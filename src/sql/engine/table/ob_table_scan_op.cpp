@@ -1031,7 +1031,6 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
   int ret = OB_SUCCESS;
   ObQueryRangeArray key_ranges;
   ObQueryRangeArray ss_key_ranges;
-  ObGetMethodArray get_method;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObIAllocator &range_allocator = (table_rescan_allocator_ != nullptr ?
       *table_rescan_allocator_ : ctx_.get_allocator());
@@ -1062,7 +1061,6 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                ctx_,
                key_ranges,
                MY_INPUT.mbr_filters_,
-               get_method,
                ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
     } else if (!MY_CTDEF.pre_query_range_.is_contain_geo_filters() &&
@@ -1071,7 +1069,6 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                 range_allocator,
                 ctx_,
                 key_ranges,
-                get_method,
                 ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
     } else if (OB_FAIL(MY_CTDEF.pre_query_range_.get_ss_tablet_ranges(range_allocator,

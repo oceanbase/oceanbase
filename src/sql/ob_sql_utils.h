@@ -53,7 +53,6 @@ class ObStmtHint;
 struct ObTransformerCtx;
 struct ObPreCalcExprFrameInfo;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
-typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 struct ObExprConstraint;
 typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
 class ObSelectStmt;
@@ -383,7 +382,6 @@ public:
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
-                                     ObGetMethodArray get_method,
                                      const ObDataTypeCastParams &dtc_params);
 
   static int extract_equal_pre_query_range(const ObQueryRange &pre_query_range,
@@ -395,7 +393,6 @@ public:
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
                                        ObMbrFilterArray &mbr_filters,
-                                       ObGetMethodArray get_method,
                                        const ObDataTypeCastParams &dtc_params);
 
   static bool is_same_type(const ObExprResType &type1, const ObExprResType &type2);

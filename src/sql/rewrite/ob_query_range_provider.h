@@ -28,14 +28,13 @@ namespace sql
 struct ColumnItem;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, true> ObRangesArray;
-typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
 
 class ObQueryRangeProvider
 {
 public:
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
-                                ObGetMethodArray &get_methods,
+                                bool &all_single_value_ranges,
                                 const common::ObDataTypeCastParams &dtc_params) = 0;
 
   // to string

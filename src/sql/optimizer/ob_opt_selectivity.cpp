@@ -3533,7 +3533,7 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
   ObIAllocator &allocator = ctx.get_allocator();
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
-  ObGetMethodArray get_methods;
+  bool dummy_all_single_value_ranges = true;
 
   if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
       OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id))) {
@@ -3549,13 +3549,13 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                                                  params))) {
     LOG_WARN("failed to preliminary extract query range", K(ret));
   } else if (!query_range.need_deep_copy()) {
-    if (OB_FAIL(query_range.get_tablet_ranges(allocator, *exec_ctx, ranges,
-                                              get_methods, dtc_params))) {
+    if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,
+                                                     dummy_all_single_value_ranges, dtc_params))) {
       LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
     LOG_WARN("failed to final extract query range", K(ret));
-  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, get_methods, dtc_params))) {
+  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
     LOG_WARN("failed to get tablet ranges", K(ret));
   } else { /*do nothing*/ }
   return ret;
