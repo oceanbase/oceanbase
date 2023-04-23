@@ -125,6 +125,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_force_order_preserve_set",
   "_force_parallel_ddl_dop",
   "_force_parallel_dml_dop",
   "_force_parallel_query_dop",
@@ -351,6 +352,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__FORCE_ORDER_PRESERVE_SET,
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
   SYS_VAR__FORCE_PARALLEL_DML_DOP,
   SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
@@ -792,7 +794,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_max_read_stale_time",
   "_optimizer_gather_stats_on_load",
   "_set_reverse_dblink_infos",
-  "_show_ddl_in_compat_mode"
+  "_show_ddl_in_compat_mode",
+  "_force_order_preserve_set"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1183,6 +1186,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOptimizerGatherStatsOnLoad)
         + sizeof(ObSysVarSetReverseDblinkInfos)
         + sizeof(ObSysVarShowDdlInCompatMode)
+        + sizeof(ObSysVarForceOrderPreserveSet)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3196,6 +3200,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarShowDdlInCompatMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarForceOrderPreserveSet())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarForceOrderPreserveSet", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarForceOrderPreserveSet));
       }
     }
 
@@ -5674,6 +5687,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowDdlInCompatMode())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarShowDdlInCompatMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__FORCE_ORDER_PRESERVE_SET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarForceOrderPreserveSet)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarForceOrderPreserveSet)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarForceOrderPreserveSet())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarForceOrderPreserveSet", K(ret));
       }
       break;
     }

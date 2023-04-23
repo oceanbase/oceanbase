@@ -2956,5 +2956,17 @@
     "info_cn": "启用后, show create table 将展示与兼容模式严格兼容的结果",
     "background_cn": "",
     "ref_url": "/"
+  },
+  "_force_order_preserve_set": {
+    "id": 10141,
+    "name": "_force_order_preserve_set",
+    "value": "0",
+    "data_type": "bool",
+    "info": "can control the behavior of set query, when true, set query will generate a serial plan, which ensure the output order of result set is ordered ",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | ORACLE_ONLY | INVISIBLE",
+    "publish_version": "420",
+    "info_cn": "用于控制set query的改写行为和计划生成逻辑，保证分支串行执行和结果集顺序",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

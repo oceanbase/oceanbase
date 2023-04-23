@@ -2927,13 +2927,25 @@ static struct VarsInit{
     ObSysVars[222].alias_ = "OB_SV__SHOW_DDL_IN_COMPAT_MODE" ;
     }();
 
+    [&] (){
+      ObSysVars[223].info_ = "can control the behavior of set query, when true, set query will generate a serial plan, which ensure the output order of result set is ordered " ;
+      ObSysVars[223].name_ = "_force_order_preserve_set" ;
+      ObSysVars[223].data_type_ = ObIntType ;
+      ObSysVars[223].value_ = "0" ;
+      ObSysVars[223].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[223].id_ = SYS_VAR__FORCE_ORDER_PRESERVE_SET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_ORDER_PRESERVE_SET] = 223 ;
+    ObSysVars[223].alias_ = "OB_SV__FORCE_ORDER_PRESERVE_SET" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 223;
+static int64_t var_amount = 224;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
