@@ -26001,6 +26001,7 @@ def_table_schema(
 # 21420: V$OB_PX_P2P_DATAHUB
 # 21421: GV$SQL_JOIN_FILTER
 # 21422: V$SQL_JOIN_FILTER
+# 21423: DBA_OB_TABLE_STAT_STALE_INFO
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -43421,6 +43422,7 @@ def_table_schema(
 # 25244: V$OB_PX_P2P_DATAHUB
 # 25245: GV$SQL_JOIN_FILTER
 # 25246: V$SQL_JOIN_FILTER
+# 25247: DBA_OB_TABLE_STAT_STALE_INFO
 
 #### End Data Dictionary View
 ################################################################################
