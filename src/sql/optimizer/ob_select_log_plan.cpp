@@ -5676,7 +5676,12 @@ int ObSelectLogPlan::match_window_function_parallel(const ObIArray<ObWinFunRawEx
       case T_FUN_SUM:
       case T_FUN_MAX:
       case T_FUN_MIN: {
-        /*do nothing*/
+        if (OB_ISNULL(win_expr->get_agg_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null agg expr", K(ret));
+        } else if (win_expr->get_agg_expr()->is_param_distinct()) {
+          can_parallel = false;
+        }
         break;
       }
       default: {
