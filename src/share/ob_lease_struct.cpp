@@ -190,7 +190,7 @@ bool ObLeaseRequest::is_valid() const
   // No need to determine the value of server_status_
   return version_ > 0 && !zone_.is_empty() && server_.is_valid()
       && sql_port_ > 0 && resource_info_.is_valid()
-      && start_service_time_ >= 0 && current_server_time_ >= 0 && round_trip_time_ >= 0;
+      && start_service_time_ >= 0;
 }
 
 OB_SERIALIZE_MEMBER(ObLeaseRequest,

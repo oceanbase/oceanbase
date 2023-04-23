@@ -57,7 +57,6 @@ class ObLeaseStateMgr
 {
 public:
   friend class HeartBeat;
-  friend class AvgCalculator;
   ObLeaseStateMgr();
   ~ObLeaseStateMgr();
 
@@ -73,9 +72,7 @@ public:
   inline void set_stop() { stopped_  = true; }
   inline bool is_inited() const { return inited_; }
   inline bool is_valid_heartbeat() const;
-  inline bool is_valid_lease() const;
   inline int64_t get_heartbeat_expire_time();
-  inline int64_t get_lease_expire_time();
   inline int set_lease_response(const share::ObLeaseResponse &lease_response);
 private:
   int try_report_sys_ls();
@@ -93,31 +90,10 @@ private:
   private:
     DISALLOW_COPY_AND_ASSIGN(HeartBeat);
   };
-
-  static const int64_t STORE_RTT_NUM = 10;
   static const int64_t DELAY_TIME = 2 * 1000 * 1000;//2s
   static const int64_t RENEW_TIMEOUT = 2 * 1000 * 1000; //2s
   static const int64_t REGISTER_TIME_SLEEP = 2 * 1000 * 1000; //5s
 
-  // maintain fixed-length buffer and calculate avarage value
-  class AvgCalculator
-  {
-  public:
-    AvgCalculator();
-    ~AvgCalculator();
-
-    int init(int64_t limit_num);
-    int calc_avg(int64_t num);
-    int get_avg(double &avg);
-  private:
-    common::ObSEArray<int64_t, STORE_RTT_NUM> calc_buffer_;
-    bool inited_;
-    int64_t limit_num_;
-    int64_t head_;
-    double avg_;
-  private:
-    DISALLOW_COPY_AND_ASSIGN(AvgCalculator);
-  };
 private:
   int start_heartbeat();
   int do_renew_lease();
@@ -137,7 +113,6 @@ private:
   HeartBeat hb_;
   int64_t renew_timeout_;
   ObService *ob_service_;
-  AvgCalculator avg_calculator_;
   int64_t baseline_schema_version_;
   volatile int64_t heartbeat_expire_time_ CACHE_ALIGNED;
 private:
@@ -147,11 +122,6 @@ private:
 bool ObLeaseStateMgr::is_valid_heartbeat() const
 {
   return heartbeat_expire_time_ > common::ObTimeUtility::current_time();
-}
-
-bool ObLeaseStateMgr::is_valid_lease() const
-{
-  return lease_expire_time_ > common::ObTimeUtility::current_time();
 }
 
 int ObLeaseStateMgr::set_lease_response(const share::ObLeaseResponse &lease_response)
@@ -166,11 +136,6 @@ int ObLeaseStateMgr::set_lease_response(const share::ObLeaseResponse &lease_resp
 int64_t ObLeaseStateMgr::get_heartbeat_expire_time()
 {
   return heartbeat_expire_time_;
-}
-
-int64_t ObLeaseStateMgr::get_lease_expire_time()
-{
-  return lease_expire_time_;
 }
 }//end namespace observer
 }//end namespace oceanbase

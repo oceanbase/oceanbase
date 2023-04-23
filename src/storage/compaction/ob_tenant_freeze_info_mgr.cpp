@@ -26,7 +26,6 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/backup/ob_backup_info_mgr.h"
 #include "observer/ob_server_struct.h"
-#include "observer/ob_service.h"
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/system_variable/ob_system_variable_alias.h"
 #include "share/ob_zone_merge_info.h"
@@ -913,7 +912,6 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
     ObSEArray<FreezeInfo, 4> freeze_info;
     ObSEArray<ObSnapshotInfo, 4> snapshots;
     bool gc_snapshot_ts_changed = false;
-    observer::ObService *ob_service = GCTX.ob_service_;
     int64_t min_major_snapshot = INT64_MAX;
 
     if (OB_FAIL(get_global_info(snapshot_gc_ts))) {
@@ -935,7 +933,7 @@ int ObTenantFreezeInfoMgr::ReloadTask::try_update_info()
       STORAGE_LOG(WARN, "update info failed",
                   K(ret), K(snapshot_gc_ts), K(freeze_info), K(snapshots));
     } else {
-      if (gc_snapshot_ts_changed || ob_service->is_heartbeat_expired()) {
+      if (gc_snapshot_ts_changed) {
         last_change_ts_ = ObTimeUtility::current_time();
       } else {
         const int64_t last_not_change_interval_us = ObTimeUtility::current_time() - last_change_ts_;

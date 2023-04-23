@@ -84,7 +84,7 @@ bool ObServerStatus::is_valid() const
 {
   return OB_INVALID_ID != id_ && server_.is_valid() && is_status_valid()
       && register_time_ >= 0 && last_hb_time_ >= 0 && block_migrate_in_time_ >= 0
-      && stop_time_ >= 0 && start_service_time_ >= 0 && last_round_trip_time_ >= 0;
+      && stop_time_ >= 0 && start_service_time_ >= 0;
 }
 
 static const char *g_server_display_status_str[] = {

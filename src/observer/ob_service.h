@@ -210,8 +210,6 @@ public:
   int set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
   // for ObPartitionService::check_mc_allowed_by_server_lease
   int get_server_heartbeat_expire_time(int64_t &lease_expire_time);
-  bool is_heartbeat_expired() const;
-  bool is_svr_lease_valid() const;
   int cancel_sys_task(const share::ObTaskId &task_id);
   int refresh_memory_stat();
   int wash_memory_fragmentation();

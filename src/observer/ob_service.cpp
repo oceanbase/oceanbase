@@ -1747,29 +1747,6 @@ int ObService::get_server_heartbeat_expire_time(int64_t &lease_expire_time)
   return ret;
 }
 
-bool ObService::is_heartbeat_expired() const
-{
-  bool bret = false;  // returns false on error
-  if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    bret = !lease_state_mgr_.is_valid_heartbeat();
-  }
-  return bret;
-}
-
-bool ObService::is_svr_lease_valid() const
-{
-  // Determine if local lease is valid in OFS mode
-  bool bret = false;
-  if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    bret = lease_state_mgr_.is_valid_lease();
-  }
-  return bret;
-}
-
 int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
 {
   int ret = OB_SUCCESS;
