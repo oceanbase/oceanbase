@@ -26,10 +26,18 @@ int ObRecursiveInnerDataOp::init(const ObExpr *search_expr, const ObExpr *cycle_
   int ret = OB_SUCCESS;
   search_expr_ = search_expr;
   cycle_expr_ = cycle_expr;
-  if (OB_FAIL(dfs_pump_.init())) {
+
+  if (OB_ISNULL(ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql session info is null", K(ret));
+  } else if (OB_FAIL(dfs_pump_.init())) {
     LOG_WARN("Failed to init depth first search pump", K(ret));
   } else if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(share::SYS_VAR_CTE_MAX_RECURSION_DEPTH, max_recursion_depth_))) {
     LOG_WARN("Get sys variable error", K(ret));
+  } else {
+    int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    stored_row_buf_.set_tenant_id(tenant_id);
+    stored_row_buf_.set_ctx_id(ObCtxIds::WORK_AREA);
   }
   return ret;
 }
