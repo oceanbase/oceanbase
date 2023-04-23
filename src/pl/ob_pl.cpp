@@ -1629,6 +1629,7 @@ int ObPL::execute(ObExecContext &ctx,
   OZ (get_pl_function(ctx, params, stmt_id, sql, cacheobj_guard));
   OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
   CK (OB_NOT_NULL(routine));
+  OX (routine->set_debug_priv());
   OX (out_args = routine->get_out_args());
   CK (OB_NOT_NULL(ctx.get_package_guard()));
 
