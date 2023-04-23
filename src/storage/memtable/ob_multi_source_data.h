@@ -97,6 +97,7 @@ public:
     TRANS_LOG(INFO, "unsync_cnt_for_multi_data dec", KPC(this));
   }
   int get_unsync_cnt_for_multi_data() const { return unsynced_cnt_for_multi_data_; }
+  void set_unsync_cnt_for_multi_data(const int unsynced_cnt_for_multi_data) { unsynced_cnt_for_multi_data_ = unsynced_cnt_for_multi_data; }
   virtual bool is_save_last() const { return true; } // only store one data unit with sync_finish=true
   virtual int64_t get_version() const { return common::OB_INVALID_VERSION; } // have to implement for unit list type
   VIRTUAL_TO_STRING_KV(K_(is_tx_end),
@@ -142,7 +143,8 @@ private:
   int inner_mark_unit_sync_finish(
       const int64_t unit_type,
       const int64_t unit_version,
-      bool save_last_flag);
+      bool save_last_flag,
+      const int unsync_cnt_for_multi_data);
   void inner_release_rest_unit_data(
       const int64_t list_pos,
       const int64_t unit_version);
@@ -209,7 +211,7 @@ int ObMultiSourceData::save_multi_source_data_unit_in_list(const T *const src, b
       (void)inner_release_rest_unit_data(list_pos, src->get_version());
     }
   } else if (src->is_sync_finish()
-      && OB_FAIL(inner_mark_unit_sync_finish(list_pos, src->get_version(), src->is_save_last()))) { // mark finish
+      && OB_FAIL(inner_mark_unit_sync_finish(list_pos, src->get_version(), src->is_save_last(), src->get_unsync_cnt_for_multi_data()))) { // mark finish
     TRANS_LOG(WARN, "failed to makr unit sync finish", K(ret), K(list_pos), KPC(src));
   }
 
