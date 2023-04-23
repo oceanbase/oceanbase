@@ -502,6 +502,7 @@ public:
   int64_t get_execution_id() const;
   static int push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id);
   void check_ddl_task_execute_too_long();
+  static bool check_is_load_data(share::ObDDLType task_type);
   virtual bool support_longops_monitoring() const { return false; }
   int cleanup();
   virtual int cleanup_impl() = 0;

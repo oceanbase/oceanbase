@@ -1416,6 +1416,11 @@ void ObDDLTask::check_ddl_task_execute_too_long()
   }
 }
 
+bool ObDDLTask::check_is_load_data(ObDDLType ddl_type)
+{
+  return (ddl_type == ObDDLType::DDL_DIRECT_LOAD || ddl_type == ObDDLType::DDL_DIRECT_LOAD_INSERT);
+}
+
 #ifdef ERRSIM
 int ObDDLTask::check_errsim_error()
 {

@@ -1181,8 +1181,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
 
   // append direct load information to the message
   if (OB_SUCC(ret)
-     && (ObDDLType::DDL_DIRECT_LOAD == get_task_type()
-         || ObDDLType::DDL_DIRECT_LOAD_INSERT == get_task_type())) {
+     && (check_is_load_data(get_task_type()))) {
     common::ObArenaAllocator allocator(lib::ObLabel("RedefTask"));
     sql::ObLoadDataStat job_stat;
     if (OB_FAIL(get_direct_load_job_stat(allocator, job_stat))) {
