@@ -94,7 +94,7 @@ private:
 
   bool is_retry_ret_code_(const int ret_code) const;
   bool is_fatal_error_(const int ret_code) const;
-  void report_error_(const ObLSID &id, const int ret_code);
+  void report_error_(const ObLSID &id, const int ret_code, const palf::LSN &lsn);
 private:
   bool inited_;
   uint64_t tenant_id_;

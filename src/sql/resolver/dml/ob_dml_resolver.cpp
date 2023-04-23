@@ -9639,8 +9639,6 @@ int ObDMLResolver::get_target_sql_for_pivot(const ObIArray<ColumnItem> &column_i
         } else if (OB_FAIL(format_from_subquery(transpose_item.alias_name_,
             table_item, expr_str_buf, sql))) {
           LOG_WARN("fail to format_from_subquery", K(table_item), K(ret));
-        } else if (OB_FAIL(get_partition_for_transpose(table_item, sql))) {
-          LOG_WARN("fail to get_partition_for_transpose", K(table_item), K(ret));
         }
 
         if (OB_FAIL(ret)){
@@ -9685,6 +9683,8 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     if (OB_FAIL(sql.append_fmt(" FROM %.*s", table_item.table_name_.length(),
                                              table_item.table_name_.ptr()))) {
       LOG_WARN("fail to append_fmt", K(table_item.table_name_), K(ret));
+    } else if (OB_FAIL(get_partition_for_transpose(table_item, sql))) {
+      LOG_WARN("fail to get_partition_for_transpose", K(table_item), K(ret));
     } else if (!table_item.alias_name_.empty()
                && table_item.alias_name_ != table_item.table_name_) {
       if (OB_FAIL(sql.append_fmt(" %.*s", table_item.alias_name_.length(),
@@ -9872,8 +9872,6 @@ int ObDMLResolver::get_target_sql_for_unpivot(const ObIArray<ColumnItem> &column
         } else if (OB_FAIL(format_from_subquery(transpose_item.alias_name_,
             table_item, expr_str_buf, sql))) {
           LOG_WARN("fail to format_from_subquery", K(table_item), K(ret));
-        } else if (OB_FAIL(get_partition_for_transpose(table_item, sql))) {
-          LOG_WARN("fail to get_partition_for_transpose", K(table_item), K(ret));
         } else if (transpose_item.is_exclude_null()) {
           if (OB_FAIL(sql.append(" WHERE"))) {
             LOG_WARN("fail to append", K(ret));

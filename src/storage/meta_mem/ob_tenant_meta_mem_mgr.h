@@ -202,6 +202,7 @@ public:
   {
     return &allocator_ == allocator;
   }
+  OB_INLINE int64_t get_total_tablet_cnt() const { return tablet_map_.count(); }
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited));
 private:

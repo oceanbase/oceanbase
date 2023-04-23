@@ -42,6 +42,8 @@ int ObPLVar::deep_copy(const ObPLVar &var, ObIAllocator &allocator)
       is_default_construct_ = var.is_default_construct();
       default_ = var.get_default();
       is_dup_declare_ = var.is_dup_declare();
+      is_formal_param_ = var.is_formal_param();
+      is_referenced_ = var.is_referenced();
     }
   }
   return ret;

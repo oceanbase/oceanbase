@@ -519,7 +519,14 @@ ObPartitionMajorMerger::~ObPartitionMajorMerger()
 {
 }
 
-int ObPartitionMajorMerger::open(ObTabletMergeCtx &ctx, const int64_t idx)
+void ObPartitionMajorMerger::reset()
+{
+  rewrite_block_cnt_ = 0;
+  need_rewrite_block_cnt_ = 0;
+  ObPartitionMerger::reset();
+}
+
+int ObPartitionMajorMerger::open(ObTabletMergeCtx &ctx, const int64_t idx, const bool force_flat_format)
 {
   int ret = OB_SUCCESS;
 
@@ -537,6 +544,9 @@ int ObPartitionMajorMerger::open(ObTabletMergeCtx &ctx, const int64_t idx)
       merge_progress_ = ctx.merge_progress_;
     }
     task_idx_ = idx;
+    if (force_flat_format) {
+      data_store_desc_.force_flat_store_type();
+    }
     data_store_desc_.sstable_index_builder_ = ctx.get_merge_info().get_index_builder();
     rewrite_block_cnt_ = 0;
     need_rewrite_block_cnt_ = 0;
@@ -594,13 +604,16 @@ int ObPartitionMajorMerger::init_partition_fuser(const ObMergeParameter &merge_p
   return ret;
 }
 
-int ObPartitionMajorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t idx)
+int ObPartitionMajorMerger::merge_partition(
+    ObTabletMergeCtx &ctx,
+    const int64_t idx,
+    const bool force_flat_format)
 {
   int ret = OB_SUCCESS;
   ObMergeParameter merge_param;
   ObPartitionMajorMergeHelper merge_helper;
 
-  if (OB_FAIL(open(ctx, idx))) {
+  if (OB_FAIL(open(ctx, idx, force_flat_format))) {
     STORAGE_LOG(WARN, "Failed to open partition major merge fuse", K(ret));
   } else if (OB_FAIL(prepare_merge_partition(merge_param, merge_helper))) {
     STORAGE_LOG(WARN, "Failed to prepare merge partition", K(ret));
@@ -838,7 +851,6 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMajorMergeHelper &merg
   return ret;
 }
 
-
 /*
  *ObPartitionMinorMergerV2
  */
@@ -868,16 +880,16 @@ void ObPartitionMinorMerger::reset()
   ObPartitionMerger::reset();
 }
 
-int ObPartitionMinorMerger::open(ObTabletMergeCtx &ctx, const int64_t idx)
+int ObPartitionMinorMerger::open(ObTabletMergeCtx &ctx, const int64_t idx, const bool force_flat_format)
 {
   int ret = OB_SUCCESS;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObPartitionMergerV2 is init twice", K(ret), K(*this));
-  } else if (OB_UNLIKELY(!ctx.is_valid() || idx < 0)) {
+  } else if (OB_UNLIKELY(!ctx.is_valid() || idx < 0 || force_flat_format)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to init ObPartitionMergerV2", K(ret), K(ctx), K(idx));
+    STORAGE_LOG(WARN, "Invalid argument to init ObPartitionMergerV2", K(ret), K(ctx), K(idx), K(force_flat_format));
   } else if (OB_FAIL(init_data_store_desc(ctx))) {
     STORAGE_LOG(WARN, "Failed to init data store desc", K(ret));
   } else {
@@ -1099,14 +1111,17 @@ int ObPartitionMinorMerger::init_partition_fuser(const ObMergeParameter &merge_p
   return ret;
 }
 
-int ObPartitionMinorMerger::merge_partition(ObTabletMergeCtx &ctx, const int64_t idx)
+int ObPartitionMinorMerger::merge_partition(
+    ObTabletMergeCtx &ctx,
+    const int64_t idx,
+    const bool force_flat_format)
 {
   int ret = OB_SUCCESS;
   ObPartitionMinorMergeHelper merge_helper;
   ObMergeParameter merge_param;
   int64_t need_rewrite_block_cnt;
 
-  if (OB_FAIL(open(ctx, idx))) {
+  if (OB_FAIL(open(ctx, idx, force_flat_format))) {
     STORAGE_LOG(WARN, "Failed to open partition minor merge fuse", K(ret));
   } else if (OB_FAIL(prepare_merge_partition(merge_param, merge_helper))) {
     STORAGE_LOG(WARN, "Failed to prepare merge partition", K(ret));

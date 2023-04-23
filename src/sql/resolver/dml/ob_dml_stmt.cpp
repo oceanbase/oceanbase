@@ -1844,7 +1844,7 @@ int ObDMLStmt::formalize_stmt_expr_reference()
       if (OB_ISNULL(stmt_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(set_sharable_expr_reference(*stmt_exprs.at(i), false))) {
+      } else if (OB_FAIL(set_sharable_expr_reference(*stmt_exprs.at(i), ExplicitedRefType::REF_BY_NORMAL))) {
         LOG_WARN("failed to set sharable expr reference", K(ret));
       } else { /*do nothing*/ }
     }
@@ -1860,7 +1860,7 @@ int ObDMLStmt::formalize_stmt_expr_reference()
                  table_item->is_json_table() ||
                  table_item->for_update_ ||
                  is_hierarchical_query()) {
-        if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_, false))) {
+        if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_, ExplicitedRefType::REF_BY_NORMAL))) {
           LOG_WARN("failed to set sharable exprs reference", K(ret));
         }
       } else { /*do nothing*/ }
@@ -1929,25 +1929,26 @@ int ObDMLStmt::check_pseudo_column_valid()
   return ret;
 }
 
-int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, bool is_under_depend_expr)
+int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type)
 {
   int ret = OB_SUCCESS;
   if (expr.is_column_ref_expr() || expr.is_aggr_expr() ||
       expr.is_win_func_expr() || expr.is_query_ref_expr() ||
       ObRawExprUtils::is_pseudo_column_like_expr(expr)) {
-    expr.set_explicited_reference();
+    expr.set_explicited_reference(ref_type);
     if (expr.is_column_ref_expr()) {
       ObColumnRefRawExpr &column_expr = static_cast<ObColumnRefRawExpr&>(expr);
+      ref_type = column_expr.is_stored_generated_column() ? ExplicitedRefType::REF_BY_STORED_GEN_COL : ExplicitedRefType::REF_BY_VIRTUAL_GEN_COL;
       if (NULL == get_column_item(column_expr.get_table_id(),
                                   column_expr.get_column_id())) {
-        if (is_under_depend_expr) {
+        if (ExplicitedRefType::REF_BY_NORMAL != ref_type) {
           expr.clear_explicited_referece();
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr's column item is not existed", K(ret), K(expr), KPC(this));
         }
       } else if (NULL != column_expr.get_dependant_expr() &&
-                 OB_FAIL(SMART_CALL(set_sharable_expr_reference(*column_expr.get_dependant_expr(), true)))) {
+                 OB_FAIL(SMART_CALL(set_sharable_expr_reference(*column_expr.get_dependant_expr(), ref_type)))) {
         LOG_WARN("failed to set sharable expr", K(ret), K(column_expr));
       }
     } else if (T_ORA_ROWSCN == expr.get_expr_type() &&
@@ -1974,7 +1975,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, bool is_under_depend
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exec param expr is null", K(ret));
     } else if (exec_param.has_flag(IS_ONETIME) &&
-               OB_FAIL(SMART_CALL(set_sharable_expr_reference(*exec_param.get_ref_expr(), is_under_depend_expr)))) {
+               OB_FAIL(SMART_CALL(set_sharable_expr_reference(*exec_param.get_ref_expr(), ref_type)))) {
       LOG_WARN("failed to set sharable expr refernece", K(ret));
     }
   }
@@ -1988,7 +1989,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, bool is_under_depend
       if (OB_ISNULL(expr.get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(set_sharable_expr_reference(*expr.get_param_expr(i), is_under_depend_expr)))) {
+      } else if (OB_FAIL(SMART_CALL(set_sharable_expr_reference(*expr.get_param_expr(i), ref_type)))) {
         LOG_WARN("failed to set sharable expr", K(ret), K(expr));
       } else { /*do nothing*/ }
     }

@@ -114,7 +114,6 @@ public:
   {
     // ret should be handle by caller.
     int ret = ht_.destroy();
-    allocer_.clear();
     return ret;
   }
   int clear()

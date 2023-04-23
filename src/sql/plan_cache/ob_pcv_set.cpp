@@ -54,13 +54,13 @@ int ObPCVSet::init(ObILibCacheCtx &ctx, const ObILibCacheObject *obj)
     } else {
       is_inited_ = true;
       if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
-        LOG_DEBUG("Lob Debug, using remote min cluster version",
+        LOG_TRACE("Lob Debug, using remote min cluster version",
                 K(pc_ctx.exec_ctx_.get_min_cluster_version()),
                 K(GET_MIN_CLUSTER_VERSION()));
       }
       min_cluster_version_ = pc_ctx.exec_ctx_.get_min_cluster_version();
       normal_parse_const_cnt_ = pc_ctx.normal_parse_const_cnt_;
-      LOG_DEBUG("inited pcv set", K(pc_key_), K(ObTimeUtility::current_time()));
+      LOG_TRACE("inited pcv set", K(pc_key_), K(ObTimeUtility::current_time()));
     }
   }
   return ret;
@@ -121,14 +121,14 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
   } else {
     if (normal_parse_const_cnt_ != pc_ctx.fp_result_.raw_params_.count()) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_PC_LOG(DEBUG, "const number of fast parse and normal parse is different",
+      SQL_PC_LOG(TRACE, "const number of fast parse and normal parse is different",
                  "fast_parse_const_num", pc_ctx.fp_result_.raw_params_.count(),
                  K_(normal_parse_const_cnt),
                  K(pc_ctx.fp_result_.raw_params_));
     }
   }
   if (pc_ctx.exec_ctx_.get_min_cluster_version() != GET_MIN_CLUSTER_VERSION()) {
-    LOG_DEBUG("Lob Debug, using remote min cluster version",
+    LOG_TRACE("Lob Debug, using remote min cluster version",
              K(pc_ctx.exec_ctx_.get_min_cluster_version()),
              K(GET_MIN_CLUSTER_VERSION()));
   }
@@ -162,26 +162,26 @@ int ObPCVSet::inner_get_cache_obj(ObILibCacheCtx &ctx,
     bool need_check_schema = true;
     DLIST_FOREACH(pcv, pcv_list_) {
       bool is_same = false;
-      LOG_DEBUG("get plan, pcv", K(pcv));
+      LOG_TRACE("get plan, pcv", K(pcv));
       if (OB_FAIL(pcv->get_all_dep_schema(pc_ctx,
                                           pc_ctx.sql_ctx_.session_info_->get_database_id(),
                                           new_tenant_schema_version,
                                           need_check_schema,
                                           schema_array))) {
         if (OB_OLD_SCHEMA_VERSION == ret) {
-          LOG_DEBUG("failed to get all table schema", K(ret));
+          LOG_TRACE("failed to get all table schema", K(ret));
         } else {
           LOG_WARN("failed to get all table schema", K(ret));
         }
       } else if (OB_FAIL(pcv->match(pc_ctx, schema_array, is_same))) {
         LOG_WARN("fail to match pcv when get plan", K(ret));
       } else if (false == is_same) {
-        LOG_DEBUG("failed to match param");
+        LOG_TRACE("failed to match param");
         /*do nothing*/
       } else {
         matched_pcv = pcv;
         if (OB_FAIL(pcv->choose_plan(pc_ctx, schema_array, plan))) {
-          LOG_DEBUG("failed to get plan in plan cache value", K(ret));
+          LOG_TRACE("failed to get plan in plan cache value", K(ret));
         }
         break;
       }
@@ -248,7 +248,7 @@ int ObPCVSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
         if (OB_FAIL(pcv->add_plan(*plan, schema_array, pc_ctx))) {
           if (OB_SQL_PC_PLAN_DUPLICATE == ret
               || is_not_supported_err(ret)) {
-            LOG_DEBUG("fail to add plan to pcv", K(ret));
+            LOG_TRACE("fail to add plan to pcv", K(ret));
           } else {
             LOG_WARN("fail to add plan to pcv", K(ret));
           }
@@ -340,7 +340,7 @@ int ObPCVSet::deep_copy_sql(const ObString &sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(sql.ptr())) {
-    SQL_PC_LOG(DEBUG, "sql is empty, ignore copy sql", K(ret), K(lbt()));
+    SQL_PC_LOG(TRACE, "sql is empty, ignore copy sql", K(ret), K(lbt()));
   } else if (OB_FAIL(ob_write_string(allocator_, sql, sql_))) {
     SQL_PC_LOG(WARN, "deep copy sql into pcv_set failed", K(ret), K(sql));
   }
@@ -493,7 +493,7 @@ int ObPCVSet::check_raw_param_for_dup_col(ObPlanCacheCtx &pc_ctx, bool &contain_
 
             if (0 != l_tmp_str.compare(r_tmp_str)) {
               all_same = false;
-              LOG_DEBUG("raw text not matched", K(l_tmp_str), K(r_tmp_str));
+              LOG_TRACE("raw text not matched", K(l_tmp_str), K(r_tmp_str));
             }
           }
         } // for end

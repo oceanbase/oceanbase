@@ -275,7 +275,30 @@ bool ObDataStoreDesc::is_valid() const
          && ls_id_.is_valid()
          && tablet_id_.is_valid()
          && compressor_type_ > ObCompressorType::INVALID_COMPRESSOR
-         && snapshot_version_ > 0;
+         && snapshot_version_ > 0
+         && is_store_type_valid();
+}
+
+bool ObDataStoreDesc::is_store_type_valid() const
+{
+  bool ret = false;
+  bool is_major = storage::is_major_merge_type(merge_type_)
+      || storage::is_meta_major_merge(merge_type_);
+  if (!ObStoreFormat::is_row_store_type_valid(row_store_type_)) {
+    // invalid row store type
+  } else if (is_force_flat_store_type_) {
+    ret = (ObRowStoreType::FLAT_ROW_STORE == row_store_type_ && is_major);
+  } else if (!is_major) {
+    ret = (!ObStoreFormat::is_row_store_type_with_encoding(row_store_type_));
+  } else {
+    ret = true;
+  }
+
+  if (!ret) {
+    STORAGE_LOG(WARN, "invalid row store type",
+        K_(row_store_type), K(is_major), K_(is_force_flat_store_type));
+  }
+  return ret;
 }
 
 void ObDataStoreDesc::reset()
@@ -308,6 +331,7 @@ void ObDataStoreDesc::reset()
   sstable_index_builder_ = nullptr;
   is_ddl_ = false;
   need_pre_warm_ = false;
+  is_force_flat_store_type_ = false;
   col_desc_array_.reset();
   datum_utils_.reset();
   allocator_.reset();
@@ -342,6 +366,7 @@ int ObDataStoreDesc::assign(const ObDataStoreDesc &desc)
   major_working_cluster_version_ = desc.major_working_cluster_version_;
   is_ddl_ = desc.is_ddl_;
   need_pre_warm_ = desc.need_pre_warm_;
+  is_force_flat_store_type_ = desc.is_force_flat_store_type_;
   col_desc_array_.reset();
   datum_utils_.reset();
   sstable_index_builder_ = desc.sstable_index_builder_;

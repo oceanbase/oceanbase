@@ -68,6 +68,7 @@ static void print_help()
   MPRINT("  -c,--cluster_id ID       cluster id");
   MPRINT("  -d,--data_dir DIR        OceanBase data directory");
   MPRINT("  -i,--devname DEV         net dev interface");
+  MPRINT("  -I,--local_ip            ip of the current machine");
   MPRINT("  -o,--optstr OPTSTR       extra options string");
   MPRINT("  -r,--rs_list RS_LIST     root service list");
   MPRINT("  -l,--log_level LOG_LEVEL server log level");
@@ -163,6 +164,7 @@ static void get_opts_setting(
       {"scn", 'f', 1},
       {"version", 'V', 0},
       {"ipv6", '6', 0},
+      {"local_ip", 'I', 1},
   };
 
   size_t opts_cnt = sizeof(ob_opts) / sizeof(ob_opts[0]);
@@ -278,6 +280,12 @@ parse_short_opt(const int c, const char *value, ObServerOptions &opts)
   case '6':
     opts.use_ipv6_ = true;
     break;
+
+  case 'I':
+    MPRINT("local_ip: %s", value);
+    opts.local_ip_ = value;
+    break;
+
   case 'h':
   default:
     print_help();

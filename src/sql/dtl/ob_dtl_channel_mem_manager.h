@@ -47,7 +47,7 @@ public:
 
   OB_INLINE int64_t get_alloc_cnt() { return alloc_cnt_; }
   OB_INLINE int64_t get_free_cnt() { return free_cnt_; }
-  OB_INLINE int64_t get_free_queue_length() { return queue_len_; }
+  OB_INLINE int64_t get_free_queue_length() { return free_queue_.size(); }
 
   OB_INLINE int64_t get_real_alloc_cnt() { return real_alloc_cnt_; }
   OB_INLINE int64_t get_real_free_cnt() { return real_free_cnt_; }
@@ -55,10 +55,8 @@ public:
   OB_INLINE void increase_alloc_cnt() { ATOMIC_INC(&alloc_cnt_); }
   OB_INLINE void increase_free_cnt() { ATOMIC_INC(&free_cnt_); }
 
-  OB_INLINE void increase_free_queue_cnt() { ATOMIC_INC(&queue_len_); }
-  OB_INLINE void decrease_free_queue_cnt() { ATOMIC_DEC(&queue_len_); }
 
-  int64_t get_total_memory_size() { return size_per_buffer_ * queue_len_; }
+  int64_t get_total_memory_size() { return size_per_buffer_ * free_queue_.size(); }
 
   int get_max_mem_percent();
   void update_max_memory_percent();
@@ -87,7 +85,6 @@ private:
   // some statistics
   int64_t alloc_cnt_;
   int64_t free_cnt_;
-  int64_t queue_len_;
 
   int64_t real_alloc_cnt_;
   int64_t real_free_cnt_;

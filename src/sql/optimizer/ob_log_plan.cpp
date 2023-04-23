@@ -12851,10 +12851,10 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
     part_expr = stmt->get_part_expr(table_id, ref_table_id);
     subpart_expr = stmt->get_subpart_expr(table_id, ref_table_id);
     if (NULL != part_expr) {
-      part_expr->set_explicited_reference();
+      part_expr->set_part_key_reference();
     }
     if (NULL != subpart_expr) {
-      subpart_expr->set_explicited_reference();
+      subpart_expr->set_part_key_reference();
     }
   }
 

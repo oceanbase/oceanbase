@@ -1438,6 +1438,16 @@ int ObDDLRedefinitionTask::get_orig_all_index_tablet_count(ObSchemaGetterGuard &
   return ret;
 }
 
+bool ObDDLRedefinitionTask::check_need_sync_stats_history() {
+  return !is_double_table_long_running_ddl(task_type_);
+}
+
+bool ObDDLRedefinitionTask::check_need_sync_stats() {
+  // bugfix:
+  // shouldn't sync stats if the ddl task is from load data's direct_load
+  return !(has_synced_stats_info_ || task_type_ == DDL_DIRECT_LOAD);
+}
+
 int ObDDLRedefinitionTask::sync_stats_info()
 {
   int ret = OB_SUCCESS;
@@ -1445,10 +1455,7 @@ int ObDDLRedefinitionTask::sync_stats_info()
   if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (has_synced_stats_info_ || task_type_ == DDL_DIRECT_LOAD) {
-    // bugfix:
-    // shouldn't sync stats if the ddl task is from load data's direct_load
-  } else {
+  } else if (check_need_sync_stats()) {
     ObMultiVersionSchemaService &schema_service = root_service->get_schema_service();
     ObMySQLTransaction trans;
     ObSchemaGetterGuard schema_guard;
@@ -1457,6 +1464,7 @@ int ObDDLRedefinitionTask::sync_stats_info()
     ObTimeoutCtx timeout_ctx;
     int64_t timeout = 0;
     const int64_t start_time = ObTimeUtility::current_time();
+    bool need_sync_history = check_need_sync_stats_history();
 
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
@@ -1475,12 +1483,19 @@ int ObDDLRedefinitionTask::sync_stats_info()
       LOG_WARN("set timeout failed", K(ret));
     } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
       LOG_WARN("fail to start transaction", K(ret));
-    } else if (OB_FAIL(sync_table_level_stats_info(trans, *data_table_schema))) {
+    } else if (OB_FAIL(sync_table_level_stats_info(trans, *data_table_schema, need_sync_history))) {
       LOG_WARN("fail to sync table level stats", K(ret));
     } else if (DDL_ALTER_PARTITION_BY != task_type_
-               && OB_FAIL(sync_partition_level_stats_info(trans, *data_table_schema, *new_table_schema))) {
+               && OB_FAIL(sync_partition_level_stats_info(trans,
+                                                          *data_table_schema,
+                                                          *new_table_schema,
+                                                          need_sync_history))) {
       LOG_WARN("fail to sync partition level stats", K(ret));
-    } else if (OB_FAIL(sync_column_level_stats_info(trans, *data_table_schema, *new_table_schema, schema_guard))) {
+    } else if (OB_FAIL(sync_column_level_stats_info(trans,
+                                                    *data_table_schema,
+                                                    *new_table_schema,
+                                                    schema_guard,
+                                                    need_sync_history))) {
       LOG_WARN("fail to sync column level stats", K(ret));
     }
 
@@ -1503,7 +1518,8 @@ int ObDDLRedefinitionTask::sync_stats_info()
 }
 
 int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransaction &trans,
-                                                       const ObTableSchema &data_table_schema)
+                                                       const ObTableSchema &data_table_schema,
+                                                       const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -1522,16 +1538,17 @@ int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransactio
       OB_ALL_TABLE_STAT_TNAME, target_object_id_, target_partition_id,
       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id))) {
     LOG_WARN("fail to assign sql string", K(ret));
-  } else if (OB_FAIL(history_sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld"
-      " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld",
-      OB_ALL_TABLE_STAT_HISTORY_TNAME, target_object_id_, target_partition_id,
-      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id))) {
-    LOG_WARN("fail to assign history sql string", K(ret));
   } else if (OB_FAIL(trans.write(tenant_id_, sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to update __all_table_stat", K(ret), K(sql_string));
   } else if (OB_UNLIKELY(affected_rows < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+  } else if (!need_sync_history) {// do not need to sync history.
+  } else if (OB_FAIL(history_sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld"
+      " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld",
+      OB_ALL_TABLE_STAT_HISTORY_TNAME, target_object_id_, target_partition_id,
+      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id))) {
+    LOG_WARN("fail to assign history sql string", K(ret));
   } else if (OB_FAIL(trans.write(tenant_id_, history_sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to update __all_table_stat_history", K(ret), K(sql_string));
   }
@@ -1540,7 +1557,8 @@ int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransactio
 
 int ObDDLRedefinitionTask::sync_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                                            const ObTableSchema &data_table_schema,
-                                                           const ObTableSchema &new_table_schema)
+                                                           const ObTableSchema &new_table_schema,
+                                                           const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
   ObArray<ObObjectID> src_partition_ids;
@@ -1567,6 +1585,12 @@ int ObDDLRedefinitionTask::sync_partition_level_stats_info(common::ObMySQLTransa
                                                           batch_end,
                                                           sql_string))) {
         LOG_WARN("fail to generate sql", K(ret));
+      } else if (OB_FAIL(trans.write(tenant_id_, sql_string.ptr(), affected_rows))) {
+        LOG_WARN("fail to update __all_table_stat", K(ret), K(sql_string));
+      } else if (OB_UNLIKELY(affected_rows < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+      } else if (!need_sync_history) {// do not need to sync history
       } else if (OB_FAIL(generate_sync_partition_level_stats_sql(OB_ALL_TABLE_STAT_HISTORY_TNAME,
                                                                  src_partition_ids,
                                                                  dest_partition_ids,
@@ -1574,19 +1598,13 @@ int ObDDLRedefinitionTask::sync_partition_level_stats_info(common::ObMySQLTransa
                                                                  batch_end,
                                                                  history_sql_string))) {
         LOG_WARN("fail to generate sql", K(ret));
-      } else if (OB_FAIL(trans.write(tenant_id_, sql_string.ptr(), affected_rows))) {
-        LOG_WARN("fail to update __all_table_stat", K(ret), K(sql_string));
-      } else if (OB_UNLIKELY(affected_rows < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
       } else if (OB_FAIL(trans.write(tenant_id_, history_sql_string.ptr(), affected_rows))) {
-        LOG_WARN("fail to update __all_table_stat_history", K(ret), K(sql_string));
+        LOG_WARN("fail to update __all_table_stat_history", K(ret), K(history_sql_string));
       } else if (OB_UNLIKELY(affected_rows < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
-      } else {
-        batch_start += BATCH_SIZE;
       }
+      batch_start += BATCH_SIZE;
     }
   }
   return ret;
@@ -1595,7 +1613,8 @@ int ObDDLRedefinitionTask::sync_partition_level_stats_info(common::ObMySQLTransa
 int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransaction &trans,
                                                         const ObTableSchema &data_table_schema,
                                                         const ObTableSchema &new_table_schema,
-                                                        ObSchemaGetterGuard &schema_guard)
+                                                        ObSchemaGetterGuard &schema_guard,
+                                                        const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
@@ -1636,14 +1655,16 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         if (OB_FAIL(sync_one_column_table_level_stats_info(trans,
                                                            data_table_schema,
                                                            col->get_column_id(),
-                                                           new_col->get_column_id()))) {
+                                                           new_col->get_column_id(),
+                                                           need_sync_history))) {
           LOG_WARN("fail to sync table level stats info for one column", K(ret), K(*col), K(*new_col));
         } else if (DDL_ALTER_PARTITION_BY != task_type_ &&
                    OB_FAIL(sync_one_column_partition_level_stats_info(trans,
                                                                       data_table_schema,
                                                                       new_table_schema,
                                                                       col->get_column_id(),
-                                                                      new_col->get_column_id()))) {
+                                                                      new_col->get_column_id(),
+                                                                      need_sync_history))) {
           LOG_WARN("fail to sync partition level stats info for one column", K(ret), K(*col), K(*new_col));
         }
       }
@@ -1655,7 +1676,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
 int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                                                   const ObTableSchema &data_table_schema,
                                                                   const uint64_t old_col_id,
-                                                                  const uint64_t new_col_id)
+                                                                  const uint64_t new_col_id,
+                                                                  const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
   ObSqlString column_sql_string;
@@ -1677,30 +1699,31 @@ int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQ
       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id,
       old_col_id))) {
     LOG_WARN("fail to assign sql string", K(ret));
-  } else if (OB_FAIL(column_history_sql_string.assign_fmt(
-      "UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
-      " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
-      OB_ALL_COLUMN_STAT_HISTORY_TNAME, target_object_id_, target_partition_id, new_col_id,
-      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id, old_col_id))) {
-    LOG_WARN("fail to assign history sql string", K(ret));
   } else if (OB_FAIL(histogram_sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
       OB_ALL_HISTOGRAM_STAT_TNAME, target_object_id_, target_partition_id, new_col_id,
       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id,
       old_col_id))) {
     LOG_WARN("fail to assign sql string", K(ret));
+  } else if (OB_FAIL(trans.write(tenant_id_, column_sql_string.ptr(), affected_rows))) {
+    LOG_WARN("fail to update __all_column_stat", K(ret), K(column_sql_string));
+  } else if (OB_FAIL(trans.write(tenant_id_, histogram_sql_string.ptr(), affected_rows))) {
+    LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_sql_string));
+  } else if (!need_sync_history) { // do not need to sync history
+  } else if (OB_FAIL(column_history_sql_string.assign_fmt(
+      "UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
+      " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
+      OB_ALL_COLUMN_STAT_HISTORY_TNAME, target_object_id_, target_partition_id, new_col_id,
+      ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id, old_col_id))) {
+    LOG_WARN("fail to assign history sql string", K(ret));
   } else if (OB_FAIL(histogram_history_sql_string.assign_fmt(
       "UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
       OB_ALL_HISTOGRAM_STAT_HISTORY_TNAME, target_object_id_, target_partition_id, new_col_id,
       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id_), object_id_, partition_id, old_col_id))) {
     LOG_WARN("fail to assign history sql string", K(ret));
-  } else if (OB_FAIL(trans.write(tenant_id_, column_sql_string.ptr(), affected_rows))) {
-    LOG_WARN("fail to update __all_column_stat", K(ret), K(column_sql_string));
   } else if (OB_FAIL(trans.write(tenant_id_, column_history_sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to update __all_column_stat_history", K(ret), K(column_history_sql_string));
-  } else if (OB_FAIL(trans.write(tenant_id_, histogram_sql_string.ptr(), affected_rows))) {
-    LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_sql_string));
   } else if (OB_FAIL(trans.write(tenant_id_, histogram_history_sql_string.ptr(), affected_rows))) {
     LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_history_sql_string));
   }
@@ -1711,7 +1734,8 @@ int ObDDLRedefinitionTask::sync_one_column_partition_level_stats_info(common::Ob
                                                                       const ObTableSchema &data_table_schema,
                                                                       const ObTableSchema &new_table_schema,
                                                                       const uint64_t old_col_id,
-                                                                      const uint64_t new_col_id)
+                                                                      const uint64_t new_col_id,
+                                                                      const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
   ObArray<ObObjectID> src_partition_ids;
@@ -1742,15 +1766,6 @@ int ObDDLRedefinitionTask::sync_one_column_partition_level_stats_info(common::Ob
                                                                  batch_end,
                                                                  column_sql_string))) {
         LOG_WARN("fail to generate sql", K(ret));
-      } else if (OB_FAIL(generate_sync_column_partition_level_stats_sql(OB_ALL_COLUMN_STAT_HISTORY_TNAME,
-                                                                 src_partition_ids,
-                                                                 dest_partition_ids,
-                                                                 old_col_id,
-                                                                 new_col_id,
-                                                                 batch_start,
-                                                                 batch_end,
-                                                                 column_history_sql_string))) {
-        LOG_WARN("fail to generate sql", K(ret));
       } else if (OB_FAIL(generate_sync_column_partition_level_stats_sql(OB_ALL_HISTOGRAM_STAT_TNAME,
                                                                  src_partition_ids,
                                                                  dest_partition_ids,
@@ -1759,6 +1774,20 @@ int ObDDLRedefinitionTask::sync_one_column_partition_level_stats_info(common::Ob
                                                                  batch_start,
                                                                  batch_end,
                                                                  histogram_sql_string))) {
+        LOG_WARN("fail to generate sql", K(ret));
+      } else if (OB_FAIL(trans.write(tenant_id_, column_sql_string.ptr(), affected_rows))) {
+        LOG_WARN("fail to update __all_column_stat", K(ret), K(column_sql_string));
+      } else if (OB_FAIL(trans.write(tenant_id_, histogram_sql_string.ptr(), affected_rows))) {
+        LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_sql_string));
+      } else if (!need_sync_history) {
+      } else if (OB_FAIL(generate_sync_column_partition_level_stats_sql(OB_ALL_COLUMN_STAT_HISTORY_TNAME,
+                                                                 src_partition_ids,
+                                                                 dest_partition_ids,
+                                                                 old_col_id,
+                                                                 new_col_id,
+                                                                 batch_start,
+                                                                 batch_end,
+                                                                 column_history_sql_string))) {
         LOG_WARN("fail to generate sql", K(ret));
       } else if (OB_FAIL(generate_sync_column_partition_level_stats_sql(OB_ALL_HISTOGRAM_STAT_HISTORY_TNAME,
                                                                  src_partition_ids,
@@ -1769,17 +1798,12 @@ int ObDDLRedefinitionTask::sync_one_column_partition_level_stats_info(common::Ob
                                                                  batch_end,
                                                                  histogram_history_sql_string))) {
         LOG_WARN("fail to generate sql", K(ret));
-      } else if (OB_FAIL(trans.write(tenant_id_, column_sql_string.ptr(), affected_rows))) {
-        LOG_WARN("fail to update __all_column_stat", K(ret), K(column_sql_string));
       } else if (OB_FAIL(trans.write(tenant_id_, column_history_sql_string.ptr(), affected_rows))) {
         LOG_WARN("fail to update __all_column_stat_history", K(ret), K(column_history_sql_string));
-      } else if (OB_FAIL(trans.write(tenant_id_, histogram_sql_string.ptr(), affected_rows))) {
-        LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_sql_string));
       } else if (OB_FAIL(trans.write(tenant_id_, histogram_history_sql_string.ptr(), affected_rows))) {
         LOG_WARN("fail to update __all_histogram_stat_history", K(ret), K(histogram_history_sql_string));
-      } else {
-        batch_start += BATCH_SIZE;
       }
+      batch_start += BATCH_SIZE;
     }
   }
   return ret;

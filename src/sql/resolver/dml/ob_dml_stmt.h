@@ -798,7 +798,7 @@ public:
   int do_remove_const_exec_param(ObRawExpr *&expr, bool &is_happened);
   int formalize_stmt_expr_reference();
   int formalize_child_stmt_expr_reference();
-  int set_sharable_expr_reference(ObRawExpr &expr, bool is_under_depend_expr);
+  int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr();

@@ -24,10 +24,6 @@ namespace share
 {
 class SCN;
 }
-namespace rpc
-{
-class ObBatchCreateTabletArg;
-}
 namespace rootserver
 {
 class ObServerManager;
@@ -45,7 +41,7 @@ public:
                   ls_id_array_(),
                   inited_(false) {}
   virtual ~ObTableCreator();
-  int init();
+  int init(const bool need_tablet_cnt_check);
   int execute();
   void reset();
 

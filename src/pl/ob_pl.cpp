@@ -2453,7 +2453,7 @@ int ObPLExecState::final(int ret)
                                           i, cursor, param, loc);
         if (OB_SUCCESS == tmp_ret) {
           if (OB_NOT_NULL(cursor) && (!cursor->is_session_cursor()
-                                   || !cursor->is_ref_by_refcursor())) {
+                                   && !cursor->is_ref_by_refcursor())) {
             tmp_ret = ObSPIService::spi_cursor_close(&ctx_, func_.get_package_id(),
                                                      func_.get_routine_id(), i, true);
           } else {

@@ -52,6 +52,19 @@ private:
     ObHeartBeatProcess &hb_process_;
   };
 
+  class ObServerIdPersistTask : public common::ObTimerTask
+  {
+  public:
+    ObServerIdPersistTask() : is_need_retry_(false) {};
+    virtual ~ObServerIdPersistTask() {};
+    virtual void runTimerTask();
+    bool is_need_retry() const { return ATOMIC_LOAD(&is_need_retry_); }
+    void disable_need_retry_flag() { ATOMIC_STORE(&is_need_retry_, false); }
+    void enable_need_retry_flag() { ATOMIC_STORE(&is_need_retry_, true); }
+  private:
+    bool is_need_retry_;
+  };
+
   int try_reload_config(const int64_t config_version);
   int try_reload_time_zone_info(const int64_t time_zone_info_version);
 private:
@@ -63,6 +76,7 @@ private:
   const ObGlobalContext &gctx_;
   ObServerSchemaUpdater &schema_updater_;
   ObLeaseStateMgr &lease_state_mgr_;
+  ObServerIdPersistTask server_id_persist_task_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHeartBeatProcess);
 };

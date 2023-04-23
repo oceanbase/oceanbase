@@ -314,6 +314,7 @@ public:
         int64_t global_sys_version_start = v.curr_query_sys_global_schema_version_;
         // (c1) 需要考虑远端机器的Schema比本地落后，远端机器抛出Schema错误的情景
         //      当远端抛出Schema错误的时候，强行将所有Schema错误转化成OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH
+        //      权限不足也会触发该重试规则，因为远端schema刷新不及时可能误报权限不足，此时是需要重试的
         // (c4) 弱一致性读场景，会校验schema版本是否大于等于数据的schema版本，
         //      如果schema版本旧，则要求重试；
         //      目的是保证：始终采用新schema解析老数据

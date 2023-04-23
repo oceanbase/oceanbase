@@ -83,7 +83,7 @@ int ObPlanSet::match_params_info(const ParamStore *params,
   } else {
     //匹配原始的参数
     int64_t N = params->count();
-    LOG_DEBUG("params info", K(params_info_), K(*params), K(this));
+    LOG_TRACE("params info", K(params_info_), K(*params), K(this));
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < N; ++i) {
       if (OB_FAIL(match_param_info(params_info_.at(i),
                                    params->at(i),
@@ -196,6 +196,7 @@ int ObPlanSet::match_params_info(const ParamStore *params,
     }
     if (OB_FAIL(ret)) {
       is_same = false;
+      LOG_TRACE("after match param result", K(ret), K(is_same), K(params_info_));
     }
   }
   LOG_DEBUG("after match param result", K(ret), K(is_same), K(params_info_));
@@ -261,6 +262,7 @@ int ObPlanSet::match_param_info(const ObParamInfo &param_info,
         is_same = true;
       } else {
         is_same = false;
+        LOG_TRACE("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
       }
       LOG_DEBUG("ext match param info", K(data_type), K(param_info), K(is_same), K(ret));
     } else if (param_info.is_oracle_empty_string_ && !param.is_null()) { //普通字符串不匹配空串的计划
@@ -934,7 +936,7 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
                    K(ret), K(const_param.get_type()), K(params.at(param_idx).get_type()));
         } else if (!const_param.can_compare(params.at(param_idx)) ||
                    0 != const_param.compare(params.at(param_idx))) {
-          LOG_DEBUG("not matched const param", K(const_param), K(params.at(param_idx)));
+          LOG_TRACE("not matched const param", K(const_param), K(params.at(param_idx)));
           is_matched = false;
         } else {
           // do nothing
@@ -968,7 +970,7 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
         }
       }
       if (match_const) {
-        LOG_DEBUG("matched const param constraint", K(params), K(all_possible_const_param_constraints_.at(i)));
+        LOG_TRACE("matched const param constraint", K(params), K(all_possible_const_param_constraints_.at(i)));
         is_matched = false; // matching one of the constraint, need to generated new plan
       }
     }
@@ -1016,7 +1018,7 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
     }
     if (OB_SUCC(ret) && !is_matched) {
       is_matched = false;
-      LOG_DEBUG("not match equal param constraint", K(params), K(first_idx), K(second_idx));
+      LOG_TRACE("not match equal param constraint", K(params), K(first_idx), K(second_idx));
     }
   }
 
@@ -1174,7 +1176,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
     if (OB_SUCC(ret)) {
       switch(plan_type) {
       case OB_PHY_PLAN_LOCAL:{
-        SQL_PC_LOG(DEBUG, "plan set add plan, local plan", K(ret));
+        SQL_PC_LOG(TRACE, "plan set add plan, local plan", K(ret));
         if (is_multi_stmt_plan()) {
           if (NULL != array_binding_plan_) {
             ret = OB_SQL_PC_PLAN_DUPLICATE;
@@ -1183,7 +1185,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
           }
         } else {
           if (OB_FAIL(add_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
-            SQL_PC_LOG(DEBUG, "fail to add local plan", K(ret));
+            SQL_PC_LOG(TRACE, "fail to add local plan", K(ret));
           } else if (OB_SUCC(ret) 
                     && FALSE_IT(direct_local_plan_ = &plan)) {
             // do nothing
@@ -1207,7 +1209,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
         }
       } break;
       case OB_PHY_PLAN_DISTRIBUTED: {
-        SQL_PC_LOG(DEBUG, "plan set add plan, distr plan",  K(ret));
+        SQL_PC_LOG(TRACE, "plan set add plan, distr plan",  K(ret));
         if (OB_FAIL(add_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
           LOG_WARN("failed to add dist plan", K(ret), K(plan));
         } else {
@@ -1230,7 +1232,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
       }
     }
   }
-  SQL_PC_LOG(DEBUG, "plan set add plan", K(ret), K(&plan), "plan type ", plan_type,
+  SQL_PC_LOG(TRACE, "plan set add plan", K(ret), K(&plan), "plan type ", plan_type,
                     K(has_duplicate_table_), K(stmt_type_));
   // increase plan ref_count,
   // if plan doesn't add in plan cache,don't increase ref_count;
@@ -1319,7 +1321,7 @@ int ObSqlPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
       if (NULL == partition_infos.at(i)) {
         ret = OB_ERR_UNEXPECTED;
-        SQL_PC_LOG(DEBUG, "invalid partition info");
+        SQL_PC_LOG(TRACE, "invalid partition info");
       } else if (OB_FAIL(table_locations_.push_back(partition_infos.at(i)->get_table_location()))) {
         SQL_PC_LOG(WARN, "fail to push table location", K(ret));
       } else if (is_all_non_partition_
@@ -1342,7 +1344,7 @@ int ObSqlPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_
   } else if (0 == need_try_plan_ || is_multi_stmt_plan()) {
     if (OB_FAIL(get_plan_normal(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {
-        LOG_DEBUG("fail to get plan normal", K(ret));
+        LOG_TRACE("fail to get plan normal", K(ret));
       } else {
         LOG_WARN("fail to get plan normal", K(ret));
       }
@@ -1350,7 +1352,7 @@ int ObSqlPlanSet::select_plan(ObPlanCacheCtx &pc_ctx, ObPlanCacheObject *&cache_
   } else {
     if (OB_FAIL(get_plan_special(pc_ctx, plan))) {
       if (OB_SQL_PC_NOT_EXIST == ret) {
-        LOG_DEBUG("fail to get plan special", K(ret));
+        LOG_TRACE("fail to get plan special", K(ret));
       } else {
         LOG_WARN("fail to get plan special", K(ret));
       }
@@ -1591,7 +1593,7 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
     SMART_VAR(PLS, candi_table_locs) {
       if (enable_inner_part_parallel_exec_) {
         if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
-          LOG_DEBUG("failed to get px plan", K(ret));
+          LOG_TRACE("failed to get px plan", K(ret));
         }
       } else if (OB_FAIL(get_plan_type(table_locations_,
                                        false,
@@ -1599,7 +1601,7 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
                                        candi_table_locs,
                                        plan_type))) {
         // ret = OB_SQL_PC_NOT_EXIST;
-        SQL_PC_LOG(DEBUG, "failed to get plan type", K(ret));
+        SQL_PC_LOG(TRACE, "failed to get plan type", K(ret));
       }
 
       if (OB_SUCC(ret) && !enable_inner_part_parallel_exec_) {
@@ -1613,7 +1615,7 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
                 plan = array_binding_plan_;
               }
             } else if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_LOCAL, pc_ctx, plan))) {
-              LOG_DEBUG("failed to get local plan", K(ret));
+              LOG_TRACE("failed to get local plan", K(ret));
             }
           } break;
           case OB_PHY_PLAN_REMOTE: {
@@ -1625,7 +1627,7 @@ int ObSqlPlanSet::get_plan_normal(ObPlanCacheCtx &pc_ctx,
           case OB_PHY_PLAN_DISTRIBUTED: {
             if (OB_FAIL(get_physical_plan(OB_PHY_PLAN_DISTRIBUTED, pc_ctx, plan))) {
               if (OB_SQL_PC_NOT_EXIST == ret) {
-                LOG_DEBUG("fail to get dist plan", K(ret));
+                LOG_TRACE("fail to get dist plan", K(ret));
               } else {
                 LOG_WARN("fail to get dist plan", K(ret));
               }
@@ -1713,9 +1715,9 @@ int ObSqlPlanSet::try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
   int ret = OB_SUCCESS;
   plan = NULL;
   if (OB_FAIL(dist_plans_.get_plan(pc_ctx, plan))) {
-    LOG_DEBUG("failed to get dist plan", K(ret));
+    LOG_TRACE("failed to get dist plan", K(ret));
   } else if (plan != NULL) {
-    LOG_DEBUG("succeed to get dist plan", K(*plan));
+    LOG_TRACE("succeed to get dist plan", K(*plan));
   }
   if (OB_SQL_PC_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
@@ -1748,7 +1750,7 @@ int ObSqlPlanSet::get_plan_special(ObPlanCacheCtx &pc_ctx,
   //try dist plan
   if (OB_SUCC(ret) && get_next) {
     if (OB_FAIL(try_get_dist_plan(pc_ctx, plan))) {
-      LOG_DEBUG("failed to try get dist plan", K(ret));
+      LOG_TRACE("failed to try get dist plan", K(ret));
     }
   }
   if (OB_SUCC(ret) && nullptr == plan) {

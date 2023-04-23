@@ -566,7 +566,7 @@ bool ObLogArchivePieceContext::is_max_round_done_(const palf::LSN &lsn) const
   } else if (! inner_piece_context_.is_valid()
       || inner_piece_context_.round_id_ < max_round_id_
       || inner_piece_context_.piece_id_ < round_context_.max_piece_id_
-      || ! inner_piece_context_.is_fronze_()
+      || ! inner_piece_context_.is_frozen_()
       || lsn < inner_piece_context_.max_lsn_in_piece_) {
     bret = false;
   } else {
@@ -583,7 +583,7 @@ bool ObLogArchivePieceContext::need_backward_round_(const palf::LSN &lsn) const
   if (min_round_id_ > 0
       && round_context_.is_valid()
       && round_context_.round_id_ > min_round_id_
-      && (inner_piece_context_.is_fronze_() || inner_piece_context_.is_empty_())
+      && (inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
       && round_context_.min_piece_id_ == inner_piece_context_.piece_id_
       && inner_piece_context_.min_lsn_in_piece_ > lsn) {
     bret = true;
@@ -612,7 +612,7 @@ bool ObLogArchivePieceContext::need_forward_round_(const palf::LSN &lsn) const
       // 当前piece状态为LOW_BOUND, 在当前piece内日志流仍未产生
       bret = true;
     }
-    else if ((inner_piece_context_.is_fronze_() || inner_piece_context_.is_empty_())
+    else if ((inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
         && inner_piece_context_.max_lsn_in_piece_ <= lsn) {
       // 同时当前piece状态为FROZEN/EMPTY
       // 并且需要日志LSN大于当前piece下最大值
@@ -635,8 +635,13 @@ bool ObLogArchivePieceContext::need_load_round_info_(const share::SCN &scn, cons
   } else if (! round_context_.is_valid()) {
     bret = true;
   } else if (round_context_.max_piece_id_ == inner_piece_context_.piece_id_
-      && inner_piece_context_.is_fronze_()
+      && (inner_piece_context_.is_frozen_() || inner_piece_context_.is_empty_())
       && lsn >= inner_piece_context_.max_lsn_in_piece_) {
+    // The piece id of current inner piece equals to the max piece id of the current round,
+    // and the no more log will be added in the piece (piece state is frozen or empty),
+    // and the lsn needed is larger than the max lsn of the piece.
+    //
+    // In this case, the piece range should be reloaded and advanced.
     bret = true;
   } else {
     bret = cal_piece_id_(scn) > round_context_.max_piece_id_;
@@ -787,7 +792,7 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
     op = PieceOp::LOAD;
   }
   // 当前piece状态确定
-  else if (inner_piece_context_.is_fronze_()) {
+  else if (inner_piece_context_.is_frozen_()) {
     // check forward or backward
     if (inner_piece_context_.max_lsn_in_piece_ > lsn) {
       if (inner_piece_context_.min_lsn_in_piece_ > lsn) {
@@ -1134,7 +1139,7 @@ int ObLogArchivePieceContext::get_(const palf::LSN &lsn,
       || inner_piece_context_.is_empty_()
       || inner_piece_context_.is_low_bound_()) {
     // skip
-  } else if (inner_piece_context_.is_fronze_()) {
+  } else if (inner_piece_context_.is_frozen_()) {
     if (inner_piece_context_.min_lsn_in_piece_ <= lsn && inner_piece_context_.max_lsn_in_piece_ > lsn) {
       done = true;
     }

@@ -151,6 +151,7 @@ public:
 
   static int prepare_data_for_binding_info(const ObTabletID &tablet_id, const ObLS &ls, const transaction::ObMulSourceDataNotifyArg &trans_flags);
 private:
+  static int check_create_new_tablets(const obrpc::ObBatchCreateTabletArg &arg);
   static int verify_tablets_absence(
       const obrpc::ObBatchCreateTabletArg &arg,
       common::ObIArray<ObTabletCreateInfo> &tablet_create_info_array);

@@ -448,6 +448,7 @@ DEFINE_ERROR(OB_ERR_OBSERVER_START, -4393, -1, "HY000", "observer start process 
 DEFINE_ERROR(OB_ERR_OBSERVER_STOP, -4394, -1, "HY000", "observer stop process failure");
 DEFINE_ERROR(OB_ERR_OBSERVICE_START, -4395, -1, "HY000", "observice start process has failure");
 DEFINE_ERROR_DEP(OB_ERR_THREAD_PANIC, -4396, -1, "HY000", "Worker thread pannic, thread may be terminated or hung");
+DEFINE_ERROR(OB_ENCODING_EST_SIZE_OVERFLOW, -4397, -1, "HY000", "Encoding estimated size overflow");
 
 ////////////////////////////////////////////////////////////////
 //error code for root server & server management -4500 ---- -5000

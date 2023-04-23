@@ -824,7 +824,6 @@ public:
       //memset(buckets_, 0, sizeof(hashbucket) * bucket_num);
       bucket_num_ = bucket_num;
       allocer_ = allocer;
-      allocer_->inc_ref();
       bucket_allocer_ = bucket_allocer;
     }
     return ret;
@@ -848,7 +847,6 @@ public:
           buckets_[i].node = NULL;
         }
       }
-      allocer_->dec_ref();
       allocer_ = NULL;
       //delete[] buckets_;
       //buckets_ = NULL;

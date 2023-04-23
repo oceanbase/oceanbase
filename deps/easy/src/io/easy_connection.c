@@ -3229,7 +3229,7 @@ easy_addr_t* easy_connection_get_local_addr(easy_connection_t* c, easy_addr_t* e
 char *easy_connection_str(easy_connection_t *c)
 {
     static __thread char buffer[192];
-    char local_addr[32], dest_addr[32];
+    char local_addr[64], dest_addr[64];
     easy_addr_t local_eaddr;
 
     if (!c) {
@@ -3238,8 +3238,8 @@ char *easy_connection_str(easy_connection_t *c)
 
     easy_connection_get_local_addr(c, &local_eaddr);
     lnprintf(buffer, 192, "%s_%s_%d_%p tp=%d t=%ld-%ld s=%d r=%d io=%ld/%ld sq=%ld",
-        easy_inet_addr_to_str(&local_eaddr, local_addr, 32),
-        easy_inet_addr_to_str(&c->addr, dest_addr, 32), c->fd, c, c->type,
+        easy_inet_addr_to_str(&local_eaddr, local_addr, sizeof(local_addr)),
+        easy_inet_addr_to_str(&c->addr, dest_addr, sizeof(dest_addr)), c->fd, c, c->type,
         (int64_t)(1000000LL * c->start_time), (int64_t)(1000000LL * c->last_time),
         c->status, c->doing_request_count, c->recv_bytes, c->send_bytes, c->ack_bytes);
     return buffer;

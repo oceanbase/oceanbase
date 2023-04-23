@@ -1675,7 +1675,8 @@ int ObDataIndexBlockBuilder::init(
     STORAGE_LOG(WARN, "fail to init referemce pointer members", K(ret));
   } else if (OB_UNLIKELY(index_store_desc->row_store_type_ != data_store_desc.row_store_type_
       && (index_store_desc->row_store_type_ == FLAT_ROW_STORE
-          || data_store_desc.row_store_type_ == FLAT_ROW_STORE))) {
+          || data_store_desc.row_store_type_ == FLAT_ROW_STORE)
+      && !data_store_desc.is_force_flat_store_type_)) {
     // since n-1 micro block should keep format same with data_blocks
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "expect row store type equal", K(ret), KPC(index_store_desc), K(data_store_desc));
@@ -1689,16 +1690,19 @@ int ObDataIndexBlockBuilder::init(
     STORAGE_LOG(WARN, "failed to init idx read info", KPC(index_store_desc), K(ret));
   } else if (OB_FAIL(micro_helper_.open(*index_store_desc, idx_read_info_, *sstable_allocator_))) {
     STORAGE_LOG(WARN, "fail to open base writer", K(ret));
-  } else if (OB_FAIL(ObMacroBlockWriter::build_micro_writer(
-                     index_store_desc,
-                     *sstable_allocator_,
-                     meta_block_writer_,
-                     GCONF.micro_block_merge_verify_level))) {
-    STORAGE_LOG(WARN, "fail to init meta block writer", K(ret));
   } else if (OB_FAIL(meta_row_.init(index_store_desc->row_column_count_))) {
     STORAGE_LOG(WARN, "fail to init flat writer", K(ret));
   } else if (OB_FAIL(leaf_store_desc_.assign(*index_store_desc))) {
     STORAGE_LOG(WARN, "fail to assign leaf store desc", K(ret));
+  } else if (data_store_desc.is_force_flat_store_type_) {
+    leaf_store_desc_.force_flat_store_type();
+  }
+  if (FAILEDx(ObMacroBlockWriter::build_micro_writer(
+                    &leaf_store_desc_,
+                    *sstable_allocator_,
+                    meta_block_writer_,
+                    GCONF.micro_block_merge_verify_level))) {
+    STORAGE_LOG(WARN, "fail to init meta block writer", K(ret));
   } else {
     // only increase the size limit of n-1 level micro block
     leaf_store_desc_.micro_block_size_ = leaf_store_desc_.micro_block_size_limit_; // nearly 2M
@@ -1961,6 +1965,10 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
     micro_writer_->dump_diagnose_info();
     STORAGE_LOG(INFO, "print error meta block");
     meta_block_writer_->dump_diagnose_info();
+    if (common::ObStoreFormat::is_row_store_type_with_encoding(macro_block.get_row_store_type())) {
+      ret = OB_ENCODING_EST_SIZE_OVERFLOW;
+      STORAGE_LOG(WARN, "build macro block failed by probably estimated maximum encoding data size overflow", K(ret));
+    }
   }
   clean_status();
   return ret;

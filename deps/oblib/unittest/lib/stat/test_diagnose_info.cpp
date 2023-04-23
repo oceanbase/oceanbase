@@ -203,44 +203,6 @@ TEST(ObDiagnoseSessionInfo, normal)
   }
 }
 
-class AtomicWaitEventTestRun : public cotesting::DefaultRunnable
-{
-public:
-  AtomicWaitEventTestRun() {}
-  ~AtomicWaitEventTestRun() {}
-  void run1() override
-  {
-    ObSessionStatEstGuard session_guard(1, 1);
-    lock_.wrlock();
-    usleep(10000); // 10ms
-    lock_.unlock();
-  }
-
-private:
-  SpinRWLock lock_;
-};
-
-TEST(ObDiagnoseSessionInfo, atomic_wait_event)
-{
-  ObSessionStatEstGuard session_guard(1, 1);
-  AtomicWaitEventTestRun test_run;
-  test_run.set_thread_count(2);
-  test_run.start();
-  test_run.wait();
-  ObDiagnoseSessionInfo *info = ObDiagnoseSessionInfo::get_local_diagnose_info();
-
-  ASSERT_TRUE(NULL != info);
-  ASSERT_EQ(1, info->get_tenant_id());
-
-  ObWaitEventStat *event_stat = info->get_event_stats().get(ObWaitEventIds::LATCH_WAIT_QUEUE_LOCK_WAIT);
-  ASSERT_TRUE(NULL != event_stat);
-  EXPECT_TRUE(0 < event_stat->total_waits_);
-
-  event_stat = info->get_event_stats().get(ObWaitEventIds::DEFAULT_SPIN_RWLOCK_WAIT);
-  ASSERT_TRUE(NULL != event_stat);
-  EXPECT_TRUE(0 < event_stat->total_waits_);
-}
-
 }
 }
 

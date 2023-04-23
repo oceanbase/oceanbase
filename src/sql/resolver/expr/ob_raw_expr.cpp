@@ -248,7 +248,7 @@ int ObRawExpr::assign(const ObRawExpr &other)
       alias_column_name_ = other.alias_column_name_;
       expr_name_= other.expr_name_;
       ref_count_ = other.ref_count_;
-      is_explicited_reference_ = other.is_explicited_reference_;
+      reference_type_ = other.reference_type_;
       is_for_generated_column_ = other.is_for_generated_column_;
       extra_ = other.extra_;
       is_called_in_sql_ = other.is_called_in_sql_;
@@ -321,7 +321,7 @@ void ObRawExpr::reset()
   rel_ids_.reset();
   set_data_type(ObMaxType);
   ref_count_ = 0;
-  is_explicited_reference_ = false;
+  reference_type_ = ExplicitedRefType::NONE_REF;
   is_for_generated_column_ = false;
   is_called_in_sql_ = true;
   is_calculated_ = false;

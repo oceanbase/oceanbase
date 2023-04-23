@@ -1832,7 +1832,7 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
     if (OB_ENTRY_EXIST != ret) {
       LOG_WARN("inner schedule task failed", K(ret), K(*redefinition_task));
     }
-  } else if (ObDDLType::DDL_DIRECT_LOAD == task_record.ddl_type_
+  } else if (ObDDLTask::check_is_load_data(task_record.ddl_type_)
             && OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(ObDDLTaskID(task_record.tenant_id_, task_record.task_id_)))) {
     LOG_WARN("register_task_time recover fail", K(ret));
   }

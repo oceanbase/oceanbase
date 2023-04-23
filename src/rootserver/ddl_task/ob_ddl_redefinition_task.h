@@ -163,23 +163,29 @@ protected:
   int check_update_autoinc_end(bool &is_end);
   int check_check_table_empty_end(bool &is_end);
   int sync_stats_info();
-  int sync_table_level_stats_info(common::ObMySQLTransaction &trans, const ObTableSchema &data_table_schema);
+  int sync_table_level_stats_info(common::ObMySQLTransaction &trans,
+                                  const ObTableSchema &data_table_schema,
+                                  const bool need_sync_history = true);
   int sync_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                       const ObTableSchema &data_table_schema,
-                                      const ObTableSchema &new_table_schema);
+                                      const ObTableSchema &new_table_schema,
+                                      const bool need_sync_history = true);
   int sync_column_level_stats_info(common::ObMySQLTransaction &trans,
                                    const ObTableSchema &data_table_schema,
                                    const ObTableSchema &new_table_schema,
-                                   ObSchemaGetterGuard &schema_guard);
+                                   ObSchemaGetterGuard &schema_guard,
+                                   const bool need_sync_history = true);
   int sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                              const ObTableSchema &data_table_schema,
                                              const uint64_t old_col_id,
-                                             const uint64_t new_col_id);
+                                             const uint64_t new_col_id,
+                                             const bool need_sync_history = true);
   int sync_one_column_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                                  const ObTableSchema &data_table_schema,
                                                  const ObTableSchema &new_table_schema,
                                                  const uint64_t old_col_id,
-                                                 const uint64_t new_col_id);   
+                                                 const uint64_t new_col_id,
+                                                 const bool need_sync_history = true);
   int generate_sync_partition_level_stats_sql(const char *table_name,
                                               const ObIArray<ObObjectID> &src_partition_ids,
                                               const ObIArray<ObObjectID> &dest_partition_ids,
@@ -194,6 +200,9 @@ protected:
                                                      const int64_t batch_start,
                                                      const int64_t batch_end,
                                                      ObSqlString &sql_string);
+
+  bool check_need_sync_stats_history();
+  bool check_need_sync_stats();
   int sync_tablet_autoinc_seq();
   int check_need_rebuild_constraint(const ObTableSchema &table_schema,
                                     ObIArray<uint64_t> &constraint_ids,

@@ -520,8 +520,8 @@ int TableAccessor::get_self_zone_name(ObStringHolder &zone_name_holder)
   int64_t pos = 0;
   const char *columns[1] = {"zone"};
   char where_condition[STACK_BUFFER_SIZE] = {0};
-  char ip_string[16] = {0};
-  if (!GCTX.self_addr().ip_to_string(ip_string, 16)) {
+  char ip_string[INET6_ADDRSTRLEN] = {0};
+  if (!GCTX.self_addr().ip_to_string(ip_string, sizeof(ip_string))) {
     ret = OB_ERR_UNEXPECTED;
     COORDINATOR_LOG_(WARN, "ip to string failed");
   } else if (CLICK_FAIL(databuff_printf(where_condition, STACK_BUFFER_SIZE, pos, "where svr_ip='%s' and svr_port=%d", ip_string, GCTX.self_addr().get_port()))) {
