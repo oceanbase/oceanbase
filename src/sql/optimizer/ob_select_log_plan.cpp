@@ -5728,9 +5728,9 @@ int ObSelectLogPlan::check_wf_pushdown_supported(ObWinFunRawExpr *win_expr,
                                                  bool &can_wf_pushdown)
 {
   int ret = OB_SUCCESS;
-  if (NULL == win_expr) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("NULL expr", K(ret));
+  if (OB_ISNULL(win_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
   } else {
     // only reporting window function can pushdown
     // If win_expr->get_partition_exprs().empty(), use window_function_parallel in single partition by yishen instead
@@ -5743,9 +5743,18 @@ int ObSelectLogPlan::check_wf_pushdown_supported(ObWinFunRawExpr *win_expr,
       case T_FUN_SYS_BIT_OR:
       case T_FUN_SYS_BIT_XOR:
       case T_FUN_MIN:
-      case T_FUN_MAX:
+      case T_FUN_MAX: {
+        break;
+      }
       case T_FUN_COUNT:
       case T_FUN_SUM: {
+        if (OB_ISNULL(win_expr->get_agg_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), KPC(win_expr));
+        } else if (win_expr->get_agg_expr()->is_param_distinct()) {
+          // If aggr expr is count distinct or sum distinct, wf can't be parallel.
+          can_wf_pushdown = false;
+        }
         break;
       }
       default: {
