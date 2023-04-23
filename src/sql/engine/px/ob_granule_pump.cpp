@@ -777,7 +777,6 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   ObQueryRangeArray scan_ranges;
   ObQueryRangeArray skip_scan_ranges;
-  ObGetMethodArray get_method;
   ObPhysicalPlanCtx *plan_ctx = nullptr;
   bool has_extract_query_range = false;
   // 如果tsc有对应的query range，就预先抽取对应的query range
@@ -809,7 +808,6 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                     ctx.get_allocator(),
                     ctx,
                     scan_ranges,
-                    get_method,
                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
         LOG_WARN("failed to get scan ranges", K(ret));
       } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(
@@ -841,7 +839,6 @@ int ObGranuleSplitter::get_query_range(ObExecContext &ctx,
                       ctx.get_allocator(),
                       ctx,
                       scan_ranges,
-                      get_method,
                       ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to get scan ranges", K(ret));
     } else if (OB_FAIL(tsc_pre_query_range.get_ss_tablet_ranges(

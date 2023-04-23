@@ -4,8 +4,7 @@
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -15,8 +14,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -26,8 +24,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
@@ -39,11 +36,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -59,11 +52,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -79,11 +68,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -101,9 +86,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -115,9 +98,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -129,9 +110,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -145,8 +124,7 @@ count of rang columns = 3
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -156,8 +134,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -167,8 +144,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -180,8 +156,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -191,8 +166,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -202,8 +176,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
@@ -215,10 +188,7 @@ count of rang columns = 3
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -232,10 +202,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -249,10 +216,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -268,11 +232,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -288,11 +248,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -308,11 +264,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -330,11 +282,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -350,11 +298,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -370,11 +314,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -392,10 +332,7 @@ count of rang columns = 3
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -409,10 +346,7 @@ count of rang columns = 1
 **filter count = 2**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -426,10 +360,7 @@ count of rang columns = 2
 **filter count = 2**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -445,11 +376,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -465,11 +392,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -485,11 +408,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -507,9 +426,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -521,9 +438,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -535,9 +450,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -551,9 +464,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -565,9 +476,7 @@ count of rang columns = 1
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -579,9 +488,7 @@ count of rang columns = 2
 **filter count = 2**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -595,8 +502,7 @@ count of rang columns = 3
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -606,8 +512,7 @@ count of rang columns = 1
 **filter count = 2**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 2
@@ -617,8 +522,7 @@ count of rang columns = 2
 **filter count = 2**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
@@ -630,11 +534,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -650,11 +550,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -670,11 +566,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -692,9 +584,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -706,9 +596,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -720,9 +608,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -736,11 +622,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -756,11 +638,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -776,11 +654,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -798,11 +672,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -818,11 +688,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 1
@@ -838,11 +704,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 0
-get_methods 1: 1
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 1
@@ -860,9 +722,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -874,9 +734,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 1
@@ -888,9 +746,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -904,8 +760,7 @@ count of rang columns = 3
 **filter count = 0**
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -915,8 +770,7 @@ count of rang columns = 1
 **filter count = 0**
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -926,8 +780,7 @@ count of rang columns = 2
 **filter count = 0**
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 3
@@ -939,10 +792,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -956,10 +806,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 1
-get_methods 1: 0
-get_methods 2: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 0
@@ -973,10 +820,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -992,9 +836,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -1006,9 +848,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 1
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 0
@@ -1020,9 +860,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -1036,11 +874,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -1056,11 +890,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 1
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -1076,11 +906,7 @@ count of rang columns = 2
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-get_methods.count() = 4
-get_methods 0: 1
-get_methods 1: 1
-get_methods 2: 0
-get_methods 3: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 star_border_flag[1] = 1
@@ -1098,8 +924,7 @@ count of rang columns = 3
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1109,8 +934,7 @@ count of rang columns = 1
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 2
@@ -1120,8 +944,7 @@ count of rang columns = 2
 **filter count = 1**
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 3

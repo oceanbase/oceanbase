@@ -6069,7 +6069,7 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
                                                  ObIAllocator &allocator,
                                                  ObExecContext &exec_ctx,
                                                  ObQueryRangeArray &ranges,
-                                                 ObGetMethodArray &get_methods,
+                                                 bool &all_single_value_ranges,
                                                  const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
@@ -6164,8 +6164,8 @@ OB_INLINE int ObQueryRange::gen_simple_get_range(const ObKeyPart &root,
     range->is_physical_rowid_range_ = contain_phy_rowid_key;
     if (OB_FAIL(ranges.push_back(range))) {
       LOG_WARN("push back range to array failed", K(ret));
-    } else if (OB_FAIL(get_methods.push_back(!always_false))) {
-      LOG_WARN("push back get method failed", K(ret));
+    } else if (always_false) {
+      all_single_value_ranges = false;
     }
   }
   return ret;
@@ -6372,7 +6372,7 @@ int ObQueryRange::store_range(ObNewRange *range,
                               bool is_get_range,
                               ObSearchState &search_state,
                               ObQueryRangeArray &ranges,
-                              ObGetMethodArray &get_methods)
+                              bool &all_single_value_ranges)
 {
   int ret = OB_SUCCESS;
   bool is_duplicate = false;
@@ -6392,8 +6392,8 @@ int ObQueryRange::store_range(ObNewRange *range,
   if (OB_SUCC(ret) && !is_duplicate) {
     if (OB_FAIL(ranges.push_back(range))) {
       LOG_WARN("push back range failed", K(ret));
-    } else if (OB_FAIL(get_methods.push_back(is_get_range))) {
-      LOG_WARN("push back get_method failed", K(ret));
+    } else if(!is_get_range) {
+      all_single_value_ranges = false;
     }
   }
   return ret;
@@ -6402,7 +6402,7 @@ int ObQueryRange::store_range(ObNewRange *range,
 int ObQueryRange::and_first_search(ObSearchState &search_state,
                                    ObKeyPart *cur,
                                    ObQueryRangeArray &ranges,
-                                   ObGetMethodArray &get_methods,
+                                   bool &all_single_value_ranges,
                                    const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
@@ -6414,7 +6414,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K_(search_state.start), K_(search_state.end), K(cur));
   } else if (cur->is_in_key()) {
-    if (OB_FAIL(and_first_in_key(search_state, cur, ranges, get_methods, dtc_params))) {
+    if (OB_FAIL(and_first_in_key(search_state, cur, ranges, all_single_value_ranges, dtc_params))) {
       LOG_WARN("failed to and in key range", K(ret));
     }
   } else {
@@ -6472,7 +6472,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
       if (OB_FAIL(SMART_CALL(and_first_search(search_state,
                                               cur->and_next_,
                                               ranges,
-                                              get_methods,
+                                              all_single_value_ranges,
                                               dtc_params)))) {
       } else {
         search_state.depth_ = copy_depth;
@@ -6506,7 +6506,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
                                        copy_depth,
                                        copy_produce_range,
                                        ranges,
-                                       get_methods,
+                                       all_single_value_ranges,
                                        cur->is_phy_rowid_key_part()))) {
           LOG_WARN("failed to generate cur range", K(ret));
         }
@@ -6524,7 +6524,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
     }
     cur = cur->or_next_;
     if (OB_SUCC(ret) &&
-        OB_FAIL(SMART_CALL(and_first_search(search_state, cur, ranges, get_methods, dtc_params)))) {
+        OB_FAIL(SMART_CALL(and_first_search(search_state, cur, ranges, all_single_value_ranges, dtc_params)))) {
       LOG_WARN("failed to do and first search", K(ret));
     }
   }
@@ -6534,7 +6534,7 @@ int ObQueryRange::and_first_search(ObSearchState &search_state,
 int ObQueryRange::and_first_in_key(ObSearchState &search_state,
                                    ObKeyPart *cur,
                                    ObQueryRangeArray &ranges,
-                                   ObGetMethodArray &get_methods,
+                                   bool &all_single_value_ranges,
                                    const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
@@ -6581,7 +6581,7 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
         if (OB_FAIL(SMART_CALL(and_first_search(search_state,
                                                 cur->and_next_,
                                                 ranges,
-                                                get_methods,
+                                                all_single_value_ranges,
                                                 dtc_params)))) {
           LOG_WARN("failed to do and first search", K(ret));
         } else {
@@ -6594,7 +6594,7 @@ int ObQueryRange::and_first_in_key(ObSearchState &search_state,
                                        copy_depth,
                                        copy_produce_range,
                                        ranges,
-                                       get_methods,
+                                       all_single_value_ranges,
                                        cur->is_phy_rowid_key_part()))) {
           LOG_WARN("failed to generate cur range", K(ret));
         }
@@ -6608,7 +6608,7 @@ int ObQueryRange::generate_cur_range(ObSearchState &search_state,
                                      const int64_t copy_depth,
                                      const bool copy_produce_range,
                                      ObQueryRangeArray &ranges,
-                                     ObGetMethodArray &get_methods,
+                                     bool &all_single_value_ranges,
                                      const bool is_phy_rowid_range)
 {
   int ret = OB_SUCCESS;
@@ -6628,7 +6628,7 @@ int ObQueryRange::generate_cur_range(ObSearchState &search_state,
                                  is_get_range,
                                  search_state,
                                  ranges,
-                                 get_methods))) {
+                                 all_single_value_ranges))) {
     LOG_WARN("store range failed", K(ret));
   } else {
     /* reset search_state  */
@@ -6647,9 +6647,8 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
                                     const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
-  ObGetMethodArray get_methods;
   if (OB_LIKELY(!need_deep_copy())) {
-    if (OB_FAIL(get_tablet_ranges(allocator, exec_ctx, ranges, get_methods, dtc_params))) {
+    if (OB_FAIL(direct_get_tablet_ranges(allocator, exec_ctx, ranges, all_single_value_ranges, dtc_params))) {
       LOG_WARN("get tablet ranges without deep copy failed", K(ret));
     }
   } else {
@@ -6659,17 +6658,8 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
       LOG_WARN("deep copy query range failed", K(ret));
     } else if (OB_FAIL(tmp_query_range.final_extract_query_range(exec_ctx, dtc_params))) {
       LOG_WARN("final extract query range failed", K(ret));
-    } else if (OB_FAIL(tmp_query_range.get_tablet_ranges(ranges, get_methods, dtc_params))) {
+    } else if (OB_FAIL(tmp_query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params))) {
       LOG_WARN("get tablet range with deep copy failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    int64_t N = get_methods.count();
-    all_single_value_ranges = true;
-    for (int64_t i = 0; all_single_value_ranges && i < N; ++i) {
-      if (!get_methods.at(i)) {
-        all_single_value_ranges = false;
-      }
     }
   }
   return ret;
@@ -6796,11 +6786,11 @@ int ObQueryRange::ObSearchState::init_search_state(int64_t column_count,
 }
 
 // @notice 调用这个接口之前必须调用need_deep_copy()来判断是否可以不用拷贝就进行final extract
-int ObQueryRange::get_tablet_ranges(ObIAllocator &allocator,
-                                    ObExecContext &exec_ctx,
-                                    ObQueryRangeArray &ranges,
-                                    ObGetMethodArray &get_methods,
-                                    const ObDataTypeCastParams &dtc_params) const
+int ObQueryRange::direct_get_tablet_ranges(ObIAllocator &allocator,
+                                          ObExecContext &exec_ctx,
+                                          ObQueryRangeArray &ranges,
+                                          bool &all_single_value_ranges,
+                                          const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(table_graph_.key_part_head_->is_always_true() ||
@@ -6811,20 +6801,20 @@ int ObQueryRange::get_tablet_ranges(ObIAllocator &allocator,
      LOG_WARN("get true_or_false range failed", K(ret));
     } else if (OB_FAIL(ranges.push_back(range))) {
      LOG_WARN("push back range failed", K(ret));
-    } else if (OB_FAIL(get_methods.push_back(is_get_range))) {
-     LOG_WARN("push back get_method failed", K(ret));
-    } else {}
+    } else if (!is_get_range) {
+      all_single_value_ranges = false;
+    }
   } else if (OB_LIKELY(table_graph_.is_precise_get_)) {
     if (OB_FAIL(gen_simple_get_range(*table_graph_.key_part_head_,
                                      allocator,
                                      exec_ctx,
                                      ranges,
-                                     get_methods,
+                                     all_single_value_ranges,
                                      dtc_params))) {
       LOG_WARN("gen simple get range failed", K(ret));
     }
   } else {
-    OZ(gen_simple_scan_range(allocator, exec_ctx, ranges, get_methods, dtc_params));
+    OZ(gen_simple_scan_range(allocator, exec_ctx, ranges, all_single_value_ranges, dtc_params));
   }
   return ret;
 }
@@ -6885,7 +6875,7 @@ OB_NOINLINE int ObQueryRange::gen_skip_scan_range(ObIAllocator &allocator,
 OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
                                                     ObExecContext &exec_ctx,
                                                     ObQueryRangeArray &ranges,
-                                                    ObGetMethodArray &get_methods,
+                                                    bool &all_single_value_ranges,
                                                     const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
@@ -6910,8 +6900,8 @@ OB_NOINLINE int ObQueryRange::gen_simple_scan_range(ObIAllocator &allocator,
     LOG_WARN("generate single range failed", K(ret));
   } else if (OB_FAIL(ranges.push_back(range))) {
     LOG_WARN("push back range to array failed", K(ret));
-  } else if (OB_FAIL(get_methods.push_back(is_get_range))) {
-    LOG_WARN("push back get method to array failed", K(ret));
+  } else if (!is_get_range) {
+    all_single_value_ranges = false;
   }
   return ret;
 }
@@ -7089,7 +7079,7 @@ inline int ObQueryRange::get_single_key_value(const ObKeyPart *key,
 #undef CAST_VALUE_TYPE
 
 OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
-                                                ObGetMethodArray &get_methods,
+                                                bool &all_single_value_ranges,
                                                 const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
@@ -7097,7 +7087,7 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
   int64_t query_range_mem_usage = 0;
   ObSearchState search_state(allocator_);
   ranges.reset();
-  get_methods.reset();
+  all_single_value_ranges = true;
   ObKeyPart *head_key = NULL;
   if (OB_UNLIKELY(CAN_READ != state_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7117,9 +7107,9 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
         LOG_WARN("generate true_or_false range failed", K(ret));
       } else if (OB_FAIL(ranges.push_back(range))) {
         LOG_WARN("push back range failed", K(ret));
-      } else if (OB_FAIL(get_methods.push_back(is_get_range))) {
-        LOG_WARN("push back get_method failed", K(ret));
-      } else {}
+      } else if (!is_get_range) {
+        all_single_value_ranges = false;
+      }
     } else if (OB_FAIL(search_state.init_search_state(column_count_, false,
             head_key->is_in_key() ? head_key->in_keypart_->table_id_ : head_key->id_.table_id_))) {
       LOG_WARN("failed to init search state", K(ret));
@@ -7136,7 +7126,7 @@ OB_NOINLINE int ObQueryRange::get_tablet_ranges(ObQueryRangeArray &ranges,
       } else if (OB_FAIL(SMART_CALL(and_first_search(search_state,
                                                      head_key,
                                                      ranges,
-                                                     get_methods,
+                                                     all_single_value_ranges,
                                                      dtc_params)))) {
         LOG_WARN("and first search failed", K(ret));
       }
