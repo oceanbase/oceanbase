@@ -294,8 +294,13 @@ int ObLogTableScan::generate_access_exprs()
       if (OB_ISNULL(col_item) || OB_ISNULL(col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(col_item), K(ret));
-      } else if (col_item->table_id_ == table_id_ && col_item->expr_->is_explicited_reference() &&
-                 OB_FAIL(temp_exprs.push_back(col_item->expr_))) {
+      } else if (col_item->table_id_ != table_id_ || !col_item->expr_->is_explicited_reference()) {
+        //do nothing
+      } else if (col_item->expr_->is_only_referred_by_stored_gen_col()) {
+        //skip if is only referred by stored generated columns which don't need to be recalculated
+      } else if (is_index_scan() && !get_index_back() && !col_item->expr_->is_referred_by_normal()) {
+        //skip the dependant columns of partkeys and generated columns if index_back is false in index scan
+      } else if (OB_FAIL(temp_exprs.push_back(col_item->expr_))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else { /*do nothing*/}
     }

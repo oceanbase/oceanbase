@@ -1580,6 +1580,13 @@ typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
 class ObRawExprVisitor;
 struct ObHiddenColumnItem;
 
+enum ExplicitedRefType {
+  NONE_REF = 0,
+  REF_BY_NORMAL = 1 << 0,
+  REF_BY_PART_EXPR = 1 << 1,
+  REF_BY_VIRTUAL_GEN_COL = 1<< 2,
+  REF_BY_STORED_GEN_COL = 1 << 3
+};
 class ObRawExpr : virtual public jit::expr::ObIRawExpr
 {
 public:
@@ -1595,7 +1602,7 @@ public:
        rel_ids_(),
        inner_alloc_(NULL),
        expr_factory_(NULL),
-       is_explicited_reference_(false),
+       reference_type_(ExplicitedRefType::NONE_REF),
        ref_count_(0),
        is_for_generated_column_(false),
        rt_expr_(NULL),
@@ -1614,7 +1621,7 @@ public:
        rel_ids_(),
        inner_alloc_(&alloc),
        expr_factory_(NULL),
-       is_explicited_reference_(false),
+       reference_type_(ExplicitedRefType::NONE_REF),
        ref_count_(0),
        is_for_generated_column_(false),
        rt_expr_(NULL),
@@ -1753,16 +1760,28 @@ public:
   inline ObExprInfo &get_flags() { return info_; }
   int set_enum_set_values(const common::ObIArray<common::ObString> &values);
   const common::ObIArray<common::ObString> &get_enum_set_values() const { return enum_set_values_; }
-  bool is_explicited_reference() const { return is_explicited_reference_; }
+  bool is_explicited_reference() const { return reference_type_ != ExplicitedRefType::NONE_REF; }
+  bool is_referred_by_normal() const { return (reference_type_ & ExplicitedRefType::REF_BY_NORMAL) != 0; }
+  bool is_only_referred_by_stored_gen_col() const { return reference_type_ == ExplicitedRefType::REF_BY_STORED_GEN_COL; }
+  int32_t get_explicited_reftype() const { return reference_type_; }
   void set_explicited_reference()
   {
     ref_count_++;
-    is_explicited_reference_ = true;
+    reference_type_ |= ExplicitedRefType::REF_BY_NORMAL;
+  }
+  void set_part_key_reference() {
+    ref_count_++;
+    reference_type_ |= ExplicitedRefType::REF_BY_PART_EXPR;
+  }
+  void set_explicited_reference(ExplicitedRefType ref_type)
+  {
+    ref_count_++;
+    reference_type_ |= ref_type;
   }
   void clear_explicited_referece()
   {
     ref_count_ = 0;
-    is_explicited_reference_ = false;
+    reference_type_ = ExplicitedRefType::NONE_REF;
   }
   int64_t get_ref_count()  const {
     return ref_count_;
@@ -1808,7 +1827,7 @@ public:
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
                        K_(enum_set_values),
-                       K_(is_explicited_reference),
+                       K_(reference_type),
                        K_(ref_count),
                        K_(is_for_generated_column),
                        K_(extra),
@@ -1840,7 +1859,7 @@ protected:
   //给user defined function。
   common::ObString expr_name_;
   // for column expr, agg expr, window function expr and query ref exprs
-  bool is_explicited_reference_;
+  int32_t reference_type_;
   int64_t ref_count_;
   bool is_for_generated_column_;
   sql::ObExpr *rt_expr_;
