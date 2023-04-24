@@ -272,6 +272,7 @@ int ObTransformDBlink::inner_reverse_link_table(ObDMLStmt *stmt, uint64_t target
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 4> child_stmts;
+  bool has_invalid_expr = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
@@ -284,6 +285,12 @@ int ObTransformDBlink::inner_reverse_link_table(ObDMLStmt *stmt, uint64_t target
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (has_invalid_link_expr(*stmt, has_invalid_expr)) {
+    LOG_WARN("failed to check stmt has invalid link expr", K(ret));
+  } else if (has_invalid_expr) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dblink write udf or user variable not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink write udf or user variable");
   } else if (OB_FAIL(reverse_link_tables(stmt->get_table_items(), target_dblink_id))) {
     LOG_WARN("failed to reverse link table", K(ret));
   } else if (OB_FAIL(formalize_link_table(stmt))) {
@@ -443,6 +450,21 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
   return ret;
 }
 
+int ObTransformDBlink::has_invalid_link_expr(ObDMLStmt &stmt, bool &has_invalid_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(stmt.has_special_expr(CNT_PL_UDF, has_invalid_expr))) {
+    LOG_WARN("failed to check stmt has special expr", K(ret));
+  } else if (has_invalid_expr) {
+  } else if (OB_FAIL(stmt.has_special_expr(CNT_SO_UDF, has_invalid_expr))) {
+    LOG_WARN("failed to check stmt has special expr", K(ret));
+  } else if (has_invalid_expr) {
+  } else if (OB_FAIL(stmt.has_special_expr(CNT_USER_VARIABLE, has_invalid_expr))) {
+    LOG_WARN("failed to check stmt has special expr", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
                                           ObIArray<LinkTableHelper> &helpers,
                                           uint64_t &dblink_id,
@@ -458,20 +480,8 @@ int ObTransformDBlink::collect_link_table(ObDMLStmt *stmt,
     LOG_WARN("unexpect null stmt", K(ret));
   } else if (stmt->has_sequence() || stmt->is_hierarchical_query() || stmt->is_unpivot_select()) {
     all_table_from_one_dblink = false;
-  } else if (OB_FAIL(stmt->has_special_expr(CNT_PL_UDF, has_special_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_special_expr) {
-    all_table_from_one_dblink = false;
-  } else if (OB_FAIL(stmt->has_special_expr(CNT_SO_UDF, has_special_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_special_expr) {
-    all_table_from_one_dblink = false;
-  } else if (OB_FAIL(stmt->has_special_expr(CNT_SO_UDF, has_special_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
-  } else if (has_special_expr) {
-    all_table_from_one_dblink = false;
-  } else if (OB_FAIL(stmt->has_special_expr(CNT_USER_VARIABLE, has_special_expr))) {
-    LOG_WARN("failed to check stmt has special expr", K(ret));
+  } else if (has_invalid_link_expr(*stmt, has_special_expr)) {
+    LOG_WARN("failed to check stmt has invalid link expr", K(ret));
   } else if (has_special_expr) {
     all_table_from_one_dblink = false;
   }
