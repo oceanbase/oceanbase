@@ -182,7 +182,7 @@ class ObMultiVersionMicroBlockRowScanner : public ObIMicroBlockRowScanner
 public:
   ObMultiVersionMicroBlockRowScanner(common::ObIAllocator &allocator)
       : ObIMicroBlockRowScanner(allocator),
-        cell_allocator_(common::ObModIds::OB_SSTABLE_READER),
+        cell_allocator_(common::ObModIds::OB_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         reserved_pos_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
         finish_scanning_cur_rowkey_(true),
         is_last_multi_version_row_(true),

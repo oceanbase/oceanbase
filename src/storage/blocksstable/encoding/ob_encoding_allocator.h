@@ -104,8 +104,8 @@ public:
   allocator_(nullptr)
   {
     int ret = OB_SUCCESS;
-    if (nullptr == (allocator_ = OB_NEW(ObDecoderAllocator, common::ObModIds::OB_SSTABLE_READER,
-        decoder_sizes, common::ObModIds::OB_SSTABLE_READER))) {
+    if (nullptr == (allocator_ = OB_NEW(ObDecoderAllocator, "encoding_alloc",
+        decoder_sizes, "encoding_alloc"))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "allocate ObDecoderAllocator failed", K(ret));
     } else if (OB_FAIL(allocator_->init())) {
