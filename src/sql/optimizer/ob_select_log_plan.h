@@ -234,6 +234,8 @@ private:
   int check_if_union_all_match_set_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
                                                   bool &is_match_set_pw);
 
+  int check_sharding_inherit_from_access_all(ObLogicalOperator* op, bool &is_inherit_from_access_all);
+
   int check_if_union_all_match_extended_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
                                                        bool &is_match_ext_pw);
 
