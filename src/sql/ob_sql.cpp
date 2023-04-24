@@ -1842,7 +1842,7 @@ int ObSql::init_execute_params_for_ab(ObIAllocator &allocator,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(ObPlanCacheValue::get_one_group_params(0, params_store, *first_group_params))) {
-    LOG_WARN("fail to get the first group paramsters", K(ret));
+    LOG_WARN("fail to get the first group parameters", K(ret));
   } else {
     for (int64_t i = 0; i < first_group_params->count(); i++) {
       ObObjParam &obj_param = first_group_params->at(i);
