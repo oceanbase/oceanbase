@@ -95,7 +95,8 @@ See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/C
 
 # Roadmap
 
-See [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects).
+For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364).  
+See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects) for more details.
 
 # Case study
 
