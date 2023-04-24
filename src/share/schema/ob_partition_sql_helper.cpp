@@ -1459,7 +1459,6 @@ int ObDropIncPartHelper::drop_partition_info()
     if (OB_SUCC(ret) && inc_part_num > 0) {
       int64_t affected_rows = 0;
       if (OB_FAIL(sql_client_.write(exec_tenant_id, part_history_sql.ptr(), affected_rows))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("execute sql failed", K(ret), K(part_history_sql));
       } else if (affected_rows != inc_part_num) {
         ret = OB_ERR_UNEXPECTED;
@@ -1530,7 +1529,6 @@ int ObDropIncSubPartHelper::drop_subpartition_info()
     if (OB_SUCC(ret) && inc_sub_part_num > 0) {
       int64_t affected_rows = 0;
       if (OB_FAIL(sql_client_.write(exec_tenant_id, sub_part_history_sql.ptr(), affected_rows))) {
-        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("execute sql failed", K(ret), K(sub_part_history_sql));
       } else if (affected_rows != inc_sub_part_num) {
         ret = OB_ERR_UNEXPECTED;
