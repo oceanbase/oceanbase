@@ -25,6 +25,7 @@
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/engine/px/ob_px_sqc_handler.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -533,7 +534,15 @@ int ObJoinFilterOp::mark_rpc_filter()
   ObPxBloomFilterData *filter_data = NULL;
   void *filter_ptr = NULL;
   common::ObIArray<ObJoinFilterDataCtx> &bf_ctx_array = ctx_.get_bloom_filter_ctx_array();
-  if (OB_ISNULL(filter_ptr = ctx_.get_allocator().alloc(sizeof(ObPxBloomFilterData)))) {
+  ObIAllocator *allocator = nullptr;
+  ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+  if (OB_ISNULL(handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("handler is null", K(ret));
+  } else if (OB_ISNULL(allocator = &handler->get_safe_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret));
+  } else if (OB_ISNULL(filter_ptr = allocator->alloc(sizeof(ObPxBloomFilterData)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to init ObPxBloomFilterData", K(ret));
   } else if (OB_ISNULL(filter_data = new(filter_ptr) ObPxBloomFilterData())) {
