@@ -2939,13 +2939,54 @@ static struct VarsInit{
     ObSysVars[223].alias_ = "OB_SV__FORCE_ORDER_PRESERVE_SET" ;
     }();
 
+    [&] (){
+      ObSysVars[224].info_ = "specifies whether automatic degree of parallelism will be enabled" ;
+      ObSysVars[224].name_ = "parallel_degree_policy" ;
+      ObSysVars[224].data_type_ = ObIntType ;
+      ObSysVars[224].enum_names_ = "[u'MANUAL', u'AUTO']" ;
+      ObSysVars[224].value_ = "0" ;
+      ObSysVars[224].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[224].id_ = SYS_VAR_PARALLEL_DEGREE_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_DEGREE_POLICY] = 224 ;
+    ObSysVars[224].alias_ = "OB_SV_PARALLEL_DEGREE_POLICY" ;
+    }();
+
+    [&] (){
+      ObSysVars[225].info_ = "limits the degree of parallelism used by the optimizer when automatic degree of parallelism is enabled" ;
+      ObSysVars[225].name_ = "parallel_degree_limit" ;
+      ObSysVars[225].data_type_ = ObUInt64Type ;
+      ObSysVars[225].value_ = "0" ;
+      ObSysVars[225].min_val_ = "0" ;
+      ObSysVars[225].max_val_ = "9223372036854775807" ;
+      ObSysVars[225].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[225].id_ = SYS_VAR_PARALLEL_DEGREE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_DEGREE_LIMIT] = 225 ;
+    ObSysVars[225].alias_ = "OB_SV_PARALLEL_DEGREE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[226].info_ = "specifies the minimum execution time a table scan should have before it's considered for automatic degree of parallelism, variable unit is milliseconds" ;
+      ObSysVars[226].name_ = "parallel_min_scan_time_threshold" ;
+      ObSysVars[226].data_type_ = ObUInt64Type ;
+      ObSysVars[226].value_ = "1000" ;
+      ObSysVars[226].min_val_ = "10" ;
+      ObSysVars[226].max_val_ = "9223372036854775807" ;
+      ObSysVars[226].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[226].id_ = SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD] = 226 ;
+    ObSysVars[226].alias_ = "OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 224;
+static int64_t var_amount = 227;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -2968,5 +2968,49 @@
     "info_cn": "用于控制set query的改写行为和计划生成逻辑，保证分支串行执行和结果集顺序",
     "background_cn": "",
     "ref_url": ""
+  },
+  "parallel_degree_policy": {
+    "id": 10142,
+    "name": "parallel_degree_policy",
+    "value": "0",
+    "data_type": "enum",
+    "enum_names": [
+      "MANUAL",
+      "AUTO"
+    ],
+    "info": "specifies whether automatic degree of parallelism will be enabled",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "publish_version": "420",
+    "info_cn": "控制并行度选择策略",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "parallel_degree_limit": {
+    "id": 10143,
+    "name": "parallel_degree_limit",
+    "value": "0",
+    "data_type": "uint",
+    "info": "limits the degree of parallelism used by the optimizer when automatic degree of parallelism is enabled",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "min_val": "0",
+    "max_val": "9223372036854775807",
+    "publish_version": "420",
+    "info_cn": "使用 Auto DOP 策略时, 限制优化器选择并行度上限值",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "parallel_min_scan_time_threshold": {
+    "id": 10144,
+    "name": "parallel_min_scan_time_threshold",
+    "value": "1000",
+    "data_type": "uint",
+    "info": "specifies the minimum execution time a table scan should have before it's considered for automatic degree of parallelism, variable unit is milliseconds",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "min_val": "10",
+    "max_val": "9223372036854775807",
+    "publish_version": "420",
+    "info_cn": "使用 Auto DOP 策略时, 增大基表扫描并行度参考执行时间, 单位 ms",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

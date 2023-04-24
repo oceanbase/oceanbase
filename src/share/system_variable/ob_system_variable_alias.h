@@ -240,6 +240,9 @@ namespace share
   static const char* const OB_SV__SET_REVERSE_DBLINK_INFOS = "_set_reverse_dblink_infos";
   static const char* const OB_SV__SHOW_DDL_IN_COMPAT_MODE = "_show_ddl_in_compat_mode";
   static const char* const OB_SV__FORCE_ORDER_PRESERVE_SET = "_force_order_preserve_set";
+  static const char* const OB_SV_PARALLEL_DEGREE_POLICY = "parallel_degree_policy";
+  static const char* const OB_SV_PARALLEL_DEGREE_LIMIT = "parallel_degree_limit";
+  static const char* const OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD = "parallel_min_scan_time_threshold";
 
 }
 }

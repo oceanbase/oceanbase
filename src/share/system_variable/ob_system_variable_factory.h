@@ -1619,6 +1619,29 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__FORCE_ORDER_PRESERVE_SET; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(223); }
 };
+class ObSysVarParallelDegreePolicy : public ObEnumSysVar
+{
+public:
+  const static char * PARALLEL_DEGREE_POLICY_NAMES[];
+public:
+  ObSysVarParallelDegreePolicy() : ObEnumSysVar(PARALLEL_DEGREE_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_DEGREE_POLICY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(224); }
+};
+class ObSysVarParallelDegreeLimit : public ObIntSysVar
+{
+public:
+  ObSysVarParallelDegreeLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_DEGREE_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(225); }
+};
+class ObSysVarParallelMinScanTimeThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarParallelMinScanTimeThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(226); }
+};
 
 
 class ObSysVarFactory
@@ -1638,7 +1661,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 127;
+  const static int64_t OB_SYS_VARS_COUNT = 130;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;
