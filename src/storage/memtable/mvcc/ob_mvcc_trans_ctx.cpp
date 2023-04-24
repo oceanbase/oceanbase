@@ -977,12 +977,18 @@ int ObMvccRowCallback::trans_commit()
           (void)ATOMIC_FAA(&value_.update_since_compact_, 1);
           if (value_.need_compact(for_read, ctx_.is_for_replay())) {
             if (ctx_.is_for_replay()) {
-              if (ctx_.get_replay_compact_version().is_valid_and_not_min() && SCN::max_scn() != ctx_.get_replay_compact_version()) {
-                memtable_->row_compact(&value_, ctx_.is_for_replay(), ctx_.get_replay_compact_version());
+              if (ctx_.get_replay_compact_version().is_valid_and_not_min()
+                  && SCN::max_scn() != ctx_.get_replay_compact_version()) {
+                memtable_->row_compact(&value_,
+                                       ctx_.get_replay_compact_version(),
+                                       ObMvccTransNode::WEAK_READ_BIT
+                                       | ObMvccTransNode::COMPACT_READ_BIT);
               }
             } else {
               SCN snapshot_version_for_compact = SCN::minus(SCN::max_scn(), 100);
-              memtable_->row_compact(&value_, ctx_.is_for_replay(), snapshot_version_for_compact);
+              memtable_->row_compact(&value_,
+                                     snapshot_version_for_compact,
+                                     ObMvccTransNode::NORMAL_READ_BIT);
             }
           }
         }

@@ -94,7 +94,6 @@ int ObMvccEngine::try_compact_row_when_mvcc_read_(const SCN &snapshot_version,
   } else {
     ObRowLatchGuard guard(row.latch_);
     if (OB_FAIL(row.row_compact(memtable_,
-                                true/*for_replay*/,
                                 snapshot_version,
                                 engine_allocator_))) {
       TRANS_LOG(WARN, "row compact error", K(ret), K(snapshot_version));

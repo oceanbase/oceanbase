@@ -131,9 +131,18 @@ bool ObMvccTransNode::is_safe_read_barrier() const
           || (flag & F_STRONG_CONSISTENT_READ_BARRIER));
 }
 
-void ObMvccTransNode::set_snapshot_version_barrier(const SCN version)
+void ObMvccTransNode::set_snapshot_version_barrier(const SCN scn_version,
+                                                   const int64_t flag)
 {
-  snapshot_version_barrier_ = version;
+  ATOMIC_STORE(&snapshot_version_barrier_, scn_version.get_val_for_tx() | flag);
+}
+
+void ObMvccTransNode::get_snapshot_version_barrier(int64_t &version,
+                                                   int64_t &flag)
+{
+  int64_t flaged_version = ATOMIC_LOAD(&snapshot_version_barrier_);
+  version = flaged_version & (~SNAPSHOT_VERSION_BARRIER_BIT);
+  flag = flaged_version & SNAPSHOT_VERSION_BARRIER_BIT;
 }
 
 void ObMvccTransNode::get_trans_id_and_seq_no(ObTransID &tx_id,
@@ -205,7 +214,8 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "version=%ld "
                           "type=%d "
                           "flag=%d "
-                          "snapshot_version_barrier=%s "
+                          "snapshot_barrier=%ld "
+                          "snapshot_barrier_flag=%ld "
                           "mtd=%s "
                           "seq_no=%ld",
                           this,
@@ -219,7 +229,9 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           version_,
                           type_,
                           flag_,
-                          to_cstring(snapshot_version_barrier_),
+                          snapshot_version_barrier_
+                          & (~SNAPSHOT_VERSION_BARRIER_BIT),
+                          snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
                           seq_no_);
   return pos;
@@ -487,7 +499,6 @@ bool ObMvccRow::need_compact(const bool for_read, const bool for_replay)
 }
 
 int ObMvccRow::row_compact(ObMemtable *memtable,
-                           const bool for_replay,
                            const SCN snapshot_version,
                            ObIAllocator *node_alloc)
 {
@@ -498,9 +509,10 @@ int ObMvccRow::row_compact(ObMemtable *memtable,
               KP(node_alloc), KP(memtable));
   } else {
     ObMemtableRowCompactor row_compactor;
-    if (OB_FAIL(row_compactor.init(this, memtable, node_alloc, for_replay))) {
+    if (OB_FAIL(row_compactor.init(this, memtable, node_alloc))) {
       TRANS_LOG(WARN, "row compactor init error", K(ret));
-    } else if (OB_FAIL(row_compactor.compact(snapshot_version))) {
+    } else if (OB_FAIL(row_compactor.compact(snapshot_version,
+                                             ObMvccTransNode::COMPACT_READ_BIT))) {
       TRANS_LOG(WARN, "row compact error", K(ret), K(snapshot_version));
     } else {
       // do nothing
@@ -732,13 +744,17 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
   } else {
     // Check safety condition for ELR
     if (NULL != node.prev_ && node.prev_->is_safe_read_barrier()) {
-      if (commit_version <= node.prev_->snapshot_version_barrier_) {
-        if ((node.is_elr() || node.is_delayed_cleanout())  && node.prev_->type_ == NDT_COMPACT) {
+      int64_t snapshot_version_barrier = 0;
+      int64_t flag = 0;
+      (void)node.prev_->get_snapshot_version_barrier(snapshot_version_barrier, flag);
+      if (commit_version.get_val_for_tx() <= snapshot_version_barrier) {
+        if ((node.is_elr() || node.is_delayed_cleanout()) && node.prev_->type_ == NDT_COMPACT) {
           // do nothing
         } else {
           // ignore ret
-          TRANS_LOG(ERROR, "unexpected commit version", K(commit_version), K(*this),
-              "cur_node", node, "prev_node", *(node.prev_));
+          TRANS_LOG(ERROR, "unexpected commit version", K(snapshot_version_barrier),
+                    "cur_node", node, "prev_node", *(node.prev_), K(flag), K(*this),
+                    K(commit_version));
         }
       }
     }

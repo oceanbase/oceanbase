@@ -616,7 +616,6 @@ public:
     share::SCN snapshot_scn;
     snapshot_scn.convert_for_tx(snapshot_version);
     EXPECT_EQ(OB_SUCCESS, row->row_compact(memtable,
-                                           for_replay,
                                            snapshot_scn,
                                            &allocator2_));
     TRANS_LOG(INFO, "====================== end compact row =====================",

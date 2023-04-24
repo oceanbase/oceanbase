@@ -72,7 +72,7 @@ public:
     modify_count_(0),
     acc_checksum_(0),
     version_(0),
-    snapshot_version_barrier_(share::SCN::min_scn()),
+    snapshot_version_barrier_(0),
     type_(NDT_NORMAL),
     flag_(0) {}
 
@@ -88,7 +88,7 @@ public:
   uint32_t modify_count_;
   uint32_t acc_checksum_;
   int64_t version_;
-  share::SCN snapshot_version_barrier_;
+  int64_t snapshot_version_barrier_;
   uint8_t type_;
   uint8_t flag_;
   char buf_[0];
@@ -112,14 +112,17 @@ public:
   void remove_callback();
 
   // ===================== ObMvccTransNode Tx Node Meta =====================
-  // ObMvccRow records safe_read_barrier and snapshot_version_barrier to detect
-  // unexpected behaviors. The safe_read_barrier means the type of the last read
-  // operation performed on the row. And the snapshot_version_barrier means the
-  // version of the read operation,
+  // ObMvccRow records snapshot_version_barrier to detect unexpected concurrency
+  // control behaviors. The snapshot_version_barrier means the snapshot of the
+  // latest read operation, and if a commit version appears after the read
+  // operation with the commit version smaller than the snapshot version, we
+  // should report the unexpected bahavior.
   void set_safe_read_barrier(const bool is_weak_consistent_read);
   void clear_safe_read_barrier();
   bool is_safe_read_barrier() const;
-  void set_snapshot_version_barrier(const share::SCN version);
+  void set_snapshot_version_barrier(const share::SCN version,
+                                    const int64_t flag);
+  void get_snapshot_version_barrier(int64_t &version, int64_t &flag);
 
   // ===================== ObMvccTransNode Flag Interface =====================
   OB_INLINE void set_committed()
@@ -182,6 +185,7 @@ public:
   share::SCN get_tx_end_scn() { return tx_end_scn_.atomic_load(); }
 
 private:
+  // the row flag of the mvcc tx node
   static const uint8_t F_INIT;
   static const uint8_t F_WEAK_CONSISTENT_READ_BARRIER;
   static const uint8_t F_STRONG_CONSISTENT_READ_BARRIER;
@@ -190,6 +194,13 @@ private:
   static const uint8_t F_ABORTED;
   static const uint8_t F_DELAYED_CLEANOUT;
   static const uint8_t F_MUTEX;
+
+public:
+  // the snapshot flag of the snapshot version barrier
+  static const int64_t NORMAL_READ_BIT =              0x0L;
+  static const int64_t WEAK_READ_BIT =                0x1L << 62;
+  static const int64_t COMPACT_READ_BIT =             0x2L << 62;
+  static const int64_t SNAPSHOT_VERSION_BARRIER_BIT = 0x3L << 62;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -303,7 +314,6 @@ struct ObMvccRow
   // snapshot_version is the version for row compact
   // node_alloc is the allocator for compact node allocation
   int row_compact(ObMemtable *memtable,
-                  const bool for_replay,
                   const share::SCN snapshot_version,
                   common::ObIAllocator *node_alloc);
 

@@ -40,16 +40,14 @@ ObMemtableRowCompactor::ObMemtableRowCompactor()
   : is_inited_(false),
     row_(NULL),
     memtable_(NULL),
-    node_alloc_(NULL),
-    for_replay_(false)
+    node_alloc_(NULL)
 {}
 
 ObMemtableRowCompactor::~ObMemtableRowCompactor() {}
 
 int ObMemtableRowCompactor::init(ObMvccRow *row,
                                  ObMemtable *mt,
-                                 ObIAllocator *node_alloc,
-                                 const bool for_replay)
+                                 ObIAllocator *node_alloc)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -63,7 +61,6 @@ int ObMemtableRowCompactor::init(ObMvccRow *row,
     row_ = row;
     memtable_ = mt;
     node_alloc_ = node_alloc;
-    for_replay_ = for_replay;
   }
   return ret;
 }
@@ -72,7 +69,8 @@ int ObMemtableRowCompactor::init(ObMvccRow *row,
 // So modification is guaranteed to be safety with another modification,
 // while we need pay attention to the concurrency between lock_for_read
 // and modification(such as compact)
-int ObMemtableRowCompactor::compact(const SCN snapshot_version)
+int ObMemtableRowCompactor::compact(const SCN snapshot_version,
+                                    const int64_t flag)
 {
   int ret = OB_SUCCESS;
 
@@ -91,7 +89,7 @@ int ObMemtableRowCompactor::compact(const SCN snapshot_version)
     find_start_pos_(snapshot_version, start);
     tg.click();
 
-    ObMvccTransNode *compact_node = construct_compact_node_(snapshot_version, start);
+    ObMvccTransNode *compact_node = construct_compact_node_(snapshot_version, flag, start);
     tg.click();
 
     if (OB_NOT_NULL(compact_node)) {
@@ -198,6 +196,7 @@ int ObMemtableRowCompactor::try_cleanout_tx_node_during_compact_(ObTxTableGuard 
 }
 
 ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snapshot_version,
+                                                                 const int64_t flag,
                                                                  ObMvccTransNode *save)
 {
   int ret = OB_SUCCESS;
@@ -350,7 +349,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
           trans_node->type_ = NDT_COMPACT;
           trans_node->flag_ = save->flag_;
           trans_node->scn_ = save->scn_;
-          trans_node->set_snapshot_version_barrier(snapshot_version);
+          trans_node->set_snapshot_version_barrier(snapshot_version, flag);
           TRANS_LOG(DEBUG, "success to compact row, ", K(trans_node->tx_id_), K(dml_flag), K(compact_row_cnt), KPC(save));
         }
       }

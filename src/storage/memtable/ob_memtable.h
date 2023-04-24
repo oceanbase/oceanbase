@@ -325,7 +325,9 @@ public:
   inline bool not_empty() const { return INT64_MAX != get_protection_clock(); };
   void set_max_schema_version(const int64_t schema_version);
   virtual int64_t get_max_schema_version() const override;
-  int row_compact(ObMvccRow *value, const bool for_replay, const share::SCN snapshot_version);
+  int row_compact(ObMvccRow *value,
+                  const share::SCN snapshot_version,
+                  const int64_t flag);
   int64_t get_hash_item_count() const;
   int64_t get_hash_alloc_memory() const;
   int64_t get_btree_item_count() const;

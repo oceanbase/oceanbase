@@ -1375,17 +1375,17 @@ ObDatumRange &ObMemtable::m_get_real_range(ObDatumRange &real_range, const ObDat
 }
 
 int ObMemtable::row_compact(ObMvccRow *row,
-                            const bool for_replay,
-                            const SCN snapshot_version)
+                            const SCN snapshot_version,
+                            const int64_t flag)
 {
   int ret = OB_SUCCESS;
   ObMemtableRowCompactor row_compactor;
   if (OB_ISNULL(row)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "row is NULL");
-  } else if (OB_FAIL(row_compactor.init(row, this, &local_allocator_, for_replay))) {
+  } else if (OB_FAIL(row_compactor.init(row, this, &local_allocator_))) {
     TRANS_LOG(WARN, "row compactor init error", K(ret));
-  } else if (OB_FAIL(row_compactor.compact(snapshot_version))) {
+  } else if (OB_FAIL(row_compactor.compact(snapshot_version, flag))) {
     TRANS_LOG(WARN, "row_compact fail", K(ret), K(*row), K(snapshot_version));
   } else {
     // do nothing
