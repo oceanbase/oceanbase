@@ -519,11 +519,12 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
   //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json();
   if (!is_lob_type) {
     // not lob types, do nothing
   } else if (value.is_null() || value.is_nop_value()) {
     // do nothing
-  } else if (is_use_lob_locator && is_lob_type && lib::is_oracle_mode()) {
+  } else if (is_actual_return_lob_locator && is_lob_type && lib::is_oracle_mode()) {
     // Should be ObLobType (cluster version < 4.1), or Text/Json/Gis with lob header
     ObLobLocatorV2 loc(value.get_string(), value.has_lob_header());
     if (loc.is_lob_locator_v1()) {// do nothing, lob locator version 1
@@ -571,7 +572,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Lob: invalid lob locator", K(value), K(GET_MIN_CLUSTER_VERSION()));
     }
-  } else if ((!is_use_lob_locator && lib::is_oracle_mode())
+  } else if ((!is_actual_return_lob_locator && lib::is_oracle_mode())
              || lib::is_mysql_mode()) {
     // Should remove locator header and read full lob data
     ObString data;
@@ -715,8 +716,9 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
       LOG_WARN("Lob: invalid collation", K(from_collation_type), K(to_collation_type), K(ret));
     } else if (CS_TYPE_BINARY != from_collation_type && CS_TYPE_BINARY != to_collation_type
         && strcmp(from_charset_info->csname, to_charset_info->csname) != 0) {
+      bool is_actual_return_lob_locator = session->is_client_use_lob_locator() && !value.is_json();
       if (value.is_lob_storage() && value.has_lob_header() && OB_NOT_NULL(session) &&
-          session->is_client_use_lob_locator() && lib::is_oracle_mode()) {
+          is_actual_return_lob_locator && lib::is_oracle_mode()) {
         ObLobLocatorV2 lob;
         ObString inrow_data;
         if (OB_FAIL(process_lob_locator_results(value,
