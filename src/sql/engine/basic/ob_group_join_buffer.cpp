@@ -168,8 +168,14 @@ int ObGroupJoinBufffer::init(ObOperator *op,
       LOG_WARN("null memory entity", KR(ret));
     } else if (OB_FAIL(left_store_.init(UINT64_MAX, tenant_id, ObCtxIds::WORK_AREA))) {
       LOG_WARN("init row store failed", KR(ret));
-    } else {
-      left_store_.set_allocator(mem_context_->get_malloc_allocator());
+    } else if (FALSE_IT(left_store_.set_allocator(mem_context_->get_malloc_allocator()))) {
+    }
+    if (OB_SUCC(ret) && op_->is_vectorized()) {
+      if (OB_FAIL(last_batch_.init(&left_->get_spec().output_,
+                                   &ctx_->get_allocator(),
+                                   spec_->max_batch_size_))) {
+        LOG_WARN("init batch failed", KR(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -291,6 +297,42 @@ int ObGroupJoinBufffer::fill_cur_row_group_param()
   return ret;
 }
 
+int ObGroupJoinBufffer::get_next_left_iter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_multi_level_ || ((above_group_idx_for_expand_ + 1) >= above_group_size_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("left op does not have another iterator", KR(ret));
+  } else {
+    // for multi level group rescan, left_ may output more than 1 iterators,
+    // and we need to call left_->rescan() to switch to next iterator
+    above_group_idx_for_expand_++;
+    ObPhysicalPlanCtx *plan_ctx = ctx_->get_physical_plan_ctx();
+    for (int64_t i = 0; OB_SUCC(ret) && i < above_left_group_params_.count(); ++i) {
+      ObSqlArrayObj *array_obj = above_left_group_params_.at(i);
+      if (NULL == array_obj) {
+        // skip
+      } else {
+        const ObDynamicParamSetter &rescan_param = left_rescan_params_->at(i);
+        int64_t param_idx = rescan_param.param_idx_;
+        ObExpr *dst = rescan_param.dst_;
+        ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
+        if (OB_FAIL(param_datum.from_obj(array_obj->data_[above_group_idx_for_expand_], dst->obj_datum_map_))) {
+          LOG_WARN("cast datum failed", KR(ret));
+        } else {
+          plan_ctx->get_param_store_for_update().at(param_idx) = array_obj->data_[above_group_idx_for_expand_];
+          dst->set_evaluated_projected(*eval_ctx_);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(left_->rescan())) {
+      ret = (OB_ITER_END == ret) ? OB_ERR_UNEXPECTED : ret;
+      LOG_WARN("rescan left failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObGroupJoinBufffer::rescan_left()
 {
   int ret = OB_SUCCESS;
@@ -326,6 +368,7 @@ int ObGroupJoinBufffer::rescan_left()
       above_group_idx_for_read_ = 0;
     }
   } else {
+    is_left_end_ = false;
     above_group_idx_for_read_++;
   }
   return ret;
@@ -361,19 +404,15 @@ int ObGroupJoinBufffer::rescan_right()
 int ObGroupJoinBufffer::fill_group_buffer()
 {
   int ret = OB_SUCCESS;
-  if (!need_fill_group_buffer()) {
-    // do nothing
-  } else if (OB_FAIL(init_group_params())) {
-    LOG_WARN("init group params failed", KR(ret));
-  } else if (is_left_end_) {
-    // we have fetched all rows from left
-    ret = OB_ITER_END;
-  } else {
-    common::ObSEArray<ObObjParam, 1> left_params_backup;
-    common::ObSEArray<ObObjParam, 1> right_params_backup;
+  common::ObSEArray<ObObjParam, 1> left_params_backup;
+  common::ObSEArray<ObObjParam, 1> right_params_backup;
+  if (!is_left_end_ && need_fill_group_buffer()) {
     if (OB_FAIL(backup_above_params(left_params_backup, right_params_backup))) {
       LOG_WARN("backup above params failed", KR(ret));
-    } else {
+    } else if (OB_FAIL(init_group_params())) {
+      LOG_WARN("init group params failed", KR(ret));
+    }
+    if (OB_SUCC(ret)) {
       if (save_last_row_) {
         if (OB_ISNULL(last_row_.get_store_row())) {
           ret = OB_NOT_INIT;
@@ -383,71 +422,75 @@ int ObGroupJoinBufffer::fill_group_buffer()
           LOG_WARN("restore last row failed", KR(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        reset_buffer_state();
-        if (OB_FAIL(last_row_.init(
-                mem_context_->get_malloc_allocator(), left_->get_spec().output_.count()))) {
-          LOG_WARN("failed to init right last row", KR(ret));
-        }
+    }
+    if (OB_SUCC(ret)) {
+      reset_buffer_state();
+      if (OB_FAIL(last_row_.init(
+              mem_context_->get_malloc_allocator(), left_->get_spec().output_.count()))) {
+        LOG_WARN("failed to init right last row", KR(ret));
       }
-      bool ignore_end = false;
-      while (OB_SUCC(ret) && !is_full()) {
-        op_->clear_evaluated_flag();
-        if (!rescan_params_->empty()) {
-          op_->set_pushdown_param_null(*rescan_params_);
-        }
-        if (OB_FAIL(get_next_left_row())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("get next left row failed", KR(ret));
-          } else {
-            is_left_end_ = true;
+    }
+    bool ignore_end = false;
+    while (OB_SUCC(ret) && !is_full()) {
+      op_->clear_evaluated_flag();
+      if (!rescan_params_->empty()) {
+        op_->set_pushdown_param_null(*rescan_params_);
+      }
+      if (OB_FAIL(left_->get_next_row())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next left row failed", KR(ret));
+        } else {
+          is_left_end_ = true;
+          if (is_multi_level_ && ((above_group_idx_for_expand_ + 1) < above_group_size_)) {
+            ret = OB_SUCCESS;
+            if (OB_FAIL(get_next_left_iter())) {
+              LOG_WARN("get next iter failed", KR(ret));
+            }
           }
-        } else if (OB_FAIL(add_row_to_store())) {
-          LOG_WARN("add row to store failed", KR(ret));
-        } else if (OB_FAIL(prepare_rescan_params())) {
-          LOG_WARN("prepare rescan params failed", KR(ret));
-        } else if (OB_FAIL(deep_copy_dynamic_obj())) {
-          LOG_WARN("deep copy dynamic obj failed", KR(ret));
-        } else {
-          ignore_end = true;
         }
-      }
-      if (OB_SUCC(ret)) {
-        if (!rescan_params_->empty()) {
-          op_->set_pushdown_param_null(*rescan_params_);
-        }
-        if (OB_FAIL(last_row_.shadow_copy(left_->get_spec().output_, *eval_ctx_))) {
-          LOG_WARN("shadow copy last left row failed", KR(ret));
-        } else {
-          save_last_row_ = true;
-        }
-      }
-      if (OB_SUCC(ret) || (ignore_end && OB_ITER_END == ret)) {
-        ret = OB_SUCCESS;
-        ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*ctx_);
-        if (OB_FAIL(left_store_.finish_add_row(false))) {
-          LOG_WARN("finish add row to row store failed", KR(ret));
-        } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
-          LOG_WARN("begin iterator for chunk row store failed", KR(ret));
-        } else if (OB_FAIL(bind_group_params_to_store())) {
-          LOG_WARN("bind group params to store failed", KR(ret));
-        } else if (OB_FAIL(rescan_right())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_ERR_UNEXPECTED;
-          }
-          LOG_WARN("rescan right failed", KR(ret));
-        } else {
-          skip_rescan_right_ = true;
-        }
-      }
-      int save_ret = ret;
-      ret = OB_SUCCESS;
-      if (OB_FAIL(restore_above_params(left_params_backup,
-                                       right_params_backup))) {
-        LOG_WARN("restore above params failed", KR(ret), KR(save_ret));
+      } else if (OB_FAIL(add_row_to_store())) {
+        LOG_WARN("add row to store failed", KR(ret));
+      } else if (OB_FAIL(prepare_rescan_params())) {
+        LOG_WARN("prepare rescan params failed", KR(ret));
+      } else if (OB_FAIL(deep_copy_dynamic_obj())) {
+        LOG_WARN("deep copy dynamic obj failed", KR(ret));
       } else {
-        ret = save_ret;
+        ignore_end = true;
       }
+    }
+    if (OB_SUCC(ret)) {
+      if (!rescan_params_->empty()) {
+        op_->set_pushdown_param_null(*rescan_params_);
+      }
+      if (OB_FAIL(last_row_.shadow_copy(left_->get_spec().output_, *eval_ctx_))) {
+        LOG_WARN("shadow copy last left row failed", KR(ret));
+      } else {
+        save_last_row_ = true;
+      }
+    }
+    if (OB_SUCC(ret) || (ignore_end && OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+      ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(*ctx_);
+      if (OB_FAIL(left_store_.finish_add_row(false))) {
+        LOG_WARN("finish add row to row store failed", KR(ret));
+      } else if (OB_FAIL(left_store_.begin(left_store_iter_))) {
+        LOG_WARN("begin iterator for chunk row store failed", KR(ret));
+      } else if (OB_FAIL(bind_group_params_to_store())) {
+        LOG_WARN("bind group params to store failed", KR(ret));
+      } else if (OB_FAIL(rescan_right())) {
+        ret = (OB_ITER_END == ret) ? OB_ERR_UNEXPECTED : ret;
+        LOG_WARN("rescan right failed", KR(ret));
+      } else {
+        skip_rescan_right_ = true;
+      }
+    }
+    int save_ret = ret;
+    ret = OB_SUCCESS;
+    if (OB_FAIL(restore_above_params(left_params_backup,
+                                     right_params_backup))) {
+      LOG_WARN("restore above params failed", KR(ret), KR(save_ret));
+    } else {
+      ret = save_ret;
     }
   }
   return ret;
@@ -457,60 +500,56 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
                                                 const ObBatchRows *&batch_rows)
 {
   int ret = OB_SUCCESS;
-  if (!need_fill_group_buffer()) {
-    // do nothing
-  } else if (OB_FAIL(init_group_params())) {
-    LOG_WARN("init group params failed", KR(ret));
-  } else if (is_left_end_) {
-    ret = OB_ITER_END;
-  } else {
-    bool ignore_end = false;
-    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
-    if (save_last_batch_) {
-      if (!last_batch_.is_inited()) {
-        ret = OB_NOT_INIT;
-        LOG_WARN("last batch is not inited", KR(ret),
-                 K(save_last_batch_), K(last_batch_.is_inited()));
-      } else {
-        last_batch_.to_exprs(*eval_ctx_);
-        save_last_batch_ = false;
-      }
+  common::ObSEArray<ObObjParam, 1> left_params_backup;
+  common::ObSEArray<ObObjParam, 1> right_params_backup;
+  if (!is_left_end_ && need_fill_group_buffer()) {
+    if (OB_FAIL(init_group_params())) {
+      LOG_WARN("init group params failed", KR(ret));
+    } else if (OB_FAIL(backup_above_params(left_params_backup, right_params_backup))) {
+      LOG_WARN("backup above params failed", KR(ret));
     }
     if (OB_SUCC(ret)) {
-      reset_buffer_state();
-      if (OB_FAIL(last_batch_.init(&left_->get_spec().output_,
-                                   &mem_context_->get_arena_allocator(),
-                                   spec_->max_batch_size_))) {
-        LOG_WARN("init batch failed", KR(ret));
-      }
-    }
-    while (OB_SUCC(ret) && !is_full()) {
-      op_->clear_evaluated_flag();
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
       if (save_last_batch_) {
         last_batch_.to_exprs(*eval_ctx_);
         save_last_batch_ = false;
       }
-      if (!rescan_params_->empty()) {
-        op_->set_pushdown_param_null(*rescan_params_);
-      }
-      if (OB_FAIL(get_next_left_batch(max_row_cnt, batch_rows))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next left batch failed", KR(ret));
+      batch_rows = &left_->get_brs();
+      reset_buffer_state();
+      while (OB_SUCC(ret) && !is_full() && !batch_rows->end_) {
+        op_->clear_evaluated_flag();
+        if (!rescan_params_->empty()) {
+          op_->set_pushdown_param_null(*rescan_params_);
         }
-      } else {
+        if (OB_FAIL(left_->get_next_batch(max_row_cnt, batch_rows))) {
+          LOG_WARN("get next batch from left failed", KR(ret));
+        }
         for (int64_t l_idx = 0;  OB_SUCC(ret) && l_idx < batch_rows->size_; l_idx++) {
-          if (batch_rows->skip_->exist(l_idx)) { continue; }
-          batch_info_guard.set_batch_idx(l_idx);
-          batch_info_guard.set_batch_size(batch_rows->size_);
-          if (OB_FAIL(add_row_to_store())) {
-            LOG_WARN("store left row failed", KR(ret));
-          } else if (OB_FAIL(prepare_rescan_params())) {
-            LOG_WARN("prepare rescan params failed", KR(ret));
-          } else if (OB_FAIL(deep_copy_dynamic_obj())) {
-            LOG_WARN("deep copy dynamic obj failed", KR(ret));
+          if (batch_rows->skip_->exist(l_idx)) {
+            // do nothing
+          } else {
+            batch_info_guard.set_batch_idx(l_idx);
+            batch_info_guard.set_batch_size(batch_rows->size_);
+            if (OB_FAIL(add_row_to_store())) {
+              LOG_WARN("store left row failed", KR(ret));
+            } else if (OB_FAIL(prepare_rescan_params())) {
+              LOG_WARN("prepare rescan params failed", KR(ret));
+            } else if (OB_FAIL(deep_copy_dynamic_obj())) {
+              LOG_WARN("deep copy dynamic obj failed", KR(ret));
+            }
           }
         }
-        ignore_end = true;
+        if (OB_SUCC(ret) && batch_rows->end_) {
+          is_left_end_ = true;
+          if (is_multi_level_) {
+            if ((above_group_idx_for_expand_ + 1) >= above_group_size_) {
+              // wait for parent op to fill next group params
+            } else if (FALSE_IT(const_cast<ObBatchRows *&>(batch_rows)->end_ = false)) {
+            } else if (OB_FAIL(get_next_left_iter())) {
+              LOG_WARN("get next iter failed", KR(ret));
+            }
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -520,13 +559,10 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       if (batch_rows->size_ == 0 && batch_rows->end_) {
         // do nothing
       } else {
-        last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, batch_rows->size_);
+        last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, spec_->max_batch_size_);
         save_last_batch_ = true;
       }
       op_->clear_evaluated_flag();
-    }
-    if (OB_SUCC(ret) || (ignore_end && OB_ITER_END == ret)) {
-      ret = OB_SUCCESS;
       if (left_store_.get_row_cnt() <= 0) {
         // this could happen if we have skipped all rows
         ret = OB_ITER_END;
@@ -537,13 +573,19 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       } else if (OB_FAIL(bind_group_params_to_store())) {
         LOG_WARN("bind group params to store failed", KR(ret));
       } else if (OB_FAIL(rescan_right())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ERR_UNEXPECTED;
-        }
+        ret = (OB_ITER_END == ret) ? OB_ERR_UNEXPECTED : ret;
         LOG_WARN("rescan right failed", KR(ret));
       } else {
         skip_rescan_right_ = true;
       }
+    }
+    int save_ret = ret;
+    ret = OB_SUCCESS;
+    if (OB_FAIL(restore_above_params(left_params_backup,
+                                     right_params_backup))) {
+      LOG_WARN("restore above params failed", KR(ret), KR(save_ret));
+    } else {
+      ret = save_ret;
     }
   }
   return ret;
@@ -644,6 +686,7 @@ void ObGroupJoinBufffer::destroy()
   above_left_group_params_.destroy();
   above_right_group_params_.destroy();
   last_row_.reset();
+  last_batch_.reset();
   if (NULL != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
@@ -793,109 +836,6 @@ int ObGroupJoinBufffer::prepare_rescan_params()
   return ret;
 }
 
-int ObGroupJoinBufffer::get_next_left_row()
-{
-  int ret = OB_SUCCESS;
-  bool got_row = false;
-  while (OB_SUCC(ret) && !got_row) {
-    op_->clear_evaluated_flag();
-    if (OB_FAIL(left_->get_next_row())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("get next row from left failed", KR(ret));
-      } else if (is_multi_level_) {
-        // for multi level group rescan, left_ may output more than 1 iterators,
-        // and we need to call left_->rescan() to switch to next iterator
-        ret = OB_SUCCESS;
-        if ((above_group_idx_for_expand_ + 1) >= above_group_size_) {
-          // wait for parent op to fill next group params
-          ret = OB_ITER_END;
-        } else {
-          above_group_idx_for_expand_++;
-          ObPhysicalPlanCtx *plan_ctx = ctx_->get_physical_plan_ctx();
-          for (int64_t i = 0; OB_SUCC(ret) && i < above_left_group_params_.count(); i++) {
-            ObSqlArrayObj *array_obj = above_left_group_params_.at(i);
-            if (NULL == array_obj) {
-              // skip
-            } else {
-              const ObDynamicParamSetter &rescan_param = left_rescan_params_->at(i);
-              int64_t param_idx = rescan_param.param_idx_;
-              ObExpr *dst = rescan_param.dst_;
-              ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
-              if (OB_FAIL(param_datum.from_obj(array_obj->data_[above_group_idx_for_expand_],
-                                               dst->obj_datum_map_))) {
-                LOG_WARN("cast datum failed", KR(ret));
-              } else {
-                plan_ctx->get_param_store_for_update().at(param_idx) =
-                        array_obj->data_[above_group_idx_for_expand_];
-                dst->set_evaluated_projected(*eval_ctx_);
-              }
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(left_->rescan())) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("rescan left failed", KR(ret));
-            }
-          }
-        }
-      }
-    } else {
-      got_row = true;
-    }
-  }
-  return ret;
-}
-
-int ObGroupJoinBufffer::get_next_left_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows)
-{
-  int ret = OB_SUCCESS;
-  bool got_row = false;
-  if (OB_FAIL(left_->get_next_batch(max_row_cnt, batch_rows))) {
-    LOG_WARN("get next batch from left failed", KR(ret));
-  } else if (batch_rows->end_) {
-    if (is_multi_level_) {
-      // for multi level group rescan, left_ may output more than 1 iterators,
-      // and we need to call left_->rescan() to switch to next iterator
-      if ((above_group_idx_for_expand_ + 1) >= above_group_size_) {
-        // wait for parent op to fill next group params
-        ret = OB_ITER_END;
-      } else {
-        above_group_idx_for_expand_++;
-        ObPhysicalPlanCtx *plan_ctx = ctx_->get_physical_plan_ctx();
-        for (int64_t i = 0; OB_SUCC(ret) && i < above_left_group_params_.count(); i++) {
-          ObSqlArrayObj *array_obj = above_left_group_params_.at(i);
-          if (NULL == array_obj) {
-            // skip
-          } else {
-            const ObDynamicParamSetter &rescan_param = left_rescan_params_->at(i);
-            int64_t param_idx = rescan_param.param_idx_;
-            ObExpr *dst = rescan_param.dst_;
-            ObDatum &param_datum = dst->locate_datum_for_write(*eval_ctx_);
-            if (OB_FAIL(param_datum.from_obj(array_obj->data_[above_group_idx_for_expand_], dst->obj_datum_map_))) {
-              LOG_WARN("cast datum failed", KR(ret));
-            } else {
-              plan_ctx->get_param_store_for_update().at(param_idx) =
-                      array_obj->data_[above_group_idx_for_expand_];
-              dst->set_evaluated_projected(*eval_ctx_);
-            }
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(left_->rescan())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("rescan left failed", KR(ret));
-          }
-        }
-      }
-    } else {
-      ret = OB_ITER_END;
-    }
-  }
-  return ret;
-}
-
 int ObGroupJoinBufffer::add_row_to_store()
 {
   int ret = OB_SUCCESS;
@@ -967,7 +907,7 @@ void ObGroupJoinBufffer::reset_buffer_state()
   left_store_read_ = 0;
   left_store_group_idx_.reuse();
   last_row_.reset();
-  last_batch_.reset();
+  last_batch_.clear_saved_size();
   save_last_row_ = false;
   mem_context_->get_arena_allocator().reset();
 }
