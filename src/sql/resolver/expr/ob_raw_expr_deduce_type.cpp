@@ -1368,7 +1368,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           result_type.set_calc_type(result_type.get_type());
           expr.set_result_type(result_type);
           ObObjTypeClass from_tc = child_expr->get_type_class();
-          need_add_cast = (ObUIntTC != from_tc);
+          need_add_cast = (ObUIntTC != from_tc && ObIntTC != from_tc);
         }
         break;
       }
