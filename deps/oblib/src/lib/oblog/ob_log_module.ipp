@@ -150,6 +150,9 @@ REG_LOG_SUB_MOD(RS, RESTORE)
 //regist storagetest
 REG_LOG_SUB_MOD(STORAGETEST, TEST)
 
+// register testbench submodules
+REG_LOG_SUB_MOD(TESTBENCH, WORKLOAD)
+
 // register liboblog's sub-modules
 REG_LOG_SUB_MOD(TLOG, FETCHER)
 REG_LOG_SUB_MOD(TLOG, PARSER)

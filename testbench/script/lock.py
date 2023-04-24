@@ -31,14 +31,14 @@ from error import LockError
 
 
 class LockType(Enum):
-
-    GLOBAL = 'global'
-    CLUSTER = 'cluster'
-    REPOSITORY = 'repository'
+    GLOBAL = "global"
+    CLUSTER = "cluster"
+    SCHEDULER = "scheduler"
+    RESULT = "result"
+    REPOSITORY = "repository"
 
 
 class MixLock(object):
-
     def __init__(self, path, stdio=None):
         self.path = path
         self.stdio = stdio
@@ -52,7 +52,7 @@ class MixLock(object):
     @property
     def lock_obj(self):
         if self._lock_obj is None or self._lock_obj.closed:
-            self._lock_obj = FileUtil.open(self.path, _type='w')
+            self._lock_obj = FileUtil.open(self.path, _type="w")
         return self._lock_obj
 
     @property
@@ -77,8 +77,9 @@ class MixLock(object):
         if not self.locked:
             self._sh_lock()
         self._sh_cnt += 1
-        self.stdio and getattr(self.stdio, 'verbose', print)(
-            'share lock `%s`, count %s' % (self.path, self._sh_cnt))
+        self.stdio and getattr(self.stdio, "verbose", print)(
+            "share lock `%s`, count %s" % (self.path, self._sh_cnt)
+        )
         return True
 
     def ex_lock(self):
@@ -91,19 +92,20 @@ class MixLock(object):
                 else:
                     raise LockError(e)
         self._ex_cnt += 1
-        self.stdio and getattr(self.stdio, 'verbose', print)(
-            'exclusive lock `%s`, count %s' % (self.path, self._ex_cnt))
+        self.stdio and getattr(self.stdio, "verbose", print)(
+            "exclusive lock `%s`, count %s" % (self.path, self._ex_cnt)
+        )
         return True
 
     def lock_escalation(self, try_times):
-        self.stdio and getattr(self.stdio, 'start_loading', print)(
-            'waiting for the lock')
+        self.stdio and getattr(self.stdio, "start_loading", print)(
+            "waiting for the lock"
+        )
         try:
             self._lock_escalation(try_times)
-            self.stdio and getattr(
-                self.stdio, 'stop_loading', print)('succeed')
+            self.stdio and getattr(self.stdio, "stop_loading", print)("succeed")
         except Exception as e:
-            self.stdio and getattr(self.stdio, 'stop_loading', print)('fail')
+            self.stdio and getattr(self.stdio, "stop_loading", print)("fail")
             raise LockError(e)
 
     def _lock_escalation(self, try_times):
@@ -119,7 +121,7 @@ class MixLock(object):
                 break
             except KeyboardInterrupt:
                 self.stdio = stdio
-                raise Exception('fail to get lock')
+                raise Exception("fail to get lock")
             except Exception as e:
                 if try_times:
                     time.sleep(LockManager.TRY_INTERVAL)
@@ -143,16 +145,18 @@ class MixLock(object):
     def sh_unlock(self):
         if self._sh_cnt > 0:
             self._sh_cnt -= 1
-            self.stdio and getattr(self.stdio, 'verbose', print)(
-                'share lock %s release, count %s' % (self.path, self._sh_cnt))
+            self.stdio and getattr(self.stdio, "verbose", print)(
+                "share lock %s release, count %s" % (self.path, self._sh_cnt)
+            )
             self._sh_unlock()
         return self.locked is False
 
     def ex_unlock(self):
         if self._ex_cnt > 0:
             self._ex_cnt -= 1
-            self.stdio and getattr(self.stdio, 'verbose', print)(
-                'exclusive lock %s release, count %s' % (self.path, self._ex_cnt))
+            self.stdio and getattr(self.stdio, "verbose", print)(
+                "exclusive lock %s release, count %s" % (self.path, self._ex_cnt)
+            )
             self._ex_unlock()
         return self.locked is False
 
@@ -166,7 +170,6 @@ class MixLock(object):
 
 
 class Lock(object):
-
     def __init__(self, mix_lock):
         self.mix_lock = mix_lock
 
@@ -178,7 +181,6 @@ class Lock(object):
 
 
 class SHLock(Lock):
-
     def lock(self):
         self.mix_lock.sh_lock()
 
@@ -187,7 +189,6 @@ class SHLock(Lock):
 
 
 class EXLock(Lock):
-
     def lock(self):
         self.mix_lock.ex_lock()
 
@@ -196,13 +197,14 @@ class EXLock(Lock):
 
 
 class LockManager(Manager):
-
     TRY_TIMES = 6000
     TRY_INTERVAL = 0.01
 
-    RELATIVE_PATH = 'lock/'
+    RELATIVE_PATH = "lock/"
     GLOBAL_FN = LockType.GLOBAL.value
     CLUSTER_FN = LockType.CLUSTER.value
+    SCHEDULER_FN = LockType.SCHEDULER.value
+    RESULT_FN_PREFIX = LockType.RESULT.value
     REPOSITORY_FN = LockType.REPOSITORY.value
     LOCKS = {}
 
@@ -212,6 +214,7 @@ class LockManager(Manager):
         self.global_path = os.path.join(self.path, self.GLOBAL_FN)
         self.cluster_path = os.path.join(self.path, self.CLUSTER_FN)
         self.repository_path = os.path.join(self.path, self.REPOSITORY_FN)
+        self.scheduler_path = os.path.join(self.path, self.SCHEDULER_FN)
 
     @staticmethod
     def set_try_times(try_times):
@@ -267,6 +270,21 @@ class LockManager(Manager):
 
     def repository_sh_lock(self):
         return self._sh_lock(self.repository_path)
+
+    def scheduler_ex_lock(self):
+        return self._ex_lock(self.scheduler_path)
+
+    def scheduler_sh_lock(self):
+        return self._sh_lock(self.scheduler_path)
+
+    def _result_lock_fp(self, trace_id):
+        return os.path.join(self.path, "{}_{}".format(self.RESULT_FN_PREFIX, trace_id))
+
+    def result_ex_lock(self, trace_id):
+        return self._ex_lock(self._result_lock_fp(trace_id))
+
+    def result_sh_lock(self, trace_id):
+        return self._sh_lock(self._result_lock_fp(trace_id))
 
 
 atexit.register(LockManager.shutdown)

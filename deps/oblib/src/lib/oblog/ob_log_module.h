@@ -59,6 +59,7 @@ DEFINE_LOG_SUB_MOD(JIT)                  // jit
 DEFINE_LOG_SUB_MOD(STORAGE)              // storage, blocksstable
 DEFINE_LOG_SUB_MOD(TLOG)                 // liboblog
 DEFINE_LOG_SUB_MOD(STORAGETEST)          // storagetest
+DEFINE_LOG_SUB_MOD(TESTBENCH)            // testbench
 DEFINE_LOG_SUB_MOD(LOGTOOL)              // logtool
 DEFINE_LOG_SUB_MOD(WRS)                  // weak read service
 DEFINE_LOG_SUB_MOD(ARCHIVE)              // archive log
@@ -231,6 +232,11 @@ DEFINE_LOG_SUB_MOD(TYPE)               // type
 DEFINE_LOG_SUB_MOD(DEBUG)              // debug
 DEFINE_LOG_SUB_MOD(CACHE)              // cache
 LOG_MOD_END(PL)
+
+// testbench submodules
+LOG_MOD_BEGIN(TESTBENCH)
+DEFINE_LOG_SUB_MOD(WORKLOAD)
+LOG_MOD_END(TESTBENCH)
 
 } //namespace common
 } //namespace oceanbase
@@ -810,6 +816,9 @@ LOG_MOD_END(PL)
                                                                    info_string, ##args)
 #define _STORAGETEST_LOG(level, info_string, args...) _OB_SUB_MOD_LOG(STORAGETEST, TEST, level,  \
                                                                   info_string, ##args)
+// testbench submodule definitions
+#define TESTBENCH_LOG(level, info_string, args...) OB_SUB_MOD_LOG(TESTBENCH, WORKLOAD, level, info_string, ##args)
+#define _TESTBENCH_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(TESTBENCH, WORKLOAD, level, _fmt_, ##args)
 
 // liboblog submod definition
 #define OBLOG_FETCHER_LOG(level, fmt, args...) OB_SUB_MOD_LOG(TLOG, FETCHER, level, fmt, ##args)
@@ -1096,6 +1105,8 @@ LOG_MOD_END(PL)
 #define _RS_RESTORE_LOG_RET(level, errcode, args...) { int ret = errcode; _RS_RESTORE_LOG(level, ##args); }
 #define STORAGETEST_LOG_RET(level, errcode, args...) { int ret = errcode; STORAGETEST_LOG(level, ##args); }
 #define _STORAGETEST_LOG_RET(level, errcode, args...) { int ret = errcode; _STORAGETEST_LOG(level, ##args); }
+#define TESTBENCH_LOG_RET(level, errcode, args...) { int ret = errcode; TESTBENCH_LOG(level, ##args); }
+#define _TESTBENCH_LOG_RET(level, errcode, args...) { int ret = errcode; _TESTBENCH_LOG(level, ##args); }
 #define OBLOG_FETCHER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_FETCHER_LOG(level, ##args); }
 #define _OBLOG_FETCHER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_FETCHER_LOG(level, ##args); }
 #define OBLOG_PARSER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_PARSER_LOG(level, ##args); }

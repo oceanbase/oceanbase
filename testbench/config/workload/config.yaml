@@ -1,0 +1,7 @@
+instance_testbench:
+  distributed_transaction:
+    participants: 1
+    operations: 1
+    affect_rows: 1
+    start_time: 0
+    duration: 5

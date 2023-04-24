@@ -36,7 +36,6 @@ ROOT_IO = IO(1)
 
 
 class OptionHelpFormatter(IndentedHelpFormatter):
-
     def format_option(self, option):
         result = []
         opts = self.option_strings[option]
@@ -44,18 +43,19 @@ class OptionHelpFormatter(IndentedHelpFormatter):
         if len(opts) > opt_width:
             opts = "%*s%s\n" % (self.current_indent, "", opts)
             indent_first = self.help_position
-        else:                       # start help on same line as opts
+        else:  # start help on same line as opts
             opts = "%*s%-*s  " % (self.current_indent, "", opt_width, opts)
             indent_first = 0
         result.append(opts)
         if option.help:
             help_text = self.expand_default(option)
-            help_lines = help_text.split('\n')
+            help_lines = help_text.split("\n")
             if len(help_lines) == 1:
                 help_lines = textwrap.wrap(help_text, self.help_width)
             result.append("%*s%s\n" % (indent_first, "", help_lines[0]))
-            result.extend(["%*s%s\n" % (self.help_position, "", line)
-                           for line in help_lines[1:]])
+            result.extend(
+                ["%*s%s\n" % (self.help_position, "", line) for line in help_lines[1:]]
+            )
         elif opts[-1] != "\n":
             result.append("\n")
         return "".join(result)
@@ -64,23 +64,33 @@ class OptionHelpFormatter(IndentedHelpFormatter):
 class AllowUndefinedOptionParser(OptionParser):
     IS_TTY = sys.stdin.isatty()
 
-    def __init__(self,
-                 usage=None,
-                 option_list=None,
-                 option_class=Option,
-                 version=None,
-                 conflict_handler="error",
-                 description=None,
-                 formatter=None,
-                 add_help_option=True,
-                 prog=None,
-                 epilog=None,
-                 allow_undefine=True,
-                 undefine_warn=True
-                 ):
+    def __init__(
+        self,
+        usage=None,
+        option_list=None,
+        option_class=Option,
+        version=None,
+        conflict_handler="error",
+        description=None,
+        formatter=None,
+        add_help_option=True,
+        prog=None,
+        epilog=None,
+        allow_undefine=True,
+        undefine_warn=True,
+    ):
         OptionParser.__init__(
-            self, usage, option_list, option_class, version, conflict_handler,
-            description, formatter, add_help_option, prog, epilog
+            self,
+            usage,
+            option_list,
+            option_class,
+            version,
+            conflict_handler,
+            description,
+            formatter,
+            add_help_option,
+            prog,
+            epilog,
         )
         self.allow_undefine = allow_undefine
         self.undefine_warn = undefine_warn
@@ -89,7 +99,7 @@ class AllowUndefinedOptionParser(OptionParser):
         if self.IS_TTY:
             print("%s %s" % (IO.WARNING_PREV, msg))
         else:
-            print('warn: %s' % msg)
+            print("warn: %s" % msg)
 
     def _process_long_opt(self, rargs, values):
         try:
@@ -98,9 +108,12 @@ class AllowUndefinedOptionParser(OptionParser):
         except BadOptionError as e:
             if self.allow_undefine:
                 key = e.opt_str
-                value = value[len(key)+1:]
-                setattr(values, key.strip('-').replace('-', '_'),
-                        value if value != '' else True)
+                value = value[len(key) + 1 :]
+                setattr(
+                    values,
+                    key.strip("-").replace("-", "_"),
+                    value if value != "" else True,
+                )
                 self.undefine_warn and self.warn(e)
             else:
                 raise e
@@ -112,33 +125,51 @@ class AllowUndefinedOptionParser(OptionParser):
         except BadOptionError as e:
             if self.allow_undefine:
                 key = e.opt_str
-                value = value[len(key)+1:]
-                setattr(values, key.strip('-').replace('-', '_'),
-                        value if value != '' else True)
+                value = value[len(key) + 1 :]
+                setattr(
+                    values,
+                    key.strip("-").replace("-", "_"),
+                    value if value != "" else True,
+                )
                 self.undefine_warn and self.warn(e)
             else:
                 raise e
 
 
 class BaseCommand(object):
-
     def __init__(self, name, summary):
         self.name = name
         self.summary = summary
         self.args = []
         self.cmds = []
         self.opts = {}
-        self.prev_cmd = ''
+        self.prev_cmd = ""
         self.is_init = False
         self.hidden = False
         self.parser = AllowUndefinedOptionParser(add_help_option=False)
-        self.parser.add_option('-h', '--help', action='callback',
-                               callback=self._show_help, help='Show help and exit.')
-        self.parser.add_option('-v', '--verbose', action='callback',
-                               callback=self._set_verbose, help='Activate verbose output.')
+        self.parser.add_option(
+            "-h",
+            "--help",
+            action="callback",
+            callback=self._show_help,
+            help="Show help and exit.",
+        )
+        self.parser.add_option(
+            "-v",
+            "--verbose",
+            action="callback",
+            callback=self._set_verbose,
+            help="Activate verbose output.",
+        )
+        self.parser.add_option(
+            "-t",
+            "--traceid",
+            default=str(uuid()),
+            help="Identifier of a unique testbench command.",
+        )
 
     def _set_verbose(self, *args, **kwargs):
-        ROOT_IO.set_verbose_level(0xfffffff)
+        ROOT_IO.set_verbose_level(0xFFFFFFF)
 
     def init(self, cmd, args):
         if self.is_init is False:
@@ -168,13 +199,12 @@ class BaseCommand(object):
 
 
 class TestBenchCommand(BaseCommand):
-
-    HOME_PATH = os.path.join(os.getenv('HOME'), '.testbench')
+    HOME_PATH = os.path.join(os.getenv("HOME"), ".testbench")
 
     def init_home(self):
         if os.path.exists(self.HOME_PATH):
             return
-        for part in ['results', 'log', 'repository']:
+        for part in ["results", "log", "repository", "config"]:
             part_dir = os.path.join(self.HOME_PATH, part)
             DirectoryUtil.mkdir(part_dir)
 
@@ -184,31 +214,30 @@ class TestBenchCommand(BaseCommand):
     def do_command(self):
         self.parse_command()
         self.init_home()
-        trace_id = uuid()
+        traceid = getattr(self.opts, "traceid", "")
         ret = False
         try:
-            log_dir = os.path.join(self.HOME_PATH, 'log')
+            log_dir = os.path.join(self.HOME_PATH, "log")
             DirectoryUtil.mkdir(log_dir)
-            log_path = os.path.join(log_dir, 'testbench')
-            ROOT_IO.init_trace_logger(log_path, 'testbench', trace_id)
+            log_path = os.path.join(log_dir, "testbench")
+            ROOT_IO.init_trace_logger(log_path, "testbench", traceid)
             tb = TestBench(self.HOME_PATH, self.opts, ROOT_IO)
             ROOT_IO.track_limit += 1
-            ROOT_IO.verbose('cmd: %s' % self.cmds)
-            ROOT_IO.verbose('opts: %s' % self.opts)
+            ROOT_IO.verbose("cmd: %s" % self.cmds)
+            ROOT_IO.verbose("opts: %s" % self.opts)
             self._do_command(tb)
         except NotImplementedError:
-            ROOT_IO.exception(
-                'command \'%s\' is not implemented' % self.prev_cmd)
+            ROOT_IO.exception("command '%s' is not implemented" % self.prev_cmd)
         except LockError:
-            ROOT_IO.exception('Another app is currently holding the obd lock.')
+            ROOT_IO.exception("Another app is currently holding the obd lock.")
         except SystemExit:
             pass
         except KeyboardInterrupt:
-            ROOT_IO.exception('Keyboard Interrupt')
+            ROOT_IO.exception("Keyboard Interrupt")
         except:
             e = sys.exc_info()[1]
-            ROOT_IO.exception('Running Error: %s' % e)
-        ROOT_IO.print('Trace ID: %s' % trace_id)
+            ROOT_IO.exception("Running Error: %s" % e)
+        ROOT_IO.print("Trace ID: %s" % traceid)
         return ret
 
     def _do_command(self, tb):
@@ -217,36 +246,35 @@ class TestBenchCommand(BaseCommand):
     def _do_step(self, description, callback):
         ROOT_IO.start_loading(description)
         if callback():
-            ROOT_IO.stop_loading('succeed')
+            ROOT_IO.stop_loading("succeed")
         else:
-            ROOT_IO.stop_loading('failed')
+            ROOT_IO.stop_loading("failed")
             raise RuntimeError
 
 
 class MajorCommand(BaseCommand):
-
     def __init__(self, name, summary):
         super(MajorCommand, self).__init__(name, summary)
         self.commands = {}
 
     def _mk_usage(self):
         if self.commands:
-            usage = ['%s <command> [options]\n\nAvailable commands:\n' %
-                     self.prev_cmd]
+            usage = ["%s <command> [options]\n\nAvailable commands:\n" % self.prev_cmd]
             commands = [x for x in self.commands.values()]
             commands.sort(key=lambda x: x.name)
             for command in commands:
                 usage.append("%-14s %s\n" % (command.name, command.summary))
-            self.parser.set_usage('\n'.join(usage))
+            self.parser.set_usage("\n".join(usage))
         return super(MajorCommand, self)._mk_usage()
 
     def do_command(self):
         if not self.is_init:
-            ROOT_IO.error('%s command not init' % self.prev_cmd)
-            raise SystemExit('command not init')
+            ROOT_IO.error("%s command not init" % self.prev_cmd)
+            raise SystemExit("command not init")
         if len(self.args) < 1:
             ROOT_IO.print(
-                'You need to give some commands.\n\nTry `testbench --help` for more information.')
+                "You need to give some commands.\n\nTry `testbench --help` for more information."
+            )
             self._show_help()
             return False
         base, args = self.args[0], self.args[1:]
@@ -254,7 +282,7 @@ class MajorCommand(BaseCommand):
             self.parse_command()
             self._show_help()
             return False
-        cmd = '%s %s' % (self.prev_cmd, base)
+        cmd = "%s %s" % (self.prev_cmd, base)
         ROOT_IO.track_limit += 1
         return self.commands[base].init(cmd, args).do_command()
 
@@ -263,73 +291,127 @@ class MajorCommand(BaseCommand):
 
 
 class ClusterMajorCommand(MajorCommand):
-
     def __init__(self):
         super(ClusterMajorCommand, self).__init__(
-            'cluster', 'Manage a local cluster, and only one cluster can be deployed.')
+            "cluster", "Manage a local cluster, and only one cluster can be deployed."
+        )
         self.register_command(ClusterDeployCommand())
         self.register_command(ClusterDestroyCommand())
         self.register_command(ClusterDisplayCommand())
 
 
 class ClusterDeployCommand(TestBenchCommand):
-
     def __init__(self):
         super(ClusterDeployCommand, self).__init__(
-            'deploy', 'Deploy a cluster with the given configuration file.')
+            "deploy", "Deploy a cluster with the given configuration file."
+        )
         self.parser.add_option(
-            '-c', '--config', type='string', help='Path to the configuration file.')
-        self.parser.add_option('-m', '--monitor', action='store_true',
-                               help='Monitor system status and alert abnormal behavior.')
+            "-c", "--config", type="string", help="Path to the configuration file."
+        )
+        self.parser.add_option(
+            "-m",
+            "--monitor",
+            action="store_true",
+            help="Monitor system status and alert abnormal behavior.",
+        )
 
     def _check(self):
-        config = getattr(self.opts, 'config', '')
+        config = getattr(self.opts, "config", "")
         if not config:
-            ROOT_IO.error(
-                'Fail to deploy a cluster without configuration file.')
+            ROOT_IO.error("Fail to deploy a cluster without configuration file.")
             return False
         if not os.path.exists(config):
-            ROOT_IO.error(
-                'Configuration file {} does not exist.'.format(config))
+            ROOT_IO.error("Configuration file {} does not exist.".format(config))
             return False
         return True
 
     def _do_command(self, tb):
-        self._do_step('Checking options.', self._check)
-        self._do_step('Deploying the local cluster.', tb.deploy_cluster)
-        self._do_step('Starting the local cluster.', tb.start_cluster)
-        self._do_step('Bootstraping the local cluster.', tb.bootstrap)
+        self._do_step("Checking options.", self._check)
+        self._do_step("Deploying the local cluster.", tb.deploy_cluster)
+        self._do_step("Starting the local cluster.", tb.start_cluster)
+        self._do_step("Bootstraping the local cluster.", tb.bootstrap)
 
 
 class ClusterDestroyCommand(TestBenchCommand):
-
     def __init__(self):
         super(ClusterDestroyCommand, self).__init__(
-            'destroy', 'Stop all servers and clear the workspace for each server.')
+            "destroy", "Stop all servers and clear the workspace for each server."
+        )
 
     def _do_command(self, tb):
-        self._do_step('Destroying local cluster.', tb.destroy_cluster)
+        self._do_step("Destroying local cluster.", tb.destroy_cluster)
 
 
 class ClusterDisplayCommand(TestBenchCommand):
-
     def __init__(self):
         super(ClusterDisplayCommand, self).__init__(
-            'display', 'Display the status of each server.')
+            "display", "Display the status of each server."
+        )
 
     def _do_command(self, tb):
-        self._do_step('Displaying the local cluster.', tb.display_cluster)
+        self._do_step("Displaying the local cluster.", tb.display_cluster)
+
+
+class BenchMajorCommand(MajorCommand):
+    def __init__(self):
+        super(BenchMajorCommand, self).__init__(
+            "bench",
+            "Start a new microbench with the given workload schedule configuration.",
+        )
+        self.register_command(BenchDataCommand())
+        self.register_command(BenchLoadCommand())
+        self.register_command(BenchTestCommand())
+
+
+class BenchDataCommand(TestBenchCommand):
+    def __init__(self):
+        super(BenchDataCommand, self).__init__(
+            "data", "Generate and save data in the local storage."
+        )
+
+    def _do_command(self, tb):
+        return super()._do_command(tb)
+
+
+class BenchLoadCommand(TestBenchCommand):
+    def __init__(self):
+        super(BenchLoadCommand, self).__init__(
+            "load", "Populate data into the cluster."
+        )
+
+    def _do_command(self, tb):
+        return super()._do_command(tb)
+
+
+class BenchTestCommand(TestBenchCommand):
+    def __init__(self):
+        super(BenchTestCommand, self).__init__(
+            "test", "Start a benchmark process with the given configuration file."
+        )
+        self.parser.add_option(
+            "-c", "--config", type="string", help="Path to the configuration file."
+        )
+
+    def _do_command(self, tb):
+        self._do_step("Starting testbench scheduler.", tb.start_scheduler)
+
+
+class ReportMajorCommand(MajorCommand):
+    def __init__(self):
+        super(ReportMajorCommand, self).__init__(
+            "report", "Generate statistic report for a benchmarking process."
+        )
 
 
 class MainCommand(MajorCommand):
-
     def __init__(self):
-        super(MainCommand, self).__init__('testbench', '')
+        super(MainCommand, self).__init__("testbench", "")
         self.register_command(ClusterMajorCommand())
+        self.register_command(BenchMajorCommand())
 
 
 if __name__ == "__main__":
     ROOT_IO.track_limit += 2
-    if MainCommand().init('testbench', sys.argv[1:]).do_command():
+    if MainCommand().init("testbench", sys.argv[1:]).do_command():
         ROOT_IO.exit(0)
     ROOT_IO.exit(1)
