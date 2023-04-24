@@ -5169,11 +5169,15 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Argument in pl context is NULL", K(session), K(ret));
     } else {
+      bool old_client_return_rowid = session->is_client_return_rowid();
       bool is_inner_session = session->is_inner();
       ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
       ObInnerSQLConnection *spi_conn = NULL;
       !is_inner_session ? session->set_inner_session() : (void)NULL;
       session->set_session_type(ObSQLSessionInfo::USER_SESSION);
+      if (NULL != ctx->pl_ctx_) {
+        session->set_client_return_rowid(false);
+      }
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
           if (NULL != sql.ptr()) {
@@ -5195,6 +5199,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
 
       !is_inner_session ? session->set_user_session() : (void)NULL;
       session->set_session_type(old_session_type);
+      session->set_client_return_rowid(old_client_return_rowid);
     }
   }
   return ret;
