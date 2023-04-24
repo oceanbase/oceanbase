@@ -4289,7 +4289,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
           ObNestedLoopJoinSpec &nlj = static_cast<ObNestedLoopJoinSpec &>(spec);
           if (op.enable_px_batch_rescan()) {
             nlj.enable_px_batch_rescan_ = true;
-            nlj.group_size_ = ObNestedLoopJoinOp::PX_RESCAN_BATCH_ROW_COUNT;
+            nlj.group_size_ = PX_RESCAN_BATCH_ROW_COUNT;
           } else {
             nlj.enable_px_batch_rescan_ = false;
           }

@@ -29,6 +29,7 @@ namespace oceanbase
 {
 namespace sql
 {
+const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
 class ObIExtraStatusCheck;
 enum ObBcastOptimization {
   BC_TO_WORKER,

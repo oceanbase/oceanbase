@@ -41,6 +41,7 @@ public:
                                                     ObDfo &child,
                                                     ObDfo &parent,
                                                     bool is_parallel_scheduler = true) const;
+  virtual void clean_dtl_interm_result(ObExecContext &ctx) = 0;
   int build_data_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   int build_data_mn_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
@@ -69,6 +70,8 @@ public:
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
   virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+  virtual void clean_dtl_interm_result(ObExecContext &ctx) override;
+
 private:
   int build_transmit_recieve_channel(ObExecContext &ctx, ObDfo *dfo) const;
   int init_dfo_channel(ObExecContext &ctx, ObDfo *child, ObDfo *parent) const;
@@ -91,6 +94,7 @@ public:
     {}
     virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
     virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+    virtual void clean_dtl_interm_result(ObExecContext &ctx) override { UNUSED(ctx); }
 private:
     int dispatch_transmit_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
     int dispatch_receive_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
