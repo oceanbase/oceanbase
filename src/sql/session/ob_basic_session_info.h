@@ -1053,6 +1053,11 @@ public:
     return capability_.cap_flags_.OB_CLIENT_RETURN_HIDDEN_ROWID;
   }
 
+  inline void set_client_return_rowid(bool flag)
+  {
+    capability_.cap_flags_.OB_CLIENT_RETURN_HIDDEN_ROWID = (flag ? 1 : 0);
+  }
+
   inline bool is_client_use_lob_locator() const
   {
     return capability_.cap_flags_.OB_CLIENT_USE_LOB_LOCATOR;
