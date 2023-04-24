@@ -172,34 +172,34 @@ int ObDataDictIterator::next_dict_header(ObDictMetaHeader &header)
 }
 
 template<class DICT_ENTRY>
-int ObDataDictIterator::next_dict_entry(DICT_ENTRY &dict_entry)
+int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, DICT_ENTRY &dict_entry)
 {
   int ret = OB_SUCCESS;
 
   if (dict_pos_ > 0) {
     // deserialize from dict_buf_
     int64_t deserialize_pos = 0;
-    if (OB_FAIL(dict_entry.deserialize(dict_buf_, dict_pos_, deserialize_pos))) {
+    if (OB_FAIL(dict_entry.deserialize(header, dict_buf_, dict_pos_, deserialize_pos))) {
       DDLOG(WARN, "deserialize DICT_ENTRY from dict_buf failed", KR(ret),
-          K_(dict_pos), K(deserialize_pos));
+          K(header), K_(dict_pos), K(deserialize_pos));
     }
   } else if (palf_pos_ > 0) {
     // deserialize from dict_buf_
-    if (OB_FAIL(dict_entry.deserialize(palf_buf_, palf_buf_len_, palf_pos_))) {
+    if (OB_FAIL(dict_entry.deserialize(header, palf_buf_, palf_buf_len_, palf_pos_))) {
       DDLOG(WARN, "deserialize DICT_ENTRY from palf_buf failed", KR(ret),
-          K_(palf_buf_len), K_(palf_pos));
+          K(header), K_(palf_buf_len), K_(palf_pos));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "expect any of dict_pos/palf_pos is valid", KR(ret), K_(palf_pos), K_(dict_pos));
+    DDLOG(WARN, "expect any of dict_pos/palf_pos is valid", KR(ret), K(header), K_(palf_pos), K_(dict_pos));
   }
 
   return ret;
 }
 
-template int ObDataDictIterator::next_dict_entry(ObDictTenantMeta &dict_entry);
-template int ObDataDictIterator::next_dict_entry(ObDictDatabaseMeta &dict_entry);
-template int ObDataDictIterator::next_dict_entry(ObDictTableMeta &dict_entry);
+template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictTenantMeta &dict_entry);
+template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictDatabaseMeta &dict_entry);
+template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictTableMeta &dict_entry);
 
 int ObDataDictIterator::append_log_buf_with_base_header_(const char *buf, const int64_t buf_len)
 {

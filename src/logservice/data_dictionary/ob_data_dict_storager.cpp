@@ -326,7 +326,7 @@ int ObDataDictStorage::parse_dict_metas(
           } else {
             new (meta) ObDictTenantMeta(&allocator);
 
-            if (OB_FAIL(iterator.next_dict_entry(*meta))) {
+            if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
               DDLOG(WARN, "next_dict_entry for tenant_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(tenant_metas.push_back(meta))) {
               DDLOG(WARN, "push_back tenant_meta failed", KR(ret), K(header), KPC(meta));
@@ -340,7 +340,7 @@ int ObDataDictStorage::parse_dict_metas(
           } else {
             new (meta) ObDictDatabaseMeta(&allocator);
 
-            if (OB_FAIL(iterator.next_dict_entry(*meta))) {
+            if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
               DDLOG(WARN, "next_dict_entry for database_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(database_metas.push_back(meta))) {
               DDLOG(WARN, "push_back database_meta failed", KR(ret), K(header), KPC(meta));
@@ -354,7 +354,7 @@ int ObDataDictStorage::parse_dict_metas(
           } else {
             new (meta) ObDictTableMeta(&allocator);
 
-            if (OB_FAIL(iterator.next_dict_entry(*meta))) {
+            if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
               DDLOG(WARN, "next_dict_entry for table_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(table_metas.push_back(meta))) {
               DDLOG(WARN, "push_back table_meta failed", KR(ret), K(header), KPC(meta));

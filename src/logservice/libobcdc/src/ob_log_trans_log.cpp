@@ -112,7 +112,8 @@ int SortedLogEntryInfo::is_all_log_entry_fetched(bool &is_all_redo_fetched)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(sort_and_unique_lsn_arr(recorded_lsn_arr_))) {
+  auto fn = [](palf::LSN &lsn1, palf::LSN &lsn2) { return lsn1 < lsn2; };
+  if (OB_FAIL(sort_and_unique_array(recorded_lsn_arr_, fn))) {
     LOG_ERROR("sort_and_unique_recorded_lsn_arr failed", KR(ret), KPC(this));
   } else {
     is_all_redo_fetched = fetched_log_entry_arr_.count() == recorded_lsn_arr_.count();

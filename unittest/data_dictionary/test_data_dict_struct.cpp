@@ -62,6 +62,7 @@ TEST(ObDictTenantMeta, test_raw)
   ObArenaAllocator allocator;
   ObArenaAllocator allocator_for_deserialize;
   ObDictTenantMeta tenant_meta(&allocator);
+  ObDictMetaHeader header(ObDictMetaType::TENANT_META);
   tenant_meta.tenant_id_ = 1001;
   tenant_meta.schema_version_=100003124341;
   tenant_meta.tenant_name_ = "md_tenant";
@@ -82,7 +83,7 @@ TEST(ObDictTenantMeta, test_raw)
 
   ObDictTenantMeta tenant_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
-  EXPECT_EQ(OB_SUCCESS, tenant_meta_after.deserialize(buf, serialize_size, deserialize_pos));
+  EXPECT_EQ(OB_SUCCESS, tenant_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
   DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(tenant_meta_after));
   ob_free(buf);
 
@@ -101,6 +102,7 @@ TEST(ObDictDatabaseMeta, test_raw)
   ObArenaAllocator allocator;
   ObArenaAllocator allocator_for_deserialize;
   ObDictDatabaseMeta db_meta(&allocator);
+  ObDictMetaHeader header(ObDictMetaType::DATABASE_META);
   db_meta.database_id_ = 1003030501;
   db_meta.tenant_id_ = 23412;
   db_meta.schema_version_ = 790134621334;
@@ -119,7 +121,7 @@ TEST(ObDictDatabaseMeta, test_raw)
 
   ObDictDatabaseMeta db_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
-  EXPECT_EQ(OB_SUCCESS, db_meta_after.deserialize(buf, serialize_size, deserialize_pos));
+  EXPECT_EQ(OB_SUCCESS, db_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
   DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(db_meta_after));
   ob_free(buf);
 
@@ -143,6 +145,7 @@ TEST(ObDictColumnMeta, test_raw)
   ObArenaAllocator allocator_for_deserialize;
   DictTableMetaBuilder meta_builder;
   ObDictColumnMeta col_meta(&allocator);
+  ObDictMetaHeader header(ObDictMetaType::TABLE_META);
   meta_builder.build_column_meta(&col_meta);
   DDLOG(INFO, "build_column_meta", K(col_meta));
 
@@ -154,7 +157,7 @@ TEST(ObDictColumnMeta, test_raw)
 
   ObDictColumnMeta col_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
-  EXPECT_EQ(OB_SUCCESS, col_meta_after.deserialize(buf, serialize_size, deserialize_pos));
+  EXPECT_EQ(OB_SUCCESS, col_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
   DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(col_meta_after));
   ob_free(buf);
 
@@ -220,6 +223,7 @@ TEST(ObDictTableMeta, test_raw)
   ObArenaAllocator allocator_for_deserialize;
   DictTableMetaBuilder meta_builder;
   ObDictTableMeta *tb_meta;
+  ObDictMetaHeader header(ObDictMetaType::TABLE_META);
   const int64_t col_count = 4000;
   const int64_t rowkey_count = 57;
   const int64_t index_column_count = 1235;
@@ -237,7 +241,7 @@ TEST(ObDictTableMeta, test_raw)
 
   ObDictTableMeta tb_meta_after(&allocator_for_deserialize);
   int64_t deserialize_pos = 0;
-  EXPECT_EQ(OB_SUCCESS, tb_meta_after.deserialize(buf, serialize_size, deserialize_pos));
+  EXPECT_EQ(OB_SUCCESS, tb_meta_after.deserialize(header, buf, serialize_size, deserialize_pos));
   DDLOG(INFO, "deserialized_meta", K(deserialize_pos), K(tb_meta_after));
   ob_free(buf);
 

@@ -47,6 +47,7 @@ namespace libobcdc
 class ObLogSchemaGuard;
 class IObLogSchemaGetter;
 class TableSchemaInfo;
+class ColumnSchemaInfo;
 class ObDictTenantInfo;
 class ObDictTenantInfoGuard;
 
@@ -346,6 +347,17 @@ private:
       ITableMeta *table_meta,
       const TABLE_SCHEMA*schema,
       const TableSchemaInfo &tb_schema_info);
+  template<class TABLE_SCHEMA>
+  int get_logic_primary_keys_for_heap_table_(
+      const TABLE_SCHEMA &table_schema,
+      ObIArray<uint64_t> &pk_list);
+  template<class TABLE_SCHEMA>
+  int fill_primary_key_info_(
+      const TABLE_SCHEMA &table_schema,
+      const ColumnSchemaInfo &column_schema_info,
+      ObLogAdaptString &pks,
+      ObLogAdaptString &pk_info,
+      int64_t &valid_pk_num);
   template<class SCHEMA_GUARD, class TABLE_SCHEMA>
   int set_unique_keys_(
       ITableMeta *table_meta,

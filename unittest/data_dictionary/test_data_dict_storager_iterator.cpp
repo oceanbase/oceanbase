@@ -139,7 +139,7 @@ TEST(ObDataDictStorage, test_storage_in_palf)
       } else {
         DDLOG(ERROR, "next_dict_header failed", KR(ret), K(header));
       }
-    } else if (OB_FAIL(iterator.next_dict_entry(tb_meta_after))) {
+    } else if (OB_FAIL(iterator.next_dict_entry(header, tb_meta_after))) {
       DDLOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
     } else {
       EXPECT_TRUE(*tb_meta == tb_meta_after);
@@ -202,7 +202,7 @@ TEST(ObDataDictStorage, test_storage_in_dict)
       } else {
         DDLOG(ERROR, "next_dict_header failed", KR(ret), K(header));
       }
-    } else if (OB_FAIL(iterator.next_dict_entry(tb_meta_after))) {
+    } else if (OB_FAIL(iterator.next_dict_entry(header, tb_meta_after))) {
       DDLOG(ERROR, "next_dict_entry failed", KR(ret), K(header));
     } else {
       EXPECT_TRUE(*tb_meta == tb_meta_after);
