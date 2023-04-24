@@ -89,18 +89,17 @@ SCN ObITransCallback::get_scn() const
 
 int ObITransCallback::before_append_cb(const bool is_replay)
 {
-  need_fill_redo_ = !is_replay;
-  need_submit_log_ = !is_replay;
-  return before_append(is_replay);
+  int ret = before_append(is_replay);
+  if (OB_SUCC(ret)) {
+    need_fill_redo_ = !is_replay;
+    need_submit_log_ = !is_replay;
+  }
+  return ret;
 }
 
-int ObITransCallback::after_append_cb(const bool is_replay, const int ret_code)
+void ObITransCallback::after_append_cb(const bool is_replay)
 {
-  if (OB_SUCCESS != ret_code) {
-    need_fill_redo_ = true;
-    need_submit_log_ = true;
-  }
-  return after_append(is_replay, ret_code);
+  (void)after_append(is_replay);
 }
 
 int ObITransCallback::log_submitted_cb()
@@ -151,18 +150,13 @@ int ObITransCallback::log_sync_fail_cb()
   return ret;
 }
 
-int ObITransCallback::append(ObITransCallback *node)
+// All safety check is in before append
+void ObITransCallback::append(ObITransCallback *node)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(node)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    node->set_prev(this);
-    node->set_next(this->get_next());
-    this->get_next()->set_prev(node);
-    this->set_next(node);
-  }
-  return ret;
+  node->set_prev(this);
+  node->set_next(this->get_next());
+  this->get_next()->set_prev(node);
+  this->set_next(node);
 }
 
 int ObITransCallback::remove()
@@ -241,56 +235,47 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
   const int64_t slot = tid % MAX_CALLBACK_LIST_COUNT;
   int64_t stat = ATOMIC_LOAD(&parallel_stat_);
 
-  if (OB_FAIL(before_append(node))) {
-    TRANS_LOG(ERROR, "before_append failed", K(ret), K(node));
-  } else {
-    if (PARALLEL_STMT == stat) {
+  (void)before_append(node);
+
+  if (PARALLEL_STMT == stat) {
+    if (NULL == callback_lists_) {
+      WRLockGuard guard(rwlock_);
       if (NULL == callback_lists_) {
-        WRLockGuard guard(rwlock_);
-        if (NULL == callback_lists_) {
-          ObTxCallbackList *tmp_callback_lists = NULL;
-          if (NULL == (tmp_callback_lists = (ObTxCallbackList *)cb_allocator_.alloc(
-                         sizeof(ObTxCallbackList) * MAX_CALLBACK_LIST_COUNT))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            TRANS_LOG(WARN, "alloc cb lists fail", K(ret));
-          } else {
-            for (int i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
-              UNUSED(new(tmp_callback_lists + i) ObTxCallbackList(*this));
-            }
-            callback_lists_ = tmp_callback_lists;
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (NULL == callback_lists_) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "callback lists is not inited", K(ret));
+        ObTxCallbackList *tmp_callback_lists = NULL;
+        if (NULL == (tmp_callback_lists = (ObTxCallbackList *)cb_allocator_.alloc(
+                       sizeof(ObTxCallbackList) * MAX_CALLBACK_LIST_COUNT))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          TRANS_LOG(WARN, "alloc cb lists fail", K(ret));
         } else {
-          ret = callback_lists_[slot].append_callback(node);
-          add_slave_list_append_cnt();
+          for (int i = 0; i < MAX_CALLBACK_LIST_COUNT; ++i) {
+            UNUSED(new(tmp_callback_lists + i) ObTxCallbackList(*this));
+          }
+          callback_lists_ = tmp_callback_lists;
         }
       }
-    } else {
-      ret = callback_list_.append_callback(node);
-      add_main_list_append_cnt();
     }
 
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(after_append(node, ret))) {
-      TRANS_LOG(ERROR, "after_append failed", K(tmp_ret), K(node));
-      if (OB_SUCC(ret)) {
-        ret = tmp_ret;
+    if (OB_SUCC(ret)) {
+      if (NULL == callback_lists_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "callback lists is not inited", K(ret));
+      } else {
+        ret = callback_lists_[slot].append_callback(node, for_replay_);
+        add_slave_list_append_cnt();
       }
     }
+  } else {
+    ret = callback_list_.append_callback(node, for_replay_);
+    add_main_list_append_cnt();
   }
+
+  after_append(node, ret);
 
   return ret;
 }
 
-int ObTransCallbackMgr::before_append(ObITransCallback *node)
+void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
-  int ret = OB_SUCCESS;
   int64_t size = node->get_data_size();
 
   int64_t new_size = inc_pending_log_size(size);
@@ -298,17 +283,10 @@ int ObTransCallbackMgr::before_append(ObITransCallback *node)
   if (for_replay_) {
     inc_flushed_log_size(size);
   }
-  if (OB_FAIL(node->before_append_cb(for_replay_))) {
-    TRANS_LOG(ERROR, "before_append_cb failed", K(ret), K(node));
-  }
-
-  return ret;
 }
 
-int ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code)
+void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code)
 {
-  int ret = OB_SUCCESS;
-
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
     inc_pending_log_size(-1 * size);
@@ -316,12 +294,6 @@ int ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code)
       inc_flushed_log_size(-1 * size);
     }
   }
-
-  if (OB_FAIL(node->after_append_cb(for_replay_, ret_code))) {
-    TRANS_LOG(ERROR, "after_before_append_cb failed", K(ret), K(node));
-  }
-
-  return ret;
 }
 
 int ObTransCallbackMgr::rollback_to(const int64_t to_seq_no,
@@ -652,21 +624,9 @@ int ObMvccRowCallback::before_append(const bool is_replay)
   return ret;
 }
 
-int ObMvccRowCallback::after_append(const bool is_replay, const int ret_code)
+void ObMvccRowCallback::after_append(const bool is_replay)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(memtable_)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "memtable is NULL", K(ret));
-  } else if (OB_SUCCESS != ret_code) {
-    if (!is_replay) {
-      dec_unsubmitted_cnt_();
-      dec_unsynced_cnt_();
-    }
-  }
-
-  return ret;
+  // do nothing
 }
 
 int ObMvccRowCallback::log_submitted()

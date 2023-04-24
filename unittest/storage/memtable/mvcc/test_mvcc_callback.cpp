@@ -159,7 +159,9 @@ public:
                                            need_fill_redo,
                                            scn);
     EXPECT_NE(NULL, (long)cb);
-    EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb));
+    EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb, false/*for_replay*/));
+    cb->need_submit_log_ = need_submit_log;
+    cb->need_fill_redo_ = need_fill_redo;
     return cb;
   }
 
