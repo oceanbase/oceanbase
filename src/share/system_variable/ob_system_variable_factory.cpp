@@ -146,7 +146,6 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_set_purge_job_interval",
   "_set_purge_job_status",
   "_set_reverse_dblink_infos",
-  "_show_ddl_in_compat_mode",
   "_windowfunc_optimization_settings",
   "auto_increment_cache_size",
   "auto_increment_increment",
@@ -372,7 +371,6 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__SET_PURGE_JOB_INTERVAL,
   SYS_VAR__SET_PURGE_JOB_STATUS,
   SYS_VAR__SET_REVERSE_DBLINK_INFOS,
-  SYS_VAR__SHOW_DDL_IN_COMPAT_MODE,
   SYS_VAR__WINDOWFUNC_OPTIMIZATION_SETTINGS,
   SYS_VAR_AUTO_INCREMENT_CACHE_SIZE,
   SYS_VAR_AUTO_INCREMENT_INCREMENT,
@@ -791,8 +789,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "log_row_value_options",
   "ob_max_read_stale_time",
   "_optimizer_gather_stats_on_load",
-  "_set_reverse_dblink_infos",
-  "_show_ddl_in_compat_mode"
+  "_set_reverse_dblink_infos"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1182,7 +1179,6 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObMaxReadStaleTime)
         + sizeof(ObSysVarOptimizerGatherStatsOnLoad)
         + sizeof(ObSysVarSetReverseDblinkInfos)
-        + sizeof(ObSysVarShowDdlInCompatMode)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3187,15 +3183,6 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__SET_REVERSE_DBLINK_INFOS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSetReverseDblinkInfos));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowDdlInCompatMode())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarShowDdlInCompatMode", K(ret));
-      } else {
-        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE))] = sys_var_ptr;
-        ptr = (void *)((char *)ptr + sizeof(ObSysVarShowDdlInCompatMode));
       }
     }
 
@@ -5663,17 +5650,6 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSetReverseDblinkInfos())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSetReverseDblinkInfos", K(ret));
-      }
-      break;
-    }
-    case SYS_VAR__SHOW_DDL_IN_COMPAT_MODE: {
-      void *ptr = NULL;
-      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarShowDdlInCompatMode)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarShowDdlInCompatMode)));
-      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarShowDdlInCompatMode())) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("fail to new ObSysVarShowDdlInCompatMode", K(ret));
       }
       break;
     }

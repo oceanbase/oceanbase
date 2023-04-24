@@ -2915,25 +2915,13 @@ static struct VarsInit{
     ObSysVars[221].alias_ = "OB_SV__SET_REVERSE_DBLINK_INFOS" ;
     }();
 
-    [&] (){
-      ObSysVars[222].info_ = "When enabled, show create table will show the strict compatible results with the compatibility mode." ;
-      ObSysVars[222].name_ = "_show_ddl_in_compat_mode" ;
-      ObSysVars[222].data_type_ = ObIntType ;
-      ObSysVars[222].value_ = "0" ;
-      ObSysVars[222].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[222].id_ = SYS_VAR__SHOW_DDL_IN_COMPAT_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SHOW_DDL_IN_COMPAT_MODE] = 222 ;
-    ObSysVars[222].alias_ = "OB_SV__SHOW_DDL_IN_COMPAT_MODE" ;
-    }();
-
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 223;
+static int64_t var_amount = 222;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
