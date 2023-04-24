@@ -873,7 +873,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
-  if(is_foreign_check_nested_session() && stmt::T_SELECT == ctx_.get_sql_ctx()->stmt_type_) {
+  if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
   }
   if (MY_SPEC.batch_scan_flag_ || is_lookup) {
