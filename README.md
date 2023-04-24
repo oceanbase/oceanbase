@@ -36,14 +36,14 @@
 **OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 # Key features
-* Transparent Scalability
-* Ultra-fast Performance
-* Real-time Operational Analytics
-* Continuous Availability
-* MySQL Compatible
-* Cost Effeciency
+* **Transparent Scalability** : An OceanBase cluster can be scaled out to 1,500 nodes transparently, handling petabytes of data and a trillion rows of records.
+* **Ultra-fast Performance** : The only distributed database that has refreshed both TPC-C record, at 707 million tmpC, and TPC-H record, at 15.26 million QphH @30000GB.
+* **Real-time Operational Analytics** : A unified system for both transactional and real-time operational analytics workloads.
+* **Continuous Availability** : OceanBase Database adopts Paxos Consensus algorithm to achieve Zero RPO and less than 30 seconds of RTO.
+* **MySQL Compatible** : OceanBase Database is highly compatible with MySQL, which ensures that zero or few modification is needed for migration.
+* **Cost Effeciency** : The cutting-edge compression technology saves 70%-90% of storage costs without compromising performance. The multi-tenancy architecture achieves higher resource utilization.
 
-See [key features](https://en.oceanbase.com/product/opensource) to learn more details.
+See also [key features](https://en.oceanbase.com/product/opensource) for more details.
 
 # System architecture
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
@@ -56,6 +56,8 @@ See [key features](https://en.oceanbase.com/product/opensource) to learn more de
 ### 🔥 Deploy by all-in-one
 
 You can quickly deploy a standalone OceanBase Database to experience with the following commands.
+
+**Note**: Linux Only
 
 ```shell
 # download and install all-in-one package (internet connection is required)
@@ -94,9 +96,12 @@ See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/C
 # Roadmap
 
 See [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects).
+
 # Case study
 
-See [success stories](https://en.oceanbase.com/customer/home).
+OceanBase makes data management and use easier with technology innovation. It has been serving more than 400 customers upgrade their database from different industries, including Financial Services, Telecom, Retail, Internet and more.
+
+See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
 
 # Contributing
 
