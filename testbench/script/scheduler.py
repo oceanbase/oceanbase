@@ -27,24 +27,6 @@ from manager import Manager
 yaml = YamlLoader()
 
 
-class Workload(object):
-    def __init__(self, type, conf):
-        self._type = type
-        self._conf = conf
-        self._repo_path = None
-
-    @property
-    def type(self):
-        return self._type
-
-    @property
-    def cmd(self):
-        strs = []
-        for key, value in self._conf.items():
-            strs.append("{}={}".format(key, value))
-        return ",".join(strs)
-
-
 class SchedulerManager(Manager):
     RELATIVE_PATH = "scheduler/"
     CONFIG_YAML_NAME = "config.yaml"
@@ -93,15 +75,35 @@ class SchedulerManager(Manager):
     def _parse_cmd(self):
         type_str = OrderedDict(
             {
-                "distributed_transaction": "-d",
+                "distributed_transaction": "-t",
                 "contention": "-c",
-                "deadlock": "-D",
+                "deadlock": "-d",
+            }
+        )
+        global_str = OrderedDict(
+            {
+                "cluster_host": "-i",
+                "cluster_port": "-P",
+                "cluster_user": "-U",
+                "cluster_password": "-p",
+                "cluster_db_name": "-n",
             }
         )
         cmds = ["-H", self.trace_path]
-        for workload in self._workload_config:
-            cmds.append(type_str[workload.type])
-            cmds.append(workload.cmd)
+        for name, config in self._workload_config.items():
+            if config is None:
+                continue
+            if name in type_str:
+                cmds.append(type_str[name])
+                cmds.append(
+                    ",".join(
+                        "{}={}".format(key, value) for key, value in config.items()
+                    )
+                )
+            elif name in global_str:
+                cmds.append(global_str[name])
+                cmds.append("{}".format(config))
+        self.stdio.verbose("parse cmds {}".format(cmds))
         return "cd {}; {} {}".format(self.trace_path, self.repo, " ".join(cmds))
 
     def _lock(self, read_only=False):
@@ -143,7 +145,11 @@ class SchedulerManager(Manager):
 
         self._component = src_data.keys()[0]
         self._component_config = src_data[self._component]
-        self._workload_config = []
+        self._workload_config = {}
         for type, config in self._component_config.items():
-            self._workload_config.append(Workload(type, config))
+            if type == "global":
+                for key, value in config.items():
+                    self._workload_config[key] = value
+            else:
+                self._workload_config[type] = config
         return True

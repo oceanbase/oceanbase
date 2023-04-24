@@ -19,20 +19,39 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/net/ob_addr.h"
+
 namespace oceanbase
 {
 namespace common
 {
 namespace sqlclient
 {
+namespace ContFuncDefID
+{
+  enum ContFuncDefIDEnum
+  { 
+    CONT_FUNC_START = -1,
+    #define CONT_FUNC_DEF(id, ...) id,
+    #include "ob_cont_func_define.h"
+    #undef CONT_FUNC_DEF
+    CONT_FUNC_END,
+    END = 256
+  };
+}
 class ObServerConnectionPool;
 class ObMySQLStatement;
 class ObMySQLPreparedStatement;
 class ObMySQLConnectionPool;
+class ObContFunc;
 
 class ObMySQLConnection : public ObISQLConnection //, ObIDbLinkConnection
 {
+  #define CONT_FUNC_DEF(id, type) \
+  friend class type;                    
+  #include "ob_cont_func_define.h"
+  #undef CONT_FUNC_DEF 
   friend class ObServerConnectionPool;
+  friend class ObMySQLPreparedStatement;
 public:
   enum
   {
@@ -50,8 +69,9 @@ public:
   ObMySQLConnection();
   ~ObMySQLConnection();
   int connect(const char *user, const char *pass, const char *db,
-                                 oceanbase::common::ObAddr &addr, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
-  int connect(const char *user, const char *pass, const char *db, const bool use_ssl, bool read_write_no_timeout = false, int64_t sql_req_level = 0);
+                                 oceanbase::common::ObAddr &addr, int64_t timeout, bool read_write_no_timeout = false, int64_t sql_req_level = 0, bool async = false);
+  int connect(const char *user, const char *pass, const char *db, const bool use_ssl,
+                               bool read_write_no_timeout = false, int64_t sql_req_level = 0, bool async = false);
   void close();
   virtual bool is_closed() const;
   // use user provided the statement
@@ -59,7 +79,7 @@ public:
   int prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql);
   int escape(const char *from, const int64_t from_size, char *to,
       const int64_t to_size, int64_t &out_size);
-  void init(ObServerConnectionPool *root);
+  int init(ObServerConnectionPool *root);
   void reset();
   const common::ObAddr &get_server(void) const;
   ObServerConnectionPool *get_root();
@@ -112,15 +132,18 @@ public:
   // dblink.
   virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
+  // Async Mode
+  int wait_for_mysql();
+  int rollback_async();
+  int commit_async();
+  int get_cont_status(ObMySQLPreparedStatement *cur_stmt = NULL);
 
 private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
 
-
 private:
   const static int64_t READ_CONSISTENCY_STRONG = 3;
-
   ObServerConnectionPool *root_;  // each connection belongs to ONE pool
   MYSQL mysql_;
   int last_error_code_;
@@ -136,8 +159,21 @@ private:
   const char *db_name_;
   uint64_t tenant_id_;
   int64_t read_consistency_;
+
+  // Async Mode
+  MYSQL *mysql_ret_;
+  MYSQL_STMT *mysql_stmt_;
+  my_bool mysql_bool_err_;
+  int mysql_int_err_;
+  int async_status_;
+  ObContFunc* cont_funcs_[ContFuncDefID::END];
+  int cur_cont_func_;
+  ObArenaAllocator alloc_;
+
+private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLConnection);
 };
+
 inline bool ObMySQLConnection::is_busy() const
 {
   return busy_;
@@ -170,6 +206,74 @@ inline int64_t ObMySQLConnection::connection_version() const
 {
   return connection_version_;
 }
+
+class ObContFunc 
+{
+public:
+  ObContFunc(ObMySQLConnection *conn) : conn_(conn) {}
+  virtual ~ObContFunc() {}
+  virtual bool run_func() = 0;
+
+protected:
+  ObMySQLConnection *conn_;
+  DISALLOW_COPY_AND_ASSIGN(ObContFunc);
+};
+
+class ObConnectContFunc : public ObContFunc
+{
+public:
+  ObConnectContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObConnectContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObQueryContFunc : public ObContFunc
+{
+public:
+  ObQueryContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObQueryContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObUpdateContFunc : public ObContFunc
+{
+public:
+  ObUpdateContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObUpdateContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObStmtQueryContFunc : public ObContFunc
+{
+public:
+  ObStmtQueryContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObStmtQueryContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObStmtUpdateContFunc : public ObContFunc
+{
+public:
+  ObStmtUpdateContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObStmtUpdateContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObCommitContFunc : public ObContFunc
+{
+public:
+  ObCommitContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObCommitContFunc() {}
+  virtual bool run_func() override; 
+};
+
+class ObRollbackContFunc : public ObContFunc
+{
+public:
+  ObRollbackContFunc(ObMySQLConnection *conn) : ObContFunc(conn) {}
+  virtual ~ObRollbackContFunc() {}
+  virtual bool run_func() override;
+};
 }
 }
 }

@@ -298,6 +298,7 @@ class ClusterMajorCommand(MajorCommand):
         self.register_command(ClusterDeployCommand())
         self.register_command(ClusterDestroyCommand())
         self.register_command(ClusterDisplayCommand())
+        self.register_command(ClusterCreateTenantCommand())
 
 
 class ClusterDeployCommand(TestBenchCommand):
@@ -330,6 +331,17 @@ class ClusterDeployCommand(TestBenchCommand):
         self._do_step("Deploying the local cluster.", tb.deploy_cluster)
         self._do_step("Starting the local cluster.", tb.start_cluster)
         self._do_step("Bootstraping the local cluster.", tb.bootstrap)
+        self._do_step("Creating testbench tenant.", tb.create_tenant)
+
+
+class ClusterCreateTenantCommand(TestBenchCommand):
+    def __init__(self):
+        super(ClusterCreateTenantCommand, self).__init__(
+            "tenant", "Create testbench tenant with remained resources."
+        )
+
+    def _do_command(self, tb):
+        self._do_step("Createing testbench tenant.", tb.create_tenant)
 
 
 class ClusterDestroyCommand(TestBenchCommand):

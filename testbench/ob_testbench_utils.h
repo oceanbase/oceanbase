@@ -17,7 +17,7 @@
 
 namespace oceanbase
 {
-  int __attribute__((weak)) split(const char *str, const char *delimiter, const int expect_res_cnt, const char **res, int &res_cnt)
+  int __attribute__((weak)) split(const char *str, const char *delimiter, const int expect_res_cnt, char **res, int &res_cnt)
   {
     int ret = OB_SUCCESS;
     res_cnt = 0;
@@ -34,7 +34,6 @@ namespace oceanbase
       char *token;
       while ((token = strtok_r(rest, delimiter, &rest)))
       {
-        TESTBENCH_LOG(INFO, "get split token", KCSTRING(token));
         *res++ = token;
         ++res_cnt;
       }

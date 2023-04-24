@@ -120,7 +120,7 @@ class TestBench(object):
         rs = self.cluster_manager.root_service
         cursor = MySQLClient.connect(rs, stdio=self.stdio)
         if not cursor:
-            self.stdio.error("Fail to get database connection.")
+            self.stdio.error("Fail to get database connection in bootstrap.")
             return False
 
         def is_bootstrap():
@@ -171,7 +171,7 @@ class TestBench(object):
     def stop_server(self):
         def kill_server(name, server):
             if not os.path.exists(server.pid_path):
-                self.stdio.warn("Found server {} not active.".format(name))
+                self.stdio.warn("Found server {} not active".format(name))
                 return False
             pid = FileUtil.open(server.pid_path).readline().strip("\n")
             if LocalClient.execute_command(
@@ -191,7 +191,7 @@ class TestBench(object):
                 'pkill -9 -u `whoami` -f "^{}"'.format(repo), stdio=self.stdio
             ).code
         ):
-            self.stdio.error("Fail to stop servers by pkill.")
+            self.stdio.error("Fail to stop servers by pkill")
             return False
         return True
 
@@ -251,3 +251,119 @@ class TestBench(object):
         if ret.stderr or ret.code:
             return False
         return True
+
+    def create_tenant(self):
+        tenant_name = "tb"
+        unit_name = "tb_unit"
+        pool_name = "tb_pool"
+        rs = self.cluster_manager.root_service
+        cursor = MySQLClient.connect(rs, stdio=self.stdio)
+        if not cursor:
+            self.stdio.error("Fail to get database connection in create tenant")
+            return False
+
+        # check tenant existence
+        def is_tenant_exist():
+            sql = "select * from oceanbase.DBA_OB_TENANTS where TENANT_NAME = '{}'".format(
+                tenant_name
+            )
+            try:
+                self.stdio.verbose("execute sql command {}".format(sql))
+                cursor.execute(sql)
+                if cursor.fetchone():
+                    return True
+            except MySQL.DatabaseError as e:
+                self.stdio.error("Check tenant existence exception {}".format(e.args))
+                return False
+            return False
+
+        if is_tenant_exist():
+            self.stdio.error("Tenant {} already exists".format(tenant_name))
+            return False
+
+        # get zone information
+        zone_svr_num = {}
+        sql = "select zone, count(*) num from oceanbase.__all_server where status = 'active' group by zone"
+        try:
+            self.stdio.verbose("execute sql command {}".format(sql))
+            cursor.execute(sql)
+            res = cursor.fetchall()
+            for row in res:
+                zone_svr_num[str(row["zone"])] = row["num"]
+        except MySQL.DatabaseError as e:
+            self.stdio.error("Get zone information exception {}".format(e.args))
+            return False
+        zone = zone_svr_num.keys()
+        zone_list = "('{}')".format("','".join(zone))
+        zone_num = len(zone)
+        unit_num = min(zone_svr_num.items(), key=lambda x: x[1])[1]
+
+        # get server information
+        sql = "select * from oceanbase.GV$OB_SERVERS where zone in {}".format(zone_list)
+        try:
+            self.stdio.verbose("execute sql command {}".format(sql))
+            cursor.execute(sql)
+        except MySQL.DatabaseError as e:
+            self.stdio.error("Get server information exception {}".format(e.args))
+            return False
+        svr_stats = cursor.fetchall()
+        cpu_avail = svr_stats[0]["CPU_CAPACITY_MAX"] - svr_stats[0]["CPU_ASSIGNED_MAX"]
+        mem_avail = svr_stats[0]["MEM_CAPACITY"] - svr_stats[0]["MEM_ASSIGNED"]
+        disk_avail = (
+            svr_stats[0]["DATA_DISK_CAPACITY"] - svr_stats[0]["DATA_DISK_IN_USE"]
+        )
+        log_disk_avail = (
+            svr_stats[0]["LOG_DISK_CAPACITY"] - svr_stats[0]["LOG_DISK_ASSIGNED"]
+        )
+        for svr_stat in svr_stats[1:]:
+            cpu_avail = min(
+                svr_stat["CPU_CAPACITY_MAX"] - svr_stat["CPU_ASSIGNED_MAX"], cpu_avail
+            )
+            mem_avail = min(
+                svr_stat["MEM_CAPACITY"] - svr_stat["MEM_ASSIGNED"], mem_avail
+            )
+            disk_avail = min(
+                svr_stat["DATA_DISK_CAPACITY"] - svr_stat["DATA_DISK_IN_USE"],
+                disk_avail,
+            )
+            log_disk_avail = min(
+                svr_stat["LOG_DISK_CAPACITY"] - svr_stat["LOG_DISK_ASSIGNED"],
+                log_disk_avail,
+            )
+
+        # create resource unit
+        sql = "create resource unit {} memory_size {}, max_cpu {}, min_cpu {}, log_disk_size {}".format(
+            unit_name, mem_avail, cpu_avail, cpu_avail, log_disk_avail
+        )
+        try:
+            self.stdio.verbose("execute sql command {}".format(sql))
+            cursor.execute(sql)
+        except MySQL.DatabaseError as e:
+            self.stdio.error("Create resource unit exception {}".format(e.args))
+            return False
+
+        # create resource pool
+        sql = "create resource pool {} unit={}, unit_num={}, zone_list={}".format(
+            pool_name, unit_name, unit_num, zone_list
+        )
+        try:
+            self.stdio.verbose("execute sql command {}".format(sql))
+            cursor.execute(sql)
+        except MySQL.DatabaseError as e:
+            self.stdio.error("Create resource pool exception {}".format(e.args))
+            return False
+
+        # create tenant
+        mode = "mysql"
+        replica_num = zone_num
+        primary_zone = "RANDOM"
+        sql = "create tenant {} replica_num={}, zone_list={}, primary_zone='{}', resource_pool_list=('{}') set ob_compatibility_mode='{}'".format(
+            tenant_name, replica_num, zone_list, primary_zone, pool_name, mode
+        )
+        try:
+            self.stdio.verbose("execute sql command {}".format(sql))
+            cursor.execute(sql)
+        except MySQL.DatabaseError as e:
+            self.stdio.error("Create tenant exception {}".format(e.args))
+            return False
+        return is_tenant_exist()

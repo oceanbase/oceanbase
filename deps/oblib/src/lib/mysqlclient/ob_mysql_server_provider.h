@@ -32,6 +32,7 @@ public:
   // should imply get_tenant_ids/get_tenant_servers
   // if using MySQLConnectionPool and MySQLConnectionPoolType is TENANT_POOL
   // MUST contains SYS_TENANT
+  virtual int get_tenants(ObIArray<ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1>> &tenants) { return OB_NOT_SUPPORTED; }
   virtual int get_tenant_ids(ObIArray<uint64_t> &tenant_ids) = 0;
   virtual int get_tenant_servers(const uint64_t tenant_id, ObIArray<ObAddr> &tenant_servers) = 0;
   virtual int refresh_server_list(void) = 0;

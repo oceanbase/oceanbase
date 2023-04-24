@@ -1,6 +1,13 @@
 instance_testbench:
+  global:
+    cluster_host: 127.0.0.1
+    cluster_port: 2881
+    cluster_user: root
+    cluster_password:  
+    cluster_db_name: oceanbase
+    duration: 1
   distributed_transaction:
-    participants: 1
+    participants: 10
     operations: 1
     affect_rows: 1
     start_time: 0

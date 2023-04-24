@@ -66,7 +66,7 @@ extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
 extern ObPLogFDType get_fd_type(const char *mod_name);
 
-#define OB_LOGGER ::oceanbase::common::ObLogger::get_logger()
+#define OB_LOGGER oceanbase::common::ObLogger::get_logger()
 #define OB_LOG_NEED_TO_PRINT(level) (OB_UNLIKELY(OB_LOGGER.need_to_print(OB_LOG_LEVEL_##level)))
 
 //@class ObLogIdLevelMap
@@ -252,6 +252,8 @@ class ObLogger : public ObBaseLogWriter
 {
 private:
   static constexpr int LOG_ITEM_SIZE = sizeof(ObPLogItem);
+  ObLogger();
+  
 public:
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024; // default max log file size
   //check whether disk storing log-file has no space every 2s
@@ -330,7 +332,7 @@ private:
 
 
 public:
-  ObLogger();
+  // ObLogger();
   virtual ~ObLogger();
   virtual int init(const ObBaseLogWriterCfg &log_cfg,
                    const bool is_arb_replica);

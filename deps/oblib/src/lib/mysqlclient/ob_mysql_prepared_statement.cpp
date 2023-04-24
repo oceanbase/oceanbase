@@ -36,6 +36,17 @@ ObMySQLPreparedStatement::ObMySQLPreparedStatement() :
 {
 }
 
+ObMySQLPreparedStatement::ObMySQLPreparedStatement(ObArenaAllocator *arena_allocator) :
+    conn_(NULL),
+    alloc_(arena_allocator),
+    param_(*this),
+    result_(*this),
+    stmt_param_count_(0),
+    stmt_(NULL)
+{
+}
+
+
 ObMySQLPreparedStatement::~ObMySQLPreparedStatement()
 {
 }
@@ -100,8 +111,6 @@ int ObMySQLPreparedStatement::close()
   return ret;
 }
 
-
-
 int ObMySQLPreparedStatement::execute_update()
 {
   int ret = OB_SUCCESS;
@@ -113,6 +122,23 @@ int ObMySQLPreparedStatement::execute_update()
   } else if (0 != mysql_stmt_execute(stmt_)) {
     ret = -mysql_stmt_errno(stmt_);
     LOG_WARN("fail to execute stmt", "info", mysql_stmt_error(stmt_), K(ret));
+  }
+  return ret;
+}
+
+int ObMySQLPreparedStatement::execute_update_async()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("stmt handler is null", K(ret));
+  } else if (OB_FAIL(param_.bind_param())) {
+    LOG_WARN("bind prepared input param fail", K(ret));
+  } else if (OB_LIKELY(conn_->async_status_ = mysql_stmt_execute_start(&conn_->mysql_int_err_, stmt_))) {
+    conn_->cur_cont_func_ = ContFuncDefID::CONT_FUNC_STMT_UPDATE;
+  } else if (OB_UNLIKELY(conn_->mysql_int_err_)) {
+    ret = -mysql_stmt_errno(stmt_);
+    LOG_WARN("execute stmt fail", "info", mysql_stmt_error(stmt_), K(ret));
   }
   return ret;
 }

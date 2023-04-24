@@ -100,6 +100,8 @@ ObMySQLConnectionPool::ObMySQLConnectionPool()
     server_pool_(),
     check_read_consistency_(true)
 {
+  OB_LOGGER.set_log_level(OB_LOG_LEVEL_DEBUG);
+  OB_LOGGER.set_file_name("log/scheduler.log", true, false);
   int ret = OB_SUCCESS;
   set_db_param(DEFAULT_DB_USER, DEFAULT_DB_PASS, DEFAULT_DB_NAME);
   init_sql_[0] = '\0';
@@ -782,12 +784,51 @@ int ObMySQLConnectionPool::create_dblink_pool(uint64_t tenant_id, uint64_t dblin
     } else if (OB_FAIL(server_list_.push_back(dblink_pool))) {
       LOG_WARN("fail to push pool to list", K(ret));
     } else {
-      LOG_DEBUG("new dblink pool created", K(server), K(config_.sqlclient_per_observer_conn_limit_));
+      LOG_DEBUG("new dblink pool created", K(server), K(db_tenant));
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dblink_pool)) {
     server_pool_.free(dblink_pool); // put back to cache. prevent memory leak
     dblink_pool = NULL;
+  }
+  return ret;
+}
+
+int ObMySQLConnectionPool::create_all_dblink_pool() 
+{
+  int ret = OB_SUCCESS;
+  dblink_param_ctx param_ctx;
+  param_ctx.pool_type_ = DblinkPoolType::DBLINK_POOL_DEF;
+  ObSEArray<uint64_t, 16> tenant_array("OBMySQLConnPool", OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ObSEArray<ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1>, 16> tenant_name_array("OBMySQLConnPool", OB_MALLOC_NORMAL_BLOCK_SIZE);
+  ObSEArray<ObAddr, 16> server_array("OBMySQLConnPool", OB_MALLOC_NORMAL_BLOCK_SIZE);
+  if (OB_FAIL(server_provider_->get_tenant_ids(tenant_array))) {
+    LOG_ERROR("get_tenant_ids by server_provider_ failed", K(ret));
+  } else if (OB_FAIL(server_provider_->get_tenants(tenant_name_array))) {
+    LOG_ERROR("get_tenants by server_provider_ failed", K(ret));
+  } else {
+    for (int64_t tenant_idx = 0; tenant_idx < tenant_array.count(); tenant_idx++) {
+      uint64_t tenant_id = OB_INVALID_TENANT_ID;
+      ObFixedLengthString<OB_MAX_TENANT_NAME_LENGTH + 1> tenant_name;
+      ObString tenant_name_str;
+      if (OB_FAIL(tenant_array.at(tenant_idx, tenant_id))) {
+        LOG_ERROR("get tenant_id failed", K(ret), K(tenant_idx), K(tenant_array));
+      } else if (OB_FAIL(tenant_name_array.at(tenant_idx, tenant_name))) {
+        LOG_ERROR("get_tenant_servers by server_provider_ failed", K(ret), K(tenant_id), K(tenant_idx), K(tenant_array));
+      } else if (OB_FAIL(server_provider_->get_tenant_servers(tenant_id, server_array))) {
+        LOG_ERROR("get_tenant_servers by server_provider_ failed", K(ret), K(tenant_id), K(tenant_idx), K(tenant_array));
+      } else {
+        tenant_name_str = tenant_name.str();
+        for (int64_t server_idx = 0; server_idx < server_array.count(); server_idx++) {
+          ObAddr server;
+          if (OB_FAIL(server_array.at(server_idx, server))) {
+            LOG_ERROR("get server failed", K(ret), K(server_idx), K(server_array));
+          } else if (OB_FAIL(create_dblink_pool(tenant_id, DblinkKey(tenant_name_str, server).hash(), server, tenant_name_str, db_user_, db_pass_, db_name_, "", "", param_ctx))) {
+            LOG_ERROR("create dblink pool failed", K(ret), K(server), K(tenant_name), KCSTRING(db_user_), KCSTRING(db_pass_), KCSTRING(db_name_), K(param_ctx));
+          }
+        }
+      }
+    } // end for tenant_array
   }
   return ret;
 }

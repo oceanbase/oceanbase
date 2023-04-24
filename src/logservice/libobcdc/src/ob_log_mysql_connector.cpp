@@ -87,7 +87,6 @@ int ObLogMySQLConnector::init(const MySQLConnConfig& cfg,
     const bool enable_ssl_client_authentication)
 {
   int ret = OB_SUCCESS;
-
   if (OB_UNLIKELY(inited_)) {
     LOG_ERROR("twice init", KR(ret));
     ret = OB_INIT_TWICE;

@@ -51,7 +51,7 @@ namespace oceanbase
             affect_rows_(10)
       {
       }
-      ~ObWorkloadOptions() {}
+      virtual ~ObWorkloadOptions() {}
 
       int fill_options(const char *key, const char *value)
       {
@@ -90,22 +90,21 @@ namespace oceanbase
         return ret;
       }
 
-      int parse_options() override
+      virtual int parse_options() override
       {
+        static const int MAX_OPTS_CNT = 16;
         int ret = OB_SUCCESS;
-        const char **opts = NULL;
+        char **opts = (char **)calloc(MAX_OPTS_CNT, sizeof(char *));
         int opts_cnt = 0;
-        TESTBENCH_LOG(INFO, "parse_option", KCSTRING(src_opt_str_));
         if (OB_FAIL(split(src_opt_str_, ",", 0, opts, opts_cnt)))
         {
           TESTBENCH_LOG(WARN, "parse options for distributed transaction workload fail, use default options");
         }
         else
         {
-          TESTBENCH_LOG(INFO, "parse options for distributed transaction workload", KP(opts), KP(opts_cnt));
           for (int i = 0; i < opts_cnt; ++i)
           {
-            const char **kv = NULL;
+            char **kv = (char **)calloc(2, sizeof(char *));
             int kv_cnt = 0;
             if (OB_FAIL(split(*(opts + i), "=", 2, kv, kv_cnt)))
             {
@@ -115,14 +114,17 @@ namespace oceanbase
             {
               fill_options(*kv, *(kv + 1));
             }
+            free(kv);
           }
         }
+        free(opts);
         TESTBENCH_LOG(INFO, "parse options for distributed transaction workload",
-                      KP(participants_), KP(operations_), KP(affect_rows_), KP(start_time_), KP(duration_));
+                      K(participants_), K(operations_), K(affect_rows_), K(start_time_), K(duration_));
         return ret;
       }
 
-      int64_t to_string(char *buffer, const int64_t size) const override
+      // TODO qianxu: use macro instead
+      virtual int64_t to_string(char *buffer, const int64_t size) const override
       {
         int64_t pos = 0;
         if (nullptr != buffer && size > 0)

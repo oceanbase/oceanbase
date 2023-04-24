@@ -1075,6 +1075,7 @@ public:
 #define TG_GET_QUEUE_NUM(tg_id, args...) TG_INVOKE(tg_id, get_queue_num, args)
 #define TG_GET_THREAD_CNT(tg_id) TG_INVOKE(tg_id, thread_cnt)
 #define TG_SET_THREAD_CNT(tg_id, count) TG_INVOKE(tg_id, set_thread_cnt, count)
+#define TG_SET_QUEUE_SIZE(tg_id, size) TG_INVOKE(tg_id, set_queue_size, size)
 #define TG_WAIT_R(tg_id) TG_INVOKE(tg_id, wait)
 #define TG_WAIT(tg_id) do { int r = TG_INVOKE(tg_id, wait); UNUSED(r); } while (0)
 #define TG_STOP_R(tg_id) TG_INVOKE(tg_id, stop)

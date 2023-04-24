@@ -193,7 +193,7 @@ int ObServerConnectionPool::init_dblink(uint64_t dblink_id, const ObAddr &server
   if (OB_FAIL(init(root, server, max_allowed_conn_count))) {
     LOG_WARN("fail to init", K(ret));
   } else if (OB_INVALID_ID == dblink_id
-             || db_tenant.empty() || db_user.empty() || db_pass.empty() /*|| db_name.empty()*/
+             || db_tenant.empty() || db_user.empty() /*|| db_pass.empty() || db_name.empty()*/
              || OB_UNLIKELY(cluster_str.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
              || OB_UNLIKELY(db_tenant.length() >= OB_MAX_TENANT_NAME_LENGTH)
              || OB_UNLIKELY(db_user.length() >= OB_MAX_USER_NAME_LENGTH)

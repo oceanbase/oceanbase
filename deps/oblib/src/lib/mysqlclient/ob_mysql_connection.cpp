@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX LIB_MYSQLC
+#include <poll.h>
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
@@ -27,6 +28,7 @@ namespace common
 {
 namespace sqlclient
 {
+
 ObMySQLConnection::ObMySQLConnection() :
     root_(NULL),
     last_error_code_(OB_SUCCESS),
@@ -41,14 +43,31 @@ ObMySQLConnection::ObMySQLConnection() :
     mode_(OCEANBASE_MODE),
     db_name_(NULL),
     tenant_id_(OB_INVALID_ID),
-    read_consistency_(-1)
+    read_consistency_(-1),
+    mysql_ret_(NULL),
+    mysql_stmt_(NULL),
+    mysql_bool_err_(false),
+    mysql_int_err_(0),
+    async_status_(0),
+    cur_cont_func_(ContFuncDefID::END),
+    alloc_(ObModIds::MYSQL_CLIENT_CACHE)
 {
   memset(&mysql_, 0, sizeof(MYSQL));
 }
 
-
 ObMySQLConnection::~ObMySQLConnection()
 {
+  #define CONT_FUNC_DEF(id, ...)                                                             \
+  {                                                                                           \
+    ObContFunc*& ptr = cont_funcs_[ContFuncDefID::id];                                        \
+    if (OB_NOT_NULL(ptr)) {                                                                   \
+      ptr->~ObContFunc();                                                                     \
+      alloc_.free(ptr);                                                                       \
+      ptr = NULL;                                                                             \
+    }                                                                                         \
+  }
+  #include "ob_cont_func_define.h"
+  #undef CONT_FUNC_DEF
 }
 
 ObCommonServerConnectionPool *ObMySQLConnection::get_common_server_pool()
@@ -61,13 +80,27 @@ ObServerConnectionPool *ObMySQLConnection::get_root()
   return root_;
 }
 
-void ObMySQLConnection::init(ObServerConnectionPool *pool)
+int ObMySQLConnection::init(ObServerConnectionPool *pool)
 {
+  int ret = OB_SUCCESS;
   root_ = pool;
   timestamp_ = 0;
   error_times_ = 0;
   succ_times_ = 0;
   set_last_error(OB_SUCCESS);
+  #define CONT_FUNC_DEF(id, type)                                                             \
+  {                                                                                           \
+    void *buf = alloc_.alloc(sizeof(type));                                                   \
+    if (OB_NOT_NULL(buf)) {                                                                   \
+      cont_funcs_[ContFuncDefID::id] = new(buf) type(this);                                   \
+    } else {                                                                                  \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                        \
+      LOG_WARN("alloc memory for continue function fail");                                    \
+    }                                                                                         \
+  }                       
+  #include "ob_cont_func_define.h"
+  #undef CONT_FUNC_DEF
+  return ret;
 }
 
 
@@ -114,7 +147,7 @@ int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const c
 
 int ObMySQLConnection::connect(const char *user, const char *pass, const char *db,
                                oceanbase::common::ObAddr &addr, int64_t timeout,
-                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
+                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/, bool async /*false*/)
 {
   int ret = OB_SUCCESS;
   const static int MAX_IP_BUFFER_LEN = 32;
@@ -171,6 +204,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
        */
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
+      if (async) {
+        mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
+      }
       closed_ = false;
       set_usable(true);
       tenant_id_ = OB_SYS_TENANT_ID;
@@ -180,9 +216,8 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
   return ret;
 }
 
-
 int ObMySQLConnection::connect(const char *user, const char *pass, const char *db, const bool use_ssl,
-                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
+                               bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/, bool async /*false*/)
 {
   int ret = OB_SUCCESS;
   const static int MAX_IP_BUFFER_LEN = 32;
@@ -241,6 +276,9 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
        */
       my_bool reconnect = 0; // in OB, do manual reconnect. xiaochu.yh
       mysql_options(&mysql_, MYSQL_OPT_RECONNECT, &reconnect);
+      if (async) {
+        mysql_options(&mysql_, MYSQL_OPT_NONBLOCK, 0);
+      }
       closed_ = false;
       set_usable(true);
       db_name_ = db;
@@ -644,6 +682,115 @@ int ObMySQLConnection::connect_dblink(const bool use_ssl, int64_t sql_request_le
     LOG_WARN("fail to connect", K(ret));
   }
   return ret;
+}
+
+// Async Mode
+int ObMySQLConnection::wait_for_mysql()
+{
+  int ret = OB_SUCCESS;
+  struct pollfd pfd;
+  int timeout, res;
+  pfd.fd = mysql_get_socket(&mysql_);
+  pfd.events = (async_status_ & MYSQL_WAIT_READ ? POLLIN : 0) |
+               (async_status_ & MYSQL_WAIT_WRITE ? POLLOUT : 0) |
+               (async_status_ & MYSQL_WAIT_EXCEPT ? POLLPRI : 0);
+  if (async_status_ & MYSQL_WAIT_TIMEOUT) {
+    timeout = 1000 * mysql_get_timeout_value(&mysql_);
+  } else {
+    timeout = -1;
+  }
+  res = poll(&pfd, 1, timeout);
+  if (res <= 0) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("poll mysql socket fail");
+  } else {
+    async_status_ = 0;
+    if (pfd.revents & POLLIN) {
+      async_status_ |= MYSQL_WAIT_READ;
+    }
+    if (pfd.revents & POLLOUT) {
+      async_status_ |= MYSQL_WAIT_WRITE;
+    }
+    if (pfd.revents & POLLPRI) {
+      async_status_ |= MYSQL_WAIT_EXCEPT;
+    }
+  }
+  return ret;
+}
+
+int ObMySQLConnection::commit_async()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else if (OB_LIKELY(async_status_ = mysql_commit_start(&mysql_bool_err_, &mysql_))) {
+    cur_cont_func_ = ContFuncDefID::CONT_FUNC_COMMIT;
+  } else if (OB_UNLIKELY(mysql_bool_err_)) {
+    ret = -mysql_errno(&mysql_);
+    LOG_WARN("commit fail", "info", mysql_error(&mysql_), K(ret));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::rollback_async()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else if (OB_LIKELY(async_status_ = mysql_rollback_start(&mysql_bool_err_, &mysql_))) {
+      cur_cont_func_ = ContFuncDefID::CONT_FUNC_ROLLBACK;
+  } else if (OB_UNLIKELY(mysql_bool_err_)) {
+    ret = -mysql_errno(&mysql_);
+    LOG_WARN("rollback fail", "info", mysql_error(&mysql_), K(ret));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::get_cont_status(ObMySQLPreparedStatement *cur_stmt /*NULL*/)
+{
+  if (cur_stmt) {
+    mysql_stmt_ = cur_stmt->get_stmt_handler();
+  }
+  return cont_funcs_[cur_cont_func_]->run_func();
+}
+
+#define RUN_CONT_FUNC(id, conn)                                                       \
+  ({                                                                                  \
+    if (nullptr != cont_funcs_[id]) {                                                 \
+      ret = cont_funcs_[idx]->run_func(conn);                                         \
+    } else {                                                                          \
+      ret = OB_NOT_INIT;                                                              \
+      LOG_WARN("mysql async continue function not init", K(id));                      \
+    }                                                                                 \
+    ret;                                                                              \
+  })                                                                                                            
+
+bool ObConnectContFunc::run_func() { return false; }
+bool ObQueryContFunc::run_func() { return false; }
+bool ObUpdateContFunc::run_func() { return false; }
+bool ObStmtQueryContFunc::run_func() { return false; }
+
+bool ObStmtUpdateContFunc::run_func() 
+{
+  conn_->async_status_ = conn_->wait_for_mysql();
+  conn_->async_status_ = mysql_stmt_execute_cont(&conn_->mysql_int_err_, conn_->mysql_stmt_, conn_->async_status_);
+  return conn_->async_status_ || conn_->mysql_int_err_;
+}
+
+bool ObCommitContFunc::run_func() 
+{
+  conn_->async_status_ = conn_->wait_for_mysql();
+  conn_->async_status_ = mysql_commit_cont(&conn_->mysql_bool_err_, &conn_->mysql_, conn_->async_status_);
+  return conn_->async_status_ || conn_->mysql_bool_err_;
+}
+
+bool ObRollbackContFunc::run_func() 
+{
+  conn_->async_status_ = conn_->wait_for_mysql();
+  conn_->async_status_ = mysql_rollback_cont(&conn_->mysql_bool_err_, &conn_->mysql_, conn_->async_status_);
+  return conn_->async_status_ || conn_->mysql_bool_err_;
 }
 
 } // end namespace sqlclient

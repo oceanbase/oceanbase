@@ -30,12 +30,14 @@ class ObMySQLPreparedStatement
 {
 public:
   ObMySQLPreparedStatement();
+  ObMySQLPreparedStatement(ObArenaAllocator *arena_allocator);
   ~ObMySQLPreparedStatement();
   ObIAllocator &get_allocator();
   ObMySQLConnection *get_connection();
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
   int init(ObMySQLConnection &conn, const char *sql);
+  int init_async(ObMySQLConnection &conn, const char *sql);
   /*
    * close statement
    */
@@ -61,6 +63,7 @@ public:
    *  - insert into t values (v1,v2),(v3,v4)
    */
   int execute_update();
+  int execute_update_async();
 
   /*
    * ! Deprecated
@@ -68,6 +71,7 @@ public:
    * reference ObMySQLPrepareStatement
    */
   ObMySQLPreparedResult *execute_query();
+  // TODO: add async api for query
 
 private:
   ObMySQLConnection *conn_;

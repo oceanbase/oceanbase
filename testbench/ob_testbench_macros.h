@@ -37,7 +37,7 @@ namespace oceanbase
 #undef X
 
 #define X(key, value) value,
-  const char * const wl_types[] = {
+  const char *const wl_types[] = {
       WORKLOAD_TYPES};
 #undef X
 
@@ -62,7 +62,7 @@ namespace oceanbase
 #undef X
 
 #define X(key, value) value,
-  const char * const dtxn_opts[] = {
+  const char *const dtxn_opts[] = {
       DTXN_OPTIONS};
 #undef X
 }

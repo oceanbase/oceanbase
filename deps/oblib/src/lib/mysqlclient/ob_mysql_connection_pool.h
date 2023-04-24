@@ -19,9 +19,9 @@
 #include "lib/task/ob_timer.h"
 #include "lib/list/ob_list.h"
 #include "lib/allocator/ob_cached_allocator.h"
-#include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/net/ob_addr.h"
 #include "lib/mysqlclient/ob_isql_connection_pool.h"
+#include "lib/mysqlclient/ob_server_connection_pool.h"
 
 namespace oceanbase
 {
@@ -34,7 +34,7 @@ class ObMySQLTransaction;
 class ObCommonMySQLProvider;
 namespace sqlclient
 {
-class ObServerConnectionPool;
+// class ObServerConnectionPool;
 class ObMySQLServerProvider;
 enum MySQLConnectionPoolType
 {
@@ -72,6 +72,22 @@ struct TenantMapKey
   }
 
   TO_STRING_KV(K_(tenant_id));
+};
+
+struct DblinkKey
+{
+  ObString tenant_name_;
+  ObAddr server_;
+
+  DblinkKey(const ObString &tenant_name, const ObAddr &server) : tenant_name_(tenant_name), server_(server) {}
+  ~DblinkKey() {}
+
+  inline int64_t hash() const
+  {
+    return tenant_name_.hash() + server_.hash();
+  }
+
+  TO_STRING_KV(K(tenant_name_), K(server_));
 };
 
 typedef common::ObSEArray<ObServerConnectionPool *, 16> TenantServerConnArray;
@@ -168,6 +184,7 @@ public:
                                 ObISQLConnection *&dblink_conn,
                                 uint32_t sessid);
   virtual int try_connect_dblink(ObISQLConnection *dblink_conn, int64_t sql_request_level = 0);
+  int create_all_dblink_pool();
   int get_dblink_pool(uint64_t dblink_id, ObServerConnectionPool *&dblink_pool);
   void set_check_read_consistency(bool need_check) { check_read_consistency_ = need_check; }
 protected:

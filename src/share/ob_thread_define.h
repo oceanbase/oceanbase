@@ -14,9 +14,9 @@
 #define GET_THREAD_NUM_BY_NPROCESSORS(factor) (sysconf(_SC_NPROCESSORS_ONLN) / (factor) > 0 ? sysconf(_SC_NPROCESSORS_ONLN) / (factor) : 1)
 #define GET_THREAD_NUM_BY_NPROCESSORS_WITH_LIMIT(factor, limit) (sysconf(_SC_NPROCESSORS_ONLN) / (factor) > 0 ? min(sysconf(_SC_NPROCESSORS_ONLN) / (factor), limit) : 1)
 #define GET_MYSQL_THREAD_COUNT(default_cnt) (GCONF.sql_login_thread_count ? GCONF.sql_login_thread_count : (default_cnt))
-TG_DEF(TEST_OB_TH, testObTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1 ,1))
-TG_DEF(COMMON_THREAD_POOL, ComTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1 ,1))
-TG_DEF(COMMON_QUEUE_THREAD, ComQueueTh, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1 ,1), 100)
+TG_DEF(TEST_OB_TH, testObTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
+TG_DEF(COMMON_THREAD_POOL, ComTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
+TG_DEF(COMMON_QUEUE_THREAD, ComQueueTh, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1, 1), 100)
 TG_DEF(COMMON_TIMER_THREAD, ComTimerTh, "", TG_STATIC, TIMER)
 TG_DEF(Blacklist, Blacklist, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(PartSerMigRetryQt, PartSerMigRetryQt, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
@@ -40,8 +40,8 @@ TG_DEF(MysqlQueueTh, MysqlQueueTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPai
 TG_DEF(DDLPQueueTh, DDLPQueueTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS_WITH_LIMIT(2, 24), 2))
 TG_DEF(DiagnoseQueueTh, DiagnoseQueueTh, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(observer::ObSrvDeliver::MYSQL_DIAG_TASK_THREAD_CNT, observer::ObSrvDeliver::MINI_MODE_MYSQL_DIAG_TASK_THREAD_CNT))
 TG_DEF(DdlBuild, DdlBuild, "", TG_STATIC, ASYNC_TASK_QUEUE, ThreadCountPair(16, 1), 4 << 10)
-TG_DEF(LSService, LSService, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(2 ,2))
-TG_DEF(SimpleLSService, SimpleLSService, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(1 ,1))
+TG_DEF(LSService, LSService, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(2, 2))
+TG_DEF(SimpleLSService, SimpleLSService, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(IntermResGC, IntermResGC, "", TG_STATIC, TIMER)
 TG_DEF(ServerGTimer, ServerGTimer, "", TG_STATIC, TIMER)
 TG_DEF(FreezeTimer, FreezeTimer, "", TG_STATIC, TIMER)
@@ -87,16 +87,18 @@ TG_DEF(CFC, CFC, "", TG_STATIC, TIMER)
 TG_DEF(CCDF, CCDF, "", TG_STATIC, TIMER)
 TG_DEF(LogMysqlPool, LogMysqlPool, "", TG_STATIC, TIMER)
 TG_DEF(TblCliSqlPool, TblCliSqlPool, "", TG_STATIC, TIMER)
+TG_DEF(MysqlProxyPool, MysqlProxyPool, "", TG_STATIC, TIMER)
+TG_DEF(TransactionExecutorPool, TransactionExecutorPool, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1, 1), 1)
 TG_DEF(QueryExecCtxGC, QueryExecCtxGC, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(DtlDfc, DtlDfc, "", TG_STATIC, TIMER)
 TG_DEF(LogIOTaskCbThreadPool, LogIOCb, "", TG_STATIC, QUEUE_THREAD,
        ThreadCountPair(palf::LogIOTaskCbThreadPool::THREAD_NUM,
-       palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
+                       palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
        palf::LogIOTaskCbThreadPool::MAX_LOG_IO_CB_TASK_NUM)
 TG_DEF(ReplayService, ReplaySrv, "", TG_DYNAMIC, QUEUE_THREAD, ThreadCountPair(1, 1),
        !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
 TG_DEF(LogRouteService, LogRouteSrv, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1, 1),
-       !lib::is_mini_mode() ? (common::MAX_SERVER_COUNT) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::MAX_SERVER_COUNT) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
+       !lib::is_mini_mode() ? (common::MAX_SERVER_COUNT)*OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::MAX_SERVER_COUNT)*OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
 TG_DEF(LogRouterTimer, LogRouterTimer, "", TG_STATIC, TIMER)
 TG_DEF(PalfBlockGC, PalfGC, "", TG_DYNAMIC, TIMER)
 TG_DEF(LSFreeze, LSFreeze, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(storage::ObLSFreezeThread::QUEUE_THREAD_NUM, storage::ObLSFreezeThread::MINI_MODE_QUEUE_THREAD_NUM),
@@ -108,7 +110,7 @@ TG_DEF(DagScheduler, DagScheduler, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPai
 TG_DEF(DagWorker, DagWorker, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(RCService, RCSrv, "", TG_DYNAMIC, QUEUE_THREAD,
        ThreadCountPair(logservice::ObRoleChangeService::MAX_THREAD_NUM,
-       logservice::ObRoleChangeService::MAX_THREAD_NUM),
+                       logservice::ObRoleChangeService::MAX_THREAD_NUM),
        logservice::ObRoleChangeService::MAX_RC_EVENT_TASK)
 TG_DEF(ApplyService, ApplySrv, "", TG_DYNAMIC, QUEUE_THREAD, ThreadCountPair(1, 1),
        !lib::is_mini_mode() ? (common::APPLY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER : (common::APPLY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_LS_NUM_PER_TENANT_PER_SERVER)
