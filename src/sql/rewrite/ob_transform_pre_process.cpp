@@ -5277,10 +5277,10 @@ int ObTransformPreProcess::transform_arg_case_recursively(
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-    if (OB_FAIL(transform_arg_case_recursively(expr_factory,
-                                               session,
-                                               expr->get_param_expr(i),
-                                               trans_happened))) {
+    if (OB_FAIL(SMART_CALL(transform_arg_case_recursively(expr_factory,
+                           session,
+                           expr->get_param_expr(i),
+                           trans_happened)))) {
       LOG_WARN("failed to transform arg case expr", K(ret), K(i));
     }
   }
