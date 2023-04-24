@@ -389,9 +389,12 @@ int ObKVCacheInstMap::erase_tenant(const uint64_t tenant_id)
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(tenant_id));
   } else {
+    ObSEArray<ObKVCacheInstKey, MAX_CACHE_NUM> erase_key_list;
+    ObSEArray<ObKVCacheInst *, MAX_CACHE_NUM> erase_inst_list;
     DRWLock::WRLockGuard wr_guard(lock_);
+    ObKVCacheInst *inst = nullptr;
     for (KVCacheInstMap::iterator iter = inst_map_.begin() ; OB_SUCC(ret) && iter != inst_map_.end() ; ++iter) {
-      ObKVCacheInst *inst = iter->second;
+      inst = iter->second;
       if (tenant_id != iter->first.tenant_id_) {
       } else if (OB_ISNULL(inst)) {
         ret = OB_ERR_UNEXPECTED;
@@ -400,11 +403,21 @@ int ObKVCacheInstMap::erase_tenant(const uint64_t tenant_id)
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "Still can not destroy cache inst", K(ret), KPC(inst), K(inst->status_.store_size_),
                    K(inst->status_.kv_cnt_), K(inst->status_.lfu_mb_cnt_), K(inst->status_.lru_mb_cnt_));
-      } else if (FALSE_IT(inst->reset())) {
-      } else if (OB_FAIL(inst_map_.erase_refactored(iter->first))) {
+      } else if (OB_FAIL(erase_key_list.push_back(iter->first))) {
+        COMMON_LOG(WARN, "Fail to push back erase inst key", K(ret));
+      } else if (OB_FAIL(erase_inst_list.push_back(inst))) {
+        COMMON_LOG(WARN, "Fail to push back erase inst key", K(ret));
+      }
+    }
+    for (int i = 0 ; OB_SUCC(ret) && i < erase_key_list.count() ; ++i) {
+      ObKVCacheInstKey tmp_key = erase_key_list.at(i);
+      inst = erase_inst_list.at(i);
+      if (OB_FAIL(inst_map_.erase_refactored(tmp_key))) {
         COMMON_LOG(WARN, "Fail to erase cache inst from inst map", K(ret));
+      } else if (FALSE_IT(inst->reset())) {
       } else if (OB_FAIL(inst_pool_.push(inst))) {
-        COMMON_LOG(WARN, "Fail to push inst back to inst pool", K(ret));
+        COMMON_LOG(ERROR, "Fail to push inst back to inst pool", K(ret));
+        ob_abort();
       }
     }
   }
