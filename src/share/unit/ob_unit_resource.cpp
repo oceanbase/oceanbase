@@ -689,6 +689,7 @@ int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
   const int64_t sys_tenant_default_memory_max =  SYS_TENANT_DEFAULT_MEMORY_MAX;
   const int64_t unit_min_memory = UNIT_MIN_MEMORY;
   const int64_t __min_full_resource_pool_memory = GCONF.__min_full_resource_pool_memory;
+  const int64_t sys_tenant_memory = GCONF._hidden_sys_tenant_memory;
   const int64_t system_memory = GMEMCONF.get_reserved_server_memory();
   const int64_t server_memory_limit = GMEMCONF.get_server_memory_limit();
   const int64_t server_avail_memory = server_memory_limit - system_memory;
@@ -705,22 +706,35 @@ int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
     LOG_ERROR("server available memory is little than __min_full_resource_pool_memory, can not create sys tenant. "
         "try adjust config '__min_full_resource_pool_memory', 'memory_limit' or 'system_memory'.",
         KR(ret), K(__min_full_resource_pool_memory), K(server_avail_memory), K(system_memory), K(server_memory_limit));
+  } else if (OB_UNLIKELY(server_avail_memory < sys_tenant_memory)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("server available memory is little than sys_tenant_memory, can not create sys tenant. "
+        "try adjust config 'sys_tenant_memory', 'memory_limit' or 'system_memory'.",
+        KR(ret), K(sys_tenant_memory), K(server_avail_memory), K(system_memory), K(server_memory_limit));
+  } else if (OB_UNLIKELY(0 != sys_tenant_memory && sys_tenant_memory < __min_full_resource_pool_memory)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("sys_tenant_memory is little than __min_full_resource_pool_memory, can not create sys tenant. "
+        "try adjust config 'sys_tenant_memory' or '__min_full_resource_pool_memory'.",
+        KR(ret), K(sys_tenant_memory), K(__min_full_resource_pool_memory));
   } else {
-    // SYS tenant MEMORY is auto computed by server_avail_memory
-    const int64_t sys_mem_based_on_svr_avail_mem = server_avail_memory * sys_tenant_default_memory_percentage / 100;
-    int64_t sys_mem = min(sys_mem_based_on_svr_avail_mem, sys_tenant_default_memory_max);
+    if (0 == sys_tenant_memory) {
+      // SYS tenant MEMORY is auto computed by server_avail_memory
+      const int64_t sys_mem_based_on_svr_avail_mem = server_avail_memory * sys_tenant_default_memory_percentage / 100;
+      int64_t sys_mem = min(sys_mem_based_on_svr_avail_mem, sys_tenant_default_memory_max);
 
-    // SYS tenant MEMORY is restricted by UNIT_MIN_MEMORY
-    sys_mem = max(sys_mem, UNIT_MIN_MEMORY);
+      // SYS tenant MEMORY is restricted by UNIT_MIN_MEMORY
+      sys_mem = max(sys_mem, UNIT_MIN_MEMORY);
 
-    // SYS tenant MEMORY is restricted by __min_full_resource_pool_memory
-    sys_mem = max(sys_mem, __min_full_resource_pool_memory);
+      // SYS tenant MEMORY is restricted by __min_full_resource_pool_memory
+      sys_mem = max(sys_mem, __min_full_resource_pool_memory);
 
-    memory_size = sys_mem;
-
+      memory_size = sys_mem;
+    } else {
+      memory_size = sys_tenant_memory;
+    }
     LOG_INFO("get_sys_tenant_default_memory",
-        "sys_tenant_default_memory_G", sys_mem/GB,
-        "sys_mem_based_on_server_avail_mem_G", sys_mem_based_on_svr_avail_mem/GB,
+        "sys_tenant_default_memory_G", memory_size/GB,
+        "sys_tenant_memory_G", sys_tenant_memory/GB,
         "server_avail_memory_G", server_avail_memory/GB,
         K(sys_tenant_default_memory_percentage),
         "sys_tenant_default_memory_max_G", sys_tenant_default_memory_max/GB,
@@ -729,7 +743,6 @@ int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
         "server_memory_limit_G", server_memory_limit/GB,
         "system_memory_G", system_memory/GB);
   }
-
   return ret;
 }
 

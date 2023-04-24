@@ -81,6 +81,7 @@ private:
   int check_new_tenants(share::TenantUnits &units);
   int check_new_tenant(const share::ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us = INT64_MAX);
   int check_del_tenants(const share::TenantUnits &local_units, share::TenantUnits &units);
+  int refresh_hidden_sys_memory();
   void periodically_check_tenant();
   int fetch_effective_tenants(const share::TenantUnits &old_tenants, share::TenantUnits &new_tenants);
   int refresh_tenant(share::TenantUnits &units);

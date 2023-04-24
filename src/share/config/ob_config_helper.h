@@ -345,6 +345,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMemoryLimitChecker);
 };
 
+class ObConfigTenantMemoryChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigTenantMemoryChecker() {}
+  virtual ~ObConfigTenantMemoryChecker() {};
+  bool check(const ObConfigItem &t) const;
+};
+
 class ObConfigUpgradeStageChecker : public ObConfigChecker
 {
 public:

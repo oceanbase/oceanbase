@@ -384,6 +384,26 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
   return ret;
 }
 
+int ObTenantNodeBalancer::refresh_hidden_sys_memory()
+{
+  int ret = OB_SUCCESS;
+  int64_t sys_tenant_memory = 0;
+  int64_t allowed_mem_limit = 0;
+  ObTenant *tenant = nullptr;
+  if (OB_FAIL(omt_->get_tenant(OB_SYS_TENANT_ID, tenant))) {
+    LOG_WARN("get sys tenant failed", K(ret));
+  } else if (OB_ISNULL(tenant) || !tenant->is_hidden()) {
+    // do nothing
+  } else if (OB_FAIL(ObUnitResource::get_sys_tenant_default_memory(sys_tenant_memory))) {
+    LOG_WARN("get hidden sys tenant default memory failed", K(ret));
+  } else if (OB_FAIL(omt_->update_tenant_memory(OB_SYS_TENANT_ID, sys_tenant_memory, allowed_mem_limit))) {
+    LOG_WARN("update hidden sys tenant memory failed", K(ret));
+  } else {
+    LOG_INFO("update hidden sys tenant memory succeed ", K(allowed_mem_limit));
+  }
+  return ret;
+}
+
 void ObTenantNodeBalancer::periodically_check_tenant()
 {
   int ret = OB_SUCCESS;
@@ -527,6 +547,8 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
     } else if (FALSE_IT(omt_->set_synced())) {
     } else if (OB_FAIL(check_del_tenants(local_units, units))) {
       LOG_WARN("check delete tenant fail", K(ret));
+    } else if (OB_FAIL(refresh_hidden_sys_memory())) {
+      LOG_WARN("refresh hidden sys memory failed", K(ret));
     }
   }
 

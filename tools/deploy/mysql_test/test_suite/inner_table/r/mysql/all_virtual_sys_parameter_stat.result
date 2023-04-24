@@ -273,6 +273,7 @@ _force_hash_groupby_dump
 _force_hash_join_spill
 _force_skip_encoding_partition_id
 _hash_area_size
+_hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
 _io_callback_thread_count
 _large_query_io_percentage

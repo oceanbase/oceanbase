@@ -282,6 +282,10 @@ DEF_DBL(server_cpu_quota_max, OB_CLUSTER_PARAMETER, "1", "[1,16]",
         "the number of maximal vCPUs allocated to the server tenant"
         "(a special internal tenant that exists on every observer). Range: [1, 16]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_CAP_WITH_CHECKER(_hidden_sys_tenant_memory, OB_CLUSTER_PARAMETER, "0M",
+        common::ObConfigTenantMemoryChecker, "[0M,)",
+        "the size of the memory reserved for hidden sys tenant, 0M means follow the adjusting value.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(location_cache_cpu_quota, OB_CLUSTER_PARAMETER, "5", "[0,10]",
         "the number of vCPUs allocated for the requests regarding location "
         "info of the core tables. Range: [0,10] in integer",
