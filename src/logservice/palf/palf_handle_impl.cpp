@@ -3029,6 +3029,10 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
   } else if (OB_FAIL(iterator.init(fetch_start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
     PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K_(palf_id));
   } else {
+    bool need_print_error = false;
+    // NB: Fetch log will be concurrent with truncate, the content on disk will not integrity, need igore
+    //     read log error.
+    iterator.set_need_print_error(need_print_error);
     LSN each_round_prev_lsn = prev_lsn;
     LogGroupEntry curr_group_entry;
     LSN curr_lsn;
