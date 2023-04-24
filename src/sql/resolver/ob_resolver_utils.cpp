@@ -944,6 +944,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
     // 如果在相同的位置已经进行过匹配, 说明给定的参数在参数列表中出现了两次
     if (OB_SUCC(ret)
         && (OB_INVALID_ID == position
+            || position >= match_info.match_info_.count()
             || ObMaxType != match_info.match_info_.at(position).dest_type_)) {
       ret = OB_ERR_SP_WRONG_ARG_NUM;
       LOG_WARN("argument count not match",

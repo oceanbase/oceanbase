@@ -553,7 +553,7 @@ public:
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
 
-  TO_STRING_KV(K_(type));
+  TO_STRING_KV(K_(type), K_(id), K_(is_null));
 
 protected:
   ObPLType type_;

@@ -8901,6 +8901,7 @@ int ObPLResolver::resolve_inner_call(
       if (OB_SUCC(ret)
           && (expr_params.count() > 0 || obj_access_idents.at(i).has_brackets_)
           && !access_idxs.at(idx_cnt).is_procedure()
+          && !access_idxs.at(idx_cnt).is_udf_type()
           && !access_idxs.at(idx_cnt).is_system_procedure()
           && !access_idxs.at(idx_cnt).is_type_method()
           && (!access_idxs.at(idx_cnt).var_type_.is_composite_type() || 0 == expr_params.count())) {
