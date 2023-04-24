@@ -1001,7 +1001,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUniform::eval_next_number_value,                              /* 588 */
   ObExprRandom::calc_random_expr_const_seed,                          /* 589 */
   ObExprRandom::calc_random_expr_nonconst_seed,                       /* 590 */
-  ObExprRandstr::calc_random_str                                      /* 591 */
+  ObExprRandstr::calc_random_str,                                     /* 591 */
+  NULL //ObExprNlsInitCap::calc_nls_initcap_expr                      /* 592 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1115,7 +1116,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprEncode::eval_encode_batch,                                    /* 107 */
   ObExprDecode::eval_decode_batch,                                    /* 108 */
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
-  ObExprIsNot::calc_batch_is_not_null                                 /* 110 */
+  ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
+  NULL //ObExprNlsInitCap::calc_nls_initcap_batch                     /* 111 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
