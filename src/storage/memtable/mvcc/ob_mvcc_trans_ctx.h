@@ -199,8 +199,8 @@ public:
   void reset();
   ObIMvccCtx &get_ctx() { return host_; }
   int append(ObITransCallback *node);
-  int before_append(ObITransCallback *node);
-  int after_append(ObITransCallback *node, const int ret_code);
+  void before_append(ObITransCallback *node);
+  void after_append(ObITransCallback *node, const int ret_code);
   void trans_start();
   void calc_checksum_all();
   void print_callbacks();
@@ -405,7 +405,7 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
   bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   virtual int before_append(const bool is_replay) override;
-  virtual int after_append(const bool is_replay, const int ret_code) override;
+  virtual void after_append(const bool is_replay) override;
   virtual int log_submitted() override;
   virtual int undo_log_submitted() override;
   int64_t get_data_size()

@@ -43,7 +43,7 @@ public:
   void reset();
 
   // append_callback will append your callback into the callback list
-  int append_callback(ObITransCallback *callback);
+  int append_callback(ObITransCallback *callback, const bool for_replay);
 
   // concat_callbacks will append all callbacks in other into itself and reset
   // other. And it will return the concat number during concat_callbacks.
