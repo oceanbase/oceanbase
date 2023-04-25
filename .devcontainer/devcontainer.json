@@ -1,7 +1,6 @@
 {
     "name": "OceanBase",
-    "image": "ubuntu:20.04",
-    "updateRemoteUserUID": true,
+    "dockerFile": "Dockerfile",
     "postAttachCommand": "bash",
     "customizations": {
         "vscode": {
