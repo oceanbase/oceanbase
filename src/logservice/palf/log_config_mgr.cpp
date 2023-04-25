@@ -1993,14 +1993,14 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
         (added_member_last_slide_log_id != INT64_MAX &&
         leader_last_slide_log_id - added_member_last_slide_log_id < PALF_SLIDING_WINDOW_SIZE)) {
       ret = OB_SUCCESS;
-      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size, skip",
+      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size",
           K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
-          K(added_member_flushed_end_lsn));
+          K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     } else {
       ret = OB_EAGAIN;
-      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size, skip",
+      PALF_LOG(INFO, "the gap between the leader and added member is larger than the group_buffer_size, skip",
           K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
-          K(added_member_flushed_end_lsn));
+          K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     }
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", K_(palf_id), K_(self), K(first_committed_end_lsn),
