@@ -634,16 +634,9 @@ int ObPxTenantTargetMonitorP::process()
           LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }
       } else {
-        const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;
-        if (OB_FAIL(OB_PX_TARGET_MGR.get_global_target_usage(tenant_id, global_target_usage))) {
+        ObPxGlobalResGather gather(result_);
+        if (OB_FAIL(OB_PX_TARGET_MGR.gather_global_target_usage(tenant_id, gather))) {
           LOG_WARN("get global thread count failed", K(ret), K(tenant_id));
-        } else {
-          for (hash::ObHashMap<ObAddr, ServerTargetUsage>::const_iterator it = global_target_usage->begin();
-              OB_SUCC(ret) && it != global_target_usage->end(); ++it) {
-            if (OB_FAIL(result_.push_peer_target_usage(it->first, it->second.get_peer_used()))) {
-              COMMON_LOG(WARN, "push_back peer_used failed", K(ret));
-            }
-          }
         }
       }
     }

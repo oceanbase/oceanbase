@@ -320,15 +320,18 @@ int ObPxTargetMgr::rollback_local_report_target_used(uint64_t tenant_id, const O
   return ret;
 }
 
-int ObPxTargetMgr::get_global_target_usage(uint64_t tenant_id, const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage)
+int ObPxTargetMgr::gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather)
 {
   int ret = OB_SUCCESS;
+  const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;
   GET_TARGET_MONITOR(tenant_id, {
     if (OB_FAIL(target_monitor->get_global_target_usage(global_target_usage))) {
       LOG_WARN("get global target usage failed", K(ret), K(tenant_id));
     } else if (OB_ISNULL(global_target_usage)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("global_target_usage is null", K(ret), K(tenant_id));
+    } else if (OB_FAIL(global_target_usage->foreach_refactored(gather))) {
+      LOG_WARN("gather global px resource usage failed", K(ret));
     }
   });
   return ret;
