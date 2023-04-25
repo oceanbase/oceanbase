@@ -156,20 +156,14 @@ int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
   } else {
-    void *buf = nullptr;
-    if (OB_ISNULL(buf = arena_.alloc(redo_info.data_buffer_.length()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(redo_info.data_buffer_.length()));
-    } else {
-      redo_info_.data_buffer_.assign(const_cast<char *>(redo_info.data_buffer_.ptr()), redo_info.data_buffer_.length());
-      redo_info_.block_type_ = redo_info.block_type_;
-      redo_info_.logic_id_ = redo_info.logic_id_;
-      redo_info_.table_key_ = redo_info.table_key_;
-      redo_info_.start_scn_ = redo_info.start_scn_;
-      ls_id_ = ls_id;
-      macro_block_id_ = macro_block_id;
-      ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
-    }
+    redo_info_.data_buffer_.assign(const_cast<char *>(redo_info.data_buffer_.ptr()), redo_info.data_buffer_.length());
+    redo_info_.block_type_ = redo_info.block_type_;
+    redo_info_.logic_id_ = redo_info.logic_id_;
+    redo_info_.table_key_ = redo_info.table_key_;
+    redo_info_.start_scn_ = redo_info.start_scn_;
+    ls_id_ = ls_id;
+    macro_block_id_ = macro_block_id;
+    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
   }
   return ret;
 }
