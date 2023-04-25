@@ -1072,7 +1072,7 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         }
       }
       if (OB_SUCC(ret)) {
-        if (!print_params_.for_dblink_ && !database_name.empty()) {
+        if (!database_name.empty()) {
           DATA_PRINTF("%.*s.", LEN_AND_PTR(database_name));
         }
         if (!package_name.empty()) {
