@@ -86,11 +86,12 @@ T* ObDITls<T, tag>::get_instance()
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
     // add tenant
-    di_tls.instance_ = OB_NEW(T, label);
+    ObMemAttr attr(OB_SERVER_TENANT_ID, label);
+    SET_USE_500(attr);
+    di_tls.instance_ = OB_NEW(T, attr);
   }
   return di_tls.instance_;
 }
-
 template <class T, int N, size_t tag>
 class ObDITls<T[N], tag>
 {
@@ -155,8 +156,10 @@ T* ObDITls<T[N], tag>::get_instance()
   if (!di_tls.is_valid()) {
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
+    ObMemAttr attr(OB_SERVER_TENANT_ID, label);
+    SET_USE_500(attr);
     // add tenant
-    if (OB_NOT_NULL(di_tls.instance_ = (T*)ob_malloc(sizeof(T) * N, label))) {
+    if (OB_NOT_NULL(di_tls.instance_ = (T*)ob_malloc(sizeof(T) * N, attr))) {
       for (auto i = 0; i < N; ++i) {
         new (di_tls.instance_ + i) T;
       }

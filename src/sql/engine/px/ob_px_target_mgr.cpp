@@ -28,19 +28,20 @@ ObPxTargetMgr &ObPxTargetMgr::get_instance()
   return px_res_mgr;
 }
 
-int ObPxTargetMgr::init(const common::ObAddr &server, 
+int ObPxTargetMgr::init(const common::ObAddr &server,
                         ObIAliveServerTracer &server_tracer)
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500("PxResMgr");
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObPxTargetMgr inited twice", K(ret));
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(server));
-  } else if (px_info_map_.init("PxResMgr")) {
+  } else if (OB_FAIL(px_info_map_.init(attr))) {
     LOG_WARN("px_info_map_ init failed", K(ret));
-  } else if (alive_server_set_.create(PX_MAX_ALIVE_SERVER_NUM)) {
+  } else if (OB_FAIL(alive_server_set_.create(PX_MAX_ALIVE_SERVER_NUM, attr))) {
     LOG_WARN("create alive_server_set_ failed", K(ret));
   } else {
     server_ = server;
@@ -128,7 +129,7 @@ void ObPxTargetMgr::run1()
 
   lib::set_thread_name("PxTargetMgr", get_thread_idx());
   while (!has_set_stop()) {
-    // sleep 100 * 1000 us 
+    // sleep 100 * 1000 us
     ob_usleep(PX_REFRESH_TARGET_INTERVEL_US);
     refresh_times++;
 
@@ -137,7 +138,7 @@ void ObPxTargetMgr::run1()
 
     // check alive is a very slow and not necessary oper
     if (refresh_times % 100 == 0) {
-      for (hash::ObHashSet<ObAddr>::const_iterator it = alive_server_set_.begin(); 
+      for (hash::ObHashSet<ObAddr>::const_iterator it = alive_server_set_.begin();
           OB_SUCC(ret) && it != alive_server_set_.end(); it++) {
         bool alive = true;
         int64_t trace_time;
@@ -177,7 +178,7 @@ int ObPxTargetMgr::add_tenant(const uint64_t tenant_id)
       if (OB_ISNULL(ptr = ob_malloc(sizeof(ObPxResInfo), memattr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret), K(tenant_id));
-      } else { 
+      } else {
         if (OB_ISNULL(px_res_info = new (ptr) ObPxResInfo())) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("px resouce info construct failed", K(ret), KP(ptr));
@@ -222,7 +223,7 @@ int ObPxTargetMgr::delete_tenant(const uint64_t tenant_id)
       }*/
     }
   }
- 
+
   if (OB_SUCCESS == ret) {
     LOG_INFO("delete tenant success", K(tenant_id));
   } else {
@@ -377,7 +378,7 @@ int ObPxTargetMgr::get_all_tenant(common::ObSEArray<uint64_t, 4> &tenant_array)
   int ret = OB_SUCCESS;
   tenant_array.reset();
   ObPxInfoMap::Iterator iter(px_info_map_);
-  for (ObPxResInfo *value = NULL; 
+  for (ObPxResInfo *value = NULL;
       OB_SUCC(ret) && OB_NOT_NULL(value = iter.next(value)); iter.revert(value)) {
     ObPxTenantInfo tenant_info = value->hash_node_->hash_link_.key_;
     if (OB_FAIL(tenant_array.push_back(tenant_info.get_value()))) {

@@ -39,6 +39,7 @@ public:
   void *alloc();
   void free(void *obj);
   void set_label(const lib::ObLabel &label) { block_allocator_.set_label(label); }
+  void set_attr(const lib::ObMemAttr &attr) { block_allocator_.set_attr(attr); }
 
   uint64_t get_free_count() const;
   uint64_t get_in_use_count() const;
@@ -132,6 +133,7 @@ public:
   }
   virtual void free(void *ptr) { block_pool_.free(ptr);};
   void set_label(const lib::ObLabel &label) {block_pool_.set_label(label);};
+  void set_attr(const lib::ObMemAttr &attr) { block_pool_.set_attr(attr); }
   int64_t get_total_mem_size() const { return block_pool_.get_total_obj_size(); }
   int mprotect_small_allocator(int prot) { return block_pool_.mprotect_mem_pool(prot); }
   void reset() override { block_pool_.reset(); }

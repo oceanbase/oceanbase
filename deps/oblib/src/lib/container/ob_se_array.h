@@ -268,6 +268,7 @@ public:
 
   // deep copy
   explicit ObSEArrayImpl(const ObSEArrayImpl &other);
+  inline void set_attr(const lib::ObMemAttr &attr) { block_allocator_.set_attr(attr); }
   ObSEArrayImpl &operator=(const ObSEArrayImpl &other);
   int assign(const ObIArray<T> &other);
 

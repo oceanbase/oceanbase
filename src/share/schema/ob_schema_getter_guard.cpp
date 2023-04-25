@@ -87,7 +87,7 @@ ObSchemaMgrInfo::ObSchemaMgrInfo(const ObSchemaMgrInfo &other)
 }
 
 ObSchemaGetterGuard::ObSchemaGetterGuard()
-  : local_allocator_(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY)),
     schema_service_(NULL),
     session_id_(0),
     tenant_id_(OB_INVALID_TENANT_ID),
@@ -103,7 +103,7 @@ ObSchemaGetterGuard::ObSchemaGetterGuard()
 }
 
 ObSchemaGetterGuard::ObSchemaGetterGuard(const ObSchemaMgrItem::Mod mod)
-  : local_allocator_(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_MGR_INFO_ARRAY)),
     schema_service_(NULL),
     session_id_(0),
     tenant_id_(OB_INVALID_TENANT_ID),

@@ -2386,7 +2386,9 @@ bool ObMemtable::has_multi_source_data_unit(const MultiSourceDataUnitType type) 
 ObMemtableStat::ObMemtableStat()
     : lock_(common::ObLatchIds::MEMTABLE_STAT_LOCK),
       memtables_()
-{}
+{
+  memtables_.set_attr(SET_USE_500("MemTables"));
+}
 
 ObMemtableStat::~ObMemtableStat()
 {}

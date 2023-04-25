@@ -261,7 +261,8 @@ void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
 }
 
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), allocator_("DDLClogCtrl"), bucket_lock_(), refreshTimerTask_()
+  : is_inited_(false), speed_handle_map_(), allocator_(SET_USE_500("DDLClogCtrl")),
+    bucket_lock_(), refreshTimerTask_()
 {
 }
 
@@ -283,6 +284,8 @@ ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
 int ObDDLCtrlSpeedHandle::init()
 {
   int ret = OB_SUCCESS;
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "DDLSpeedCtrl");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
@@ -291,7 +294,7 @@ int ObDDLCtrlSpeedHandle::init()
     LOG_WARN("unexpected error, speed handle map is created", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM))) {
     LOG_WARN("init bucket lock failed", K(ret));
-  } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, "DDLSpeedCtrl"))) {
+  } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, attr, attr))) {
     LOG_WARN("fail to create speed handle map", K(ret));
   } else {
     is_inited_ = true;

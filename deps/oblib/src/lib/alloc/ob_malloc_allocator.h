@@ -131,6 +131,7 @@ public:
 
   void print_tenant_ctx_memory_usage(uint64_t tenant_id) const;
   void print_tenant_memory_usage(uint64_t tenant_id) const;
+  void print_malloc_sample(uint64_t tenant_id) const;
   int set_tenant_ctx_idle(
       const uint64_t tenant_id, const uint64_t ctx_id, const int64_t size, const bool reserve = false);
   int64_t sync_wash(uint64_t tenant_id, uint64_t from_ctx_id, int64_t wash_size);
@@ -251,6 +252,8 @@ public:
   ObTenantCtxAllocatorGuard ta_;
   bool restore_;
 };
+
+extern int64_t mtl_id();
 
 } // end of namespace lib
 } // end of namespace oceanbase

@@ -20,6 +20,14 @@
 
 namespace oceanbase
 {
+namespace lib
+{
+int64_t mtl_id()
+{
+  return MTL_CTX() != nullptr && MTL_ID() != 0 ? MTL_ID() : OB_SERVER_TENANT_ID;
+}
+}
+
 namespace share
 {
 using namespace oceanbase::common;

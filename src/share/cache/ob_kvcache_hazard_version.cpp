@@ -17,7 +17,7 @@
 namespace oceanbase{
 namespace common{
 
-/* 
+/*
  * -----------------------------------------------------------KVCacheHazardNode-----------------------------------------------------------
  */
 KVCacheHazardNode::KVCacheHazardNode()
@@ -38,7 +38,7 @@ void KVCacheHazardNode::set_next(KVCacheHazardNode * const next)
   }
 }
 
-/* 
+/*
  * -----------------------------------------------------------KVCacheHazardThreadStore-----------------------------------------------------------
  */
 KVCacheHazardThreadStore::KVCacheHazardThreadStore()
@@ -139,7 +139,7 @@ void KVCacheHazardThreadStore::retire(const uint64_t version, const uint64_t ten
 }
 
 void KVCacheHazardThreadStore::add_nodes(KVCacheHazardNode &list)
-{ 
+{
   // Remember to udapte waiting_nodes_count_ outside
 
   KVCacheHazardNode *tail = &list;
@@ -156,17 +156,17 @@ void KVCacheHazardThreadStore::add_nodes(KVCacheHazardNode &list)
   }
 }
 
-/* 
+/*
  * -----------------------------------------------------------GlobalHazardVersion-----------------------------------------------------------
  */
 
 GlobalHazardVersion::GlobalHazardVersion()
-    : version_(0), 
+    : version_(0),
       thread_waiting_node_threshold_(0),
       thread_store_lock_(common::ObLatchIds::THREAD_STORE_LOCK),
       thread_stores_(nullptr),
       thread_store_allocator_(),
-      ts_key_(OB_INVALID_PTHREAD_KEY), 
+      ts_key_(OB_INVALID_PTHREAD_KEY),
       inited_(false)
 {
 }
@@ -176,17 +176,20 @@ GlobalHazardVersion::~GlobalHazardVersion()
   destroy();
 }
 
-int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold) 
-{ 
+int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold)
+{
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     COMMON_LOG(WARN, "This HazardVersion has been inited", K(ret), K(inited_));
-  } else if (OB_FAIL(thread_store_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "KVCACHE_HAZARD", OB_SERVER_TENANT_ID, 
+  } else if (OB_FAIL(thread_store_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE, "KVCACHE_HAZARD", OB_SERVER_TENANT_ID,
                       INT64_MAX))) {
     COMMON_LOG(WARN, "Fail to init thread store allocator", K(ret));
   } else {
+    lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "KVCACHE_HAZARD");
+    SET_USE_500(attr);
+    thread_store_allocator_.set_attr(attr);
     int syserr = pthread_key_create(&ts_key_, deregister_thread);
     if (OB_UNLIKELY(0 != syserr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -311,7 +314,7 @@ int GlobalHazardVersion::retire(const uint64_t tenant_id)
 int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
 {
   int ret = OB_SUCCESS;
-  
+
   ts = static_cast<KVCacheHazardThreadStore *>(pthread_getspecific(ts_key_));
   if (OB_UNLIKELY(nullptr == ts)) {
     int64_t thread_id = GETTID();
@@ -337,7 +340,7 @@ int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
             ts = free_store;
             break;
           }
-        } 
+        }
         free_store = free_store->get_next();
       }
 
@@ -368,7 +371,7 @@ int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
         }
       }
     }
-  } 
+  }
 
   return ret;
 }
@@ -463,7 +466,7 @@ void GlobalHazardVersion::deregister_thread(void *d_ts)
   static_cast<KVCacheHazardThreadStore *>(d_ts)->set_exit();
 }
 
-/* 
+/*
  * -----------------------------------------------------------GlobalHazardVersionGuard-----------------------------------------------------------
  */
 

@@ -34,11 +34,15 @@ ObVector<T, Allocator>::ObVector(Allocator *alloc, const lib::ObLabel &label)
 
 template <typename T, typename Allocator>
 ObVector<T, Allocator>::ObVector(int64_t size, Allocator *alloc, const lib::ObLabel &label)
+    : ObVector(size, alloc, ObMemAttr(common::OB_SERVER_TENANT_ID, label)) {}
+
+template <typename T, typename Allocator>
+ObVector<T, Allocator>::ObVector(int64_t size, Allocator *alloc, const lib::ObMemAttr &attr)
     : mem_begin_(NULL), mem_end_(NULL), mem_end_of_storage_(NULL)
 {
   if (NULL == alloc) {
     pallocator_ = &default_allocator_;
-    pallocator_->set_label(label);
+    pallocator_->set_attr(attr);
   } else {
     pallocator_ = alloc;
   }

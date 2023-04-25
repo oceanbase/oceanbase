@@ -222,19 +222,19 @@ struct Deep_Copy_EarlyStopCondition
 ///////////////////////////////////////////////////////////////////
 ObTablespaceMgr::ObTablespaceMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      tablespace_infos_(0, NULL, ObModIds::OB_SCHEMA_TABLESPACE),
-      tablespace_map_(ObModIds::OB_SCHEMA_TABLESPACE)
+      tablespace_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TABLESPACE)),
+      tablespace_map_(SET_USE_500(ObModIds::OB_SCHEMA_TABLESPACE))
 {
 }
 
 ObTablespaceMgr::ObTablespaceMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      tablespace_infos_(0, NULL, ObModIds::OB_SCHEMA_TABLESPACE),
-      tablespace_map_(ObModIds::OB_SCHEMA_TABLESPACE)
+      tablespace_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TABLESPACE)),
+      tablespace_map_(SET_USE_500(ObModIds::OB_SCHEMA_TABLESPACE))
 {
 }
 

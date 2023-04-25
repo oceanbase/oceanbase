@@ -126,7 +126,7 @@ ObColumnDecoderCtx ObMicroBlockDecoder::none_exist_column_decoder_ctx_;
 class ObTLDecoderCtxArray
 {
 public:
-  ObTLDecoderCtxArray(): ctxs_array_(), allocator_("TLDecoderCtx") {}
+  ObTLDecoderCtxArray(): ctxs_array_(), allocator_(SET_USE_500("TLDecoderCtx")) {}
 
   virtual ~ObTLDecoderCtxArray()
   {
@@ -877,8 +877,8 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     allocator_(nullptr),
     ctx_array_(nullptr),
     ctxs_(nullptr),
-    decoder_allocator_(ObModIds::OB_DECODER_CTX),
-    buf_allocator_("OB_MICB_DECODER")
+    decoder_allocator_(SET_USE_500(ObModIds::OB_DECODER_CTX)),
+    buf_allocator_(SET_USE_500("OB_MICB_DECODER"))
 {
   need_release_decoders_.set_allocator(&buf_allocator_);
 }

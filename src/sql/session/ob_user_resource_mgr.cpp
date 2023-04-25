@@ -31,7 +31,9 @@ static const char *MEMORY_LABEL = "UserResourceMgr";
 
 ObConnectResource* ObConnectResAlloc::alloc_value()
 {
-  return OB_NEW(ObConnectResource, MEMORY_LABEL);
+  ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+  SET_USE_500(attr);
+  return OB_NEW(ObConnectResource, attr);
 }
 
 void ObConnectResAlloc::free_value(ObConnectResource* tz_info)
@@ -43,7 +45,9 @@ void ObConnectResAlloc::free_value(ObConnectResource* tz_info)
 ObConnectResHashNode* ObConnectResAlloc::alloc_node(ObConnectResource* value)
 {
   UNUSED(value);
-  return OB_NEW(ObConnectResHashNode, MEMORY_LABEL);
+  ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+  SET_USE_500(attr);
+  return OB_NEW(ObConnectResHashNode, attr);
 }
 
 void ObConnectResAlloc::free_node(ObConnectResHashNode* node)
@@ -97,7 +101,9 @@ int ObConnectResourceMgr::apply_for_tenant_conn_resource(const uint64_t tenant_i
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       // not exist, alloc and insert
-      if (OB_ISNULL(tenant_res = OB_NEW(ObConnectResource, MEMORY_LABEL))) {
+      ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+      SET_USE_500(attr);
+      if (OB_ISNULL(tenant_res = OB_NEW(ObConnectResource, attr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate tenant resource failed", K(ret));
       } else {
@@ -205,8 +211,10 @@ int ObConnectResourceMgr::get_or_insert_user_resource(const uint64_t tenant_id,
   if (OB_FAIL(user_res_map_.get(user_key, user_res))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
+      ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+      SET_USE_500(attr);
       // not exist, alloc and insert
-      if (OB_ISNULL(user_res = OB_NEW(ObConnectResource, MEMORY_LABEL))) {
+      if (OB_ISNULL(user_res = OB_NEW(ObConnectResource, attr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate user resource failed", K(ret));
       } else {

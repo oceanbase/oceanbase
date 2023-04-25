@@ -132,7 +132,9 @@ ObChunkInfo *ObObjFreeList::chunk_create(ObThreadCache *thread_cache)
   void *next = NULL;
   ObChunkInfo *chunk_info = NULL;
 
-  if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, label_))) {
+  ObMemAttr attr(OB_SERVER_TENANT_ID, label_);
+  SET_USE_500(attr);
+  if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, attr))) {
     OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "failed to allocate chunk", K_(chunk_byte_size));
   } else {
     chunk_info = new (reinterpret_cast<char *>(chunk_addr) + type_size_ * obj_count_per_chunk_) ObChunkInfo();
@@ -433,7 +435,9 @@ void *ObObjFreeList::global_alloc()
 
   do {
     if (obj_free_list_.empty()) {
-      if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, label_))) {
+      ObMemAttr attr(OB_SERVER_TENANT_ID, label_);
+      SET_USE_500(attr);
+      if (NULL == (chunk_addr = ob_malloc_align(alignment_, chunk_byte_size_, attr))) {
         OB_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "failed to allocate chunk", K_(chunk_byte_size));
         break_loop = true;
       } else {

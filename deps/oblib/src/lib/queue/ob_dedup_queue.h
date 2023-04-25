@@ -175,6 +175,7 @@ public:
   int add_task(const IObDedupTask &task);
   int64_t task_count() const { return task_queue_.get_total(); }
   void set_label(const lib::ObLabel &label) { allocator_.set_label(label); }
+  void set_attr(const lib::ObMemAttr &attr) { allocator_.set_attr(attr); }
   int set_thread_dead_threshold(const int64_t thread_dead_threshold);
 public:
   void run1() override;

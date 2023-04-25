@@ -101,21 +101,21 @@ int64_t ObSimpleRoutineSchema::get_convert_size() const
 }
 
 ObRoutineMgr::ObRoutineMgr()
-    : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      routine_infos_(0, NULL, ObModIds::OB_SCHEMA_ROUTINE_INFO_VECTOR),
-      routine_id_map_(ObModIds::OB_SCHEMA_ROUTINE_ID_MAP),
-      routine_name_map_(ObModIds::OB_SCHEMA_ROUTINE_NAME_MAP),
+      routine_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_INFO_VECTOR)),
+      routine_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_ID_MAP)),
+      routine_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_NAME_MAP)),
       is_inited_(false)
 {
 }
 
 ObRoutineMgr::ObRoutineMgr(ObIAllocator &allocator)
-    : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      routine_infos_(0, NULL, ObModIds::OB_SCHEMA_ROUTINE_INFO_VECTOR),
-      routine_id_map_(ObModIds::OB_SCHEMA_ROUTINE_ID_MAP),
-      routine_name_map_(ObModIds::OB_SCHEMA_ROUTINE_NAME_MAP),
+      routine_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_INFO_VECTOR)),
+      routine_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_ID_MAP)),
+      routine_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_ROUTINE_NAME_MAP)),
       is_inited_(false)
 {
 }

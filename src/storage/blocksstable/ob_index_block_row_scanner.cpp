@@ -43,7 +43,7 @@ int ObIndexBlockDataHeader::get_index_data(const int64_t row_idx, const char *&i
 }
 
 ObIndexBlockDataTransformer::ObIndexBlockDataTransformer()
-  : allocator_(), micro_reader_helper_() {}
+  : allocator_(SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "IdxBlkDataTrans"))), micro_reader_helper_() {}
 
 ObIndexBlockDataTransformer::~ObIndexBlockDataTransformer()
 {

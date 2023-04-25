@@ -28,7 +28,8 @@ namespace storage
 int ObLobManager::mtl_new(ObLobManager *&m) {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
-  m = OB_NEW(ObLobManager, oceanbase::ObModIds::OMT_TENANT, tenant_id);
+  auto attr = SET_USE_500("LobManager");
+  m = OB_NEW(ObLobManager, attr, tenant_id);
   if (OB_ISNULL(m)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(tenant_id));
@@ -972,7 +973,7 @@ int ObLobManager::check_need_out_row(
   // in_row : 0 | need_out_row : 0  --> invalid
   // in_row : 0 | need_out_row : 1  --> do nothing, keep out_row
   // in_row : 1 | need_out_row : 0  --> do nothing, keep in_row
-  // in_row : 1 | need_out_row : 1  --> in_row to out_row 
+  // in_row : 1 | need_out_row : 1  --> in_row to out_row
   if (!param.lob_common_->in_row_ && !need_out_row) {
     if (!param.lob_common_->is_init_) {
       ret = OB_ERR_UNEXPECTED;

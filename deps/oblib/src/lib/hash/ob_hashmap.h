@@ -124,7 +124,12 @@ public:
     allocer_.set_attr(node_attr);
     bucket_allocer_.set_attr(bucket_attr);
     return ht_.create(cal_next_prime(bucket_num), &allocer_, &bucket_allocer_);
-  };
+  }
+  int create(int64_t bucket_num,
+             const ObMemAttr &bucket_attr)
+  {
+    return create(bucket_num, bucket_attr, bucket_attr);
+  }
   int create(int64_t bucket_num, const lib::ObLabel &bucket_label,
              const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE, uint64_t tenant_id = OB_SERVER_TENANT_ID,
              uint64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID)

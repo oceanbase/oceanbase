@@ -626,8 +626,9 @@ ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
   : map_array_lock_(common::ObLatchIds::HASH_MAP_LOCK)
 {
   attr_.label_ = ObModIds::OB_LINEAR_HASH_MAP;
+  SET_USE_500(attr_);
   // Init node alloc.
-  int ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)), attr_.label_, attr_.tenant_id_);
+  int ret = node_alloc_.init(static_cast<int64_t>(sizeof(Node)), attr_);
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init node alloc", K(ret));
   }
@@ -642,13 +643,13 @@ ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
   }
   // Init dir alloc.
   ret = dir_alloc_.init(total_limit, 2 * page_size, page_size);
-  dir_alloc_.set_label(attr_.label_);
+  dir_alloc_.set_attr(attr_);
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init dir alloc", K(ret));
   }
   // Init counter alloc.
   ret = cnter_alloc_.init(total_limit, 2 * page_size, page_size);
-  cnter_alloc_.set_label(attr_.label_);
+  cnter_alloc_.set_attr(attr_);
   if (OB_FAIL(ret)) {
     LIB_LOG(WARN, "failed to init cnter alloc", K(ret));
   }

@@ -177,8 +177,7 @@ public:
     if (OB_UNLIKELY(ObTransErrsim::is_memory_errsim())) {
       ret = NULL;
     } else {
-      const common::ObMemAttr attr(tenant_id_, label_, ctx_id_);
-      ret = inner_alloc_(sz, attr);
+      ret = inner_alloc_(sz, attr_);
     }
     return ret;
   }
@@ -425,8 +424,8 @@ public:
 
 enum TransType : int32_t
 {
-  UNKNOWN_TRANS = -1, 
-  SP_TRANS = 0, 
+  UNKNOWN_TRANS = -1,
+  SP_TRANS = 0,
   DIST_TRANS = 2
 };
 

@@ -147,7 +147,9 @@ int ObTenantDutyTask::update_tenant_ctx_memory_throttle(uint64_t tenant_id)
         limit = INT64_MAX; // empty str means no limit, and not care ctx_id.
       }
       for (int i = 0; i < ObCtxIds::MAX_CTX_ID; i++) {
-        if (ObCtxIds::WORK_AREA == i || ObCtxIds::META_OBJ_CTX_ID == i) {
+        if (ObCtxIds::WORK_AREA == i ||
+            ObCtxIds::META_OBJ_CTX_ID == i ||
+            ObCtxIds::DO_NOT_USE_ME == i) {
           // use sql_work_area
           continue;
         }

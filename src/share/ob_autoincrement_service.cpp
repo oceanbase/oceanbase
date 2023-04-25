@@ -263,15 +263,17 @@ int ObAutoincrementService::init(ObAddr &addr,
   srv_proxy_ = srv_proxy;
   schema_service_ = schema_service;
 
+  ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_AUTOINCREMENT);
+  SET_USE_500(attr);
   if (OB_FAIL(distributed_autoinc_service_.init(mysql_proxy))) {
     LOG_WARN("fail init distributed_autoinc_service_ service", K(ret));
   } else if (OB_FAIL(global_autoinc_service_.init(my_addr_, req_transport))) {
     LOG_WARN("fail init auto inc global service", K(ret));
-  } else if (OB_FAIL(node_allocator_.init(sizeof(TableNode), ObModIds::OB_AUTOINCREMENT))) {
+  } else if (OB_FAIL(node_allocator_.init(sizeof(TableNode), attr))) {
     LOG_WARN("failed to init table node allocator", K(ret));
-  } else if (OB_FAIL(handle_allocator_.init(sizeof(CacheHandle), ObModIds::OB_AUTOINCREMENT))) {
+  } else if (OB_FAIL(handle_allocator_.init(sizeof(CacheHandle), attr))) {
     LOG_WARN("failed to init cache handle allocator", K(ret));
-  } else if (OB_FAIL(node_map_.init())) {
+  } else if (OB_FAIL(node_map_.init(attr))) {
     LOG_WARN("failed to init table node map", K(ret));
   } else {
     for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {

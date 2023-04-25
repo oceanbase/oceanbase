@@ -55,20 +55,6 @@ namespace common
 {
 using namespace oceanbase::obrpc;
 
-void get_tenant_ids(uint64_t *ids, int cap, int &cnt)
-{
-  auto *instance = ObMallocAllocator::get_instance();
-  cnt = 0;
-  for (uint64_t tenant_id = 1; tenant_id <= instance->get_max_used_tenant_id() && cnt < cap; ++tenant_id) {
-    if (nullptr != instance->get_tenant_ctx_allocator(tenant_id,
-                                                      ObCtxIds::DEFAULT_CTX_ID) ||
-        nullptr != instance->get_tenant_ctx_allocator_unrecycled(tenant_id,
-                                                                 ObCtxIds::DEFAULT_CTX_ID)) {
-      ids[cnt++] = tenant_id;
-    }
-  }
-}
-
 ObVirtualTenantManager::ObVirtualTenantManager()
   : tenant_map_(NULL),
     tenant_pool_(),

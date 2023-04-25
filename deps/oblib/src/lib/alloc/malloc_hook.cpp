@@ -57,7 +57,8 @@ void *ob_malloc_retry(size_t size)
 {
   void *ptr = nullptr;
   do {
-    static ObMemAttr attr(OB_SERVER_TENANT_ID, "glibc_malloc", ObCtxIds::GLIBC);
+    ObMemAttr attr(OB_SERVER_TENANT_ID, "glibc_malloc", ObCtxIds::GLIBC);
+    SET_USE_500(attr);
     ptr = ob_malloc(size, attr);
     if (OB_ISNULL(ptr)) {
       ::usleep(10000);  // 10ms

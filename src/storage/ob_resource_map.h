@@ -212,6 +212,7 @@ int ObResourceMap<Key, Value>::init(
     const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
+  auto attr = SET_USE_500(ObMemAttr(tenant_id, label));
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
@@ -223,7 +224,7 @@ int ObResourceMap<Key, Value>::init(
         K(page_size), K(tenant_id));
   } else if (OB_FAIL(bucket_lock_.init(bkt_num))) {
     STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
-  } else if (OB_FAIL(map_.create(bkt_num, label, label, tenant_id))) {
+  } else if (OB_FAIL(map_.create(bkt_num, attr, attr))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
   } else if (OB_UNLIKELY(bkt_num != map_.bucket_count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -232,7 +233,7 @@ int ObResourceMap<Key, Value>::init(
   } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
-    allocator_.set_label(label);
+    allocator_.set_attr(attr);
     is_inited_ = true;
     STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
   }

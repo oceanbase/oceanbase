@@ -167,6 +167,7 @@ int ObServerSchemaService::init(ObMySQLProxy *sql_proxy,
                                 const ObCommonConfig *config)
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500(ObModIds::OB_SCHEMA_ID_VERSIONS);
   if (OB_ISNULL(sql_proxy)
      || NULL != schema_service_
      || OB_ISNULL(sql_proxy->get_pool())
@@ -185,7 +186,7 @@ int ObServerSchemaService::init(ObMySQLProxy *sql_proxy,
   } else if (FALSE_IT(schema_service_->set_common_config(config))) {
     // will not reach here
   } else if (OB_FAIL(version_his_map_.create(VERSION_HIS_MAP_BUCKET_NUM,
-      ObModIds::OB_SCHEMA_ID_VERSIONS, ObModIds::OB_SCHEMA_ID_VERSIONS))) {
+      attr))) {
     LOG_WARN("create version his map failed", KR(ret));
   } else {
     sql_proxy_ = sql_proxy;

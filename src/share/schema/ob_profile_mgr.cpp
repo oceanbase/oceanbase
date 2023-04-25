@@ -30,20 +30,20 @@ using namespace hash;
 
 ObProfileMgr::ObProfileMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      schema_infos_(0, NULL, ObModIds::OB_SCHEMA_PROFILE),
-      name_map_(ObModIds::OB_SCHEMA_PROFILE),
-      id_map_(ObModIds::OB_SCHEMA_PROFILE)
+      schema_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PROFILE)),
+      name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PROFILE)),
+      id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PROFILE))
 {
 }
 ObProfileMgr::ObProfileMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      schema_infos_(0, NULL, ObModIds::OB_SCHEMA_PROFILE),
-      name_map_(ObModIds::OB_SCHEMA_PROFILE),
-      id_map_(ObModIds::OB_SCHEMA_PROFILE)
+      schema_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PROFILE)),
+      name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PROFILE)),
+      id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PROFILE))
 {
 }
 ObProfileMgr::~ObProfileMgr()

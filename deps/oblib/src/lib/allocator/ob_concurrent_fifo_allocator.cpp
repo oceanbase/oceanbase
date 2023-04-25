@@ -85,6 +85,11 @@ void ObConcurrentFIFOAllocator::set_label(const lib::ObLabel &label)
   inner_allocator_.set_label(label);
 }
 
+void ObConcurrentFIFOAllocator::set_attr(const lib::ObMemAttr &attr)
+{
+  inner_allocator_.set_attr(attr);
+}
+
 void ObConcurrentFIFOAllocator::set_tenant_id(const uint64_t tenant_id)
 {
   inner_allocator_.set_tenant_id(tenant_id);

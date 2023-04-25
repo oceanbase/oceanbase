@@ -2989,13 +2989,14 @@ ObIOTracer::~ObIOTracer()
 int ObIOTracer::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500("io_trace_map");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(trace_map_.create(1009, "io_trace_map"))) {
+  } else if (OB_FAIL(trace_map_.create(1009, attr))) {
     LOG_WARN("create trace map failed", K(ret));
   } else {
     tenant_id_ = tenant_id;

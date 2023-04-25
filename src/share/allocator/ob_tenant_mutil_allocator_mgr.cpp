@@ -113,6 +113,7 @@ int ObTenantMutilAllocatorMgr::construct_allocator_(const uint64_t tenant_id,
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else {
     ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_TENANT_MUTIL_ALLOCATOR);
+    SET_USE_500(attr);
     void *buf = ob_malloc(sizeof(TMA), attr);
     if (NULL == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

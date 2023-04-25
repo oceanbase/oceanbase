@@ -74,6 +74,7 @@ public:
   void set_locker(ISetLocker *locker) { locker_ = locker; }
   int64_t sync_wash(int64_t wash_size=INT64_MAX);
   bool check_has_unfree();
+  ObTenantCtxAllocator *get_tenant_ctx_allocator() const { return  tallocator_; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);

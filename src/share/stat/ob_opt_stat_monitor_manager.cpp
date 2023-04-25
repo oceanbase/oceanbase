@@ -119,15 +119,17 @@ void ObOptStatMonitorCheckTask::runTimerTask()
 int ObOptStatMonitorManager::init(ObMySQLProxy *mysql_proxy)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
+  SET_USE_500(attr);
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("column usage manager has already been initialized.", K(ret));
   } else if (OB_ISNULL(mysql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null mysql proxy", K(ret));
-  } else if (OB_FAIL(column_usage_maps_.create(100, "ColUsagHashMap"))) {
+  } else if (OB_FAIL(column_usage_maps_.create(100, SET_USE_500("ColUsagHashMap")))) {
     LOG_WARN("failed to create column usage maps", K(ret));
-  } else if (OB_FAIL(dml_stat_maps_.create(100, "DmlStatsHashMap"))) {
+  } else if (OB_FAIL(dml_stat_maps_.create(100, attr))) {
     LOG_WARN("failed to create dml stats maps", K(ret));
   } else if (OB_FAIL(flush_all_task_.init(lib::TGDefIDs::ServerGTimer))) {
     LOG_WARN("failed to init column usage task", K(ret));
@@ -265,18 +267,20 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ReadMapAtomicOp atomic_op(&args);
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "ColUsagHashMap");
+  SET_USE_500(attr);
   if (GCTX.is_standby_cluster()) {
     // standby cluster can't write __all_column_usage, so do not need to update local update
   } else if (OB_FAIL(column_usage_maps_.read_atomic(tenant_id, atomic_op))) {
     if (OB_HASH_NOT_EXIST == ret) {//not exists such tenant id map, need alloc new map
       ColumnUsageMap *col_map = NULL;
       ColumnUsageMap *tmp_col_map = NULL;
-      void *buff = ob_malloc(sizeof(ColumnUsageMap), "ColUsagHashMap");
+      void *buff = ob_malloc(sizeof(ColumnUsageMap), attr);
       if (OB_ISNULL(buff)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(col_map = new(buff)ColumnUsageMap())) {
-      } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
+      } else if (OB_FAIL(col_map->create(10000, attr))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(column_usage_maps_.set_refactored(tenant_id, col_map))) {
         // set refacter failed, may created by other thread
@@ -309,6 +313,8 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id, ObOptDmlStat
 {
   int ret = OB_SUCCESS;
   ReadMapAtomicOp atomic_op(dml_stat);
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
+  SET_USE_500(attr);
   if (GCTX.is_standby_cluster()) {
     // standby cluster can't write __all_monitor_modified, so do not need to update local update
   } else if (OB_FAIL(dml_stat_maps_.read_atomic(tenant_id, atomic_op))) {
@@ -316,12 +322,12 @@ int ObOptStatMonitorManager::update_local_cache(uint64_t tenant_id, ObOptDmlStat
       ret = OB_SUCCESS;
       DmlStatMap *dml_stat_map = NULL;
       DmlStatMap *tmp_dml_stat_map = NULL;
-      void *buff = ob_malloc(sizeof(DmlStatMap), "DmlStatsHashMap");
+      void *buff = ob_malloc(sizeof(DmlStatMap), attr);
       if (OB_ISNULL(buff)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FALSE_IT(dml_stat_map = new(buff)DmlStatMap())) {
-      } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatsHashMap", "DmlStatsHashMap", OB_SERVER_TENANT_ID))) {
+      } else if (OB_FAIL(dml_stat_map->create(10000, attr))) {
         LOG_WARN("failed to create column usage map", K(ret));
       } else if (OB_FAIL(dml_stat_maps_.set_refactored(tenant_id, dml_stat_map))) {
         // set refacter failed, may created by other thread
@@ -734,6 +740,8 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
 {
   int ret = OB_SUCCESS;
   column_usage_map_ = NULL;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatsHashMap");
+  SET_USE_500(attr);
   if (OB_ISNULL(entry.second)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -741,14 +749,14 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     // do nothing
   } else {
     ColumnUsageMap *col_map = NULL;
-    void *buff = ob_malloc(sizeof(ColumnUsageMap), "ColUsagHashMap");
+    void *buff = ob_malloc(sizeof(ColumnUsageMap), attr);
     if (OB_ISNULL(buff)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (NULL == (col_map = new(buff)ColumnUsageMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor column usage map", K(ret));
-    } else if (OB_FAIL(col_map->create(10000, "ColUsagHashMap", "ColUsagHashMap", OB_SERVER_TENANT_ID))) {
+    } else if (OB_FAIL(col_map->create(10000, attr))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       column_usage_map_ = entry.second;
@@ -770,6 +778,8 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
 {
   int ret = OB_SUCCESS;
   dml_stat_map_ = NULL;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "DmlStatMap");
+  SET_USE_500(attr);
   if (OB_ISNULL(entry.second)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -777,14 +787,14 @@ int ObOptStatMonitorManager::SwapMapAtomicOp::operator() (common::hash::HashMapP
     // do nothing
   } else {
     DmlStatMap *dml_stat_map = NULL;
-    void *buff = ob_malloc(sizeof(DmlStatMap), "DmlStatMap");
+    void *buff = ob_malloc(sizeof(DmlStatMap), attr);
     if (OB_ISNULL(buff)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (NULL == (dml_stat_map = new(buff)DmlStatMap())) {
       ret = OB_NOT_INIT;
       LOG_WARN("fail to constructor DmlStatMap", K(ret));
-    } else if (OB_FAIL(dml_stat_map->create(10000, "DmlStatMap", "DmlStatMap", OB_SERVER_TENANT_ID))) {
+    } else if (OB_FAIL(dml_stat_map->create(10000, attr))) {
       LOG_WARN("failed to create column usage map", K(ret));
     } else {
       dml_stat_map_ = entry.second;

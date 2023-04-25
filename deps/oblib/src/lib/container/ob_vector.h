@@ -91,6 +91,8 @@ public:
   explicit ObVector(Allocator *alloc = NULL, const lib::ObLabel &label = ObModIds::OB_MOD_DO_NOT_USE_ME);
   explicit ObVector(int64_t size, Allocator *alloc = NULL,
                     const lib::ObLabel &label = ObModIds::OB_MOD_DO_NOT_USE_ME);
+  explicit ObVector(int64_t size, Allocator *alloc,
+                    const lib::ObMemAttr &attr);
   virtual ~ObVector();
   int assign(const ObVector &other);
   ObVector<T, Allocator> &operator=(const ObVector<T, Allocator> &other);
@@ -184,6 +186,9 @@ public:
   explicit ObSortedVector(int64_t size, Allocator *alloc = NULL,
                           const lib::ObLabel &label = ObModIds::OB_MOD_DO_NOT_USE_ME)
       : vector_(size, alloc, label) {}
+  ObSortedVector(int64_t size, Allocator *alloc,
+                 const lib::ObMemAttr &attr)
+      : vector_(size, alloc, attr) {}
   virtual ~ObSortedVector() {}
   int assign(const ObSortedVector &other)
   {

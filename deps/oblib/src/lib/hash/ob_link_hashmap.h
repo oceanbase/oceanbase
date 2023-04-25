@@ -157,12 +157,16 @@ public:
   int init(const lib::ObLabel &label = ObModIds::OB_CONCURRENT_HASH_MAP,
       const uint64_t tenant_id = OB_SERVER_TENANT_ID)
   {
+    return init(lib::ObMemAttr(tenant_id, label));
+  }
+  int init(const lib::ObMemAttr &attr)
+  {
     int ret = OB_SUCCESS;
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    if (OB_UNLIKELY(!is_valid_tenant_id(attr.tenant_id_))) {
       ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "invalid argument", K(ret), K(label), K(tenant_id));
-    } else if (OB_FAIL(array_alloc_.init(label, tenant_id))) {
-      COMMON_LOG(ERROR, "array_alloc_ init error", K(ret), K(label), K(tenant_id));
+      COMMON_LOG(WARN, "invalid argument", K(ret), K(attr));
+    } else if (OB_FAIL(array_alloc_.init(attr))) {
+      COMMON_LOG(ERROR, "array_alloc_ init error", K(ret), K(attr));
     } else {
       magic_code_ = MAGIC_CODE;
     }

@@ -61,7 +61,7 @@ ObStorageLocalityCache::ObStorageLocalityCache()
     sql_proxy_(nullptr),
     alloc_buf_(nullptr),
     allocator_("StoLocCache"),
-    ls_locality_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_)
+    ls_locality_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
 {}
 
 ObStorageLocalityCache::~ObStorageLocalityCache()

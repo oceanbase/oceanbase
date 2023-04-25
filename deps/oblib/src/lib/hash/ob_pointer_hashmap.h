@@ -447,7 +447,12 @@ public:
   typedef typename SubMap::Iterator iterator;
 
   explicit ObPointerHashMap(const lib::ObLabel &label = ObModIds::OB_HASH_NODE)
-      : sub_map_count_(0), sub_map_mem_size_(default_size), allocator_(label)
+    : ObPointerHashMap(lib::ObMemAttr(OB_SERVER_TENANT_ID, label))
+  {
+  }
+
+  explicit ObPointerHashMap(const lib::ObMemAttr &attr)
+      : sub_map_count_(0), sub_map_mem_size_(default_size), allocator_(attr)
   {
     memset(sub_maps_, 0, sizeof(sub_maps_));
   }

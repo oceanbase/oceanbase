@@ -384,7 +384,7 @@ int ObTenantTimezoneMgr::get_tenant_timezone_default(const uint64_t tenant_id,
   static ObTZInfoMap tz_map;
   UNUSED(tenant_id);
   if (OB_UNLIKELY(! tz_map.is_inited()) &&
-      OB_FAIL(tz_map.init("TzMapStatic"))) {
+      OB_FAIL(tz_map.init(SET_USE_500("TzMapStatic")))) {
     LOG_WARN("init time zone info map failed", K(ret));
   } else {
     timezone_wrap.set_tz_map(&tz_map);

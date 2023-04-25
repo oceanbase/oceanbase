@@ -187,11 +187,11 @@ ObDTLIntermResultManager &ObDTLIntermResultManager::getInstance()
 int ObDTLIntermResultManager::init()
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500("HashBuckDTLINT");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(map_.create(BUCKET_NUM,
-        "HashBuckDTLINT",
-        "HashNodeDTLINT"))) {
+                                 attr, attr))) {
     LOG_WARN("create hash table failed", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, gc_,
       ObDTLIntermResultGC::REFRESH_INTERVAL, true))) {

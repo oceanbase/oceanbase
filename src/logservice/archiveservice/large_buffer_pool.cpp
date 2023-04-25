@@ -27,7 +27,9 @@ LargeBufferPool::LargeBufferPool() :
   label_(),
   array_(),
   rwlock_()
-{}
+{
+  array_.set_attr(SET_USE_500("LargeBufferPool"));
+}
 
 LargeBufferPool::~LargeBufferPool()
 {

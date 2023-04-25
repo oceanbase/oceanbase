@@ -931,6 +931,7 @@ int ObTsMgr::add_tenant_(const uint64_t tenant_id)
   void *ptr = NULL;
   ObTimeGuard timeguard("add ts tenant");
   ObMemAttr memattr(OB_SERVER_TENANT_ID, ObModIds::OB_GTS_TASK_QUEUE);
+  SET_USE_500(memattr);
   ObTsTenantInfo tenant_info(tenant_id);
   ObTsSourceInfo *ts_source_info = NULL;
 

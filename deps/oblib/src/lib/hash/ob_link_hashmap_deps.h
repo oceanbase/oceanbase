@@ -24,17 +24,16 @@ namespace common
 class DCArrayAlloc: public IAlloc
 {
 public:
-  DCArrayAlloc(): label_(ObModIds::OB_CONCURRENT_HASH_MAP), tenant_id_(OB_SERVER_TENANT_ID) {}
+  DCArrayAlloc(): attr_(OB_SERVER_TENANT_ID, ObModIds::OB_CONCURRENT_HASH_MAP) {}
   virtual ~DCArrayAlloc() {}
-  int init(const lib::ObLabel &label, const uint64_t tenant_id)
+  int init(const lib::ObMemAttr &attr)
   {
     int ret = OB_SUCCESS;
-    if (!is_valid_tenant_id(tenant_id)) {
+    if (!is_valid_tenant_id(attr.tenant_id_)) {
       ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "invalid argument", K(ret), K(label), K(tenant_id));
+      COMMON_LOG(WARN, "invalid argument", K(ret), K(attr));
     } else {
-      label_ = label;
-      tenant_id_ = tenant_id;
+      attr_ = attr;
     }
     return ret;
   }
@@ -45,8 +44,7 @@ public:
     if (sz <= 0) {
       COMMON_LOG_RET(WARN, common::OB_INVALID_ARGUMENT, "invalid argument", K(sz));
     } else {
-      ObMemAttr attr(tenant_id_, label_);
-      ptr = ob_malloc(sz, attr);
+      ptr = ob_malloc(sz, attr_);
     }
     return ptr;
   }
@@ -61,8 +59,7 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(DCArrayAlloc);
 private:
-  lib::ObLabel label_;
-  uint64_t tenant_id_;
+  lib::ObMemAttr attr_;
 };
 
 struct RefNode

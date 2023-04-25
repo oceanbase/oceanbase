@@ -132,24 +132,24 @@ int64_t ObSimpleOutlineSchema::get_convert_size() const
 }
 
 ObOutlineMgr::ObOutlineMgr()
-    : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      outline_infos_(0, NULL, ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR),
-      outline_id_map_(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP),
-      outline_name_map_(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP),
-      signature_map_(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP),
-      sql_id_map_(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)
+      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR)),
+      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP)),
+      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP)),
+      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)),
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP))
 {
 }
 
 ObOutlineMgr::ObOutlineMgr(ObIAllocator &allocator)
-    : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      outline_infos_(0, NULL, ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR),
-      outline_id_map_(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP),
-      outline_name_map_(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP),
-      signature_map_(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP),
-      sql_id_map_(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)
+      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR)),
+      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP)),
+      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP)),
+      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)),
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP))
 {
 }
 

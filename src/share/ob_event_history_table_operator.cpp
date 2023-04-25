@@ -194,7 +194,7 @@ int ObEventHistoryTableOperator::init(common::ObMySQLProxy &proxy)
           OB_FAIL(timer_.init_and_start(thread_count, 5_s, "EventTimer", queue_size_square_of_2))) {
       LOG_WARN("int global event report timer failed", KR(ret));
     } else {
-      event_queue_.set_label(ObModIds::OB_RS_EVENT_QUEUE);
+      event_queue_.set_attr(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_RS_EVENT_QUEUE)));
       proxy_ = &proxy;
       inited_ = true;
       stopped_ = false;

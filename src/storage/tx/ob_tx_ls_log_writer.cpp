@@ -148,11 +148,13 @@ int ObTxLSLogCb::alloc_log_buf_()
 {
   int ret = OB_SUCCESS;
 
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "TxLSLogBuf");
+  SET_USE_500(attr);
   if (0 == ObTxLSLogLimit::LOG_BUF_SIZE || nullptr != log_buf_) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KR(ret), K(ObTxLSLogLimit::LOG_BUF_SIZE), KP(log_buf_));
   } else if (nullptr
-             == (log_buf_ = (char *)ob_malloc(ObTxLSLogLimit::LOG_BUF_SIZE, "TxLSLogBuf"))) {
+             == (log_buf_ = (char *)ob_malloc(ObTxLSLogLimit::LOG_BUF_SIZE, attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "[TxLsLogWriter] allocate memory failed", KR(ret), K(ObTxLSLogLimit::LOG_BUF_SIZE));
   }

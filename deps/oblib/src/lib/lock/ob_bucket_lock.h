@@ -32,6 +32,10 @@ public:
       const uint32_t latch_id = ObLatchIds::DEFAULT_BUCKET_LOCK,
       const lib::ObLabel &label = ObModIds::BUCKET_LOCK,
       const uint64_t tenant_id = OB_SERVER_TENANT_ID);
+  int init(
+      const uint64_t bucket_cnt,
+      const uint32_t latch_id,
+      const lib::ObMemAttr &attr);
   void destroy();
   int try_rdlock(const uint64_t bucket_idx);
   int try_wrlock(const uint64_t bucket_idx);
@@ -57,6 +61,7 @@ private:
   OB_INLINE uint64_t bucket_to_latch_idx(const uint64_t bucket_idx) const;
   int try_lock_all(const bool is_write_lock);
 private:
+  lib::ObMemAttr attr_;
   uint64_t bucket_cnt_;
   uint64_t latch_cnt_;
   ObLatch *latches_;

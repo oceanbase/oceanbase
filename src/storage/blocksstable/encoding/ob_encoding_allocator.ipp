@@ -14,7 +14,7 @@ template <typename EncodingItem>
 ObEncodingPool<EncodingItem>::ObEncodingPool(const int64_t item_size, const char *label)
   : free_items_(), free_cnt_(0),
     pool_(item_size, common::OB_MALLOC_NORMAL_BLOCK_SIZE,
-      common::ObMalloc(label))
+      common::ObMalloc(SET_USE_500(label)))
 {
 }
 

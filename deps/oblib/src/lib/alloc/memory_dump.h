@@ -116,6 +116,7 @@ public:
 private:
 friend class observer::ObAllVirtualMemoryInfo;
 friend class lib::ObTenantCtxAllocator;
+friend class lib::ObMallocAllocator;
 
 static const int64_t TASK_NUM = 8;
 static const int PRINT_BUF_LEN = 1L << 20;

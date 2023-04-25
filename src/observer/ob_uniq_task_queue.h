@@ -197,6 +197,8 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
                                               const int64_t queue_size, const char *thread_name)
 {
   int ret = common::OB_SUCCESS;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, common::ObModIds::OB_PARTITION_TABLE_TASK);
+  SET_USE_500(attr);
   const int64_t group_count = 128;
   if (inited_) {
     ret = common::OB_INIT_TWICE;
@@ -206,12 +208,12 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
     SERVER_LOG(WARN, "invalid argument", K(thread_num), K(queue_size), K(updater));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::PARTITION_TABLE_UPDATER_COND_WAIT))) {
     SERVER_LOG(WARN, "fai to init condition, ", K(ret));
-  } else if (OB_FAIL(task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+  } else if (OB_FAIL(task_map_.create(queue_size, attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(queue_size));
   } else if (OB_FAIL(group_map_.create(group_count,
-      common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+                                       attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(group_count));
-  } else if (OB_FAIL(processing_task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+  } else if (OB_FAIL(processing_task_map_.create(queue_size, attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret));
   } else {
     this->set_thread_count(static_cast<int32_t>(thread_num));

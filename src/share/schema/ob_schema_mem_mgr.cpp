@@ -59,9 +59,14 @@ int ObSchemaMemMgr::init(const char *label, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
+  auto attr = SET_USE_500(label);
   //FIXME: The memory split of the subsequent 500 tenants is then set to the corresponding tenant_id
-  new(&allocator_[0]) ObArenaAllocator(label, OB_MALLOC_BIG_BLOCK_SIZE, OB_SERVER_TENANT_ID);
-  new(&allocator_[1]) ObArenaAllocator(label, OB_MALLOC_BIG_BLOCK_SIZE, OB_SERVER_TENANT_ID);
+  new(&allocator_[0]) ObArenaAllocator(attr, OB_MALLOC_BIG_BLOCK_SIZE);
+  new(&allocator_[1]) ObArenaAllocator(attr, OB_MALLOC_BIG_BLOCK_SIZE);
+  all_ptrs_[0].set_attr(attr);
+  all_ptrs_[1].set_attr(attr);
+  ptrs_[0].set_attr(attr);
+  ptrs_[1].set_attr(attr);
   tenant_id_ = tenant_id;
   is_inited_ = true;
 

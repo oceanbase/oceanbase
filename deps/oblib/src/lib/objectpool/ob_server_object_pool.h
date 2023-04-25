@@ -221,6 +221,7 @@ public:
       }
       if (NULL == ctx) {
         ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
+        SET_USE_500(attr);
         char *p = static_cast<char*>(ob_malloc(item_size_, attr));
         if (NULL == p) {
           COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_));
@@ -298,9 +299,10 @@ public:
     int64_t s = (sizeof(T) + sizeof(Meta)); // Each cached object header has a Meta field to store necessary information and linked list pointers
     item_size_ = upper_align(s, CACHE_ALIGN_SIZE); // Align according to the cache line to ensure that there will be no false sharing between objects
     ObMemAttr attr(tenant_id_, ObModIds::OB_SERVER_OBJECT_POOL);
+    SET_USE_500(attr);
     void *ptr = NULL;
     if (OB_ISNULL(ptr = ob_malloc(sizeof(ObPoolArenaHead) * arena_num_,
-                                  ObMemAttr(tenant_id_, "PoolArenaArray")))) {
+                                  SET_USE_500(ObMemAttr(tenant_id_, "PoolArenaArray"))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(ERROR, "allocate memory failed", K(ret), K(typeid(T).name()));
     } else if ((buf_ = ob_malloc(arena_num_ * cnt_per_arena_ * item_size_, attr)) == NULL) {

@@ -308,11 +308,13 @@ int ObKVCacheInstMap::get_cache_inst(
         //double check, success to get inst, add ref to return outside
         add_inst_ref(inst);
       } else if (OB_HASH_NOT_EXIST == ret) {
+        lib::ObMemAttr attr(inst_key.tenant_id_, "CACHE_MAP_NODE");
+        SET_USE_500(attr);
         if (OB_FAIL(inst_pool_.pop(inst))) {
           COMMON_LOG(WARN, "Fail to alloc cache inst, ", K(ret));
         } else if (OB_FAIL(get_mb_list(inst_key.tenant_id_, inst->mb_list_handle_))) {
           COMMON_LOG(WARN, "get mb list failed", K(ret), "tenant_id", inst_key.tenant_id_);
-        } else if (OB_FAIL(inst->node_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, "CACHE_MAP_NODE", inst_key.tenant_id_, 1))) {
+        } else if (OB_FAIL(inst->node_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, attr, 1))) {
           COMMON_LOG(WARN, "Fail to init node allocator, ", K(ret));
         } else if (OB_FAIL(inst_map_.set_refactored(inst_key, inst))) {
           COMMON_LOG(WARN, "Fail to set inst to inst map, ", K(ret));
@@ -503,7 +505,7 @@ int ObKVCacheInstMap::get_cache_info(const uint64_t tenant_id, ObIArray<ObKVCach
 void ObKVCacheInstMap::print_tenant_cache_info(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  
+
   if (OB_LIKELY(is_inited_)) {
     ContextParam param;
     param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_TEMP_VARIABLES);
@@ -652,8 +654,8 @@ int ObKVCacheInstMap::get_mb_list(const uint64_t tenant_id, ObTenantMBListHandle
           if (create_list) {
             ret = OB_SUCCESS;
             need_create = true;
-          } 
-          // If the parameter "create_list" is false, OB_ENTRY_NOT_EXIST should be treated 
+          }
+          // If the parameter "create_list" is false, OB_ENTRY_NOT_EXIST should be treated
           // as excepted return rather than error. Therefore, do nothing.
         } else {
           COMMON_LOG(WARN, "get failed", K(ret), K(tenant_id));
@@ -662,7 +664,7 @@ int ObKVCacheInstMap::get_mb_list(const uint64_t tenant_id, ObTenantMBListHandle
         COMMON_LOG(WARN, "init list_handle failed", K(ret));
       }
     }
-    
+
     if (need_create && OB_SUCC(ret) && !list_handle.is_valid()) {
       DRWLock::WRLockGuard wr_guard(list_lock_);
       if (OB_FAIL(list_map_.get(tenant_id, list))) {
