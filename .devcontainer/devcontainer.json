@@ -1,0 +1,20 @@
+{
+    "name": "OceanBase",
+    "image": "ubuntu:20.04",
+    "mounts": [
+        // "source=${localEnv:HOME}/.cargo/registry,target=/opt/rust/cargo/registry,type=bind,consistency=cached"
+    ],
+    "updateRemoteUserUID": true,
+    "postAttachCommand": "bash",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "cschleiden.vscode-github-actions",
+                "vadimcn.vscode-lldb"
+            ],
+            "settings": {
+                "editor.formatOnSave": true
+            }
+        }
+    }
+}
