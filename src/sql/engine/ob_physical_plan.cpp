@@ -33,7 +33,6 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
-#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -1218,7 +1217,6 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   int64_t plan_open_time = 0;
-  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
   ObSEArray<ObSqlPlanItem*, 4> plan_items;
   ObExecFeedbackInfo &feedback_info = ctx.get_feedback_info();
   const common::ObIArray<ObExecFeedbackNode> &feedback_nodes = feedback_info.get_feedback_nodes();
@@ -1250,8 +1248,8 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
       }
       plan_item->real_cardinality_ = feedback_node.output_row_count_;
       plan_item->real_cost_ = real_cost;
-      plan_item->cpu_cost_ = feedback_node.db_time_ / cpu_khz;
-      plan_item->io_cost_ = feedback_node.block_time_ / cpu_khz;
+      plan_item->cpu_cost_ = feedback_node.db_time_;
+      plan_item->io_cost_ = feedback_node.block_time_;
       plan_item->search_columns_ = feedback_node.worker_count_;
     }
   }
