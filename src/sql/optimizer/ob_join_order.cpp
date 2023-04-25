@@ -265,149 +265,125 @@ bool ObJoinOrder::is_main_table_use_das(const ObIArray<AccessPath *> &access_pat
 int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths)
 {
   int ret = OB_SUCCESS;
-  ObOptimizerContext *opt_ctx = NULL;
-  const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(table_partition_info_) ||
-      OB_ISNULL(get_plan()) ||
-      OB_ISNULL(stmt = get_plan()->get_stmt()) ||
-      OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(table_partition_info_), K(ret));
-  } else if (NULL == table_sharding_info_ &&
-             OB_FAIL(compute_sharding_info_for_base_path(is_main_table_use_das(access_paths),
-                                                         *table_partition_info_,
-                                                         table_sharding_info_))) {
-    LOG_WARN("failed to compute sharding info", K(ret));
-  } else {
-    // compute path sharding info
-    for (int64_t i = access_paths.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      AccessPath *path = NULL;
-      if (OB_ISNULL(path = access_paths.at(i)) || OB_ISNULL(path->table_partition_info_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(path), K(ret));
-      } else if (!path->is_global_index_ && !path->is_inner_path_ &&
-                 !get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) {
-        path->strong_sharding_ = table_sharding_info_;
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < available_access_paths_.count(); ++j) {
-          AccessPath *cur_path = available_access_paths_.at(j);
-          if (OB_ISNULL(cur_path)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (path->table_id_ == cur_path->table_id_ &&
-                     path->ref_table_id_ == cur_path->ref_table_id_ &&
-                     path->index_id_ == cur_path->index_id_ &&
-                     path->use_das_ == cur_path->use_das_) {
-            if (path->use_das_) {
-              path->strong_sharding_ = opt_ctx->get_match_all_sharding();
-            } else {
-              path->strong_sharding_ = cur_path->strong_sharding_;
-            }
-            break;
-          }
-        }
-        if (OB_SUCC(ret) && NULL == path->strong_sharding_) {
-          if (OB_FAIL(compute_sharding_info_for_base_path(path->use_das_,
-                                                          *path->table_partition_info_,
-                                                          path->strong_sharding_))) {
-            LOG_WARN("failed to calc sharding info", K(ret));
-          } else if (!path->use_das_ && (1 < access_paths.count() || path->is_inner_path_) &&
-                     (path->is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
-                     !is_virtual_table(path->ref_table_id_) &&
-                     !ObSqlSchemaGuard::is_link_table(get_plan()->get_stmt(), path->ref_table_id_) &&
-                     opt_ctx->get_parallel() > path->strong_sharding_->get_part_cnt()) {
-            access_paths.remove(i);
-          }
-        }
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
-      AccessPath *path = NULL;
-      if (OB_ISNULL(path = access_paths.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(path), K(ret));
-      } else if (OB_FAIL(compute_base_table_path_plan_type(path))) {
-        LOG_WARN("failed to compute base table path plan type", K(ret));
-      } else if (OB_FAIL(compute_base_table_path_ordering(path))) {
-        LOG_WARN("failed to compute base table path ordering", K(ret));
-      } else if (OB_FAIL(compute_base_table_parallel_and_server_info(path))) {
-        LOG_WARN("failed to compute base table server info", K(ret));
-      } else {
-        LOG_TRACE("succeed to compute base sharding info", K(*path));
-      }
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); i++) {
+    AccessPath *path = NULL;
+    if (OB_ISNULL(path = access_paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(path), K(ret));
+    } else if (OB_FAIL(compute_base_table_parallel_and_server_info(path))) {
+      LOG_WARN("failed to compute base table server info", K(ret));
+    } else if (OB_FAIL(compute_sharding_info_for_base_path(access_paths, i))) {
+      LOG_WARN("failed to compute sharding info for base path", K(ret), K(i));
+    } else if (OB_FAIL(compute_base_table_path_plan_type(path))) {
+      LOG_WARN("failed to compute base table path plan type", K(ret));
+    } else if (OB_FAIL(compute_base_table_path_ordering(path))) {
+      LOG_WARN("failed to compute base table path ordering", K(ret));
+    } else {
+      LOG_TRACE("succeed to compute base sharding info", K(*path));
     }
   }
   return ret;
 }
 
-int ObJoinOrder::compute_sharding_info_for_base_path(const bool use_das,
-                                                     ObTablePartitionInfo &table_partition_info,
-                                                     ObShardingInfo *&sharding_info)
+int ObJoinOrder::compute_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+                                                     const int64_t cur_idx)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
-  ObSqlSchemaGuard *schema_guard = NULL;
-  const ObTableSchema *table_schema = NULL;
   ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
-  const TableItem *table_item = NULL;
-  sharding_info = NULL;
-  bool hint_need_partition_info;
   bool is_modified = false;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
+  AccessPath *path = NULL;
+  ObShardingInfo *sharding_info = NULL;
+  ObTablePartitionInfo *table_partition_info = NULL;
+  if (OB_UNLIKELY(access_paths.count() <= cur_idx) ||
+      OB_ISNULL(path = access_paths.at(cur_idx)) ||
+      OB_ISNULL(table_partition_info = path->table_partition_info_) ||
+      OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
-      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(get_plan()), K(stmt), K(opt_ctx),
-        K(session_info), K(schema_guard), K(ret));
-  } else if (use_das) {
+    LOG_WARN("get unexpected null", K(ret), K(access_paths.count()), K(path), K(table_partition_info),
+                                  K(cur_idx), K(get_plan()), K(stmt), K(opt_ctx), K(session_info));
+  } else if (path->use_das_) {
     sharding_info = opt_ctx->get_match_all_sharding();
-  } else if (OB_FAIL(schema_guard->get_table_schema(table_partition_info.get_ref_table_id(),
-                                      table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(table_partition_info.get_location_type(opt_ctx->get_local_server_addr(),
-                                                            location_type))) {
+  } else if (OB_FAIL(table_partition_info->get_location_type(opt_ctx->get_local_server_addr(),
+                                                                    location_type))) {
     LOG_WARN("failed to get location type", K(ret));
-  } else if (opt_ctx->use_intra_parallel() && !opt_ctx->is_use_table_dop()
-      && (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type)) {
+  } else if (ObGlobalHint::DEFAULT_PARALLEL < path->parallel_
+             && (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type)) {
     sharding_info = opt_ctx->get_distributed_sharding();
+  } else if (OB_FAIL(get_sharding_info_from_available_access_paths(access_paths, cur_idx, sharding_info))) {
+    LOG_WARN("failed to get sharding info from available access paths", K(ret));
+  } else if (NULL != sharding_info) {
+    /* do nothing */
   } else if (OB_ISNULL(sharding_info = reinterpret_cast<ObShardingInfo*>(
                                        allocator_->alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate memory", K(ret));
-  } else if (OB_FAIL(stmt->check_table_be_modified(table_partition_info.get_ref_table_id(), is_modified))) {
+  } else if (OB_FAIL(stmt->check_table_be_modified(table_partition_info->get_ref_table_id(), is_modified))) {
     LOG_WARN("failed to check table be modified", K(ret));
   } else {
-    const ObCandiTableLoc &phy_tbl_info = table_partition_info.get_phy_tbl_location_info();
+    const ObCandiTableLoc &phy_tbl_info = table_partition_info->get_phy_tbl_location_info();
     bool can_reselect_replica = (phy_tbl_info.is_duplicate_table_not_in_dml() &&
         (1 == phy_tbl_info.get_phy_part_loc_info_list().count())
         && !session_info->get_is_in_retry_for_dup_tbl()
         && !is_modified);
-    int64_t parallel = opt_ctx->get_parallel();
-    if (opt_ctx->is_use_table_dop()) {
-      parallel = table_schema->get_dop();
-    }
     sharding_info = new(sharding_info) ObShardingInfo();
-    if ((parallel > 1 &&
-        (OB_TBL_LOCATION_LOCAL == location_type || OB_TBL_LOCATION_REMOTE == location_type))) {
-      sharding_info->set_distributed();
-    } else if (FALSE_IT(sharding_info->set_location_type(location_type))) {
-      // do nothing
-    } else if (OB_FAIL(sharding_info->init_partition_info(
+    sharding_info->set_location_type(location_type);
+    if (OB_FAIL(sharding_info->init_partition_info(
                                   get_plan()->get_optimizer_context(),
                                   *get_plan()->get_stmt(),
-                                  table_partition_info.get_table_id(),
-                                  table_partition_info.get_ref_table_id(),
-                                  table_partition_info.get_phy_tbl_location_info_for_update()))) {
+                                  table_partition_info->get_table_id(),
+                                  table_partition_info->get_ref_table_id(),
+                                  table_partition_info->get_phy_tbl_location_info_for_update()))) {
       LOG_WARN("failed to set partition key", K(ret));
     } else {
       sharding_info->set_can_reselect_replica(can_reselect_replica);
       LOG_TRACE("succeed to compute base table sharding info", K(*sharding_info));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sharding_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to compute base table sharding info", K(ret), K(sharding_info));
+  } else {
+    path->strong_sharding_ = sharding_info;
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_sharding_info_from_available_access_paths(ObIArray<AccessPath *> &access_paths,
+                                                               const int64_t cur_idx,
+                                                               ObShardingInfo *&sharding_info) const
+{
+  int ret = OB_SUCCESS;
+  sharding_info = NULL;
+  AccessPath *path = NULL;
+  if (OB_UNLIKELY(access_paths.count() <= cur_idx) ||
+      OB_ISNULL(path = access_paths.at(cur_idx))) {
+    LOG_WARN("get unexpected params",  K(ret), K(access_paths.count()), K(cur_idx), K(path));
+  } else {
+    AccessPath *cur_path = NULL;
+    const int64_t cnt = available_access_paths_.count();
+    const int64_t all_cnt = cnt + cur_idx;
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == sharding_info && i < all_cnt; ++i) {
+      cur_path = i >= cnt ? access_paths.at(i - cnt) : available_access_paths_.at(i);
+      if (OB_ISNULL(cur_path) || OB_ISNULL(cur_path->strong_sharding_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(cur_path));
+      } else if (path->table_id_ != cur_path->table_id_ ||
+                 path->ref_table_id_ != cur_path->ref_table_id_ ||
+                 path->is_global_index_ != cur_path->is_global_index_ ||
+                 path->parallel_ != cur_path->parallel_ ||
+                 path->use_das_ != cur_path->use_das_) {
+        /* do nothing */
+      } else if (!path->is_global_index_ || path->index_id_ == cur_path->index_id_) {
+        path->strong_sharding_ = cur_path->strong_sharding_;
+        break;
+      }
     }
   }
   return ret;
@@ -520,8 +496,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
     if (OB_FAIL(path->server_list_.push_back(opt_ctx->get_local_server_addr()))) {
       LOG_WARN("failed to assign das path server list", K(ret));
     }
-  } else if (OB_FAIL(schema_guard->get_table_schema(path->table_partition_info_->get_ref_table_id(),
-                                                    table_schema))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(path->index_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -531,8 +506,7 @@ int ObJoinOrder::compute_base_table_parallel_and_server_info(AccessPath *path)
     if (opt_ctx->is_use_table_dop()) {
       parallel = table_schema->get_dop();
     } else if (opt_ctx->is_use_table_parallel_hint()) {
-      const ObTableParallelHint *hint = get_plan()->get_log_plan_hint().get_parallel_hint(
-                                                      path->table_partition_info_->get_table_id());
+      const ObTableParallelHint *hint = get_plan()->get_log_plan_hint().get_parallel_hint(get_table_id());
       if (NULL != hint) {
         parallel = hint->get_parallel();
       } else {

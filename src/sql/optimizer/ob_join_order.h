@@ -1196,7 +1196,6 @@ struct NullAwareAntiJoinInfo {
       output_row_size_(-1.0),
       anti_or_semi_match_sel_(1.0),
       table_partition_info_(NULL),
-      table_sharding_info_(NULL),
       table_meta_info_(common::OB_INVALID_ID),
       join_info_(NULL),
       used_conflict_detectors_(),
@@ -1271,8 +1270,6 @@ struct NullAwareAntiJoinInfo {
                               bool &is_global_index);
 
     inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
-
-    inline ObShardingInfo *get_table_sharding_info() { return table_sharding_info_; }
 
     int param_funct_table_expr(ObRawExpr* &function_table_expr,
                                ObIArray<ObExecParamRawExpr *> &nl_params,
@@ -1613,10 +1610,11 @@ struct NullAwareAntiJoinInfo {
 
     int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
 
-    int compute_sharding_info_for_base_path(const bool use_das,
-                                            ObTablePartitionInfo &table_partition_info,
-                                            ObShardingInfo *&sharding_info);
-
+    int compute_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+                                            const int64_t cur_idx);
+    int get_sharding_info_from_available_access_paths(ObIArray<AccessPath *> &access_paths,
+                                                      const int64_t cur_idx,
+                                                      ObShardingInfo *&sharding_info) const;
     int compute_base_table_path_plan_type(AccessPath *access_path);
     int compute_base_table_path_ordering(AccessPath *access_path);
     int compute_base_table_parallel_and_server_info(AccessPath *path);
@@ -2366,7 +2364,6 @@ struct NullAwareAntiJoinInfo {
     double output_row_size_;
     double anti_or_semi_match_sel_; //for anti/semi join
     ObTablePartitionInfo *table_partition_info_; // only for base table
-    ObShardingInfo *table_sharding_info_; // only for base table
     ObTableMetaInfo table_meta_info_; // only for base table
     JoinInfo* join_info_; //记录连接信息
     common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器

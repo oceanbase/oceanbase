@@ -2031,7 +2031,7 @@ int ObSelectLogPlan::generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &
       // reset pos for next generation
       if (OB_SUCC(ret)) {
         has_next = false;
-        for (int64_t i = move_pos.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        for (int64_t i = move_pos.count() - 1; !has_next && OB_SUCC(ret) && i >= 0; i--) {
           if (move_pos.at(i) < best_plan_list.at(i).count() - 1) {
             ++move_pos.at(i);
             has_next = true;
