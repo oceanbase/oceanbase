@@ -12566,6 +12566,8 @@ def_table_schema(
                         WHEN 3 THEN "gbk"
                         WHEN 4 THEN "utf16"
                         WHEN 5 THEN "gb18030"
+                        WHEN 6 THEN "latin1"
+                        WHEN 7 THEN "gb18030_2022"
                         ELSE NULL
                         END
                           AS CHAR(64)
@@ -24809,6 +24811,8 @@ def_table_schema(
                           WHEN 3 THEN "gbk"
                           WHEN 4 THEN "utf16"
                           WHEN 5 THEN "gb18030"
+                          WHEN 6 THEN "latin1"
+                          WHEN 7 THEN "gb18030_2022"
                           ELSE NULL
                         END AS CHAR(64)) AS CHARACTER_SET_NAME,
                         CAST(CASE rp.param_coll_type

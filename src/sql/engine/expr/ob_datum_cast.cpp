@@ -11757,12 +11757,19 @@ int ObDatumCast::is_trivial_cast(const ObObjType in_type,
   is_trivial_cast = false;
   int ret = OB_SUCCESS;
 
+  ObCharsetType in_cs = ObCharset::charset_type_by_coll(in_cs_type);
+  ObCharsetType out_cs = ObCharset::charset_type_by_coll(out_cs_type);
+
   ObObjTypeClass in_tc = ob_obj_type_class(in_type);
   ObObjTypeClass out_tc = ob_obj_type_class(out_type);
   const bool is_same_charset = (ob_is_string_type(in_type) &&
       ob_is_string_type(out_type) &&
-      ObCharset::charset_type_by_coll(in_cs_type) ==
-      ObCharset::charset_type_by_coll(out_cs_type));
+      (in_cs == out_cs ||
+      /** GB18030 and GB18030_2022 have the same code points,
+       *  but they have different mapping to unicode.
+       *  So, we do not do charset_convert for them in cast*/
+      (in_cs == CHARSET_GB18030 && out_cs == CHARSET_GB18030_2022) ||
+      (in_cs == CHARSET_GB18030_2022 && out_cs == CHARSET_GB18030)));
   const bool is_clob_to_nonclob = (ob_is_clob(in_type, in_cs_type)
                                    && !ob_is_clob(out_type, out_cs_type));
   const bool is_nonblob_to_blob = ((false == ob_is_blob(in_type, in_cs_type)) &&

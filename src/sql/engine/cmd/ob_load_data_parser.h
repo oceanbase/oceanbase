@@ -114,6 +114,7 @@ public:
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_GB18030:
+    case common::CHARSET_GB18030_2022:
       ret = scan_proto<common::CHARSET_GB18030, handle_func, DO_ESCAPE>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;

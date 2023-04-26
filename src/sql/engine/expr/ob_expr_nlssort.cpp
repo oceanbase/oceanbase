@@ -83,7 +83,10 @@ int ObExprNLSSort::convert_to_coll_code(ObEvalCtx &ctx,
                                         ObString &to_str)
 {
   int ret = OB_SUCCESS;
-  if (to_type == CS_TYPE_GB18030_CHINESE_CS) {
+  if (to_type == CS_TYPE_GB18030_CHINESE_CS ||
+      to_type == CS_TYPE_GB18030_2022_PINYIN_CS ||
+      to_type == CS_TYPE_GB18030_2022_RADICAL_CS ||
+      to_type == CS_TYPE_GB18030_2022_STROKE_CS) {
     char *conv_buf = NULL;
     const int32_t MostBytes = 4; //most 4 bytes
     size_t conv_buf_len = from_str.length() * MostBytes;

@@ -549,6 +549,10 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "latin1 not supported when data_version < 4_1_0_0", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, charset latin1 is");
+  } else if (CHARSET_GB18030_2022 == charset_type && data_version < DATA_VERSION_4_2_0_0 ) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "GB18030_2022 not supported when data_version < 4_2_0_0", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, charset GB18030_2022 is");
   }
   return ret;
 }

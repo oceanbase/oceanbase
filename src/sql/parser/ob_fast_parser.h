@@ -214,7 +214,7 @@ protected:
 				byte_len = 3;																															 \
 			}																																						 \
 		} else if (is_oracle_mode_																										 \
-			&& (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_)) {		 \
+			&& (ObCharset::is_gb_charset(charset_type_))) {		 													 \
 			if (pos + 2 < len && -1 != is_gbk_multi_byte_##CHARACTER_NAME(str, pos)) {	 \
 				bool_ret = true;																													 \
 				byte_len = 2;																															 \

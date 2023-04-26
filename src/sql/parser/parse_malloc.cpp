@@ -207,6 +207,13 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
       switch (*connection_collation_) {
         case 28/*CS_TYPE_GBK_CHINESE_CI*/:
         case 87/*CS_TYPE_GBK_BIN*/:
+        case 216/*CS_TYPE_GB18030_2022_BIN*/:
+        case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
+        case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
+        case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
+        case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
+        case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
+        case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
         case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
         case 249/*CS_TYPE_GB18030_BIN*/: {
           if (i + 1 < dup_len) {

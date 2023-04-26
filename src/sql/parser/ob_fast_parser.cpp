@@ -188,7 +188,7 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     // added here to avoid the next judgment whether it is utf8 char or gbk char
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
-  } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
+  } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
   } else if (CHARSET_LATIN1 == charset_type_) {
     idf_pos = is_latin1_char(pos);
@@ -943,7 +943,7 @@ char *ObFastParserBase::parse_strdup_with_replace_multi_byte_char(
       } else {
         out_str[len++] = str[i];
       }
-    } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
+    } else if (ObCharset::is_gb_charset(charset_type_)) {
       if (i + 1 < dup_len) {
         if (str[i] == (char)0xa1 && str[i+1] == (char)0xa1) {//gbk multi byte space
           out_str[len++] = ' ';
@@ -1162,7 +1162,7 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     // added here to avoid the next judgment whether it is utf8 char or gbk char
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
-  } else if (CHARSET_GBK == charset_type_ || CHARSET_GB18030 == charset_type_) {
+  } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
   } else if (CHARSET_LATIN1 == charset_type_) {
     idf_pos = is_latin1_char(pos);

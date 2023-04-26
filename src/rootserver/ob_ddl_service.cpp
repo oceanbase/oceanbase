@@ -30526,7 +30526,8 @@ int ObDDLService::update_oracle_tenant_sys_var(
           || CS_TYPE_LATIN1_BIN == tenant_schema.get_collation_type()
           || CS_TYPE_GBK_BIN == tenant_schema.get_collation_type()
           || CS_TYPE_UTF16_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_GB18030_BIN == tenant_schema.get_collation_type()) {
+          || CS_TYPE_GB18030_BIN == tenant_schema.get_collation_type()
+          || CS_TYPE_GB18030_2022_BIN == tenant_schema.get_collation_type()) {
         VAR_INT_TO_STRING(val_buf, tenant_schema.get_collation_type());
         SET_TENANT_VARIABLE(SYS_VAR_CHARACTER_SET_SERVER, val_buf);
         SET_TENANT_VARIABLE(SYS_VAR_CHARACTER_SET_DATABASE, val_buf);
@@ -30539,6 +30540,9 @@ int ObDDLService::update_oracle_tenant_sys_var(
         } else if (CHARSET_GB18030 ==
                    ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
           OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS32GB18030"));
+        } else if (CHARSET_GB18030_2022 ==
+                   ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
+          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS32GB18030_2022"));
         } else if (CHARSET_LATIN1 ==
                    ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
           OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "WE8MSWIN1252"));

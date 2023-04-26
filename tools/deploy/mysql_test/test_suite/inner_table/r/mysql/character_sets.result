@@ -7,6 +7,7 @@ gbk	gbk_chinese_ci	GBK charset	2
 utf16	utf16_general_ci	UTF-16 Unicode	2
 gb18030	gb18030_chinese_ci	GB18030 charset	4
 latin1	latin1_swedish_ci	cp1252 West European	1
+gb18030_2022	gb18030_2022_chinese_ci	GB18030-2022 charset	4
 select character_set_name, default_collate_name, description, maxlen from character_sets;
 character_set_name	default_collate_name	description	maxlen
 binary	binary	Binary pseudo charset	1
@@ -15,6 +16,7 @@ gbk	gbk_chinese_ci	GBK charset	2
 utf16	utf16_general_ci	UTF-16 Unicode	2
 gb18030	gb18030_chinese_ci	GB18030 charset	4
 latin1	latin1_swedish_ci	cp1252 West European	1
+gb18030_2022	gb18030_2022_chinese_ci	GB18030-2022 charset	4
 select maxlen from character_sets;
 maxlen
 1
@@ -23,6 +25,7 @@ maxlen
 2
 4
 1
+4
 select * from character_sets where character_set_name like '%binary%';
 CHARACTER_SET_NAME	DEFAULT_COLLATE_NAME	DESCRIPTION	MAXLEN
 binary	binary	Binary pseudo charset	1

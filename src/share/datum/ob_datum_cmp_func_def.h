@@ -377,7 +377,14 @@ typedef ObConstIntMapping<0,
     CS_TYPE_GB18030_CHINESE_CI, 1,
     CS_TYPE_GB18030_BIN, 1,
     CS_TYPE_LATIN1_SWEDISH_CI,1,
-    CS_TYPE_LATIN1_BIN,1 > SupportedCollections;
+    CS_TYPE_LATIN1_BIN,1,
+    CS_TYPE_GB18030_2022_BIN, 1,
+    CS_TYPE_GB18030_2022_PINYIN_CI, 1,
+    CS_TYPE_GB18030_2022_PINYIN_CS, 1,
+    CS_TYPE_GB18030_2022_RADICAL_CI, 1,
+    CS_TYPE_GB18030_2022_RADICAL_CS, 1,
+    CS_TYPE_GB18030_2022_STROKE_CI, 1,
+    CS_TYPE_GB18030_2022_STROKE_CS, 1 > SupportedCollections;
 
 // bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 //                            bool is_oracle_mode,

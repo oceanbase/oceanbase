@@ -431,47 +431,16 @@ private:
       case CS_TYPE_BINARY:
         idx = 2;
         break;
-      case CS_TYPE_GBK_BIN:
-        idx = 3;
-        break;
-      case CS_TYPE_GBK_CHINESE_CI:
-        idx = 4;
-        break;
-      case CS_TYPE_UTF16_GENERAL_CI:
-        idx = 5;
-        break;
-      case CS_TYPE_UTF16_BIN:
-        idx = 6;
-        break;
-      case CS_TYPE_UTF8MB4_UNICODE_CI:
-        idx = 7;
-        break;
-      case CS_TYPE_UTF16_UNICODE_CI:
-        idx = 8;
-        break;
-      case CS_TYPE_GB18030_BIN:
-        idx = 9;
-        break;
-      case CS_TYPE_GB18030_CHINESE_CI:
-        idx = 10;
-        break;
-      case CS_TYPE_LATIN1_BIN:
-        idx = 11;
-        break;
-      case CS_TYPE_LATIN1_SWEDISH_CI:
-        idx = 12;
-        break;
       default:
         idx = -1;
     }
     return idx;
   }
 private:
+  static const int64_t VALID_OC_COLLATION_TYPES = 3;
   static const bool CAST_MONOTONIC[ObMaxTC][ObMaxTC];
   static const bool ORDER_CONSISTENT[ObMaxTC][ObMaxTC];
-  static const bool ORDER_CONSISTENT_WITH_BOTH_STRING[ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES];
-  static const bool INJECTION[ObMaxTC][ObMaxTC];
-  static const bool INJECTION_WITH_BOTH_STRING[ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES];
+  static const bool ORDER_CONSISTENT_WITH_BOTH_STRING[VALID_OC_COLLATION_TYPES][VALID_OC_COLLATION_TYPES][VALID_OC_COLLATION_TYPES];
 };
 
 class ObObjEvaluator
