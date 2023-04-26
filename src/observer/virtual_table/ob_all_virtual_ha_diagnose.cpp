@@ -215,7 +215,7 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         break;
       case RESTORE_HANDLER_ROLE:
         if (OB_FAIL(role_to_string(diagnose_info.restore_diagnose_info_.restore_role_,
-                                   palf_role_str_, sizeof(palf_role_str_)))) {
+                                   restore_handler_role_str_, sizeof(restore_handler_role_str_)))) {
           SERVER_LOG(WARN, "role_to_string failed", K(ret), K(diagnose_info));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(restore_handler_role_str_));
