@@ -383,9 +383,23 @@ private:
   bool is_vectorized_expr(const ObRawExpr *raw_expr) const;
   int compute_max_batch_size(const ObRawExpr *raw_expr);
 
+  enum class ObExprBatchSize {
+    one = 1,
+    small = 8,
+    full = 65535
+  };
   // Certain exprs can NOT be executed vectorizely. Check the exps within this
   // routine
-  bool can_execute_vectorizely(const common::ObIArray<ObRawExpr *> &raw_exprs);
+  ObExprBatchSize
+  get_expr_execute_size(const common::ObIArray<ObRawExpr *> &raw_exprs);
+  inline bool is_large_data(ObObjType type) {
+    bool b_large_data = false;
+    if (type == ObLongTextType || type == ObMediumTextType ||
+        type == ObLobType) {
+      b_large_data = true;
+    }
+    return b_large_data;
+  }
 
   // get the frame idx of param frames and datum index (in frame) by index of param store.
   void get_param_frame_idx(const int64_t idx, int64_t &frame_idx, int64_t &datum_idx);
