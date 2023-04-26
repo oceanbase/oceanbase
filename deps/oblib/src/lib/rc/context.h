@@ -785,7 +785,7 @@ public:
   ~_SBase()
   {
     if (OB_UNLIKELY(0 == i_)) {
-      OB_LOG_RET(ERROR, OB_ERROR, "has break statement!!!");
+      OB_LOG_RET(WARN, OB_ERROR, "has break statement!!!");
     }
   }
   int i_;
