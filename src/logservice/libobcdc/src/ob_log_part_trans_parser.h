@@ -132,6 +132,25 @@ private:
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);
   int64_t get_row_seq_(PartTransTask &task, MutatorRow &row) const;
+  int alloc_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow *&row);
+  void free_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow *&row);
+  int parse_mutator_row_(
+      ObLogTenant *tenant,
+      const ObTabletID &tablet_id,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      int64_t &pos,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow *&row,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
 
 private:
   bool              inited_;
