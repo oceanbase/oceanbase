@@ -4846,7 +4846,7 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     ObString name(interface_name);
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {
-      ret = fp(*ctx->exec_ctx_, *ctx->params_, *ctx->result_, *ctx);
+      ret = fp(*ctx, *ctx->params_, *ctx->result_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Calling C interface which doesn't exist", K(interface_name), K(name));

@@ -137,7 +137,7 @@ namespace oceanbase
 namespace pl
 {
 
-typedef int(*PL_C_INTERFACE_t)(ObExecContext&, ParamStore&, ObObj&, ObPLExecCtx&);
+typedef int(*PL_C_INTERFACE_t)(ObPLExecCtx&, ParamStore&, ObObj&);
 
 enum ObPLInterfaceType
 {
