@@ -1455,6 +1455,10 @@ int ObPartTransCtx::get_tx_ctx_table_info(ObTxCtxTableInfo &info)
   } else if (!exec_info_.max_applying_log_ts_.is_valid()) {
     ret = OB_TRANS_CTX_NOT_EXIST;
     TRANS_LOG(INFO, "tx ctx has no persisted log", K(ret), KPC(this));
+  // 3. Tx ctx has no persisted log, so donot need persisting
+  } else if (is_incomplete_replay_ctx_) {
+    ret = OB_TRANS_CTX_NOT_EXIST;
+    TRANS_LOG(INFO, "tx ctx is in complete replay ctx", K(ret), KPC(this));
   // 3. Fetch the current state of the tx ctx table
   } else if (OB_FAIL(get_tx_ctx_table_info_(info))) {
     TRANS_LOG(WARN, "get tx ctx table info failed", K(ret), K(*this));
