@@ -388,7 +388,7 @@ END_P SET_VAR DELIMITER
 %type <node> simple_select no_table_select limit_clause select_expr_list
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause
-%type <node> opt_limit_clause limit_expr opt_for_update opt_for_update_wait
+%type <node> opt_limit_clause limit_expr opt_lock_type opt_for_update opt_for_update_wait opt_lock_in_share_mode
 %type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
@@ -2836,11 +2836,11 @@ INTERVAL '(' expr ',' expr ')'
   merge_nodes(params_node, result, T_EXPR_LIST, params);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_INTERVAL, 2, $3, params_node);
 }
-| CHECK '(' expr ')'		
-{		
-  // just compatible with mysql, do nothing		
-  (void)($3);		
-  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);		
+| CHECK '(' expr ')'
+{
+  // just compatible with mysql, do nothing
+  (void)($3);
+  malloc_terminal_node($$, result->malloc_pool_, T_EMPTY);
 }
 ;
 
@@ -4869,7 +4869,7 @@ BINARY opt_string_length_i_v2
 { /* If p is provided and 0 <= < p <= 24, the result is of type FLOAT. */
   /* If 25 <= p <= 53, the result is of type DOUBLE. If p < 0 or p > 53, an error is returned. */
   malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
-  $$->value_ = 0; 
+  $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_FLOAT;
   $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2[0];  /* precision */
   $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -1;    /* scale */
@@ -5912,7 +5912,7 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_AUTO_INCREMENT_MODE, 1, $3);
 }
-| ENABLE_EXTENDED_ROWID opt_equal_mark BOOL_VALUE 
+| ENABLE_EXTENDED_ROWID opt_equal_mark BOOL_VALUE
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ENABLE_EXTENDED_ROWID, 1, $3);
@@ -6892,8 +6892,8 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
 ;
 
 opt_algorithm:
-ALGORITHM COMP_EQ view_algorithm 
-{ 
+ALGORITHM COMP_EQ view_algorithm
+{
   (void)($3);
   $$ = NULL;
 }
@@ -7684,20 +7684,33 @@ select_with_parens:
 | '(' with_select ')'         { $$ = $2; };
 
 select_no_parens:
-select_clause opt_for_update
+select_clause opt_lock_type
 {
   $$ = $1;
   $$->children_[PARSE_SELECT_FOR_UPD] = $2;
 }
-| select_clause_set opt_for_update
+| select_clause_set opt_lock_type
 {
   $$ = $1;
   $$->children_[PARSE_SELECT_FOR_UPD] = $2;
 }
-| select_clause_set_with_order_and_limit opt_for_update
+| select_clause_set_with_order_and_limit opt_lock_type
 {
   $$ = $1;
   $$->children_[PARSE_SELECT_FOR_UPD] = $2;
+}
+;
+
+opt_lock_type:
+/* EMPTY */
+{ $$ = NULL; }
+| opt_for_update
+{
+  $$ = $1;
+}
+| opt_lock_in_share_mode
+{
+  $$ = $1;
 }
 ;
 
@@ -9129,11 +9142,17 @@ opt_limit_clause:
 ;
 
 opt_for_update:
-/* EMPTY */
-{ $$ = NULL; }
-| FOR UPDATE opt_for_update_wait
+FOR UPDATE opt_for_update_wait
 {
   $$ = $3;
+}
+;
+
+opt_lock_in_share_mode:
+LOCK_ IN SHARE MODE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
+  $$->value_ = -1;
 }
 ;
 
@@ -10932,7 +10951,7 @@ INTNUM
 ;
 
 get_statement_diagnostics_stmt:
-GET DIAGNOSTICS statement_information_item_list 
+GET DIAGNOSTICS statement_information_item_list
 {
   ParseNode *is_condition = NULL;
   ParseNode *is_current = NULL;
@@ -11184,7 +11203,7 @@ SHOW opt_full TABLES opt_from_or_in_database_clause opt_show_condition
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CREATE_DATABASE, 2, $4, $5);
 }
 | SHOW create_with_opt_hint TABLE relation_factor
-{ 
+{
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_CREATE_TABLE, 1, $4);
 }
@@ -12444,7 +12463,7 @@ ALTER
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_ALTER;
 }
-|create_with_opt_hint 
+|create_with_opt_hint
 {
   (void)($1);
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
@@ -14351,7 +14370,7 @@ ALTER SYSTEM BACKUP INCREMENTAL DATABASE opt_backup_to PLUS ARCHIVELOG opt_descr
   ParseNode *tenant = NULL;
   malloc_terminal_node(tenant, result->malloc_pool_, T_INT);
   tenant->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_DATABASE, 5, tenant, compl_log, incremental, $6, $9); 
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_DATABASE, 5, tenant, compl_log, incremental, $6, $9);
 }
 |
 ALTER SYSTEM BACKUP opt_backup_tenant_list opt_backup_to PLUS ARCHIVELOG opt_description
@@ -14497,7 +14516,7 @@ ALTER SYSTEM CANCEL ALL BACKUP FORCE
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_MANAGE, 2, type, value);
 }
 |
-ALTER SYSTEM DELETE BACKUPSET INTNUM opt_copy_id opt_backup_tenant_list opt_description 
+ALTER SYSTEM DELETE BACKUPSET INTNUM opt_copy_id opt_backup_tenant_list opt_description
 {
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
@@ -14523,7 +14542,7 @@ ALTER SYSTEM DELETE BACKUPPIECE INTNUM opt_copy_id opt_backup_tenant_list opt_de
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_CLEAN, 5, type, value, $8, $6, $7);
 }
 |
-ALTER SYSTEM DELETE OBSOLETE BACKUP opt_backup_tenant_list opt_description 
+ALTER SYSTEM DELETE OBSOLETE BACKUP opt_backup_tenant_list opt_description
 {
   ParseNode *type = NULL;
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
@@ -14561,7 +14580,7 @@ ALTER SYSTEM DROP DELETE BACKUP policy_name opt_backup_tenant_list
   malloc_terminal_node(type, result->malloc_pool_, T_INT);
   type->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_DELETE_POLICY, 3, type, $7, $6);
-}  
+}
 |
 ALTER SYSTEM BACKUP BACKUPSET ALL opt_tenant_info opt_backup_backup_dest
 {
@@ -16002,7 +16021,7 @@ opt_description:
 ;
 
 opt_restore_until:
-/*EMPTY*/  { $$ = NULL; } 
+/*EMPTY*/  { $$ = NULL; }
 | UNTIL TIME COMP_EQ STRING_VALUE
 {
   ParseNode *is_scn = NULL;
