@@ -443,14 +443,21 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
           STORAGE_LOG(ERROR, "fail to release object", K(ret), KP(meta_pointer));
         }
       } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
+          || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
           || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
         ret = OB_ITEM_NOT_MATCH;
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = meta_pointer->release_obj(t))) {
           STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
         } else {
+          if (meta_pointer != tmp_ptr_hdl.get_resource_ptr()) {
+            meta_pointer = tmp_ptr_hdl.get_resource_ptr();
+            if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+              STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+            }
+          }
           if (REACH_TIME_INTERVAL(1000000)) {
-            STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(meta_pointer));
+            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(disk_addr), KPC(meta_pointer));
           }
         }
       } else {
@@ -573,8 +580,16 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
               need_free_obj = true;
             }
           } else if (OB_UNLIKELY(disk_addr != t_ptr->get_addr()
+              || t_ptr != tmp_ptr_hdl.get_resource_ptr()
               || t_ptr->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
             ret = OB_ITEM_NOT_MATCH;
+            if (t_ptr != tmp_ptr_hdl.get_resource_ptr()) {
+              t_ptr = tmp_ptr_hdl.get_resource_ptr();
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+                STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+              }
+            }
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
