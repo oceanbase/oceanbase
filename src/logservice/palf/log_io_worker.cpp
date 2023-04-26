@@ -34,6 +34,7 @@ LogIOWorker::LogIOWorker()
       do_task_count_(0),
       print_log_interval_(OB_INVALID_TIMESTAMP),
       last_working_time_(OB_INVALID_TIMESTAMP),
+      log_io_worker_queue_size_stat_("[PALF STAT LOG IO WORKER QUEUE SIZE]", PALF_STAT_PRINT_INTERVAL_US),
       is_inited_(false)
 {
 }
@@ -69,6 +70,8 @@ int LogIOWorker::init(const LogIOWorkerConfig &config,
     log_io_worker_num_ = config.io_worker_num_;
     cb_thread_pool_tg_id_ = cb_thread_pool_tg_id;
     palf_env_impl_ = palf_env_impl;
+    PALF_REPORT_INFO_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id));
+    log_io_worker_queue_size_stat_.set_extra_info(EXTRA_INFOS);
     is_inited_ = true;
     PALF_LOG(INFO, "LogIOWorker init success", K(ret), K(config), K(cb_thread_pool_tg_id),
              KPC(palf_env_impl));
@@ -148,12 +151,14 @@ int LogIOWorker::run_loop_()
 
   while (false == has_set_stop()
       && false == (OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
-
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
       ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
       ret = reduce_io_task_(task);
       ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
+    }
+    if (queue_.size() > 0) {
+      log_io_worker_queue_size_stat_.stat(queue_.size());
     }
   }
 

@@ -92,6 +92,8 @@ int ObLogHandler::init(const int64_t id,
     replay_service_ = replay_service;
     rc_service_ = rc_service;
     apply_status_->inc_ref();
+    PALF_REPORT_INFO_KV(K(id));
+    append_cost_stat_.set_extra_info(EXTRA_INFOS);
     id_ = id;
     self_ = self;
     palf_handle_ = palf_handle;

@@ -305,6 +305,8 @@ private:
                                       const int64_t &proposal_id,
                                       const int64_t accum_checksum);
   int try_advance_committed_lsn_(const LSN &end_lsn);
+  int try_advance_log_task_committed_ts_();
+  int try_advance_log_task_first_ack_ts_(const LSN &end_lsn);
   void get_last_submit_log_info_(LSN &lsn,
                                  LSN &end_lsn,
                                  int64_t &log_id,
@@ -518,7 +520,11 @@ private:
   LSN last_record_end_lsn_;
   ObMiniStat::ObStatItem fs_cb_cost_stat_;
   ObMiniStat::ObStatItem log_life_time_stat_;
-  ObMiniStat::ObStatItem log_submit_wait_stat_;
+  ObMiniStat::ObStatItem log_gen_to_freeze_cost_stat_;
+  ObMiniStat::ObStatItem log_gen_to_submit_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_first_ack_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_flush_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_commit_cost_stat_;
   ObMiniStat::ObStatItem log_submit_to_slide_cost_stat_;
   int64_t group_log_stat_time_us_;
   int64_t accum_log_cnt_;

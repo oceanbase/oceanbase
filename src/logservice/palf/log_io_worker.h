@@ -124,6 +124,7 @@ private:
   int64_t do_task_count_;
   int64_t print_log_interval_;
   int64_t last_working_time_;
+  ObMiniStat::ObStatItem log_io_worker_queue_size_stat_;
   bool is_inited_;
 };
 } // end namespace palf

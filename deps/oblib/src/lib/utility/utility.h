@@ -1123,20 +1123,26 @@ public:
   {
   public:
     ObStatItem(const char *item, const int64_t stat_interval)
-      : item_(item), stat_interval_(stat_interval), last_ts_(0), stat_count_(0), lock_tag_(false) {}
+      : item_(item), stat_interval_(stat_interval), last_ts_(0), stat_count_(0), accum_count_(0), lock_tag_(false) {
+        MEMSET(extra_info_, '\0', MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH);
+      }
     ~ObStatItem() {}
   public:
-    void stat(const int64_t time_cost = 0)
+    void set_extra_info(const char *extra_info)
+    {
+      MEMCPY(extra_info_, extra_info, MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH);
+    }
+    void stat(const int64_t count = 0)
     {
       const int64_t cur_ts = ::oceanbase::common::ObTimeUtility::fast_current_time();
       const int64_t cur_stat_count = ATOMIC_AAF(&stat_count_, 1);
-      const int64_t cur_accum_time = ATOMIC_AAF(&accum_time_, time_cost);
+      const int64_t cur_accum_count = ATOMIC_AAF(&accum_count_, count);
       if (ATOMIC_LOAD(&last_ts_) + stat_interval_ < cur_ts) {
         if (ATOMIC_BCAS(&lock_tag_, false, true)) {
-          LIB_LOG(INFO, NULL == item_ ? "" : item_, K(cur_stat_count), K_(stat_interval), "avg cost", cur_accum_time / cur_stat_count, K(this));
+          LIB_LOG(INFO, NULL == item_ ? "" : item_, K(cur_stat_count), K_(stat_interval), "avg count/cost", cur_accum_count / cur_stat_count, K(this), K_(extra_info));
           (void)ATOMIC_SET(&last_ts_, cur_ts);
           (void)ATOMIC_SET(&stat_count_, 0);
-          (void)ATOMIC_SET(&accum_time_, 0);
+          (void)ATOMIC_SET(&accum_count_, 0);
           ATOMIC_BCAS(&lock_tag_, true, false);
         }
       }
@@ -1144,9 +1150,10 @@ public:
   private:
     const char *const item_;
     const int64_t stat_interval_;
+    char extra_info_[MAX_ROOTSERVICE_EVENT_EXTRA_INFO_LENGTH];
     int64_t last_ts_;
     int64_t stat_count_;
-    int64_t accum_time_;
+    int64_t accum_count_;
     bool lock_tag_;
   };
 public:

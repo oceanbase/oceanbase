@@ -138,9 +138,12 @@ LogTask::LogTask()
      header_(),
      ref_cnt_(0),
      log_cnt_(0),
-     gen_ts_(0),
-     submit_ts_(0),
-     flushed_ts_(0),
+     gen_ts_(OB_INVALID_TIMESTAMP),
+     freeze_ts_(OB_INVALID_TIMESTAMP),
+     submit_ts_(OB_INVALID_TIMESTAMP),
+     first_ack_ts_(OB_INVALID_TIMESTAMP),
+     flushed_ts_(OB_INVALID_TIMESTAMP),
+     committed_ts_(OB_INVALID_TIMESTAMP),
      lock_()
 {
   reset();
@@ -161,9 +164,12 @@ void LogTask::reset()
   header_.reset();
   ref_cnt_ = 0;
   log_cnt_ = 0;
-  gen_ts_ = 0;
-  submit_ts_ = 0;
-  flushed_ts_ = 0;
+  gen_ts_ = OB_INVALID_TIMESTAMP;
+  freeze_ts_ = OB_INVALID_TIMESTAMP;
+  submit_ts_ = OB_INVALID_TIMESTAMP;
+  first_ack_ts_ = OB_INVALID_TIMESTAMP;
+  flushed_ts_ = OB_INVALID_TIMESTAMP;
+  committed_ts_ = OB_INVALID_TIMESTAMP;
 }
 
 bool LogTask::can_be_slid()
@@ -248,6 +254,7 @@ int LogTask::set_group_header(const LSN &lsn, const SCN &scn, const LogGroupEntr
     PALF_LOG(WARN, "log_task has been valid", K(ret), K(lsn), K(scn), K(group_entry_header), KPC(this));
   } else {
     header_.begin_lsn_ = lsn;
+    header_.end_lsn_ = lsn + group_entry_header.get_serialize_size() + group_entry_header.get_data_len();
     header_.log_id_ = group_entry_header.get_log_id();
     header_.is_padding_log_ = group_entry_header.is_padding_log();
     header_.proposal_id_ = group_entry_header.get_log_proposal_id();  // leader's proposal_id when generate this log
@@ -417,14 +424,30 @@ int64_t LogTask::ref(const int64_t val, const bool is_append_log)
   return ATOMIC_AAF(&ref_cnt_, val);
 }
 
+void LogTask::set_freeze_ts(const int64_t ts)
+{
+  // freeze ts may be setted more than once
+  ATOMIC_CAS(&freeze_ts_, OB_INVALID_TIMESTAMP, ts);
+}
+
 void LogTask::set_submit_ts(const int64_t ts)
 {
   ATOMIC_STORE(&submit_ts_, ts);
 }
 
+void LogTask::set_first_ack_ts(const int64_t ts)
+{
+  ATOMIC_STORE(&first_ack_ts_, ts);
+}
+
 void LogTask::set_flushed_ts(const int64_t ts)
 {
   ATOMIC_STORE(&flushed_ts_, ts);
+}
+
+void LogTask::set_committed_ts(const int64_t ts)
+{
+  ATOMIC_STORE(&committed_ts_, ts);
 }
 }  // namespace palf
 }  // namespace oceanbase

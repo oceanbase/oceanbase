@@ -39,7 +39,7 @@ namespace palf
 
 #define PALF_EVENT(info_string, palf_id, args...) FLOG_INFO("[PALF_EVENT] "info_string, "palf_id", palf_id, args)
 
-#define PALF_EVENT_REPORT_INFO_KV(args...) \
+#define PALF_REPORT_INFO_KV(args...) \
 const int64_t MAX_INFO_LENGTH = 512; \
 char EXTRA_INFOS[MAX_INFO_LENGTH]; \
 int64_t pos = 0; \

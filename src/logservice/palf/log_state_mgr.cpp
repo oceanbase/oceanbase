@@ -570,7 +570,7 @@ int LogStateMgr::pending_to_follower_active_()
   if (OB_FAIL(to_follower_active_())) {
     PALF_LOG(ERROR, "to_follower_active_ failed", K(ret), K_(palf_id));
   }
-  PALF_EVENT_REPORT_INFO_KV(K_(leader), K_(pending_end_lsn));
+  PALF_REPORT_INFO_KV(K_(leader), K_(pending_end_lsn));
   plugins_->record_role_change_event(palf_id_, FOLLOWER, ObReplicaState::PENDING,
       FOLLOWER, ObReplicaState::ACTIVE, EXTRA_INFOS);
   PALF_EVENT("follower_pending_to_follower_active", palf_id_, K(ret), K_(self), K_(leader),
@@ -602,7 +602,7 @@ int LogStateMgr::to_reconfirm_(const int64_t new_leader_epoch)
 int LogStateMgr::follower_active_to_reconfirm_(const int64_t new_leader_epoch)
 {
   int ret = to_reconfirm_(new_leader_epoch);
-  PALF_EVENT_REPORT_INFO_KV(K_(leader), K(new_leader_epoch));
+  PALF_REPORT_INFO_KV(K_(leader), K(new_leader_epoch));
   plugins_->record_role_change_event(palf_id_, FOLLOWER, ObReplicaState::ACTIVE,
       LEADER, ObReplicaState::RECONFIRM, EXTRA_INFOS);
   PALF_EVENT("follower_active_to_reconfirm", palf_id_, K(ret), K_(self), K(new_leader_epoch),
@@ -613,7 +613,7 @@ int LogStateMgr::follower_active_to_reconfirm_(const int64_t new_leader_epoch)
 int LogStateMgr::follower_pending_to_reconfirm_(const int64_t new_leader_epoch)
 {
   int ret = to_reconfirm_(new_leader_epoch);
-  PALF_EVENT_REPORT_INFO_KV(K_(leader), K(new_leader_epoch), K_(pending_end_lsn));
+  PALF_REPORT_INFO_KV(K_(leader), K(new_leader_epoch), K_(pending_end_lsn));
   plugins_->record_role_change_event(palf_id_, FOLLOWER, ObReplicaState::PENDING,
       LEADER, ObReplicaState::RECONFIRM, EXTRA_INFOS);
   PALF_EVENT("follower_pending_to_reconfirm", palf_id_, K(ret), K_(self), K(new_leader_epoch),
@@ -629,7 +629,7 @@ int LogStateMgr::reconfirm_to_follower_pending_()
   } else {
     reset_status_();
     update_role_and_state_(FOLLOWER, PENDING);
-    PALF_EVENT_REPORT_INFO_KV(K_(leader), K_(allow_vote));
+    PALF_REPORT_INFO_KV(K_(leader), K_(allow_vote));
     plugins_->record_role_change_event(palf_id_, LEADER, ObReplicaState::RECONFIRM,
         FOLLOWER, ObReplicaState::PENDING, EXTRA_INFOS);
     PALF_EVENT("reconfirm_to_follower_pending", palf_id_, K_(self), K_(leader), "is_allow_vote",
@@ -663,7 +663,7 @@ int LogStateMgr::reconfirm_to_leader_active_()
     }
     const int64_t reconfirm_to_active_cost = ObTimeUtility::current_time() - reconfirm_start_time_us_;
     PALF_EVENT("reconfirm_to_leader_active end", palf_id_, K(ret), K_(self), K(reconfirm_to_active_cost), K_(role), K_(state));
-    PALF_EVENT_REPORT_INFO_KV(K(reconfirm_stage_cost), K(reconfirm_to_active_cost));
+    PALF_REPORT_INFO_KV(K(reconfirm_stage_cost), K(reconfirm_to_active_cost));
     plugins_->record_role_change_event(palf_id_, LEADER, ObReplicaState::RECONFIRM,
         LEADER, ObReplicaState::ACTIVE, EXTRA_INFOS);
   }
@@ -690,7 +690,7 @@ int LogStateMgr::leader_active_to_follower_pending_()
     update_role_and_state_(FOLLOWER, PENDING);
   }
 
-  PALF_EVENT_REPORT_INFO_KV(K_(pending_end_lsn));
+  PALF_REPORT_INFO_KV(K_(pending_end_lsn));
   plugins_->record_role_change_event(palf_id_, LEADER, ObReplicaState::ACTIVE,
       FOLLOWER, ObReplicaState::PENDING, EXTRA_INFOS);
   PALF_EVENT("leader_active_to_follower_pending_", palf_id_, K(ret), K_(self), K_(role), K_(state), K_(pending_end_lsn));
