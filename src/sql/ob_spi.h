@@ -593,7 +593,7 @@ public:
 
   static int spi_check_exception_handler_legal(pl::ObPLExecCtx *ctx, int64_t code);
 
-  static int spi_interface_impl(pl::ObPLExecCtx* ctx, int64_t func_addr);
+  static int spi_interface_impl(pl::ObPLExecCtx* ctx, const char *interface_name);
 
   static int process_function_out_result(pl::ObPLExecCtx *ctx,
                                          ObResultSet &result_set,

@@ -5130,14 +5130,14 @@ int ObPLResolver::resolve_interface(const ObStmtNodeTree *parse_tree,
   }
 
   if (OB_SUCC(ret)) {
-    void *entry = NULL;
+    PL_C_INTERFACE_t entry = nullptr;
     CK (OB_NOT_NULL(GCTX.pl_engine_));
     OX (entry = GCTX.pl_engine_->get_interface_service().get_entry(interface_name));
     if (OB_SUCC(ret) && OB_ISNULL(entry)) {
       ret = OB_ERR_PRAGMA_FOLLOW_DECL;
       LOG_USER_ERROR(OB_ERR_PRAGMA_FOLLOW_DECL, interface_name.length(), interface_name.ptr());
     }
-    OX (stmt->set_entry(reinterpret_cast<ObFuncPtr>(entry)));
+    OX (stmt->set_entry(interface_name));
     OZ (ast.get_compile_flag().add_intf());
   }
   return ret;

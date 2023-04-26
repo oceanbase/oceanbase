@@ -3005,9 +3005,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
   int ret = OB_SUCCESS;
   ObSEArray<ObLLVMValue, 2> args;
   ObLLVMValue entry;
+  ObLLVMValue interface_name_length;
   ObLLVMValue ret_err;
+  const ObString interface_name = s.get_entry();
+  CK (!interface_name.empty());
   OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-  OZ (generator_.get_helper().get_int64(s.get_entry(), entry));
+  OZ (generator_.generate_string(interface_name, entry, interface_name_length));
   OZ (args.push_back(entry));
   OZ (generator_.get_helper().create_call(ObString("spi_interface_impl"),
       generator_.get_spi_service().spi_interface_impl_,
@@ -3818,7 +3821,7 @@ int ObPLCodeGenerator::init_spi_service()
   if (OB_SUCC(ret)) {
     arg_types.reset();
     OZ (arg_types.push_back(pl_exec_context_pointer_type));
-    OZ (arg_types.push_back(int64_type));
+    OZ (arg_types.push_back(char_type));
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_interface_impl"),
                                 ft, spi_service_.spi_interface_impl_));

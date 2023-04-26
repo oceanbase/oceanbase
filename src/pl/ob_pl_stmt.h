@@ -3135,13 +3135,13 @@ public:
 
   int accept(ObPLStmtVisitor &visitor) const;
 
-  inline ObFuncPtr get_entry() const { return entry_; }
-  inline void set_entry(ObFuncPtr entry) { entry_ = entry; }
+  inline ObString get_entry() const { return entry_; }
+  inline void set_entry(const common::ObString &entry) { entry_ = entry; }
 
   TO_STRING_KV(K_(entry));
 
 private:
-  ObFuncPtr entry_;
+  common::ObString entry_;
 };
 
 class ObPLDoStmt : public ObPLStmt

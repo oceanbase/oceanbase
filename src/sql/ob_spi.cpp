@@ -4831,21 +4831,26 @@ int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
   return ret;
 }
 
-int ObSPIService::spi_interface_impl(pl::ObPLExecCtx* ctx, int64_t func_addr)
+int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface_name)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 ==  func_addr || NULL == ctx)) {
+  if (OB_UNLIKELY(nullptr == interface_name || nullptr == ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Argument passed in is NULL", K(ctx), K(func_addr), K(ret));
+    LOG_WARN("Argument passed in is NULL", K(ctx), K(interface_name), K(ret));
   } else if (OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->params_)
       || OB_ISNULL(ctx->result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid context", K(ctx->exec_ctx_), K(ctx->params_), K(ctx->result_));
   } else {
-    int (*fp)(ObExecContext&, ParamStore&, ObObj&)
-        = (int(*)(ObExecContext&, ParamStore&, ObObj&))(func_addr);
-    ret = fp(*ctx->exec_ctx_, *ctx->params_, *ctx->result_);
+    ObString name(interface_name);
+    PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
+    if (nullptr != fp) {
+      ret = fp(*ctx->exec_ctx_, *ctx->params_, *ctx->result_, *ctx);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Calling C interface which doesn't exist", K(interface_name), K(name));
+    }
   }
   return ret;
 }
