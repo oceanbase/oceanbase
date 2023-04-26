@@ -279,8 +279,9 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
     if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
       PALF_LOG(INFO, "persistent_config_version_ has been greater than or equal to config_version, \
           no need set_initial_config_info_", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K_(persistent_config_version), K(init_config_version));
-    } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info, proposal_id, LSN(PALF_INITIAL_LSN_VAL), proposal_id))) {
-      PALF_LOG(ERROR, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K(proposal_id), K(initial_config_seq));
+    } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info,
+        proposal_id, LSN(PALF_INITIAL_LSN_VAL), proposal_id))) {
+      PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K(proposal_id), K(initial_config_seq));
     } else {
       config_meta_ = log_ms_meta_;
       FlushMetaCbCtx cb_ctx;
