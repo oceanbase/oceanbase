@@ -3660,7 +3660,7 @@ ObExprOperator *ObSysFunRawExpr::get_op()
     }
   }
   if (OB_UNLIKELY(NULL == (op = ObOpRawExpr::get_op()))) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "make function failed", K_(func_name));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "make function failed", K_(func_name));
   }
   return op;
 }
