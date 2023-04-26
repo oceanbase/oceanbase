@@ -107,31 +107,42 @@ int extract_tenant_id(ObRequest &req, uint64_t &tenant_id)
   return ret;
 }
 
-int dispatch_req(ObRequest& req)
+int dispatch_req(ObRequest &req, QueueThread *global_mysql_queue)
 {
   int ret = OB_SUCCESS;
+  static const int64_t MAX_QUEUE_LEN = 10000;
   uint64_t tenant_id = OB_INVALID_ID;
   if (OB_FAIL(extract_tenant_id(req, tenant_id))) {
     LOG_WARN("extract tenant_id fail", K(ret), K(tenant_id), K(req));
-    // handle all error by OB_TENANT_NOT_IN_SERVER
-    ret = OB_TENANT_NOT_IN_SERVER;
   } else if (is_meta_tenant(tenant_id)) {
     // cannot login meta tenant
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot login meta tenant", K(ret), K(tenant_id));
-    ret = OB_TENANT_NOT_IN_SERVER;
   } else if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
     MTL_SWITCH(tenant_id) {
       QueueThread *mysql_queue = MTL(QueueThread *);
-      if (!mysql_queue->queue_.push(&req,
-                                    10000)) { // MAX_QUEUE_LEN = 10000;
+      ObTenant *tenant = (ObTenant *)MTL_CTX();
+      mysql_queue->queue_.inc_push_worker_count();
+      if (OB_ISNULL(tenant)) {
+        ret = OB_TENANT_NOT_IN_SERVER;
+        LOG_WARN("tenant is NULL", K(ret), K(tenant_id));
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_NOT_IN_SERVER;
+        LOG_WARN("tenant is stopped", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(mysql_queue)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("mysql_queue is NULL", K(ret), K(tenant_id));
+      } else if (!mysql_queue->queue_.push(&req, MAX_QUEUE_LEN)) {  // MAX_QUEUE_LEN = 10000;
         ret = OB_QUEUE_OVERFLOW;
         EVENT_INC(MYSQL_DELIVER_FAIL);
         LOG_ERROR("deliver request fail", K(ret), K(tenant_id), K(req));
+      } else {
+        LOG_INFO("succeed to dispatch to tenant mysql queue", K(tenant_id));
       }
+      mysql_queue->queue_.dec_push_worker_count();
       // print queue length per 10s
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-        LOG_INFO("mysql login queue", K(tenant_id),
-                  K(mysql_queue->queue_.size()));
+        LOG_INFO("mysql login queue", K(mysql_queue->queue_.size()));
       }
 
       // if (0 != MTL(obmysql::ObSqlNioServer *)
@@ -142,6 +153,18 @@ int dispatch_req(ObRequest& req)
       // }
     } else {
       LOG_WARN("cannot switch to tenant", K(ret), K(tenant_id));
+    }
+  }
+
+  // failed to dispatch, push to global mysql queue
+  if (OB_FAIL(ret)) {
+    if (!global_mysql_queue->queue_.push(&req, MAX_QUEUE_LEN)) {
+      ret = OB_QUEUE_OVERFLOW;
+      EVENT_INC(MYSQL_DELIVER_FAIL);
+      LOG_ERROR("deliver request fail", K(req));
+    } else {
+      LOG_INFO("fail to dispatch to tenant, but push to global mysql queue", K(ret));
+      ret = OB_SUCCESS;
     }
   }
   return ret;
@@ -499,15 +522,11 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
           LOG_ERROR("deliver request fail", K(req));
         }
       } else if (OB_NOT_NULL(mysql_queue_)) {
-        if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-            OB_SUCC(dispatch_req(req))) {
-          // do nothing
-        } else {
-          if (OB_TENANT_NOT_IN_SERVER == ret) {
-            LOG_WARN("fail to dispatch to tenant", K(ret), K(req));
-            // set OB_SUCCESS to go normal procedure
-            ret = OB_SUCCESS;
+        if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
+          if (OB_FAIL(dispatch_req(req, mysql_queue_))) {
+            LOG_ERROR("deliver request in dispatch_req fail", K(ret), K(req));
           }
+        } else {
           if (OB_SUCC(ret) && !mysql_queue_->queue_.push(&req, MAX_QUEUE_LEN)) {
             ret = OB_QUEUE_OVERFLOW;
             EVENT_INC(MYSQL_DELIVER_FAIL);
