@@ -1450,11 +1450,11 @@ int ObPLComposite::copy_element(const ObObj &src,
       CK (OB_NOT_NULL(dest_composite));
       if (src.get_ext() == dest.get_ext()) {
         OZ (ObPLComposite::deep_copy(*dest_composite,
-                                     src_composite,
-                                     allocator,
-                                     ns,
-                                     session,
-                                     need_new_allocator));
+                                   src_composite,
+                                   allocator,
+                                   ns,
+                                   session,
+                                   need_new_allocator));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                             src.get_meta().get_extend_type(),
                             src.get_val_len()));

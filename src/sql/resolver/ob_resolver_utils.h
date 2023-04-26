@@ -299,6 +299,9 @@ public:
                                          int64_t &prepare_param_count,
                                          ObRawExpr *&expr);
 
+  static int revert_external_param_info(ExternalParams &param_info,
+                                        ObRawExpr *expr);
+
    /**
    * @brief  从parser结果中解析出语句type
    * @param [in] result      - parse结果

@@ -6267,6 +6267,29 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == expr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    for (int64_t i = 0; i < expr->get_param_count(); ++i) {
+      ObRawExpr *&child = expr->get_param_expr(i);
+      for (int64_t j = 0; j < param_infos.count(); ++j) {
+        if (child == param_infos.at(j).second) {
+          child = param_infos.at(j).first;
+          break;
+        }
+      }
+      if (OB_FAIL(revert_external_param_info(param_infos, child))) {
+        LOG_WARN("failed to revert external param info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
                                                  ObRawExprFactory &expr_factory,
                                                  int64_t &prepare_param_count,

@@ -1795,6 +1795,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else {
             const ParseNode *expr_node = func_node.children_[1]->children_[0];
             ObRawExpr *index_expr = NULL;
+            int64_t start_child = ctx_.columns_->count();
             if (OB_FAIL(ctx_.parents_expr_info_.add_member(IS_PL_ACCESS_IDX))) {
               LOG_WARN("failed to add parents expr info", K(ret));
             } else if (OB_FAIL(SMART_CALL(recursive_resolve(expr_node, index_expr)))) {
@@ -1806,6 +1807,9 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
               }
             }
             ctx_.parents_expr_info_.del_member(IS_PL_ACCESS_IDX);
+            for (int64_t i = start_child; i < ctx_.columns_->count(); ++i) {
+              ctx_.columns_->at(i).is_access_root_ = false;
+            }
           }
         }
           break;

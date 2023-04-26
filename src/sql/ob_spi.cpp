@@ -5190,9 +5190,9 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
     LOG_WARN("Argument passed in is NULL", K(ctx), K(sql), K(ret));
   } else {
 #ifndef NDEBUG
-    LOG_INFO("spi_execute using", K(sql), K(exec_params));
+    LOG_INFO("spi_execute using", K(sql), K(ps_sql), K(exec_params));
 #else
-    LOG_TRACE("spi_execute using", K(sql), K(exec_params));
+    LOG_TRACE("spi_execute using", K(sql), K(ps_sql), K(exec_params));
 #endif
     ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
     if (OB_ISNULL(session) || OB_ISNULL(GCTX.sql_engine_)) {

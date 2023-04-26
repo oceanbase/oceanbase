@@ -2333,6 +2333,8 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
                                                             *params_.expr_factory_,
                                                              params_.prepare_param_count_,
                                                              self));
+            OZ (ObResolverUtils::revert_external_param_info(params_.external_param_info_,
+                                                           real_ref_expr->get_param_expr(0)));
             OZ (ObRawExprUtils::replace_ref_column(real_ref_expr,
                                                    real_ref_expr->get_param_expr(0),
                                                    self));
