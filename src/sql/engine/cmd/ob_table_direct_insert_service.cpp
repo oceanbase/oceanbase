@@ -158,7 +158,8 @@ int ObTableDirectInsertService::close_task(const uint64_t table_id,
         if (OB_FAIL(store.px_finish_trans(trans_id))) {
           LOG_WARN("fail to finish direct load trans", KR(ret), K(trans_id));
         }
-      } else {
+      }
+      if (OB_FAIL(ret)){
         if (OB_FAIL(store.px_abandon_trans(trans_id))) {
           LOG_WARN("fail to abandon direct load trans", KR(ret));
         }
