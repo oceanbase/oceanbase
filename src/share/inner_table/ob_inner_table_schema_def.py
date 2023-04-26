@@ -11565,6 +11565,7 @@ def_table_schema(
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
 # 12397: __all_virtual_px_p2p_datahub
 # 12398: __all_virtual_column_group
+# 12399: __all_virtual_storage_leak_info
 #
 # 余留位置
 #
