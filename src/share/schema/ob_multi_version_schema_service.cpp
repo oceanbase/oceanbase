@@ -2196,19 +2196,33 @@ int ObMultiVersionSchemaService::async_refresh_schema(
                  && (!check_formal || ObSchemaService::is_formal_version(local_schema_version))) {
         // success
         break;
-      } else if (OB_ISNULL(GCTX.ob_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("observice is null", K(ret));
       } else {
-        if (0 != retry_cnt % 20) {
+        if (0 == retry_cnt % 20) {
           // try refresh schema each 2s
-        } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(
-                           tenant_id, schema_version))) {
-          if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to submit async refresh schema task",
-                     K(ret), K(tenant_id), K(schema_version));
+          {
+            bool is_dropped = false;
+            ObSchemaGetterGuard guard;
+            if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+              LOG_WARN("fail to get schema guard", KR(ret));
+            } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+              LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+            } else if (is_dropped) {
+              ret = OB_TENANT_HAS_BEEN_DROPPED;
+              LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(GCTX.ob_service_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("observice is null", K(ret));
+          } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(
+                             tenant_id, schema_version))) {
+            if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to submit async refresh schema task",
+                       K(ret), K(tenant_id), K(schema_version));
+            }
           }
         }
         if (OB_SUCC(ret)) {
