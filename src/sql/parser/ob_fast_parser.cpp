@@ -2042,19 +2042,6 @@ int ObFastParserMysql::process_identifier_begin_with_n()
       OZ (add_null_type_node());
     }
   } else {
-    bool is_nowait = false;
-    if (CHECK_EQ_STRNCASECMP("o_wait", 6)) {
-      is_nowait = true;
-      cur_token_type_ = PARAM_TOKEN;
-      raw_sql_.scan(6);
-    } else if (CHECK_EQ_STRNCASECMP("owait", 5)) {
-      is_nowait = true;
-      cur_token_type_ = PARAM_TOKEN;
-      raw_sql_.scan(5);
-    }
-    if (is_nowait && OB_FAIL(add_nowait_type_node())) {
-      LOG_WARN("failed to add nowait node info", K(ret));
-    }
   }
   return ret;
 }
@@ -2453,15 +2440,6 @@ int ObFastParserOracle::process_identifier_begin_with_n()
       }
     }
   } else {
-    bool is_nowait = false;
-    if (CHECK_EQ_STRNCASECMP("owait", 5)) {
-      is_nowait = true;
-      cur_token_type_ = PARAM_TOKEN;
-      raw_sql_.scan(5);
-    }
-    if (is_nowait && OB_FAIL(add_nowait_type_node())) {
-      LOG_WARN("failed to add nowait node info", K(ret));
-    }
   }
   return ret;
 }

@@ -1488,14 +1488,7 @@ BEGIN(in_c_comment);
   if (IS_FAST_PARAMETERIZE) {
     ParseResult *p = (ParseResult *)yyextra;
     REPUT_NEG_SIGN(p);
-    if (strcasecmp("nowait", yytext) == 0
-        || strcasecmp("no_wait", yytext) == 0) {
-      //语法阶段for update nowait 会给默认值0，所以如果是fast parse也需要给0, 从而保证常量个数识别的一致性
-      char num[2] = "0";
-      STORE_UNIT_TYPE_NODE(num);
-    } else {
-      return NAME_OB;
-    }
+    return NAME_OB;
   } else {
     int ret = NAME_OB;
     if (NULL == (word = mysql_non_reserved_keyword_lookup(yytext)))
