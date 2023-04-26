@@ -301,7 +301,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     session_type_ = INVALID_TYPE;
     package_state_map_.reuse();
     sequence_currval_map_.reuse();
-    contexts_map_.reuse();
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_can_retry_ = true;
@@ -330,6 +329,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
       DESTROY_CONTEXT(mem_context_);
       mem_context_ = NULL;
     }
+    contexts_map_.reuse();
     cur_exec_ctx_ = nullptr;
     plan_cache_ = NULL;
     client_app_info_.reset();
@@ -2158,6 +2158,7 @@ int ObSQLSessionInfo::clear_all_context(const ObString &context_name)
     app_ctx_info_encoder_.is_changed_ = true;
     curr_session_context_size_ -= inner_map->context_map_->size();
     inner_map->destroy();
+    mem_context_->get_malloc_allocator().free(inner_map);
   }
   return ret;
 }
