@@ -11888,7 +11888,7 @@ def_table_schema(
          CAST(V.INDEX_TYPE AS      CHAR(16))     AS INDEX_TYPE,
          CAST(V.COMMENT AS         CHAR(16))     AS COMMENT,
          CAST(V.INDEX_COMMENT AS   CHAR(1024))   AS INDEX_COMMENT,
-         CAST('YES' AS             CHAR(3))      AS IS_VISIBLE
+         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE
   FROM   (SELECT db.database_name                                              AS TABLE_SCHEMA,
                  t.table_name                                                  AS TABLE_NAME,
                  CASE WHEN i.index_type IN (2,4,8) THEN 0 ELSE 1 END           AS NON_UNIQUE,
@@ -11897,11 +11897,12 @@ def_table_schema(
                  c.index_position                                              AS SEQ_IN_INDEX,
                  CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
                  CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
-                 CASE WHEN c.nullable = 1 THEN 'YES' ELSE NULL END             AS NULLABLE,
+                 CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
                  CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                  i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
                  t.comment                                                     AS COMMENT,
-                 i.comment                                                     AS INDEX_COMMENT
+                 i.comment                                                     AS INDEX_COMMENT,
+                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
           FROM   oceanbase.__all_table i
           JOIN   oceanbase.__all_table t
           ON     i.data_table_id=t.table_id
@@ -11933,11 +11934,12 @@ def_table_schema(
                   c.rowkey_position AS SEQ_IN_INDEX,
                   c.column_name     AS COLUMN_NAME,
                   NULL              AS SUB_PART,
-                  NULL              AS NULLABLE,
+                  ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
-                  t.comment        AS INDEX_COMMENT
+                  t.comment        AS INDEX_COMMENT,
+                  'YES'            AS IS_VISIBLE
           FROM   oceanbase.__all_table t
           JOIN   oceanbase.__all_column c
           ON     t.table_id=c.table_id
@@ -11959,11 +11961,12 @@ def_table_schema(
               c.index_position                                              AS SEQ_IN_INDEX,
               CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
               CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
-              CASE WHEN c.nullable = 1 THEN 'YES' ELSE NULL END             AS NULLABLE,
+              CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
               CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
               t.comment                                                     AS COMMENT,
-              i.comment                                                     AS INDEX_COMMENT
+              i.comment                                                     AS INDEX_COMMENT,
+              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE i
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           ON     i.data_table_id=t.table_id
@@ -11993,11 +11996,12 @@ def_table_schema(
                   c.rowkey_position AS SEQ_IN_INDEX,
                   c.column_name     AS COLUMN_NAME,
                   NULL              AS SUB_PART,
-                  NULL              AS NULLABLE,
+                  ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
-                  t.comment        AS INDEX_COMMENT
+                  t.comment        AS INDEX_COMMENT,
+                  'YES'            AS IS_VISIBLE
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE c
           ON     t.table_id=c.table_id
