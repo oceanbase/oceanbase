@@ -45,7 +45,8 @@ private:
     USED_SIZE,
     FREE_SIZE,
     IS_DISK_VALID,
-    DISK_ERROR_BEGIN_TS
+    DISK_ERROR_BEGIN_TS,
+    ALLOCATED_SIZE
   };
   common::ObAddr *addr_;
   common::ObString ipstr_;

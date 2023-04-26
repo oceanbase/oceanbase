@@ -61,6 +61,7 @@ public:
   // - OS info
   // - timezone info
   static const char *build_syslog_file_info(const common::ObAddr &addr);
+  static int calc_auto_extend_size(int64_t &actual_extend_size);
 
 private:
   static int decide_disk_size(const struct statvfs& svfs,

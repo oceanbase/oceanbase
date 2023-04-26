@@ -49,6 +49,8 @@ connection_control_min_connection_delay
 cpu_count
 cpu_quota_concurrency
 datafile_disk_percentage
+datafile_maxsize
+datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
@@ -242,6 +244,8 @@ _bloom_filter_ratio
 _cache_wash_interval
 _chunk_row_store_mem_limit
 _ctx_memory_limit
+_datafile_usage_lower_bound_percentage
+_datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _enable_adaptive_compaction
 _enable_backtrace_function

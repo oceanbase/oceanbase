@@ -28,6 +28,7 @@
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "common/ob_timeout_ctx.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 namespace oceanbase
 {
@@ -98,6 +99,8 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
   } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
     LOG_WARN("Failed to get clog stat ", KR(ret));
   } else {
+    int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+    (void) SLOGGERMGR.get_reserved_size(reserved_size);
     lease_request.request_lease_time_ = 0; // this is not a valid member
     lease_request.version_ = ObLeaseRequest::LEASE_VERSION;
     lease_request.zone_ = gctx_.config_->zone.str();
@@ -110,7 +113,7 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
     lease_request.resource_info_.mem_in_use_ = 0;
     lease_request.resource_info_.mem_total_ = GMEMCONF.get_server_memory_avail();
     lease_request.resource_info_.disk_total_
-        = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+        = OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size();
     lease_request.resource_info_.disk_in_use_
         = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
     lease_request.resource_info_.log_disk_total_ = clog_total_size_byte;

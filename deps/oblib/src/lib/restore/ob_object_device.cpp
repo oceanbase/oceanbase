@@ -794,6 +794,12 @@ int64_t ObObjectDevice::get_total_block_size() const
   return -1;
 }
 
+int64_t ObObjectDevice::get_max_block_size(int64_t reserved_size) const
+{
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_max_block_size is not support in object device !", K(device_type_));
+  return -1;
+}
+
 int64_t ObObjectDevice::get_free_block_count() const
 {
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_free_block_count is not support in object device !", K(device_type_));
@@ -803,6 +809,12 @@ int64_t ObObjectDevice::get_free_block_count() const
 int64_t ObObjectDevice::get_reserved_block_count() const
 {
   OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_reserved_block_count is not support in object device !", K(device_type_));
+  return -1;
+}
+
+int64_t ObObjectDevice::get_max_block_count(int64_t reserved_size) const
+{
+  OB_LOG_RET(WARN, OB_NOT_SUPPORTED, "get_max_block_count is not support in object device !", K(device_type_));
   return -1;
 }
 

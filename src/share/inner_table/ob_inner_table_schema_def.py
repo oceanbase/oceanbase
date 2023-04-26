@@ -6425,6 +6425,7 @@ def_table_schema(
   ('free_size', 'int', 'false'),
   ('is_disk_valid', 'int', 'false'),
   ('disk_error_begin_ts', 'int', 'false'),
+  ('allocated_size', 'int', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -10312,6 +10313,7 @@ def_table_schema(
       ('log_disk_in_use', 'int'),
       ('ssl_cert_expired_time', 'int'),
       ('memory_limit', 'int'),
+      ('data_disk_allocated', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -20085,6 +20087,7 @@ SELECT
   DATA_DISK_IN_USE,
   DATA_DISK_HEALTH_STATUS,
   MEMORY_LIMIT,
+  DATA_DISK_ALLOCATED,
   (CASE
       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)
       ELSE NULL

@@ -760,7 +760,7 @@ int ObInnerTableSchema::gv_ob_servers_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   (CASE       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)       ELSE NULL    END) AS DATA_DISK_ABNORMAL_TIME,   (CASE       WHEN ssl_cert_expired_time > 0 THEN usec_to_time(ssl_cert_expired_time)       ELSE NULL    END) AS SSL_CERT_EXPIRED_TIME FROM oceanbase.__all_virtual_server )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SQL_PORT,   CPU_CAPACITY,   CPU_CAPACITY_MAX,   CPU_ASSIGNED,   CPU_ASSIGNED_MAX,   MEM_CAPACITY,   MEM_ASSIGNED,   LOG_DISK_CAPACITY,   LOG_DISK_ASSIGNED,   LOG_DISK_IN_USE,   DATA_DISK_CAPACITY,   DATA_DISK_IN_USE,   DATA_DISK_HEALTH_STATUS,   MEMORY_LIMIT,   DATA_DISK_ALLOCATED,   (CASE       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)       ELSE NULL    END) AS DATA_DISK_ABNORMAL_TIME,   (CASE       WHEN ssl_cert_expired_time > 0 THEN usec_to_time(ssl_cert_expired_time)       ELSE NULL    END) AS SSL_CERT_EXPIRED_TIME FROM oceanbase.__all_virtual_server )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

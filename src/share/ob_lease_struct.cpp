@@ -116,6 +116,24 @@ bool ObServerResourceInfo::operator!=(const ObServerResourceInfo &other) const
       || disk_in_use_ != other.disk_in_use_;
 }
 
+int ObServerResourceInfo::assign(const ObServerResourceInfo& other)
+{
+  int ret = OB_SUCCESS;
+
+  cpu_ = other.cpu_;
+  mem_in_use_ = other.mem_in_use_;
+  mem_total_ = other.mem_total_;
+  disk_in_use_ = other.disk_in_use_;
+  disk_total_ = other.disk_total_;
+  log_disk_total_ = other.log_disk_total_;
+  report_log_disk_assigned_ = other.report_log_disk_assigned_;
+  report_cpu_assigned_ = other.report_cpu_assigned_;
+  report_cpu_max_assigned_ = other.report_cpu_max_assigned_;
+  report_mem_assigned_ = other.report_mem_assigned_;
+
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObServerResourceInfo,
                     cpu_,
                     report_cpu_assigned_,

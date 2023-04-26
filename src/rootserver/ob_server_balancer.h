@@ -634,7 +634,7 @@ private:
     ServerDiskStatistic() : server_(),
                             disk_in_use_(0),
                             disk_total_(0),
-                            wild_server_(false) {}
+                            wild_server_(false){}
     void reset() {
       server_.reset();
       disk_in_use_ = 0;

@@ -196,6 +196,7 @@ public:
   int64_t get_total_macro_block_count() const;
   int64_t get_free_macro_block_count() const;
   int64_t get_used_macro_block_count() const;
+  int64_t get_max_macro_block_count(int64_t reserved_size) const;
 
   int check_macro_block_free(const MacroBlockId &macro_id, bool &is_free) const;
   int get_bad_block_infos(common::ObIArray<ObBadBlockInfo> &bad_block_infos);
@@ -264,6 +265,7 @@ private:
 
   static const int64_t RECYCLE_DELAY_US = 30 * 1000 * 1000; // 30s
   static const int64_t INSPECT_DELAY_US = 1  * 1000 * 1000; // 1s
+  static const int64_t AUTO_EXTEND_LEAST_FREE_BLOCK_CNT = 512; // 1G
 
   typedef common::ObLinearHashMap<MacroBlockId, BlockInfo> BlockMap;
   typedef common::ObLinearHashMap<MacroBlockId, bool> MacroBlkIdMap;
@@ -366,9 +368,14 @@ private:
   void disable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, false); }
   void enable_mark_sweep() { ATOMIC_SET(&is_mark_sweep_enabled_, true); }
   bool is_mark_sweep_enabled() { return ATOMIC_LOAD(&is_mark_sweep_enabled_); }
-  int wait_mark_sweep_finish();
+
+  int  wait_mark_sweep_finish();
   void set_mark_sweep_doing();
   void set_mark_sweep_done();
+
+  int  extend_file_size_if_need();
+  bool check_can_be_extend(
+      const int64_t reserved_size);
 
 private:
   // not thread-safe, only for first mark device.
@@ -419,6 +426,7 @@ private:
   private:
     DISALLOW_COPY_AND_ASSIGN(InspectBadBlockTask);
   };
+
 private:
   friend class InspectBadBlockTask;
 
@@ -460,6 +468,8 @@ private:
 
   bool is_inited_;
   bool is_started_;
+
+  lib::ObMutex resize_file_lock_;
 };
 
 class ObServerBlockManager : public ObBlockManager

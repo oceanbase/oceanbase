@@ -34,14 +34,23 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
 // ObServerUtils::get_data_disk_info_in_config()
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)", "size of the data file. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_next, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend step. Range: [0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_maxsize, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend max size. Range: [0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
         "the percentage of disk space used by the data files. Range: [0,99] in integer",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_upper_bound_percentage, OB_CLUSTER_PARAMETER, "90", "[5,99]",
+        "the percentage of disk space usage upper bound to trigger datafile extend. Range: [5,99] in integer",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_lower_bound_percentage, OB_CLUSTER_PARAMETER, "10", "[5,99]",
+        "the percentage of disk space usage lower bound to trigger datafile shrink. Range: [5,99] in integer",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(memory_reserved, OB_CLUSTER_PARAMETER, "500M", "[10M,)",
         "the size of the system memory reserved for emergency internal use. "
         "Range: [10M, total size of memory]",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 //// observer config
 DEF_STR_LIST(config_additional_dir, OB_CLUSTER_PARAMETER, "etc2;etc3", "additional directories of configure file",
              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
