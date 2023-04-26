@@ -1112,6 +1112,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_ctdef.is_batch_stmt_) {
     dml_param.write_flag_.set_is_dml_batch_opt();
   }
+  if (base_ctdef.is_insert_up_) {
+    dml_param.write_flag_.set_is_insert_up();
+  }
   return ret;
 }
 
