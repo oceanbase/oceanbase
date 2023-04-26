@@ -618,13 +618,34 @@ int ObAggregateProcessor::init()
 
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
-        LinearInterAggrFuncCtx *ctx = OB_NEWx(LinearInterAggrFuncCtx,
-                                              (&eval_ctx_.exec_ctx_.get_allocator()));
-        if (NULL == ctx) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret));
-        } else {
-          aggr_func_ctxs_.at(i) = ctx;
+        // ObAggregateProcessor::init would be invoked many times under groupby rescan
+        // Only create LinearInterAggrFuncCtx once to prevent memory leak.
+        //
+        // Details:
+        // Normally ObAggregateProcessor::init would ONLY be invoked once under open
+        // stage and NEVER be triggered any more. Typically window function follows
+        // this rule.
+        // However, ObAggregateProcessor::init would be invoked many times under groupby
+        // rescan cases, see ObGroupByOp::inner_rescan. And LinearInterAggrFuncCtx would
+        // be created repeatedly. This break init semantic(invoked once) and leading
+        // memory leak.
+        //
+        // Solution:
+        // Only create LinearInterAggrFuncCtx once when ObAggregateProcessor::init is called
+        // repeatedly. So both window function and groupby cases would be well handled.
+        //
+        // TODO qubin.qb:
+        // Refactor group by rescan API to stop calling ObAggregateProcessor::init so that
+        // init semantic (only invoke one time) would be strictly followed
+        if (aggr_func_ctxs_.at(i) == nullptr) {
+          LinearInterAggrFuncCtx *ctx = OB_NEWx(LinearInterAggrFuncCtx,
+                                                (&eval_ctx_.exec_ctx_.get_allocator()));
+          if (NULL == ctx) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            aggr_func_ctxs_.at(i) = ctx;
+          }
         }
       }
     }
