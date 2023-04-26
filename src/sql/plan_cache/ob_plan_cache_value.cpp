@@ -452,7 +452,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     SQL_PC_LOG(WARN, "fail to check table version", K(ret));
   } else if (true == is_old_version) {
     ret = OB_OLD_SCHEMA_VERSION;
-    SQL_PC_LOG(DEBUG, "view or table is old version", K(ret));
+    SQL_PC_LOG(TRACE, "view or table is old version", K(ret));
   }
   if (OB_FAIL(ret)) {
     //do nothing
@@ -703,28 +703,28 @@ int ObPlanCacheValue::resolver_params(ObPlanCacheCtx &pc_ctx,
                 && (value.is_negative_number()
                     || (value.is_zero_number() && '-' == raw_param->str_value_[0]))) { // -0 is also counted as negative
               ret = OB_ERR_UNEXPECTED;
-              LOG_DEBUG("param must be positive", K(ret), K(i), K(value));
+              LOG_TRACE("param must be positive", K(ret), K(i), K(value));
               pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
             } else if (lib::is_mysql_mode()
                        && value.is_integer_type()
                        && (value.get_int() < 0
                            || (0 == value.get_int() && '-' == raw_param->str_value_[0]))) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_DEBUG("param must be positive", K(ret), K(i), K(value));
+              LOG_TRACE("param must be positive", K(ret), K(i), K(value));
               pc_ctx.should_add_plan_ = false; // 内部主动抛出not supported时候需要设置这个标志，以免新计划add plan导致锁冲突
             } else {
               // do nothing
             }
           }
         }
-        SQL_PC_LOG(DEBUG, "is_param",
+        SQL_PC_LOG(TRACE, "is_param",
                    K(i),
                    K(value),
                    K(raw_param->type_),
                    K(raw_param->value_),
                    "str_value", ObString(raw_param->str_len_, raw_param->str_value_));
       } else {
-        SQL_PC_LOG(DEBUG, "not_param",
+        SQL_PC_LOG(TRACE, "not_param",
                    K(i),
                    K(value),
                    K(raw_param->type_),
@@ -888,11 +888,11 @@ int  ObPlanCacheValue::check_not_param_value(const ObFastParserResult &fp_result
     } else if (0 != not_param_info.at(i).raw_text_.compare(
         ObString(raw_param->text_len_, raw_param->raw_text_))) {
       is_same = false;
-      LOG_DEBUG("match not param info",
+      LOG_TRACE("match not param info",
                 "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
                 "cached special value", not_param_info.at(i).raw_text_);
     } else {
-      LOG_DEBUG("match param info",
+      LOG_TRACE("match param info",
                 "raw value", ObString(raw_param->text_len_, raw_param->raw_text_),
                 "cached special value", not_param_info.at(i).raw_text_);
     }
@@ -914,10 +914,10 @@ int ObPlanCacheValue::cmp_not_param_info(const NotParamInfoList &l_param_info_li
       const NotParamInfo &r_param_info = r_param_info_list.at(i);
       if (l_param_info.idx_ != r_param_info.idx_) {
         is_equal = false;
-        LOG_DEBUG("compare not param info", K(l_param_info), K(r_param_info));
+        LOG_TRACE("compare not param info", K(l_param_info), K(r_param_info));
       } else if (0 != l_param_info.raw_text_.compare(r_param_info.raw_text_)) {
         is_equal = false;
-        LOG_DEBUG("compare not param info", K(l_param_info), K(r_param_info));
+        LOG_TRACE("compare not param info", K(l_param_info), K(r_param_info));
       }
     }
   }
@@ -1001,7 +1001,7 @@ int ObPlanCacheValue::get_one_group_params(int64_t pos, const ParamStore &src_pa
     } else if (OB_FAIL(dst_params.push_back(array_obj->data_[pos]))) {
       LOG_WARN("fail to push param_obj to param_store", K(i), K(pos), K(array_obj->data_[pos]), K(ret));
     } else {
-      LOG_DEBUG("get one batch obj", K(pos), K(i), K(array_obj->data_[pos]));
+      LOG_TRACE("get one batch obj", K(pos), K(i), K(array_obj->data_[pos]));
     }
   }
   return ret;
@@ -1085,7 +1085,7 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
     SQL_PC_LOG(WARN, "fail to check table version", K(ret));
   } else if (is_old_version) {
     ret = OB_OLD_SCHEMA_VERSION;
-    SQL_PC_LOG(DEBUG, "view or table is old version", K(ret));
+    SQL_PC_LOG(TRACE, "view or table is old version", K(ret));
   /* Consider this concurrent scene:
      1. No mapping is defined on t.c1 at first.
      2. Thread1 resolve select * from t where c1 = 1; and generate a plan with rule_id = INVALID
@@ -1130,7 +1130,7 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
         need_new_planset = false;
         batch_plan_set = cur_plan_set;
         if (OB_FAIL(cur_plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
-          SQL_PC_LOG(DEBUG, "failed to add plan", K(ret));
+          SQL_PC_LOG(TRACE, "failed to add plan", K(ret));
         }
         break;
       }
@@ -1155,7 +1155,7 @@ int ObPlanCacheValue::add_plan(ObPlanCacheObject &plan,
                                            get_pc_malloc()))) {
           LOG_WARN("init new plan set failed", K(ret));
         } else if (OB_FAIL(plan_set->add_cache_obj(plan, pc_ctx, outline_param_idx, add_plan_ret))) {
-          SQL_PC_LOG(DEBUG, "failed to add plan to plan set", K(ret));
+          SQL_PC_LOG(TRACE, "failed to add plan to plan set", K(ret));
         } else if (!plan_sets_.add_last(plan_set)) {
           ret = OB_ERROR;
           SQL_PC_LOG(WARN, "failed to add plan set to plan cache value", K(ret));
@@ -1233,7 +1233,7 @@ void ObPlanCacheValue::reset()
   plan_sets_.clear();
   // free plan_cache_key
   if (NULL == pc_alloc_) {
-    SQL_PC_LOG(DEBUG, "pc alloc not init, may be reset before", K(pc_alloc_));
+    SQL_PC_LOG(TRACE, "pc alloc not init, may be reset before", K(pc_alloc_));
   } else {
     for (int64_t i = 0; i < not_param_info_.count(); i++) {
       if (NULL != not_param_info_.at(i).raw_text_.ptr()) {
@@ -1410,7 +1410,7 @@ int ObPlanCacheValue::check_dep_schema_version(const ObIArray<PCVSchemaObj> &sch
         LOG_DEBUG("matched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
         // do nothing
       } else {
-        LOG_DEBUG("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
+        LOG_TRACE("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
         is_old_version = true;
       }
     }
@@ -1747,7 +1747,7 @@ int ObPlanCacheValue::set_stored_schema_objs(const DependenyTableStore &dep_tabl
         } else {
           // do nothing
         }
-        LOG_DEBUG("check sys table", K(table_schema->get_table_name()), K(contain_sys_name_table_));
+        LOG_TRACE("check sys table", K(table_schema->get_table_name()), K(contain_sys_name_table_));
       } else {
         // do nothing
       }
@@ -1881,7 +1881,7 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
         tmp_schema_obj.reset();
       } else if (nullptr == table_schema) {
         ret = OB_OLD_SCHEMA_VERSION;
-        LOG_DEBUG("table not exist", K(ret), K(*pcv_schema), K(table_schema));
+        LOG_TRACE("table not exist", K(ret), K(*pcv_schema), K(table_schema));
       } else if (OB_FAIL(tmp_schema_obj.init_without_copy_name(table_schema))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
       } else if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {

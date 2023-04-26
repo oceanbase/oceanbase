@@ -76,6 +76,7 @@ int ObLCObjectManager::alloc(ObCacheObjGuard& guard,
         if (OB_FAIL(alloc_cache_obj_map_.set_refactored(obj_id, cache_obj))) {
           LOG_WARN("failed to add element to hashmap", K(ret));
           inner_free(cache_obj);
+          entity = NULL;
           cache_obj = NULL;
         }
       }
