@@ -1787,10 +1787,6 @@ int ObMPStmtExecute::process()
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id),
                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
-    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
-      //packet size check with session variable max_allowd_packet or net_buffer_length
-      ret = OB_ERR_NET_PACKET_TOO_LARGE;
-      LOG_WARN("packet too large than allowed for the session", K_(stmt_id), K(ret));
     } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, ctx_.cur_sql_))) {
       LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K(ctx_.cur_sql_));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
@@ -1813,6 +1809,10 @@ int ObMPStmtExecute::process()
       need_response_error = false;
       LOG_WARN("fail to update sess info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
+      //packet size check with session variable max_allowd_packet or net_buffer_length
+      ret = OB_ERR_NET_PACKET_TOO_LARGE;
+      LOG_WARN("packet too large than allowed for the session", K_(stmt_id), K(ret));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));

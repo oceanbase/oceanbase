@@ -183,11 +183,6 @@ int ObMPQuery::process()
         ret = OB_ERR_SESSION_INTERRUPTED;
         LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
                  K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
-      } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
-        //packet size check with session variable max_allowd_packet or net_buffer_length
-        need_disconnect = false;
-        ret = OB_ERR_NET_PACKET_TOO_LARGE;
-        LOG_WARN("packet too large than allowed for the session", K_(sql), K(ret));
       } else if (OB_FAIL(session.check_and_init_retry_info(*cur_trace_id, sql_))) {
         // 注意，retry info和last query trace id的逻辑要写在query lock内，否则会有并发问题
         LOG_WARN("fail to check and init retry info", K(ret), K(*cur_trace_id), K_(sql));
@@ -211,6 +206,11 @@ int ObMPQuery::process()
         need_response_error = false;
         LOG_WARN("fail to update sess info", K(ret));
       } else if (FALSE_IT(session.post_sync_session_info())) {
+      } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
+        //packet size check with session variable max_allowd_packet or net_buffer_length
+        need_disconnect = false;
+        ret = OB_ERR_NET_PACKET_TOO_LARGE;
+        LOG_WARN("packet too large than allowed for the session", K_(sql), K(ret));
       } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                               conn->proxy_cap_flags_.is_full_link_trace_support()))) {
         LOG_WARN("failed to update flt extra info", K(ret));
