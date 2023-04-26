@@ -129,6 +129,7 @@ namespace rootserver
   class ObRestoreService;
   class ObRecoveryLSService;
   class ObArbitrationService;
+  class ObStandbySchemaRefreshTrigger;
 }
 namespace observer
 {
@@ -198,7 +199,8 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
-      rootserver::ObTenantInfoLoader*,         \
+      rootserver::ObStandbySchemaRefreshTrigger*,    \
+      rootserver::ObTenantInfoLoader*,               \
       rootserver::ObPrimaryLSService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \

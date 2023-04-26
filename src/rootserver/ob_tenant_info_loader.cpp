@@ -153,7 +153,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
     } else {
       LOG_WARN("failed to get tenant info", KR(ret));
     }
-  } else if (refresh_time_us < specified_time_us) {
+  } else if (refresh_time_us <= specified_time_us) {
     ret = OB_NEED_WAIT;
     LOG_TRACE("tenant info cache is old, need wait", KR(ret), K(refresh_time_us), K(specified_time_us), K(tenant_info));
     wakeup();
@@ -206,7 +206,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id, common::
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo new_tenant_info;
-  const int64_t new_refresh_time_us = ObTimeUtility::current_time();
+  const int64_t new_refresh_time_us = ObClockGenerator::getCurrentTime();
   if (OB_ISNULL(sql_proxy) || !is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(sql_proxy));
