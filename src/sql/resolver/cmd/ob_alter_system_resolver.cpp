@@ -1973,6 +1973,12 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
 
                 if (OB_SUCC(ret)) {
                   bool is_backup_config = false;
+                  bool can_set_trace_control_info = false;
+                  int  tmp_ret = OB_SUCCESS;
+                  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
+                  if (OB_SUCCESS != tmp_ret) {
+                    can_set_trace_control_info = true;
+                  }
                   share::ObBackupConfigChecker backup_config_checker;
                   if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
                     LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
@@ -2041,6 +2047,13 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
                       LOG_WARN("set query response time stats", K(ret));
                     }  
+                  } else if (!can_set_trace_control_info &&
+                              session_info_ != NULL &&
+                              0 == STRCMP(item.name_.ptr(), OB_STR_TRC_CONTROL_INFO) &&
+                              !session_info_->is_inner()) {
+                    ret = OB_OP_NOT_ALLOW;
+                    LOG_WARN("_trace_control_info is not allowed to modify");
+                    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter _trace_control_info");
                   }
                 }
               }
