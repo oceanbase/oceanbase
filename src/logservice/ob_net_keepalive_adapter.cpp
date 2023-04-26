@@ -37,10 +37,12 @@ int ObNetKeepAliveAdapter::in_black_or_stopped_(const common::ObAddr &server,
   } else if (OB_FAIL(net_keepalive_->in_black(server, in_blacklist, &ka_data))) {
       CLOG_LOG(WARN, "in_black failed", K(ret), K(server));
   } else {
-    is_server_stopped = (share::RSS_IS_STOPPED == ka_data.rs_server_status_);
+    is_server_stopped = (share::RSS_IS_STOPPED == ka_data.rs_server_status_)
+        || (ka_data.start_service_time_ <= 0 || OB_INVALID_TIMESTAMP == ka_data.start_service_time_);
     if (is_server_stopped
         && REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-      CLOG_LOG(INFO, "this server is stopped", K(server));
+      CLOG_LOG(INFO, "this server is stopped", K(server), "server_status", ka_data.rs_server_status_,
+          "start_service_time", ka_data.start_service_time_);
     }
     CLOG_LOG(TRACE, "in_black_or_stopped_ failed", K(in_blacklist), K(is_server_stopped), K(server));
   }
