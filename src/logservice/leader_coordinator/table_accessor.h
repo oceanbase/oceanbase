@@ -115,6 +115,7 @@ private:
   int get_row_from_table_();
   int start_and_read_();
   int write_and_commit_();
+  int schedule_refresh_priority_task_();
 private:
   const uint64_t tenant_id_;
   const share::ObLSID ls_id_;

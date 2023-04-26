@@ -68,6 +68,7 @@ using namespace share;
 using namespace sql;
 using namespace obmysql;
 using namespace omt;
+using namespace logservice::coordinator;
 
 namespace rpc
 {
@@ -409,6 +410,56 @@ int ObRpcNotifyTenantServerUnitResourceP::process()
       LOG_WARN("failed to notify update tenant", K(ret), K_(arg));
     }
   }
+  return ret;
+}
+
+int ObRpcNotifySwitchLeaderP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null of GCTX.omt_", KR(ret));
+  } else if (OB_INVALID_TENANT_ID != tenant_id) {
+    // only refresh the status of specified tenant
+    if (GCTX.omt_->is_available_tenant(tenant_id)) {
+      MTL_SWITCH(tenant_id) {
+        ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+        if (OB_ISNULL(coordinator)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected null of leader coordinator", KR(ret), K_(arg));
+        } else if (OB_FAIL(coordinator->schedule_refresh_priority_task())) {
+          LOG_WARN("failed to schedule refresh priority task", KR(ret), K_(arg));
+        }
+      }
+    }
+  } else {
+    // refresh the status of all tenants
+    common::ObArray<uint64_t> tenant_ids;
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+      LOG_WARN("fail to get_mtl_tenant_ids", KR(ret));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; i < tenant_ids.size(); i++) {
+        if (GCTX.omt_->is_available_tenant(tenant_ids.at(i))) {
+          MTL_SWITCH(tenant_ids.at(i)) {
+            ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+            if (OB_ISNULL(coordinator)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected null of leader coordinator", KR(ret), K_(arg));
+            } else if (OB_FAIL(coordinator->schedule_refresh_priority_task())) {
+              LOG_WARN("failed to schedule refresh priority task", KR(ret), K_(arg));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+          tmp_ret = ret;
+        }
+      }
+      ret = tmp_ret;
+    }
+  }
+  LOG_INFO("receive notify switch leader", KR(ret), K_(arg));
   return ret;
 }
 
@@ -2247,6 +2298,18 @@ int ObRefreshTenantInfoP::process()
     COMMON_LOG(WARN, "ob_service is null", KR(ret));
   } else if (OB_FAIL(gctx_.ob_service_->refresh_tenant_info(arg_, result_))) {
     COMMON_LOG(WARN, "failed to refresh_tenant_info", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObUpdateTenantInfoCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->update_tenant_info_cache(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to update_tenant_info_cache", KR(ret), K(arg_));
   }
   return ret;
 }

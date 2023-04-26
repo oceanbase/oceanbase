@@ -1,5 +1,6 @@
 result_format: 4
 explain_protocol: 2
+alter system set _enable_newsort = true;
 drop table if exists xy_t1, xy_t2;
 create table xy_t1(c1 int, c2 int);
 create table xy_t2(c1 int, c2 int);

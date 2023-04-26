@@ -17,6 +17,7 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/container/ob_array.h"
 #include "lib/time/ob_tsc_timestamp.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -83,7 +84,7 @@ public:
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock(index_)))) {
       COMMON_LOG_RET(WARN, ret_, "Fail to read lock bucket, ", K_(index), K_(ret));
     } else {
-      lock_start_ts_ = ObTimeUtility::fast_current_time();
+      lock_start_ts_ = common::ObClockGenerator::getClock();
     }
   };
   ~ObBucketRLockGuard()
@@ -92,7 +93,7 @@ public:
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock(index_)))) {
         COMMON_LOG_RET(WARN, ret_, "Fail to unlock bucket, ", K_(ret));
       } else {
-        const int64_t lock_end_ts = ObTimeUtility::fast_current_time();
+        const int64_t lock_end_ts = common::ObClockGenerator::getClock();
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
           STORAGE_LOG(INFO, "bucket lock handle cost too much time",
                                             K_(lock_start_ts),
@@ -124,7 +125,7 @@ public:
     if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock(index_)))) {
       COMMON_LOG_RET(WARN, ret_, "Fail to write lock bucket, ", K_(index), K_(ret));
     } else {
-      lock_start_ts_ = OB_TSC_TIMESTAMP.current_time();
+      lock_start_ts_ = common::ObClockGenerator::getClock();
     }
   };
   ~ObBucketWLockGuard()
@@ -133,7 +134,7 @@ public:
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock(index_)))) {
         COMMON_LOG_RET(WARN, ret_, "Fail to unlock bucket, ", K_(index), K_(ret));
       } else {
-        const int64_t lock_end_ts = OB_TSC_TIMESTAMP.current_time();
+        const int64_t lock_end_ts = common::ObClockGenerator::getClock();
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
           STORAGE_LOG(INFO, "bucket lock handle cost too much time",
                                             K_(lock_start_ts),
@@ -254,7 +255,7 @@ public:
         }
       }
     } else {
-      lock_start_ts_ = ObTimeUtility::current_time();
+      lock_start_ts_ = common::ObClockGenerator::getClock();
     }
   };
   ~ObBucketTryRLockAllGuard()
@@ -263,7 +264,7 @@ public:
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock_all()))) {
         COMMON_LOG_RET(WARN, ret_, "Fail to unlock all buckets, ", K_(ret));
       } else {
-        const int64_t lock_end_ts = ObTimeUtility::current_time();
+        const int64_t lock_end_ts = common::ObClockGenerator::getClock();
         if (lock_end_ts - lock_start_ts_ > 5 * 1000 * 1000) {
           STORAGE_LOG(INFO, "bucket lock handle cost too much time",
                                             K_(lock_start_ts),

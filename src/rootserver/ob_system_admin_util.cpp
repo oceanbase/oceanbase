@@ -197,6 +197,12 @@ int ObAdminSwitchReplicaRole::execute(const ObAdminSwitchReplicaRoleArg &arg)
     LOG_WARN("get ls info from GCTX.lst_operator_ failed", K(arg), KR(ret), K(tenant_id));
   } else if (OB_FAIL(update_ls_election_reference_info_table(arg, tenant_id, ls_info))) {
     LOG_WARN("fail to update ls election reference info", K(arg), KR(ret), K(tenant_id));
+  } else {
+    int tmp_ret = OB_SUCCESS;//ignore ret
+    if (OB_TMP_FAIL(ObRootUtils::try_notify_switch_ls_leader(ctx_.rpc_proxy_, ls_info,
+          obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment::MANUAL_SWITCH))) {
+      LOG_WARN("failed to notify switch ls leader", KR(ret), K(ls_info));
+    }
   }
   LOG_INFO("switch leader done", KR(ret), K(arg), K(tenant_id), K(ls_info));
   return ret;

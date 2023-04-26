@@ -3979,14 +3979,12 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
       // failed to get request manager, maybe tenant has been dropped, NOT NEED TO record;
     } else {
       const ObAuditRecordData &audit_record = session.get_final_audit_record(exec_mode);
-      if (OB_FAIL(req_manager->record_request(audit_record, is_sensitive))) {
+      if (OB_FAIL(req_manager->record_request(audit_record,
+                                              session.enable_query_response_time_stats(),
+                                              is_sensitive))) {
         if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
           LOG_DEBUG("cannot allocate mem for record", K(ret));
           ret = OB_SUCCESS;
-        } else {
-          if (REACH_TIME_INTERVAL(100 * 1000)) { // in case logging is too frequent
-            LOG_WARN("failed to record request info in request manager", K(ret));
-          }
         }
       }
     }

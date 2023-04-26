@@ -12,7 +12,10 @@
 
 #define USING_LOG_PREFIX SHARE
 
+#include "lib/ob_name_id_def.h" //OB_ID
 #include "share/ob_tenant_role.h"
+#include "lib/utility/ob_print_utils.h" //TO_STRING_KV
+#include "lib/trace/ob_trace_event.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -29,6 +32,8 @@ static const char* TENANT_ROLE_ARRAY[] =
 };
 
 OB_SERIALIZE_MEMBER(ObTenantRole, value_);
+DEFINE_TO_YSON_KV(ObTenantRole,
+                  OB_ID(value), value_);
 
 const char* ObTenantRole::to_str() const
 {

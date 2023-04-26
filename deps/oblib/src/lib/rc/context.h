@@ -30,6 +30,7 @@
 #include "lib/thread_local/ob_tsi_factory.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/hash/ob_hashmap.h"
+#include "common/ob_clock_generator.h"
 
 #ifdef OB_USE_ASAN
 #include "lib/allocator/ob_asan_allocator.h"
@@ -258,7 +259,7 @@ struct DynamicInfo
 {
   DynamicInfo()
     : tid_(GETTID()), cid_(0lu),
-      create_time_(common::ObTimeUtility::fast_current_time())
+      create_time_(common::ObClockGenerator::getClock())
   {}
   TO_STRING_KV(K(tid_), K(cid_), K(create_time_));
   int64_t tid_;

@@ -193,15 +193,6 @@ TEST_F(TestMultiTenant, create_and_remove_tenant)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
-TEST_F(TestMultiTenant, RS_TENANT)
-{
-  uint64_t tenant_id = OB_RS_TENANT_ID;
-  int ret = add_tenant(tenant_id);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  lib::ObMallocAllocator *ma = lib::ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_RS_MEMORY, ma->get_tenant_limit(OB_RS_TENANT_ID));
-}
-
 //int get_tenant_with_tenant_lock(const uint64_t tenant_id, ObTenant *&tenant) const;
 TEST_F(TestMultiTenant, tenant_lock)
 {

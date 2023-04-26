@@ -142,7 +142,7 @@ int ObReqQueue::process_task(void *task)
 void ObReqQueue::loop()
 {
   int ret = OB_SUCCESS;
-  int64_t timeout = 300 * 1000;
+  int64_t timeout = 3000 * 1000;
   void *task = NULL;
   if (OB_ISNULL(qhandler_)) {
     ret = OB_INVALID_ARGUMENT;

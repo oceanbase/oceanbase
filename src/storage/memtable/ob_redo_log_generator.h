@@ -61,9 +61,16 @@ public:
         redo_sync_fail_cnt_(0),
         generate_cursor_(),
         callback_mgr_(nullptr),
-        mem_ctx_(NULL)
+        mem_ctx_(NULL),
+        clog_encrypt_meta_(NULL)
   {}
-  ~ObRedoLogGenerator() {}
+  ~ObRedoLogGenerator()
+  {
+    if (clog_encrypt_meta_ != NULL) {
+      op_free(clog_encrypt_meta_);
+      clog_encrypt_meta_ = NULL;
+    }
+  }
   void reset();
   void reuse();
   int set(ObTransCallbackMgr *mgr, ObIMemtableCtx *mem_ctx);
@@ -86,7 +93,8 @@ private:
                     ObMutatorWriter &mmw,
                     RedoDataNode &redo,
                     const bool log_for_lock_node,
-                    bool &fake_fill);
+                    bool &fake_fill,
+                    transaction::ObCLogEncryptInfo &encrypt_info);
   int fill_table_lock_redo(ObITransCallbackIterator &cursor,
                            ObMutatorWriter &mmw,
                            TableLockRedoDataNode &redo,
@@ -102,6 +110,7 @@ private:
   ObITransCallbackIterator generate_cursor_; // the pos of callback which already generated log
   ObTransCallbackMgr *callback_mgr_;
   ObIMemtableCtx *mem_ctx_;
+  transaction::ObTxEncryptMeta *clog_encrypt_meta_;
 };
 }; // end namespace memtable
 }; // end namespace oceanbase

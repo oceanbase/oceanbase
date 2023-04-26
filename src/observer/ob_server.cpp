@@ -1619,15 +1619,17 @@ int ObServer::set_running_mode()
 {
   int ret = OB_SUCCESS;
   const int64_t memory_limit = GMEMCONF.get_server_memory_limit();
+  const int64_t cnt = GCONF.cpu_count;
+  const int64_t cpu_cnt = cnt > 0 ? cnt : common::get_cpu_num();
   if (memory_limit < lib::ObRunningModeConfig::MINI_MEM_LOWER) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     LOG_ERROR("memory limit too small", KR(ret), K(memory_limit));
   } else if (memory_limit < lib::ObRunningModeConfig::MINI_MEM_UPPER) {
     ObTaskController::get().allow_next_syslog();
     LOG_INFO("observer start with mini_mode", K(memory_limit));
-    lib::update_mini_mode(memory_limit);
+    lib::update_mini_mode(memory_limit, cpu_cnt);
   } else {
-    lib::update_mini_mode(memory_limit);
+    lib::update_mini_mode(memory_limit, cpu_cnt);
   }
   _OB_LOG(INFO, "mini mode: %s", lib::is_mini_mode() ? "true" : "false");
   return ret;

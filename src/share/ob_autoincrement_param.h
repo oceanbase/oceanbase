@@ -99,7 +99,8 @@ struct AutoincParam
       part_level_(schema::PARTITION_LEVEL_ZERO),
       auto_increment_cache_size_(DEFAULT_INCREMENT_CACHE_SIZE),
       autoinc_mode_is_order_(true),
-      autoinc_version_(0)
+      autoinc_version_(0),
+      autoinc_auto_increment_(1)
   {}
 
   TO_STRING_KV("tenant_id"               , tenant_id_,
@@ -123,7 +124,8 @@ struct AutoincParam
                "auto_increment_cache_size"  , auto_increment_cache_size_,
                "part_value_no_order"     , part_value_no_order_,
                "autoinc_mode_is_order"   , autoinc_mode_is_order_,
-               "autoinc_version"         , autoinc_version_);
+               "autoinc_version"         , autoinc_version_,
+               "autoinc_auto_increment"  , autoinc_auto_increment_);
 
   inline bool with_order() const { return !part_value_no_order_; }
   // pay attention to schema changes
@@ -161,6 +163,7 @@ struct AutoincParam
   int64_t auto_increment_cache_size_;
   bool              autoinc_mode_is_order_;
   int64_t           autoinc_version_;
+  uint64_t          autoinc_auto_increment_; // auto increment value of table schema
   OB_UNIS_VERSION(1);
 };
 

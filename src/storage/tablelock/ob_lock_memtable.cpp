@@ -647,13 +647,15 @@ int ObLockMemtable::set(
     const uint64_t table_id,
     const storage::ObTableReadInfo &read_info,
     const ObIArray<share::schema::ObColDesc> &columns,
-    const storage::ObStoreRow &row)
+    const storage::ObStoreRow &row,
+    const share::ObEncryptMeta *encrypt_meta)
 {
   UNUSED(ctx);
   UNUSED(table_id);
   UNUSED(read_info);
   UNUSED(columns);
   UNUSED(row);
+  UNUSED(encrypt_meta);
   return OB_NOT_SUPPORTED;
 }
 

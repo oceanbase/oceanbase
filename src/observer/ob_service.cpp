@@ -2680,5 +2680,39 @@ int ObService::init_tenant_config(
   return OB_SUCCESS;
 }
 
+int ObService::update_tenant_info_cache(
+    const ObUpdateTenantInfoCacheArg &arg,
+    ObUpdateTenantInfoCacheRes &result)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+
+    if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
+    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(arg.get_ora_rowscn(), arg.get_tenant_info()))) {
+      COMMON_LOG(WARN, "update_tenant_info_cache failed", KR(ret), K(arg));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
+    } else {
+      LOG_TRACE("finish update_tenant_info_cache", KR(ret), K(arg), K(result));
+    }
+  }
+  return ret;
+}
+
 }// end namespace observer
 }// end namespace oceanbase

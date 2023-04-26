@@ -153,7 +153,8 @@ public:
                               obrpc::ObEstPartRes &res) const;
   int estimate_tablet_block_count(const obrpc::ObEstBlockArg &arg,
                                   obrpc::ObEstBlockRes &res) const;
-
+  int update_tenant_info_cache(const obrpc::ObUpdateTenantInfoCacheArg &arg,
+                                  obrpc::ObUpdateTenantInfoCacheRes &result);
   ////////////////////////////////////////////////////////////////
   // ObRpcMinorFreezeP @RS minor freeze
   int minor_freeze(const obrpc::ObMinorFreezeArg &arg,

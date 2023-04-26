@@ -190,14 +190,16 @@ public:
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
       const ObColDescIArray &col_descs,
-      const storage::ObStoreRow &row);
+      const storage::ObStoreRow &row,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
   int update_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
       const ObColDescIArray &col_descs,
       const ObIArray<int64_t> &update_idx,
       const storage::ObStoreRow &old_row,
-      const storage::ObStoreRow &new_row);
+      const storage::ObStoreRow &new_row,
+      const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
   int lock_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -505,6 +507,7 @@ private:
       const bool for_replay,
       const memtable::MemtableRefOp ref_op);
   void print_memtables_for_table();
+
 
 private:
   static const int32_t TABLET_VERSION = 1;
@@ -887,6 +890,7 @@ int ObTablet::save_multi_source_data_unit(
   }
   return ret;
 }
+
 
 } // namespace storage
 } // namespace oceanbase

@@ -192,8 +192,8 @@ private:
   typedef hash::HashMapTypes<const IObDedupTask *, IObDedupTask *>::pair_type TaskMapKVPair;
   static const int32_t DEFAULT_THREAD_NUM = 4;
   static const int32_t MAX_THREAD_NUM = 64;
-  static const int32_t QUEUE_WAIT_TIME_MS = 10; //10ms
-  static const int32_t MAX_QUEUE_WAIT_TIME_MS = 100; //100ms
+  static const int32_t QUEUE_WAIT_TIME_MS = 50; //50ms
+  static const int32_t MAX_QUEUE_WAIT_TIME_MS = 500; //500ms
   static const int64_t GC_BATCH_NUM = 512;
   static const int64_t DEFALT_THREAD_DEAD_THRESHOLD = 30000000L; //30s
   static const int64_t THREAD_CHECK_INTERVAL = 10000000L; //10s

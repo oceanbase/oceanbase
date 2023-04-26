@@ -209,10 +209,10 @@ int PalfEnvImpl::init(
     PALF_LOG(ERROR, "construct log path failed", K(ret), K(pret));
   } else if (OB_FAIL(palf_handle_impl_map_.init("LOG_HASH_MAP", tenant_id))) {
     PALF_LOG(ERROR, "palf_handle_impl_map_ init failed", K(ret));
-  } else if (OB_FAIL(log_loop_thread_.init(true, this))) {
+  } else if (OB_FAIL(log_loop_thread_.init(this))) {
     PALF_LOG(ERROR, "log_loop_thread_ init failed", K(ret));
   } else if (OB_FAIL(
-                 election_timer_.init_and_start(1, 1_ms, "ElectTimer"))) { // just one worker thread
+                 election_timer_.init_and_start(1, 10_ms, "ElectTimer"))) { // just one worker thread
     PALF_LOG(ERROR, "election_timer_ init failed", K(ret));
   } else if (OB_FAIL(election::GLOBAL_INIT_ELECTION_MODULE())) {
     PALF_LOG(ERROR, "global init election module failed", K(ret));
@@ -827,7 +827,6 @@ int PalfEnvImpl::for_each(const common::ObFunction<int (IPalfHandleImpl *)> &fun
     int ret = OB_SUCCESS;
     if (OB_FAIL(func(ipalf_handle_impl))) {
       PALF_LOG(WARN, "execute func failed", K(ret), K(ls_key));
-    } else {
     }
     if (OB_FAIL(ret)) {
      bool_ret = false;

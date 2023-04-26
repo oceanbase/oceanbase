@@ -193,7 +193,8 @@ public:
       const uint64_t table_id,
       const storage::ObTableReadInfo &read_info,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
-      const storage::ObStoreRow &row);
+      const storage::ObStoreRow &row,
+      const share::ObEncryptMeta *encrypt_meta);
   virtual int set(
       storage::ObStoreCtx &ctx,
       const uint64_t table_id,
@@ -201,7 +202,8 @@ public:
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const ObIArray<int64_t> &update_idx,
       const storage::ObStoreRow &old_row,
-      const storage::ObStoreRow &new_row);
+      const storage::ObStoreRow &new_row,
+      const share::ObEncryptMeta *encrypt_meta);
 
   // lock is used to lock the row(s)
   // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
@@ -291,8 +293,7 @@ public:
   // decrypt_buf is used for decryption
   virtual int replay_row(
       storage::ObStoreCtx &ctx,
-      ObMemtableMutatorIterator *mmi,
-      ObEncryptRowBuf &decrypt_buf);
+      ObMemtableMutatorIterator *mmi);
   virtual int replay_schema_version_change_log(
       const int64_t schema_version);
 
@@ -466,6 +467,8 @@ public:
                                   const bool for_replay,
                                   const MemtableRefOp ref_op = MemtableRefOp::NONE,
                                   const bool is_callback = false);
+
+
   // Print stat data in log.
   // For memtable debug.
   int print_stat() const;
@@ -581,6 +584,8 @@ private:
   bool contain_hotspot_row_;
   ObMultiSourceData multi_source_data_;
   mutable common::TCRWLock multi_source_data_lock_;
+  transaction::ObTxEncryptMeta *encrypt_meta_;
+  common::SpinRWLock encrypt_meta_lock_;
 };
 
 template<class T>

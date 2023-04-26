@@ -45,11 +45,14 @@ using namespace share;
 class ObTenantRoleTransitionConstants
 {
 public:
-  static constexpr int64_t TENANT_INFO_REFRESH_TIME_US = 100 * 1000;  // 100ms
-  static constexpr int64_t TENANT_INFO_LEASE_TIME_US = 2 * TENANT_INFO_REFRESH_TIME_US;  // 200ms
-
+  static constexpr int64_t PRIMARY_UPDATE_LS_RECOVERY_STAT_TIME_US = 1000 * 1000;  // 1s
+  static constexpr int64_t STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US = 100 * 1000;  // 100ms
+  static constexpr int64_t STS_TENANT_INFO_REFRESH_TIME_US = 100 * 1000;  // 100ms
+  static constexpr int64_t DEFAULT_TENANT_INFO_REFRESH_TIME_US = 1000 * 1000;  // 1s
+  static constexpr int64_t TENANT_INFO_LEASE_TIME_US = 2 * DEFAULT_TENANT_INFO_REFRESH_TIME_US;  // 2s
   static const char* const SWITCH_TO_PRIMARY_LOG_MOD_STR;
   static const char* const SWITCH_TO_STANDBY_LOG_MOD_STR;
+  static const char* const RESTORE_TO_STANDBY_LOG_MOD_STR;
 };
 
 /*description:

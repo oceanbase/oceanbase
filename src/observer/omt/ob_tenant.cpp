@@ -669,11 +669,13 @@ int ObTenant::init(const ObTenantMeta &meta)
       // there must be 2 workers.
       static_cast<ObThWorker*>(workers_.get_first()->get_data())->set_priority_limit(QQ_HIGH);
       static_cast<ObThWorker*>(workers_.get_last()->get_data())->set_priority_limit(QQ_NORMAL);
-      for (int level = MULTI_LEVEL_THRESHOLD; level < MAX_REQUEST_LEVEL; level++) {
-        if (OB_FAIL(acquire_level_worker(1, succ_cnt, level))) {
-          break;
+      if (!is_virtual_tenant_id(id_) && !is_meta_tenant(id_)) {
+        for (int level = MULTI_LEVEL_THRESHOLD; level < MAX_REQUEST_LEVEL; level++) {
+          if (OB_FAIL(acquire_level_worker(1, succ_cnt, level))) {
+            break;
+          }
+          succ_cnt = 0L;
         }
-        succ_cnt = 0L;
       }
       timeup();
     }

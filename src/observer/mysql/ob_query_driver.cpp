@@ -279,13 +279,24 @@ int ObQueryDriver::convert_string_value_charset(ObObj& value, ObResultSet &resul
   ObCharsetType charset_type = CHARSET_INVALID;
   const ObSQLSessionInfo &my_session = result.get_session();
   ObArenaAllocator *allocator = NULL;
-  if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+  ObCollationType from_collation_type = value.get_collation_type();
+  ObCollationType to_collation_type = CS_TYPE_INVALID;
+  if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
+    LOG_WARN("fail to get result charset", K(ret));
+  } else if (from_collation_type == (to_collation_type = ObCharset::get_default_collation(charset_type))) {
+    const ObCharsetInfo *charset_info = ObCharset::get_charset(from_collation_type);
+    if (OB_ISNULL(charset_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("charsetinfo is null", K(ret), K(from_collation_type), K(to_collation_type), K(value));
+    } else if (CS_TYPE_INVALID == from_collation_type) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid collation", K(ret), K(from_collation_type), K(to_collation_type), K(value));
+    }
+  } else if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
     LOG_WARN("fail to get lob fake allocator", K(ret));
   } else if (OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lob fake allocator is null.", K(ret), K(value));
-  } else if (OB_FAIL(my_session.get_character_set_results(charset_type))) {
-    LOG_WARN("fail to get result charset", K(ret));
   } else {
     OZ (value.convert_string_value_charset(charset_type, *allocator));
   }

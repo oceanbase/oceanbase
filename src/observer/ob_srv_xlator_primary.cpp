@@ -72,6 +72,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
   RPC_PROCESSOR(ObGetLeaderLocationsP, gctx_);
   RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
+  RPC_PROCESSOR(ObRpcNotifySwitchLeaderP, gctx_);
 
   // interrupt
   RPC_PROCESSOR(obrpc::ObInterruptProcessor);

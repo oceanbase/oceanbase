@@ -1318,7 +1318,8 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected null", K(ret), K(session), K(sql_ctx));
   } else if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
-             dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
+             dml_stmt.get_query_ctx()->is_contain_select_for_update_ ||
+             dml_stmt.get_query_ctx()->is_contain_inner_table_) {
     is_weak_read = false;
   } else {
     ObConsistencyLevel consistency_level = INVALID_CONSISTENCY;

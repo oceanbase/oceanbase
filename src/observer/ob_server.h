@@ -98,7 +98,7 @@ class ObServer
 {
 public:
   static const int64_t DEFAULT_ETHERNET_SPEED = 1000 / 8 * 1024 * 1024; // default 125m/s  1000Mbit
-  static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 10L; // 60s
+  static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 300L; // 5min
   static const uint64_t DEFAULT_CPU_FREQUENCY = 2500 * 1000; // 2500 * 1000 khz
   static ObServer &get_instance();
 

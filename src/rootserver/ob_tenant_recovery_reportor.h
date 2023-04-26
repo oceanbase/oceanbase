@@ -67,6 +67,7 @@ public:
 private:
   static int get_sync_point_(const share::ObLSID &id, share::SCN &scn, share::SCN &read_scn);
   int update_ls_recovery_stat_();
+  int64_t get_idle_time_();
 
 public:
  TO_STRING_KV(K_(is_inited), K_(tenant_id));

@@ -35,7 +35,8 @@ OB_SERIALIZE_MEMBER(AutoincParam,
                     auto_increment_cache_size_,
                     part_value_no_order_,
                     autoinc_mode_is_order_,
-                    autoinc_version_);
+                    autoinc_version_,
+                    autoinc_auto_increment_);
 
 }//end namespace share
 }//end namespace oceanbase

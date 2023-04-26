@@ -29,7 +29,7 @@
 #include "ob_ts_worker.h"
 #include "ob_location_adapter.h"
 
-#define REFRESH_GTS_INTERVEL_US  (100 * 1000)
+#define REFRESH_GTS_INTERVEL_US  (500 * 1000)
 
 namespace oceanbase
 {

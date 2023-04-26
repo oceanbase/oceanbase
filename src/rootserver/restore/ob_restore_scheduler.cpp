@@ -582,6 +582,11 @@ int ObRestoreService::post_check(const ObPhysicalRestoreJob &job_info)
             share::STANDBY_TENANT_ROLE, all_tenant_info.get_switchover_status(),
             share::NORMAL_SWITCHOVER_STATUS, new_switch_ts))) {
       LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id_), K(all_tenant_info));
+    } else {
+      ObTenantRoleTransitionService role_transition_service(tenant_id_, sql_proxy_,
+                                            GCTX.srv_rpc_proxy_, ObSwitchTenantArg::OpType::INVALID);
+      (void)role_transition_service.broadcast_tenant_info(
+            ObTenantRoleTransitionConstants::RESTORE_TO_STANDBY_LOG_MOD_STR);
     }
   }
 

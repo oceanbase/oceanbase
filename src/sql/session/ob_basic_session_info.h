@@ -930,7 +930,6 @@ public:
   int is_use_transmission_checksum(bool &use_transmission_checksum) const;
   int is_select_index_enabled(bool &select_index_enabled) const;
   int get_name_case_mode(common::ObNameCaseMode &case_mode) const;
-  int64_t get_variables_last_modify_time() const { return variables_last_modify_time_;}
   int get_init_connect(common::ObString &str) const;
   /// @}
 
@@ -1897,8 +1896,6 @@ private:
   uint32_t sessid_;
   uint32_t master_sessid_;
   uint64_t proxy_sessid_;
-  //TODO(qianfu):this is not used,may be removed
-  int64_t variables_last_modify_time_;
   int64_t global_vars_version_; // used for obproxy synchronize variables
   int64_t sys_var_base_version_;
   /*******************************************

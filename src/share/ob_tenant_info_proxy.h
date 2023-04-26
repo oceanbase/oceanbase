@@ -113,6 +113,7 @@ IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
  TO_STRING_KV(K_(tenant_id), K_(tenant_role), K_(switchover_status),
               K_(switchover_epoch), K_(sync_scn), K_(replayable_scn),
               K_(standby_scn), K_(recovery_until_scn), K_(log_mode));
+  DECLARE_TO_YSON_KV;
 
   // Getter&Setter
   const ObTenantRole &get_tenant_role() const { return tenant_role_; }
@@ -168,6 +169,19 @@ public:
    */
   static int load_tenant_info(const uint64_t tenant_id, ObISQLClient *proxy,
                               const bool for_update,
+                              ObAllTenantInfo &tenant_info);
+
+  /**
+   * @description: get target tenant's tenant_info from inner table
+   * @param[in] tenant_id
+   * @param[in] proxy
+   * @param[in] for_update select for_update
+   * @param[out] ora_rowscn
+   * @param[out] tenant_info
+   */
+  static int load_tenant_info(const uint64_t tenant_id, ObISQLClient *proxy,
+                              const bool for_update,
+                              int64_t &ora_rowscn,
                               ObAllTenantInfo &tenant_info);
   /**
    * @description: update tenant recovery status 
@@ -244,7 +258,7 @@ public:
     const ObTenantSwitchoverStatus &old_status,
     const ObTenantSwitchoverStatus &new_status,
     int64_t &new_switchover_epoch);
-  static int fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info);
+  static int fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info, int64_t &ora_rowscn);
 
   /**
    * @description: update tenant recovery_until_scn in trans

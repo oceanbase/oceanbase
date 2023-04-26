@@ -370,9 +370,6 @@ struct ObMvccRow
                                     const transaction::ObTransID &tx_id);
   int64_t get_total_trans_node_cnt() const { return total_trans_node_cnt_; }
   int64_t get_last_compact_cnt() const { return last_compact_cnt_; }
-  // ===================== ObMvccRow Event Statistic =====================
-  void lock_begin(ObIMemtableCtx &ctx) const;
-  void mvcc_write_end(ObIMemtableCtx &ctx, int64_t ret) const;
   // ===================== ObMvccRow Flag Interface =====================
   OB_INLINE bool is_btree_indexed() const
   {

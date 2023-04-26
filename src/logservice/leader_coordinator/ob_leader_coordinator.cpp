@@ -78,9 +78,9 @@ int ObLeaderCoordinator::mtl_init(ObLeaderCoordinator *&p_coordinator)// init ti
   if(p_coordinator->is_running_) {
     ret = OB_INIT_TWICE;
     COORDINATOR_LOG(ERROR, "has been inited alread]y", KR(ret));
-  } else if (CLICK_FAIL(p_coordinator->recovery_detect_timer_.init_and_start(1, 1_ms, "CoordTR"))) {
+  } else if (CLICK_FAIL(p_coordinator->recovery_detect_timer_.init_and_start(1, 100_ms, "CoordTR"))) {
     COORDINATOR_LOG(ERROR, "fail to init and start recovery_detect_timer", KR(ret));
-  } else if (CLICK_FAIL(p_coordinator->failure_detect_timer_.init_and_start(1, 1_ms, "CoordTF"))) {
+  } else if (CLICK_FAIL(p_coordinator->failure_detect_timer_.init_and_start(1, 100_ms, "CoordTF"))) {
     COORDINATOR_LOG(ERROR, "fail to init and start failure_detect_timer", KR(ret));
   } else {
     COORDINATOR_LOG(INFO, "ObLeaderCoordinator mtl init success", KR(ret));
@@ -99,7 +99,7 @@ int ObLeaderCoordinator::mtl_start(ObLeaderCoordinator *&p_coordinator)// start 
     new(p_coordinator->all_ls_election_reference_info_) ObArray<LsElectionReferenceInfo>();
     if (CLICK_FAIL(p_coordinator->recovery_detect_timer_.schedule_task_repeat(
         p_coordinator->refresh_priority_task_handle_,
-        500_ms,
+        5000_ms,
         [p_coordinator](){ p_coordinator->refresh(); return false; }))) {
       COORDINATOR_LOG(ERROR, "schedule repeat task failed", KR(ret));
     } else {
@@ -175,6 +175,12 @@ int ObLeaderCoordinator::get_ls_election_reference_info(const share::ObLSID &ls_
     }
   }
   return ret;
+}
+
+int ObLeaderCoordinator::schedule_refresh_priority_task()
+{
+  // the parameter is set to 1us to pass the checking
+  return refresh_priority_task_handle_.reschedule_after(1);
 }
 
 }

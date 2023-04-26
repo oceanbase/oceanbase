@@ -1210,6 +1210,11 @@ int LogSlidingWindow::feedback_freeze_last_log_()
   return ret;
 }
 
+bool LogSlidingWindow::is_in_period_freeze_mode() const
+{
+  return (PERIOD_FREEZE_MODE == freeze_mode_);
+}
+
 int LogSlidingWindow::check_and_switch_freeze_mode()
 {
   int ret = OB_SUCCESS;

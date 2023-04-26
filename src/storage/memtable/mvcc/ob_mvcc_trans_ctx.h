@@ -172,6 +172,7 @@ public:
 
   friend class ObITransCallbackIterator;
   enum { MAX_CALLBACK_LIST_COUNT = OB_MAX_CPU_NUM };
+  enum { MAX_CB_ALLOCATOR_COUNT = OB_MAX_CPU_NUM };
   enum {
     PARALLEL_STMT = -1
   };
@@ -192,12 +193,15 @@ public:
       callback_remove_for_rollback_to_count_(0),
       pending_log_size_(0),
       flushed_log_size_(0),
-      cb_allocator_(cb_allocator)
+      cb_allocator_(cb_allocator),
+      cb_allocators_(NULL)
   {
   }
   ~ObTransCallbackMgr() {}
   void reset();
   ObIMvccCtx &get_ctx() { return host_; }
+  void *callback_alloc(const int64_t size);
+  void callback_free(ObITransCallback *cb);
   int append(ObITransCallback *node);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
@@ -323,6 +327,7 @@ private:
   // current flushed log size in leader participant
   int64_t flushed_log_size_;
   ObMemtableCtxCbAllocator &cb_allocator_;
+  ObMemtableCtxCbAllocator *cb_allocators_;
 };
 
 //class ObIMvccCtx;

@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_META_OBJ_STRUCT_H_
 
 #include "common/log/ob_log_constants.h"
+#include "common/ob_clock_generator.h"
 #include "share/ob_define.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 
@@ -206,7 +207,7 @@ void ObMetaObjGuard<T>::set_obj(ObMetaObj<T> &obj)
     } else {
       obj_ = obj.ptr_;
       obj_->inc_ref();
-      hold_start_time_ = ObTimeUtility::current_time();
+      hold_start_time_ = ObClockGenerator::getClock();
     }
   }
 }
@@ -223,7 +224,7 @@ void ObMetaObjGuard<T>::set_obj(T *obj, common::ObIAllocator *allocator)
    } else {
      obj_ = obj;
      obj_->inc_ref();
-     hold_start_time_ = ObTimeUtility::current_time();
+     hold_start_time_ = ObClockGenerator::getClock();
    }
   }
 }
@@ -262,7 +263,7 @@ ObMetaObjGuard<T> &ObMetaObjGuard<T>::operator = (const ObMetaObjGuard<T> &other
         ob_abort();
       } else {
         obj_ = other.obj_;
-        hold_start_time_ = ObTimeUtility::current_time();
+        hold_start_time_ = ObClockGenerator::getClock();
         other.obj_->inc_ref();
         if (OB_UNLIKELY(other.obj_->get_ref() < 2)) {
           STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "obj guard may be accessed by multiple threads or ref cnt leak", KP(obj_), KP(obj_pool_));
@@ -301,7 +302,7 @@ void ObMetaObjGuard<T>::reset_obj()
       ob_abort();
     } else {
       const int64_t ref_cnt = obj_->dec_ref();
-      const int64_t hold_time = ObTimeUtility::current_time() - hold_start_time_;
+      const int64_t hold_time = ObClockGenerator::getClock() - hold_start_time_;
       if (OB_UNLIKELY(hold_time > HOLD_OBJ_MAX_TIME && need_hold_time_check())) {
         int ret = OB_ERR_TOO_MUCH_TIME;
         STORAGE_LOG(WARN, "The meta obj reference count was held for more "

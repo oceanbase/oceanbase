@@ -520,7 +520,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.set_curr_trans_last_stmt_end_time(0);
 
   //============================ 注意这些变量的生命周期 ================================
-  ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
@@ -598,7 +597,7 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   // 也不需要在这里设置结束时间，因为这已经相当于事务的最后一条语句了。
   // 最后，需要判断ret错误码，只有成功执行的sql才记录结束时间
   if (session.get_in_transaction() && !async_resp_used && OB_SUCC(ret)) {
-    session.set_curr_trans_last_stmt_end_time(ObTimeUtility::current_time());
+    session.set_curr_trans_last_stmt_end_time(ObClockGenerator::getClock());
   }
 
   // need_response_error这个变量保证仅在

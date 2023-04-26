@@ -22,7 +22,7 @@ namespace palf
 {
 LogLoopThread::LogLoopThread()
     : palf_env_impl_(NULL),
-      run_interval_(DEFAULT_PALF_LOG_LOOP_INTERVAL_US),
+      run_interval_(DEFAULT_LOG_LOOP_INTERVAL_US),
       is_inited_(false)
 {
 }
@@ -32,7 +32,7 @@ LogLoopThread::~LogLoopThread()
   destroy();
 }
 
-int LogLoopThread::init(const bool is_normal_mode, IPalfEnvImpl *palf_env_impl)
+int LogLoopThread::init(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -44,9 +44,7 @@ int LogLoopThread::init(const bool is_normal_mode, IPalfEnvImpl *palf_env_impl)
   } else {
     palf_env_impl_ = palf_env_impl;
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
-    if (false == is_normal_mode) {
-      run_interval_ = PALF_LOG_LOOP_INTERVAL_US_UPPER_BOUND;
-    }
+    run_interval_ = DEFAULT_LOG_LOOP_INTERVAL_US;
     is_inited_ = true;
   }
 
@@ -94,14 +92,47 @@ void LogLoopThread::log_loop_()
       last_switch_state_time = start_ts;
     }
 
-    auto switch_freeze_mode_func  = [](IPalfHandleImpl *ipalf_handle_impl) {
-      return ipalf_handle_impl->check_and_switch_freeze_mode();
-    };
     if (start_ts - last_check_freeze_mode_time >= 1 * 1000 * 1000) {
+      auto switch_freeze_mode_func  = [](IPalfHandleImpl *ipalf_handle_impl) {
+        return ipalf_handle_impl->check_and_switch_freeze_mode();
+      };
       if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(switch_freeze_mode_func))) {
         PALF_LOG_RET(WARN, tmp_ret, "for_each switch_freeze_mode_func failed", K(tmp_ret));
       }
+      // Check whether some palf is in period_freeze_mode.
+      bool any_in_period_freeze_mode = false;
+      auto check_freeze_mode_func  = [&any_in_period_freeze_mode](IPalfHandleImpl *ipalf_handle_impl) {
+        any_in_period_freeze_mode = (true == ipalf_handle_impl->is_in_period_freeze_mode()) \
+                                    ? true : any_in_period_freeze_mode;
+        int ret = OB_SUCCESS;
+        if (any_in_period_freeze_mode) {
+          // If any one returns true, break iteration.
+          ret = OB_ITER_END;
+        }
+        return ret;
+      };
+      if (OB_SUCCESS != (tmp_ret = palf_env_impl_->for_each(check_freeze_mode_func))) {
+        PALF_LOG_RET(WARN, tmp_ret, "for_each check_freeze_mode_func failed", K(tmp_ret));
+      }
+      // update ts for each round
       last_check_freeze_mode_time = start_ts;
+
+      // Try switch run_interval_ according to whether some palf is in period_freeze_mode.
+      if (any_in_period_freeze_mode) {
+        if (run_interval_ > LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US) {
+          // Some palf_handle is in period_freeze mode, the run_interval_
+          // need be adjusted to DEFAULT_LOG_LOOP_INTERVAL_US here.
+          run_interval_ = LOG_LOOP_INTERVAL_FOR_PERIOD_FREEZE_US;
+          PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval), K(any_in_period_freeze_mode));
+        }
+      } else {
+        // There is not any ls in period_freeze mode,
+        // try set run_interval_ to 100ms.
+        if (run_interval_ < DEFAULT_LOG_LOOP_INTERVAL_US) {
+          run_interval_ = DEFAULT_LOG_LOOP_INTERVAL_US;
+          PALF_LOG(INFO, "LogLoopThread switch run_interval(us)", K_(run_interval), K(any_in_period_freeze_mode));
+        }
+      }
     }
 
     auto try_freeze_log_func = [](IPalfHandleImpl *ipalf_handle_impl) {
@@ -119,7 +150,7 @@ void LogLoopThread::log_loop_()
     ob_usleep(sleep_ts);
 
     if (REACH_TENANT_TIME_INTERVAL(5 * 1000 * 1000)) {
-      PALF_LOG(INFO, "LogLoopThread round_cost_time", K(round_cost_time));
+      PALF_LOG(INFO, "LogLoopThread round_cost_time(us)", K(round_cost_time));
     }
   }
 }

@@ -91,7 +91,7 @@ class ObPxTargetMgr
     : public share::ObThreadPool
 {
 
-#define PX_REFRESH_TARGET_INTERVEL_US (100 * 1000)
+#define PX_REFRESH_TARGET_INTERVEL_US (500 * 1000)
 #define PX_MAX_ALIVE_SERVER_NUM (2000)
 
 public:

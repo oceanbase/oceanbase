@@ -17,6 +17,7 @@
 #include "lib/ob_errno.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -317,6 +318,30 @@ int ObLSMap::get_ls(const share::ObLSID &ls_id,
     } else if (OB_FAIL(handle.set_ls(*this, *ls, mod))) {
       LOG_WARN("get_ls fail", K(ret), K(ls_id));
     }
+  }
+  return ret;
+}
+
+int ObLSMap::get_all_ls_id(ObIArray<ObLSID> &ls_id_array)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = NULL;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSMap not init", K(ret));
+  } else {
+    for (int64_t bucket_idx = 0 ; OB_SUCC(ret) && bucket_idx < BUCKETS_CNT; ++bucket_idx) {
+      ObQSyncLockReadGuard bucket_guard(buckets_lock_[bucket_idx]);
+      ls = ls_buckets_[bucket_idx];
+      while (OB_SUCC(ret) && OB_NOT_NULL(ls)) {
+        if (OB_FAIL(ls_id_array.push_back(ls->get_ls_id()))) {
+          LOG_WARN("failed to push back ls id", K(ret), KP(ls));
+        } else {
+          ls = static_cast<ObLS *>(ls->next_);
+        }
+      } // end of while
+    } // end of for
   }
   return ret;
 }

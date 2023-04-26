@@ -55,6 +55,43 @@ private:
   bool enable_fast_freeze_;
 };
 
+
+// record ls_id/tablet_id
+class ObCompactionScheduleIterator
+{
+public:
+  ObCompactionScheduleIterator(
+    const bool is_major,
+    ObLSGetMod mod = ObLSGetMod::STORAGE_MOD,
+    const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)
+    : mod_(mod),
+      is_major_(is_major),
+      timeout_us_(timeout_us),
+      ls_idx_(0),
+      tablet_idx_(0),
+      ls_ids_(),
+      tablet_ids_()
+  {}
+  ~ObCompactionScheduleIterator() { reset(); }
+  int build_iter();
+  int get_next_ls(ObLSHandle &ls_handle);
+  int get_next_tablet(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
+  void reset();
+  bool is_valid() const;
+  OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
+private:
+  static const int64_t LS_ID_ARRAY_CNT = 10;
+  static const int64_t TABLET_ID_ARRAY_CNT = 2000;
+  ObLSGetMod mod_;
+  bool is_major_;
+  int64_t timeout_us_;
+  int64_t ls_idx_;
+  uint64_t tablet_idx_;
+  common::ObSEArray<share::ObLSID, LS_ID_ARRAY_CNT> ls_ids_;
+  common::ObSEArray<ObTabletID, TABLET_ID_ARRAY_CNT> tablet_ids_;
+};
+
+
 class ObTenantTabletScheduler
 {
 public:
@@ -171,11 +208,13 @@ private:
   int schedule_all_tablets_medium();
   int schedule_ls_medium_merge(
       int64_t &merge_version,
-      ObLS &ls,
+      ObLSHandle &ls_handle,
       bool &ls_merge_finish,
-      bool &all_ls_weak_read_ts_ready);
+      bool &all_ls_weak_read_ts_ready,
+      int64_t &schedule_tablet_cnt);
   int schedule_ls_minor_merge(
-      ObLS &ls);
+      ObLSHandle &ls_handle,
+      int64_t &schedule_tablet_cnt);
   int try_remove_old_table(ObLS &ls);
   int restart_schedule_timer_task(
     const int64_t interval,
@@ -226,10 +265,11 @@ private:
   static const int64_t DEFAULT_HASH_MAP_BUCKET_CNT = 1009;
   static const int64_t DEFAULT_COMPACTION_SCHEDULE_INTERVAL = 30 * 1000 * 1000L; // 30s
   static const int64_t CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL = 10 * 1000 * 1000L; // 10s
-  static const int64_t CHECK_REPORT_SCN_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
+  static const int64_t CHECK_REPORT_SCN_INTERVAL = 5 * 60 * 1000 * 1000L; // 600s
   static const int64_t ADD_LOOP_EVENT_INTERVAL = 120 * 1000 * 1000L; // 120s
   static const int64_t WAIT_MEDIUM_CHECK_THRESHOLD = 10 * 60 * 1000 * 1000L; // 10m
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
+  static const int64_t SCHEDULE_TABLET_BATCH_CNT = 50 * 1000L; // 5w
   static const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5m
 private:
   bool is_inited_;
@@ -251,6 +291,8 @@ private:
   SSTableGCTask sstable_gc_task_;
   ObFastFreezeChecker fast_freeze_checker_;
   bool enable_adaptive_compaction_;
+  ObCompactionScheduleIterator minor_ls_tablet_iter_;
+  ObCompactionScheduleIterator medium_ls_tablet_iter_;
   int64_t error_tablet_cnt_; // for diagnose
   compaction::ObStorageLocalityCache ls_locality_cache_;
 };

@@ -215,7 +215,7 @@ public:
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
-  const static int MIN_SCHEDULER_INTERVAL = 5 * 1000 * 1000;
+  const static int MIN_SCHEDULER_INTERVAL = 20 * 1000 * 1000;
 
   bool inited_;
   bool stoped_;

@@ -802,26 +802,15 @@ const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 
 const double MIN_TENANT_QUOTA = .5;
-const double EXT_LOG_TENANT_CPU = 4.;
-const int64_t EXT_LOG_TENANT_MEMORY_LIMIT = 4L << 30;
-const double OB_MONITOR_CPU = 1.;
-const double OB_DTL_CPU = 5.;
-const double OB_DIAG_CPU = 1.0;
-const double OB_DATA_CPU = 2.5;
-const double OB_RS_CPU = 1.0;
-const double OB_SVR_BLACKLIST_CPU = 1.0;
-const int64_t OB_RS_MEMORY = 2L << 30;
+const double OB_DTL_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 5.;
+const double OB_DATA_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 2.5;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
 const uint64_t OB_SYS_TENANT_ID = 1;
 const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
-const uint64_t OB_ELECT_TENANT_ID = 501;
-const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
-const uint64_t OB_RS_TENANT_ID = 510;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;
@@ -1851,9 +1840,7 @@ OB_INLINE bool is_valid_cluster_id(const int64_t cluster_id)
 
 OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
-  return is_virtual_tenant_id(tenant_id) &&
-       (OB_EXT_LOG_TENANT_ID == tenant_id ||
-        OB_RS_TENANT_ID == tenant_id);
+  return is_virtual_tenant_id(tenant_id);
 }
 
 enum ObNameCaseMode

@@ -7212,6 +7212,10 @@ int ObRootService::stop_server(const obrpc::ObAdminServerArg &arg)
         LOG_WARN("stop server failed", "server", arg.servers_, "zone", arg.zone_, K(ret));
       } else {
         LOG_INFO("stop server ok", K(arg));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(try_notify_switch_leader(obrpc::ObNotifySwitchLeaderArg::STOP_SERVER))) {
+          LOG_WARN("failed to notify switch leader", KR(ret), KR(tmp_ret));
+        }
       }
     }
   }
@@ -7462,6 +7466,10 @@ int ObRootService::stop_zone(const obrpc::ObAdminZoneArg &arg)
           LOG_WARN("stop zone failed", K(arg), K(ret));
         } else {
           LOG_INFO("stop zone ok", K(arg));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(try_notify_switch_leader(obrpc::ObNotifySwitchLeaderArg::STOP_ZONE))) {
+            LOG_WARN("failed to notify switch leader", KR(ret), KR(tmp_ret));
+          }
         }
       } else {
         //set other error code to 4179
@@ -7516,6 +7524,24 @@ int ObRootService::generate_stop_server_log_in_sync_dest_server_array(
   return ret;
 }
 
+int ObRootService::try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment)
+{
+  int ret = OB_SUCCESS;
+  ObServerManager::ObServerArray server_list;
+  ObZone zone;
+  obrpc::ObNotifySwitchLeaderArg arg;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(server_manager_.get_alive_servers(zone, server_list))) {
+    LOG_WARN("failed to get server list", KR(ret), K(zone));
+  } else if (OB_FAIL(arg.init(OB_INVALID_TENANT_ID, ObLSID(), ObAddr(), comment))) {
+    LOG_WARN("failed to init switch leader arg", KR(ret), K(comment));
+  } else if (OB_FAIL(ObRootUtils::notify_switch_leader(&rpc_proxy_, OB_SYS_TENANT_ID, arg, server_list))) {
+    LOG_WARN("failed to notify switch leader", KR(ret), K(arg), K(server_list));
+  }
+  return ret;
+}
 ////////////////////////////////////////////////////////////////
 // system admin command (alter system ...)
 ////////////////////////////////////////////////////////////////

@@ -2424,9 +2424,8 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
              || !ObStmt::is_dml_stmt(result.get_stmt_type())) {
     ret = (tmp_ret == OB_PC_LOCK_CONFLICT) ? OB_SUCCESS : tmp_ret;
   } else {
-    const int64_t curr_time = ObTimeUtility::current_time();
     const int64_t lqt = GCONF.large_query_threshold;
-    int64_t elapsed_time = curr_time - THIS_THWORKER.get_query_start_time();
+    int64_t elapsed_time = ObClockGenerator::getClock() - THIS_THWORKER.get_query_start_time();
     bool is_large_query = false;
     bool lq_from_plan = true;
     int64_t total_process_time = 0;

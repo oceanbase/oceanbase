@@ -66,6 +66,7 @@ public:
    */
   void refresh();
   int get_ls_election_reference_info(const share::ObLSID &ls_id, LsElectionReferenceInfo &reference_info) const;
+  int schedule_refresh_priority_task();
 private:
   common::ObArray<LsElectionReferenceInfo> *all_ls_election_reference_info_;
   // refresh priority and detect recovery from failure

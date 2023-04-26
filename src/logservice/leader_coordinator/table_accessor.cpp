@@ -107,6 +107,9 @@ int LsElectionReferenceInfoRow::change_zone_priority(const ObArray<ObArray<ObStr
       COORDINATOR_LOG_(WARN, "fail to roll back transaction");
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(schedule_refresh_priority_task_())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -130,6 +133,9 @@ int LsElectionReferenceInfoRow::change_manual_leader(const common::ObAddr &manua
     if (OB_SUCCESS != (tmp_ret = end_(false))) {
       COORDINATOR_LOG_(WARN, "fail to roll back transaction");
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(schedule_refresh_priority_task_())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -173,6 +179,9 @@ int LsElectionReferenceInfoRow::add_server_to_blacklist(const common::ObAddr &se
     if (OB_SUCCESS != (tmp_ret = end_(false))) {
       COORDINATOR_LOG_(WARN, "fail to roll back transaction");
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(schedule_refresh_priority_task_())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
   }
   return ret;
   #undef PRINT_WRAPPER
@@ -218,6 +227,9 @@ int LsElectionReferenceInfoRow::delete_server_from_blacklist(const common::ObAdd
       COORDINATOR_LOG_(WARN, "fail to roll back transaction");
     }
   }
+  if (OB_SUCC(ret) && OB_FAIL(schedule_refresh_priority_task_())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -251,6 +263,22 @@ int LsElectionReferenceInfoRow::write_and_commit_()
     COORDINATOR_LOG_(WARN, "update column failed");
   } else if (CLICK_FAIL(end_(true))) {
     COORDINATOR_LOG_(WARN, "commit change failed");
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int LsElectionReferenceInfoRow::schedule_refresh_priority_task_()
+{
+  LC_TIME_GUARD(1_s);
+  #define PRINT_WRAPPER K(*this), KR(ret)
+  int ret = OB_SUCCESS;
+  ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+  if (OB_ISNULL(coordinator)) {
+    ret = OB_ERR_UNEXPECTED;
+    COORDINATOR_LOG_(ERROR, "unexpected null of leader coordinator", KR(ret));
+  } else if (OB_FAIL(coordinator->schedule_refresh_priority_task())) {
+    COORDINATOR_LOG_(WARN, "failed to schedule refresh priority task", KR(ret));
   }
   return ret;
   #undef PRINT_WRAPPER

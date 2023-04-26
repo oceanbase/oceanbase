@@ -1705,6 +1705,7 @@ int ObTenantLSInfo::try_update_ls_primary_zone_(
     const common::ObSqlString &zone_priority)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_UNLIKELY(!primary_zone_info.is_valid()
         || new_primary_zone.is_empty() || zone_priority.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1716,11 +1717,22 @@ int ObTenantLSInfo::try_update_ls_primary_zone_(
   } else if (new_primary_zone != primary_zone_info.get_primary_zone()
       || zone_priority.string() != primary_zone_info.get_zone_priority_str()) {
     ObLSLifeAgentManager ls_life_agent(*GCTX.sql_proxy_);
-    if (OB_FAIL(ls_life_agent.update_ls_primary_zone(primary_zone_info.get_tenant_id(),
-            primary_zone_info.get_ls_id(),
+    ObLSInfo ls_info;
+    const uint64_t tenant_id = primary_zone_info.get_tenant_id();
+    const ObLSID ls_id = primary_zone_info.get_ls_id();
+    if (OB_FAIL(ls_life_agent.update_ls_primary_zone(tenant_id, ls_id,
             new_primary_zone, zone_priority.string()))) {
       LOG_WARN("failed to update ls primary zone", KR(ret), K(primary_zone_info),
           K(new_primary_zone), K(zone_priority));
+    } else if (OB_ISNULL(GCTX.lst_operator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.lst_operator_ is NULL", KR(ret));
+    } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id,
+            tenant_id, ls_id, share::ObLSTable::DEFAULT_MODE, ls_info))) {
+      LOG_WARN("get ls info from GCTX.lst_operator_ failed", KR(ret), K(tenant_id), K(ls_id));
+    } else if (OB_TMP_FAIL(ObRootUtils::try_notify_switch_ls_leader(GCTX.srv_rpc_proxy_, ls_info,
+            obrpc::ObNotifySwitchLeaderArg::MODIFY_PRIMARY_ZONE))) {
+      LOG_WARN("failed to switch ls leader", KR(ret), KR(tmp_ret), K(ls_id), K(ls_info));
     }
     LOG_INFO("[LS_MGR] update ls primary zone", KR(ret), K(new_primary_zone),
         K(zone_priority), K(primary_zone_info));

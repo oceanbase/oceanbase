@@ -542,6 +542,8 @@ void ObTxRedoLog::reset_mutator_buf()
   mutator_size_ = -1;
 }
 
+//TODO: if ob_admin_dump is called by others and clog is encrypted,
+//      unused_encrypt_info can work. This may be perfected in the future.
 int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
                                ObAdminMutatorStringArg &arg,
                                palf::block_id_t block_id,
@@ -552,6 +554,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
+  transaction::ObCLogEncryptInfo unused_encrypt_info;
+  unused_encrypt_info.init();
 
     arg.log_stat_->tx_redo_log_size_ += get_serialize_size();
   if (OB_ISNULL(iter_ptr) || OB_ISNULL(arg.writer_ptr_) || OB_ISNULL(arg.buf_)
@@ -560,7 +564,7 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
     TRANS_LOG(WARN, "invalid argument", KP(iter_ptr), KP(arg.writer_ptr_), KP(arg.buf_),
               KP(mutator_buf_), KP(replay_mutator_buf_));
   } else if (OB_FAIL(iter_ptr->deserialize(replay_mutator_buf_, mutator_size_, pos,
-                                           ctx_redo_info_.clog_encrypt_info_))) {
+                                           unused_encrypt_info))) {
     TRANS_LOG(WARN, "deserialize replay_mutator_buf_ failed", K(ret));
   } else {
     bool has_output = false;
@@ -587,7 +591,8 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
       //fill info in buf
     }
     bool has_dumped_meta_info = false;
-    while (OB_SUCC(iter_ptr->iterate_next_row())) {
+    memtable::ObEncryptRowBuf unused_row_buf;
+    while (OB_SUCC(iter_ptr->iterate_next_row(unused_row_buf, unused_encrypt_info))) {
       // arg.writer_ptr_->start_object();
       if (arg.filter_.is_tablet_id_valid()) {
         if (arg.filter_.get_tablet_id() != iter_ptr->get_row_head().tablet_id_) {

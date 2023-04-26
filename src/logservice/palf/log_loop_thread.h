@@ -27,7 +27,7 @@ public:
   LogLoopThread();
   virtual ~LogLoopThread();
 public:
-  int init(const bool is_normal_mode, IPalfEnvImpl *palf_env_impl);
+  int init(IPalfEnvImpl *palf_env_impl);
   void destroy();
   void run1();
 private:

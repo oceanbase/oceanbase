@@ -1149,6 +1149,20 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
 
 namespace memtable
 {
+void ObMemtableCtx::callback_free(ObITransCallback *cb)
+{
+  if (OB_ISNULL(cb)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
+  } else if (cb->is_table_lock_callback()) {
+    free_table_lock_callback(cb);
+  } else {
+    ATOMIC_INC(&callback_free_count_);
+    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
+    ctx_cb_allocator_.free(cb);
+    cb = NULL;
+  }
+}
+
 int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
 {
   int ret = OB_SUCCESS;

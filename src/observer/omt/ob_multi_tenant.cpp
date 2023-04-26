@@ -620,12 +620,6 @@ int ObMultiTenant::create_virtual_tenants()
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(create_tenant_without_unit(
-                         OB_EXT_LOG_TENANT_ID,
-                         EXT_LOG_TENANT_CPU,
-                         EXT_LOG_TENANT_CPU))) {
-    LOG_ERROR("add ext_log tenant fail", K(ret));
-
-  } else if (OB_FAIL(create_tenant_without_unit(
                          OB_DATA_TENANT_ID,
                          OB_DATA_CPU,
                          OB_DATA_CPU))) {
@@ -637,17 +631,6 @@ int ObMultiTenant::create_virtual_tenants()
                          OB_DTL_CPU))) {
     LOG_ERROR("add DTL tenant fail", K(ret));
 
-  } else if (OB_FAIL(create_tenant_without_unit(
-                         OB_RS_TENANT_ID,
-                         OB_RS_CPU,
-                         OB_RS_CPU))) {
-    LOG_ERROR("add RS tenant fail", K(ret));
-
-  } else if (OB_FAIL(create_tenant_without_unit(
-                         OB_SVR_BLACKLIST_TENANT_ID,
-                         OB_SVR_BLACKLIST_CPU,
-                         OB_SVR_BLACKLIST_CPU))) {
-    LOG_ERROR("add server balcklist tenant fail", K(ret));
   } else {
     // init allocator for OB_SERVER_TENANT_ID
     ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
@@ -678,10 +661,6 @@ int ObMultiTenant::create_tenant_without_unit(const uint64_t tenant_id,
 
   if (OB_SERVER_TENANT_ID == tenant_id) {
     mem_limit = INT64_MAX;
-  } else if (OB_EXT_LOG_TENANT_ID == tenant_id) {
-    mem_limit = EXT_LOG_TENANT_MEMORY_LIMIT;
-  } else if (OB_RS_TENANT_ID == tenant_id) {
-    mem_limit = GCONF.rootservice_memory_limit;
   } else {
     static const int64_t VIRTUAL_TENANT_MEMORY_LIMTI = 1L << 30;
     mem_limit = VIRTUAL_TENANT_MEMORY_LIMTI;

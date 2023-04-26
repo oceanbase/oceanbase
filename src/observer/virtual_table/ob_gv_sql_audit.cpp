@@ -847,7 +847,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         cells[cell_idx].set_uint64(record.data_.exec_record_.user_io_time_);
       } break;
       case SCHEDULE_TIME: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.sched_time_);
+        cells[cell_idx].set_uint64(0);
       } break;
       case ROW_CACHE_HIT: {
         cells[cell_idx].set_int(record.data_.exec_record_.row_cache_hit_);

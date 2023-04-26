@@ -23,7 +23,9 @@ struct ObRunningModeConfig
   static const int64_t MIN_MEM;
   static const int64_t MINI_MEM_LOWER;
   static const int64_t MINI_MEM_UPPER;
+  static const int64_t MINI_CPU_UPPER;
   bool mini_mode_ = false;
+  bool mini_cpu_mode_ = false;
   int64_t memory_limit_ = 0;
   static ObRunningModeConfig &instance();
 private:
@@ -41,10 +43,16 @@ inline bool is_mini_mode()
   return ObRunningModeConfig::instance().mini_mode_;
 }
 
-inline void update_mini_mode(int64_t memory_limit)
+inline bool is_mini_cpu_mode()
+{
+  return ObRunningModeConfig::instance().mini_cpu_mode_;
+}
+
+inline void update_mini_mode(int64_t memory_limit, int64_t cpu_cnt)
 {
   ObRunningModeConfig::instance().memory_limit_ = memory_limit;
   ObRunningModeConfig::instance().mini_mode_ = (memory_limit < lib::ObRunningModeConfig::MINI_MEM_UPPER);
+  ObRunningModeConfig::instance().mini_cpu_mode_ = (cpu_cnt <= lib::ObRunningModeConfig::MINI_CPU_UPPER);
 }
 
 } //lib

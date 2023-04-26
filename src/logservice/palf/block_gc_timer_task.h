@@ -30,7 +30,7 @@ public:
   void destroy();
   virtual void runTimerTask();
 private:
-  static const int64_t BLOCK_GC_TIMER_INTERVAL_MS = 10 * 1000;
+  static const int64_t BLOCK_GC_TIMER_INTERVAL_MS = 30 * 1000;
   PalfEnvImpl *palf_env_impl_;
   int64_t warn_time_;
   int tg_id_;

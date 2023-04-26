@@ -1961,6 +1961,69 @@ int ObRootUtils::check_left_f_in_primary_zone(ObZoneManager &zone_mgr,
   return ret;
 }
 
+int ObRootUtils::try_notify_switch_ls_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const share::ObLSInfo &ls_info,
+      const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_info.is_valid()) || OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_info), K(rpc_proxy));
+  } else {
+    ObArray<ObAddr> server_list;
+    obrpc::ObNotifySwitchLeaderArg arg;
+    const uint64_t tenant_id = ls_info.get_tenant_id();
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_info.get_replicas_cnt(); ++i) {
+      if (OB_FAIL(server_list.push_back(ls_info.get_replicas().at(i).get_server()))) {
+        LOG_WARN("failed to push back server", KR(ret), K(i), K(ls_info));
+      }
+    }
+    if (FAILEDx(arg.init(tenant_id, ls_info.get_ls_id(), ObAddr(), comment))) {
+      LOG_WARN("failed to init switch leader arg", KR(ret), K(tenant_id), K(ls_info), K(comment));
+    } else if (OB_FAIL(notify_switch_leader(rpc_proxy, tenant_id, arg, server_list))) {
+      LOG_WARN("failed to notify switch leader", KR(ret), K(arg), K(tenant_id), K(server_list));
+    }
+  }
+  return ret;
+
+}
+
+
+int ObRootUtils::notify_switch_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const uint64_t tenant_id,
+      const obrpc::ObNotifySwitchLeaderArg &arg,
+      const ObIArray<common::ObAddr> &addr_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+        || !arg.is_valid() || 0 == addr_list.count()) || OB_ISNULL(rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(arg), K(addr_list), KP(rpc_proxy));
+  } else {
+    ObTimeoutCtx ctx;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+      LOG_WARN("fail to set timeout ctx", KR(ret));
+    } else {
+      ObNotifySwitchLeaderProxy proxy(*rpc_proxy, &obrpc::ObSrvRpcProxy::notify_switch_leader);
+      for (int64_t i = 0; i < addr_list.count(); ++i) {
+        const int64_t timeout =  ctx.get_timeout();
+        if (OB_TMP_FAIL(proxy.call(addr_list.at(i), timeout, GCONF.cluster_id, tenant_id, arg))) {
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+          LOG_WARN("failed to send rpc", KR(ret), K(i), K(tenant_id), K(arg), K(addr_list));
+        }
+      }//end for
+      if (OB_TMP_FAIL(proxy.wait())) {
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        LOG_WARN("failed to wait all result", KR(ret), KR(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 ///////////////////////////////
 
 ObClusterRole ObClusterInfoGetter::get_cluster_role_v2()

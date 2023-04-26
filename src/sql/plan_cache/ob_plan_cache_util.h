@@ -772,8 +772,7 @@ struct ObPlanStat
 
   inline void update_cache_stat(const ObTableScanStat &stat)
   {
-    const int64_t current_time = common::ObTimeUtility::current_time();
-    if (current_time > gen_time_ + CACHE_POLICY_UPDATE_INTERVAL) {
+    if (ObClockGenerator::getClock() > gen_time_ + CACHE_POLICY_UPDATE_INTERVAL) {
       const int64_t update_times = ATOMIC_AAF(&cache_stat_update_times_, 1);
       ATOMIC_AAF(&bf_filter_cnt_, stat.bf_filter_cnt_);
       ATOMIC_AAF(&bf_access_cnt_, stat.bf_access_cnt_);

@@ -166,7 +166,7 @@ private:
   void print_archive_status_();
 
 private:
-  const int64_t THREAD_RUN_INTERVAL = 1000 * 1000L;
+  const int64_t THREAD_RUN_INTERVAL = 5 * 1000 * 1000L;
 private:
   bool inited_;
   uint64_t tenant_id_;

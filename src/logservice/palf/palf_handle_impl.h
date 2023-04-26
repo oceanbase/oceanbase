@@ -515,6 +515,7 @@ public:
   virtual int inner_flashback(const share::SCN &flashback_scn) = 0;
   virtual int check_and_switch_state() = 0;
   virtual int check_and_switch_freeze_mode() = 0;
+  virtual bool is_in_period_freeze_mode() const = 0;
   virtual int period_freeze_last_log() = 0;
   virtual int handle_prepare_request(const common::ObAddr &server,
                                      const int64_t &proposal_id) = 0;
@@ -845,6 +846,7 @@ public:
   // ==================================================================
   int check_and_switch_state() override final;
   int check_and_switch_freeze_mode() override final;
+  bool is_in_period_freeze_mode() const override final;
   int period_freeze_last_log() override final;
   int handle_prepare_request(const common::ObAddr &server,
                              const int64_t &proposal_id) override final;

@@ -109,8 +109,6 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
       TRANS_LOG(WARN, "timeout task init error", KR(ret));
     } else if (OB_FAIL(init_memtable_ctx_(tenant_id, ls_id))) {
       TRANS_LOG(WARN, "ObPartTransCtx init memtable context error", KR(ret), K(trans_id), K(ls_id));
-    } else if (OB_FAIL(clog_encrypt_info_.init())) {
-      TRANS_LOG(WARN, "init clog encrypt info failed", K(ret), K(trans_id));
     } else if (OB_FAIL(init_log_cbs_(ls_id, trans_id))) {
       TRANS_LOG(WARN, "init log cbs failed", KR(ret), K(trans_id), K(ls_id));
     } else if (OB_FAIL(ctx_tx_data_.init(ls_ctx_mgr, trans_id))) {
@@ -150,11 +148,8 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
 
     if (!GCONF.enable_sql_audit) {
       tlog_ = NULL;
-    } else if (OB_ISNULL(tlog_ = ObTransTraceLogFactory::alloc())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "alloc ObTransTraceLog error", KR(ret), KP_(tlog));
     } else {
-      // do nothing
+      tlog_ = &trace_log_;
     }
 
     is_inited_ = true;
@@ -239,15 +234,15 @@ void ObPartTransCtx::destroy()
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
-      ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
 
     mds_cache_.destroy();
     exec_info_.destroy();
 
+    reset_log_cbs_();
+
     timeout_task_.destroy();
-    clog_encrypt_info_.destroy();
     trace_info_.reset();
     block_frozen_memtable_ = nullptr;
     is_inited_ = false;
@@ -273,7 +268,6 @@ void ObPartTransCtx::default_init_()
   can_elr_ = false;
 
   // TODO ObPartTransCtx
-  clog_encrypt_info_.reset();
   ObTxCycleTwoPhaseCommitter::reset();
   is_inited_ = false;
   mt_ctx_.reset();
@@ -313,16 +307,17 @@ void ObPartTransCtx::default_init_()
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < OB_TX_MAX_LOG_CBS; ++i) {
-    if (OB_FAIL(log_cbs_[i].init(ls_id, tx_id, this))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < PREALLOC_LOG_CALLBACK_COUNT; ++i) {
+    if (OB_FAIL(log_cbs_[i].init(ls_id, tx_id, this, false))) {
       TRANS_LOG(WARN, "log cb init failed", KR(ret));
     } else if (!free_cbs_.add_last(&log_cbs_[i])) {
-      ret = OB_INIT_FAIL;
+      log_cbs_[i].destroy();
+      ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "add to free list failed", KR(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(final_log_cb_.init(ls_id, tx_id, this))) {
+    if (OB_FAIL(final_log_cb_.init(ls_id, tx_id, this, false))) {
       TRANS_LOG(WARN, "init commit log cb failed", K(ret));
     } else {
       TRANS_LOG(DEBUG, "init commit log cb success", K(ret), KP(&final_log_cb_), K(*this));
@@ -331,24 +326,63 @@ int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
   return ret;
 }
 
+int ObPartTransCtx::extend_log_cbs_()
+{
+  int ret = OB_SUCCESS;
+  void *ptr = NULL;
+  ObTxLogCb *cb = NULL;
+  if (busy_cbs_.get_size() >= OB_TX_MAX_LOG_CBS + 1) {
+    ret = OB_TX_NOLOGCB;
+  } else if (ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) == false &&
+      busy_cbs_.get_size() >= OB_TX_MAX_LOG_CBS + 1 - RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING) {
+    ret = OB_TX_NOLOGCB;
+  } else if (OB_ISNULL(ptr = reserve_allocator_.alloc(sizeof(ObTxLogCb)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    if (OB_ISNULL(cb = new(ptr) ObTxLogCb)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "log callback construct failed", K(ret));
+    } else if (OB_FAIL(cb->init(ls_id_, trans_id_, this, true))) {
+      TRANS_LOG(WARN, "log callback init failed", K(ret));
+      cb->~ObTxLogCb();
+    } else if (!free_cbs_.add_last(cb)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "add to free list failed", KR(ret));
+      cb->~ObTxLogCb();
+    } else {
+      // do nothing
+    }
+    if (OB_FAIL(ret)) {
+      reserve_allocator_.free(ptr);
+    }
+  }
+  return ret;
+}
+
+void ObPartTransCtx::reset_log_cb_list_(common::ObDList<ObTxLogCb> &cb_list)
+{
+  ObTxLogCb *cb = NULL;
+  while (OB_NOT_NULL(cb = cb_list.remove_first())) {
+    const bool is_dynamic = cb->is_dynamic();
+    if (OB_NOT_NULL(cb->get_tx_data())) {
+      ObTxData *tx_data = cb->get_tx_data();
+      ctx_tx_data_.free_tmp_tx_data(tx_data);
+      cb->set_tx_data(nullptr);
+    }
+    if (!is_dynamic) {
+      cb->reset();
+    } else {
+      cb->~ObTxLogCb();
+      reserve_allocator_.free(cb);
+    }
+  }
+}
+
 void ObPartTransCtx::reset_log_cbs_()
 {
-  for (int64_t i = 0; i < OB_TX_MAX_LOG_CBS; ++i) {
-    if (OB_NOT_NULL(log_cbs_[i].get_tx_data())) {
-      ObTxData *tx_data = log_cbs_[i].get_tx_data();
-      ctx_tx_data_.free_tmp_tx_data(tx_data);
-      log_cbs_[i].set_tx_data(nullptr);
-    }
-    log_cbs_[i].reset();
-  }
-  if (OB_NOT_NULL(final_log_cb_.get_tx_data())) {
-    ObTxData *tx_data = final_log_cb_.get_tx_data();
-    ctx_tx_data_.free_tmp_tx_data(tx_data);
-    final_log_cb_.set_tx_data(nullptr);
-  }
+  reset_log_cb_list_(free_cbs_);
+  reset_log_cb_list_(busy_cbs_);
   final_log_cb_.reset();
-  free_cbs_.reset();
-  busy_cbs_.reset();
 }
 
 // thread-unsafe
@@ -2415,7 +2449,7 @@ int ObPartTransCtx::submit_redo_log_(ObTxLogBlock &log_block,
   ObTxLogCb *log_cb = NULL;
 
   while (OB_SUCC(ret) && need_continue) {
-    ObTxRedoLog redo_log(clog_encrypt_info_, get_redo_log_no_(), cluster_version_);
+    ObTxRedoLog redo_log(get_redo_log_no_(), cluster_version_);
     mutator_size = 0;
     need_undo_log = false;
     need_submit_log = false;
@@ -3677,23 +3711,31 @@ int ObPartTransCtx::get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb)
       log_cb = &final_log_cb_;
     }
   } else {
-    if (free_cbs_.is_empty()) {
-      ret = OB_TX_NOLOGCB;
-      //TRANS_LOG(INFO, "all log cbs are busy now, try again later", K(ret), K(*this));
-    } else if (free_cbs_.get_size() <= RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING &&
-        ATOMIC_LOAD(&is_submitting_redo_log_for_freeze_) == false) {
-      ret = OB_TX_NOLOGCB;
-      //TRANS_LOG(INFO, "reserve log callback for freezing, try again later", K(ret), K(*this));
-    } else if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "unexpected null log cb", KR(ret), K(*this));
-    } else {
-      // do nothing
+    for (int64_t i = 0; OB_SUCC(ret) && i < 2; i++) {
+      if (!free_cbs_.is_empty()) {
+        if (OB_ISNULL(log_cb = free_cbs_.remove_first())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "unexpected null log cb", KR(ret), K(*this));
+        } else {
+          break;
+        }
+      } else {
+        if (OB_FAIL(extend_log_cbs_())) {
+          TRANS_LOG(WARN, "extend log callback failed", K(ret));
+          // rewrite ret
+          ret = OB_TX_NOLOGCB;
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {
-    log_cb->reuse();
-    busy_cbs_.add_last(log_cb);
+    if (OB_ISNULL(log_cb)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected log callback", K(ret));
+    } else {
+      log_cb->reuse();
+      busy_cbs_.add_last(log_cb);
+    }
   }
   return ret;
 }

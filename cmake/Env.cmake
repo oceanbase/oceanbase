@@ -54,8 +54,8 @@ ob_define(THIN_LTO_OPT "")
 ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
-  set(THIN_LTO_OPT "-flto=thin")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32")
+  set(THIN_LTO_OPT "-flto=thin -fwhole-program-vtables")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32,--lto-whole-program-visibility")
 endif()
 
 

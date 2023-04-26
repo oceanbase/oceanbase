@@ -3023,6 +3023,48 @@ private:
   int ret_;
 };
 
+struct ObNotifySwitchLeaderArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum SwitchLeaderComment
+  {
+    INVALID_COMMENT = -1,
+    STOP_SERVER,
+    STOP_ZONE,
+    CHANGE_MEMBER,//remove member, migrate replica, type transfer
+    MODIFY_PRIMARY_ZONE,
+    MANUAL_SWITCH,
+  };
+  const char* comment_to_str() const;
+  ObNotifySwitchLeaderArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), advise_leader_(),
+  comment_(INVALID_COMMENT) {}
+  ~ObNotifySwitchLeaderArg() {}
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(advise_leader), K_(comment), "commet_str", comment_to_str());
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &leader, const SwitchLeaderComment &comment);
+  bool is_valid() const
+  {
+    return INVALID_COMMENT != comment_;
+  }
+  int assign(const ObNotifySwitchLeaderArg &other);
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifySwitchLeaderArg);
+private:
+  //tenant_id is invalid weakup all tenant
+  //teenant_id is valid weakup target tenant
+  uint64_t tenant_id_;
+  //ls_id is invalid iterator all ls
+  //ls_id is valid, only check target ls
+  share::ObLSID ls_id_;
+  //advise_leader maybe invalid
+  common::ObAddr advise_leader_;
+  SwitchLeaderComment comment_;
+};
+
 struct ObCreateTabletInfo
 {
   OB_UNIS_VERSION(1);
@@ -6257,6 +6299,60 @@ public:
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRefreshTenantInfoRes);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObUpdateTenantInfoCacheArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0)  {}
+  ~ObUpdateTenantInfoCacheArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info, const int64_t ora_rowscn);
+  int assign(const ObUpdateTenantInfoCacheArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+
+  const share::ObAllTenantInfo &get_tenant_info() const
+  {
+    return tenant_info_;
+  }
+
+  int64_t get_ora_rowscn() const
+  {
+    return ora_rowscn_;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTenantInfoCacheArg);
+private:
+  uint64_t tenant_id_;
+  share::ObAllTenantInfo tenant_info_;
+  int64_t ora_rowscn_;
+};
+
+struct ObUpdateTenantInfoCacheRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpdateTenantInfoCacheRes(): tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObUpdateTenantInfoCacheRes() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id);
+  int assign(const ObUpdateTenantInfoCacheRes &other);
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTenantInfoCacheRes);
 private:
   uint64_t tenant_id_;
 };

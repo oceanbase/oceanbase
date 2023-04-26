@@ -22,6 +22,7 @@
 #include "lib/alloc/alloc_func.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/rc/ob_rc.h"
+#include "common/ob_clock_generator.h"
 #include "share/rc/ob_context.h"
 #include "observer/mysql/ob_mysql_request_manager.h"
 #include "observer/ob_server.h"
@@ -151,7 +152,9 @@ void ObMySQLRequestManager::destroy()
  *11.tenant_name           varchar
  */
 
-int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record, bool is_sensitive)
+int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
+                                          const bool enable_query_response_time_stats,
+                                          bool is_sensitive)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -217,19 +220,20 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         record->data_.db_name_ = buf + pos;
         pos += db_len;
       }
-      int64_t timestamp = common::ObTimeUtility::current_time();
       //for find bug
       // only print this log if enable_perf_event is enable,
       // for `receive_ts_` might be invalid if `enable_perf_event` is false
       if (lib::is_diagnose_info_enabled()
-          && OB_UNLIKELY(timestamp - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
+          && OB_UNLIKELY(ObClockGenerator::getClock() - audit_record.exec_timestamp_.receive_ts_ > US_PER_HOUR)) {
         SERVER_LOG(WARN, "record: query too slow ",
-                   "elapsed", timestamp - audit_record.exec_timestamp_.receive_ts_,
+                   "elapsed", ObClockGenerator::getClock() - audit_record.exec_timestamp_.receive_ts_,
                    "receive_ts", audit_record.exec_timestamp_.receive_ts_);
       }
 
       // query response time
-      observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
+      if (enable_query_response_time_stats) {
+        observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
+      }
 
       //push into queue
       if (OB_SUCC(ret)) {

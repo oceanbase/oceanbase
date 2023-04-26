@@ -243,6 +243,7 @@ public:
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();
+  virtual bool is_in_period_freeze_mode() const;
   virtual int period_freeze_last_log();
   virtual int inc_update_scn_base(const share::SCN &scn);
   virtual int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &ack_info) const;

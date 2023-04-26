@@ -689,30 +689,6 @@ int ObMvccRow::elr(const ObTransID &tx_id,
   return ret;
 }
 
-void ObMvccRow::lock_begin(ObIMemtableCtx &ctx) const
-{
-  if (GCONF.enable_sql_audit) {
-    ctx.set_lock_start_time(OB_TSC_TIMESTAMP.current_time());
-  }
-}
-
-void ObMvccRow::mvcc_write_end(ObIMemtableCtx &ctx, int64_t ret) const
-{
-  if (GCONF.enable_sql_audit) {
-    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
-    EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, lock_use_time);
-    if (OB_FAIL(ret)) {
-      EVENT_INC(MEMSTORE_WRITE_LOCK_FAIL_COUNT);
-    } else {
-      EVENT_INC(MEMSTORE_WRITE_LOCK_SUCC_COUNT);
-    }
-    if (lock_use_time >= WARN_TIME_US && TC_REACH_TIME_INTERVAL(LOG_INTERVAL)) {
-      TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "wait mvcc write use too much time",
-          K(ctx), K(ret), K(lock_use_time));
-    }
-  }
-}
-
 SCN ObMvccRow::get_max_trans_version() const
 {
   const SCN max_elr_commit_version = max_elr_trans_version_.atomic_get();
@@ -1020,7 +996,6 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const SCN snapshot_version = snapshot.version_;
-  lock_begin(ctx);
 
   if (max_trans_version_.atomic_load() > snapshot_version
       || max_elr_trans_version_.atomic_load() > snapshot_version) {
@@ -1052,7 +1027,6 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
     }
   }
 
-  mvcc_write_end(ctx, ret);
   return ret;
 }
 

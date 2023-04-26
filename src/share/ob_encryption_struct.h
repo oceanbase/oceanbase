@@ -132,16 +132,14 @@ struct ObEncryptMeta
   int replace_tenant_id(const uint64_t real_tenant_id);
   bool is_valid_before_decrypt_table_key() const
   {
-    return OB_INVALID_ID != tenant_id_
-           && encrypt_algorithm_ > 0
+    return encrypt_algorithm_ > 0
            && master_key_version_ > 0
            && random_.size() > 0
            && encrypted_table_key_.size() > 0;
   }
   bool is_valid() const
   {
-    return OB_INVALID_ID != tenant_id_
-           && encrypt_algorithm_ > 0
+    return encrypt_algorithm_ > 0
            && master_key_version_ > 0
            && random_.size() > 0
            && master_key_.size() > 0

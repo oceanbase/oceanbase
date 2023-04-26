@@ -2800,6 +2800,8 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
           param.autoinc_desired_count_ = 0;
           param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
           param.autoinc_version_ = table_schema->get_truncate_version();
+          param.autoinc_auto_increment_ = table_schema->get_auto_increment();
+
           // hidden pk auto-increment variables' default value is 1
           // auto-increment variables for other columns are set in ob_sql.cpp
           // because physical plan may come from plan cache; it need be reset every time

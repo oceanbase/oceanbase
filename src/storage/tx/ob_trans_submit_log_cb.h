@@ -74,7 +74,8 @@ public:
   ~ObTxLogCb() { destroy(); }
   int init(const share::ObLSID &key,
            const ObTransID &trans_id,
-           ObTransCtx *ctx);
+           ObTransCtx *ctx,
+           const bool is_dynamic);
   void reset();
   void reuse();
   void destroy() { reset(); }
@@ -93,6 +94,7 @@ public:
   memtable::ObCallbackScope& get_callbacks() { return callbacks_; }
   void set_callbacked() { is_callbacked_ = true; }
   bool is_callbacked() const { return is_callbacked_; }
+  bool is_dynamic() const { return is_dynamic_; }
   ObTxCbArgArray &get_cb_arg_array() { return cb_arg_array_; }
   const ObTxCbArgArray &get_cb_arg_array() const { return cb_arg_array_; }
   bool is_valid() const;
@@ -116,6 +118,7 @@ public:
                        KP_(ctx),
                        K_(tx_data_guard),
                        K(is_callbacked_),
+                       K(is_dynamic_),
                        K(mds_range_),
                        K(cb_arg_array_),
                        K(first_part_scn_));
@@ -131,6 +134,7 @@ private:
   ObTxDataGuard tx_data_guard_;
   memtable::ObCallbackScope callbacks_;
   bool is_callbacked_;
+  bool is_dynamic_;
   ObTxMDSRange mds_range_;
   ObTxCbArgArray cb_arg_array_;
   share::SCN first_part_scn_;

@@ -108,18 +108,15 @@ private:
 
   int replay_redo_in_memtable_(ObTxRedoLog &redo);
   virtual int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
-                                  memtable::ObMemtableMutatorIterator *mmi_ptr,
-                                  memtable::ObEncryptRowBuf &row_buf);
+                                  memtable::ObMemtableMutatorIterator *mmi_ptr);
   int prepare_memtable_replay_(storage::ObStorageTableGuard &w_guard,
                           memtable::ObIMemtable *&mem_ptr);
   int replay_row_(storage::ObStoreCtx &store_ctx,
                   storage::ObTablet *tablet,
-                  memtable::ObMemtableMutatorIterator *mmi_ptr,
-                  memtable::ObEncryptRowBuf &row_buf);
+                  memtable::ObMemtableMutatorIterator *mmi_ptr);
   int replay_lock_(storage::ObStoreCtx &store_ctx,
                    storage::ObTablet *tablet,
-                   memtable::ObMemtableMutatorIterator *mmi_ptr,
-                   memtable::ObEncryptRowBuf &row_buf);
+                   memtable::ObMemtableMutatorIterator *mmi_ptr);
   int get_compat_mode_(const ObTabletID &tablet_id, lib::Worker::CompatMode &mode);
   bool can_replay() const;
 

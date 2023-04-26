@@ -73,7 +73,6 @@ void MockObTxCtx::init(const uint64_t tenant_id,
 
   ASSERT_EQ(OB_SUCCESS, lock_.init(this));
   ASSERT_EQ(OB_SUCCESS, init_log_cbs_(ls_id, trans_id));
-  ASSERT_EQ(OB_SUCCESS, clog_encrypt_info_.init());
   init_memtable_ctx_(lock_memtable_handle);
   ctx_tx_data_.test_init(*tx_data, nullptr);
 

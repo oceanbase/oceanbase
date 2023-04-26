@@ -61,7 +61,7 @@ struct ObAutoIncCacheNode
                                    const uint64_t max_value) const;
   inline bool need_sync(const uint64_t new_sync_value) const
   {
-    return !is_valid() || new_sync_value > sync_value_;
+    return new_sync_value > sync_value_;
   }
   int update_sequence_value(const uint64_t sequence_value);
   int update_available_value(const uint64_t available_value);

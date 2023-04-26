@@ -490,6 +490,8 @@ public:
                                  px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
+                                 hash_area_size_(128*1024*1024),
+                                 enable_query_response_time_stats_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
@@ -503,6 +505,8 @@ public:
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
+    int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
+    bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
@@ -517,6 +521,8 @@ public:
     int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
+    int64_t hash_area_size_;
+    bool enable_query_response_time_stats_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -967,10 +973,20 @@ public:
     at_type = cached_tenant_config_info_.get_at_type();
     return common::OB_SUCCESS;
   }
+  int64_t get_tenant_hash_area_size()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_hash_area_size();
+  }
   int64_t get_tenant_sort_area_size()
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
+  }
+  bool enable_query_response_time_stats()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_query_response_time_stats();
   }
   int64_t get_tenant_print_sample_ppm()
   {

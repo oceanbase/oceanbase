@@ -597,6 +597,7 @@ int ObTxNode::write(ObTxDesc &tx,
   write_store_ctx.mvcc_acc_ctx_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
   ObTableReadInfo read_info;
+  const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   const int64_t schema_version = 100;
   read_info.init(allocator, schema_version, 1, false, columns_);
   ObStoreRow row;
@@ -606,7 +607,7 @@ int ObTxNode::write(ObTxDesc &tx,
   row.row_val_.count_ = 2;
   row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
-  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row));
+  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row, encrypt_meta));
   OZ(txs_.revert_store_ctx(write_store_ctx));
   delete iter;
   return ret;
@@ -639,6 +640,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
 
   ObArenaAllocator allocator;
   ObTableReadInfo read_info;
+  const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   const int64_t schema_version = 100;
   read_info.init(allocator, schema_version, 1, false, columns_);
   ObStoreRow row;
@@ -646,7 +648,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
-  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row));
+  OZ(memtable_->set(write_store_ctx, 1, read_info, columns_, row, encrypt_meta));
 
   return ret;
 }

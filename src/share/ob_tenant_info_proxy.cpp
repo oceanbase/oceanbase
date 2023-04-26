@@ -58,6 +58,16 @@ SCN gen_new_standby_scn(const SCN &cur_standby_scn, const SCN &desired_standby_s
 }
 
 ////////////ObAllTenantInfo
+DEFINE_TO_YSON_KV(ObAllTenantInfo,
+                  OB_ID(tenant_id), tenant_id_,
+                  OB_ID(switchover_epoch), switchover_epoch_,
+                  OB_ID(sync_scn), sync_scn_,
+                  OB_ID(replayable_scn), replayable_scn_,
+                  OB_ID(standby_scn), standby_scn_,
+                  OB_ID(recovery_until_scn), recovery_until_scn_,
+                  OB_ID(tenant_role), tenant_role_,
+                  OB_ID(switchover_status), switchover_status_);
+
 bool ObAllTenantInfo::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
@@ -309,6 +319,24 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   tenant_info.reset();
+  int64_t ora_rowscn = 0;
+
+  if (OB_FAIL(load_tenant_info(tenant_id, proxy, for_update, ora_rowscn, tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret), K(tenant_id), KP(proxy), K(for_update));
+  }
+  return ret;
+}
+
+
+int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
+                                           ObISQLClient *proxy,
+                                           const bool for_update,
+                                           int64_t &ora_rowscn,
+                                           ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  tenant_info.reset();
+  ora_rowscn = 0;
   ObTimeoutCtx ctx;
   if (OB_ISNULL(proxy)) {
     ret = OB_ERR_UNEXPECTED;
@@ -326,7 +354,7 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
     uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
     if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-    } else if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id = %lu ",
+    } else if (OB_FAIL(sql.assign_fmt("select ORA_ROWSCN, * from %s where tenant_id = %lu ",
                    OB_ALL_TENANT_INFO_TNAME, tenant_id))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql));
     } else if(for_update && OB_FAIL(sql.append(" for update"))) {
@@ -341,7 +369,7 @@ int ObAllTenantInfoProxy::load_tenant_info(const uint64_t tenant_id,
           LOG_WARN("failed to get sql result", KR(ret));
         } else if (OB_FAIL(result->next())) {
           LOG_WARN("failed to get tenant info", KR(ret), K(sql));
-        } else if (OB_FAIL(fill_cell(result, tenant_info))) {
+        } else if (OB_FAIL(fill_cell(result, tenant_info, ora_rowscn))) {
           LOG_WARN("failed to fill cell", KR(ret), K(sql));
         }
       }
@@ -419,7 +447,7 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status(
   return ret; 
 }
 
-int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info)
+int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info, int64_t &ora_rowscn)
 {
   int ret = OB_SUCCESS;
   tenant_info.reset();
@@ -435,6 +463,7 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     uint64_t replay_scn_val = OB_INVALID_SCN_VAL;
     uint64_t sts_scn_val = OB_INVALID_SCN_VAL;
     uint64_t recovery_until_scn_val = OB_INVALID_SCN_VAL;
+    ora_rowscn = 0;
     ObString log_mode_str;
     ObString log_mode_default_value("NOARCHIVELOG");
     SCN sync_scn;
@@ -451,6 +480,7 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "recovery_until_scn", recovery_until_scn_val, uint64_t, false /* skip_null_error */, true /* skip_column_error */, OB_MAX_SCN_TS_NS);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "log_mode", log_mode_str,
                 false /* skip_null_error */, true /* skip_column_error */, log_mode_default_value);
+    EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn, int64_t);
     ObTenantRole tmp_tenant_role(tenant_role_str);
     ObTenantSwitchoverStatus tmp_tenant_sw_status(status_str);
     ObArchiveMode tmp_log_mode(log_mode_str);

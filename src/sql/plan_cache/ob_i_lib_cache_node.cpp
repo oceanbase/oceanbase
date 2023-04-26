@@ -153,7 +153,7 @@ int ObILibCacheNode::lock(bool is_rdlock)
 int ObILibCacheNode::update_node_stat(ObILibCacheCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  ATOMIC_STORE(&(node_stat_.last_active_timestamp_), ObTimeUtility::current_time());
+  ATOMIC_STORE(&(node_stat_.last_active_timestamp_), ObClockGenerator::getClock());
   ATOMIC_INC(&(node_stat_.execute_count_));
   return ret;
 }

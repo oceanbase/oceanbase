@@ -176,8 +176,9 @@ public:
            int32_t &flag,
            int64_t &seq_no) const;
 
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos,
-                const transaction::ObCLogEncryptInfo &encrypt_meta,
+  int serialize(char *buf, int64_t &buf_len, int64_t &pos,
+                const transaction::ObTxEncryptMeta *encrypt_meta,
+                transaction::ObCLogEncryptInfo &new_encrypt_info,
                 const bool is_big_row = false);
   // the deserialize function need to be virtual function so as for
   // the extended classes to implement their own deserializaation logic
@@ -309,20 +310,23 @@ public:
   int append_row_kv(
       const int64_t table_version,
       const RedoDataNode &redo,
-      const transaction::ObCLogEncryptInfo &clog_encrypt_info,
+      const transaction::ObTxEncryptMeta *encrypt_meta,
+      transaction::ObCLogEncryptInfo &encrypt_info,
       const bool is_big_row = false);
   int append_row(
       ObMemtableMutatorRow &row,
-      const transaction::ObCLogEncryptInfo &encrypt_info,
+      transaction::ObCLogEncryptInfo &encrypt_info,
       const bool is_big_row = false,
       const bool is_with_head = false);
   int append_row_buf(const char *buf, const int64_t buf_len);
-  int serialize(const uint8_t row_flag, int64_t &res_len);
+  int serialize(const uint8_t row_flag, int64_t &res_len,
+                transaction::ObCLogEncryptInfo &encrypt_info);
   ObMemtableMutatorMeta& get_meta() { return meta_; }
   int64_t get_serialize_size() const;
 private:
   ObMemtableMutatorMeta meta_;
   common::ObDataBuffer buf_;
+  int64_t row_capacity_;
 
   DISALLOW_COPY_AND_ASSIGN(ObMutatorWriter);
 };
@@ -335,12 +339,13 @@ public:
   void reset();
 public:
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos,
-      const transaction::ObCLogEncryptInfo &encrypt_info);
+      transaction::ObCLogEncryptInfo &encrypt_info);
   bool is_iter_end() const { return buf_.get_remain() <= 0; }
   const ObMemtableMutatorMeta &get_meta() const { return meta_; }
 
   //4.0 new interface for replay
-  int iterate_next_row();
+  int iterate_next_row(ObEncryptRowBuf &decrypt_buf,
+      const transaction::ObCLogEncryptInfo &encrypt_info);
   const ObMutatorRowHeader &get_row_head();
   const ObMemtableMutatorRow &get_mutator_row();
   const ObMutatorTableLock &get_table_lock_row();

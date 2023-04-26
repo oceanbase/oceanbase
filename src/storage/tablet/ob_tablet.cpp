@@ -1316,6 +1316,7 @@ int ObTablet::insert_row(
 {
   int ret = OB_SUCCESS;
   bool b_exist = false;
+  common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr = NULL;
   if (OB_UNLIKELY(!store_ctx.is_valid() || col_descs.count() <= 0 || !row.is_valid()
       || !relative_table.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1331,7 +1332,7 @@ int ObTablet::insert_row(
     } else if (OB_UNLIKELY(b_exist)) {
       ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
       LOG_WARN("rowkey already exists",  K(relative_table.get_table_id()), K(row), K(ret));
-    } else if (OB_FAIL(insert_row_without_rowkey_check(relative_table, store_ctx, col_descs, row))) {
+    } else if (OB_FAIL(insert_row_without_rowkey_check(relative_table, store_ctx, col_descs, row, encrypt_meta_arr))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("failed to set row", K(row), K(ret));
       }
@@ -1346,13 +1347,15 @@ int ObTablet::update_row(
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
     const ObIArray<int64_t> &update_idx,
     const storage::ObStoreRow &old_row,
-    const storage::ObStoreRow &new_row)
+    const storage::ObStoreRow &new_row,
+    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
 
   {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
+    const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
 
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -1380,7 +1383,7 @@ int ObTablet::update_row(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
     } else if (OB_FAIL(write_memtable->set(store_ctx, relative_table.get_table_id(),
-        full_read_info_, col_descs, update_idx, old_row, new_row))) {
+        full_read_info_, col_descs, update_idx, old_row, new_row, encrypt_meta))) {
       LOG_WARN("failed to set write memtable", K(ret));
     }
   }
@@ -1392,12 +1395,14 @@ int ObTablet::insert_row_without_rowkey_check(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    const storage::ObStoreRow &row)
+    const storage::ObStoreRow &row,
+    const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
   {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
+    const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
 
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -1423,7 +1428,7 @@ int ObTablet::insert_row_without_rowkey_check(
     } else if (OB_FAIL(prepare_memtable(relative_table, store_ctx, write_memtable))) {
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
     } else if (OB_FAIL(write_memtable->set(store_ctx, relative_table.get_table_id(),
-        full_read_info_, col_descs, row))) {
+        full_read_info_, col_descs, row, encrypt_meta))) {
       LOG_WARN("failed to set memtable", K(ret));
     }
   }

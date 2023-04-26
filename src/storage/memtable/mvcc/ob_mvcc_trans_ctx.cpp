@@ -212,9 +212,18 @@ void ObTransCallbackMgr::reset()
       }
     }
   }
+  if (NULL != cb_allocators_) {
+    for (int i = 0; i < MAX_CB_ALLOCATOR_COUNT; ++i) {
+      cb_allocators_[i].reset();
+    }
+  }
   if (OB_NOT_NULL(callback_lists_)) {
     cb_allocator_.free(callback_lists_);
     callback_lists_ = NULL;
+  }
+  if (OB_NOT_NULL(cb_allocators_)) {
+    cb_allocator_.free(cb_allocators_);
+    cb_allocators_ = NULL;
   }
   parallel_stat_ = 0;
   callback_main_list_append_count_ = 0;
@@ -226,6 +235,77 @@ void ObTransCallbackMgr::reset()
   callback_remove_for_rollback_to_count_ = 0;
   pending_log_size_ = 0;
   flushed_log_size_ = 0;
+}
+
+void ObTransCallbackMgr::callback_free(ObITransCallback *cb)
+{
+  int64_t owner = cb->owner_;
+  if (-1 == owner) {
+    TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "callback free failed", KPC(cb));
+  } else if (0 == owner) {
+    cb_allocator_.free(cb);
+  } else if (0 < owner) {
+    cb_allocators_[owner - 1].free(cb);
+  } else {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected cb", KPC(cb));
+    ob_abort();
+  }
+}
+
+void *ObTransCallbackMgr::callback_alloc(const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  ObITransCallback *callback = nullptr;
+  const int64_t tid = get_itid() + 1;
+  const int64_t slot = tid % MAX_CB_ALLOCATOR_COUNT;
+  int64_t stat = ATOMIC_LOAD(&parallel_stat_);
+
+  if (PARALLEL_STMT == stat) {
+    if (NULL == cb_allocators_) {
+      WRLockGuard guard(rwlock_);
+      if (NULL == cb_allocators_) {
+        ObMemtableCtxCbAllocator *tmp_cb_allocators = nullptr;
+        if (NULL == (tmp_cb_allocators = (ObMemtableCtxCbAllocator *)cb_allocator_.alloc(
+                       sizeof(ObMemtableCtxCbAllocator) * MAX_CB_ALLOCATOR_COUNT))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          TRANS_LOG(WARN, "alloc cb allocator fail", K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < MAX_CB_ALLOCATOR_COUNT; ++i) {
+            UNUSED(new(tmp_cb_allocators + i) ObMemtableCtxCbAllocator());
+            if (OB_FAIL(tmp_cb_allocators[i].init(MTL_ID()))) {
+              TRANS_LOG(ERROR, "cb_allocator_ init error", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            cb_allocators_ = tmp_cb_allocators;
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (NULL == cb_allocators_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "cb allocators is not inited", K(ret));
+      } else {
+        callback = (ObITransCallback *)(cb_allocators_[slot].alloc(size));
+        if (nullptr != callback) {
+          callback->owner_ = slot + 1;
+        }
+      }
+    }
+  } else {
+    callback = (ObITransCallback *)(cb_allocator_.alloc(size));
+    if (nullptr != callback) {
+      callback->owner_ = 0;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    callback = nullptr;
+  }
+
+  return callback;
 }
 
 int ObTransCallbackMgr::append(ObITransCallback *node)

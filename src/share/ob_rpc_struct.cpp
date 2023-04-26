@@ -5530,6 +5530,73 @@ int ObRefreshTenantInfoRes::assign(const ObRefreshTenantInfoRes &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObUpdateTenantInfoCacheArg, tenant_id_, tenant_info_, ora_rowscn_);
+
+bool ObUpdateTenantInfoCacheArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && tenant_info_.is_valid()
+         && 0 != ora_rowscn_;
+}
+
+int ObUpdateTenantInfoCacheArg::init(
+    const uint64_t tenant_id,
+    const ObAllTenantInfo &tenant_info,
+    const int64_t ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || !tenant_info.is_valid()
+                  || 0 == ora_rowscn)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tenant_info), K(ora_rowscn));
+  } else {
+    tenant_id_ = tenant_id;
+    tenant_info_ = tenant_info;
+    ora_rowscn_ = ora_rowscn;
+  }
+  return ret;
+}
+
+int ObUpdateTenantInfoCacheArg::assign(const ObUpdateTenantInfoCacheArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    tenant_info_ = other.tenant_info_;
+    ora_rowscn_ = other.ora_rowscn_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObUpdateTenantInfoCacheRes, tenant_id_);
+
+bool ObUpdateTenantInfoCacheRes::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_;
+}
+
+int ObUpdateTenantInfoCacheRes::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObUpdateTenantInfoCacheRes::assign(const ObUpdateTenantInfoCacheRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
 int ObSwitchTenantArg::init(
     const uint64_t exec_tenant_id,
     const OpType op_type,
@@ -6756,6 +6823,49 @@ int ObChangeLSAccessModeRes::assign(const ObChangeLSAccessModeRes &other)
 }
 
 OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_);
+
+int ObNotifySwitchLeaderArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObAddr &leader, const SwitchLeaderComment &comment)
+{
+  int ret = OB_SUCCESS;
+  if (ObNotifySwitchLeaderArg::INVALID_COMMENT == comment) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(comment));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    advise_leader_ = leader;
+    comment_ = comment;
+  }
+  return ret;
+}
+
+int ObNotifySwitchLeaderArg::assign(const ObNotifySwitchLeaderArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  ls_id_ = other.ls_id_;
+  advise_leader_ = other.advise_leader_;
+  comment_ = other.comment_;
+  return ret;
+}
+
+const char* SwitchLeaderCommentStr[] =
+{
+  "STOP SERVER", "STOP ZONE", "CHANGE MEMBER", "MODIFY PRIMARY_ZONE", "MANUAL SWITCH"
+};
+const char* ObNotifySwitchLeaderArg::comment_to_str() const
+{
+  const char* str = "UNKNOWN";
+  if (ObNotifySwitchLeaderArg::INVALID_COMMENT == comment_) {
+    LOG_WARN_RET(OB_NOT_INIT, "comment is invalid", K(comment_));
+  } else {
+    str = SwitchLeaderCommentStr[comment_];
+  }
+  return str;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifySwitchLeaderArg, tenant_id_, ls_id_, advise_leader_, comment_);
 
 bool ObBatchRemoveTabletArg::is_valid() const
 {

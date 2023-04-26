@@ -25,6 +25,7 @@
 #include "rootserver/ob_locality_util.h"
 #include "rootserver/ob_zone_manager.h"
 #include "share/ob_cluster_role.h"
+#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 namespace share
@@ -642,6 +643,16 @@ public:
                                      common::ObIArray<common::ObAddr> &this_server_list,
                                      common::ObIArray<common::ObAddr> &other_server_list,
                                      common::ObIArray<uint64_t> &tenant_ids);
+
+  static int notify_switch_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const uint64_t tenant_id,
+      const obrpc::ObNotifySwitchLeaderArg &arg,
+      const ObIArray<common::ObAddr> &addr_list);
+  static int try_notify_switch_ls_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const share::ObLSInfo &ls_info,
+      const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
 };
 

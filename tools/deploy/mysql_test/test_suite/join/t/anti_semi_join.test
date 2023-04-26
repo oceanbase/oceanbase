@@ -12,6 +12,13 @@ set @@session.explicit_defaults_for_timestamp=off;
 --result_format 4
 --explain_protocol 2
 
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+alter system set _enable_newsort = true;
+--sleep 3
+connection default;
+--sleep 3
+
 --disable_warnings
 drop table if exists xy_t1, xy_t2;
 --enable_warnings

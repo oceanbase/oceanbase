@@ -115,6 +115,9 @@ public:
   // use guard just like a pointer of ObLSIterator
   int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod);
 
+  // get all ls ids
+  int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array);
+
   // tablet operation
   int create_tablet(const obrpc::ObBatchCreateTabletArg &batch_arg,
                     obrpc::ObCreateTabletBatchRes &result);

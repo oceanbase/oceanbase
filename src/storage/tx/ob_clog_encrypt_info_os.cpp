@@ -49,11 +49,9 @@ void ObCLogEncryptInfo::destroy()
 {
 }
 
-int ObCLogEncryptInfo::get_encrypt_info(const uint64_t table_id, bool &need_encrypt,
-    ObEncryptMeta &meta) const
+int ObCLogEncryptInfo::get_encrypt_info(const uint64_t table_id, ObTxEncryptMeta *&meta) const
 {
   int ret = OB_SUCCESS;
-  need_encrypt = false;
   return ret;
 }
 
@@ -67,20 +65,20 @@ OB_DEF_SERIALIZE(ObCLogEncryptInfo)
   } else if (OB_UNLIKELY(!is_inited_)) {
     TRANS_LOG(ERROR, "serialize uninitialized clog encrypt info");
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(encrypt_meta_)) {
+  } else if (OB_ISNULL(encrypt_map_)) {
     size = 0;
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, size))) {
       TRANS_LOG(WARN, "failed to encode count of encrypt info map", K(ret));
     }
   } else {
-    size = encrypt_meta_->size();
+    size = encrypt_map_->count();
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, size))) {
       TRANS_LOG(WARN, "failed to encode count of encrypt info map", K(ret));
     }
-    for (auto it = encrypt_meta_->begin(); OB_SUCC(ret) && it != encrypt_meta_->end(); ++it) {
-      if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, it->first))) {
+    for (auto it = encrypt_map_->begin(); OB_SUCC(ret) && it != encrypt_map_->end(); ++it) {
+      if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, it->table_id_))) {
         TRANS_LOG(WARN, "failed to encode encrypt info map table_id", K(ret));
-      } else if (OB_FAIL(it->second.serialize(buf, buf_len, pos))) {
+      } else if (OB_FAIL(it->meta_.serialize(buf, buf_len, pos))) {
         TRANS_LOG(WARN, "failed to encode encrypt info map item", K(ret));
       }
     }
@@ -119,11 +117,11 @@ OB_DEF_SERIALIZE_SIZE(ObCLogEncryptInfo)
 {
   int64_t size = 0;
   int64_t count = 0;
-  if (OB_NOT_NULL(encrypt_meta_)) {
-    count = encrypt_meta_->size();
-    for (auto it = encrypt_meta_->begin(); it != encrypt_meta_->end(); ++it) {
-      size += serialization::encoded_length_vi64(it->first);
-      size += it->second.get_serialize_size();
+  if (OB_NOT_NULL(encrypt_map_)) {
+    count = encrypt_map_->count();
+    for (auto it = encrypt_map_->begin(); it != encrypt_map_->end(); ++it) {
+      size += serialization::encoded_length_vi64(it->table_id_);
+      size += it->meta_.get_serialize_size();
     }
   }
   size += serialization::encoded_length_vi64(count);

@@ -87,8 +87,6 @@ int ObTenantRecoveryReportor::start()
   } else if (OB_FAIL(logical_start())) {
     LOG_WARN("failed to start", KR(ret));
   } else {
-    ObThreadCondGuard guard(get_cond());
-    get_cond().broadcast();
     LOG_INFO("tenant recovery service start", KPC(this));
   }
   return ret;
@@ -122,7 +120,6 @@ void ObTenantRecoveryReportor::run2()
     LOG_WARN("not init", KR(ret));
   } else {
     ObThreadCondGuard guard(get_cond());
-    const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
       if (OB_ISNULL(GCTX.schema_service_)) {
@@ -145,11 +142,80 @@ void ObTenantRecoveryReportor::run2()
       if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
         LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }
+
+      const int64_t idle_time = get_idle_time_();
+
       if (!stop_) {
         get_cond().wait_us(idle_time);
       }
     }//end while
   }
+}
+
+int64_t ObTenantRecoveryReportor::get_idle_time_()
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  ObAllTenantInfo tenant_info;
+  int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
+  } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
+    idle_time = ObTenantRoleTransitionConstants::PRIMARY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+  }
+  return idle_time;
+}
+
+int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo tenant_info;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.ob_service_) || OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pointer is null", KR(ret), KP(GCTX.ob_service_), KP(GCTX.schema_service_), KP(sql_proxy_), KP(tenant_info_loader));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
+  } else if (tenant_info.is_standby() && tenant_info.is_normal_status()) {
+    ObRefreshSchemaStatus schema_status;
+    ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
+    if (OB_ISNULL(schema_status_proxy)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_status_proxy is null", KR(ret));
+    } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id_, schema_status))) {
+      LOG_WARN("fail to get schema status", KR(ret), K(tenant_id_));
+    } else if (common::OB_INVALID_TIMESTAMP == schema_status.snapshot_timestamp_) {
+      int64_t version_in_inner_table = OB_INVALID_VERSION;
+      int64_t local_schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(
+                        tenant_id_, local_schema_version))) {
+        LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(
+                  *sql_proxy_, schema_status, version_in_inner_table))) {
+        LOG_WARN("fail to get_schema_version_in_inner_table", KR(ret), K(schema_status));
+      } else if (local_schema_version > version_in_inner_table) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("local_schema_version > version_in_inner_table", KR(ret), K_(tenant_id),
+                  K(local_schema_version), K(version_in_inner_table));
+      } else if (local_schema_version == version_in_inner_table) {
+        // do nothing
+      } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(tenant_id_, version_in_inner_table))) {
+        LOG_WARN("failed to submit_async_refresh_schema_task", KR(ret), K_(tenant_id));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTenantRecoveryReportor::update_ls_recovery_stat_()

@@ -66,7 +66,6 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       sessid_(0),
       master_sessid_(INVALID_SESSID),
       proxy_sessid_(VALID_PROXY_SESSID),
-      variables_last_modify_time_(0),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
       tx_desc_(NULL),
@@ -321,7 +320,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sessid_ = 0;
   master_sessid_ = INVALID_SESSID;
   proxy_sessid_ = VALID_PROXY_SESSID;
-  variables_last_modify_time_ = 0;
   global_vars_version_ = 0;
 
   tx_result_.reset();
@@ -1056,8 +1054,6 @@ int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, con
     LOG_WARN("fail create all sys variables", K(ret));
   } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant))) {
     LOG_WARN("Init system variables failed !", K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -1276,8 +1272,6 @@ int ObBasicSessionInfo::load_sys_variable(ObIAllocator &calc_buf,
                                               false /*check_timezone_valid*/,
                                               false /*is_update_sys_var*/))) {
     LOG_WARN("process system variable error",  K(name), K(type), K(real_val), K(value), K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -1600,7 +1594,6 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
     if (OB_FAIL(track_sys_var(sys_var_id, sys_var->get_value()))) {
       LOG_WARN("failed to track sys var", K(ret), K(sys_var_id), K(val));
     } else {
-      variables_last_modify_time_ = ObTimeUtility::current_time();
       LOG_DEBUG("succ to track system variable",
                 K(ret), K(sys_var_id), K(val), K(sys_var->get_value()));
     }
@@ -3430,9 +3423,6 @@ int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessi
         LOG_WARN("fail to track user var", K(var), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      variables_last_modify_time_ = ObTimeUtility::current_time();
-    }
   }
   return ret;
 }
@@ -3446,8 +3436,6 @@ int ObBasicSessionInfo::remove_user_variable(const ObString &var)
   } else if (OB_SUCCESS != user_var_val_map_.erase_refactored(var)) {
     ret = OB_ERR_USER_VARIABLE_UNKNOWN;
     LOG_WARN("unknown variable", K(var), K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }

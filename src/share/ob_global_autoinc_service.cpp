@@ -313,14 +313,10 @@ int ObGlobalAutoIncService::handle_push_autoinc_request(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get seq value", K(ret), K(key));
     } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST == err || cache_node.need_sync(request.base_value_))) {
-      const bool is_valid_before_sync = cache_node.is_valid();
       if (OB_FAIL(sync_value_to_inner_table_(request, cache_node, sync_value))) {
         LOG_WARN("sync to inner table failed", K(ret));
-      } else {
-        bool need_update_node_map = cache_node.is_valid() || is_valid_before_sync;
-        if (need_update_node_map && OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {
-          LOG_WARN("set autoinc_map_ failed", K(ret));
-        }
+      } else if (OB_FAIL(autoinc_map_.set_refactored(key, cache_node, 1))) {
+        LOG_WARN("set autoinc_map_ failed", K(ret));
       }
     } else {
       sync_value = cache_node.sync_value_;
@@ -444,6 +440,7 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
     if (seq_value > node.last_available_value_) {
       // the node is expired.
       node.reset();
+      node.sync_value_ = sync_value; // update sync value for next sync
     } else if (sync_value == request.max_value_) {
       if (node.last_available_value_ != request.max_value_) {
         ret = OB_ERR_UNEXPECTED;
@@ -457,7 +454,8 @@ int ObGlobalAutoIncService::sync_value_to_inner_table_(
       LOG_WARN("fail to update sync value", K(ret), K(sync_value));
     }
   } else {
-    // do nothing for non-valid node.
+    node.reset();
+    node.sync_value_ = sync_value; // update sync value for next sync
   }
   return ret;
 }

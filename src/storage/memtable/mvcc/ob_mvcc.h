@@ -156,6 +156,8 @@ protected:
     bool need_submit_log_ : 1; // Identifies whether log has been submitted
   };
   share::SCN scn_;
+public:
+  int64_t owner_;
 private:
   ObITransCallback *prev_;
   ObITransCallback *next_;

@@ -116,7 +116,7 @@ DEF_BOOL(enable_sql_audit, OB_CLUSTER_PARAMETER, "true",
          "specifies whether SQL audit is turned on. "
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_record_trace_id, OB_CLUSTER_PARAMETER, "true",
+DEF_BOOL(enable_record_trace_id, OB_CLUSTER_PARAMETER, "False",
          "specifies whether record app trace id is turned on.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_rich_error_msg, OB_CLUSTER_PARAMETER, "false",
@@ -162,7 +162,7 @@ DEF_STR_WITH_CHECKER(default_compress, OB_CLUSTER_PARAMETER, "archive",
                      "default compress strategy for create new table within oracle mode",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
+DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "500ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -372,7 +372,7 @@ DEF_CAP(plan_cache_low_watermark, OB_CLUSTER_PARAMETER, "1500M",
         "(don't use now) memory usage at which plan cache eviction will be stopped. "
         "Range: [0, plan_cache_high_watermark)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "1s", "[0s,)",
+DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_px_worker_count, OB_CLUSTER_PARAMETER, "64", "[0,65535]",
@@ -712,7 +712,7 @@ DEF_TIME(virtual_table_location_cache_expire_time, OB_CLUSTER_PARAMETER, "8s", "
          "expiration time for virtual table location info in partiton location cache. "
          "Range: [1s, +∞)",
          ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(location_refresh_thread_count, OB_CLUSTER_PARAMETER, "4", "(1,64]",
+DEF_INT(location_refresh_thread_count, OB_CLUSTER_PARAMETER, "2", "(1,64]",
         "the number of threads for fetching location cache in the background. Range: (1, 64]",
         ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -885,7 +885,7 @@ DEF_INT(_migrate_block_verify_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
         "2 : logical verification",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_cache_wash_interval, OB_CLUSTER_PARAMETER, "200ms", "[1ms, 3s]",
+DEF_TIME(_cache_wash_interval, OB_CLUSTER_PARAMETER, "1s", "[1ms, 3s]",
         "specify interval of cache background wash",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

@@ -40,7 +40,7 @@ public:
   int erase_tenant(const uint64_t tenant_id, const bool force_erase = false);
   int erase_tenant_cache(const uint64_t tenant_id, const int64_t cache_id);
   int clean_garbage_node(int64_t &start_pos, const int64_t clean_num);
-  int replace_fragment_node(int64_t &start_pos, const int64_t replace_num);
+  int replace_fragment_node(int64_t &start_pos, int64_t &replace_node_count, const int64_t replace_num);
   int put(
     ObKVCacheInst &inst,
     const ObIKVCacheKey &key,

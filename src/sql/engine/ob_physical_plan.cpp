@@ -456,7 +456,7 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_evolution,
                                       const ObIArray<ObTableRowCount> *table_row_count_list)
 {
-  const int64_t current_time = ObTimeUtility::current_time();
+  const int64_t current_time = ObClockGenerator::getClock();
   int64_t execute_count = 0;
   if (record.is_timeout()) {
     ATOMIC_INC(&(stat_.timeout_count_));

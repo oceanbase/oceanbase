@@ -19,7 +19,6 @@
 #include "ob_ctx_tx_data.h"
 #include "lib/container/ob_mask_set2.h"
 #include "lib/list/ob_dlist.h"
-#include "ob_clog_encrypt_info.h"
 #include "share/ob_ls_id.h"
 #include "logservice/palf/lsn.h"
 #include "ob_one_phase_committer.h"
@@ -81,7 +80,8 @@ enum
 namespace transaction
 {
 
-const static int64_t OB_TX_MAX_LOG_CBS = 3;
+const static int64_t OB_TX_MAX_LOG_CBS = 15;
+const static int64_t PREALLOC_LOG_CALLBACK_COUNT = 3;
 const static int64_t RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING = 1;
 
 // participant transaction context
@@ -173,7 +173,6 @@ public:
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
   int check_scheduler_status();
-  void audit_partition(const bool is_rollback, const sql::stmt::StmtType stmt_type);
   int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
   int64_t get_trans_mem_total_size() const { return mt_ctx_.get_trans_mem_total_size(); }
 
@@ -188,7 +187,6 @@ public:
   int64_t get_applying_log_ts() const;
   int64_t get_pending_log_size() { return mt_ctx_.get_pending_log_size(); }
   int64_t get_flushed_log_size() { return mt_ctx_.get_flushed_log_size(); }
-  ObCLogEncryptInfo& get_clog_encrypt_info() { return clog_encrypt_info_; }
   void get_audit_info(int64_t &lock_for_read_elapse) const;
   virtual int64_t get_part_trans_action() const override;
   inline bool has_pending_write() const { return pending_write_; }
@@ -539,6 +537,8 @@ protected:
 private:
 
   int init_log_cbs_(const share::ObLSID&ls_id, const ObTransID &tx_id);
+  int extend_log_cbs_();
+  void reset_log_cb_list_(common::ObDList<ObTxLogCb> &cb_list);
   void reset_log_cbs_();
   int prepare_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
   int get_log_cb_(const bool need_final_cb, ObTxLogCb *&log_cb);
@@ -745,7 +745,6 @@ private:
 
   int64_t last_ask_scheduler_status_ts_;
   int64_t cur_query_start_time_;
-  ObCLogEncryptInfo clog_encrypt_info_;
 
   /*
    * used during txn protected data access
@@ -774,7 +773,7 @@ private:
   ObTxMDSCache mds_cache_;
   // sub_state_ is volatile
   ObTxSubState sub_state_;
-  ObTxLogCb log_cbs_[OB_TX_MAX_LOG_CBS];
+  ObTxLogCb log_cbs_[PREALLOC_LOG_CALLBACK_COUNT];
   common::ObDList<ObTxLogCb> free_cbs_;
   common::ObDList<ObTxLogCb> busy_cbs_;
   ObTxLogCb final_log_cb_;
@@ -837,7 +836,8 @@ private:
 };
 
 // reserve log callback for freezing and other two log callbacks for normal
-STATIC_ASSERT(OB_TX_MAX_LOG_CBS >= RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING + 2, "log callback is not enough");
+STATIC_ASSERT(OB_TX_MAX_LOG_CBS >= PREALLOC_LOG_CALLBACK_COUNT &&
+    PREALLOC_LOG_CALLBACK_COUNT >= (RESERVE_LOG_CALLBACK_COUNT_FOR_FREEZING + 2), "log callback is not enough");
 
 #if defined(__x86_64__)
 /* uncomment this block to error messaging real size

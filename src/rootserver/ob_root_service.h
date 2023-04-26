@@ -872,6 +872,7 @@ private:
   int check_all_ls_has_leader_(const char *print_str);
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
+  int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 private:
   int construct_rs_list_arg(obrpc::ObRsListArg &rs_list_arg);
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);

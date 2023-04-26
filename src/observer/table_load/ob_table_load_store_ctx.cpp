@@ -450,6 +450,7 @@ int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)
         autoinc_param.total_value_count_ = 1;
         autoinc_param.autoinc_desired_count_ = 0;
         autoinc_param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+        autoinc_param.autoinc_auto_increment_ = table_schema->get_auto_increment();
         autoinc_param.autoinc_increment_ = 1;
         autoinc_param.autoinc_offset_ = 1;
         autoinc_param.part_value_no_order_ = true;

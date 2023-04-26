@@ -2120,6 +2120,11 @@ int PalfHandleImpl::check_and_switch_freeze_mode()
   return ret;
 }
 
+bool PalfHandleImpl::is_in_period_freeze_mode() const
+{
+  return sw_.is_in_period_freeze_mode();
+}
+
 int PalfHandleImpl::leader_sync_mode_meta_to_arb_member_()
 {
   // caller need hold rdlock
