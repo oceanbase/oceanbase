@@ -1518,7 +1518,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
     if (OB_ISNULL(cur_batch_group_buf_ = (char *)aggr_alloc_.alloc(
                 alloc_size * BATCH_GROUP_SIZE))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
+      LOG_WARN("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
     } else {
       // The memset is not needed here because the object will be constructed by NEW.
       // But we memset first then NEW got a better performance because of better CPU cache locality.
