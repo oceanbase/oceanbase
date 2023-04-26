@@ -11567,6 +11567,8 @@ def_table_schema(
 # 12398: __all_virtual_column_group
 # 12399: __all_virtual_storage_leak_info
 #
+# 12400 __all_virtual_ls_log_restore_status
+#
 # 余留位置
 #
 
@@ -11876,6 +11878,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15384: __all_virtual_px_p2p_datahub
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
+# 15387: __all_virtual_ls_log_restore_status
 
 ################################################################################
 # System View (20000,30000]
@@ -26003,6 +26006,7 @@ def_table_schema(
 # 21421: GV$SQL_JOIN_FILTER
 # 21422: V$SQL_JOIN_FILTER
 # 21423: DBA_OB_TABLE_STAT_STALE_INFO
+# 21424: V$OB_LS_LOG_RESTORE_STATUS
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -49093,6 +49097,8 @@ def_table_schema(
       SYS.ALL_VIRTUAL_TIMESTAMP_SERVICE)
 """.replace("\n", " ")
 )
+
+# 28194: V$OB_LS_LOG_RESTORE_STATUS
 
 ################################################################################
 # Lob Table (50000, 70000)
