@@ -337,10 +337,10 @@ int ObSqlTransControl::kill_idle_timeout_tx(ObSQLSessionInfo *session)
 
 int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
 {
-  auto session_id = session->get_sessid();
-  LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
   int ret = OB_SUCCESS;
-  if (session->is_in_transaction()) {
+  if (!session->get_is_deserialized() && session->is_in_transaction()) {
+    auto session_id = session->get_sessid();
+    LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
     transaction::ObTxDesc *tx_desc = session->get_tx_desc();
     auto tx_tenant_id = tx_desc->get_tenant_id();
     const ObTransID tx_id = tx_desc->get_tx_id();
