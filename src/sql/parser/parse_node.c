@@ -153,19 +153,19 @@ int deep_copy_parse_node(void *malloc_pool, const ParseNode *src_node, ParseNode
         (void)fprintf(stderr, "ERROR failed to allocate memory\n");
       }
       for (int64_t i = 0; OB_PARSER_SUCCESS == ret && i < src_node->num_child_; ++i) {
-        ParseNode *dst_node = NULL;
+        ParseNode *tmp_node = NULL;
         ParseNode *child_node = src_node->children_[i];
         if (OB_UNLIKELY(NULL == child_node)) {
           ret = OB_PARSER_ERR_UNEXPECTED;
           (void)fprintf(stderr, "ERROR child node is null\n");
-        } else if (OB_UNLIKELY(NULL == (dst_node =
+        } else if (OB_UNLIKELY(NULL == (tmp_node =
                   (ParseNode *)parser_alloc(malloc_pool, sizeof(ParseNode))))) {
           ret = OB_PARSER_ERR_NO_MEMORY;
           (void)fprintf(stderr, "ERROR failed to allocate memory\n");
-        } else if (OB_PARSER_SUCCESS != (ret = deep_copy_parse_node(malloc_pool, child_node, dst_node))) {
+        } else if (OB_PARSER_SUCCESS != (ret = deep_copy_parse_node(malloc_pool, child_node, tmp_node))) {
           (void)fprintf(stderr, "ERROR failed to deep copy parse node\n");
         } else {
-          dst_node->children_[i] = dst_node;
+          dst_node->children_[i] = tmp_node;
         }
       }
     }
