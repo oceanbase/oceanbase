@@ -246,6 +246,7 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
           || (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_CAST_ARGUMENT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_DOUBLE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_SFU_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
         ctx.is_fast_parse_const_ = false;
       } else {
@@ -858,11 +859,9 @@ int ObSqlParameterization::check_and_generate_param_info(const ObIArray<ObPCPara
   int ret = OB_SUCCESS;
   if (sql_info.total_ != raw_params.count()) {
     ret = OB_NOT_SUPPORTED;
-#if !defined(NDEBUG)
     SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
                "fast_parse_const_num", raw_params.count(),
                "normal_parse_const_num", sql_info.total_);
-#endif
   }
   ObPCParam *pc_param = NULL;
   for (int32_t i = 0; OB_SUCC(ret) && i < raw_params.count(); i ++) {

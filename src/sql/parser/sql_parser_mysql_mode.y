@@ -9170,6 +9170,7 @@ opt_for_update_wait:
 {
   /* USE T_SFU_XXX to avoid being parsed by plan cache as template var */
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
+  $$->is_hidden_const_ = 1;
   $$->value_ = -1;
 }
 | WAIT DECIMAL_VAL
@@ -9187,11 +9188,13 @@ opt_for_update_wait:
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | NO_WAIT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = 0;
+  $$->is_hidden_const_ = 1;
 };
 
 parameterized_trim:
