@@ -398,7 +398,13 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
 int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(extract_info())) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (OB_FAIL(extract_info())) {
     LOG_WARN("failed to extract info", K(*this));
   } else if (OB_FAIL(deduce_type(session_info))) {
     LOG_WARN("failed to deduce type", K(*this));
