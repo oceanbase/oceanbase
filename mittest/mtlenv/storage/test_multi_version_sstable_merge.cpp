@@ -60,6 +60,39 @@ using namespace palf;
 namespace storage
 {
 
+int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn)
+{
+  int ret = OB_SUCCESS;
+
+  ObTxDataGuard tx_data_guard;
+  bool find = false;
+
+  if (OB_FAIL(get_tx_data_from_cache_(tx_id, tx_data_guard, find))) {
+    if (OB_EAGAIN != ret) {
+      STORAGE_LOG(WARN, "get tx data from cache failed", KR(ret));
+    }
+  } else {
+    if (find) {
+      /**************** rewrite logic *******************/
+
+      ret = fn(*tx_data_guard.tx_data());
+
+      /**************** rewrite logic *******************/
+    } else {
+      int64_t memtable_head = -1;
+      int64_t memtable_tail = -1;
+      if (OB_FAIL(get_memtable_mgr_()->get_memtable_range(memtable_head, memtable_tail))) {
+        STORAGE_LOG(WARN, "get memtable range failed", KR(ret));
+      } else if (memtable_head != memtables_cache_.memtable_head_ || memtable_tail != memtables_cache_.memtable_tail_) {
+        ret = OB_EAGAIN;
+      } else {
+        ret = OB_TRANS_CTX_NOT_EXIST;
+      }
+    }
+  }
+  return ret;
+}
+
 int clear_tx_data(ObTxDataTable *tx_data_table)
 {
   int ret = OB_SUCCESS;
