@@ -235,6 +235,8 @@ public:
 
   void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
 
+  bool is_locked() const { return stattype_locked_ > 0; }
+
   void add_row_count(int64_t rc) { row_count_ += rc; }
 
   // for multi rows

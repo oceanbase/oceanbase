@@ -971,7 +971,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     ObString escape_val;
     // check pattern is not null already, so result is null if and only if text is null.
     bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
-    if (escape_datum->is_null()) {
+    if (escape_datum->is_null() || escape_datum->get_string().empty()) {
       escape_val.assign_ptr("\\", 1);
     } else {
       escape_val = escape_datum->get_string();
@@ -1002,6 +1002,7 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
     } else if (INVALID_INSTR_MODE == instr_mode
                && OB_FAIL(calc_escape_wc(escape_coll, escape_val, escape_wc))) {
       LOG_WARN("calc escape wc failed", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
     } else {
       #define MATCH_TEXT_BATCH_ARG_LIST expr, ctx, skip, size, coll_type, escape_wc, pattern_val, \
                 instr_info

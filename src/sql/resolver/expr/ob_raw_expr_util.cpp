@@ -3383,7 +3383,7 @@ int ObRawExprUtils::extract_table_ids_from_exprs(const common::ObIArray<ObRawExp
       LOG_WARN("get unexpected null expr", K(ret));
     } else if (OB_FAIL(extract_table_ids(expr, expr_table_ids))) {
       LOG_WARN("failed to extract table ids", K(ret));
-    } else if (OB_FAIL(append(table_ids, expr_table_ids))) {
+    } else if (OB_FAIL(append_array_no_dup(table_ids, expr_table_ids))) {
       LOG_WARN("failed to append table ids", K(ret));
     }
   }

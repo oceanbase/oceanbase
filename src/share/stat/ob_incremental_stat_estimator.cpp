@@ -964,11 +964,11 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret));
-  } else if (OB_FAIL(pl::ObDbmsStats::get_part_infos(*table_schema,
-                                                     param.part_infos_,
-                                                     param.subpart_infos_,
-                                                     param.part_ids_,
-                                                     param.subpart_ids_))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      param.part_infos_,
+                                                      param.subpart_infos_,
+                                                      param.part_ids_,
+                                                      param.subpart_ids_))) {
     LOG_WARN("failed to get partition infos", K(ret));
   } else if (table_schema->get_part_level() == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO
             && OB_FAIL(param.approx_part_infos_.assign(param.part_infos_))) {

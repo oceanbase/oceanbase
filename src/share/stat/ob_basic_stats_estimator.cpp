@@ -16,6 +16,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_storage_estimator.h"
+#include "pl/sys_package/ob_dbms_stats.h"
 namespace oceanbase
 {
 namespace common
@@ -385,20 +386,30 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
 int ObBasicStatsEstimator::estimate_modified_count(ObExecContext &ctx,
                                                    const uint64_t tenant_id,
                                                    const uint64_t table_id,
-                                                   int64_t &inc_modified_count)
+                                                   int64_t &result,
+                                                   const bool need_inc_modified_count/*default true*/)
 {
   int ret = OB_SUCCESS;
   ObSqlString select_sql;
   const int64_t obj_pos = 0;
-  ObObj inc_modified_obj;
+  ObObj result_obj;
   bool is_valid = true;
   if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
     LOG_WARN("failed to check table read write valid", K(ret));
   } else if (!is_valid) {
     // do nothing
-  } else if (OB_FAIL(select_sql.append_fmt(
+  } else if (need_inc_modified_count &&
+             OB_FAIL(select_sql.append_fmt(
         "select cast(sum(inserts + updates + deletes) - sum(last_inserts + last_updates + " \
         "last_deletes) as signed) as inc_mod_count " \
+        "from %s where tenant_id = %lu and table_id = %lu;",
+        share::OB_ALL_MONITOR_MODIFIED_TNAME,
+        share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+        share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else if (!need_inc_modified_count &&
+             OB_FAIL(select_sql.append_fmt(
+        "select cast(sum(inserts + updates + deletes) as signed) as modified_count " \
         "from %s where tenant_id = %lu and table_id = %lu;",
         share::OB_ALL_MONITOR_MODIFIED_TNAME,
         share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
@@ -416,16 +427,17 @@ int ObBasicStatsEstimator::estimate_modified_count(ObExecContext &ctx,
         LOG_WARN("failed to execute sql", K(ret));
       } else if (OB_FAIL(client_result->next())) {
         LOG_WARN("failed to get next result", K(ret));
-      } else if (OB_FAIL(client_result->get_obj(obj_pos, inc_modified_obj))) {
+      } else if (OB_FAIL(client_result->get_obj(obj_pos, result_obj))) {
         LOG_WARN("failed to get object", K(ret));
-      } else if (inc_modified_obj.is_null()) {
-        inc_modified_count = 0;
-      } else if (OB_UNLIKELY(!inc_modified_obj.is_integer_type())) {
+      } else if (result_obj.is_null()) {
+        result = 0;
+      } else if (OB_UNLIKELY(!result_obj.is_integer_type())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected obj type", K(ret), K(inc_modified_obj.get_type()));
+        LOG_WARN("get unexpected obj type", K(ret), K(result_obj.get_type()));
       } else {
-        inc_modified_count = inc_modified_obj.get_int();
-        LOG_TRACE("succeed to get estimate modified count", K(table_id), K(inc_modified_count));
+        result = result_obj.get_int();
+        LOG_TRACE("succeed to get estimate modified count", K(table_id), K(result),
+                                                            K(need_inc_modified_count));
       }
     }
   }

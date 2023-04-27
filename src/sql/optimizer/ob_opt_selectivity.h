@@ -21,6 +21,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "sql/optimizer/ob_optimizer_context.h"
+#include "sql/optimizer/ob_dynamic_sampling.h"
 
 namespace oceanbase
 {
@@ -215,8 +216,10 @@ public:
     stat_type_(0),
     last_analyzed_(0),
     all_used_parts_(),
+    all_used_tablets_(),
     pk_ids_(),
-    column_metas_()
+    column_metas_(),
+    ds_level_(ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING)
   {}
   int assign(const OptTableMeta &other);
 
@@ -226,6 +229,7 @@ public:
            const int64_t stat_type,
            ObSqlSchemaGuard &schema_guard,
            common::ObIArray<int64_t> &all_used_part_id,
+           common::ObIArray<ObTabletID> &all_used_tablets,
            common::ObIArray<uint64_t> &column_ids,
            const OptSelectivityCtx &ctx);
 
@@ -243,26 +247,46 @@ public:
   void set_version(const int64_t version) { last_analyzed_ = version; }
   const common::ObIArray<int64_t>& get_all_used_parts() const { return all_used_parts_; }
   common::ObIArray<int64_t> &get_all_used_parts() { return all_used_parts_; }
+  const common::ObIArray<ObTabletID>& get_all_used_tablets() const { return all_used_tablets_; }
+  common::ObIArray<ObTabletID> &get_all_used_tablets() { return all_used_tablets_; }
   const common::ObIArray<uint64_t>& get_pkey_ids() const { return pk_ids_; }
   common::ObIArray<OptColumnMeta>& get_column_metas() { return column_metas_; }
 
+  void set_ds_level(const int64_t ds_level) { ds_level_ = ds_level; }
+  int64_t get_ds_level() const { return ds_level_; }
   bool use_default_stat() const { return stat_type_ == 0; }
   bool use_opt_stat() const { return stat_type_ == 1; }
+  bool use_ds_stat() const { return stat_type_ == 2; }
+  void set_use_ds_stat() { stat_type_ = 2; }
 
-  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(rows), K_(stat_type),
-               K_(all_used_parts), K_(pk_ids), K_(column_metas));
+  TO_STRING_KV(K_(table_id), K_(ref_table_id), K_(rows), K_(stat_type), K_(ds_level),
+               K_(all_used_parts), K_(all_used_tablets), K_(pk_ids), K_(column_metas));
 private:
   uint64_t table_id_;
   uint64_t ref_table_id_;
   double rows_;
   /// 0 for default stat
   /// 1 for optimizer-gathered stat
+  /// 2 for dynamic sampling stat, TODO, jiangxiu.wt
   int64_t stat_type_;
   int64_t last_analyzed_;
 
   ObSEArray<int64_t, 64, common::ModulePageAllocator, true> all_used_parts_;
+  ObSEArray<ObTabletID, 64, common::ModulePageAllocator, true> all_used_tablets_;
   ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> pk_ids_;
   ObSEArray<OptColumnMeta, 32, common::ModulePageAllocator, true> column_metas_;
+  int64_t ds_level_;//dynamic sampling level
+};
+
+struct OptSelectivityDSParam {
+  OptSelectivityDSParam() :
+    table_meta_(NULL),
+    quals_()
+  {}
+  TO_STRING_KV(KPC(table_meta_),
+               K(quals_));
+  const OptTableMeta *table_meta_;
+  ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> quals_;
 };
 
 class OptTableMetas
@@ -276,6 +300,7 @@ public:
                                const uint64_t ref_table_id,
                                const int64_t rows,
                                common::ObIArray<int64_t> &all_used_part_id,
+                               common::ObIArray<ObTabletID> &all_used_tablets,
                                common::ObIArray<uint64_t> &column_ids,
                                const int64_t stat_type,
                                int64_t last_analyzed);
@@ -599,7 +624,8 @@ private:
   static int get_like_sel(const OptTableMetas &table_metas,
                           const OptSelectivityCtx &ctx,
                           const ObRawExpr &qual,
-                          double &selectivity);
+                          double &selectivity,
+                          bool &can_calc_sel);
 
   //c1 between $val1 and $val2     -> equal with [$val2 - $val1] range sel
   //c1 not between $val1 and $val2 -> equal with (min, $val1) or ($val2, max) range sel
@@ -860,6 +886,43 @@ private:
   static int convert_valid_obj_for_opt_stats(const ObObj *old_obj,
                                              ObIAllocator &alloc,
                                              const ObObj *&new_obj);
+
+  static int calc_complex_predicates_selectivity_by_ds(const OptTableMetas &table_metas,
+                                                       const OptSelectivityCtx &ctx,
+                                                       const ObIArray<ObRawExpr*> &predicates,
+                                                       ObIArray<ObExprSelPair> &all_predicate_sel);
+
+  static int calc_selectivity_by_dynamic_sampling(const OptSelectivityCtx &ctx,
+                                                  const OptSelectivityDSParam &ds_param,
+                                                  ObIArray<ObExprSelPair> &all_predicate_sel);
+
+  static int resursive_extract_valid_predicate_for_ds(const OptTableMetas &table_metas,
+                                                      const OptSelectivityCtx &ctx,
+                                                      const ObRawExpr *qual,
+                                                      ObIArray<OptSelectivityDSParam> &ds_params);
+
+  static int add_ds_result_items(const ObIArray<ObRawExpr*> &quals,
+                                 const uint64_t ref_table_id,
+                                 ObIArray<ObDSResultItem> &ds_result_items);
+
+  static int add_ds_result_into_selectivity(const ObIArray<ObDSResultItem> &ds_result_items,
+                                            const uint64_t ref_table_id,
+                                            ObIArray<ObExprSelPair> &all_predicate_sel);
+
+  static int add_valid_ds_qual(const ObRawExpr *qual,
+                               const OptTableMetas &table_metas,
+                               ObIArray<OptSelectivityDSParam> &ds_params);
+
+  // static int calculate_join_selectivity_by_dynamic_sampling(const OptTableMetas &table_metas,
+  //                                                           const OptSelectivityCtx &ctx,
+  //                                                           const ObIArray<ObRawExpr*> &predicates,
+  //                                                           double &selectivity,
+  //                                                           bool &is_calculated);
+
+  // static int collect_ds_join_param(const OptTableMetas &table_metas,
+  //                                  const OptSelectivityCtx &ctx,
+  //                                  const ObIArray<ObRawExpr*> &predicates,
+  //                                  ObOptDSJoinParam &ds_join_param);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);

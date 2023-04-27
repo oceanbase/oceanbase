@@ -237,7 +237,29 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
     CK (0 <= idx && idx < param_store_->count());
-    OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+    if (OB_FAIL(ret)) {
+    } else if (param_store_->at(idx).is_datetime()) {
+      int32_t tmp_date = 0;
+      if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "%s '", LITERAL_PREFIX_DATE))) {
+        LOG_WARN("fail to print literal prefix", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_date(param_store_->at(idx).get_datetime(), NULL, tmp_date))) {
+        LOG_WARN("fail to datetime_to_date", "datetime", param_store_->at(idx).get_datetime(), K(ret));
+      } else if (OB_FAIL(ObTimeConverter::date_to_str(tmp_date, buf_, buf_len_, *pos_))) {
+        LOG_WARN("fail to date_to_str", K(tmp_date), K(ret));
+      } else if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "'"))) {
+        LOG_WARN("fail to print single quote", K(ret));
+      }
+    } else {
+      //timestamp time zone type need print prefix.
+      if (param_store_->at(idx).is_timestamp_tz()) {
+        DATA_PRINTF(" timestamp ");
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_))) {
+          LOG_WARN("failed to print sql literal", K(ret));
+        }
+      }
+    }
   } else if (expr->get_literal_prefix().empty()) {
     //for empty string in Oracle mode , we should use char/nchar-type obj to print
     if (expr->get_value().is_null() && (ObCharType == expr->get_expr_obj_meta().get_type()
@@ -457,14 +479,18 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("prior");
     case T_OP_CONNECT_BY_ROOT :
       SET_SYMBOL_IF_EMPTY("connect_by_root");
-    case T_OP_NOT:
-      SET_SYMBOL_IF_EMPTY("not");
     case T_OP_NOT_EXISTS:
       SET_SYMBOL_IF_EMPTY("not exists");
     case T_OP_BIT_NEG:
       SET_SYMBOL_IF_EMPTY("~");
-    case T_OP_EXISTS: {
+    case T_OP_EXISTS:
       SET_SYMBOL_IF_EMPTY("exists");
+    case T_OP_NOT: {
+      if (lib::is_mysql_mode()) {
+        SET_SYMBOL_IF_EMPTY("(not");
+      } else {
+        SET_SYMBOL_IF_EMPTY("not");
+      }
       if (1 != expr->get_param_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr param count should be equal 1 ", K(ret), K(expr->get_param_count()));
@@ -472,6 +498,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
         DATA_PRINTF("(");
         PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      if (type == T_OP_NOT && lib::is_mysql_mode()) {
         DATA_PRINTF(")");
       }
       break;
@@ -572,9 +601,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       }
     case T_OP_BIT_AND:
       SET_SYMBOL_IF_EMPTY("&");
-    case T_OP_REGEXP: {
+    case T_OP_REGEXP:
       SET_SYMBOL_IF_EMPTY("regexp");
-    case T_OP_CNN:
+    case T_OP_CNN: {
       SET_SYMBOL_IF_EMPTY("||");
       //case T_OP_DATE_ADD: {
       if (OB_UNLIKELY(2 != expr->get_param_count())) {
@@ -3026,6 +3055,36 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         } else {
           DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
           OZ(inner_print_fun_params(*expr));
+        }
+        break;
+      }
+      case T_FUN_SYS_REGEXP_LIKE: {
+        if (OB_UNLIKELY(expr->get_param_count() < 2 || expr->get_param_count() > 3)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr param count should be equal 2 or 3", "count", expr->get_param_count(), K(ret));
+        } else {
+          DATA_PRINTF("(");
+          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(",");
+          PRINT_EXPR(expr->get_param_expr(1));
+          if (OB_SUCC(ret) && expr->get_param_count() == 3) {
+            DATA_PRINTF(",");
+            PRINT_EXPR(expr->get_param_expr(2));
+          }
+          DATA_PRINTF("))");
+        }
+        break;
+      }
+      case T_FUN_ENUM_TO_STR:
+      case T_FUN_SET_TO_STR:
+      case T_FUN_ENUM_TO_INNER_TYPE:
+      case T_FUN_SET_TO_INNER_TYPE: {
+        if (expr->get_param_count() < 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be greater than 1", K(ret), K(*expr));
+        } else {
+          PRINT_EXPR(expr->get_param_expr(1));
         }
         break;
       }

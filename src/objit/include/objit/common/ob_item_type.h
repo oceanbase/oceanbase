@@ -2217,6 +2217,8 @@ typedef enum ObItemType
   T_NULL_IF_EXETERNAL,
   T_EMPTY_FIELD_AS_NULL,
   T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
+  T_DYNAMIC_SAMPLING,
+  T_TABLE_DYNAMIC_SAMPLING,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

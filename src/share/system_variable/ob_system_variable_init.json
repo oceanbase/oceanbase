@@ -3012,5 +3012,19 @@
     "info_cn": "使用 Auto DOP 策略时, 增大基表扫描并行度参考执行时间, 单位 ms",
     "background_cn": "",
     "ref_url": ""
+  },
+  "optimizer_dynamic_sampling": {
+    "id": 10145,
+    "name": "optimizer_dynamic_sampling",
+    "value": "1",
+    "data_type": "uint",
+    "min_val": "0",
+    "max_val": "1",
+    "info": "control optimizer dynamic sample level",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "?singleDoc#"
   }
 }

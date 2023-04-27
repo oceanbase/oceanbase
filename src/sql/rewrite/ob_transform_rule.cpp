@@ -408,6 +408,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
                root_stmt,
                false,
                ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
+        //optctx.set_only_ds_basic_stat(true);
         ObOptimizer optimizer(optctx);
         ObLogPlan *plan = NULL;
         if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {

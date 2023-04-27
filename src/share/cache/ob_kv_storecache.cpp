@@ -747,7 +747,9 @@ void ObKVGlobalCache::reload_priority()
         priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_column_stat_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
-      } else if (0 == STRNCMP(configs_[i].cache_name_, "tablet_ls_cache", MAX_CACHE_NAME_LENGTH)) {
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_ds_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
+      }else if (0 == STRNCMP(configs_[i].cache_name_, "tablet_ls_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().tablet_ls_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "index_block_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().index_block_cache_priority;

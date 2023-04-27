@@ -418,19 +418,6 @@ public:
                                       ObIArray<PartInfo> &new_subpart_infos,
                                       bool &is_subpart_name);
 
-  static int get_part_infos(const share::schema::ObTableSchema &schema,
-                            ObIArray<PartInfo> &part_infos,
-                            ObIArray<PartInfo> &subpart_infos,
-                            ObIArray<int64_t> &part_ids,
-                            ObIArray<int64_t> &subpart_ids,
-                            OSGPartMap *part_map = NULL);
-
-  static int get_subpart_infos(const ObTableSchema &table_schema,
-                               const ObPartition *part,
-                               ObIArray<PartInfo> &subpart_infos,
-                               ObIArray<int64_t> &subpart_ids,
-                               OSGPartMap *part_map = NULL);
-
   static int flush_database_monitoring_info(sql::ObExecContext &ctx,
                                             sql::ParamStore &params,
                                             common::ObObj &result);
@@ -481,6 +468,11 @@ public:
   static int get_table_partition_map(const ObTableSchema &table_schema,
                                      OSGPartMap &part_map);
 
+  static int get_table_stale_percent_threshold(sql::ObExecContext &ctx,
+                                               const uint64_t tenant_id,
+                                               const uint64_t table_id,
+                                               double &stale_percent_threshold);
+
 private:
   static int check_statistic_table_writeable(sql::ObExecContext &ctx);
 
@@ -503,11 +495,6 @@ private:
                                ObString &opt_value,
                                bool is_global_prefs,
                                ObStatPrefs *&stat_pref);
-
-  static int get_table_stale_percent_threshold(sql::ObExecContext &ctx,
-                                               const uint64_t tenant_id,
-                                               const StatTable &stat_table,
-                                               double &stale_percent_threshold);
 
   static int convert_vaild_ident_name(common::ObIAllocator &allocator,
                                       const common::ObDataTypeCastParams &dtc_params,

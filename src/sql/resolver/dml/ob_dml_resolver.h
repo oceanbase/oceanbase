@@ -880,6 +880,8 @@ private:
                              int64_t &ref_id);
   int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
+  int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+
   //////////end of functions for sql hint/////////////
 protected:
   struct GenColumnExprInfo {

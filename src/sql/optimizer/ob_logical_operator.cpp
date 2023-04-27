@@ -425,9 +425,6 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
       selectivity = predicate_selectivities_.at(i).sel_;
     }
   }
-  if (!found) {
-    LOG_PRINT_EXPR_RET(WARN, OB_ERR_UNEXPECTED, "Failed to get selectivity", expr);
-  }
   return selectivity;
 }
 

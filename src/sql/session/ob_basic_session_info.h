@@ -320,7 +320,7 @@ public:
   public:
     // 原StmtSavedValue的属性
     ObPhysicalPlan *cur_phy_plan_;
-    char cur_query_[MAX_CUR_QUERY_LEN];
+    char cur_query_[MAX_QUERY_STRING_LEN];
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -627,6 +627,7 @@ public:
   int get_px_shared_hash_join(bool &shared_hash_join) const;
   int get_secure_file_priv(common::ObString &v) const;
   int get_sql_safe_updates(bool &v) const;
+  int get_opt_dynamic_sampling(uint64_t &v) const;
   int get_sql_notes(bool &sql_notes) const;
   int get_regexp_stack_limit(int64_t &v) const;
   int get_regexp_time_limit(int64_t &v) const;

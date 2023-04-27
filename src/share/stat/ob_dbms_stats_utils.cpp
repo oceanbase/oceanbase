@@ -19,6 +19,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_item.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {
@@ -229,7 +230,10 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
       table_id == share::OB_ALL_HISTOGRAM_STAT_TID ||
       table_id == share::OB_ALL_TABLE_STAT_HISTORY_TID ||
       table_id == share::OB_ALL_COLUMN_STAT_HISTORY_TID ||
-      table_id == share::OB_ALL_HISTOGRAM_STAT_HISTORY_TID) {
+      table_id == share::OB_ALL_HISTOGRAM_STAT_HISTORY_TID ||
+      table_id == share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TID ||//circular dependency
+      table_id == share::OB_ALL_OPTSTAT_USER_PREFS_TID ||
+      table_id == share::OB_ALL_MONITOR_MODIFIED_TID) {
     is_valid = false;
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
@@ -652,6 +656,128 @@ int ObDbmsStatsUtils::check_part_id_valid(const ObTableStatParam &param,
         is_valid = true;
       }
     }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_part_ids_from_param(const ObTableStatParam &param,
+                                              common::ObIArray<int64_t> &part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (param.global_stat_param_.need_modify_) {
+    if (OB_FAIL(part_ids.push_back(param.global_part_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
+                                     ObIArray<PartInfo> &part_infos,
+                                     ObIArray<PartInfo> &subpart_infos,
+                                     ObIArray<int64_t> &part_ids,
+                                     ObIArray<int64_t> &subpart_ids,
+                                     OSGPartMap *part_map/*default null*/)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *part = NULL;
+  const bool is_twopart = (table_schema.get_part_level() == share::schema::PARTITION_LEVEL_TWO);
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  if (table_schema.is_partitioned_table()) {
+    ObPartIterator iter(table_schema, check_partition_mode);
+    while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null partition", K(ret), K(part));
+      } else {
+        PartInfo part_info;
+        part_info.part_name_ = part->get_part_name();
+        part_info.part_id_ = part->get_part_id();
+        part_info.tablet_id_ = part->get_tablet_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = part->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(part->get_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(part->get_part_id()));
+          }
+        }
+        int64_t origin_cnt = subpart_infos.count();
+        if (OB_FAIL(part_infos.push_back(part_info))) {
+          LOG_WARN("failed to push back part info", K(ret));
+        } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else if (is_twopart &&
+                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
+          LOG_WARN("failed to get subpart info", K(ret));
+        } else {
+          part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
+          LOG_TRACE("succeed to get table part infos", K(part_info));
+        }
+      }
+    }
+    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
+                                        const ObPartition *part,
+                                        ObIArray<PartInfo> &subpart_infos,
+                                        ObIArray<int64_t> &subpart_ids,
+                                        OSGPartMap *part_map/*default NULL*/)
+{
+  int ret = OB_SUCCESS;
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  if (OB_ISNULL(part) ||
+      OB_UNLIKELY(table_schema.get_part_level() != share::schema::PARTITION_LEVEL_TWO)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition is null", K(ret), K(table_schema.get_part_level()));
+  } else {
+    const ObSubPartition *subpart = NULL;
+    ObSubPartIterator sub_iter(table_schema, *part, check_partition_mode);
+    while (OB_SUCC(ret) && OB_SUCC(sub_iter.next(subpart))) {
+      if (OB_ISNULL(subpart)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null subpartition", K(ret));
+      } else {
+        PartInfo subpart_info;
+        subpart_info.part_name_ = subpart->get_part_name();
+        subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
+        subpart_info.tablet_id_ = subpart->get_tablet_id();
+        subpart_info.first_part_id_ = part->get_part_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = subpart->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(subpart->get_sub_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(subpart->get_sub_part_id()));
+          }
+        }
+        if (OB_FAIL(subpart_infos.push_back(subpart_info))) {
+          LOG_WARN("failed to push back subpart_info", K(ret));
+        } else if (OB_FAIL(subpart_ids.push_back(subpart_info.part_id_))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else {
+          LOG_TRACE("succeed to get table part infos", K(subpart_info)) ;
+        }
+      }
+    }
+    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
   }
   return ret;
 }

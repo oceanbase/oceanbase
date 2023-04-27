@@ -16,7 +16,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "storage/ob_tenant_tablet_stat_mgr.h"
-
+#include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "ob_opt_stat_service.h"
 
 namespace oceanbase {
@@ -244,6 +244,9 @@ int ObOptStatService::init(common::ObMySQLProxy *proxy, ObServerConfig *config)
   } else if (OB_FAIL(column_stat_cache_.init("opt_column_stat_cache",
                                              DEFAULT_COL_STAT_CACHE_PRIORITY))) {
     LOG_WARN("fail to init table cache.", K(ret));
+  } else if (OB_FAIL(ds_stat_cache_.init("opt_ds_stat_cache",
+                                          DEFAULT_DS_STAT_CACHE_PRIORITY))) {
+    LOG_WARN("fail to init table cache.", K(ret));
   } else {
     inited_ = true;
   }
@@ -310,11 +313,11 @@ int ObOptStatService::get_table_rowcnt(const uint64_t tenant_id,
         } else if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
                    OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
           LOG_WARN("failed to push back", K(ret));
-        }
+         }
       } else if (OB_ISNULL(handle.stat_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), K(key));
-      //check is stale
+       //check is stale
       } else if (handle.stat_->is_arrived_expired_time()) {
         if (OB_FAIL(reload_tablet_ids.push_back(all_tablet_ids.at(i))) ||
             OB_FAIL(reload_ls_ids.push_back(all_ls_ids.at(i)))) {
@@ -391,6 +394,47 @@ int ObOptStatService::load_table_rowcnt_and_put_cache(const uint64_t tenant_id,
     }
   }
   return ret;
+}
+
+int ObOptStatService::get_ds_stat(const ObOptDSStat::Key &key, ObOptDSStatHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("statistics service is not initialized. ", K(ret), K(key));
+  } else if (OB_FAIL(ds_stat_cache_.get_value(key, handle))) {
+    // we need to fetch statistics from inner table if it is not yet available from cache
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("get ds stat from cache failed", K(ret), K(key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(handle.stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), K(key));
+  }
+  return ret;
+}
+
+int ObOptStatService::add_ds_stat_cache(const ObOptDSStat::Key &key,
+                                        const ObOptDSStat &value,
+                                        ObOptDSStatHandle &ds_stat_handle)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret));
+  } else if (OB_FAIL(ds_stat_cache_.put_and_fetch_value(key, value, ds_stat_handle))) {
+    LOG_WARN("failed to put value", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatService::erase_ds_stat(const ObOptDSStat::Key &key)
+{
+  return ds_stat_cache_.erase(key);
 }
 
 }

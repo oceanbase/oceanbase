@@ -463,7 +463,7 @@ int ObBlockSampleRangeIterator::calculate_level_and_batch_size(const double perc
     }
   } else {
     // micro level
-    batch_size_ = micro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
+   batch_size_ = micro_count * percent / 100 / EXPECTED_OPEN_RANGE_NUM;
   }
 
   return ret;

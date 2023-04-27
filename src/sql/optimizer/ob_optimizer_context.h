@@ -24,6 +24,7 @@
 #include "sql/optimizer/ob_sharding_info.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "sql/optimizer/ob_dynamic_sampling.h"
 
 namespace oceanbase
 {
@@ -149,6 +150,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     has_for_update_(false),
     has_var_assign_(false),
     is_var_assign_only_in_root_stmt_(false),
+    failed_ds_tab_list_(),
     has_multiple_link_stmt_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
@@ -477,9 +479,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_has_var_assign(bool v) { has_var_assign_ = v; }
   inline bool is_var_assign_only_in_root_stmt() { return is_var_assign_only_in_root_stmt_; }
   inline void set_is_var_assign_only_in_root_stmt(bool v) { is_var_assign_only_in_root_stmt_ = v; }
+  common::ObIArray<ObDSFailTabInfo> &get_failed_ds_tab_list() { return failed_ds_tab_list_; }
   inline bool has_multiple_link_stmt() const { return has_multiple_link_stmt_; }
   inline void set_has_multiple_link_stmt(bool v) { has_multiple_link_stmt_ = v; }
-
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -551,6 +553,8 @@ private:
   bool has_for_update_;
   bool has_var_assign_;
   bool is_var_assign_only_in_root_stmt_;
+  //record the dynamic sampling falied table list, avoid repeated dynamic sampling.
+  common::ObSEArray<ObDSFailTabInfo, 1, common::ModulePageAllocator, true> failed_ds_tab_list_;
   bool has_multiple_link_stmt_;
 };
 }

@@ -651,6 +651,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
                                                session_enable_parallel,
                                                session_force_parallel_dop))) {
     LOG_WARN("failed to get session parallel info", K(ret));
+  } else if (OB_FAIL(check_force_default_stat())) {
+    LOG_WARN("failed to check force default stat", K(ret));
   } else if (OB_FAIL(calc_link_stmt_count(*target_stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
   } else {
@@ -1041,5 +1043,32 @@ int ObOptimizer::update_column_usage_infos()
                 ctx_.get_column_usage_infos());
   }
 
+  return ret;
+}
+
+int ObOptimizer::check_force_default_stat()
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard* schema_guard = ctx_.get_schema_guard();
+  ObSQLSessionInfo* session = ctx_.get_session_info();
+  ObQueryCtx* query_ctx = ctx_.get_query_ctx();
+  bool is_restore = false;
+  bool use_default_opt_stat = false;
+  bool is_exists_opt = false;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(session) || OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(schema_guard), K(session), K(query_ctx));
+  } else if (OB_FAIL(schema_guard->check_tenant_is_restore(session->get_effective_tenant_id(),
+                                                           is_restore))) {
+    LOG_WARN("fail to check if tenant is restore", K(session->get_effective_tenant_id()));
+  } else if (is_restore) {
+    ctx_.set_use_default_stat();
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::USE_DEFAULT_OPT_STAT,
+                                                                                 use_default_opt_stat,
+                                                                                 is_exists_opt))) {
+    LOG_WARN("fail to check use default opt stat", K(ret));
+  } else if (is_exists_opt && use_default_opt_stat) {
+    ctx_.set_use_default_stat();
+  }
   return ret;
 }

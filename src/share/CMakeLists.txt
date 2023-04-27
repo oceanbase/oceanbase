@@ -444,6 +444,8 @@ ob_set_subtarget(ob_share stat
   stat/ob_topk_hist_estimator.cpp
   stat/ob_index_stats_estimator.cpp
   stat/ob_dbms_stats_maintenance_window.cpp
+  stat/ob_opt_ds_stat.cpp
+  stat/ob_opt_ds_stat_cache.cpp
 )
 
 ob_set_subtarget(ob_share io

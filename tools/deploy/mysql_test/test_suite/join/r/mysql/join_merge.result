@@ -476,47 +476,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, ASC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, ASC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, ASC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 a2	b3
 10	14
@@ -527,47 +527,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 a2	b3
 12	10
@@ -578,47 +578,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [ASC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, ASC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, ASC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, ASC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 a2	b3
 12	10
@@ -629,47 +629,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [DESC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, DESC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, DESC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, DESC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 delete from aa;
 insert into aa values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 11, 13), (5, 12, 12), (6, 12, 10);
 delete from bb;
@@ -684,47 +684,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, ASC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, ASC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, ASC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, ASC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2, a3 desc;
 a2	b3
 10	14
@@ -735,47 +735,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, ASC], [aa.a3, DESC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3;
 a2	b3
 12	10
@@ -786,47 +786,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [ASC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, ASC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, ASC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, ASC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, ASC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 select /*+ use_merge(aa, bb) */ a2, b3 from aa, bb where a2 = b2 and a3 = b3 order by a2 desc, a3 desc;
 a2	b3
 12	10
@@ -837,47 +837,47 @@ Query Plan
 =================================================================
 |ID|OPERATOR                     |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE JOIN                   |        |1       |20          |
-|1 |├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|3 |│   └─SORT                   |        |1       |9           |
-|4 |│     └─PX PARTITION ITERATOR|        |1       |9           |
-|5 |│       └─TABLE FULL SCAN    |aa      |1       |9           |
-|6 |└─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|7 |  └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|8 |    └─SORT                   |        |1       |9           |
-|9 |      └─PX PARTITION ITERATOR|        |1       |9           |
-|10|        └─TABLE FULL SCAN    |bb      |1       |9           |
+|0 |MERGE JOIN                   |        |5       |30          |
+|1 |├─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|2 |│ └─EXCHANGE OUT DISTR       |:EX10000|5       |13          |
+|3 |│   └─SORT                   |        |5       |10          |
+|4 |│     └─PX PARTITION ITERATOR|        |5       |9           |
+|5 |│       └─TABLE FULL SCAN    |bb      |5       |9           |
+|6 |└─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|7 |  └─EXCHANGE OUT DISTR       |:EX20000|6       |14          |
+|8 |    └─SORT                   |        |6       |10          |
+|9 |      └─PX PARTITION ITERATOR|        |6       |9           |
+|10|        └─TABLE FULL SCAN    |aa      |6       |9           |
 =================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [DESC])
-  1 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, DESC])
-  2 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      dop=1
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      sort_keys([aa.a2, DESC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      force partition granule
-  5 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
-      access([aa.a2], [aa.a3]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false,
-      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
-  6 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, DESC])
-  7 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  2 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       dop=1
-  8 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
+  3 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, DESC])
-  9 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       force partition granule
- 10 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([bb.__pk_increment]), range(MIN ; MAX)always true
+  6 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  7 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      dop=1
+  8 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      sort_keys([aa.a2, DESC], [aa.a3, DESC])
+  9 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      force partition granule
+ 10 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
+      access([aa.a2], [aa.a3]), partitions(p[0-4])
+      is_index_back=false, is_global_index=false,
+      range_key([aa.__pk_increment]), range(MIN ; MAX)always true
 delete from cc;
 insert into cc values (1, 10, 15), (2, 10, 14), (3, 10, 12), (4, 12, 10);
 select /*+ leading(aa bb cc) use_merge(aa, bb, cc) */ c2, a3 from aa, bb, cc where a2 = b2 and a3 = b3 and b2 = c2 and b3 = c3 order by c2, c3 desc;
@@ -889,23 +889,23 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |1       |29          |
-|1 |├─MERGE JOIN                   |        |1       |20          |
-|2 |│ ├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|4 |│ │   └─SORT                   |        |1       |9           |
-|5 |│ │     └─PX PARTITION ITERATOR|        |1       |9           |
-|6 |│ │       └─TABLE FULL SCAN    |aa      |1       |9           |
-|7 |│ └─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|9 |│     └─SORT                   |        |1       |9           |
-|10|│       └─PX PARTITION ITERATOR|        |1       |9           |
-|11|│         └─TABLE FULL SCAN    |bb      |1       |9           |
-|12|└─PX COORDINATOR MERGE SORT    |        |1       |10          |
-|13|  └─EXCHANGE OUT DISTR         |:EX30000|1       |10          |
-|14|    └─SORT                     |        |1       |9           |
-|15|      └─PX PARTITION ITERATOR  |        |1       |9           |
-|16|        └─TABLE FULL SCAN      |cc      |1       |9           |
+|0 |MERGE JOIN                     |        |4       |44          |
+|1 |├─MERGE JOIN                   |        |5       |30          |
+|2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |14          |
+|4 |│ │   └─SORT                   |        |6       |10          |
+|5 |│ │     └─PX PARTITION ITERATOR|        |6       |9           |
+|6 |│ │       └─TABLE FULL SCAN    |aa      |6       |9           |
+|7 |│ └─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|5       |13          |
+|9 |│     └─SORT                   |        |5       |10          |
+|10|│       └─PX PARTITION ITERATOR|        |5       |9           |
+|11|│         └─TABLE FULL SCAN    |bb      |5       |9           |
+|12|└─PX COORDINATOR MERGE SORT    |        |4       |13          |
+|13|  └─EXCHANGE OUT DISTR         |:EX30000|4       |12          |
+|14|    └─SORT                     |        |4       |9           |
+|15|      └─PX PARTITION ITERATOR  |        |4       |9           |
+|16|        └─TABLE FULL SCAN      |cc      |4       |9           |
 ===================================================================
 Outputs & filters:
 -------------------------------------
@@ -960,23 +960,23 @@ Query Plan
 ===================================================================
 |ID|OPERATOR                       |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------
-|0 |MERGE JOIN                     |        |1       |29          |
-|1 |├─MERGE JOIN                   |        |1       |20          |
-|2 |│ ├─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|1       |10          |
-|4 |│ │   └─SORT                   |        |1       |9           |
-|5 |│ │     └─PX PARTITION ITERATOR|        |1       |9           |
-|6 |│ │       └─TABLE FULL SCAN    |aa      |1       |9           |
-|7 |│ └─PX COORDINATOR MERGE SORT  |        |1       |10          |
-|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|1       |10          |
-|9 |│     └─SORT                   |        |1       |9           |
-|10|│       └─PX PARTITION ITERATOR|        |1       |9           |
-|11|│         └─TABLE FULL SCAN    |bb      |1       |9           |
-|12|└─PX COORDINATOR MERGE SORT    |        |1       |10          |
-|13|  └─EXCHANGE OUT DISTR         |:EX30000|1       |10          |
-|14|    └─SORT                     |        |1       |9           |
-|15|      └─PX PARTITION ITERATOR  |        |1       |9           |
-|16|        └─TABLE FULL SCAN      |cc      |1       |9           |
+|0 |MERGE JOIN                     |        |4       |44          |
+|1 |├─MERGE JOIN                   |        |5       |30          |
+|2 |│ ├─PX COORDINATOR MERGE SORT  |        |6       |16          |
+|3 |│ │ └─EXCHANGE OUT DISTR       |:EX10000|6       |14          |
+|4 |│ │   └─SORT                   |        |6       |10          |
+|5 |│ │     └─PX PARTITION ITERATOR|        |6       |9           |
+|6 |│ │       └─TABLE FULL SCAN    |aa      |6       |9           |
+|7 |│ └─PX COORDINATOR MERGE SORT  |        |5       |15          |
+|8 |│   └─EXCHANGE OUT DISTR       |:EX20000|5       |13          |
+|9 |│     └─SORT                   |        |5       |10          |
+|10|│       └─PX PARTITION ITERATOR|        |5       |9           |
+|11|│         └─TABLE FULL SCAN    |bb      |5       |9           |
+|12|└─PX COORDINATOR MERGE SORT    |        |4       |13          |
+|13|  └─EXCHANGE OUT DISTR         |:EX30000|4       |12          |
+|14|    └─SORT                     |        |4       |9           |
+|15|      └─PX PARTITION ITERATOR  |        |4       |9           |
+|16|        └─TABLE FULL SCAN      |cc      |4       |9           |
 ===================================================================
 Outputs & filters:
 -------------------------------------
@@ -1215,12 +1215,12 @@ Query Plan
 ==============================================================
 |ID|OPERATOR                  |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT |        |1       |15          |
-|1 |└─EXCHANGE OUT DISTR      |:EX10000|1       |15          |
-|2 |  └─PX PARTITION ITERATOR |        |1       |14          |
-|3 |    └─MERGE JOIN          |        |1       |14          |
-|4 |      ├─TABLE FULL SCAN   |t1      |1       |7           |
-|5 |      └─TABLE FULL SCAN   |t2      |1       |7           |
+|0 |PX COORDINATOR MERGE SORT |        |20      |36          |
+|1 |└─EXCHANGE OUT DISTR      |:EX10000|20      |30          |
+|2 |  └─PX PARTITION ITERATOR |        |20      |17          |
+|3 |    └─MERGE JOIN          |        |20      |17          |
+|4 |      ├─TABLE FULL SCAN   |t1      |20      |8           |
+|5 |      └─TABLE FULL SCAN   |t2      |20      |8           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
@@ -1526,7 +1526,7 @@ Query Plan
 ==========================================================
 |ID|OPERATOR               |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |MERGE RIGHT OUTER JOIN |       |7       |5           |
+|0 |MERGE RIGHT OUTER JOIN |       |14      |5           |
 |1 |├─TABLE FULL SCAN      |t8(idx)|6       |3           |
 |2 |└─TABLE FULL SCAN      |t9(idx)|7       |3           |
 ==========================================================
@@ -1700,7 +1700,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE JOIN       |       |6       |6           |
+|0 |MERGE JOIN       |       |7       |6           |
 |1 |├─TABLE FULL SCAN|t8(idx)|6       |3           |
 |2 |└─TABLE FULL SCAN|t9(idx)|7       |3           |
 ====================================================
@@ -1761,7 +1761,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR         |NAME   |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE OUTER JOIN |       |6       |6           |
+|0 |MERGE OUTER JOIN |       |7       |6           |
 |1 |├─TABLE FULL SCAN|t8(idx)|6       |3           |
 |2 |└─TABLE FULL SCAN|t9(idx)|7       |3           |
 ====================================================
@@ -1971,8 +1971,8 @@ Query Plan
 =====================================================================
 |ID|OPERATOR             |NAME                |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |SORT                 |                    |28      |18          |
-|1 |└─MERGE JOIN         |                    |28      |15          |
+|0 |SORT                 |                    |21      |17          |
+|1 |└─MERGE JOIN         |                    |21      |14          |
 |2 |  ├─TABLE FULL SCAN  |table1              |28      |4           |
 |3 |  └─SORT             |                    |29      |7           |
 |4 |    └─TABLE FULL SCAN|table2(idx1,Reverse)|29      |4           |

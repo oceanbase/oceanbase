@@ -379,7 +379,8 @@ int ObTableScanIterator::open_iter()
                         get_table_param_.tablet_iter_,
                         false /*allow_not_ready*/ ))) {
             STORAGE_LOG(WARN, "Fail to read tables", K(ret));
-          } else if (OB_FAIL(can_retire_to_row_sample(retire_to_row_sample))) {
+          } else if (!scan_param_->sample_info_.force_block_ &&
+                     OB_FAIL(can_retire_to_row_sample(retire_to_row_sample))) {
             STORAGE_LOG(WARN, "Fail to try to retire to row sample", K(ret));
           } else if (!retire_to_row_sample) {
             if (nullptr == block_sample_iterator_) {

@@ -1714,7 +1714,7 @@ private: // member functions
                               common::ObIArray<ObObj> &popular_values) const;
   bool has_depend_json_table(const ObRelIds& table_ids);
 public:
-  const ObLogPlanHint &get_log_plan_hint() { return log_plan_hint_; }
+  const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
   bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
   const ObRelIds& get_leading_tables() { return log_plan_hint_.join_order_.leading_tables_; }
   void set_added_leading() { outline_print_flags_ |= ADDED_LEADING_HINT; }

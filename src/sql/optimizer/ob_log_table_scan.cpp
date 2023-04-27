@@ -1146,10 +1146,16 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FALSE_IT(table_meta =
+    } else if (OB_ISNULL(table_meta =
       plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
-    } else if (NULL != table_meta &&
-               OB_FAIL(BUF_PRINTF("stats version:%ld", table_meta->get_version()))) {
+      //do nothing
+    } else if (OB_FAIL(BUF_PRINTF("stats version:%ld", table_meta->get_version()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("dynamic sampling level:%ld", table_meta->get_ds_level()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     }
     END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);

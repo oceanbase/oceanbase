@@ -1219,6 +1219,9 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
       LOG_WARN("fail to get column in row. ", "column_name", "last_analyzed", K(ret));
     } else {
       stat.set_last_analyzed(static_cast<int64_t>(int_value));
+      if (!stat.is_locked()) {
+        stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
+      }
     }
   }
   return ret;

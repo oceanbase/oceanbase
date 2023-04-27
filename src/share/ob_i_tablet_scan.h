@@ -82,6 +82,7 @@ struct SampleInfo
     scope_ = SAMPLE_ALL_DATA;
     percent_ = 100;
     seed_ = -1;
+    force_block_ = false;
   }
 
   uint64_t table_id_;
@@ -89,7 +90,8 @@ struct SampleInfo
   SampleScope scope_;
   double percent_; // valid value: [0.000001, 100)
   int64_t seed_; // valid value: [0, 4294967296], -1 stands for random seed
-  TO_STRING_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope));
+  bool force_block_;//force sample block
+  TO_STRING_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope), K_(force_block));
   OB_UNIS_VERSION(1);
 };
 

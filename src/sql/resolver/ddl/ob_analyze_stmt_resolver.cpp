@@ -16,6 +16,7 @@
 #include "sql/resolver/ddl/ob_analyze_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "pl/sys_package/ob_dbms_stats.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -256,11 +257,11 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null table schema", K(ret));
-  } else if (OB_FAIL(pl::ObDbmsStats::get_part_infos(*table_schema,
-                                                     part_infos,
-                                                     subpart_infos,
-                                                     part_ids,
-                                                     subpart_ids))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      part_infos,
+                                                      subpart_infos,
+                                                      part_ids,
+                                                      subpart_ids))) {
     LOG_WARN("failed to get part infos", K(ret));
   } else if (OB_FAIL(analyze_stmt.set_part_ids(part_ids))) {
     LOG_WARN("failed to set part infos", K(ret));

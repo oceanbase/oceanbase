@@ -278,6 +278,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_trx_lock_timeout",
   "ob_trx_timeout",
   "optimizer_capture_sql_plan_baselines",
+  "optimizer_dynamic_sampling",
   "optimizer_use_sql_plan_baselines",
   "parallel_degree_limit",
   "parallel_degree_policy",
@@ -508,6 +509,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_TRX_LOCK_TIMEOUT,
   SYS_VAR_OB_TRX_TIMEOUT,
   SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES,
+  SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING,
   SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
   SYS_VAR_PARALLEL_DEGREE_LIMIT,
   SYS_VAR_PARALLEL_DEGREE_POLICY,
@@ -809,7 +811,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_force_order_preserve_set",
   "parallel_degree_policy",
   "parallel_degree_limit",
-  "parallel_min_scan_time_threshold"
+  "parallel_min_scan_time_threshold",
+  "optimizer_dynamic_sampling"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1204,6 +1207,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarParallelDegreePolicy)
         + sizeof(ObSysVarParallelDegreeLimit)
         + sizeof(ObSysVarParallelMinScanTimeThreshold)
+        + sizeof(ObSysVarOptimizerDynamicSampling)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3253,6 +3257,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarParallelMinScanTimeThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerDynamicSampling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerDynamicSampling", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerDynamicSampling));
       }
     }
 
@@ -5775,6 +5788,17 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelMinScanTimeThreshold())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarParallelMinScanTimeThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerDynamicSampling)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerDynamicSampling)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerDynamicSampling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerDynamicSampling", K(ret));
       }
       break;
     }

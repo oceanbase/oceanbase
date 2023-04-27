@@ -5267,6 +5267,11 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
   return ret;
 }
 
+int ObBasicSessionInfo::get_opt_dynamic_sampling(uint64_t &v) const
+{
+  return get_uint64_sys_var(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING, v);
+}
+
 void ObBasicSessionInfo::reset_query_string()
 {
   thread_data_.cur_query_[0] = '\0';

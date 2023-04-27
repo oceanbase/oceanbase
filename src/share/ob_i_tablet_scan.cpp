@@ -23,7 +23,7 @@ namespace common
 {
 
 OB_SERIALIZE_MEMBER(ObLimitParam, offset_, limit_);
-OB_SERIALIZE_MEMBER(SampleInfo, table_id_, method_, scope_, percent_, seed_);
+OB_SERIALIZE_MEMBER(SampleInfo, table_id_, method_, scope_, percent_, seed_, force_block_);
 OB_SERIALIZE_MEMBER(ObEstRowCountRecord, table_id_, table_type_, version_range_, logical_row_count_, physical_row_count_);
 
 uint64_t SampleInfo::hash(uint64_t seed) const
@@ -32,6 +32,7 @@ uint64_t SampleInfo::hash(uint64_t seed) const
   seed = do_hash(method_, seed);
   seed = do_hash(scope_, seed);
   seed = do_hash(percent_, seed);
+  seed = do_hash(force_block_, seed);
   seed = do_hash(seed_, seed);
 
   return seed;

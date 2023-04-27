@@ -243,6 +243,7 @@ namespace share
   static const char* const OB_SV_PARALLEL_DEGREE_POLICY = "parallel_degree_policy";
   static const char* const OB_SV_PARALLEL_DEGREE_LIMIT = "parallel_degree_limit";
   static const char* const OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD = "parallel_min_scan_time_threshold";
+  static const char* const OB_SV_OPTIMIZER_DYNAMIC_SAMPLING = "optimizer_dynamic_sampling";
 
 }
 }

@@ -4403,12 +4403,12 @@ int ObDbmsStats::get_table_part_infos(const share::schema::ObTableSchema *table_
   } else if (!table_schema->is_partitioned_table()) {
     /*do notthing*/
     LOG_TRACE("table is not part table", K(table_schema->get_part_level()));
-  } else if (OB_FAIL(get_part_infos(*table_schema,
-                                    part_infos,
-                                    subpart_infos,
-                                    part_ids,
-                                    subpart_ids,
-                                    part_map))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
+                                                      part_infos,
+                                                      subpart_infos,
+                                                      part_ids,
+                                                      subpart_ids,
+                                                      part_map))) {
     LOG_WARN("failed to get partition infos", K(ret));
   }
   return ret;
@@ -4616,102 +4616,6 @@ int ObDbmsStats::parser_pl_rawarray(const ObObjParam &rawarray_param,
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid argument", K(rawarray_param));
     }
-  }
-  return ret;
-}
-
-int ObDbmsStats::get_part_infos(const ObTableSchema &table_schema,
-                                ObIArray<PartInfo> &part_infos,
-                                ObIArray<PartInfo> &subpart_infos,
-                                ObIArray<int64_t> &part_ids,
-                                ObIArray<int64_t> &subpart_ids,
-                                OSGPartMap *part_map/*default null*/)
-{
-  int ret = OB_SUCCESS;
-  const ObPartition *part = NULL;
-  const bool is_twopart = (table_schema.get_part_level() == share::schema::PARTITION_LEVEL_TWO);
-  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
-  if (table_schema.is_partitioned_table()) {
-    ObPartIterator iter(table_schema, check_partition_mode);
-    while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
-      if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null partition", K(ret), K(part));
-      } else {
-        PartInfo part_info;
-        part_info.part_name_ = part->get_part_name();
-        part_info.part_id_ = part->get_part_id();
-        part_info.tablet_id_ = part->get_tablet_id();
-        if (OB_NOT_NULL(part_map)) {
-          OSGPartInfo part_info;
-          part_info.part_id_ = part->get_part_id();
-          part_info.tablet_id_ = part->get_tablet_id();
-          if (OB_FAIL(part_map->set_refactored(part->get_part_id(), part_info))) {
-            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(part->get_part_id()));
-          }
-        }
-        int64_t origin_cnt = subpart_infos.count();
-        if (OB_FAIL(part_infos.push_back(part_info))) {
-          LOG_WARN("failed to push back part info", K(ret));
-        } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
-          LOG_WARN("failed to push back part id", K(ret));
-        } else if (is_twopart &&
-                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
-          LOG_WARN("failed to get subpart info", K(ret));
-        } else {
-          part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
-          LOG_TRACE("succeed to get table part infos", K(part_info));
-        }
-      }
-    }
-    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
-  }
-  return ret;
-}
-
-int ObDbmsStats::get_subpart_infos(const ObTableSchema &table_schema,
-                                   const ObPartition *part,
-                                   ObIArray<PartInfo> &subpart_infos,
-                                   ObIArray<int64_t> &subpart_ids,
-                                   OSGPartMap *part_map/*default NULL*/)
-{
-  int ret = OB_SUCCESS;
-  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
-  if (OB_ISNULL(part) ||
-      OB_UNLIKELY(table_schema.get_part_level() != share::schema::PARTITION_LEVEL_TWO)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition is null", K(ret), K(table_schema.get_part_level()));
-  } else {
-    const ObSubPartition *subpart = NULL;
-    ObSubPartIterator sub_iter(table_schema, *part, check_partition_mode);
-    while (OB_SUCC(ret) && OB_SUCC(sub_iter.next(subpart))) {
-      if (OB_ISNULL(subpart)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null subpartition", K(ret));
-      } else {
-        PartInfo subpart_info;
-        subpart_info.part_name_ = subpart->get_part_name();
-        subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
-        subpart_info.tablet_id_ = subpart->get_tablet_id();
-        subpart_info.first_part_id_ = part->get_part_id();
-        if (OB_NOT_NULL(part_map)) {
-          OSGPartInfo part_info;
-          part_info.part_id_ = part->get_part_id();
-          part_info.tablet_id_ = subpart->get_tablet_id();
-          if (OB_FAIL(part_map->set_refactored(subpart->get_sub_part_id(), part_info))) {
-            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(subpart->get_sub_part_id()));
-          }
-        }
-        if (OB_FAIL(subpart_infos.push_back(subpart_info))) {
-          LOG_WARN("failed to push back subpart_info", K(ret));
-        } else if (OB_FAIL(subpart_ids.push_back(subpart_info.part_id_))) {
-          LOG_WARN("failed to push back part id", K(ret));
-        } else {
-          LOG_TRACE("succeed to get table part infos", K(subpart_info)) ;
-        }
-      }
-    }
-    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
   }
   return ret;
 }
@@ -5273,7 +5177,7 @@ int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx,
             double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
             if (OB_FAIL(get_table_stale_percent_threshold(ctx,
                                                           tenant_id,
-                                                          stat_table,
+                                                          stat_table.table_id_,
                                                           stale_percent_threshold))) {
               LOG_WARN("failed to get table stale percent threshold", K(ret));
             } else if (OB_FAIL(get_table_stale_percent(ctx, tenant_id, *table_schema,
@@ -5748,7 +5652,7 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
 
 int ObDbmsStats::get_table_stale_percent_threshold(sql::ObExecContext &ctx,
                                                    const uint64_t tenant_id,
-                                                   const StatTable &stat_table,
+                                                   const uint64_t table_id,
                                                    double &stale_percent_threshold)
 {
   int ret = OB_SUCCESS;
@@ -5757,8 +5661,7 @@ int ObDbmsStats::get_table_stale_percent_threshold(sql::ObExecContext &ctx,
   ObString opt_name("STALE_PERCENT");
   ObArenaAllocator tmp_alloc("OptStatPrefs", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   param.tenant_id_ = tenant_id;
-  param.db_id_ = stat_table.database_id_;
-  param.table_id_ = stat_table.table_id_;
+  param.table_id_ = table_id;
   param.allocator_ = &tmp_alloc;
   if (OB_FAIL(ObDbmsStatsPreferences::get_prefs(ctx, param, opt_name, result))) {
     LOG_WARN("failed to get prefs", K(ret));

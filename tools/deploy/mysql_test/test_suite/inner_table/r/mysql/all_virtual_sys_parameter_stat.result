@@ -310,6 +310,7 @@ _ob_plan_cache_gc_strategy
 _ob_query_rate_limit
 _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
+_optimizer_ads_time_limit
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time

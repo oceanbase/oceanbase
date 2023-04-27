@@ -832,6 +832,10 @@ int ObTransformSimplifyExpr::do_check_like_condition(ObRawExpr *&expr,
         }
       }
       if (OB_SUCC(ret)) {
+        if (text_expr->get_expr_type() == T_FUN_SYS_CAST &&
+            text_expr->has_flag(IS_INNER_ADDED_EXPR)) {//avoid reconstuct sql is wrong.
+          text_expr->clear_flag(IS_INNER_ADDED_EXPR);
+        }
         if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_->expr_factory_,
                                                       ctx_->session_info_,
                                                       pattern_expr,

@@ -60,6 +60,7 @@
 #include "observer/virtual_table/ob_table_columns.h"
 #include "share/ob_lob_access_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
+#include "share/stat/ob_opt_ds_stat.h"
 
 namespace oceanbase
 {
@@ -12181,6 +12182,16 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       global_hint.disable_cost_based_transform_ = true;
       break;
     }
+    case T_DYNAMIC_SAMPLING: {
+      // global dynamic sampling hint is processed here. table dynamic sampling hint is processed elsewhere
+      CHECK_HINT_PARAM(hint_node, 1) {
+        if (child0->value_ >= ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING &&
+            child0->value_ <= ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
+          global_hint.merge_dynamic_sampling_hint(child0->value_);
+        }
+      }
+      break;
+    }
     default: {
       resolved_hint = false;
       break;
@@ -12419,6 +12430,11 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_PQ_DISTRIBUTE_WINDOW: {
       CK(2 == hint_node.num_child_);
       OZ(resolve_pq_distribute_window_hint(hint_node, opt_hint));
+      break;
+    }
+    case T_TABLE_DYNAMIC_SAMPLING: {// dynamic_sampling(qb_name tablespec intnum)
+      CK(4 == hint_node.num_child_);
+      OZ(resolve_table_dynamic_sampling_hint(hint_node, opt_hint));
       break;
     }
     default: {
@@ -14322,6 +14338,45 @@ int ObDMLResolver::check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *p
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
     OZ (SMART_CALL(check_cast_multiset(expr->get_param_expr(i), expr)));
   }
+  return ret;
+}
+
+int ObDMLResolver::resolve_table_dynamic_sampling_hint(const ParseNode &hint_node,
+                                                       ObOptHint *&opt_hint)
+{
+  int ret = OB_SUCCESS;
+  opt_hint = NULL;
+  ObTableDynamicSamplingHint *dynamic_sampling_hint = NULL;
+  ObString qb_name;
+  int64_t sample_block_cnt = 0;
+  bool is_valid_hint = true;
+  if (OB_UNLIKELY(4 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dynamic sampling hint should have 3 child", K(ret), K(hint_node.num_child_));
+  } else if (OB_ISNULL(hint_node.children_[1]) || OB_ISNULL(hint_node.children_[2])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (hint_node.children_[2]->value_ != ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING &&
+             hint_node.children_[2]->value_ != ObDynamicSamplingLevel::BASIC_DYNAMIC_SAMPLING) {
+    is_valid_hint = false;
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, dynamic_sampling_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("failed to resolve qb name node.", K(ret));
+  } else if (OB_FAIL(resolve_table_relation_in_hint(*hint_node.children_[1],
+                                                    dynamic_sampling_hint->get_table()))) {
+    LOG_WARN("failed to resovle simple table list in hint", K(ret));
+  } else if (hint_node.children_[3] != NULL) {
+    sample_block_cnt = hint_node.children_[3]->value_;
+    is_valid_hint = sample_block_cnt > 0;
+  }
+  if (OB_SUCC(ret) && is_valid_hint) {
+    dynamic_sampling_hint->set_dynamic_sampling(hint_node.children_[2]->value_);
+    dynamic_sampling_hint->set_qb_name(qb_name);
+    dynamic_sampling_hint->set_sample_block_cnt(sample_block_cnt);
+    opt_hint = dynamic_sampling_hint;
+  }
+  LOG_TRACE("resolve_table_dynamic_sampling_hint", K(is_valid_hint));
   return ret;
 }
 

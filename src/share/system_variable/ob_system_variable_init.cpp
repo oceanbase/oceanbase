@@ -2980,13 +2980,27 @@ static struct VarsInit{
     ObSysVars[226].alias_ = "OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD" ;
     }();
 
+    [&] (){
+      ObSysVars[227].info_ = "control optimizer dynamic sample level" ;
+      ObSysVars[227].name_ = "optimizer_dynamic_sampling" ;
+      ObSysVars[227].data_type_ = ObUInt64Type ;
+      ObSysVars[227].value_ = "1" ;
+      ObSysVars[227].min_val_ = "0" ;
+      ObSysVars[227].max_val_ = "1" ;
+      ObSysVars[227].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[227].id_ = SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING] = 227 ;
+    ObSysVars[227].alias_ = "OB_SV_OPTIMIZER_DYNAMIC_SAMPLING" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 227;
+static int64_t var_amount = 228;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

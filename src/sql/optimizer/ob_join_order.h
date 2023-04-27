@@ -2187,10 +2187,9 @@ struct NullAwareAntiJoinInfo {
                                     const ObBitSet<> &ex_prefix_column_bs,
                                     bool &can_extract);
 
-    int estimate_rowcount_for_access_path(const uint64_t table_id,
-                                          const uint64_t ref_table_id,
-                                          ObIArray<AccessPath*> &all_paths,
-                                          const bool is_inner_path);
+    int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
+                                          const bool is_inner_path,
+                                          common::ObIArray<ObRawExpr*> &filter_exprs);
 
     inline bool can_use_remote_estimate(OptimizationMethod method)
     {

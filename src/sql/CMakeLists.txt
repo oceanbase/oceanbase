@@ -868,6 +868,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_update_log_plan.cpp
   optimizer/ob_log_stat_collector.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
+  optimizer/ob_dynamic_sampling.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache

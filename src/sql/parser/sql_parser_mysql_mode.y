@@ -185,6 +185,8 @@ USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
 DIRECT
 // hint related to optimizer statistics
 APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS DBMS_STATS
+// optimizer dynamic sampling hint
+DYNAMIC_SAMPLING
 // other
 NEG_SIGN
 
@@ -496,6 +498,8 @@ END_P SET_VAR DELIMITER
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause
 %type <node> recover_tenant_stmt recover_point_clause
+%type <node> dynamic_sampling_hint
+
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -9017,6 +9021,10 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_DISTRIBUTED_DML, 1, $2);
 }
+| DYNAMIC_SAMPLING '(' dynamic_sampling_hint ')'
+{
+  $$ = $3;
+}
 ;
 
 pq_set_hint_desc:
@@ -9062,6 +9070,24 @@ INTNUM
 {
   (void)$3;
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_PARALLEL, 3, $1, $2, $4);
+}
+;
+
+dynamic_sampling_hint:
+INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DYNAMIC_SAMPLING, 1, $1);
+}
+| qb_name_option relation_factor_in_hint opt_comma INTNUM
+{
+  (void)$3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_DYNAMIC_SAMPLING, 4, $1, $2, $4, NULL);
+}
+| qb_name_option relation_factor_in_hint opt_comma INTNUM opt_comma INTNUM
+{
+  (void)$3;
+  (void)$5;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_DYNAMIC_SAMPLING, 4, $1, $2, $4, $6);
 }
 ;
 

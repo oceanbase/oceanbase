@@ -45,7 +45,8 @@ public:
   static int estimate_modified_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const uint64_t table_id,
-                                     int64_t &inc_modified_count);
+                                     int64_t &result,
+                                     const bool need_inc_modified_count = true);
 
   static int estimate_stale_partition(ObExecContext &ctx,
                                       const uint64_t tenant_id,

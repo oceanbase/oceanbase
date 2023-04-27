@@ -2915,18 +2915,6 @@ int ObSql::generate_plan(ParseResult &parse_result,
     pctx->set_is_ps_protocol(result.is_ps_protocol());
     bool is_restore = false;
     uint64_t effective_tid = result.get_session().get_effective_tenant_id();
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(sql_ctx.schema_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema guard is null", K(ret));
-    } else if (OB_FAIL(sql_ctx.schema_guard_->check_tenant_is_restore(
-                        effective_tid, is_restore))) {
-      LOG_WARN("fail to check if tenant is restore", K(ret), K(effective_tid));
-    } else if (is_restore) {
-      // 为避免物理恢复阶段系统表恢复过程中，SQL依赖需要恢复的统计信息表，
-      // 对恢复中租户，仅需获取缺省统计信息即可
-      optctx.set_use_default_stat();
-    }
     ObOptimizer optimizer(optctx);
     bool use_jit = false;
     bool turn_on_jit = sql_ctx.need_late_compile_;

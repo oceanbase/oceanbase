@@ -127,7 +127,7 @@ private:
 
 private:
   static const int64_t DEFAULT_SSTABLE_CNT = 9;
-  static const int64_t EXPECTED_MIN_MACRO_SAMPLE_BLOCK_COUNT = 5;
+  static const int64_t EXPECTED_MIN_MACRO_SAMPLE_BLOCK_COUNT = 2;
   static const int64_t EXPECTED_OPEN_RANGE_NUM = 8;
   const blocksstable::ObDatumRange *sample_range_;
   ObIAllocator *allocator_;

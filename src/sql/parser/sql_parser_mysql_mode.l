@@ -1061,6 +1061,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_PULLUP_EXPR { return NO_PULLUP_EXPR; }
 <hint>OPT_PARAM { return OPT_PARAM; }
 <hint>OB_DDL_SCHEMA_VERSION { return OB_DDL_SCHEMA_VERSION; }
+<hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

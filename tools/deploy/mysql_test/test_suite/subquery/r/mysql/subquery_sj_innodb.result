@@ -35,7 +35,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |    |3       |6           |
+|0 |HASH RIGHT SEMI JOIN |    |4       |6           |
 |1 |├─TABLE FULL SCAN    |t1  |3       |2           |
 |2 |└─TABLE FULL SCAN    |t2  |10      |3           |
 =====================================================
@@ -70,7 +70,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |    |3       |6           |
+|0 |HASH RIGHT SEMI JOIN |    |2       |6           |
 |1 |├─TABLE FULL SCAN    |t1  |3       |2           |
 |2 |└─TABLE FULL SCAN    |t3  |10      |3           |
 =====================================================
