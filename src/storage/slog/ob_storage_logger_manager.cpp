@@ -302,6 +302,7 @@ int ObStorageLoggerManager::get_tenant_slog_dir(
   return ret;
 }
 
+
 int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
 {
   int ret = OB_SUCCESS;
@@ -317,7 +318,10 @@ int ObStorageLoggerManager::get_using_disk_space(int64_t &using_space) const
     omt->get_mtl_tenant_ids(mtl_tenant_ids);
     for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
-      MTL_SWITCH(tenant_id) {
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+      if (OB_FAIL(guard.switch_to(tenant_id, false))) {
+        STORAGE_REDO_LOG(WARN, "fail to switch tenant", K(ret), K(tenant_id));
+      } else {
         int64_t tenant_using_size = 0;
         ObStorageLogger *slogger = nullptr;
         if (OB_ISNULL(slogger = MTL(ObStorageLogger*))) {

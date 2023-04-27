@@ -1564,6 +1564,8 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
   int64_t clog_total_size_byte = 0;
   logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
   resource_info.reset();
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -1574,9 +1576,9 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
     LOG_WARN("fail to get server allocated resource", KR(ret));
   } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
     LOG_WARN("Failed to get clog stat ", KR(ret));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    LOG_WARN("Failed to get reserved size ", KR(ret));
   } else {
-    int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
-    (void) SLOGGERMGR.get_reserved_size(reserved_size);
     resource_info.cpu_ = get_cpu_count();
     resource_info.report_cpu_assigned_ = svr_res_assigned.min_cpu_;
     resource_info.report_cpu_max_assigned_ = svr_res_assigned.max_cpu_;

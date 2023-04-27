@@ -62,6 +62,8 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   int64_t clog_free_size_byte = 0;
   int64_t clog_total_size_byte = 0;
 
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
   if (start_to_read_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(cur_row_.cells_)) {
@@ -77,9 +79,9 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs,
       data_disk_abnormal_time))) {
     SERVER_LOG(WARN, "get device health status fail", KR(ret));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    SERVER_LOG(WARN, "Fail to get reserved size", K(ret));
   } else {
-    int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
-    (void) SLOGGERMGR.get_reserved_size(reserved_size);
     const int64_t col_count = output_column_ids_.count();
     const double hard_limit = GCONF.resource_hard_limit;
     const int64_t cpu_capacity = get_cpu_count();

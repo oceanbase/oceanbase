@@ -1421,11 +1421,11 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
 int ObBlockManager::extend_file_size_if_need()
 {
   int ret = OB_SUCCESS;
-
   int64_t reserved_size = 4 * 1024 * 1024 * 1024L; //default RESERVED_DISK_SIZE -> 4G
-  (void) SLOGGERMGR.get_reserved_size(reserved_size);
 
   if (OB_ISNULL(io_device_)) {
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    LOG_WARN("Fail to get reserved size", K(ret));
   } else if (!check_can_be_extend(reserved_size)) {
     ret = OB_NOT_READY_TO_EXTEND_FILE;
     LOG_DEBUG("Check auto extend, no need to start ssbfile auto extend", K(ret));
@@ -1468,9 +1468,6 @@ bool ObBlockManager::check_can_be_extend(const int64_t reserved_size)
 {
   bool can_be_extended  = false;
 
-  const int64_t max_block_cnt = get_max_macro_block_count(reserved_size);
-  const int64_t current_block_cnt = get_total_macro_block_count();
-
   const int64_t datafile_maxsize = GCONF.datafile_maxsize;
   const int64_t datafile_next = GCONF.datafile_next;
   const int64_t current_block_file_size = io_device_->get_total_block_size();
@@ -1486,14 +1483,16 @@ bool ObBlockManager::check_can_be_extend(const int64_t reserved_size)
     LOG_DEBUG("Do not extend file size, maxsize is smaller than datafile size",
       K(datafile_maxsize),
       K(current_block_file_size));
-  // althought datafile_maxsize setting is larger than current block size,
-  // but actually no more space to extend
-  } else if (max_block_cnt <= current_block_cnt) {
-    LOG_DEBUG("Do not extend file size, max block cnt is smaller than current block cnt",
-      K(max_block_cnt),
-      K(current_block_cnt));
   } else {
-    can_be_extended = true;
+    const int64_t max_block_cnt = get_max_macro_block_count(reserved_size);
+    const int64_t current_block_cnt = get_total_macro_block_count();
+    if (max_block_cnt <= current_block_cnt) {
+      LOG_DEBUG("Do not extend file size, max block cnt is smaller than current block cnt",
+        K(max_block_cnt),
+        K(current_block_cnt));
+    } else {
+      can_be_extended = true;
+    }
   }
 
   return can_be_extended;

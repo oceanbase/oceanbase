@@ -1331,16 +1331,17 @@ int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
 int ObLocalDevice::check_space_full(const int64_t required_size) const
 {
   int ret = OB_SUCCESS;
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
   if (OB_UNLIKELY(!is_marked_)) {
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice has not been marked", K(ret));
   } else if (OB_UNLIKELY(required_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(required_size));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    SHARE_LOG(WARN, "Fail to get reserved size", K(ret));
   } else {
-    int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
-    (void) SLOGGERMGR.get_reserved_size(reserved_size);
-
     int64_t max_block_cnt = get_max_block_count(reserved_size);
     int64_t actual_free_block_cnt = free_block_cnt_;
     if (max_block_cnt > total_block_cnt_) {  // auto extend is on

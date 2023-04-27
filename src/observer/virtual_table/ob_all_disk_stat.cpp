@@ -105,8 +105,11 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow *&row)
           }
           case TOTAL_SIZE:{
             int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
-            (void) SLOGGERMGR.get_reserved_size(reserved_size);
-            cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+              SERVER_LOG(WARN, "fail to get reserved size", K(ret));
+            } else {
+              cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            }
             break;
           }
           case ALLOCATED_SIZE: {
