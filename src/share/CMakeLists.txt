@@ -117,6 +117,7 @@ ob_set_subtarget(ob_share common
   ob_label_security_os.cpp
   ob_leader_election_waiter.cpp
   ob_lease_struct.cpp
+  ob_heartbeat_struct.cpp
   ob_list_parser.cpp
   ob_local_device.cpp
   ob_locality_info.cpp

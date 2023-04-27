@@ -148,6 +148,9 @@ public:
   bool is_encryption() const {
     return zone_type_.value_ == common::ObZoneType::ZONE_TYPE_ENCRYPTION;
   }
+  bool is_active() const {
+    return ObZoneStatus::ACTIVE == status_;
+  }
 public:
   common::ObZone zone_;
   ObZoneInfoItem::ItemList list_;

@@ -608,6 +608,7 @@ def_table_schema(
       ('start_service_time', 'int'),
       ('first_sessid', 'int', 'false', '0'),
       ('with_partition', 'int', 'false', '0'),
+      ('last_offline_time', 'int', 'false', '0'),
   ],
 )
 
@@ -15819,7 +15820,12 @@ SELECT SVR_IP,
        gmt_create AS CREATE_TIME,
        gmt_modified AS MODIFY_TIME,
 
-       BUILD_VERSION
+       BUILD_VERSION,
+
+       CASE last_offline_time
+          WHEN 0 THEN NULL
+          ELSE usec_to_time(last_offline_time) END
+       AS LAST_OFFLINE_TIME
 FROM oceanbase.__all_server
 """.replace("\n", " ")
 )

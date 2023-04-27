@@ -23,7 +23,6 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_part_mgr_util.h"
-#include "ob_server_manager.h"
 #include "ob_unit_manager.h"
 #include "ob_zone_manager.h"
 #include "ob_root_utils.h"

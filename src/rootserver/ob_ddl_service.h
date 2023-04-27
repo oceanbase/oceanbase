@@ -83,7 +83,6 @@ namespace palf
 namespace rootserver
 {
 class ObDDLOperator;
-class ObServerManager;
 class ObZoneManager;
 class ObUnitManager;
 class ObCommitAlterTenantLocalityArg;
@@ -131,7 +130,6 @@ public:
            common::ObMySQLProxy &sql_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
            share::ObLSTableOperator &lst_operator,
-           ObServerManager &server_mgr,
            ObZoneManager &zone_mgr,
            ObUnitManager &unit_mgr,
            ObSnapshotInfoManager &snapshot_mgr);
@@ -142,7 +140,6 @@ public:
   // these functions should be called after ddl_service has been inited
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
   common::ObMySQLProxy &get_sql_proxy() { return *sql_proxy_; }
-  ObServerManager &get_server_manager() { return *server_mgr_; }
   ObZoneManager &get_zone_mgr() { return *zone_mgr_; }
   ObSnapshotInfoManager &get_snapshot_mgr() { return *snapshot_mgr_; }
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
@@ -1781,7 +1778,6 @@ public:
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
 
-  int check_all_server_frozen_scn(const share::SCN &frozen_scn);
   int handle_security_audit(const obrpc::ObSecurityAuditArg &arg);
 
   static int check_and_get_object_name(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2300,7 +2296,6 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   share::ObLSTableOperator *lst_operator_;
   //TODO(jingqian): used to choose partition server, use load balancer finnally
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   ObSnapshotInfoManager *snapshot_mgr_;

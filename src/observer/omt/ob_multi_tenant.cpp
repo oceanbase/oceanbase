@@ -102,6 +102,7 @@
 #include "observer/table_load/ob_table_load_service.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "rootserver/ob_heartbeat_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -452,6 +453,7 @@ int ObMultiTenant::init(ObAddr myaddr,
       // MTL_BIND2(nullptr, nullptr, start_sql_nio_server, mtl_stop_default,
       //           mtl_wait_default, mtl_destroy_default);
     }
+    MTL_BIND2(mtl_new_default, rootserver::ObHeartbeatService::mtl_init, nullptr, rootserver::ObHeartbeatService::mtl_stop, rootserver::ObHeartbeatService::mtl_wait, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

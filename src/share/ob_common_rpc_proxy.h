@@ -47,12 +47,12 @@ public:
   RPC_S(PR5 report_sys_ls, obrpc::OB_REPORT_SYS_LS, (share::ObLSReplica));
   RPC_S(PR5 remove_sys_ls, obrpc::OB_REMOVE_SYS_LS, (obrpc::ObRemoveSysLsArg));
   RPC_S(PR5 fetch_location, obrpc::OB_FETCH_LOCATION, (obrpc::ObFetchLocationArg), ObFetchLocationResult);
-  RPC_S(PR5 merge_finish, obrpc::OB_MERGE_FINISH, (ObMergeFinishArg));
+  // RPC_S(PR5 merge_finish, obrpc::OB_MERGE_FINISH, (ObMergeFinishArg));
   RPC_S(PR5 broadcast_ds_action, obrpc::OB_BROADCAST_DS_ACTION, (ObDebugSyncActionArg));
   RPC_S(PR5 check_dangling_replica_finish, obrpc::OB_CHECK_DANGLING_REPLICA_FINISH, (ObCheckDanglingReplicaFinishArg));
   // high priority for fetch_alive_server, make sure it will not be blocked while network partition
   RPC_S(PR3 fetch_alive_server, obrpc::OB_FETCH_ALIVE_SERVER, (ObFetchAliveServerArg), ObFetchAliveServerResult);
-  RPC_S(PR5 fetch_active_server_status, obrpc::OB_FETCH_ACTIVE_SERVER_STATUS, (ObFetchAliveServerArg), ObFetchActiveServerAddrResult);
+  // RPC_S(PR5 fetch_active_server_status, obrpc::OB_FETCH_ACTIVE_SERVER_STATUS, (ObFetchAliveServerArg), ObFetchActiveServerAddrResult);
 
   RPC_S(PRD create_tenant, obrpc::OB_CREATE_TENANT, (ObCreateTenantArg), UInt64);
   RPC_S(PRD create_tenant_end, obrpc::OB_CREATE_TENANT_END, (ObCreateTenantEndArg));
@@ -262,7 +262,6 @@ public:
   //RPC_S(PRD log_nop_operation, obrpc::OB_LOG_DDL_NOP_OPERATOR, (obrpc::ObDDLNopOpreatorArg));
   RPC_S(PRD broadcast_schema, OB_BROADCAST_SCHEMA, (obrpc::ObBroadcastSchemaArg));
   //RPC_S(PR5 get_switchover_status, OB_GET_SWITCHOVER_STATUS, obrpc::ObGetSwitchoverStatusRes);
-  RPC_S(PR5 check_merge_finish, OB_CHECK_MERGE_FINISH, (obrpc::ObCheckMergeFinishArg));
   RPC_S(PR5 get_recycle_schema_versions, OB_GET_RECYCLE_SCHEMA_VERSIONS, (obrpc::ObGetRecycleSchemaVersionsArg), obrpc::ObGetRecycleSchemaVersionsResult);
 
   // backup and restore

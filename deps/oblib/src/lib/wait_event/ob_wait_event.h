@@ -300,6 +300,8 @@ WAIT_EVENT_DEF(TENANT_IO_CONFIG_WAIT, 15254, "rwlock: tenant io config wait", "a
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_LOCK_WAIT, 15255, "latch: window function participator cond lock wait", "address", "", "", CONCURRENCY, "window function participator cond lock wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_COND_WAIT, 15256, "mutex: window function participator cond wait", "address", "", "", CONCURRENCY, "window function participator cond wait", true)
 WAIT_EVENT_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, 15257, "latch: major_freeze diagnose lock wait", "address", "number", "tries", CONCURRENCY, "latch: major_freeze diagnose lock wait", true)
+WAIT_EVENT_DEF(HB_RESPONSES_LOCK_WAIT, 15258, "latch: hb responses lock wait", "address", "number", "tries", CONCURRENCY, "latch: hb responses lock wait", true)
+WAIT_EVENT_DEF(ALL_SERVERS_INFO_IN_TABLE_LOCK_WAIT, 15259, "latch: all servers info in table lock wait", "address", "number", "tries", CONCURRENCY, "latch: all servers info in table lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

@@ -60,11 +60,11 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcReportSysLSP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRemoveSysLSP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcFetchLocationP, *gctx_.root_service_);
-    RPC_PROCESSOR(rootserver::ObRpcMergeFinishP, *gctx_.root_service_);
+    // RPC_PROCESSOR(rootserver::ObRpcMergeFinishP, *gctx_.root_service_);
 
     RPC_PROCESSOR(rootserver::ObBroadcastDSActionP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcFetchAliveServerP, *gctx_.root_service_);
-    RPC_PROCESSOR(rootserver::ObRpcFetchActiveServerStatusP, *gctx_.root_service_);
+    // RPC_PROCESSOR(rootserver::ObRpcFetchActiveServerStatusP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRefreshTimeZoneInfoP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRequestTimeZoneInfoP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObCheckDanglingReplicaFinishP, *gctx_.root_service_);
@@ -238,7 +238,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 
     //for upgrade
     RPC_PROCESSOR(ObGetTenantSchemaVersionP, gctx_);
-    RPC_PROCESSOR(rootserver::ObCheckMergeFinishP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcFlashBackTableToScnP, *gctx_.root_service_);
 
     RPC_PROCESSOR(rootserver::ObRpcCreateRestorePointP, *gctx_.root_service_);

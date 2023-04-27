@@ -34,7 +34,6 @@ class ObMultiVersionSchemaService;
 
 namespace rootserver
 {
-class ObServerManager;
 
 class ObLostReplicaChecker :  public ObRsReentrantThread 
 {
@@ -42,9 +41,7 @@ public:
   ObLostReplicaChecker();
   virtual ~ObLostReplicaChecker();
 
-  int init(ObServerManager &server_manager,
-           share::ObLSTableOperator &lst_operator,
-           share::schema::ObMultiVersionSchemaService &schema_service);
+  int init(share::ObLSTableOperator &lst_operator, share::schema::ObMultiVersionSchemaService &schema_service);
   int check_lost_replicas();
   virtual void run3() override;
   virtual int blocking_run() {
@@ -66,7 +63,6 @@ private:
  private:
   bool inited_;
   common::ObThreadCond cond_;
-  ObServerManager *server_manager_;
   share::ObLSTableOperator *lst_operator_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
 private:

@@ -63,10 +63,14 @@ int ObZoneTableOperation::set_info_item(
 }
 
 template <typename T>
-int ObZoneTableOperation::load_info(common::ObISQLClient &sql_client, T &info)
+int ObZoneTableOperation::load_info(
+    common::ObISQLClient &sql_client,
+    T &info,
+    const bool check_zone_exists)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  bool zone_exists = false;
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     ObTimeoutCtx ctx;
@@ -86,6 +90,7 @@ int ObZoneTableOperation::load_info(common::ObISQLClient &sql_client, T &info)
       int64_t value = 0;
       char info_str[MAX_ZONE_INFO_LENGTH + 1] = "";
       while (OB_SUCCESS == ret && OB_SUCCESS == (ret = result->next())) {
+        zone_exists = true;
         EXTRACT_STRBUF_FIELD_MYSQL(*result, "name", name,
                                    static_cast<int64_t>(sizeof(name)), tmp_real_str_len);
         EXTRACT_INT_FIELD_MYSQL(*result, "value", value, int64_t);
@@ -100,6 +105,10 @@ int ObZoneTableOperation::load_info(common::ObISQLClient &sql_client, T &info)
       }
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
+        if (check_zone_exists && !zone_exists) {
+          ret = OB_ZONE_INFO_NOT_EXIST;
+          LOG_WARN("zone not exists", KR(ret), K(sql));
+        }
       } else {
         LOG_WARN("get result failed", K(ret), K(sql));
       }
@@ -109,14 +118,20 @@ int ObZoneTableOperation::load_info(common::ObISQLClient &sql_client, T &info)
   return ret;
 }
 
-int ObZoneTableOperation::load_global_info(ObISQLClient &sql_client, ObGlobalInfo &info)
+int ObZoneTableOperation::load_global_info(
+    ObISQLClient &sql_client,
+    ObGlobalInfo &info,
+    const bool check_zone_exists /* = false */)
 {
-  return load_info(sql_client, info);
+  return load_info(sql_client, info, check_zone_exists);
 }
 
-int ObZoneTableOperation::load_zone_info(ObISQLClient &sql_client, ObZoneInfo &info)
+int ObZoneTableOperation::load_zone_info(
+    ObISQLClient &sql_client,
+    ObZoneInfo &info,
+    const bool check_zone_exists /* = false */)
 {
-  return load_info(sql_client, info);
+  return load_info(sql_client, info, check_zone_exists);
 }
 
 template <typename T>
@@ -406,5 +421,124 @@ int ObZoneTableOperation::get_region_list(
   return ret;
 }
 
+int ObZoneTableOperation::check_encryption_zone(
+    common::ObISQLClient &sql_client,
+    const common::ObZone &zone,
+    bool &encryption)
+{
+  int ret = OB_SUCCESS;
+  encryption = false;
+  HEAP_VAR(ObZoneInfo, zone_info) {
+    if (OB_UNLIKELY(zone.is_empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the zone is empty", KR(ret), K(zone));
+    } else if (OB_FAIL(get_zone_info(zone, sql_client, zone_info))) {
+      LOG_WARN("fail to get zone info", KR(ret), K(zone));
+    } else {
+      encryption = zone_info.is_encryption();
+    }
+  }
+  return ret;
+}
+int ObZoneTableOperation::check_zone_active(
+    common::ObISQLClient &sql_client,
+    const common::ObZone &zone,
+    bool &is_active)
+{
+  int ret = OB_SUCCESS;
+  is_active = false;
+  HEAP_VAR(ObZoneInfo, zone_info) {
+    if (OB_UNLIKELY(zone.is_empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("the zone is empty", KR(ret), K(zone));
+    } else if (OB_FAIL(get_zone_info(zone, sql_client, zone_info))) {
+      LOG_WARN("fail to get zone info", KR(ret), K(zone));
+    } else {
+      is_active = zone_info.is_active();
+    }
+  }
+  return ret;
+}
+int ObZoneTableOperation::get_inactive_zone_list(
+      common::ObISQLClient &sql_client,
+      common::ObIArray<common::ObZone> &zone_list)
+{
+  return get_zone_list_(sql_client, zone_list, false /* is_active */);
+}
+int ObZoneTableOperation::get_active_zone_list(
+      common::ObISQLClient &sql_client,
+      common::ObIArray<common::ObZone> &zone_list)
+{
+  return get_zone_list_(sql_client, zone_list, true /* is_active */);
+}
+int ObZoneTableOperation::get_zone_list_(
+    common::ObISQLClient &sql_client,
+    common::ObIArray<common::ObZone> &zone_list,
+    const bool is_active)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObTimeoutCtx ctx;
+  zone_list.reset();
+  ObZone zone;
+  if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", K(ret), K(ctx));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT zone FROM %s WHERE name = 'status' AND info = '%s'",
+      OB_ALL_ZONE_TNAME, is_active ? "ACTIVE" : "INACTIVE"))) {
+    LOG_WARN("fail to append sql", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_client.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", KR(ret), K(sql));
+      } else {
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("result next failed", KR(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else {
+            int64_t tmp_real_str_len = 0;
+            zone.reset();
+            EXTRACT_STRBUF_FIELD_MYSQL(*result, "zone", zone.ptr(), MAX_ZONE_LENGTH, tmp_real_str_len);
+            (void) tmp_real_str_len; // make compiler happy
+            if (OB_FAIL(zone_list.push_back(zone))) {
+              LOG_WARN("fail to push an element into zone_list", KR(ret), K(zone));
+            }
+          }
+        }
+      }
+    }
+  }
+  FLOG_INFO("get inactive zone_list", KR(ret), K(zone_list));
+  return ret;
+}
+int ObZoneTableOperation::get_zone_info(
+      const ObZone &zone,
+      common::ObISQLClient &sql_client,
+      ObZoneInfo &zone_info)
+{
+  int ret = OB_SUCCESS;
+  zone_info.reset();
+  zone_info.zone_ = zone;
+  bool check_zone_exists = true;
+  if (OB_UNLIKELY(zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the zone is empty", KR(ret), K(zone));
+  } else if (OB_FAIL(load_zone_info(sql_client, zone_info, check_zone_exists))) {
+    LOG_WARN("fail to load zone info", KR(ret), K(zone));
+  } else if (OB_UNLIKELY(!zone_info.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("zone_info is unexpectedly invalid",
+        KR(ret), K(zone), K(zone_info));
+  } else {}
+  return ret;
+}
 }//end namespace share
 }//end namespace oceanbase

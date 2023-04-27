@@ -6,6 +6,7 @@ ob_set_subtarget(ob_server ALONE
 ob_set_subtarget(ob_server common
   ob_dump_task_generator.cpp
   ob_heartbeat.cpp
+  ob_heartbeat_handler.cpp
   ob_inner_sql_rpc_proxy.cpp
   ob_inner_sql_rpc_processor.cpp
   ob_inner_sql_connection.cpp

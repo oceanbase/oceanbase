@@ -126,7 +126,7 @@ int ObSysStat::set_initial_values(const uint64_t tenant_id)
     ob_max_used_unit_config_id_.value_.set_int(OB_USER_UNIT_CONFIG_ID);
     ob_max_used_resource_pool_id_.value_.set_int(OB_USER_RESOURCE_POOL_ID);
     ob_max_used_unit_id_.value_.set_int(OB_USER_UNIT_ID);
-    ob_max_used_server_id_.value_.set_int(OB_INIT_SERVER_ID);
+    ob_max_used_server_id_.value_.set_int(OB_INIT_SERVER_ID - 1);
     ob_max_used_ddl_task_id_.value_.set_int(OB_INIT_DDL_TASK_ID);
     ob_max_used_unit_group_id_.value_.set_int(OB_USER_UNIT_GROUP_ID);
   } else {

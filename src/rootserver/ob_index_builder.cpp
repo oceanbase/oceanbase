@@ -30,7 +30,6 @@
 #include "share/ob_index_builder_util.h"
 #include "observer/ob_server_struct.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
-#include "ob_server_manager.h"
 #include "ob_zone_manager.h"
 #include "ob_ddl_service.h"
 #include "ob_root_service.h"

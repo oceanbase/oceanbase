@@ -18,7 +18,6 @@
 #include "rootserver/ob_thread_idling.h"
 //#include "rootserver/ob_freeze_info_manager.h"
 #include "rootserver/ob_zone_manager.h"
-#include "rootserver/ob_server_manager.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/config/ob_server_config.h"
 
@@ -162,8 +161,7 @@ public:
   int init(share::schema::ObMultiVersionSchemaService &schema_service,
            //ObFreezeInfoManager &freeze_info_manager,
            ObZoneManager &zone_manager,
-           common::ObMySQLProxy &sql_proxy,
-           ObServerManager &server_mgr);
+           common::ObMySQLProxy &sql_proxy);
   virtual void run3() override;
   void wakeup();
   void stop();
@@ -211,7 +209,6 @@ private:
   //ObFreezeInfoManager *freeze_info_mgr_;
   ObZoneManager *zone_mgr_;
   common::ObMySQLProxy *sql_proxy_;
-  ObServerManager *server_mgr_;
   common::hash::ObHashMap<uint64_t, int64_t, common::hash::ReadWriteDefendMode> recycle_schema_versions_;
   DISALLOW_COPY_AND_ASSIGN(ObSchemaHistoryRecycler);
 };

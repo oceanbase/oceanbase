@@ -304,26 +304,26 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
 
     if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
       LOG_WARN("failed to get tenant info", KR(ret));
-    } else if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_status(
-                  [&rpc_count, &tenant_info, &proxy, ora_rowscn](const share::ObServerStatus &status) -> int {
+    } else if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(
+                  [&rpc_count, &tenant_info, &proxy, ora_rowscn](const share::ObServerInfoInTable &server_info) -> int {
                     int ret = OB_SUCCESS;
                     obrpc::ObUpdateTenantInfoCacheArg arg;
-                    if (!status.is_valid()) {
-                      LOG_WARN("skip invalid status", KR(ret), K(status));
-                    } else if (!status.is_alive()) {
+                    if (!server_info.is_valid()) {
+                      LOG_WARN("skip invalid server_info", KR(ret), K(server_info));
+                    } else if (!server_info.is_alive()) {
                       //not send to alive
                     } else if (OB_FAIL(arg.init(tenant_info.get_tenant_id(), tenant_info, ora_rowscn))) {
                       LOG_WARN("failed to init arg", KR(ret), K(tenant_info), K(ora_rowscn));
                     // use meta rpc process thread
-                    } else if (OB_FAIL(proxy.call(status.server_, DEFAULT_TIMEOUT_US, gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
-                      LOG_WARN("failed to send rpc", KR(ret), K(status), K(tenant_info), K(arg));
+                    } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US, gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
+                      LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
                     } else {
                       rpc_count++;
                     }
 
                     return ret;
                   }))) {
-      LOG_WARN("for each server status failed", KR(ret));
+      LOG_WARN("for each server_info failed", KR(ret));
     }
 
     int tmp_ret = OB_SUCCESS;

@@ -49,7 +49,9 @@ public:
   static int init_service_epoch(common::ObISQLClient &sql_proxy,
                                 const int64_t tenant_id,
                                 const int64_t freeze_service_epoch,
-                                const int64_t arbitration_service_epoch);
+                                const int64_t arbitration_service_epoch,
+                                const int64_t server_zone_op_service_epoch,
+                                const int64_t heartbeat_service_epoch);
 
   static int insert_service_epoch(common::ObISQLClient &sql_proxy,
                                   const int64_t tenant_id,
@@ -78,10 +80,20 @@ public:
                                  const char *name,
                                  const int64_t expected_epoch,
                                  bool &is_match);
+  // if service_epoch = persistent service epoch, do nothing
+  // if service_epoch > persistent service epoch, update persistent service epoch
+  // otherwise return error code OB_NOT_MASTER;
+  static int check_and_update_service_epoch(
+      ObMySQLTransaction &trans,
+      const int64_t tenant_id,
+      const char *name,
+      const int64_t service_epoch);
 
 public:
   constexpr static const char * const FREEZE_SERVICE_EPOCH = "freeze_service_epoch";
   constexpr static const char * const ARBITRATION_SERVICE_EPOCH = "arbitration_service_epoch";
+  constexpr static const char * const SERVER_ZONE_OP_SERVICE_EPOCH = "server_zone_op_service_epoch";
+  constexpr static const char * const HEARTBEAT_SERVICE_EPOCH = "heartbeat_service_epoch";
 
 private:
   static int inner_get_service_epoch_(common::ObISQLClient &sql_proxy,

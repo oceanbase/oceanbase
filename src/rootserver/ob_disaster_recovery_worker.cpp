@@ -222,13 +222,11 @@ int ObDRWorker::LocalityAlignment::locate_zone_locality(
 }
 
 ObDRWorker::LocalityAlignment::LocalityAlignment(ObUnitManager *unit_mgr,
-                                                 ObServerManager *server_mgr,
                                                  ObZoneManager *zone_mgr,
                                                  DRLSInfo &dr_ls_info)
   : task_idx_(0),
     add_replica_task_(),
     unit_mgr_(unit_mgr),
-    server_mgr_(server_mgr),
     zone_mgr_(zone_mgr),
     dr_ls_info_(dr_ls_info),
     task_array_(),
@@ -1077,11 +1075,9 @@ int ObDRWorker::LocalityAlignment::build()
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
   if (OB_UNLIKELY(nullptr == unit_mgr_
-                  || nullptr == server_mgr_
                   || nullptr == zone_mgr_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("LocalityAlignment not init",
-             KR(ret), KP(unit_mgr_), KP(server_mgr_), KP(zone_mgr_));
+    LOG_WARN("LocalityAlignment not init", KR(ret), KP(unit_mgr_), KP(zone_mgr_));
   } else if (OB_FAIL(locality_map_.create(LOCALITY_MAP_BUCKET_NUM, "LocAlign"))) {
     LOG_WARN("fail to create locality map", KR(ret));
   } else if (OB_FAIL(generate_paxos_replica_number())) {
@@ -1098,7 +1094,7 @@ int ObDRWorker::LocalityAlignment::build()
     LOG_WARN("fail to create unit set", KR(ret));
   } else if (OB_FAIL(init_unit_set(unit_set_))) {
     LOG_WARN("fail to init unit set", KR(ret));
-  } else if (OB_FAIL(unit_provider_.init(gen_user_tenant_id(tenant_id), unit_mgr_, server_mgr_))) {
+  } else if (OB_FAIL(unit_provider_.init(gen_user_tenant_id(tenant_id), unit_mgr_))) {
     LOG_WARN("fail to init unit provider", KR(ret), K(tenant_id));
   }
   return ret;
@@ -1521,25 +1517,18 @@ int ObDRWorker::LocalityAlignment::get_next_locality_alignment_task(
 
 int ObDRWorker::UnitProvider::init(
     const uint64_t tenant_id,
-    ObUnitManager *unit_mgr,
-    ObServerManager *server_mgr)
+    ObUnitManager *unit_mgr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
-                         || nullptr == unit_mgr
-                         || nullptr == server_mgr)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || nullptr == unit_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret),
-             K(tenant_id),
-             KP(unit_mgr),
-             KP(server_mgr));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(unit_mgr));
   } else {
     tenant_id_ = tenant_id;
     unit_mgr_ = unit_mgr;
-    server_mgr_ = server_mgr;
     inited_ = true;
   }
   return ret;
@@ -1554,9 +1543,9 @@ int ObDRWorker::UnitProvider::get_unit(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(server_mgr_)) {
+  } else if (OB_ISNULL(unit_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit mgr ptr is null", KR(ret), KP(unit_mgr_), KP(server_mgr_));
+    LOG_WARN("unit_mgr is null", KR(ret), KP(unit_mgr_));
   } else {
     common::ObArray<ObUnitInfo> unit_array;
     bool found = false;
@@ -1571,7 +1560,7 @@ int ObDRWorker::UnitProvider::get_unit(
           int hash_ret = OB_SUCCESS;
           if (this_info.unit_.zone_ != zone) {
             // bypass, because we only support migrate in same zone
-          } else if (OB_FAIL(server_mgr_->check_server_active(this_info.unit_.server_, is_active))) {
+          } else if (OB_FAIL(SVR_TRACER.check_server_active(this_info.unit_.server_, is_active))) {
             LOG_WARN("fail to check server active", KR(ret), "server", this_info.unit_.server_);
           } else if (!is_active) {
             LOG_INFO("server is not active", "server", this_info.unit_.server_, K(is_active));
@@ -1603,7 +1592,7 @@ int ObDRWorker::UnitProvider::get_unit(
           int hash_ret = OB_SUCCESS;
           if (this_info.unit_.zone_ != zone) {
             // bypass, because only support migrate in same zone
-          } else if (OB_FAIL(server_mgr_->check_server_active(this_info.unit_.server_, is_active))) {
+          } else if (OB_FAIL(SVR_TRACER.check_server_active(this_info.unit_.server_, is_active))) {
             LOG_WARN("fail to check server active", KR(ret), "server", this_info.unit_.server_);
           } else if (!is_active) {
             LOG_INFO("server is not active", "server", this_info.unit_.server_, K(is_active));
@@ -1655,7 +1644,6 @@ ObDRWorker::ObDRWorker(volatile bool &stop)
     self_addr_(),
     config_(nullptr),
     unit_mgr_(nullptr),
-    server_mgr_(nullptr),
     zone_mgr_(nullptr),
     disaster_recovery_task_mgr_(nullptr),
     lst_operator_(nullptr),
@@ -1675,7 +1663,6 @@ int ObDRWorker::init(
     common::ObAddr &self_addr,
     common::ObServerConfig &config,
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     ObDRTaskMgr &task_mgr,
     share::ObLSTableOperator &lst_operator,
@@ -1694,7 +1681,6 @@ int ObDRWorker::init(
     self_addr_ = self_addr;
     config_ = &config;
     unit_mgr_ = &unit_mgr;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     disaster_recovery_task_mgr_ = &task_mgr;
     lst_operator_ = &lst_operator;
@@ -1789,7 +1775,6 @@ void ObDRWorker::statistic_total_dr_task(const int64_t task_cnt)
 int ObDRWorker::check_tenant_locality_match(
     const uint64_t tenant_id,
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     bool &locality_is_matched)
 {
@@ -1816,7 +1801,6 @@ int ObDRWorker::check_tenant_locality_match(
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
         DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
                             &unit_mgr,
-                            &server_mgr,
                             &zone_mgr,
                             GCTX.schema_service_);
         if (ls_status_info.ls_is_creating()) {
@@ -1834,7 +1818,7 @@ int ObDRWorker::check_tenant_locality_match(
                 ls_info, ls_status_info))) {
           LOG_WARN("fail to generate dr log stream info", KR(ret));
         } else if (OB_FAIL(check_ls_locality_match_(
-                dr_ls_info, unit_mgr, server_mgr, zone_mgr, locality_is_matched))) {
+                dr_ls_info, unit_mgr, zone_mgr, locality_is_matched))) {
           LOG_WARN("fail to try log stream disaster recovery", KR(ret));
         }
       }
@@ -1846,7 +1830,6 @@ int ObDRWorker::check_tenant_locality_match(
 int ObDRWorker::check_ls_locality_match_(
     DRLSInfo &dr_ls_info,
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     bool &locality_is_matched)
 {
@@ -1855,7 +1838,6 @@ int ObDRWorker::check_ls_locality_match_(
   locality_is_matched = false;
   LOG_INFO("start to check ls locality match", K(dr_ls_info));
   LocalityAlignment locality_alignment(&unit_mgr,
-                                       &server_mgr,
                                        &zone_mgr,
                                        dr_ls_info);
   if (!dr_ls_info.has_leader()) {
@@ -1948,7 +1930,6 @@ int ObDRWorker::try_tenant_disaster_recovery(
         share::ObLSStatusInfo &ls_status_info = ls_status_info_array.at(i);
         DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
                             unit_mgr_,
-                            server_mgr_,
                             zone_mgr_,
                             schema_service_);
         int64_t ls_acc_dr_task = 0;
@@ -2409,13 +2390,12 @@ int ObDRWorker::do_single_replica_permanent_offline_(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(server_mgr_)
-             || OB_UNLIKELY(!member_to_remove.is_valid()
+  } else if (OB_UNLIKELY(!member_to_remove.is_valid()
                          || OB_INVALID_TENANT_ID == tenant_id
                          || !ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(member_to_remove), K(tenant_id), K(ls_id), KP(server_mgr_));
-  } else if (OB_FAIL(server_mgr_->check_server_permanent_offline(member_to_remove.get_server(), is_offline))) {
+    LOG_WARN("invalid argument", KR(ret), K(member_to_remove), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(SVR_TRACER.check_server_permanent_offline(member_to_remove.get_server(), is_offline))) {
     LOG_WARN("fail to check server permanent offline", KR(ret), K(member_to_remove));
   } else if (is_offline) {
     FLOG_INFO("found ls replica need to permanent offline", K(member_to_remove));
@@ -2565,7 +2545,6 @@ int ObDRWorker::construct_extra_infos_to_build_migrate_task(
     //shall never be here
   } else if (OB_FAIL(choose_disaster_recovery_data_source(
                          zone_mgr_,
-                         server_mgr_,
                          dr_ls_info,
                          dst_member,
                          src_member,
@@ -2907,7 +2886,6 @@ int ObDRWorker::try_generate_add_replica_locality_alignment_task(
       //shall never be here
     } else if (OB_FAIL(choose_disaster_recovery_data_source(
             zone_mgr_,
-            server_mgr_,
             dr_ls_info,
             dst_member,
             ObReplicaMember(),/*empty*/
@@ -2992,7 +2970,6 @@ int ObDRWorker::try_generate_type_transform_locality_alignment_task(
       LOG_INFO("may has no leader while member change", K(dr_ls_info));
     } else if (OB_FAIL(choose_disaster_recovery_data_source(
             zone_mgr_,
-            server_mgr_,
             dr_ls_info,
             dst_member,
             src_member,
@@ -3242,7 +3219,6 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
                                    my_task->memstore_percent_);
         if (OB_FAIL(choose_disaster_recovery_data_source(
             zone_mgr_,
-            server_mgr_,
             dr_ls_info,
             dst_member,
             ObReplicaMember(),/*empty*/
@@ -3275,7 +3251,6 @@ int ObDRWorker::record_task_plan_for_locality_alignment(
                                    my_task->dst_memstore_percent_);
         if (OB_FAIL(choose_disaster_recovery_data_source(
             zone_mgr_,
-            server_mgr_,
             dr_ls_info,
             dst_member,
             ObReplicaMember(),/*empty*/
@@ -3347,10 +3322,7 @@ int ObDRWorker::try_locality_alignment(
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_TRY_LOCALITY_ALIGNMENT);
   LOG_INFO("try locality alignment", K(dr_ls_info), K(only_for_display));
-  LocalityAlignment locality_alignment(unit_mgr_,
-                                       server_mgr_,
-                                       zone_mgr_,
-                                       dr_ls_info);
+  LocalityAlignment locality_alignment(unit_mgr_, zone_mgr_, dr_ls_info);
   const LATask *task = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -3784,7 +3756,6 @@ int ObDRWorker::construct_extra_infos_for_generate_migrate_to_unit_task(
     //shall never be here
   } else if (OB_FAIL(choose_disaster_recovery_data_source(
                          zone_mgr_,
-                         server_mgr_,
                          dr_ls_info,
                          dst_member,
                          src_member,
@@ -4131,7 +4102,6 @@ int ObDRWorker::generate_disaster_recovery_paxos_replica_number(
 
 int ObDRWorker::choose_disaster_recovery_data_source(
     ObZoneManager *zone_mgr,
-    ObServerManager *server_mgr,
     DRLSInfo &dr_ls_info,
     const ObReplicaMember &dst_member,
     const ObReplicaMember &src_member,
@@ -4139,7 +4109,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
     int64_t &data_size)
 {
   int ret = OB_SUCCESS;
-  ObZone dst_zone;
+  ObServerInfoInTable server_info;
   ObRegion dst_region;
   ObDataSourceCandidateChecker type_checker(dst_member.get_replica_type());
   int64_t replica_cnt = 0;
@@ -4147,12 +4117,13 @@ int ObDRWorker::choose_disaster_recovery_data_source(
   DRServerStatInfo *server_stat_info = nullptr;
   DRUnitStatInfo *unit_stat_info = nullptr;
   DRUnitStatInfo *unit_in_group_stat_info = nullptr;
+  ObZone dst_zone;
 
-  if (OB_ISNULL(zone_mgr) || OB_ISNULL(server_mgr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(zone_mgr), KP(server_mgr));
-  } else if (OB_FAIL(server_mgr->get_server_zone(dst_member.get_server(), dst_zone))) {
-    LOG_WARN("fail to get server zone", KR(ret), "server", dst_member.get_server());
+  if (OB_ISNULL(zone_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("zone_mgr is null", KR(ret), KP(zone_mgr));
+  } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst_member.get_server(), dst_zone))) {
+    LOG_WARN("fail to get server zone", KR(ret), K(dst_member.get_server()));
   } else if (OB_FAIL(zone_mgr->get_region(dst_zone, dst_region))) {
     LOG_WARN("fail to get region", KR(ret), K(dst_zone));
   } else if (OB_FAIL(dr_ls_info.get_replica_cnt(replica_cnt))) {
@@ -4161,8 +4132,8 @@ int ObDRWorker::choose_disaster_recovery_data_source(
     ObLSReplica *src_replica = nullptr;
     // try task offline src
     for (int64_t i = 0;
-         OB_SUCC(ret) && i < replica_cnt && src_member.is_valid() && nullptr == src_replica;
-         ++i) {
+        OB_SUCC(ret) && i < replica_cnt && src_member.is_valid() && nullptr == src_replica;
+        ++i) {
       if (OB_FAIL(dr_ls_info.get_replica_stat(
               i,
               ls_replica,

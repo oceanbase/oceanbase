@@ -5731,12 +5731,6 @@ void ObBroadcastSchemaArg::reset()
   schema_version_ = OB_INVALID_VERSION;
 }
 
-OB_SERIALIZE_MEMBER(ObCheckMergeFinishArg, frozen_scn_);
-bool ObCheckMergeFinishArg::is_valid() const
-{
-  return frozen_scn_.is_valid();
-}
-
 OB_SERIALIZE_MEMBER(ObGetRecycleSchemaVersionsArg, tenant_ids_);
 bool ObGetRecycleSchemaVersionsArg::is_valid() const
 {
@@ -5867,6 +5861,59 @@ OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, po
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
 OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
+OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_);
+int ObCheckServerForAddingServerArg::init(const Mode &mode, const uint64_t sys_tenant_data_version)
+{
+  int ret = OB_SUCCESS;
+  mode_ = mode;
+  sys_tenant_data_version_ = sys_tenant_data_version;
+  return ret;
+}
+int ObCheckServerForAddingServerArg::assign(const ObCheckServerForAddingServerArg &other) {
+  int ret = OB_SUCCESS;
+  mode_ = other.mode_;
+  sys_tenant_data_version_ = other.sys_tenant_data_version_;
+  return ret;
+}
+OB_SERIALIZE_MEMBER(
+    ObCheckServerForAddingServerResult,
+    is_server_empty_,
+    zone_,
+    sql_port_,
+    build_version_);
+int ObCheckServerForAddingServerResult::init(
+    const bool is_server_empty,
+    const ObZone &zone,
+    const int64_t sql_port,
+    const share::ObServerInfoInTable::ObBuildVersion &build_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(zone.is_empty() || sql_port <= 0 || build_version.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(zone), K(sql_port), K(build_version));
+  } else if (OB_FAIL(zone_.assign(zone))) {
+    LOG_WARN("fail to assign zone", KR(ret), K(zone));
+  } else if (OB_FAIL(build_version_.assign(build_version))) {
+    LOG_WARN("fail to assign build version", KR(ret), K(build_version));
+  } else {
+    is_server_empty_ = is_server_empty;
+    sql_port_ = sql_port;
+  }
+  return ret;
+}
+int ObCheckServerForAddingServerResult::assign(const ObCheckServerForAddingServerResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(zone_.assign(other.zone_))) {
+    LOG_WARN("fail to assign zone", KR(ret), K(other.zone_));
+  } else if (OB_FAIL(build_version_.assign(other.build_version_))) {
+    LOG_WARN("fail to assign build_version", KR(ret), K(other.build_version_));
+  } else {
+    is_server_empty_ = other.is_server_empty_;
+    sql_port_ = other.sql_port_;
+  }
+  return ret;
+}
 OB_SERIALIZE_MEMBER(ObCheckDeploymentModeArg, single_zone_deployment_on_);
 
 OB_SERIALIZE_MEMBER(ObArchiveLogArg, enable_, tenant_id_, archive_tenant_ids_);
@@ -8112,5 +8159,71 @@ int ObRlsContextDDLArg::assign(const ObRlsContextDDLArg &other)
 OB_SERIALIZE_MEMBER((ObTryAddDepInofsForSynonymBatchArg, ObDDLArg),
                     tenant_id_, synonym_ids_);
 
+OB_SERIALIZE_MEMBER(ObGetServerResourceInfoArg, rs_addr_);
+
+int ObGetServerResourceInfoArg::init(const common::ObAddr &rs_addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!rs_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rs_addr", KR(ret), K(rs_addr));
+  } else {
+    rs_addr_ = rs_addr;
+  }
+  return ret;
+}
+
+int ObGetServerResourceInfoArg::assign(const ObGetServerResourceInfoArg &other)
+{
+  int ret = OB_SUCCESS;
+  rs_addr_ = other.rs_addr_;
+  return ret;
+}
+
+bool ObGetServerResourceInfoArg::is_valid() const
+{
+  return rs_addr_.is_valid();
+}
+
+void ObGetServerResourceInfoArg::reset()
+{
+  rs_addr_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObGetServerResourceInfoResult, server_, resource_info_);
+
+int ObGetServerResourceInfoResult::init(
+    const common::ObAddr &server,
+    const share::ObServerResourceInfo &resource_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!server.is_valid() || !resource_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server or resource_info", KR(ret), K(server), K(resource_info));
+  } else {
+    server_ = server;
+    resource_info_ = resource_info;
+  }
+  return ret;
+}
+
+int ObGetServerResourceInfoResult::assign(const ObGetServerResourceInfoResult &other)
+{
+  int ret = OB_SUCCESS;
+  server_ = other.server_;
+  resource_info_ = other.resource_info_;
+  return ret;
+}
+
+bool ObGetServerResourceInfoResult::is_valid() const
+{
+  return server_.is_valid() && resource_info_.is_valid();
+}
+
+void ObGetServerResourceInfoResult::reset()
+{
+  server_.reset();
+  resource_info_.reset();
+}
 }//end namespace obrpc
 }//end namepsace oceanbase

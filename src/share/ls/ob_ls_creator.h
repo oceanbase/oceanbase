@@ -45,7 +45,6 @@ namespace share
 {
 
 class SCN;
-class ObServerManager;
 struct ObLSReplicaAddr
 {
   common::ObAddr addr_;

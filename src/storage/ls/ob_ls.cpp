@@ -40,6 +40,7 @@
 #include "rootserver/ob_primary_ls_service.h"
 #include "rootserver/ob_recovery_ls_service.h"
 #include "rootserver/restore/ob_restore_scheduler.h"
+#include "rootserver/ob_heartbeat_service.h"
 #include "sql/das/ob_das_id_service.h"
 #include "storage/tablet/ob_tablet.h"
 
@@ -216,6 +217,12 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
       }
 
+
+      if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        //sys tenant
+        REGISTER_TO_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObHeartbeatService *));
+        LOG_INFO("heartbeat service is registered successfully");
+      }
 
       if (OB_SUCC(ret)) {             // don't delete it
         election_priority_.set_ls_id(ls_id);
@@ -645,6 +652,10 @@ void ObLS::destroy()
   if (OB_SUCC(ret) && !is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
+  }
+  if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObHeartbeatService * heartbeat_service = MTL(rootserver::ObHeartbeatService*);
+    UNREGISTER_FROM_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
   }
   tx_table_.destroy();
   lock_table_.destroy();

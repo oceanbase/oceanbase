@@ -141,6 +141,9 @@ int ObServerConfig::strict_check_special() const
     if (!cluster_id.check()) {
       ret = OB_INVALID_CONFIG;
       SHARE_LOG(WARN, "invalid cluster id", K(ret), K(cluster_id.str()));
+    } else if (strlen(zone.str()) <= 0) {
+      ret = OB_INVALID_CONFIG;
+      SHARE_LOG(WARN, "config zone cannot be empty", KR(ret), K(zone.str()));
     }
   }
   return ret;

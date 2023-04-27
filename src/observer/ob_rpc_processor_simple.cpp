@@ -811,6 +811,18 @@ int ObRpcIsEmptyServerP::process()
   return ret;
 }
 
+int ObRpcCheckServerForAddingServerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->check_server_for_adding_server(arg_, result_))) {
+    LOG_WARN("fail to call check_server_for_adding_server", KR(ret), K(arg_));
+  } else {}
+  return ret;
+}
+
 int ObRpcCheckDeploymentModeP::process()
 {
   int ret = OB_SUCCESS;
@@ -2334,7 +2346,31 @@ int ObSyncRewriteRulesP::process()
     } else if (OB_FAIL(rule_mgr->sync_rule_from_inner_table())) {
       LOG_WARN("failed to sync rewrite rules from inner table", K(ret));
     }
+    }
+  return ret;
+}
+
+int ObRpcSendHeartbeatP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->handle_heartbeat(arg_, result_))) {
+    LOG_WARN("fail to call handle_heartbeat in ob service", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObRpcGetServerResourceInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->get_server_resource_info(arg_, result_))) {
+    LOG_WARN("fail to call get_server_resource_info in ob service", KR(ret), K(arg_));
+  } else {}
   return ret;
 }
 

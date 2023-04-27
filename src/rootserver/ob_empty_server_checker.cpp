@@ -24,12 +24,15 @@
 #include "share/ob_rpc_struct.h"//GetLSReportCnt
 #include "share/ls/ob_ls_table_iterator.h"//ObAllLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
+#include "share/ob_all_server_tracer.h"
 
 #include "observer/ob_server_struct.h"
 
 #include "ob_server_manager.h"
 #include "ob_unit_manager.h"//ObUnitManager
+#include "ob_server_zone_op_service.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"//ObGetLSReportCntProxy
+#include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
 {
@@ -43,7 +46,8 @@ int ObEmptyServerChecker::init(
     ObServerManager &server_mgr,
     ObUnitManager &unit_mgr,
     share::ObLSTableOperator &lst_operator,
-    schema::ObMultiVersionSchemaService &schema_service)
+    schema::ObMultiVersionSchemaService &schema_service,
+    ObServerZoneOpService &server_zone_op_service)
 {
   int ret = OB_SUCCESS;
   const int64_t empty_server_checker_thread_cnt = 1;
@@ -60,6 +64,7 @@ int ObEmptyServerChecker::init(
     lst_operator_ = &lst_operator;
     schema_service_ = &schema_service;
     unit_mgr_ = &unit_mgr;
+    server_zone_op_service_ = &server_zone_op_service;
     empty_servers_.reset();
     need_check_ = true;
     inited_ = true;
@@ -98,47 +103,31 @@ int ObEmptyServerChecker::try_delete_server_()
 {
   int ret = OB_SUCCESS;
   ObZone zone; // empty means all zones
-  ObArray<ObServerStatus> statuses;
+  ObArray<ObServerInfoInTable> servers_info;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(server_mgr_) || OB_ISNULL(unit_mgr_)) {
+  } else if (OB_ISNULL(server_mgr_) || OB_ISNULL(unit_mgr_) || OB_ISNULL(server_zone_op_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", KR(ret), KP(server_mgr_), KP(unit_mgr_));
-  } else if (OB_FAIL(server_mgr_->get_server_statuses(zone, statuses))) {
-    LOG_WARN("get_server_statuses failed", K(zone), KR(ret));
+    LOG_WARN("unexpected error", KR(ret), KP(server_mgr_), KP(unit_mgr_), KP(server_zone_op_service_));
+  } else if (OB_FAIL(SVR_TRACER.get_servers_info(zone, servers_info))) {
+    LOG_WARN("get_servers_info failed", KR(ret), K(zone));
   } else {
-    int first_error_ret = OB_SUCCESS;
     need_check_ = false;
     empty_servers_.reset();
-    FOREACH_CNT_X(status, statuses, OB_SUCCESS == ret) {
-      if (ObServerStatus::OB_SERVER_ADMIN_DELETING == status->admin_status_) {
+    FOREACH_CNT_X(server_info, servers_info, OB_SUCC(ret)) {
+      if (server_info->is_deleting()) {
         need_check_ = true;
         bool server_empty = false;
-        if (OB_FAIL(unit_mgr_->check_server_empty(status->server_, server_empty))) {
-          LOG_WARN("check_server_empty failed", "server", status->server_, K(ret));
-        } else if (server_empty && !(status->force_stop_hb_)) {
-          // stop server's heartbeat
-          bool force_stop_hb = true;
-          if (OB_FAIL(server_mgr_->set_force_stop_hb(status->server_, force_stop_hb))) {
-            LOG_WARN("set force stop hb failed", K(status->server_), K(ret));
-          } else {
-            LOG_INFO("force set stop hb", KR(ret), K(status->server_));
-          }
-          DEBUG_SYNC(SET_FORCE_STOP_HB_DONE);
+        const ObAddr &addr= server_info->get_server();
+        if (OB_FAIL(unit_mgr_->check_server_empty(addr, server_empty))) {
+          LOG_WARN("check_server_empty failed", "server", addr, KR(ret));
+        } else if (server_empty && OB_FAIL(empty_servers_.push_back(addr))) {
+          LOG_WARN("failed to push back empty server", KR(ret), KPC(server_info));
         }
-        if (OB_FAIL(ret)) {
-        } else if (server_empty && OB_FAIL(empty_servers_.push_back(status->server_))) {
-          LOG_WARN("failed to push back empty server", KR(ret), KPC(status));
-        }
-      }
-      // ignore single server error
-      if (OB_FAIL(ret)) {
-        first_error_ret = OB_SUCC(first_error_ret) ? ret : first_error_ret;
-        ret = OB_SUCCESS;
       }
     }
-    ret = OB_SUCC(first_error_ret) ? ret : first_error_ret;
+    DEBUG_SYNC(END_DELETE_SERVER_BEFORE_CHECK_META_TABLE);
     if (OB_SUCC(ret) && empty_servers_.count() > 0) {
       //need check empty
       if (OB_FAIL(check_server_empty_())) {
@@ -149,10 +138,20 @@ int ObEmptyServerChecker::try_delete_server_()
       const bool commit = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < empty_servers_.count(); ++i) {
         const ObAddr &addr = empty_servers_.at(i);
-        if (OB_FAIL(server_mgr_->end_delete_server(addr, zone, commit))) {
-          LOG_WARN("server_mgr end_delete_server failed", KR(ret), K(addr), K(zone));
+        if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+          LOG_INFO("sys tenant data version < 4.2, server manager executes end_delete_server");
+          if (OB_FAIL(server_mgr_->end_delete_server(addr, zone, commit))) {
+            LOG_WARN("server_mgr end_delete_server failed", KR(ret), K(addr), K(zone));
+          }
+        } else {
+          LOG_INFO("sys tenant data version >= 4.2, server zone op service executes finish_delete_server");
+          if (OB_FAIL(server_zone_op_service_->finish_delete_server(addr, zone))) {
+            LOG_WARN("server_zone_op_service finish_delete_server failed", KR(ret), K(addr), K(zone));
+          } else if (OB_FAIL(server_mgr_->load_server_manager())) {
+            LOG_WARN("fail to load server manager", KR(ret));
+          }
         }
-      } 
+      }
     }
   }
   return ret;

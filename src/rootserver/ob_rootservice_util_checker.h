@@ -28,7 +28,6 @@ public:
 public:
   int init(
       ObUnitManager &unit_mgr,
-      ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
       obrpc::ObCommonRpcProxy &common_rpc_proxy,
       common::ObAddr &self,

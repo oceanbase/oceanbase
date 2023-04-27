@@ -68,6 +68,7 @@
 #include "share/config/ob_config.h" // ObConfigArray
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
 #include "share/scn.h"//SCN
+#include "share/ob_server_table_operator.h"
 
 namespace oceanbase
 {
@@ -6839,20 +6840,6 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(schema_version));
 };
 
-struct ObCheckMergeFinishArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObCheckMergeFinishArg()
-  {
-    frozen_scn_.set_min();
-  }
-  bool is_valid() const;
-public:
-  share::SCN frozen_scn_;
-  TO_STRING_KV(K_(frozen_scn));
-};
-
 struct ObGetRecycleSchemaVersionsArg
 {
   OB_UNIS_VERSION(1);
@@ -7475,6 +7462,70 @@ public:
   TO_STRING_KV(K_(mode), K_(sys_data_version));
   Mode mode_;
   uint64_t sys_data_version_;
+};
+struct ObCheckServerForAddingServerArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum Mode {
+    ADD_SERVER
+  };
+
+  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0) {}
+  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version));
+  int init(const Mode &mode, const uint64_t sys_tenant_data_version);
+  int assign(const ObCheckServerForAddingServerArg &other);
+  Mode get_mode() const
+  {
+    return mode_;
+  }
+  uint64_t get_sys_tenant_data_version() const
+  {
+    return sys_tenant_data_version_;
+  }
+private:
+  Mode mode_;
+  uint64_t sys_tenant_data_version_;
+};
+struct ObCheckServerForAddingServerResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckServerForAddingServerResult()
+      : is_server_empty_(false),
+      zone_(),
+      sql_port_(0),
+      build_version_()
+  {
+  }
+  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version));
+  int init(
+      const bool is_server_empty,
+      const ObZone &zone,
+      const int64_t sql_port,
+      const share::ObServerInfoInTable::ObBuildVersion &build_version);
+  int assign(const ObCheckServerForAddingServerResult &other);
+  bool get_is_server_empty() const
+  {
+    return is_server_empty_;
+  }
+  const ObZone& get_zone() const
+  {
+    return zone_;
+  }
+  int64_t get_sql_port() const
+  {
+    return sql_port_;
+  }
+  const share::ObServerInfoInTable::ObBuildVersion& get_build_version() const
+  {
+    return build_version_;
+  }
+private:
+  bool is_server_empty_;
+  ObZone zone_;
+  int64_t sql_port_;
+  share::ObServerInfoInTable::ObBuildVersion build_version_;
 };
 
 struct ObArchiveLogArg
@@ -8944,6 +8995,37 @@ public:
   ObSArray<uint64_t> synonym_ids_;
 };
 
+struct ObGetServerResourceInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetServerResourceInfoArg() : rs_addr_() {}
+  TO_STRING_KV(K_(rs_addr));
+  int init(const common::ObAddr &rs_addr);
+  int assign(const ObGetServerResourceInfoArg &other);
+  bool is_valid() const;
+  void reset();
+  const common::ObAddr &get_rs_addr() const { return rs_addr_; }
+private:
+  common::ObAddr rs_addr_;
+};
+
+struct ObGetServerResourceInfoResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetServerResourceInfoResult() : server_(), resource_info_() {}
+  TO_STRING_KV(K_(server), K_(resource_info));
+  int init(const common::ObAddr &server, const share::ObServerResourceInfo &resource_info);
+  int assign(const ObGetServerResourceInfoResult &other);
+  bool is_valid() const;
+  void reset();
+  const common::ObAddr &get_server() const { return server_; }
+  const share::ObServerResourceInfo &get_resource_info() const { return resource_info_; }
+private:
+  common::ObAddr server_;
+  share::ObServerResourceInfo resource_info_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

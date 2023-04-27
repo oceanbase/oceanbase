@@ -19,7 +19,6 @@
 #include "rootserver/ob_root_utils.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
-#include "rootserver/ob_server_manager.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "storage/ls/ob_ls.h"
 #include "share/ls/ob_ls_operator.h"

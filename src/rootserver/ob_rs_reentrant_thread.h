@@ -60,6 +60,7 @@ public:
   int start();
   void stop();
   void wait();
+  void reset_last_run_timestamp() { ATOMIC_STORE(&last_run_timestamp_, 0); }
   TO_STRING_KV("name", get_thread_name());
 
 private:

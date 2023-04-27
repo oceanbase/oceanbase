@@ -99,6 +99,7 @@
 #include "share/scn.h"
 #include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
+#include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
 {
@@ -233,6 +234,7 @@ int ObRootService::ObStartStopServerTask::process()
   if (!server_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(server_));
+  // still use server manager here, since this func. will be called only in version < 4.2
   } else if (OB_FAIL(root_service_.get_server_mgr().is_server_exist(server_, exist))) {
     LOG_WARN("fail to check server exist", KR(ret), K(server_));
   } else if (!exist) {
@@ -643,11 +645,12 @@ ObRootService::ObRootService()
     server_manager_(), hb_checker_(),
     server_checker_(),
     rs_list_change_cb_(*this),
+    server_zone_op_service_(),
     root_minor_freeze_(),
     lst_operator_(NULL),
     zone_manager_(), ddl_service_(), unit_manager_(server_manager_, zone_manager_),
     root_balancer_(), empty_server_checker_(), lost_replica_checker_(), thread_checker_(),
-    vtable_location_getter_(server_manager_, unit_manager_),
+    vtable_location_getter_(unit_manager_),
     addr_agent_(NULL), root_inspection_(),
     upgrade_executor_(),
     upgrade_storage_format_executor_(), create_inner_schema_executor_(),
@@ -754,34 +757,34 @@ int ObRootService::fake_init(ObServerConfig &config,
   // init ddl service
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ddl_service_.init(rpc_proxy_, common_proxy_, sql_proxy_, *schema_service,
-                                  lst_operator, server_manager_, zone_manager_, unit_manager_,
+                                  lst_operator, zone_manager_, unit_manager_,
                                   snapshot_manager_))) {
       LOG_WARN("ddl_service_ init failed", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(backup_task_scheduler_.init(&server_manager_, &zone_manager_, &rpc_proxy_, &backup_service_, sql_proxy_, backup_lease_service_))) {
+    if (OB_FAIL(backup_task_scheduler_.init(&zone_manager_, &rpc_proxy_, &backup_service_, sql_proxy_, backup_lease_service_))) {
       LOG_WARN("fail to init backup task scheduler", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-	    if (OB_FAIL(backup_service_.init(server_manager_, sql_proxy_, rpc_proxy_, *schema_service_, backup_lease_service_, backup_task_scheduler_))) {
+	    if (OB_FAIL(backup_service_.init(sql_proxy_, rpc_proxy_, *schema_service_, backup_lease_service_, backup_task_scheduler_))) {
       LOG_WARN("fail to init backup service", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance()
-          .init(&server_manager_, &sql_proxy_, schema_service_))) {
+          .init(&sql_proxy_, schema_service_))) {
       LOG_WARN("failed to init ObDBMSJobMaster", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance()
-          .init(&server_manager_, &unit_manager_, &sql_proxy_, schema_service_))) {
+          .init(&unit_manager_, &sql_proxy_, schema_service_))) {
       LOG_WARN("failed to init ObDBMSSchedJobMaster", K(ret));
     }
   }
@@ -866,15 +869,23 @@ int ObRootService::init(ObServerConfig &config,
                                           unit_manager_, zone_manager_, config, self, rpc_proxy_))) {
     // init server management related
     FLOG_WARN("init server manager failed", KR(ret));
+  } else if (OB_FAIL(server_zone_op_service_.init(
+      server_change_callback_,
+      rpc_proxy_,
+      lst_operator,
+      unit_manager_,
+      sql_proxy_
+      ))) {
+    FLOG_WARN("init server zone op service failed", KR(ret));
   } else if (OB_FAIL(hb_checker_.init(server_manager_))) {
     FLOG_WARN("init heartbeat checker failed", KR(ret));
   } else if (OB_FAIL(server_checker_.init(server_manager_, self))) {
     FLOG_WARN("init server checker failed", KR(ret), K(self));
-  } else if (OB_FAIL(root_minor_freeze_.init(rpc_proxy_, server_manager_, unit_manager_))) {
+  } else if (OB_FAIL(root_minor_freeze_.init(rpc_proxy_, unit_manager_))) {
     // init root minor freeze
     FLOG_WARN("init root_minor_freeze_ failed", KR(ret));
   } else if (OB_FAIL(ddl_service_.init(rpc_proxy_, common_proxy_, sql_proxy_, *schema_service,
-                                       lst_operator, server_manager_, zone_manager_, unit_manager_,
+                                       lst_operator, zone_manager_, unit_manager_,
                                        snapshot_manager_))) {
     // init ddl service
     FLOG_WARN("init ddl_service_ failed", KR(ret));
@@ -895,9 +906,14 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init create inner role executor failed", KR(ret));
   } else if (OB_FAIL(thread_checker_.init())) {
     FLOG_WARN("init thread checker failed", KR(ret));
-  } else if (OB_FAIL(empty_server_checker_.init(server_manager_, unit_manager_, *lst_operator_, *schema_service_))) {
+  } else if (OB_FAIL(empty_server_checker_.init(
+      server_manager_,
+      unit_manager_,
+      *lst_operator_,
+      *schema_service_,
+      server_zone_op_service_))) {
     FLOG_WARN("init empty server checker failed", KR(ret));
-  } else if (OB_FAIL(lost_replica_checker_.init(server_manager_, *lst_operator_, *schema_service_))) {
+  } else if (OB_FAIL(lost_replica_checker_.init(*lst_operator_, *schema_service_))) {
     FLOG_WARN("init empty server checker failed", KR(ret));
   } else if (OB_FAIL(root_balancer_.init(*config_, *schema_service_, unit_manager_,
                                            server_manager_, zone_manager_, rpc_proxy_,
@@ -914,43 +930,38 @@ int ObRootService::init(ObServerConfig &config,
   } else if (OB_FAIL(backup_lease_service_.init(self_addr_, sql_proxy))) {
     // backup lease service需要rs切走以后将lease的leader addr重置调，所以不能用sql_proxy_
     FLOG_WARN("init backup lease service failed", KR(ret));
-  } else if (OB_FAIL(backup_task_scheduler_.init(&server_manager_, &zone_manager_, &rpc_proxy_,
+  } else if (OB_FAIL(backup_task_scheduler_.init(&zone_manager_, &rpc_proxy_,
                                                  &backup_service_, sql_proxy_, backup_lease_service_))) {
     FLOG_WARN("init backup task scheduler failed", KR(ret));
-  } else if (OB_FAIL(backup_service_.init(server_manager_, sql_proxy_, rpc_proxy_, *schema_service_,
+  } else if (OB_FAIL(backup_service_.init(sql_proxy_, rpc_proxy_, *schema_service_,
                                           backup_lease_service_, backup_task_scheduler_))) {
     FLOG_WARN("init backup service failed", KR(ret));
   } else if (OB_FAIL(backup_lease_service_.register_mgr(backup_service_))) {
     FLOG_WARN("register log backup mgr failed", KR(ret));
-  } else if (OB_FAIL(archive_service_.init(server_manager_, zone_manager_, unit_manager_, schema_service_,
+  } else if (OB_FAIL(archive_service_.init(zone_manager_, unit_manager_, schema_service_,
                                            rpc_proxy_, sql_proxy_, backup_lease_service_))) {
     FLOG_WARN("init archive_service_ failed", KR(ret));
   } else if (OB_FAIL(backup_lease_service_.register_scheduler(archive_service_))) {
     FLOG_WARN("register archive_service_ failed", KR(ret));
   } else if (OB_FAIL(schema_history_recycler_.init(*schema_service_,
                                                    zone_manager_,
-                                                   sql_proxy_,
-                                                   server_manager_))) {
+                                                   sql_proxy_))) {
     FLOG_WARN("fail to init schema history recycler failed", KR(ret));
   } else if (OB_FAIL(backup_lease_service_.start())) {
     FLOG_WARN("start backup lease task failed", KR(ret));
-  } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&server_manager_,
-                                                                    &sql_proxy_,
+  } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&sql_proxy_,
                                                                     schema_service_))) {
     FLOG_WARN("init ObDBMSJobMaster failed", KR(ret));
-  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().init(&server_manager_,
-                                                                               &unit_manager_,
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobMaster::get_instance().init(&unit_manager_,
                                                                                &sql_proxy_,
                                                                                schema_service_))) {
     FLOG_WARN("init ObDBMSSchedJobMaster failed", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_executor_.init(lst_operator,
-                                                           rpc_proxy_,
-                                                           server_manager_))) {
+                                                           rpc_proxy_))) {
     FLOG_WARN("init disaster recovery task executor failed", KR(ret));
   } else if (OB_FAIL(disaster_recovery_task_mgr_.init(self,
                                                       *config_,
                                                       disaster_recovery_task_executor_,
-                                                      &server_manager_,
                                                       &rpc_proxy_,
                                                       &sql_proxy_,
                                                       schema_service_))) {
@@ -1389,9 +1400,11 @@ int ObRootService::submit_update_all_server_task(const ObAddr &server)
     LOG_WARN("invalid server", K(server), K(ret));
   } else {
     const bool with_rootserver = (server == self_addr_);
-    ObAllServerTask task(server_manager_, disaster_recovery_task_mgr_, server, with_rootserver);
-    if (OB_FAIL(task_queue_.add_async_task(task))) {
-      LOG_WARN("inner queue push task failed", K(ret));
+    if (!ObHeartbeatService::is_service_enabled()) {
+      ObAllServerTask task(server_manager_, disaster_recovery_task_mgr_, server, with_rootserver);
+      if (OB_FAIL(task_queue_.add_async_task(task))) {
+        LOG_WARN("inner queue push task failed", K(ret));
+      }
     }
   }
 
@@ -1529,10 +1542,13 @@ int ObRootService::schedule_check_server_timer_task()
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(task_queue_.add_timer_task(check_server_task_,
-                                                config_->server_check_interval, true))) {
-    LOG_WARN("failed to add check_server task", K(ret));
-  } else {}
+  } else if (!ObHeartbeatService::is_service_enabled()) {
+    if (OB_FAIL(task_queue_.add_timer_task(check_server_task_, config_->server_check_interval, true))) {
+      LOG_WARN("failed to add check_server task", K(ret));
+    }
+  } else {
+    LOG_TRACE("no need to schedule ObCheckServerTask in version >= 4.2");
+  }
   return ret;
 }
 
@@ -1673,8 +1689,7 @@ int ObRootService::submit_update_rslist_task(const bool force_update)
     if (ObUpdateRsListTask::try_lock()) {
       bool task_added = false;
       ObUpdateRsListTask task;
-      if (OB_FAIL(task.init(*lst_operator_, addr_agent_,
-                            server_manager_, zone_manager_,
+      if (OB_FAIL(task.init(*lst_operator_, addr_agent_, zone_manager_,
                             broadcast_rs_list_lock_,
                             force_update, self_addr_))) {
         LOG_WARN("task init failed", KR(ret));
@@ -1769,7 +1784,7 @@ int ObRootService::update_rslist()
   ObTimeoutCtx ctx;
   ctx.set_timeout(config_->rpc_timeout);
   const bool force_update = true;
-  if (OB_FAIL(task.init(*lst_operator_, addr_agent_, server_manager_,
+  if (OB_FAIL(task.init(*lst_operator_, addr_agent_,
                         zone_manager_, broadcast_rs_list_lock_, force_update, self_addr_))) {
     LOG_WARN("task init failed", K(ret), K(force_update));
   } else if (OB_FAIL(task.process_without_lock())) {
@@ -1799,7 +1814,7 @@ int ObRootService::update_all_server_and_rslist()
   if (OB_SUCC(ret)) {
     ObArray<ObAddr> servers;
     ObZone empty_zone; // empty zone for all servers
-    if (OB_FAIL(server_manager_.get_servers_of_zone(empty_zone, servers))) {
+    if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, servers))) {
       LOG_WARN("get server list failed", K(ret));
     } else {
       FOREACH_X(s, servers, OB_SUCC(ret)) {
@@ -1987,7 +2002,7 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     FLOG_INFO("[ROOTSERVICE_NOTICE] success to get lock for bootstrap in execute_bootstrap");
     ObBootstrap bootstrap(rpc_proxy_, *lst_operator_, ddl_service_, unit_manager_,
                           *config_, arg, common_proxy_);
-    if (OB_FAIL(bootstrap.execute_bootstrap())) {
+    if (OB_FAIL(bootstrap.execute_bootstrap(server_zone_op_service_))) {
       LOG_ERROR("failed to execute_bootstrap", K(server_list), K(ret));
     }
 
@@ -2194,8 +2209,7 @@ void ObRootService::construct_lease_expire_time(
   lease_response.lease_expire_time_ = lease_response.heartbeat_expire_time_;
 }
 
-int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
-                               ObLeaseResponse &lease_response)
+int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseResponse &lease_response)
 {
   int ret = OB_SUCCESS;
   ObServerStatus server_stat;
@@ -2222,13 +2236,16 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request,
       if (OB_FAIL(zone_manager_.get_lease_info_version(lease_info_version))) {
         LOG_WARN("get_lease_info_version failed", K(ret));
       } else if (OB_FAIL(server_manager_.get_server_status(
-                  lease_request.server_, server_stat))) {
+          lease_request.server_, server_stat))) {
+        // get server_stat for construct_lease_expire_time only!
         LOG_WARN("get server status failed", K(ret), "server", lease_request.server_);
-      } else if (OB_FAIL(server_manager_.is_server_stopped(lease_request.server_, is_stopped))) {
-        LOG_WARN("check_server_stopped failed", K(ret), "server", lease_request.server_);
+      }
+      if (!ObHeartbeatService::is_service_enabled()) {
+        if (FAILEDx(server_manager_.is_server_stopped(lease_request.server_, is_stopped))) {
+          LOG_WARN("check_server_stopped failed", KR(ret), "server", lease_request.server_);
+        }
       }
     }
-
     if (OB_SUCC(ret)) {
       lease_response.version_ = ObLeaseResponse::LEASE_VERSION;
       construct_lease_expire_time(lease_request, lease_response, server_stat);
@@ -2335,25 +2352,6 @@ int ObRootService::fetch_location(
     LOG_WARN("vtable_location_getter get failed", KR(ret), K(arg));
   } else if (OB_FAIL(res.set_servers(servers))) {
     LOG_WARN("fail to assign servers", KR(ret), K(servers), K(arg));
-  }
-  return ret;
-}
-
-int ObRootService::try_block_server(int rc, const common::ObAddr &server)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (rc > 0 || rc <= -OB_MAX_ERROR_CODE || !server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(rc), K(server), K(ret));
-  } else if (OB_SERVER_MIGRATE_IN_DENIED == rc
-             || OB_TOO_MANY_PARTITIONS_ERROR == rc) {
-    LOG_INFO("receive server deny migrate in, try to block server migrate in", K(server));
-    if (OB_FAIL(server_manager_.block_migrate_in(server))) {
-      LOG_WARN("block migrate in failed", K(ret), K(server));
-    }
   }
   return ret;
 }
@@ -6899,43 +6897,54 @@ int ObRootService::do_tablespace_ddl(const obrpc::ObTablespaceDDLArg &arg)
 
   return ret;
 }
-
-int ObRootService::construct_rs_list_arg(
-    ObRsListArg &rs_list_arg)
-{
-  int ret = OB_SUCCESS;
-  ObLSInfo ls_info;
-  int64_t cluster_id = GCONF.cluster_id;
-  uint64_t tenant_id = OB_SYS_TENANT_ID;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(get_lst_operator().get(
-          GCONF.cluster_id,
-          tenant_id,
-          SYS_LS,
-          share::ObLSTable::DEFAULT_MODE,
-          ls_info))) {
-    LOG_WARN("fail to get", KR(ret));
-  } else {
-    rs_list_arg.master_rs_ = GCONF.self_addr_;
-    FOREACH_CNT_X(replica, ls_info.get_replicas(), OB_SUCCESS == ret) {
-      if (replica->get_server() == GCONF.self_addr_
-          || (replica->is_in_service()
-          && ObReplicaTypeCheck::is_paxos_replica_V2(replica->get_replica_type()))) {
-        if (OB_FAIL(rs_list_arg.rs_list_.push_back(replica->get_server()))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 ////////////////////////////////////////////////////////////////
 // server & zone management
 ////////////////////////////////////////////////////////////////
+int ObRootService::add_server_for_bootstrap_in_version_smaller_than_4_2_0(
+      const common::ObAddr &server,
+      const common::ObZone &zone)
+{
+  return server_manager_.add_server(server, zone);
+}
 int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else {}
+  if (OB_SUCC(ret)) {
+    if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+      LOG_INFO("sys tenant data version < 4.2, add_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(old_add_server(arg))) {
+        LOG_WARN("fail to add server by using old logic", KR(ret), K(arg));
+      }
+    } else { // the new logic
+      LOG_INFO("sys tenant data version >= 4.2, add_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.add_servers(arg.servers_, arg.zone_))) {
+        LOG_WARN("fail to add servers", KR(ret), K(arg));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(load_server_manager())) {
+        // ** FIXME (linqiucen.lqc): temp. solution.
+        // ** This will be removed if we do not need whitelist in server_manager
+        LOG_WARN("fail to load server_manager, please try 'ALTER SYSTEM RELOAD SERVER;'", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  FLOG_INFO("add server", KR(ret), K(arg));
+  return ret;
+}
+int ObRootService::old_add_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
   uint64_t sys_data_version = 0;
@@ -6956,7 +6965,6 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
     dp_arg.single_zone_deployment_on_ = OB_FILE_SYSTEM_ROUTER.is_single_zone_deployment_on();
 
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.servers_.count(); ++i) {
-      const int64_t rpc_timeout = THIS_WORKER.get_timeout_ts() - ObTimeUtility::current_time();
       const ObAddr &addr = arg.servers_[i];
       Bool is_empty(false);
       Bool is_deployment_mode_match(false);
@@ -6987,8 +6995,50 @@ int ObRootService::add_server(const obrpc::ObAdminServerArg &arg)
   ROOTSERVICE_EVENT_ADD("root_service", "add_server", K(ret), K(arg));
   return ret;
 }
-
 int ObRootService::delete_server(const obrpc::ObAdminServerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else {}
+  if (OB_SUCC(ret)) {
+    if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+      LOG_INFO("sys tenant data version < 4.2, delete_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(old_delete_server(arg))) {
+        LOG_WARN("fail to delete server by using the old logic", KR(ret), K(arg));
+      }
+    } else { // the new logic
+      LOG_INFO("sys tenant data version >= 4.2, delete_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.delete_servers(arg.servers_, arg.zone_))) {
+        LOG_WARN("fail to delete servers", KR(ret), K(arg));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(load_server_manager())) {
+        // ** FIXME (linqiucen.lqc): temp. solution.
+        // ** This will be removed if we do not need whitelist in server_manager
+        LOG_WARN("fail to load server_manager, please try 'ALTER SYSTEM RELOAD SERVER;'", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      } else {
+        root_balancer_.wakeup();
+        empty_server_checker_.wakeup();
+        lost_replica_checker_.wakeup();
+        LOG_INFO("delete server and load server manager successfully", K(arg));
+      }
+    }
+  }
+  FLOG_INFO("delete server", KR(ret), K(arg));
+  return ret;
+}
+int ObRootService::old_delete_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
   bool has_enough = false;
@@ -7000,7 +7050,7 @@ int ObRootService::delete_server(const obrpc::ObAdminServerArg &arg)
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else if (OB_FAIL(check_server_have_enough_resource_for_delete_server(arg.servers_, arg.zone_))) {
     LOG_WARN("not enough resource, cannot delete servers", K(ret), K(arg));
-  } else if (OB_FAIL(check_all_ls_has_leader_("delete server"))) {
+  } else if (OB_FAIL(check_all_ls_has_leader("delete server"))) {
     LOG_WARN("fail to check all ls has leader", KR(ret), K(arg));
   } else if (OB_FAIL(server_manager_.delete_server(arg.servers_, arg.zone_))) {
     LOG_WARN("delete_server failed", "servers", arg.servers_, "zone", arg.zone_, K(ret));
@@ -7025,6 +7075,7 @@ int ObRootService::check_server_have_enough_resource_for_delete_server(
   } else {
     FOREACH_CNT_X(server, servers, OB_SUCC(ret)) {
       if (zone.is_empty()) {
+        // still use server manager here, since this func. will be called only in version < 4.2
         if (OB_FAIL(server_manager_.get_server_zone(*server, tmp_zone))) {
           LOG_WARN("fail to get server zone", K(ret));
         }
@@ -7047,8 +7098,48 @@ int ObRootService::check_server_have_enough_resource_for_delete_server(
   return ret;
 }
 
-
 int ObRootService::cancel_delete_server(const obrpc::ObAdminServerArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else {}
+  if (OB_SUCC(ret)) {
+    if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+      LOG_INFO("sys tenant data version < 4.2, cancel_delete_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(old_cancel_delete_server(arg))) {
+        LOG_WARN("fail to cancel delete server by using the old logic", KR(ret), K(arg));
+      }
+    } else { // the new logic
+      LOG_INFO("sys tenant data version >= 4.2, cancel_delete_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.cancel_delete_servers(arg.servers_, arg.zone_))) {
+        LOG_WARN("fail to cancel delete servers", KR(ret), K(arg));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(load_server_manager())) {
+        // ** FIXME (linqiucen.lqc): temp. solution.
+        // ** This will be removed if we do not need whitelist in server_manager
+        LOG_WARN("fail to load server_manager, please try 'ALTER SYSTEM RELOAD SERVER;'", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      } else {
+        root_balancer_.wakeup();
+      }
+    }
+  }
+  FLOG_INFO("cancel delete server", KR(ret), K(arg));
+  return ret;
+}
+
+int ObRootService::old_cancel_delete_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
@@ -7060,15 +7151,6 @@ int ObRootService::cancel_delete_server(const obrpc::ObAdminServerArg &arg)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.servers_.count(); ++i) {
       const bool commit = false;
-      const bool force_stop_hb = false;
-      int tmp_ret = OB_SUCCESS;
-      // resume heardbeat
-      if (OB_FAIL(server_manager_.set_force_stop_hb(arg.servers_[i], force_stop_hb))) {
-        LOG_WARN("set force stop hb failed", K(ret), "server", arg.servers_[i], K(force_stop_hb));
-      } else if (OB_SUCCESS != (tmp_ret = request_heartbeats())) {
-        LOG_WARN("request heartbeats failed", K(ret));
-      }
-
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(server_manager_.end_delete_server(arg.servers_[i], arg.zone_, commit))) {
         LOG_WARN("delete_server failed", "server", arg.servers_[i],
@@ -7086,140 +7168,82 @@ int ObRootService::cancel_delete_server(const obrpc::ObAdminServerArg &arg)
 int ObRootService::start_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
-  if (!inited_) {
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
+    LOG_WARN("not init", KR(ret), K(inited_));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(server_manager_.start_server_list(arg.servers_, arg.zone_))) {
-    LOG_WARN("start servers failed", "server", arg.servers_, "zone", arg.zone_, K(ret));
-  }
-  ROOTSERVICE_EVENT_ADD("root_service", "start_server", K(ret), K(arg));
-  return ret;
-}
-
-int ObRootService::get_readwrite_servers(
-    const common::ObIArray<common::ObAddr> &input_servers,
-    common::ObIArray<common::ObAddr> &readwrite_servers)
-{
-  int ret = OB_SUCCESS;
-  readwrite_servers.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_servers.count(); ++i) {
-    const ObAddr &server = input_servers.at(i);
-    HEAP_VAR(ObZoneInfo, zone_info) {
-      if (OB_FAIL(server_manager_.get_server_zone(server, zone_info.zone_))) {
-        LOG_WARN("fail to get server zone", K(ret));
-      } else if (OB_FAIL(zone_manager_.get_zone(zone_info))) {
-        LOG_WARN("fail to get zone", K(ret));
-      } else {
-        ObZoneType zone_type = static_cast<ObZoneType>(zone_info.zone_type_.value_);
-        if (common::ZONE_TYPE_READWRITE == zone_type
-            || common::ZONE_TYPE_ENCRYPTION == zone_type) {
-          if (OB_FAIL(readwrite_servers.push_back(server))) {
-            LOG_WARN("fail to push back", K(ret));
-          } else {} // no more to do
-        } else if (common::ZONE_TYPE_READONLY == zone_type) {
-          // ignore read-only zone
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid zone type", K(ret), K(zone_type), K(server), "zone", zone_info.zone_);
-        }
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else {}
+  if (OB_SUCC(ret)) {
+    if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+      LOG_INFO("sys tenant data version < 4.2, start_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_manager_.start_server_list(arg.servers_, arg.zone_))) {
+        LOG_WARN("fail to start server by using old logic", KR(ret), K(arg));
+      }
+    } else { // the new logic
+      LOG_INFO("sys tenant data version >= 4.2, start_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.start_servers(arg.servers_, arg.zone_))) {
+        LOG_WARN("fail to start servers", KR(ret), K(arg));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(load_server_manager())) {
+        // ** FIXME (linqiucen.lqc): temp. solution.
+        // ** This will be removed if we do not need whitelist in server_manager
+        LOG_WARN("fail to load server_manager, please try 'ALTER SYSTEM RELOAD SERVER;'", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
     }
   }
-  return ret;
-}
-
-int ObRootService::check_zone_and_server(const ObIArray<ObAddr> &servers,
-                                         bool &is_same_zone,
-                                         bool &is_all_stopped)
-{
-  int ret = OB_SUCCESS;
-  ObZone zone;
-  is_same_zone = true;
-  is_all_stopped = true;
-  ObServerStatus server_status;
-  for (int64_t i = 0; i < servers.count() && OB_SUCC(ret) && is_same_zone && is_all_stopped; i++) {
-    if (OB_FAIL(server_manager_.get_server_status(servers.at(i), server_status))) {
-      LOG_WARN("fail to get server zone", K(ret), K(servers), K(i));
-    } else if (i == 0) {
-      zone = server_status.zone_;
-    } else if (zone != server_status.zone_) {
-      is_same_zone = false;
-      LOG_WARN("server zone not same", K(zone), K(server_status), K(servers));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (server_status.is_stopped()) {
-      //nothing todo
-    } else {
-      is_all_stopped = false;
-    }
-  }
+  FLOG_INFO("start server", KR(ret), K(arg));
   return ret;
 }
 
 int ObRootService::stop_server(const obrpc::ObAdminServerArg &arg)
 {
   int ret = OB_SUCCESS;
-  common::ObArray<common::ObAddr> readwrite_servers;
-  ObZone zone;
-  bool is_same_zone = false;
-  bool is_all_stopped = false;
-  if (!inited_) {
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(get_readwrite_servers(arg.servers_, readwrite_servers))) {
-    LOG_WARN("fail to get readwrite servers", K(ret));
-  } else if (readwrite_servers.count() <= 0) {
-    // no need to do check, stop servers directly
-  } else if (OB_FAIL(check_zone_and_server(arg.servers_, is_same_zone, is_all_stopped))) {
-    LOG_WARN("fail to check stop server zone", K(ret), K(arg.servers_));
-  } else if (is_all_stopped) {
-    //nothing todo
-  } else if (!is_same_zone) {
-    ret = OB_STOP_SERVER_IN_MULTIPLE_ZONES;
-    LOG_WARN("can not stop servers in multiple zones", K(ret));
-  } else if (OB_FAIL(server_manager_.get_server_zone(readwrite_servers.at(0), zone))) {
-    LOG_WARN("fail to get server zone", K(ret), K(readwrite_servers));
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else {
-    if (ObAdminServerArg::ISOLATE == arg.op_) {
-      //"Isolate server" does not need to check the total number and status of replicas; it cannot be restarted later;
-      if (OB_FAIL(check_can_stop(zone, arg.servers_, false /*is_stop_zone*/))) {
-        LOG_WARN("fail to check can stop", KR(ret), K(zone), K(arg));
-        if (OB_OP_NOT_ALLOW == ret) {
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Stop all servers in primary region is");
-        }
+    if (!ObHeartbeatService::is_service_enabled()) { // the old logic
+      LOG_INFO("sys tenant data version < 4.2, stop_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.stop_server_precheck(arg.servers_, arg.op_))) {
+        LOG_WARN("fail to precheck stop server", KR(ret), K(arg));
+      } else if (OB_FAIL(server_manager_.stop_server_list(arg.servers_, arg.zone_))) {
+        LOG_WARN("stop server failed", "server", arg.servers_, "zone", arg.zone_, KR(ret));
       }
     } else {
-      if (have_other_stop_task(zone)) {
-        ret = OB_STOP_SERVER_IN_MULTIPLE_ZONES;
-        LOG_WARN("can not stop servers in multiple zones", KR(ret), K(arg), K(zone));
-        LOG_USER_ERROR(OB_STOP_SERVER_IN_MULTIPLE_ZONES,
-            "cannot stop server or stop zone in multiple zones");
-      } else if (OB_FAIL(check_majority_and_log_in_sync_(
-          readwrite_servers,
-          arg.force_stop_,/*skip_log_sync_check*/
-          "stop server"))) {
-        LOG_WARN("fail to check majority and log in-sync", KR(ret), K(arg));
+      LOG_INFO("sys tenant data version >= 4.2, stop_server", K(arg),
+          "timeout_ts", ctx.get_timeout());
+      if (OB_FAIL(server_zone_op_service_.stop_servers(arg.servers_, arg.zone_, arg.op_))) {
+        LOG_WARN("stop server failed", KR(ret), K(arg));
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(server_manager_.stop_server_list(arg.servers_, arg.zone_))) {
-        LOG_WARN("stop server failed", "server", arg.servers_, "zone", arg.zone_, K(ret));
-      } else {
-        LOG_INFO("stop server ok", K(arg));
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(try_notify_switch_leader(obrpc::ObNotifySwitchLeaderArg::STOP_SERVER))) {
-          LOG_WARN("failed to notify switch leader", KR(ret), KR(tmp_ret));
-        }
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(load_server_manager())) {
+        // ** FIXME (linqiucen.lqc): temp. solution.
+        // ** This will be removed if we do not need whitelist in server_manager
+        LOG_WARN("fail to load server_manager, please try 'ALTER SYSTEM RELOAD SERVER;'", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+      if (OB_TMP_FAIL(try_notify_switch_leader(obrpc::ObNotifySwitchLeaderArg::STOP_SERVER))) {
+        LOG_WARN("failed to notify switch leader", KR(ret), KR(tmp_ret));
       }
     }
   }
-  ROOTSERVICE_EVENT_ADD("root_service", "stop_server", K(ret), K(arg));
+  FLOG_INFO("stop server", KR(ret), K(arg));
   return ret;
 }
 
@@ -7256,8 +7280,14 @@ int ObRootService::delete_zone(const obrpc::ObAdminZoneArg &arg)
     // it does not matter while add server after check.
     int64_t alive_count = 0;
     int64_t not_alive_count = 0;
-    if (OB_FAIL(server_manager_.get_server_count(arg.zone_, alive_count, not_alive_count))) {
-      LOG_WARN("failed to get server count of the zone", K(ret), "zone", arg.zone_);
+    ObArray<ObServerInfoInTable> servers_info;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info))) {
+      LOG_WARN("fail to get servers_info", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ObRootUtils::get_server_count(servers_info, arg.zone_, alive_count, not_alive_count))) {
+      LOG_WARN("failed to get server count of the zone", KR(ret), K(arg.zone_), K(servers_info));
     } else {
       LOG_INFO("current server count of zone",
                "zone", arg.zone_, K(alive_count), K(not_alive_count));
@@ -7309,14 +7339,12 @@ int ObRootService::check_can_stop(const ObZone &zone,
   ObArray<ObAddr> to_stop_list;
   ObArray<ObZone> stopped_zone_list;
   ObArray<ObAddr> stopped_server_list;
-
+  ObArray<ObServerInfoInTable> servers_info_in_table;
   if ((!is_stop_zone && (0 == servers.count() || zone.is_empty()))
       || (is_stop_zone && zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(servers), K(zone));
-  } else if (OB_FAIL(ObRootUtils::get_stopped_zone_list(zone_manager_,
-                                                        server_manager_,
-                                                        stopped_zone_list,
+  } else if (OB_FAIL(ObRootUtils::get_stopped_zone_list(stopped_zone_list,
                                                         stopped_server_list))) {
     LOG_WARN("fail to get stopped zone list", KR(ret));
   } else if (0 >= stopped_server_list.count()) {
@@ -7326,7 +7354,12 @@ int ObRootService::check_can_stop(const ObZone &zone,
       if (OB_FAIL(to_stop_list.assign(servers))) {
         LOG_WARN("fail to push back", KR(ret), K(servers));
       }
-    } else if (OB_FAIL(server_manager_.get_servers_of_zone(zone, to_stop_list))) {
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info_in_table))) {
+      LOG_WARN("fail to get servers_info_in_table", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(ObRootUtils::get_servers_of_zone(servers_info_in_table, zone, to_stop_list))) {
       LOG_WARN("fail to get servers of zone", KR(ret), K(zone));
     }
     ObArray<uint64_t> tenant_ids;
@@ -7358,41 +7391,6 @@ int ObRootService::check_can_stop(const ObZone &zone,
   int64_t cost = ObTimeUtility::current_time() - start_time;
   LOG_INFO("check can stop zone/server", KR(ret), K(zone), K(servers), K(cost));
   return ret;
-}
-
-//Multiple stop tasks are allowed on a zone; they cannot cross zones;
-bool ObRootService::have_other_stop_task(const ObZone &zone)
-{
-  bool bret = false;
-  int ret = OB_SUCCESS;
-  ObArray<ObZoneInfo> zone_infos;
-  bool stopped = false;
-  //Check if there are other servers in the stopped state on other zones
-  if (OB_FAIL(server_manager_.check_other_zone_stopped(zone, stopped))) {
-    LOG_WARN("fail to check other zone stopped", KR(ret), K(zone));
-    bret = true;
-  } else if (stopped) {
-    bret = true;
-    LOG_WARN("have other server stop in other zone", K(bret), K(zone));
-  } else if (OB_FAIL(zone_manager_.get_zone(zone_infos))) {
-    LOG_WARN("fail to get zone", KR(ret), K(zone));
-    bret = true;
-  } else {
-    //Check whether other zones are in the stopped state
-    FOREACH_CNT_X(zone_info, zone_infos, OB_SUCC(ret) && !bret) {
-      if (OB_ISNULL(zone_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        bret = true;
-        LOG_WARN("zone info is null", KR(ret), K(zone_infos));
-      } else if (zone_info->status_ != ObZoneStatus::ACTIVE
-          && zone != zone_info->zone_) {
-        bret = true;
-        LOG_WARN("have other zone in inactive status", K(bret), K(zone),
-                 "other_zone", zone_info->zone_);
-      }
-    }
-  }
-  return bret;
 }
 
 int ObRootService::stop_zone(const obrpc::ObAdminZoneArg &arg)
@@ -7427,7 +7425,7 @@ int ObRootService::stop_zone(const obrpc::ObAdminZoneArg &arg)
       }
     } else {
       //stop zone/force stop zone
-      if (have_other_stop_task(arg.zone_)) {
+      if (ObRootUtils::have_other_stop_task(arg.zone_)) {
         ret = OB_STOP_SERVER_IN_MULTIPLE_ZONES;
         LOG_WARN("cannot stop zone when other stop task already exist", KR(ret), K(arg));
         LOG_USER_ERROR(OB_STOP_SERVER_IN_MULTIPLE_ZONES,
@@ -7447,11 +7445,17 @@ int ObRootService::stop_zone(const obrpc::ObAdminZoneArg &arg)
       } else if (common::ZONE_TYPE_READWRITE == zone_type
                  || common::ZONE_TYPE_ENCRYPTION == zone_type) {
         ObArray<ObAddr> server_list;
-        if (OB_FAIL(server_manager_.get_servers_of_zone(arg.zone_, server_list))) {
-          LOG_WARN("get servers of zone failed", K(ret), "zone", arg.zone_);
+        ObArray<ObServerInfoInTable> servers_info;
+        if (OB_ISNULL(GCTX.sql_proxy_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+        } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info))) {
+          LOG_WARN("fail to get servers_info", KR(ret), KP(GCTX.sql_proxy_));
+        } else if (OB_FAIL(ObRootUtils::get_servers_of_zone(servers_info, arg.zone_, server_list))) {
+          LOG_WARN("get servers of zone failed", KR(ret), K(arg.zone_), K(servers_info));
         } else if (server_list.count() <= 0) {
           //do not need to check anyting while zone is empty
-        } else if (OB_FAIL(check_majority_and_log_in_sync_(
+        } else if (OB_FAIL(check_majority_and_log_in_sync(
             server_list,
             arg.force_stop_,/*skip_log_sync_check*/
             "stop zone"))) {
@@ -7533,7 +7537,7 @@ int ObRootService::try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, server_list))) {
     LOG_WARN("failed to get server list", KR(ret), K(zone));
   } else if (OB_FAIL(arg.init(OB_INVALID_TENANT_ID, ObLSID(), ObAddr(), comment))) {
     LOG_WARN("failed to init switch leader arg", KR(ret), K(comment));
@@ -8314,28 +8318,6 @@ int ObRootService::upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &ar
   return ret;
 }
 
-int ObRootService::merge_finish(const obrpc::ObMergeFinishArg &arg)
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("receive merge finish", K(arg));
-  bool zone_merged = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(server_manager_.update_merged_version(
-              arg.server_, arg.frozen_version_, zone_merged))) {
-  } else {
-    if (zone_merged) {
-      LOG_INFO("zone merged, wakeup daily merge thread");
-      // daily_merge_scheduler_.wakeup();
-    }
-  }
-  return ret;
-}
-
 int ObRootService::broadcast_ds_action(const obrpc::ObDebugSyncActionArg &arg)
 {
   LOG_INFO("receive broadcast debug sync actions", K(arg));
@@ -8348,7 +8330,7 @@ int ObRootService::broadcast_ds_action(const obrpc::ObDebugSyncActionArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(all_zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(all_zone, server_list))) {
     LOG_WARN("get all alive servers failed", K(all_zone), K(ret));
   } else {
     FOREACH_X(s, server_list, OB_SUCCESS == ret) {
@@ -8385,48 +8367,9 @@ int ObRootService::fetch_alive_server(const ObFetchAliveServerArg &arg,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cluster id mismatch",
              K(ret), K(arg), "cluster_id", static_cast<int64_t>(config_->cluster_id));
-  } else if (OB_FAIL(server_manager_.get_servers_by_status(empty_zone, result.active_server_list_,
+  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, result.active_server_list_,
                                                            result.inactive_server_list_))) {
     LOG_WARN("get alive servers failed", K(ret));
-  }
-  return ret;
-}
-
-int ObRootService::fetch_active_server_status(const ObFetchAliveServerArg &arg,
-                                      ObFetchActiveServerAddrResult &result)
-{
-  LOG_DEBUG("receive fetch alive server request");
-  ObZone empty_zone; // for all server
-  ObArray<share::ObServerStatus> server_status_list;
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!arg.is_valid())
-             || OB_ISNULL(config_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(arg), KP(config_));
-  } else if (arg.cluster_id_ != config_->cluster_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cluster id mismatch",
-             K(ret), K(arg), "cluster_id", static_cast<int64_t>(config_->cluster_id));
-  } else if (OB_FAIL(server_manager_.get_server_statuses(
-          empty_zone, server_status_list))) {
-    LOG_WARN("get alive servers failed", KR(ret));
-  } else {
-    share::ObAliveServerTracer::ServerAddr addr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_status_list.count(); ++i) {
-      share::ObServerStatus &status = server_status_list.at(i);
-      if (status.is_active()) {
-        //get active server
-        addr.reset();
-        if (OB_FAIL(addr.init(status.server_, status.sql_port_))) {
-          LOG_WARN("failed to init server addr", KR(ret), K(status));
-        } else if (OB_FAIL(result.server_addr_list_.push_back(addr))) {
-          LOG_WARN("failed to push back", KR(ret), K(i), K(addr), K(server_status_list));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -8450,9 +8393,12 @@ int ObRootService::refresh_server(const bool load_frozen_status, const bool need
       } else {
         LOG_INFO("build server manager succeed", K(load_frozen_status));
       }
+      if (FAILEDx(SVR_TRACER.refresh())) {
+        LOG_WARN("fail to refresh all server tracer", KR(ret));
+      }
     }
     // request heartbeats from observers
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !ObHeartbeatService::is_service_enabled()) {
       int temp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (temp_ret = request_heartbeats())) {
         LOG_WARN("request heartbeats failed", K(temp_ret));
@@ -8623,7 +8569,7 @@ int ObRootService::report_replica()
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(null_zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
     LOG_WARN("fail to get alive server", K(ret));
   } else {
     FOREACH_CNT(server, server_list) {
@@ -8650,7 +8596,7 @@ int ObRootService::report_single_replica(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(null_zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
     LOG_WARN("fail to get alive server", KR(ret));
   } else if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -8682,7 +8628,7 @@ int ObRootService::update_all_server_config()
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
-    } else if (OB_FAIL(server_manager_.get_servers_of_zone(empty_zone, server_list))) {
+    } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, server_list))) {
       LOG_WARN("fail to get server", K(ret));
     } else if (OB_FAIL(all_server_config.name_.assign(config_->all_server_list.name()))) {
       LOG_WARN("fail to assign name", K(ret));
@@ -8965,7 +8911,7 @@ int ObRootService::update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg)
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(null_zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(null_zone, server_list))) {
     LOG_WARN("fail to get alive server", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); i++) {
@@ -9400,38 +9346,6 @@ int ObRootService::generate_user(const ObClusterRole &cluster_role,
   } else {
     LOG_INFO("grant privilege success", K(ddl_stmt_str));
   }
-  return ret;
-}
-
-
-
-int ObRootService::check_merge_finish(const obrpc::ObCheckMergeFinishArg &arg)
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("receive check_merge_finish request", K(arg));
-  SCN last_merged_scn = SCN::min_scn();
-  share::ObSimpleFrozenStatus frozen_status;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (/*OB_FAIL(zone_manager_.get_global_last_merged_scn(last_merged_scn))*/false) {
-    LOG_WARN("fail to get last merged version", K(ret));
-  } /*else if (OB_FAIL(freeze_info_manager_.get_freeze_info(0, frozen_status))) {
-    LOG_WARN("fail to get freeze info", K(ret));
-  } */ else if (frozen_status.frozen_scn_ != last_merged_scn) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can't alter column when major freeze is not finished", K(ret));
-  } else if (arg.frozen_scn_ != last_merged_scn) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("frozen_version is not new enough", K(ret), K(arg),
-             K(last_merged_scn), K(frozen_status));
-  } else if (OB_FAIL(ddl_service_.check_all_server_frozen_scn(last_merged_scn))) {
-    LOG_WARN("fail to check all servers's frozen version", K(ret), K(last_merged_scn));
-  }
-  LOG_INFO("check_merge_finish finish", K(ret), K(last_merged_scn), K(frozen_status), K(arg));
   return ret;
 }
 
@@ -9891,8 +9805,8 @@ int ObRootService::flush_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(server_manager_.get_alive_servers(empty_zone, server_list))) {
-    LOG_WARN("fail to get alive server", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, server_list))) {
+    LOG_WARN("fail to get alive server", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
       if (OB_FAIL(rpc_proxy_.to(server_list.at(i)).flush_local_opt_stat_monitoring_info(arg))) {
@@ -10036,7 +9950,7 @@ int ObRootService::cancel_ddl_task(const ObCancelDDLTaskArg &arg)
   return ret;
 }
 
-int ObRootService::check_majority_and_log_in_sync_(
+int ObRootService::check_majority_and_log_in_sync(
     const ObIArray<ObAddr> &to_stop_servers,
     const bool skip_log_sync_check,
     const char *print_str)
@@ -10071,8 +9985,6 @@ int ObRootService::check_majority_and_log_in_sync_(
           ob_usleep(CHECK_RETRY_INTERVAL);
         }
         if (OB_FAIL(ls_status_op.check_all_ls_has_majority_and_log_sync(
-            zone_manager_,
-            server_manager_,
             to_stop_servers,
             skip_log_sync_check,
             print_str,
@@ -10090,7 +10002,7 @@ int ObRootService::check_majority_and_log_in_sync_(
   return ret;
 }
 
-int ObRootService::check_all_ls_has_leader_(const char *print_str)
+int ObRootService::check_all_ls_has_leader(const char *print_str)
 {
   int ret = OB_SUCCESS;
   ObLSStatusOperator ls_status_op;

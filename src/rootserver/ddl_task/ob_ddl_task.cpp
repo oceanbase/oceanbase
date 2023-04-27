@@ -34,7 +34,6 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/scheduler/ob_sys_task_stat.h"
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_zone_manager.h"
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"

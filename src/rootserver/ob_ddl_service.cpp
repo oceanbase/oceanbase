@@ -55,7 +55,7 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
-#include "ob_server_manager.h"
+#include "share/ob_all_server_tracer.h"
 #include "ob_zone_manager.h"
 #include "rootserver/ob_schema2ddl_sql.h"
 #include "rootserver/ob_unit_manager.h"
@@ -161,7 +161,6 @@ ObDDLService::ObDDLService()
     sql_proxy_(NULL),
     schema_service_(NULL),
     lst_operator_(NULL),
-    server_mgr_(NULL),
     zone_mgr_(NULL),
     unit_mgr_(NULL),
     snapshot_mgr_(NULL)
@@ -173,7 +172,6 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
                        common::ObMySQLProxy &sql_proxy,
                        share::schema::ObMultiVersionSchemaService &schema_service,
                        share::ObLSTableOperator &lst_operator,
-                       ObServerManager &server_mgr,
                        ObZoneManager &zone_mgr,
                        ObUnitManager &unit_mgr,
                        ObSnapshotInfoManager &snapshot_mgr)
@@ -188,7 +186,6 @@ int ObDDLService::init(obrpc::ObSrvRpcProxy &rpc_proxy,
     sql_proxy_ = &sql_proxy;
     schema_service_ = &schema_service;
     lst_operator_ = &lst_operator;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     unit_mgr_ = &unit_mgr;
     snapshot_mgr_ = &snapshot_mgr;
@@ -1494,9 +1491,9 @@ int ObDDLService::check_inner_stat() const
       || OB_ISNULL(rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service_,sql_proxy_  or rpc_proxy_ is null", K(ret));
-  } else if (OB_ISNULL(server_mgr_) || OB_ISNULL(lst_operator_)) {
+  } else if (OB_ISNULL(lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server_mgr_ or pt_operator_ or lst_operator_ is null", KR(ret));
+    LOG_WARN("lst_operator_ is null", KR(ret));
   } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(zone_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit_mgr_ or zone_mgr_ is null", K(ret));
@@ -11274,50 +11271,6 @@ int ObDDLService::check_restore_point_allow(const int64_t tenant_id, const ObTab
   return ret;
 }
 
-int ObDDLService::check_all_server_frozen_scn(const SCN &frozen_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(server_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", K(ret), KP_(rpc_proxy), KP_(server_mgr));
-  } else {
-    ObCheckFrozenScnProxy check_frozen_scn_proxy(*rpc_proxy_, &obrpc::ObSrvRpcProxy::check_frozen_scn);
-    ObZone zone;
-    ObArray<share::ObServerStatus> server_statuses;
-    ObCheckFrozenScnArg arg;
-    arg.frozen_scn_ = frozen_scn;
-    if (OB_FAIL(server_mgr_->get_server_statuses(zone, server_statuses))) {
-      LOG_WARN("fail to get server statuses", K(ret));
-    } else if (server_statuses.count() <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid server cnt", K(ret));
-    }
-    // check server alive
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses.count(); i++) {
-      if (!server_statuses[i].is_alive()) {
-        ret = OB_SERVER_NOT_ALIVE;
-        LOG_WARN("server not alive", K(ret), "server", server_statuses[i]);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // send async rpc
-      for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses.count(); i++) {
-        const int64_t rpc_timeout_us = THIS_WORKER.get_timeout_remain();
-        const ObAddr &addr = server_statuses[i].server_;
-        if (OB_FAIL(check_frozen_scn_proxy.call(addr, rpc_timeout_us, arg))) {
-          LOG_WARN("fail to check frozen version", K(ret), K(addr), K(rpc_timeout_us));
-        }
-      }
-      int tmp_ret = OB_SUCCESS;
-      // all server should success;
-      if (OB_SUCCESS != (tmp_ret = check_frozen_scn_proxy.wait())) {
-        LOG_WARN("fail to execute rpc", K(tmp_ret));
-      }
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-  return ret;
-}
 
 // This code will be used for partition operations of table and tablegroup
 // 1. for table, parameter is_drop_truncate_and_alter_index parameter avoids the drop/truncate partition
@@ -20129,8 +20082,13 @@ int ObDDLService::create_sys_tenant(
         LOG_WARN("init tenant env failed", K(tenant_schema), K(ret));
       } else if (OB_FAIL(ddl_operator.insert_tenant_merge_info(OB_DDL_ADD_TENANT, tenant_schema, trans))) {
         LOG_WARN("fail to insert tenant merge info", KR(ret));
-      } else if (OB_FAIL(ObServiceEpochProxy::init_service_epoch(trans, OB_SYS_TENANT_ID,
-                             0/*freeze_service_epoch*/ ,0/*arbitration_service_epoch*/))) {
+      } else if (OB_FAIL(ObServiceEpochProxy::init_service_epoch(
+          trans,
+          OB_SYS_TENANT_ID,
+          0, /*freeze_service_epoch*/
+          0, /*arbitration_service_epoch*/
+          0, /*server_zone_op_service_epoch*/
+          0 /*heartbeat_service_epoch*/))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       }
       if (trans.is_started()) {
@@ -21188,9 +21146,14 @@ int ObDDLService::init_tenant_schema(
         LOG_WARN("init tenant env failed", KR(ret), K(tenant_role), K(recovery_until_scn), K(tenant_schema));
       } else if (OB_FAIL(ddl_operator.insert_tenant_merge_info(OB_DDL_ADD_TENANT_START, tenant_schema, trans))) {
         LOG_WARN("fail to insert tenant merge info", KR(ret), K(tenant_schema));
-      } else if (is_meta_tenant(tenant_id) && OB_FAIL(ObServiceEpochProxy::init_service_epoch(trans, tenant_id,
-          0/*freeze_service_epoch*/, 0/*arbitration_service_epoch*/))) {
-        LOG_WARN("fail to init service epoch", KR(ret), K(tenant_id));
+      } else if (is_meta_tenant(tenant_id) && OB_FAIL(ObServiceEpochProxy::init_service_epoch(
+          trans,
+          tenant_id,
+          0, /*freeze_service_epoch*/
+          0, /*arbitration_service_epoch*/
+          0, /*server_zone_op_service_epoch*/
+          0 /*heartbeat_service_epoch*/))) {
+        LOG_WARN("fail to init service epoch", KR(ret));
       }
 
       if (trans.is_started()) {
@@ -24331,19 +24294,25 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
 {
   int ret = OB_SUCCESS;
   const ObZone zone;
-  ObServerManager::ObServerArray server_list;
+  ObArray<ObAddr> server_list;
   ObSwitchSchemaProxy proxy(*rpc_proxy_, &ObSrvRpcProxy::switch_schema);
   ObSwitchSchemaArg arg;
   ObRefreshSchemaInfo local_schema_info;
   ObRefreshSchemaInfo &schema_info = arg.schema_info_;
   int64_t schema_version = OB_INVALID_VERSION;
+  ObAddr rs_addr;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
-  } else if (OB_FAIL(server_mgr_->get_alive_servers(zone, server_list))) {
-    LOG_WARN("get alive server failed", KR(ret));
-  } else if (OB_ISNULL(schema_service_)) {
+  } else if (OB_ISNULL(GCTX.rs_mgr_) || OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
+    LOG_WARN("GCTX.rs_mgr_ or schema_service_ is null", KR(ret), KP(GCTX.rs_mgr_), KP(schema_service_));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("fail to get master root servcer", KR(ret));
+  } else if (OB_UNLIKELY(!rs_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rs_addr is invalid", KR(ret), K(rs_addr));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret), K(zone));
   } else if (OB_FAIL(schema_service_->get_refresh_schema_info(local_schema_info))) {
     LOG_WARN("fail to get schema info", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_version(OB_SYS_TENANT_ID, schema_version))) {
@@ -24366,7 +24335,7 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
       if (OB_ISNULL(s)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("s is null", K(ret));
-      } else if (server_mgr_->get_rs_addr() == *s) {
+      } else if (rs_addr == *s) {
         continue;
       } else {
         bool found = false;

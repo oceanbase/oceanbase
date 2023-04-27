@@ -23,7 +23,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/ls/ob_ls_table_iterator.h"//ObTenantLSTableIterator
 #include "share/ls/ob_ls_info.h"//ObLSInfo
-#include "rootserver/ob_server_manager.h"
+#include "share/ob_all_server_tracer.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 namespace oceanbase
@@ -37,7 +37,6 @@ namespace rootserver
 
 ObLostReplicaChecker::ObLostReplicaChecker()
   : inited_(false), cond_(),
-    server_manager_(NULL),
     lst_operator_(NULL),
     schema_service_(NULL)
 {
@@ -65,9 +64,7 @@ int ObLostReplicaChecker::check_cancel_()
   return ret;
 }
 
-int ObLostReplicaChecker::init(ObServerManager &server_manager,
-                                ObLSTableOperator &lst_operator,
-                                ObMultiVersionSchemaService &schema_service)
+int ObLostReplicaChecker::init(ObLSTableOperator &lst_operator, ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
   const int64_t thread_cnt = 1;
@@ -79,7 +76,6 @@ int ObLostReplicaChecker::init(ObServerManager &server_manager,
   } else if (OB_FAIL(create(thread_cnt, "LostRepCheck"))) {
     LOG_WARN("create empty server checker thread failed", K(ret), K(thread_cnt));
   } else {
-    server_manager_ = &server_manager;
     lst_operator_ = &lst_operator;
     schema_service_ = &schema_service;
     inited_ = true;
@@ -293,21 +289,18 @@ int ObLostReplicaChecker::check_lost_server_(const ObAddr &server, bool &is_lost
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server", K(server), K(ret));
-  } else if (OB_ISNULL(server_manager_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server mgr is null", KR(ret), KP(server_manager_));
-  } else if (!server_manager_->has_build()) {
+  } else if (!SVR_TRACER.has_build()) {
     is_lost_server = false;
   } else {
-    ObServerStatus status;
-    ret = server_manager_->get_server_status(server, status);
+    ObServerInfoInTable server_info;
+    ret = SVR_TRACER.get_server_info(server, server_info);
     if (OB_ENTRY_NOT_EXIST != ret && OB_SUCCESS != ret) {
       LOG_WARN("get_server_status failed", K(server), K(ret));
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       is_lost_server = true;
       LOG_INFO("server not exist", K(server));
-    } else if (status.is_permanent_offline()) {
+    } else if (server_info.is_permanent_offline()) {
       is_lost_server = true;
     }
   }

@@ -33,6 +33,7 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_tenant_memstore_info_operator.h"
+#include "share/ob_rpc_struct.h"
 #include "storage/ob_file_system_router.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_balance_info.h"
@@ -43,6 +44,8 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_root_balancer.h"
 #include "storage/ob_file_system_router.h"
+#include "share/ob_all_server_tracer.h"
+#include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
 {
@@ -3051,9 +3054,7 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
     } // end for
   }
   //Count the number of existing units
-  if (OB_FAIL(ret)) {
-    //nothing todo
-  } else if (OB_FAIL(get_pools_by_tenant(tenant_id, pools))) {
+  if (FAILEDx(get_pools_by_tenant(tenant_id, pools))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       // a new tenant, without resource pool already granted
       ret = OB_SUCCESS;
@@ -3084,13 +3085,12 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
     }
   }
   ObArray<ObZoneInfo> zone_infos;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(zone_mgr_.get_zone(zone_infos))) {
+  if (FAILEDx(zone_mgr_.get_zone(zone_infos))) {
     LOG_WARN("fail to get zone infos", K(ret));
   } else {
     //Count the number of units in zone
     for (int64_t i = 0; i < zone_infos.count() && OB_SUCC(ret) && enough; i++) {
-      ObZone zone = zone_infos.at(i).zone_;
+      const ObZone &zone = zone_infos.at(i).zone_;
       int64_t unit_count = 0;
       int64_t alive_server_count = 0;
       for (int64_t j = 0; j < total_unit_infos.count() && OB_SUCC(ret); j++) {
@@ -3099,8 +3099,8 @@ int ObUnitManager::check_server_enough(const uint64_t tenant_id,
         }
       }
       if (unit_count > 0) {
-        if (OB_FAIL(server_mgr_.get_alive_server_count(zone, alive_server_count))) {
-          LOG_WARN("fail to get alive server count", K(ret), K(zone));
+        if (OB_FAIL(SVR_TRACER.get_alive_servers_count(zone, alive_server_count))) {
+          LOG_WARN("fail to get alive server count", KR(ret), K(zone));
         } else if (alive_server_count < unit_count) {
           //ret = OB_UNIT_NUM_OVER_SERVER_COUNT;
           enough = false;
@@ -4429,9 +4429,9 @@ int ObUnitManager::inner_get_zone_alive_unit_infos_by_tenant(
             LOG_WARN("unit is empty", K(ret));
           } else if (zone != u->unit_.zone_) {
             // do not belong to this zone
-            } else if (OB_FAIL(server_mgr_.check_server_alive(u->unit_.server_, is_alive))) {
+            } else if (OB_FAIL(SVR_TRACER.check_server_alive(u->unit_.server_, is_alive))) {
             LOG_WARN("check_server_alive failed", "server", u->unit_.server_, K(ret));
-          } else if (OB_FAIL(server_mgr_.check_in_service(u->unit_.server_, is_in_service))) {
+          } else if (OB_FAIL(SVR_TRACER.check_in_service(u->unit_.server_, is_in_service))) {
             LOG_WARN("check server in service failed", "server", u->unit_.server_, K(ret));
           } else if (!is_alive || !is_in_service) {
             // ignore unit on not-alive server
@@ -5055,7 +5055,7 @@ int ObUnitManager::calc_sum_load(const ObArray<ObUnitLoad> *unit_loads,
   return ret;
 }
 
-int ObUnitManager::check_resource_pool(share::ObResourcePool  &resource_pool) const
+int ObUnitManager::check_resource_pool(share::ObResourcePool &resource_pool) const
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
@@ -5110,8 +5110,8 @@ int ObUnitManager::check_resource_pool(share::ObResourcePool  &resource_pool) co
     }
     FOREACH_CNT_X(zone, resource_pool.zone_list_, OB_SUCCESS == ret) {
       int64_t alive_server_count = 0;
-      if (OB_FAIL(server_mgr_.get_alive_server_count(*zone, alive_server_count))) {
-        LOG_WARN("get_alive_servers failed", "zone", *zone, K(ret));
+      if (OB_FAIL(SVR_TRACER.get_alive_servers_count(*zone, alive_server_count))) {
+        LOG_WARN("get_alive_servers failed", KR(ret), KPC(zone));
       } else if (alive_server_count < resource_pool.unit_count_) {
         ret = OB_UNIT_NUM_OVER_SERVER_COUNT;
         LOG_WARN("resource pool unit num over zone server count", "unit_count",
@@ -5157,19 +5157,17 @@ int ObUnitManager::try_notify_tenant_server_unit_resource(
     const bool skip_offline_server)
 {
   int ret = OB_SUCCESS;
-  bool is_server_alive = false;
+  bool is_alive = false;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat failed", K(ret), K(inited_), K(loaded_));
-  } else if (OB_UNLIKELY(nullptr == srv_rpc_proxy_)) {
+  } else if (OB_ISNULL(srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("srv_rpc_proxy_ ptr is null", K(ret));
-  } else if (OB_FAIL(server_mgr_.check_server_alive(unit.server_, is_server_alive))) {
-    LOG_WARN("fail to check server alive", K(ret), "server", unit.server_);
-  } else if (!is_server_alive && (is_delete || skip_offline_server)) {
+    LOG_WARN("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
+  } else if (OB_FAIL(SVR_TRACER.check_server_alive(unit.server_, is_alive))) {
+    LOG_WARN("fail to get server_info", KR(ret), K(unit.server_));
+  } else if (!is_alive && (is_delete || skip_offline_server)) {
     LOG_INFO("server not alive when delete unit, ignore", "server", unit.server_);
-  } else if (!is_delete && OB_FAIL(server_mgr_.set_with_partition(unit.server_))) {
-    LOG_WARN("failed to set with partition", KR(ret), K(unit));
   } else {
     share::ObUnitConfig *unit_config = nullptr;
     if (!is_valid_tenant_id(new_pool.tenant_id_) && !is_delete) {
@@ -5317,6 +5315,9 @@ int ObUnitManager::allocate_pool_units_(
   int ret = OB_SUCCESS;
   ObUnitConfig *config = NULL;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  ObArray<ObServerInfoInTable> servers_info;
+  ObArray<ObServerInfoInTable> active_servers_info_of_zone;
+  ObArray<obrpc::ObGetServerResourceInfoResult> active_servers_resource_info_of_zone;
 
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
@@ -5331,10 +5332,10 @@ int ObUnitManager::allocate_pool_units_(
       && unit_group_id_array->count() != increase_delta_unit_num) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("new unit group id array status not match",
-             KR(ret), K(increase_delta_unit_num), KP(unit_group_id_array));
-  } else if (OB_UNLIKELY(nullptr == srv_rpc_proxy_)) {
+        KR(ret), K(increase_delta_unit_num), KP(unit_group_id_array));
+  } else if (OB_ISNULL(srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("srv_rpc_proxy_ ptr is null", K(ret));
+    LOG_WARN("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
   } else if (is_valid_tenant_id(pool.tenant_id_)
       && OB_FAIL(ObCompatModeGetter::get_tenant_mode(pool.tenant_id_, compat_mode))) {
     LOG_WARN("fail to get tenant compat mode", KR(ret), K(pool.tenant_id_));
@@ -5353,18 +5354,33 @@ int ObUnitManager::allocate_pool_units_(
     for (int64_t i = 0; OB_SUCC(ret) && i < zones.count(); ++i) { // for each zone
       const ObZone &zone = zones.at(i);
       excluded_servers.reuse();
+      active_servers_info_of_zone.reuse();
+      active_servers_resource_info_of_zone.reuse();
 
       if (FAILEDx(get_excluded_servers(pool.resource_pool_id_, zone, module,
               new_allocate_pool, excluded_servers))) {
         LOG_WARN("get excluded servers fail", KR(ret), K(pool.resource_pool_id_), K(zone),
             K(module), K(new_allocate_pool));
+      } else if (OB_FAIL(SVR_TRACER.get_active_servers_info(zone, active_servers_info_of_zone))) {
+        LOG_WARN("fail to get active_servers_info_of_zone", KR(ret), K(servers_info), K(zone));
+      } else if (OB_FAIL(get_servers_resource_info_via_rpc(
+          active_servers_info_of_zone,
+          active_servers_resource_info_of_zone))) {
+        LOG_WARN("fail to get active_servers_resource_info_of_zone", KR(ret), K(active_servers_info_of_zone));
       }
 
       for (int64_t j = 0; OB_SUCC(ret) && j < increase_delta_unit_num; ++j) {
         uint64_t unit_id = OB_INVALID_ID;
         std::string resource_not_enough_reason;
         ObAddr server;
-        if (OB_FAIL(choose_server_for_unit(config->unit_resource(), zone, excluded_servers, module, server,
+        if (OB_FAIL(choose_server_for_unit(
+            config->unit_resource(),
+            zone,
+            excluded_servers,
+            module,
+            active_servers_info_of_zone,
+            active_servers_resource_info_of_zone,
+            server,
             resource_not_enough_reason))) {
           LOG_WARN("choose server for unit failed", K(module), KR(ret), "unit_idx", j, K(increase_delta_unit_num),
               K(zone), K(excluded_servers), KPC(config));
@@ -5431,34 +5447,44 @@ int ObUnitManager::allocate_pool_units_(
   return ret;
 }
 
-int ObUnitManager::get_excluded_servers(const ObUnit &unit,
-                                        const ObUnitStat &unit_stat,
-                                        const char *module,
-                                        ObIArray<ObAddr> &servers) const
+int ObUnitManager::get_excluded_servers(
+    const ObUnit &unit,
+    const ObUnitStat &unit_stat,
+    const char *module,
+    const ObIArray<ObServerInfoInTable> &servers_info, // servers info in unit.zone_
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info, // active servers' resource info in unit.zone_
+    ObIArray<ObAddr> &servers) const
 {
   int ret = OB_SUCCESS;
   //Add all OBS whose disks do not meet the requirements
   ObArray<share::ObServerStatus> server_list;
+  ObServerResourceInfo server_resource_info;
   const bool new_allocate_pool = false;
   if (OB_FAIL(get_excluded_servers(unit.resource_pool_id_, unit.zone_, module,
           new_allocate_pool, servers))) {
     LOG_WARN("fail to get excluded_servers", K(ret), K(unit), K(new_allocate_pool));
-  } else if (OB_FAIL(server_mgr_.get_server_statuses(unit.zone_, server_list))) {
-    LOG_WARN("fail to get server of zone", K(ret), K(unit));
   } else {
-    for (int64_t i = 0; i < server_list.count() && OB_SUCC(ret); i++) {
-      ObServerStatus &status = server_list.at(i);
+    for (int64_t i = 0; i < servers_info.count() && OB_SUCC(ret); i++) {
+      const ObServerInfoInTable &server_info = servers_info.at(i);
+      const ObAddr &server = server_info.get_server();
       bool is_exclude = false;
-      if (!status.can_migrate_in()) {
+      server_resource_info.reset();
+      if (!server_info.can_migrate_in()) {
         is_exclude = true;
-        LOG_INFO("server can't migrate in, push into excluded_array", K(status), K(module));
+        LOG_INFO("server can't migrate in, push into excluded_array", K(server_info), K(module));
+      } else if (OB_FAIL(ObRootUtils::get_server_resource_info(
+          report_servers_resource_info,
+          server,
+          server_resource_info))) {
+        // server which can be migrated in must have its resource_info
+        LOG_WARN("fail to get server_resource_info", KR(ret), K(report_servers_resource_info), K(server));
       } else {
-        int64_t required_size = unit_stat.required_size_ + status.resource_info_.disk_in_use_;
-        int64_t total_size = status.resource_info_.disk_total_;
+        int64_t required_size = unit_stat.required_size_ + server_resource_info.disk_in_use_;
+        int64_t total_size = server_resource_info.disk_total_;
         if (total_size <= required_size || total_size <= 0) {
           is_exclude = true;
-          LOG_INFO("server total size no bigger than required size", K(module), K(required_size), K(total_size),
-                   K(unit_stat), K(status.resource_info_));
+          LOG_INFO("server total size no bigger than required size", K(module), K(required_size),
+              K(total_size), K(unit_stat), K(server_resource_info));
         } else if (required_size <= 0) {
           //nothing todo
         } else {
@@ -5473,10 +5499,10 @@ int ObUnitManager::get_excluded_servers(const ObUnit &unit,
       }
       if (!is_exclude) {
         //nothing todo
-      } else if (has_exist_in_array(servers, status.server_)) {
+      } else if (has_exist_in_array(servers, server)) {
         //nothing todo
-      } else if (OB_FAIL(servers.push_back(status.server_))) {
-        LOG_WARN("fail to push back", K(ret), K(status));
+      } else if (OB_FAIL(servers.push_back(server))) {
+        LOG_WARN("fail to push back", KR(ret), K(server));
       }
     }
   }
@@ -5658,32 +5684,34 @@ int ObUnitManager::get_pool_servers(const uint64_t resource_pool_id,
 // @ret OB_SUCCESS                    on success
 // @ret OB_ZONE_RESOURCE_NOT_ENOUGH   zone resource not enough to hold new unit
 // @ret OB_ZONE_SERVER_NOT_ENOUGH     all valid servers are excluded, no server to hold new unit
-int ObUnitManager::choose_server_for_unit(const ObUnitResource &config,
-                                          const ObZone &zone,
-                                          const ObArray<ObAddr> &excluded_servers,
-                                          const char *module,
-                                          ObAddr &choosed_server,
-                                          std::string &resource_not_enough_reason) const
+int ObUnitManager::choose_server_for_unit(
+    const ObUnitResource &config,
+    const ObZone &zone,
+    const ObArray<ObAddr> &excluded_servers,
+    const char *module,
+    const ObIArray<ObServerInfoInTable> &active_servers_info, // active_servers_info of the give zone,
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &active_servers_resource_info, // active_servers_resource_info of the give zone
+    ObAddr &choosed_server,
+    std::string &resource_not_enough_reason) const
 {
   int ret = OB_SUCCESS;
-  ObArray<ObServerStatus> server_statuses;
+  ObArray<ObServerStatus> statuses;
   ObArray<ObUnitPlacementStrategy::ObServerResource> server_resources;
-
+  ObArray<ObServerInfoInTable> servers_info;
+  ObArray<obrpc::ObGetServerResourceInfoResult> report_servers_resource_info;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
   } else if (!config.is_valid() || zone.is_empty()) {
     // excluded_servers can be empty
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid config", K(config), K(zone), K(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_statuses(zone, server_statuses))) {
-    LOG_WARN("get_server_statuses failed", K(zone), K(ret));
-  } else if (OB_FAIL(build_server_resources_(server_statuses, server_resources))) {
-    LOG_WARN("build server resources fail", KR(ret), K(server_statuses));
-  } else if (OB_FAIL(do_choose_server_for_unit_(config, zone, excluded_servers, server_statuses,
+    LOG_WARN("invalid config", KR(ret), K(config), K(zone));
+  } else if (OB_FAIL(build_server_resources_(active_servers_resource_info, server_resources))) {
+    LOG_WARN("fail to build server resources", KR(ret), K(active_servers_resource_info));
+  } else if (OB_FAIL(do_choose_server_for_unit_(config, zone, excluded_servers, active_servers_info,
       server_resources, module, choosed_server, resource_not_enough_reason))) {
-    LOG_WARN("fail to choose server for unit", K(module), KR(ret), K(config), K(zone), K(excluded_servers),
-        K(server_statuses), K(server_resources),
+    LOG_WARN("fail to choose server for unit", K(module), KR(ret), K(config), K(zone),
+        K(excluded_servers), K(servers_info), K(server_resources),
         "resource_not_enough_reason", resource_not_enough_reason.c_str());
   }
   return ret;
@@ -5693,7 +5721,7 @@ int ObUnitManager::choose_server_for_unit(const ObUnitResource &config,
 int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
                                               const ObZone &zone,
                                               const ObArray<ObAddr> &excluded_servers,
-                                              const ObIArray<share::ObServerStatus> &statuses,
+                                              const ObIArray<share::ObServerInfoInTable> &servers_info,
                                               const ObIArray<ObUnitPlacementStrategy::ObServerResource> &server_resources,
                                               const char *module,
                                               ObAddr &choosed_server,
@@ -5710,36 +5738,37 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
   if (OB_UNLIKELY(zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("zone is empty, unexpected", KR(ret), K(zone));
-  } else if (statuses.count() != server_resources.count()) {
+  } else if (servers_info.count() != server_resources.count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server statuses and server resources array", KR(ret), K(statuses), K(server_resources));
+    LOG_WARN("invalid servers_info and server_resources array", KR(ret), K(servers_info), K(server_resources));
   } else if (OB_FAIL(get_hard_limit(hard_limit))) {
     LOG_WARN("get_hard_limit failed", K(ret));
   } else {
     int64_t not_excluded_server_count = 0;
     // 1. construct valid servers resource
-    for (int64_t i = 0; OB_SUCC(ret) && i < statuses.count(); ++i) { // for each active servers
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); ++i) { // for each active servers
       ObResourceType not_enough_resource = RES_MAX;
       AlterResourceErr not_enough_resource_config = ALT_ERR;
-      const ObServerStatus &server_status = statuses.at(i);
+      const ObServerInfoInTable &server_info = servers_info.at(i);
+      const ObAddr &server = server_info.get_server();
       const ObUnitPlacementStrategy::ObServerResource &server_resource = server_resources.at(i);
 
-      if (has_exist_in_array(excluded_servers, server_status.server_)) {
+      if (has_exist_in_array(excluded_servers, server)) {
         // excluded servers are expected, need not show in reason
         continue;
       } else {
         not_excluded_server_count++;
 
-        if (!server_status.can_migrate_in()) {
-          if (! server_status.is_active()) {
+        if (!server_info.can_migrate_in()) {
+          if (!server_info.is_active()) {
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server_status.server_) + "' is not active\n";
+                resource_not_enough_reason + "server '" + to_cstring(server) + "' is not active\n";
           } else {
             // server is block-migrate-in
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server_status.server_) + "' is blocked migrate-in\n";
+                resource_not_enough_reason + "server '" + to_cstring(server) + "' is blocked migrate-in\n";
           }
-          LOG_WARN("[CHOOSE_SERVER_FOR_UNIT] server can not migrate in", K(module), K(i), "server", server_status);
+          LOG_WARN("[CHOOSE_SERVER_FOR_UNIT] server can not migrate in", K(module), K(i), "server", server_info);
           continue;
         } else {
           bool is_resource_enough =
@@ -5759,7 +5788,7 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
                 "not_enough_resource_config", alter_resource_err_to_str(not_enough_resource_config),
                 K(server_resource), "request_unit_config", config);
             resource_not_enough_reason =
-                resource_not_enough_reason + "server '" + to_cstring(server_status.server_) + "' "
+                resource_not_enough_reason + "server '" + to_cstring(server) + "' "
                 + resource_type_to_str(not_enough_resource) + " resource not enough\n";
           }
         }
@@ -5770,7 +5799,7 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
       if (0 == not_excluded_server_count) {
         ret = OB_ZONE_SERVER_NOT_ENOUGH;
         LOG_WARN("zone server not enough to hold all units", K(module), KR(ret), K(zone), K(excluded_servers),
-            K(statuses));
+            K(servers_info));
       } else if (valid_server_resources.count() <= 0) {
         ret = OB_ZONE_RESOURCE_NOT_ENOUGH;
         LOG_WARN("zone resource is not enough to hold a new unit", K(module), KR(ret), K(zone),
@@ -5791,27 +5820,29 @@ int ObUnitManager::do_choose_server_for_unit_(const ObUnitResource &config,
   return ret;
 }
 
-int ObUnitManager::compute_server_resource_(const ObServerStatus &server_status,
+int ObUnitManager::compute_server_resource_(
+    const obrpc::ObGetServerResourceInfoResult &report_server_resource_info,
     ObUnitPlacementStrategy::ObServerResource &server_resource) const
 {
   int ret = OB_SUCCESS;
   ObUnitConfig sum_load;
   ObArray<ObUnitLoad> *unit_loads = NULL;
-
-  if (OB_UNLIKELY(!server_status.is_valid())) {
+  const ObAddr &server = report_server_resource_info.get_server();
+  const ObServerResourceInfo &report_resource = report_server_resource_info.get_resource_info();
+  if (OB_UNLIKELY(!report_server_resource_info.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(server_status), KR(ret));
-  } else if (OB_FAIL(get_loads_by_server(server_status.server_, unit_loads))) {
+    LOG_WARN("invalid argument", KR(ret), K(report_server_resource_info));
+  } else if (OB_FAIL(get_loads_by_server(server, unit_loads))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get_loads_by_server failed", "server", server_status.server_, K(ret));
+      LOG_WARN("get_loads_by_server failed", "server", server, KR(ret));
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (NULL == unit_loads) {
+  } else if (OB_ISNULL(unit_loads)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_loads is null", KP(unit_loads), K(ret));
+    LOG_WARN("unit_loads is null", KR(ret), KP(unit_loads));
   } else if (OB_FAIL(calc_sum_load(unit_loads, sum_load))) {
-    LOG_WARN("calc_sum_load failed", KP(unit_loads), K(ret));
+    LOG_WARN("calc_sum_load failed", KR(ret), KP(unit_loads));
   }
 
   if (OB_SUCC(ret)) {
@@ -5822,28 +5853,26 @@ int ObUnitManager::compute_server_resource_(const ObServerStatus &server_status,
     // The persistent information of the unit on the observer side is regularly reported to rs by the observer through the heartbeat.
     // When performing allocation, rs reports the maximum value of resource information from its own resource view
     // and observer side as a reference for unit resource allocation
-
-    const ObServerResourceInfo &report_resource = server_status.resource_info_;
-    server_resource.addr_ = server_status.server_;
+    server_resource.addr_ = server;
     server_resource.assigned_[RES_CPU] = sum_load.min_cpu() > report_resource.report_cpu_assigned_
                                          ? sum_load.min_cpu() : report_resource.report_cpu_assigned_;
     server_resource.max_assigned_[RES_CPU] = sum_load.max_cpu() > report_resource.report_cpu_max_assigned_
                                          ? sum_load.max_cpu() : report_resource.report_cpu_max_assigned_;
-    server_resource.capacity_[RES_CPU] = server_status.resource_info_.cpu_;
+    server_resource.capacity_[RES_CPU] = report_resource.cpu_;
     server_resource.assigned_[RES_MEM] = sum_load.memory_size() > report_resource.report_mem_assigned_
                                          ? static_cast<double>(sum_load.memory_size())
                                          : static_cast<double>(report_resource.report_mem_assigned_);
     server_resource.max_assigned_[RES_MEM] = server_resource.assigned_[RES_MEM];
-    server_resource.capacity_[RES_MEM] = static_cast<double>(server_status.resource_info_.mem_total_);
+    server_resource.capacity_[RES_MEM] = static_cast<double>(report_resource.mem_total_);
     server_resource.assigned_[RES_LOG_DISK] = static_cast<double>(sum_load.log_disk_size());
     server_resource.max_assigned_[RES_LOG_DISK] = static_cast<double>(sum_load.log_disk_size());
-    server_resource.capacity_[RES_LOG_DISK] = static_cast<double>(server_status.resource_info_.log_disk_total_);
+    server_resource.capacity_[RES_LOG_DISK] = static_cast<double>(report_resource.log_disk_total_);
   }
 
   LOG_INFO("compute server resource", KR(ret),
-            "server", server_status.server_,
+            "server", server,
             K(server_resource),
-            "report_resource_info", server_status.resource_info_,
+            "report_resource_info", report_resource,
             "valid_unit_sum", sum_load,
             "valid_unit_count", unit_loads != NULL ? unit_loads->count(): 0);
   return ret;
@@ -5899,7 +5928,7 @@ bool ObUnitManager::check_resource_enough_for_unit_(
 
 
 // demand_resource may have some invalid items, need not check valid for demand_resource
-int ObUnitManager::have_enough_resource(const ObServerStatus &server_status,
+int ObUnitManager::have_enough_resource(const obrpc::ObGetServerResourceInfoResult &report_server_resource_info,
                                         const ObUnitResource &demand_resource,
                                         const double hard_limit,
                                         bool &is_enough,
@@ -5908,32 +5937,211 @@ int ObUnitManager::have_enough_resource(const ObServerStatus &server_status,
   int ret = OB_SUCCESS;
   ObResourceType not_enough_resource = RES_MAX;
   ObUnitPlacementStrategy::ObServerResource server_resource;
-
   err_index = ALT_ERR;
 
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat failed", K(inited_), K(loaded_), K(ret));
-  } else if (!server_status.is_valid() || hard_limit <= 0) {
+  } else if (!report_server_resource_info.is_valid() || hard_limit <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(server_status), K(hard_limit), K(ret));
-  } else if (OB_FAIL(compute_server_resource_(server_status, server_resource))) {
-    LOG_WARN("compute server resource fail", KR(ret), K(server_status));
+    LOG_WARN("invalid argument", K(report_server_resource_info), K(hard_limit), K(ret));
+  } else if (OB_FAIL(compute_server_resource_(report_server_resource_info, server_resource))) {
+    LOG_WARN("compute server resource fail", KR(ret), K(report_server_resource_info));
   } else {
     is_enough = check_resource_enough_for_unit_(server_resource, demand_resource, hard_limit,
         not_enough_resource, err_index);
   }
   return ret;
 }
-
 int ObUnitManager::check_enough_resource_for_delete_server(
     const ObAddr &server,
     const ObZone &zone)
 {
   int ret = OB_SUCCESS;
+  // get_servers_of_zone
+  ObArray<obrpc::ObGetServerResourceInfoResult> report_servers_resource_info;
+  ObArray<ObServerInfoInTable> servers_info;
+  ObArray<ObServerInfoInTable> servers_info_of_zone;
+  bool empty = false;
+  if (OB_UNLIKELY(!server.is_valid() || zone.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server or zone", KR(ret), K(server), K(zone));
+  } else if (OB_FAIL(check_server_empty(server, empty))) {
+    // the validity of the server is checked here
+    LOG_WARN("fail to check whether the server is empty", KR(ret));
+  } else if (empty) {
+    //nothing todo
+  } else if (OB_FAIL(SVR_TRACER.get_active_servers_info(zone, servers_info_of_zone))) {
+    LOG_WARN("fail to get servers_info_of_zone", KR(ret), K(servers_info), K(zone));
+  } else if (OB_FAIL(get_servers_resource_info_via_rpc(servers_info_of_zone, report_servers_resource_info))) {
+    LOG_WARN("fail to get servers_resouce_info via rpc", KR(ret), K(servers_info_of_zone), K(report_servers_resource_info));
+  } else if (OB_FAIL(check_enough_resource_for_delete_server_(
+      server,
+      zone,
+      servers_info_of_zone,
+      report_servers_resource_info))) {
+    LOG_WARN("fail to check enough resource for delete server", KR(ret), K(server), K(zone),
+        K(servers_info_of_zone), K(report_servers_resource_info));
+  } else {}
+  return ret;
+}
+int ObUnitManager::get_servers_resource_info_via_rpc(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info) const
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  obrpc::ObGetServerResourceInfoArg arg;
+  ObArray<obrpc::ObGetServerResourceInfoResult> tmp_report_servers_resource_info;
+  report_servers_resource_info.reset();
+  if (OB_UNLIKELY(servers_info.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("servers_info.count() should be greater than zero", KR(ret), K(servers_info.count()));
+  } else if (!ObHeartbeatService::is_service_enabled()) { // old logic
+    ObServerResourceInfo resource_info;
+    obrpc::ObGetServerResourceInfoResult result;
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+      const ObAddr &server = servers_info.at(i).get_server();
+      resource_info.reset();
+      result.reset();
+      if (OB_FAIL(server_mgr_.get_server_resource_info(server, resource_info))) {
+        LOG_WARN("fail to get server resource info", KR(ret), K(server));
+      } else if (OB_FAIL(result.init(server, resource_info))) {
+        LOG_WARN("fail to init", KR(ret), K(server));
+      } else if (OB_FAIL(report_servers_resource_info.push_back(result))) {
+        LOG_WARN("fail to push an element into report_servers_resource_info", KR(ret), K(result));
+      }
+    }
+  } else { // new logic
+    if (OB_ISNULL(srv_rpc_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
+    } else if (OB_FAIL(ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+      LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+    } else {
+      ObGetServerResourceInfoProxy proxy(*srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_server_resource_info);
+      for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+        const ObServerInfoInTable & server_info = servers_info.at(i);
+        arg.reset();
+        if (OB_UNLIKELY(!server_info.is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid server_info", KR(ret), K(server_info));
+        } else {
+          const ObAddr &server = server_info.get_server();
+          const int64_t time_out = ctx.get_timeout();
+          if (OB_FAIL(arg.init(GCTX.self_addr()))) {
+            LOG_WARN("fail to init arg", KR(ret), K(GCTX.self_addr()));
+          } else if (OB_FAIL(proxy.call(
+              server,
+              time_out,
+              GCONF.cluster_id,
+              OB_SYS_TENANT_ID,
+              arg))) {
+            LOG_WARN("fail to send get_server_resource_info rpc",  KR(ret), KR(tmp_ret), K(server),
+                K(time_out), K(arg));
+          }
+        }
+      }
+      if (OB_TMP_FAIL(proxy.wait())) {
+        LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+      tmp_report_servers_resource_info.reset();
+      ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+        const obrpc::ObGetServerResourceInfoResult *rpc_result = proxy.get_results().at(idx);
+        if (OB_ISNULL(rpc_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("rpc_result is null", KR(ret), KP(rpc_result));
+        } else if (OB_UNLIKELY(!rpc_result->is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("rpc_result is invalid", KR(ret), KPC(rpc_result));
+        } else if (OB_FAIL(tmp_report_servers_resource_info.push_back(*rpc_result))) {
+          LOG_WARN("fail to push an element into tmp_report_servers_resource_info", KR(ret), KPC(rpc_result));
+        }
+      }
+    }
+    // get ordered report_servers_resource_info: since when processing resource_info,
+    // we assume servers_info.at(i).get_server() = report_servers_resource_info.at(i).get_server()
+    if (FAILEDx(order_report_servers_resource_info_(
+        servers_info,
+        tmp_report_servers_resource_info,
+        report_servers_resource_info ))) {
+      LOG_WARN("fail to order report_servers_resource_info", KR(ret),
+          K(servers_info.count()), K(tmp_report_servers_resource_info.count()),
+          K(servers_info), K(tmp_report_servers_resource_info));
+    }
+  }
+  return ret;
+}
+
+int ObUnitManager::order_report_servers_resource_info_(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &ordered_report_servers_resource_info)
+{
+  // target: servers_info.at(i).get_server() = ordered_report_servers_resource_info.at(i).get_server()
+  int ret = OB_SUCCESS;
+  ordered_report_servers_resource_info.reset();
+  if (servers_info.count() != report_servers_resource_info.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the size of servers_info should be equal to the size of report_servers_resource_info",
+        KR(ret), K(servers_info.count()), K(report_servers_resource_info.count()),
+        K(servers_info), K(report_servers_resource_info));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+      bool find_server = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !find_server && j < report_servers_resource_info.count(); j++) {
+        const obrpc::ObGetServerResourceInfoResult &server_resource_info = report_servers_resource_info.at(j);
+        if (servers_info.at(i).get_server() == server_resource_info.get_server()) {
+          find_server = true;
+          if (OB_FAIL(ordered_report_servers_resource_info.push_back(server_resource_info))) {
+            LOG_WARN("fail to push an element into ordered_report_servers_resource_info",
+                KR(ret), K(server_resource_info));
+          }
+        }
+      }
+      if(OB_SUCC(ret) && !find_server) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("server not exists in report_servers_resource_info",
+            K(servers_info.at(i)), K(report_servers_resource_info));
+      }
+    }
+  }
+  return ret;
+}
+int ObUnitManager::get_server_resource_info_via_rpc(
+    const share::ObServerInfoInTable &server_info,
+    obrpc::ObGetServerResourceInfoResult &report_server_resource_info) const
+{
+  int ret = OB_SUCCESS;
+  ObArray<share::ObServerInfoInTable> servers_info;
+  ObArray<obrpc::ObGetServerResourceInfoResult> report_resource_info_array;
+  report_server_resource_info.reset();
+  if (OB_UNLIKELY(!server_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("server_info is invalid", KR(ret), K(server_info));
+  } else if (OB_FAIL(servers_info.push_back(server_info))) {
+    LOG_WARN("fail to push an element into servers_info", KR(ret), K(server_info));
+  } else if (OB_FAIL(get_servers_resource_info_via_rpc(servers_info, report_resource_info_array))) {
+    LOG_WARN("fail to execute get_servers_resource_info_via_rpc", KR(ret), K(servers_info));
+  } else if (OB_UNLIKELY(1 != report_resource_info_array.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("report_resource_info_array.count() should be one", KR(ret), K(report_resource_info_array.count()));
+  } else if (OB_FAIL(report_server_resource_info.assign(report_resource_info_array.at(0)))) {
+    LOG_WARN("fail to assign report_server_resource_info", KR(ret), K(report_resource_info_array.at(0)));
+  }
+  return ret;
+}
+int ObUnitManager::check_enough_resource_for_delete_server_(
+    const ObAddr &server,
+    const ObZone &zone,
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info)
+{
+  int ret = OB_SUCCESS;
   ObArray<ObUnitManager::ObUnitLoad> *unit_loads = NULL;
   ObArray<ObUnitPlacementStrategy::ObServerResource> initial_servers_resources;
-  ObArray<ObServerStatus> statuses;
   SpinRLockGuard guard(lock_);
   bool empty = false;
   if (OB_UNLIKELY(zone.is_empty())) {
@@ -5946,19 +6154,17 @@ int ObUnitManager::check_enough_resource_for_delete_server(
   } else {
     if (OB_FAIL(get_loads_by_server(server, unit_loads))) {
       LOG_WARN("fail to get loads by server", K(ret));
-    } else if (OB_FAIL(server_mgr_.get_server_statuses(zone, statuses))) {
-      LOG_WARN("get_server_statuses failed", K(zone), K(ret));
-    } else if (OB_FAIL(build_server_resources_(statuses, initial_servers_resources))) {
-      LOG_WARN("fail to build server resources", KR(ret), K(statuses));
+    } else if (OB_FAIL(build_server_resources_(report_servers_resource_info, initial_servers_resources))) {
+      LOG_WARN("fail to build server resources", KR(ret), K(report_servers_resource_info));
     } else {
       for (int64_t i = 0; i < unit_loads->count() && OB_SUCC(ret); ++i) {
         std::string resource_not_enough_reason;
         if (OB_FAIL(check_server_have_enough_resource_for_delete_server_(
-                    unit_loads->at(i),
-                    zone,
-                    statuses,
-                    initial_servers_resources,
-                    resource_not_enough_reason))) {
+            unit_loads->at(i),
+            zone,
+            servers_info,
+            initial_servers_resources,
+            resource_not_enough_reason))) {
           LOG_WARN("fail to check server have enough resource for delete server",
               K(ret),
               K(zone),
@@ -5994,11 +6200,10 @@ int ObUnitManager::check_enough_resource_for_delete_server(
   }
   return ret;
 }
-
 int ObUnitManager::check_server_have_enough_resource_for_delete_server_(
     const ObUnitLoad &unit_load,
     const common::ObZone &zone,
-    const ObIArray<ObServerStatus> &statuses,
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
     ObIArray<ObUnitPlacementStrategy::ObServerResource> &initial_servers_resources,
     std::string &resource_not_enough_reason)
 {
@@ -6020,9 +6225,9 @@ int ObUnitManager::check_server_have_enough_resource_for_delete_server_(
   } else if (OB_UNLIKELY(zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("zone is empty, unexpected", KR(ret), K(zone));
-  } else if (statuses.count() != initial_servers_resources.count()) {
+  } else if (servers_info.count() != initial_servers_resources.count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("server statuses does not match initial_servers_resources", KR(ret), K(statuses),
+    LOG_WARN("servers_info does not match initial_servers_resources", KR(ret), K(servers_info),
         K(initial_servers_resources));
   } else if (OB_ISNULL(unit_load.unit_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -6032,13 +6237,12 @@ int ObUnitManager::check_server_have_enough_resource_for_delete_server_(
   } else if (OB_FAIL(get_excluded_servers(unit_load.unit_->resource_pool_id_, unit_load.unit_->zone_, module,
           new_allocate_pool, excluded_servers))) {
     LOG_WARN("fail to get excluded server", K(module), KR(ret), KPC(unit_load.unit_), K(new_allocate_pool));
-  }
-  // choose right server for target unit
-  else if (OB_FAIL(do_choose_server_for_unit_(config->unit_resource(), zone,
-      excluded_servers, statuses, initial_servers_resources,
+  } else if (OB_FAIL(do_choose_server_for_unit_(config->unit_resource(), zone,
+      excluded_servers, servers_info, initial_servers_resources,
       module, choosed_server, resource_not_enough_reason))) {
+    // choose right server for target unit
     LOG_WARN("choose server for unit fail", K(module), KR(ret), K(zone), KPC(config),
-        K(excluded_servers), K(statuses), K(initial_servers_resources),
+        K(excluded_servers), K(servers_info), K(initial_servers_resources),
         "resource_not_enough_reason", resource_not_enough_reason.c_str());
   } else {
     // sum target unit resource config on choosed server resource
@@ -6062,16 +6266,16 @@ int ObUnitManager::check_server_have_enough_resource_for_delete_server_(
 }
 
 int ObUnitManager::build_server_resources_(
-                   const ObIArray<ObServerStatus> &statuses,
-                   ObIArray<ObUnitPlacementStrategy::ObServerResource> &servers_resources) const
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info,
+    ObIArray<ObUnitPlacementStrategy::ObServerResource> &servers_resources) const
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < statuses.count(); ++i) {
-    const ObServerStatus &server_status = statuses.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < report_servers_resource_info.count(); ++i) {
+    const obrpc::ObGetServerResourceInfoResult &report_resource_info = report_servers_resource_info.at(i);
     ObUnitPlacementStrategy::ObServerResource server_resource;
 
-    if (OB_FAIL(compute_server_resource_(server_status, server_resource))) {
-      LOG_WARN("compute server resource fail", KR(ret), K(server_status));
+    if (OB_FAIL(compute_server_resource_(report_resource_info, server_resource))) {
+      LOG_WARN("compute server resource fail", KR(ret), K(report_resource_info));
     } else if (OB_FAIL(servers_resources.push_back(server_resource))) {
       LOG_WARN("fail to push back", KR(ret), K(server_resource));
     }
@@ -7986,7 +8190,6 @@ int ObUnitManager::check_expand_resource_(
 {
   int ret = OB_SUCCESS;
   common::hash::ObHashMap<ObAddr, int64_t> server_ref_count_map;
-  common::ObZone zone;
   ObString err_str;
   AlterResourceErr err_index = ALT_ERR;
   int temp_ret = OB_SUCCESS;
@@ -8009,59 +8212,67 @@ int ObUnitManager::check_expand_resource_(
     bool can_expand = true;
     const ObUnitResource delta = new_resource - old_resource;
     ObUnitResource expand_resource;
-
+    ObServerInfoInTable server_info;
     _LOG_INFO("[%s] check_expand_resource begin. old=%s, new=%s, delta=%s", module,
         to_cstring(old_resource), to_cstring(new_resource), to_cstring(delta));
 
     FOREACH_X(iter, server_ref_count_map, OB_SUCCESS == ret) {
       expand_resource = delta * (iter->second);
-
+      const ObAddr &server = iter->first;
+      server_info.reset();
       _LOG_INFO("[%s] check_expand_resource. svr=%s, pools=%ld, expand_resource=%s", module,
-          to_cstring(iter->first), iter->second, to_cstring(expand_resource));
-
-      if (OB_FAIL(check_expand_resource_(iter->first, expand_resource, can_expand, err_index))) {
-        LOG_WARN("check expand resource failed", K(ret));
+          to_cstring(server), iter->second, to_cstring(expand_resource));
+      if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
+        LOG_WARN("fail to get server_info", KR(ret), K(server));
+      } else if (OB_FAIL(check_expand_resource_(server_info, expand_resource, can_expand, err_index))) {
+        LOG_WARN("check expand resource failed", KR(ret), K(server_info));
       } else if (!can_expand) {
-        if (OB_FAIL(server_mgr_.get_server_zone(iter->first, zone))) {
-          LOG_WARN("get_server_zone failed", K(iter->first), K(ret));
-        } else {
-          LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone), to_cstring(iter->first),
-              alter_resource_err_to_str(err_index));
-
-          // return ERROR
-          ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-        }
+        const ObZone &zone = server_info.get_zone();
+        LOG_USER_ERROR(OB_MACHINE_RESOURCE_NOT_ENOUGH, to_cstring(zone), to_cstring(server),
+            alter_resource_err_to_str(err_index));
+        // return ERROR
+        ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
       }
     }
   }
   return ret;
 }
 
-int ObUnitManager::check_expand_resource_(const ObAddr &server,
-    const ObUnitResource &expand_resource, bool &can_expand, AlterResourceErr &err_index) const
+int ObUnitManager::check_expand_resource_(
+    const share::ObServerInfoInTable &server_info,
+    const ObUnitResource &expand_resource,
+    bool &can_expand,
+    AlterResourceErr &err_index) const
 {
   int ret = OB_SUCCESS;
-  ObServerStatus status;
   double hard_limit = 0;
   bool can_hold_unit = false;
   can_expand = true;
+  obrpc::ObGetServerResourceInfoResult report_server_resource_info;
   // some item of expand_resource may be negative, so we don't check expand_resource here
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat failed", K_(inited), K_(loaded), K(ret));
-  } else if (!server.is_valid()) {
+  } else if (!server_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(server), K(ret));
+    LOG_WARN("invalid server_info", KR(ret), K(server_info));
   } else if (OB_FAIL(get_hard_limit(hard_limit))) {
     LOG_WARN("get_hard_limit failed", K(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_status(server, status))) {
-    LOG_WARN("get_server_status failed", K(server), K(ret));
-  } else if (OB_FAIL(have_enough_resource(status, expand_resource, hard_limit, can_hold_unit, err_index))) {
-    LOG_WARN("fail to check have enough resource", K(status), K(hard_limit), K(ret));
+  } else if (OB_FAIL(get_server_resource_info_via_rpc(server_info, report_server_resource_info))) {
+    LOG_WARN("get_server_resource_info_via_rpc failed", KR(ret), K(server_info));
+  } else if (OB_FAIL(have_enough_resource(
+      report_server_resource_info,
+      expand_resource,
+      hard_limit,
+      can_hold_unit,
+      err_index))) {
+    LOG_WARN("fail to check have enough resource", KR(ret), K(hard_limit),
+        K(report_server_resource_info), K(expand_resource));
   } else if (!can_hold_unit) {
     can_expand = false;
     // don't need to set ret
-    LOG_WARN("find server can't hold expanded resource", K(server), K(status), K(expand_resource));
+    LOG_WARN("find server can't hold expanded resource", KR(ret), K(server_info),
+        K(report_server_resource_info), K(expand_resource));
   } else {
     can_expand = true;
   }
@@ -8594,7 +8805,7 @@ int ObUnitManager::check_tenant_on_server(const uint64_t tenant_id,
     ObArray<ObAddr> servers;
     if (OB_FAIL(get_pool_ids_of_tenant(tenant_id, pool_ids))) {
       LOG_WARN("get_pool_ids_of_tenant failed", K(tenant_id), K(ret));
-    } else if (OB_FAIL(server_mgr_.get_server_zone(server, zone))) {
+    } else if (OB_FAIL(SVR_TRACER.get_server_zone(server, zone))) {
       LOG_WARN("get_server_zone failed", K(server), K(ret));
     } else {
       SpinRLockGuard guard(lock_);
@@ -8618,7 +8829,9 @@ int ObUnitManager::admin_migrate_unit(
   int ret = OB_SUCCESS;
   ObUnitInfo unit_info;
   ObArray<ObAddr> excluded_servers;
-  ObServerStatus status;
+  ObArray<ObServerInfoInTable> servers_info;
+  ObServerInfoInTable dst_server_info;
+  obrpc::ObGetServerResourceInfoResult report_dst_server_resource_info;
   ObUnitConfig left_resource;
   ObZone src_zone;
   ObZone dst_zone;
@@ -8646,19 +8859,25 @@ int ObUnitManager::admin_migrate_unit(
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("migrate a unit which is in deleting status", KR(ret), K(unit_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "migrate a unit which is in deleting status");
-  } else if (OB_FAIL(server_mgr_.get_server_zone(unit_info.unit_.server_, src_zone))) {
+  } else if (OB_FAIL(SVR_TRACER.get_server_zone(unit_info.unit_.server_, src_zone))) {
     LOG_WARN("get server zone failed", "server", unit_info.unit_.server_, KR(ret));
   } else if (dst == unit_info.unit_.migrate_from_server_ || is_cancel) {
     // cancel migrate unit
+    bool can_migrate_in = false;
     if (is_cancel && !unit_info.unit_.migrate_from_server_.is_valid()) {
 	    ret = OB_ERR_UNEXPECTED;
 	    LOG_WARN("failed to cancel migrate unit, may be no migrate task", KR(ret), K(unit_info));
       LOG_USER_ERROR(OB_ERR_UNEXPECTED,"no migrate task to cancel");
-	  } else if (OB_FAIL(cancel_migrate_unit(
-            unit_info.unit_, unit_info.pool_.tenant_id_ == OB_GTS_TENANT_ID))) {
-		  LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info));
+	  } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(
+        unit_info.unit_.migrate_from_server_,
+        can_migrate_in))) {
+      LOG_WARN("fail to check server can_migrate_in", KR(ret), K(servers_info),
+          K(unit_info.unit_.migrate_from_server_));
+    } else if (OB_FAIL(cancel_migrate_unit(
+            unit_info.unit_, can_migrate_in, unit_info.pool_.tenant_id_ == OB_GTS_TENANT_ID))) {
+		LOG_WARN("failed to cancel migrate unit", KR(ret), K(unit_info), K(can_migrate_in));
     }
-  } else if (OB_FAIL(server_mgr_.get_server_zone(dst, dst_zone))) {
+  } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst, dst_zone))) {
     LOG_WARN("get server zone failed", "server", dst, KR(ret));
   } else if (src_zone != dst_zone) {
     ret = OB_NOT_SUPPORTED;
@@ -8671,13 +8890,21 @@ int ObUnitManager::admin_migrate_unit(
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,"hold two units of a tenant in the same server");
     LOG_WARN("hold two units of a tenant in the same server is not supported", KR(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_status(dst, status))) {
-    LOG_WARN("get server status failed", "server", dst, KR(ret));
-  } else if (!status.can_migrate_in()) {
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(dst, dst_server_info))) {
+    LOG_WARN("get dst_server_info failed", KR(ret), K(dst), K(servers_info));
+  } else if (!dst_server_info.can_migrate_in()) {
     ret = OB_SERVER_MIGRATE_IN_DENIED;
-    LOG_WARN("server can not migrate in", K(dst), K(status), KR(ret));
-  } else if (OB_FAIL(have_enough_resource(status, unit_info.config_.unit_resource(), hard_limit, can_hold_unit, err_index))) {
-      LOG_WARN("calculate_left_resource failed", "status", status, K(hard_limit), K(err_index), KR(ret));
+    LOG_WARN("server can not migrate in", K(dst), K(dst_server_info), KR(ret));
+  } else if (OB_FAIL(get_server_resource_info_via_rpc(dst_server_info, report_dst_server_resource_info))) {
+    LOG_WARN("fail to execute get_server_resource_info_via_rpc", KR(ret), K(dst_server_info));
+  } else if (OB_FAIL(have_enough_resource(
+      report_dst_server_resource_info,
+      unit_info.config_.unit_resource(),
+      hard_limit,
+      can_hold_unit,
+      err_index))) {
+    LOG_WARN("calculate_left_resource failed", KR(ret), K(report_dst_server_resource_info),
+        K(hard_limit), K(err_index));
   } else if (!can_hold_unit) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     LOG_WARN("left resource can't hold unit", "server", dst,
@@ -8691,15 +8918,13 @@ int ObUnitManager::admin_migrate_unit(
 
 int ObUnitManager::cancel_migrate_unit(
     const share::ObUnit &unit,
+    const bool migrate_from_server_can_migrate_in,
     const bool is_gts_unit)
 {
   int ret = OB_SUCCESS;
-  ObServerStatus status;
-  if (OB_FAIL(server_mgr_.get_server_status(unit.migrate_from_server_, status))) {
-    LOG_WARN("get_server_status failed", "server", unit.migrate_from_server_, K(ret));
-  } else if (!status.can_migrate_in() && !is_gts_unit) {
+  if (!migrate_from_server_can_migrate_in && !is_gts_unit) {
     ret = OB_SERVER_MIGRATE_IN_DENIED;
-    LOG_WARN("server can not migrate in", "server", unit.migrate_from_server_, K(status), K(ret));
+    LOG_WARN("server can not migrate in", K(unit.migrate_from_server_), K(migrate_from_server_can_migrate_in), KR(ret));
   } else {
     const EndMigrateOp op = REVERSE;
     if (OB_FAIL(end_migrate_unit(unit.unit_id_, op))) {
@@ -8714,8 +8939,8 @@ int ObUnitManager::cancel_migrate_unit(
 int ObUnitManager::try_cancel_migrate_unit(const share::ObUnit &unit, bool &is_canceled)
 {
   int ret = OB_SUCCESS;
-  ObServerStatus status;
-  bool can_migrate_in = false;
+  bool migrate_from_server_can_migrate_in = false;
+  bool server_can_migrate_in = false;
   is_canceled = false;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
@@ -8723,17 +8948,17 @@ int ObUnitManager::try_cancel_migrate_unit(const share::ObUnit &unit, bool &is_c
   } else if (!unit.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit", K(unit), K(ret));
-  } else if (OB_FAIL(check_can_migrate_in(unit.server_, can_migrate_in))) {
-    LOG_WARN("check_can_migrate_in failed", "server", unit.server_, K(ret));
-  } else if (can_migrate_in) {
+  } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(unit.server_, server_can_migrate_in))) {
+    LOG_WARN("check_server_can_migrate_in failed", "server", unit.server_, K(ret));
+  } else if (server_can_migrate_in) {
     // ignore, do nothing
-  } else if (!unit.migrate_from_server_.is_valid()) {
-    // ignore, do nothing
-  } else if (OB_FAIL(server_mgr_.get_server_status(unit.migrate_from_server_, status))) {
+  } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(
+      unit.migrate_from_server_,
+      migrate_from_server_can_migrate_in))) {
     LOG_WARN("get_server_status failed", "server", unit.migrate_from_server_, K(ret));
-  } else if (status.can_migrate_in()) {
+  } else if (migrate_from_server_can_migrate_in) {
     LOG_INFO("unit migrate_from_server can migrate in, "
-        "migrate unit back to migrate_from_server", K(unit), K(status));
+        "migrate unit back to migrate_from_server", K(unit), K(migrate_from_server_can_migrate_in));
     const EndMigrateOp op = REVERSE;
     if (OB_FAIL(end_migrate_unit(unit.unit_id_, op))) {
       LOG_WARN("end_migrate_unit failed", "unit_id", unit.unit_id_, K(op), K(ret));
@@ -8742,97 +8967,6 @@ int ObUnitManager::try_cancel_migrate_unit(const share::ObUnit &unit, bool &is_c
       LOG_INFO("reverse unit migrate success", K(ret), "unit_id", unit.unit_id_, K(op));
     }
   }
-  return ret;
-}
-
-int ObUnitManager::get_server_loads_internal(const ObZone &zone,
-                                             const bool only_active,
-                                             ObArray<ObServerLoad> &server_loads,
-                                             double &sum_load,
-                                             int64_t &alive_server_count,
-                                             double *weights, int64_t weights_count)
-{
-  int ret = OB_SUCCESS;
-  ObServerManager::ObServerStatusArray server_statuses;
-  // zone can be empty, don't check it
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check inner stat failed", K_(inited), K_(loaded), K(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_statuses(zone, server_statuses))) {
-    LOG_WARN("get_servers_of_zone failed", K(zone), K(ret));
-  } else {
-    alive_server_count = 0;
-    sum_load = 0;
-  }
-
-  ObServerLoad server_load;
-  for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses.count(); ++i) {
-    ObArray<ObUnitLoad> *unit_loads = NULL;
-    ObServerStatus &status = server_statuses.at(i);
-    server_load.reset();
-    if (only_active && !status.is_active()) {
-      // filter not active server
-    } else {
-      if (status.is_active()) {
-        ++alive_server_count;
-      }
-      if (OB_FAIL(get_loads_by_server(status.server_, unit_loads))) {
-        if (OB_ENTRY_NOT_EXIST != ret) {
-          LOG_WARN("get_loads_by_server failed", "server", status.server_, K(ret));
-        } else {
-          ret = OB_SUCCESS;
-          LOG_DEBUG("server is empty, no unit on it", "server", status.server_);
-        }
-      } else if (NULL == unit_loads) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unit_loads is null", KP(unit_loads), K(ret));
-      }
-
-      // unit_loads is null if no unit on it
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(server_load.build(unit_loads, status))) {
-        LOG_WARN("server_load build failed", K(status), K(ret));
-      } else if (OB_FAIL(server_loads.push_back(server_load))) {
-        LOG_WARN("push_back failed", K(ret));
-      } else {}
-    }
-  }  // end for
-  if (OB_SUCC(ret) && server_loads.count() > 0) {
-    if (OB_FAIL(ObResourceUtils::calc_server_resource_weight(server_loads, weights, weights_count))) {
-      LOG_WARN("failed to calc resource weight", K(ret));
-    } else {
-      double load = 0;
-      ARRAY_FOREACH(server_loads, i) {
-        ObServerLoad &server_load = server_loads.at(i);
-        if (OB_FAIL(server_load.get_load(weights, weights_count, load))) {
-          LOG_WARN("get_load_percentage failed", K(ret));
-        } else {
-          sum_load += load;
-        }
-      }  // end for
-    }
-  }
-  return ret;
-}
-
-int ObUnitManager::get_server_loads(const ObZone &zone,
-                                    ObArray<ObServerLoad> &server_loads,
-                                    double *weights, int64_t weights_count)
-{
-  int ret = OB_SUCCESS;
-  double sum_load = 0;
-  int64_t alive_server_count = 0;
-  const bool only_active = false;
-  SpinRLockGuard guard(lock_);
-  // zone can be empty, don't check it
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check inner stat failed", K_(inited), K_(loaded), K(ret));
-  } else if (OB_FAIL(get_server_loads_internal(zone, only_active,
-                                               server_loads, sum_load, alive_server_count, weights, weights_count))) {
-    LOG_WARN("fail to get server loads internal", K(zone), K(only_active), K(ret));
-  }
-
   return ret;
 }
 
@@ -8907,39 +9041,18 @@ int ObUnitManager::check_has_intersect_pg(const share::ObUnit &a,
   return OB_SUCCESS;
 }
 
-int ObUnitManager::check_can_migrate_in(const ObAddr &server, bool &can_migrate_in) const
-{
-  int ret = OB_SUCCESS;
-  ObServerStatus status;
-  can_migrate_in = false;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("check inner stat failed", K_(inited), K_(loaded), K(ret));
-  } else if (!server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(server), K(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_status(server, status))) {
-    LOG_WARN("get_server_status failed", K(server), K(ret));
-  } else {
-    can_migrate_in = status.can_migrate_in();
-  }
-  return ret;
-}
-
 int ObUnitManager::try_migrate_unit(const uint64_t unit_id,
                                     const uint64_t tenant_id,
                                     const ObUnitStat &unit_stat,
                                     const ObIArray<ObUnitStat> &migrating_unit_stat,
                                     const ObAddr &dst,
+                                    const ObServerResourceInfo &dst_resource_info,
                                     const bool is_manual)
 {
   int ret = OB_SUCCESS;
-  ObServerStatus server_status;
   if (unit_id != unit_stat.unit_id_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid unit stat", K(unit_id), K(unit_stat), K(ret));
-  } else if (OB_FAIL(server_mgr_.get_server_status(dst, server_status))) {
-    LOG_WARN("fail get server status", K(dst), K(ret));
   } else {
     int64_t mig_partition_cnt = 0;
     int64_t mig_required_size = 0;
@@ -8952,8 +9065,8 @@ int ObUnitManager::try_migrate_unit(const uint64_t unit_id,
     //    mig_partition_cnt + unit_stat.partition_cnt_ + server_status.resource_info_.partition_cnt_;
     // sstable Space constraints
     int64_t required_size =
-        mig_required_size + unit_stat.required_size_ + server_status.resource_info_.disk_in_use_;
-    int64_t total_size = server_status.resource_info_.disk_total_;
+        mig_required_size + unit_stat.required_size_ + dst_resource_info.disk_in_use_;
+    int64_t total_size = dst_resource_info.disk_total_;
     int64_t required_percent = (100 * required_size) / total_size;
     int64_t limit_percent = GCONF.data_disk_usage_limit_percentage;
 // 4.0 does not restrict OB_MAX_PARTITION_NUM_PER_SERVER
@@ -9028,8 +9141,8 @@ int ObUnitManager::migrate_unit(const uint64_t unit_id, const ObAddr &dst, const
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("migrate not grant unit not valid", K(ret));
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "migrate unit which has not been granted");
-      } else if (OB_FAIL(server_mgr_.get_server_zone(dst, zone))) {
-        LOG_WARN("server_mgr_ get_server_zone failed", K(dst), K(ret));
+      } else if (OB_FAIL(SVR_TRACER.get_server_zone(dst, zone))) {
+        LOG_WARN("get_server_zone failed", KR(ret), K(dst));
       } else if (unit->server_ == dst) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("unit->server same as migrate destination server",
@@ -9182,7 +9295,7 @@ int ObUnitManager::inner_try_delete_migrate_unit_resource(
     LOG_WARN("unit ptr is null", K(ret), KP(unit));
   } else if (!migrate_from_server.is_valid()) {
     LOG_INFO("unit not in migrating, no need to delete src resource", K(unit_id));
-  } else if (OB_FAIL(server_mgr_.check_server_alive(migrate_from_server, is_alive))) {
+  } else if (OB_FAIL(SVR_TRACER.check_server_alive(migrate_from_server, is_alive))) {
     LOG_WARN("fail to check server alive", K(ret), "server", migrate_from_server);
   } else if (!is_alive) {
     LOG_INFO("src server not alive, ignore notify",

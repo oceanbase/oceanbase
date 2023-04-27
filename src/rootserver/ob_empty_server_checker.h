@@ -38,7 +38,7 @@ namespace rootserver
 {
 class ObServerManager;
 class ObUnitManager;
-
+class ObServerZoneOpService;
 /// Empty server checker thread.
 class ObEmptyServerChecker : public ObRsReentrantThread
 {
@@ -50,7 +50,8 @@ public:
                           server_mgr_(NULL),
                           unit_mgr_(NULL),
                           lst_operator_(NULL),
-                          schema_service_(NULL) {};
+                          schema_service_(NULL),
+                          server_zone_op_service_(NULL) {};
   virtual ~ObEmptyServerChecker() {};
 
   virtual void run3() override;
@@ -59,7 +60,8 @@ public:
   int init(ObServerManager &server_mgr,
       ObUnitManager &unit_mgr,
       share::ObLSTableOperator &lst_operator,
-      share::schema::ObMultiVersionSchemaService &schema_service);
+      share::schema::ObMultiVersionSchemaService &schema_service,
+      ObServerZoneOpService &server_zone_op_service);
 
   virtual void wakeup();
   virtual void stop();
@@ -79,6 +81,7 @@ private:
   ObUnitManager *unit_mgr_;
   share::ObLSTableOperator *lst_operator_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
+  ObServerZoneOpService *server_zone_op_service_;
 
   DISALLOW_COPY_AND_ASSIGN(ObEmptyServerChecker);
 };

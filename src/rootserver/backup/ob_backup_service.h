@@ -35,7 +35,7 @@ class ObBackupService : public ObRsReentrantThread
 public:
   ObBackupService();
   virtual ~ObBackupService() {};
-  int init(ObServerManager &server_mgr, common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+  int init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service, ObBackupLeaseService &lease_service,
       ObBackupTaskScheduler &task_scheduler);
   virtual void run3() override;

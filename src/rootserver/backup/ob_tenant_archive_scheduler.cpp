@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX ARCHIVE
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_unit_manager.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -385,7 +384,7 @@ static int round_checkpoint_cb(
  */
 ObArchiveHandler::ObArchiveHandler()
   : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID),
-    server_mgr_(nullptr), zone_mgr_(nullptr), unit_mgr_(nullptr), rpc_proxy_(nullptr),
+    zone_mgr_(nullptr), unit_mgr_(nullptr), rpc_proxy_(nullptr),
     sql_proxy_(nullptr), schema_service_(nullptr), round_handler_(),
     archive_table_op_()
 {
@@ -394,7 +393,6 @@ ObArchiveHandler::ObArchiveHandler()
 
 int ObArchiveHandler::init(
     const uint64_t tenant_id,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     ObUnitManager &unit_manager,
     share::schema::ObMultiVersionSchemaService *schema_service,
@@ -415,7 +413,6 @@ int ObArchiveHandler::init(
     LOG_WARN("failed to init archive round", K(ret), K(tenant_id));
   } else {
     tenant_id_ = tenant_id;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     unit_mgr_ = &unit_manager;
     schema_service_ = schema_service;

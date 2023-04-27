@@ -17,8 +17,8 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/container/ob_se_array_iterator.h"
 #include "ob_unit_manager.h"
-#include "ob_server_manager.h"
 #include "ob_zone_manager.h"
+#include "share/ob_all_server_tracer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -272,35 +272,39 @@ int DRLSInfo::fill_servers()
 {
   int ret = OB_SUCCESS;
   common::ObZone zone;
-  ObServerManager::ObServerStatusArray server_status_array;
-  if (OB_UNLIKELY(nullptr == server_mgr_)) {
+  ObArray<ObServerInfoInTable> servers_info;
+  if (OB_FAIL(SVR_TRACER.get_servers_info(zone, servers_info))) {
+    LOG_WARN("fail to get all servers_info", KR(ret));
+  } else if (OB_ISNULL(zone_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server mgr ptr is null", KR(ret), KP(server_mgr_));
-  } else if (OB_FAIL(server_mgr_->get_server_statuses(zone, server_status_array))) {
-    LOG_WARN("fail to get all server status", KR(ret));
+    LOG_WARN("zone_mgr_ is null", KR(ret), KP(zone_mgr_));
   } else {
     server_stat_info_map_.reuse();
-    FOREACH_X(s, server_status_array, OB_SUCC(ret)) {
+    FOREACH_X(s, servers_info, OB_SUCC(ret)) {
       ServerStatInfoMap::Item *item = nullptr;
       bool zone_active = false;
-      if (OB_UNLIKELY(nullptr == s)) {
+      if (OB_ISNULL(s)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("server ptr is null", KR(ret));
-      } else if (OB_FAIL(zone_mgr_->check_zone_active(s->zone_, zone_active))) {
-        LOG_WARN("fail to check zone active", KR(ret), "zone", s->zone_);
-      } else if (OB_FAIL(server_stat_info_map_.locate(s->server_, item))) {
-        LOG_WARN("fail to locate server status", KR(ret), "server", s->server_);
-      } else if (OB_UNLIKELY(nullptr == item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("item ptr is null", KR(ret), "server", s->server_);
-      } else if (OB_FAIL(item->v_.init(
-              s->server_,
-              s->is_alive(),
-              s->is_active(),
-              s->is_permanent_offline(),
-              s->is_migrate_in_blocked(),
-              (s->is_stopped() || !zone_active)))) {
-        LOG_WARN("fail to init server item", KR(ret));
+      } else {
+        const ObAddr &server = s->get_server();
+        const ObZone &zone = s->get_zone();
+        if (OB_FAIL(zone_mgr_->check_zone_active(zone, zone_active))) {
+          LOG_WARN("fail to check zone active", KR(ret), "zone", zone);
+        } else if (OB_FAIL(server_stat_info_map_.locate(server, item))) {
+          LOG_WARN("fail to locate server status", KR(ret), "server", server);
+        } else if (OB_UNLIKELY(nullptr == item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("item ptr is null", KR(ret), "server", server);
+        } else if (OB_FAIL(item->v_.init(
+                server,
+                s->is_alive(),
+                s->is_active(),
+                s->is_permanent_offline(),
+                s->is_migrate_in_blocked(),
+                (s->is_stopped() || !zone_active)))) {
+          LOG_WARN("fail to init server item", KR(ret));
+        }
       }
     }
   }

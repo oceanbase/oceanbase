@@ -1014,35 +1014,35 @@ int ObMultiVersionGarbageCollector::monitor_(const ObArray<ObAddr> &snapshot_ser
   int ret = OB_SUCCESS;
   ObArray<ObAddr> lost_servers;
 
-  if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_status(
+  if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(
                 [&snapshot_servers,
-                 &lost_servers](const share::ObServerStatus &status) -> int {
+                 &lost_servers](const share::ObServerInfoInTable &server_info) -> int {
                   int ret = OB_SUCCESS;
                   bool found = false;
 
-                  // find servers that recorded in the server manger while has
+                  // find servers that recorded in __all_server table while has
                   // not reported its timestamp.
                   for (int64_t i = 0; !found && i < snapshot_servers.count(); ++i) {
-                    if (status.server_ == snapshot_servers[i]) {
+                    if (server_info.get_server() == snapshot_servers[i]) {
                       found = true;
                     }
                   }
 
                   if (!found) {// not found in __all_reserved_snapshot inner table
-                    if (OB_FAIL(lost_servers.push_back(status.server_))) {
+                    if (OB_FAIL(lost_servers.push_back(server_info.get_server()))) {
                       MVCC_LOG(WARN, "lost servers push back failed", K(ret));
-                    } else if (!status.is_valid()) {
-                      MVCC_LOG(ERROR, "invalid status", K(ret), K(status));
+                    } else if (!server_info.is_valid()) {
+                      MVCC_LOG(ERROR, "invalid server info", K(ret), K(server_info));
                       // if not in service, we ignore it and report the warning
-                    } else if (!status.in_service() || status.is_stopped()) {
-                      MVCC_LOG(WARN, "server is not alive, we will remove soon", K(ret), K(status));
+                    } else if (!server_info.in_service() || server_info.is_stopped()) {
+                      MVCC_LOG(WARN, "server is not alive, we will remove soon", K(ret), K(server_info));
                       // if not alive, we ignore it and report the warning
-                    } else if (!status.is_alive()) {
-                      MVCC_LOG(WARN, "server is not alive, please pay attention", K(ret), K(status));
+                    } else if (!server_info.is_alive()) {
+                      MVCC_LOG(WARN, "server is not alive, please pay attention", K(ret), K(server_info));
                     } else {
                       // may be lost or do not contain the tenant
                       // TODO(handora.qc): make it better and more clear
-                      MVCC_LOG(INFO, "server is alive when mointor", K(ret), K(status));
+                      MVCC_LOG(INFO, "server is alive when mointor", K(ret), K(server_info));
                     }
                   }
 

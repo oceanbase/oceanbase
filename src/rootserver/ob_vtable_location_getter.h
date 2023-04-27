@@ -24,14 +24,12 @@ namespace oceanbase
 {
 namespace rootserver
 {
-class ObServerManager;
 class ObUnitManager;
 
 class ObVTableLocationGetter
 {
 public:
-  ObVTableLocationGetter(ObServerManager &server_mgr,
-                         ObUnitManager &unit_mgr);
+  ObVTableLocationGetter(ObUnitManager &unit_mgr);
   virtual ~ObVTableLocationGetter();
   int get(const share::ObVtableLocationType &vtable_type,
           common::ObSArray<common::ObAddr> &servers);
@@ -44,7 +42,6 @@ private:
   int get_tenant_vtable_location_(const share::ObVtableLocationType &vtable_type,
                                   common::ObSArray<common::ObAddr> &servers);
 
-  ObServerManager &server_mgr_;
   ObUnitManager &unit_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObVTableLocationGetter);

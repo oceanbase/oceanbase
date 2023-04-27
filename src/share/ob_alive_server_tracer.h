@@ -61,8 +61,7 @@ public:
   virtual int is_alive(const common::ObAddr &addr, bool &alive, int64_t &trace_time) const;
   virtual int get_server_status(const common::ObAddr &addr, bool &alive,
                                 bool &is_server_exist, int64_t &trace_time) const;
-  virtual int refresh(common::ObIArray<common::ObAddr> &active_server_list,
-                      common::ObIArray<common::ObAddr> &inactive_server_list);
+  virtual int refresh();
   virtual int get_active_server_list(common::ObIArray<common::ObAddr> &addrs) const;
 
 private:

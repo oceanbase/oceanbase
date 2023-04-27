@@ -129,6 +129,7 @@ namespace rootserver
   class ObRestoreService;
   class ObRecoveryLSService;
   class ObArbitrationService;
+  class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
 }
 namespace observer
@@ -245,7 +246,8 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
       ObTestModule*,                                 \
-      oceanbase::common::sqlclient::ObTenantOciEnvs* \
+      oceanbase::common::sqlclient::ObTenantOciEnvs*, \
+      rootserver::ObHeartbeatService*                \
   )
 
 

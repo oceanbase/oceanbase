@@ -181,6 +181,14 @@ public:
   ////////////////////////////////////////////////////////////////
   // ObRpcBootstrapP @RS bootstrap
   int bootstrap(const obrpc::ObBootstrapArg &arg);
+  // ObRpcCheckServerForAddingServerP @RS add server
+  int check_server_for_adding_server(
+      const obrpc::ObCheckServerForAddingServerArg &arg,
+      obrpc::ObCheckServerForAddingServerResult &result);
+  // ObRpcGetServerStatusP @RS
+  int get_server_resource_info(const obrpc::ObGetServerResourceInfoArg &arg, obrpc::ObGetServerResourceInfoResult &result);
+  int get_server_resource_info(share::ObServerResourceInfo &resource_info);
+  static int get_build_version(share::ObServerInfoInTable::ObBuildVersion &build_version);
   // ObRpcIsEmptyServerP @RS bootstrap
   int is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   // ObRpcCheckDeploymentModeP
@@ -209,8 +217,6 @@ public:
   int sync_partition_table(const obrpc::Int64 &arg);
   // ObRpcSetTPP @RS::admin to set tracepoint
   int set_tracepoint(const obrpc::ObAdminSetTPArg &arg);
-  // for ObPartitionService::check_mc_allowed_by_server_lease
-  int get_server_heartbeat_expire_time(int64_t &lease_expire_time);
   int cancel_sys_task(const share::ObTaskId &task_id);
   int refresh_memory_stat();
   int wash_memory_fragmentation();
@@ -231,6 +237,9 @@ public:
   int init_tenant_config(
       const obrpc::ObInitTenantConfigArg &arg,
       obrpc::ObInitTenantConfigRes &result);
+  int handle_heartbeat(
+      const share::ObHBRequest &hb_request,
+      share::ObHBResponse &hb_response);
 private:
   int get_role_from_palf_(
       logservice::ObLogService &log_service,

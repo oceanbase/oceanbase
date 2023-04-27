@@ -15,7 +15,6 @@
 
 #include "ob_backup_struct.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "rootserver/ob_server_manager.h"
 #include "share/backup/ob_backup_store.h"
 namespace oceanbase
 {

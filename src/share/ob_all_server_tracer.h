@@ -35,19 +35,45 @@ public:
   virtual int check_in_service(const common::ObAddr &addr, bool &service_started) const;
   virtual int check_migrate_in_blocked(const common::ObAddr &addr, bool &is_block) const;
   virtual int check_server_permanent_offline(const common::ObAddr &server, bool &is_offline) const;
+  virtual int check_server_active(const common::ObAddr &server, bool &is_active) const;
+  virtual int check_server_can_migrate_in(const common::ObAddr &server, bool &can_migrate_in) const;
   virtual int is_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
+  virtual int get_server_zone(const common::ObAddr &server, common::ObZone &zone) const;
+  virtual int get_servers_of_zone(
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &servers) const;
+  virtual int get_servers_of_zone(
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &servers,
+      common::ObIArray<uint64_t> &server_id_list) const;
+  virtual int get_server_info(const common::ObAddr &server, ObServerInfoInTable &server_info) const;
+  virtual int get_servers_info(
+      const common::ObZone &zone,
+      common::ObIArray<ObServerInfoInTable> &servers_info,
+      bool include_permanent_offline) const;
+  virtual int get_active_servers_info(
+      const common::ObZone &zone,
+      common::ObIArray<ObServerInfoInTable> &active_servers_info) const;
+  virtual int get_alive_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
+  virtual int get_alive_servers_count(const common::ObZone &zone, int64_t &count) const;
+  virtual int get_servers_by_status(
+      const ObZone &zone,
+      common::ObIArray<common::ObAddr> &alive_server_list,
+      common::ObIArray<common::ObAddr> &not_alive_server_list) const;
+  virtual int get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH]);
+  bool has_build() const {return has_build_; };
   int refresh();
-  int for_each_server_status(const ObFunction<int(const ObServerStatus &status)> &functor);
+  int for_each_server_info(const ObFunction<int(const ObServerInfoInTable &server_info)> &functor);
 
 private:
-  int find_server_status(const ObAddr &addr, ObServerStatus &status) const;
+  int find_server_info(const ObAddr &addr, ObServerInfoInTable &server_info) const;
 
 private:
   static const int64_t DEFAULT_SERVER_COUNT = 2048;
   bool is_inited_;
+  bool has_build_;
   mutable common::SpinRWLock lock_;
-  common::ObArray<ObServerStatus> server_status_arr_;
-  ObServerTableOperator server_table_operator_;
+  common::ObArray<ObServerInfoInTable> server_info_arr_;
 };
 
 class ObServerTraceTask : public common::ObTimerTask
@@ -69,13 +95,44 @@ class ObAllServerTracer : public share::ObIServerTrace
 public:
   static ObAllServerTracer &get_instance();
   int init(int tg_id, ObServerTraceTask &trace_task);
-  int for_each_server_status(const ObFunction<int(const ObServerStatus &status)> &functor);
+  int for_each_server_info(const ObFunction<int(const ObServerInfoInTable &server_info)> &functor);
   virtual int is_server_exist(const common::ObAddr &server, bool &exist) const;
   virtual int check_server_alive(const common::ObAddr &server, bool &is_alive) const;
   virtual int check_in_service(const common::ObAddr &addr, bool &service_started) const;
   virtual int check_server_permanent_offline(const common::ObAddr &server, bool &is_offline) const;
   virtual int is_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
   virtual int check_migrate_in_blocked(const common::ObAddr &addr, bool &is_block) const;
+  virtual int get_server_zone(const common::ObAddr &server, common::ObZone &zone) const;
+  // empty zone means that get all servers
+  virtual int get_servers_of_zone(
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &servers) const;
+  // empty zone means that get all servers
+  virtual int get_servers_of_zone(
+      const common::ObZone &zone,
+      common::ObIArray<common::ObAddr> &servers,
+      common::ObIArray<uint64_t> &server_id_list) const;
+  virtual int get_server_info(
+      const common::ObAddr &server,
+      ObServerInfoInTable &server_info) const;
+  virtual int get_servers_info(
+      const common::ObZone &zone,
+      common::ObIArray<ObServerInfoInTable> &servers_info,
+      bool include_permanent_offline = true) const;
+  virtual int get_active_servers_info(
+      const common::ObZone &zone,
+      common::ObIArray<ObServerInfoInTable> &active_servers_info) const;
+  virtual int get_alive_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
+  virtual int check_server_active(const common::ObAddr &server, bool &is_active) const;
+  virtual int refresh();
+  virtual int check_server_can_migrate_in(const common::ObAddr &server, bool &can_migrate_in) const;
+  virtual int get_alive_servers_count(const common::ObZone &zone, int64_t &count) const;
+  virtual int get_servers_by_status(
+      const ObZone &zone,
+      common::ObIArray<common::ObAddr> &alive_server_list,
+      common::ObIArray<common::ObAddr> &not_alive_server_list) const;
+  virtual int get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH]);
+  bool has_build() const;
 private:
   ObAllServerTracer();
   virtual ~ObAllServerTracer();
@@ -86,5 +143,7 @@ private:
 
 }  // end namespace share
 }  // end namespace oceanbase
+
+#define SVR_TRACER (::oceanbase::share::ObAllServerTracer::get_instance())
 
 #endif  // OCEANBASE_SHARE_OB_ALL_SERVER_TRACER_H_

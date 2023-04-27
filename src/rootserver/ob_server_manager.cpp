@@ -30,6 +30,7 @@
 #include "observer/ob_server.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ob_file_system_router.h"
+#include "rootserver/ob_heartbeat_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -159,15 +160,19 @@ int ObServerManager::add_server(const common::ObAddr &server, const ObZone &zone
   if (OB_SUCC(ret)) {
     ROOTSERVICE_EVENT_ADD("server", "add_server", K(server));
     LOG_INFO("add new server", K(server), K(zone));
-    int tmp = server_change_callback_->on_server_change();
-    if (OB_SUCCESS != tmp) {
-      LOG_WARN("fail to callback on server change", K(ret));
+    int tmp_ret = server_change_callback_->on_server_change();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to callback on server change", KR(ret), K(tmp_ret));
     } else {
       LOG_WARN("callback on add server success");
+    }
+    if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+      LOG_WARN("fail to refresh all server tracer", KR(ret), KR(tmp_ret));
     }
   }
   return ret;
 }
+
 
 int ObServerManager::try_delete_server_working_dir(
     const common::ObZone &zone,
@@ -175,90 +180,27 @@ int ObServerManager::try_delete_server_working_dir(
     const int64_t svr_seq)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    // not shared storage, no need to delete server working dir, only to clean disk usage table.
-    ObDiskUsageTableOperator disk_usage_table_operator;
-    ObSEArray<uint64_t, 16> tenant_ids;
-    char ip_str[MAX_IP_ADDR_LENGTH] = { '\0' };
+  // not shared storage, no need to delete server working dir, only to clean disk usage table.
+  ObDiskUsageTableOperator disk_usage_table_operator;
+  ObSEArray<uint64_t, 16> tenant_ids;
+  char ip_str[MAX_IP_ADDR_LENGTH] = { '\0' };
 
-    if (OB_FAIL(disk_usage_table_operator.init(OBSERVER.get_mysql_proxy()))) {
-      LOG_WARN("fail to init disk usage table operator", K(ret));
-    } else if (OB_UNLIKELY(!server.ip_to_string(ip_str, MAX_IP_ADDR_LENGTH))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get server ip cstring", K(ret), K(server), K(svr_seq));
-    } else if (OB_FAIL(disk_usage_table_operator.get_all_tenant_ids(ip_str,
-        server.get_port(), svr_seq, tenant_ids))) {
-      LOG_WARN("fail to get all tenant ids", K(ret), K(server), K(svr_seq));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
-        const uint64_t tenant_id = tenant_ids.at(i);
-        if (OB_FAIL(disk_usage_table_operator.delete_tenant_all(tenant_id,
-                                                                ip_str,
-                                                                server.get_port(),
-                                                                svr_seq))) {
-          STORAGE_LOG(WARN, "failed to delete tenant all", K(ret), K(tenant_id), K(server));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::finish_server_recovery(
-    const common::ObAddr &server)
-{
-  int ret = OB_SUCCESS;
-  // avoid maintain operation run concurrently
-  SpinWLockGuard guard(maintaince_lock_);
-  ObServerStatus *server_status = nullptr;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(server));
+  if (OB_FAIL(disk_usage_table_operator.init(OBSERVER.get_mysql_proxy()))) {
+    LOG_WARN("fail to init disk usage table operator", K(ret));
+  } else if (OB_UNLIKELY(!server.ip_to_string(ip_str, MAX_IP_ADDR_LENGTH))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get server ip cstring", K(ret), K(server), K(svr_seq));
+  } else if (OB_FAIL(disk_usage_table_operator.get_all_tenant_ids(ip_str,
+      server.get_port(), svr_seq, tenant_ids))) {
+    LOG_WARN("fail to get all tenant ids", K(ret), K(server), K(svr_seq));
   } else {
-    {
-      SpinRLockGuard guard(server_status_rwlock_);
-      if (OB_FAIL(find(server, server_status))) {
-        LOG_WARN("fail to find server status", K(ret), K(server));
-      } else if (nullptr == server_status) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("server status is null", K(ret), K(server));
-      } else if (ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS != server_status->admin_status_) {
-        ret = OB_STATE_NOT_MATCH;
-        LOG_WARN("server admin status not match", K(ret),
-                 "admin_status", server_status->admin_status_);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      common::ObMySQLTransaction trans;
-      if (OB_FAIL(trans.start(&st_operator_.get_proxy(), OB_SYS_TENANT_ID))) {
-        LOG_WARN("fail to start trans", K(ret));
-      } else if (OB_FAIL(st_operator_.remove(server, trans))) {
-        LOG_WARN("fail to remove", K(ret), K(server));
-      } else if (OB_FAIL(update_admin_status(
-              server, server_status->admin_status_, true/* remove */))) {
-        LOG_WARN("fail to update admin status", K(ret));
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("fail to end trans", K(tmp_ret));
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        // delete associated records from __all_clog_history_info_v2 about this server
-        LOG_INFO("finish server recovery", K(server));
-        if (OB_SUCCESS != server_change_callback_->on_server_change()) {
-          LOG_WARN("fail to callback on server change", K(server));
-        } else {
-          LOG_INFO("callback on server change succeed", K(server));
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      if (OB_FAIL(disk_usage_table_operator.delete_tenant_all(tenant_id,
+                                                              ip_str,
+                                                              server.get_port(),
+                                                              svr_seq))) {
+        STORAGE_LOG(WARN, "failed to delete tenant all", K(ret), K(tenant_id), K(server));
       }
     }
   }
@@ -339,6 +281,9 @@ int ObServerManager::delete_server(const ObIArray<ObAddr> &servers, const ObZone
       if (OB_SUCCESS != (tmp_ret = trans.end(commit))) {
          LOG_WARN("trans end failed", K(tmp_ret), K(commit));
          ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+      if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+        LOG_WARN("fail to refresh all server tracer", KR(ret), KR(tmp_ret));
       }
     }
   }
@@ -448,11 +393,14 @@ int ObServerManager::end_delete_server(const ObAddr &server, const ObZone &zone,
         ROOTSERVICE_EVENT_ADD("server", "cancel_delete_server", K(server));
       }
       LOG_INFO("end delete server", K(server), K(commit));
-      int tmp = server_change_callback_->on_server_change();
-      if (OB_SUCCESS != tmp) {
-        LOG_WARN("fail to callback on server change", K(ret));
+      int tmp_ret = server_change_callback_->on_server_change();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to callback on server change", KR(ret), KR(tmp_ret));
       } else {
         LOG_WARN("callback on server change success", K(server));
+      }
+      if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+        LOG_WARN("fail to refresh all server tracer", KR(ret), KR(tmp_ret));
       }
     }
   }
@@ -476,73 +424,6 @@ int ObServerManager::get_server_id(
       LOG_WARN("get_server_status failed", KR(ret), K(server));
     } else {
       server_id = server_status.id_;
-    }
-  }
-  return ret;
-}
-
-// only add to memory and only used by bootstrap
-int ObServerManager::add_server_list(const ObServerInfoList &server_list, uint64_t &server_id)
-{
-  int ret = OB_SUCCESS;
-  SpinWLockGuard guard(server_status_rwlock_);
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (server_list.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("server_list is empty", K(server_list), K(ret));
-  } else {
-    const int64_t now = ObTimeUtility::current_time();
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
-      server_id = OB_INIT_SERVER_ID;
-      ObServerStatus *server_status = NULL;
-      if (OB_SUCC(find(server_list.at(i).server_, server_status))) {
-        if (NULL == server_status) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("server_status is null", "server_status ptr", OB_P(server_status), K(ret));
-        } else if (server_status->id_ > server_id) {
-          server_id = server_status->id_;
-        }
-      } else if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("find failed", "server", server_list.at(i).server_, K(ret));
-      } else {
-        ret = OB_SUCCESS;
-        bool server_id_used = false;
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(check_server_id_used(server_id, server_id_used))) {
-            LOG_WARN("check server_id_used failed", K(server_id), K(ret));
-          } else if (server_id_used) {
-            ++server_id;
-          } else {
-            break;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          ObServerStatus new_server_status;
-          new_server_status.id_ = server_id;
-          new_server_status.server_ = server_list.at(i).server_;
-          new_server_status.zone_ = server_list.at(i).zone_;
-          new_server_status.admin_status_ = ObServerStatus::OB_SERVER_ADMIN_NORMAL;
-          new_server_status.hb_status_ = ObServerStatus::OB_HEARTBEAT_LEASE_EXPIRED;
-          new_server_status.lease_expire_time_ = now + ObLeaseRequest::SERVICE_LEASE;
-          new_server_status.last_hb_time_ = now - config_->lease_time;
-          new_server_status.with_partition_ = true;
-          if (OB_FAIL(server_statuses_.push_back(new_server_status))) {
-            BOOTSTRAP_LOG(WARN, "fail to push back server status", K(ret), K(new_server_status));
-          } else {
-            BOOTSTRAP_LOG(INFO, "add server list success", K(new_server_status));
-            ROOTSERVICE_EVENT_ADD("server", "add_server",
-                                  "server", new_server_status.server_);
-            int tmp = server_change_callback_->on_server_change();
-            if (OB_SUCCESS != tmp) {
-              LOG_WARN("fail to callback on server change", K(ret));
-            } else {
-              LOG_WARN("callback on add server success");
-            }
-          }
-        }
-      }
     }
   }
   return ret;
@@ -658,30 +539,6 @@ int ObServerManager::is_server_stopped(const ObAddr &server, bool &is_stopped) c
   return ret;
 }
 
-int ObServerManager::get_server_leader_cnt(const ObAddr &server, int64_t &leader_cnt) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not init", K(ret));
-  } else if (!server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(server));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    const ObServerStatus *status_ptr = NULL;
-    if (OB_FAIL(find(server, status_ptr))) {
-      LOG_WARN("find failed", K(ret), K(server));
-    } else if (NULL == status_ptr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("status ptr is null", K(ret), KP(status_ptr));
-    } else {
-      leader_cnt = status_ptr->leader_cnt_;
-    }
-  }
-  return ret;
-}
-
 int ObServerManager::stop_server(const ObAddr &server, const ObZone &zone)
 {
   int ret = OB_SUCCESS;
@@ -747,75 +604,12 @@ int ObServerManager::start_or_stop_server(const ObAddr &server, const ObZone &zo
       SpinWLockGuard guard(server_status_rwlock_);
       server_status->stop_time_ = stop_time;
     }
-  }
-
-  return ret;
-}
-
-int ObServerManager::expend_server_lease(
-    const common::ObAddr &server,
-    const int64_t new_lease_end)
-{
-  int ret = OB_SUCCESS;
-  SpinWLockGuard guard(server_status_rwlock_);
-  ObServerStatus *status_ptr = NULL;
-  if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(server));
-  } else if (OB_FAIL(find(server, status_ptr))) {
-    LOG_WARN("fail to find server", K(ret));
-  } else if (OB_UNLIKELY(NULL == status_ptr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("status ptr is null", K(ret), K(server));
-  } else if (status_ptr->lease_expire_time_ <= new_lease_end) {
-    status_ptr->lease_expire_time_ = new_lease_end;
-  } else {} // no need to update lease_expire_time
-  return ret;
-}
-
-void ObServerManager::clear_in_recovery_server_takenover_by_rs(
-     const common::ObAddr &server)
-{
-  SpinWLockGuard guard(server_status_rwlock_);
-  ObServerStatus *status_ptr = NULL;
-  int tmp_ret = find(server, status_ptr);
-  if (OB_SUCCESS == tmp_ret) {
-    status_ptr->in_recovery_for_takenover_by_rs_ = false;;
-  } else if (OB_ENTRY_NOT_EXIST != tmp_ret) {
-    LOG_WARN_RET(tmp_ret, "find failed", K(server), K(tmp_ret));
-  } else {
-    LOG_WARN_RET(tmp_ret, "fail to find server", K(server), K(tmp_ret));
-  }
-}
-
-int ObServerManager::try_modify_recovery_server_takenover_by_rs(
-    const common::ObAddr &server,
-    const common::ObZone &zone)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(server));
-  } else {
-    SpinWLockGuard guard(server_status_rwlock_);
-    ObServerStatus *status_ptr = nullptr;
-    if (OB_FAIL(find(server, status_ptr))) {
-      LOG_WARN("fail to find server status", K(ret), K(server));
-    } else if (nullptr == status_ptr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("status ptr is null", K(ret), KP(status_ptr));
-    } else {
-      status_ptr->hb_status_ = ObServerStatus::OB_HEARTBEAT_ALIVE;
-      status_ptr->last_hb_time_ = common::ObTimeUtility::current_time();
-      status_ptr->admin_status_ = share::ObServerStatus::OB_SERVER_ADMIN_NORMAL;
-      if (OB_FAIL(status_change_callback_->on_server_status_change(server))) {
-        LOG_WARN("fail to submit server status change task", K(ret), K(server));
-      }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+      LOG_WARN("fail to refresh all server tracer", KR(ret), KR(tmp_ret));
     }
   }
+
   return ret;
 }
 
@@ -862,53 +656,105 @@ int ObServerManager::receive_hb(
     } else if (NULL == status_ptr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("status_ptr is null", "status_ptr", OB_P(status_ptr), K(ret));
-    } else if (ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS == status_ptr->admin_status_) {
-      ret = OB_STATE_NOT_MATCH;
-      LOG_WARN("server taken over by rs, state not match", K(ret), "server_status", *status_ptr);
-    } else if (!status_ptr->zone_.is_empty() && status_ptr->zone_ != lease_request.zone_) {
-      ret = OB_SERVER_ZONE_NOT_MATCH;
-      LOG_WARN("server zone not match", "zone", status_ptr->zone_,
-               "lease zone", lease_request.zone_, K(ret));
-    } else {
-      // if force_stop_hb is true then won't extend server's last_hb_time_
-      const int64_t now = status_ptr->force_stop_hb_ ?
-        status_ptr->last_hb_time_ : ::oceanbase::common::ObTimeUtility::current_time();
-      ObServerStatus::HeartBeatStatus old_hb_status = status_ptr->hb_status_;
+    } else if (ObHeartbeatService::is_service_enabled()) { // the new logic
+      if (status_ptr->resource_info_ != lease_request.resource_info_) {
+        LOG_INFO("server resource changed", "old_resource_info", status_ptr->resource_info_,
+            "new_resource_info", lease_request.resource_info_);
+        status_ptr->resource_info_ = lease_request.resource_info_;
+      }
+      status_ptr->last_hb_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       server_id = status_ptr->id_;
-      if (status_ptr->with_rootserver_ != with_rootserver) {
-        LOG_INFO("server change with_rootserver", "old with_rootserver",
-            status_ptr->with_rootserver_, "new with_rootserver", with_rootserver);
-        if (with_rootserver) {
-          if (OB_FAIL(reset_existing_rootserver())) {
-            LOG_WARN("reset_existing_rootserver failed", K(ret));
+    } else {
+      if (!status_ptr->zone_.is_empty() && status_ptr->zone_ != lease_request.zone_) {
+        ret = OB_SERVER_ZONE_NOT_MATCH;
+        LOG_WARN("server zone not match", "zone", status_ptr->zone_,
+                "lease zone", lease_request.zone_, K(ret));
+      } else {
+        // if force_stop_hb is true then won't extend server's last_hb_time_
+        const int64_t now = status_ptr->force_stop_hb_ ?
+          status_ptr->last_hb_time_ : ::oceanbase::common::ObTimeUtility::current_time();
+        ObServerStatus::HeartBeatStatus old_hb_status = status_ptr->hb_status_;
+        server_id = status_ptr->id_;
+        if (status_ptr->with_rootserver_ != with_rootserver) {
+          LOG_INFO("server change with_rootserver", "old with_rootserver",
+              status_ptr->with_rootserver_, "new with_rootserver", with_rootserver);
+          if (with_rootserver) {
+            if (OB_FAIL(reset_existing_rootserver())) {
+              LOG_WARN("reset_existing_rootserver failed", K(ret));
+            }
           }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(lease_request),
-              K(now), K(with_rootserver), K(ret));
-        } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
-          LOG_WARN("commit server change with_rootserver task failed", "server",
-              status_ptr->server_, K(ret));
-        }
-      } else if (ObServerStatus::OB_HEARTBEAT_ALIVE != status_ptr->hb_status_
-                 && !status_ptr->force_stop_hb_) {
-        const char *hb_status_str = NULL;
-        // for logging, ignore result and do not check NULL string.
-        int tmp_ret = ObServerStatus::heartbeat_status_str(
-            status_ptr->hb_status_, hb_status_str);
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("heartbeat status to string failed", K(tmp_ret),
-              "hb_status", status_ptr->hb_status_);
-        } else {
-          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-            LOG_WARN("set server status failed", K(lease_request), K(now), K(with_rootserver), K(ret));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(lease_request),
+                K(now), K(with_rootserver), K(ret));
+          } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
+            LOG_WARN("commit server change with_rootserver task failed", "server",
+                status_ptr->server_, K(ret));
+          }
+        } else if (ObServerStatus::OB_HEARTBEAT_ALIVE != status_ptr->hb_status_
+                  && !status_ptr->force_stop_hb_) {
+          const char *hb_status_str = NULL;
+          // for logging, ignore result and do not check NULL string.
+          int tmp_ret = ObServerStatus::heartbeat_status_str(
+              status_ptr->hb_status_, hb_status_str);
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("heartbeat status to string failed", K(tmp_ret),
+                "hb_status", status_ptr->hb_status_);
           } else {
-            LOG_INFO("server alive again", "server", status_ptr->server_,
-                     "last hb status", hb_status_str,
-                     "last hb time", status_ptr->last_hb_time_);
-            status_ptr->register_time_ = now;
-            //commit server online task
+            if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+              LOG_WARN("set server status failed", K(lease_request), K(now), K(with_rootserver), K(ret));
+            } else {
+              LOG_INFO("server alive again", "server", status_ptr->server_,
+                      "last hb status", hb_status_str,
+                      "last hb time", status_ptr->last_hb_time_);
+              status_ptr->register_time_ = now;
+              //commit server online task
+              // ignore wakeup balancer and wakeup daily merger failed
+              int temp_ret = OB_SUCCESS;
+              if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_balancer())) {
+                LOG_WARN("wakeup_balancer failed", K(temp_ret));
+              } else if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_daily_merger())) {
+                LOG_WARN("wakeup_daily_merger failed", K(temp_ret));
+              }
+              if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
+                LOG_WARN("commit new server online task failed", "server",
+                         status_ptr->server_, K(ret));
+              } else {
+              ROOTSERVICE_EVENT_ADD("server", "online", "server", status_ptr->server_);
+              }
+            }
+          }
+        } else if (0 != MEMCMP(status_ptr->build_version_, lease_request.build_version_,
+            OB_SERVER_VERSION_LENGTH)) {
+          LOG_INFO("server change build_version", "old svn version", status_ptr->build_version_,
+              "new svn version", lease_request.build_version_);
+          //commit server svn version change
+          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(lease_request),
+                K(now), K(with_rootserver), K(ret));
+          } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
+            LOG_WARN("commit server change build_version task failed", "server",
+                status_ptr->server_, K(ret));
+          }
+        } else if (status_ptr->ssl_key_expired_time_ != lease_request.ssl_key_expired_time_) {
+          LOG_INFO("server ssl_key_expired_time changed", "old ssl_key_expired_time", status_ptr->ssl_key_expired_time_,
+              "new ssl_key_expired_time", lease_request.ssl_key_expired_time_);
+          //commit server svn version change
+          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(lease_request),
+                K(now), K(with_rootserver), K(ret));
+          } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
+            LOG_WARN("commit server change build_version task failed", "server",
+                status_ptr->server_, K(ret));
+          }
+        } else if (status_ptr->start_service_time_ != lease_request.start_service_time_) {
+          LOG_INFO("server change start_service_time", "old start_service_time",
+              status_ptr->start_service_time_, "new start_service_time",
+              lease_request.start_service_time_);
+          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(lease_request),
+                K(now), K(with_rootserver), K(ret));
+          } else {
             // ignore wakeup balancer and wakeup daily merger failed
             int temp_ret = OB_SUCCESS;
             if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_balancer())) {
@@ -917,87 +763,42 @@ int ObServerManager::receive_hb(
               LOG_WARN("wakeup_daily_merger failed", K(temp_ret));
             }
             if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
-              LOG_WARN("commit new server online task failed", "server",
-                       status_ptr->server_, K(ret));
+              LOG_WARN("commit server change start_service_time task failed", "server",
+                  status_ptr->server_, K(ret));
             } else {
-              ROOTSERVICE_EVENT_ADD("server", "online", "server", status_ptr->server_);
+              if (0 == status_ptr->start_service_time_ && 0 != lease_request.start_service_time_) {
+                ROOTSERVICE_EVENT_ADD("server", "start_service",
+                    "server", status_ptr->server_);
+              }
             }
           }
-        }
-      } else if (0 != MEMCMP(status_ptr->build_version_, lease_request.build_version_,
-          OB_SERVER_VERSION_LENGTH)) {
-        LOG_INFO("server change build_version", "old svn version", status_ptr->build_version_,
-            "new svn version", lease_request.build_version_);
-        //commit server svn version change
-        if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(lease_request),
-              K(now), K(with_rootserver), K(ret));
-        } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
-          LOG_WARN("commit server change build_version task failed", "server",
-              status_ptr->server_, K(ret));
-        }
-      } else if (status_ptr->ssl_key_expired_time_ != lease_request.ssl_key_expired_time_) {
-        LOG_INFO("server ssl_key_expired_time changed", "old ssl_key_expired_time", status_ptr->ssl_key_expired_time_,
-            "new ssl_key_expired_time", lease_request.ssl_key_expired_time_);
-        //commit server svn version change
-        if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(lease_request),
-              K(now), K(with_rootserver), K(ret));
-        } else if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
-          LOG_WARN("commit server change build_version task failed", "server",
-              status_ptr->server_, K(ret));
-        }
-      } else if (status_ptr->start_service_time_ != lease_request.start_service_time_) {
-        LOG_INFO("server change start_service_time", "old start_service_time",
-            status_ptr->start_service_time_, "new start_service_time",
-            lease_request.start_service_time_);
-        if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(lease_request),
-              K(now), K(with_rootserver), K(ret));
-        } else {
-          // ignore wakeup balancer and wakeup daily merger failed
-          int temp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_balancer())) {
-            LOG_WARN("wakeup_balancer failed", K(temp_ret));
-          } else if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_daily_merger())) {
-            LOG_WARN("wakeup_daily_merger failed", K(temp_ret));
-          }
-          if (OB_FAIL(status_change_callback_->on_server_status_change(status_ptr->server_))) {
-            LOG_WARN("commit server change start_service_time task failed", "server",
-                status_ptr->server_, K(ret));
+        } else if (status_ptr->server_report_status_ != lease_request.server_status_) {
+          LOG_INFO("server report status change",
+                  "old report status", status_ptr->server_report_status_,
+                  "new report status", lease_request.server_status_);
+          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(ret),
+                    K(lease_request), K(now), K(with_rootserver));
+          } else if (OB_FAIL(process_report_status_change(lease_request, *status_ptr))) {
+            LOG_WARN("fail to proc report status change", K(ret));
           } else {
-            if (0 == status_ptr->start_service_time_ && 0 != lease_request.start_service_time_) {
-              ROOTSERVICE_EVENT_ADD("server", "start_service",
-                  "server", status_ptr->server_);
-            }
+            status_ptr->server_report_status_ = lease_request.server_status_;
           }
-        }
-      } else if (status_ptr->server_report_status_ != lease_request.server_status_) {
-        LOG_INFO("server report status change",
-                 "old report status", status_ptr->server_report_status_,
-                 "new report status", lease_request.server_status_);
-        if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(ret),
-                   K(lease_request), K(now), K(with_rootserver));
-        } else if (OB_FAIL(process_report_status_change(lease_request, *status_ptr))) {
-          LOG_WARN("fail to proc report status change", K(ret));
+        } else if (status_ptr->resource_info_ != lease_request.resource_info_) {
+          LOG_INFO("server resource changed", "old_resource_info", status_ptr->resource_info_,
+                  "new_resource_info", lease_request.resource_info_);
+          if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
+            LOG_WARN("set server status failed", K(lease_request),
+                K(now), K(with_rootserver), K(ret));
+          }
         } else {
-          status_ptr->server_report_status_ = lease_request.server_status_;
+          status_ptr->last_hb_time_ = now;
         }
-      } else if (status_ptr->resource_info_ != lease_request.resource_info_) {
-        LOG_INFO("server resource changed", "old_resource_info", status_ptr->resource_info_,
-                 "new_resource_info", lease_request.resource_info_);
-        if (OB_FAIL(set_server_status(lease_request, now, with_rootserver, *status_ptr))) {
-          LOG_WARN("set server status failed", K(lease_request),
-              K(now), K(with_rootserver), K(ret));
-        }
-      } else {
-        status_ptr->last_hb_time_ = now;
-      }
-      if (OB_SUCC(ret)) {
-        if (ObServerStatus::OB_HEARTBEAT_ALIVE == status_ptr->hb_status_
-            && ObServerStatus::OB_HEARTBEAT_ALIVE != old_hb_status) {
-          to_alive = true;
+        if (OB_SUCC(ret)) {
+          if (ObServerStatus::OB_HEARTBEAT_ALIVE == status_ptr->hb_status_
+              && ObServerStatus::OB_HEARTBEAT_ALIVE != old_hb_status) {
+            to_alive = true;
+          }
         }
       }
     }
@@ -1156,40 +957,6 @@ int ObServerManager::check_server_permanent_offline(const ObAddr &server, bool &
   return ret;
 }
 
-int ObServerManager::check_server_with_id_exist(
-    const ObAddr &server,
-    const uint64_t server_id,
-    bool &exist) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", KR(ret));
-  } else if (!server.is_valid() || OB_INVALID_ID == server_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(server), K(server_id), KR(ret));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    exist = false;
-    const ObServerStatus *status_ptr = NULL;
-    if (OB_FAIL(find(server, status_ptr))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("find failed", K(server), K(ret));
-      } else {
-        ret = OB_SUCCESS;
-        exist = false;
-        LOG_DEBUG("treat not exist server as not alive", K(server));
-      }
-    } else if (NULL == status_ptr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("status_ptr is null", "status_ptr", OB_P(status_ptr), K(ret));
-    } else {
-      exist = (status_ptr->get_server_id() == server_id);
-    }
-  }
-  return ret;
-}
-
 int ObServerManager::check_server_alive(const ObAddr &server, bool &is_alive) const
 {
   int ret = OB_SUCCESS;
@@ -1216,39 +983,6 @@ int ObServerManager::check_server_alive(const ObAddr &server, bool &is_alive) co
       LOG_WARN("status_ptr is null", "status_ptr", OB_P(status_ptr), K(ret));
     } else {
       is_alive = status_ptr->is_alive();
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::check_server_takenover_by_rs(
-    const common::ObAddr &server,
-    bool &taken_over_by_rs) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", KR(ret));
-  } else if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(server));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    const ObServerStatus *status_ptr = nullptr;
-    int tmp_ret = find(server, status_ptr);
-    if (OB_SUCCESS == tmp_ret) {
-      if (OB_UNLIKELY(nullptr == status_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("status_ptr is null", KR(ret), "status_ptr", OB_P(status_ptr), K(server));
-      } else {
-        taken_over_by_rs =
-          (status_ptr->admin_status_ == ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS);
-      }
-    } else if (OB_ENTRY_NOT_EXIST == tmp_ret) {
-      ret = OB_ENTRY_NOT_EXIST;
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get server status unexpected", KR(ret), K(server));
     }
   }
   return ret;
@@ -1311,188 +1045,6 @@ int ObServerManager::check_server_stopped(const common::ObAddr &server, bool &is
       LOG_WARN("status_ptr is null", "status_ptr", OB_P(status_ptr), K(ret));
     } else {
       is_stopped = status_ptr->is_stopped();
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::check_server_valid_for_partition(const common::ObAddr &server, bool &is_valid) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", KR(ret));
-  } else if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server",KR(ret), K(server));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    is_valid = false;
-    bool zone_active = false;
-    const ObServerStatus *status_ptr = NULL;
-    if (OB_FAIL(find(server, status_ptr))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("failed to find server", KR(ret), K(server));
-      } else {
-        ret = OB_SUCCESS;
-        LOG_INFO("server not exist, not valid for partition", K(server));
-      }
-    } else if (OB_ISNULL(status_ptr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("status_ptr is null", KR(ret), "status_ptr", OB_P(status_ptr));
-    } else if (OB_FAIL(zone_mgr_->check_zone_active(status_ptr->zone_, zone_active))) {
-      LOG_WARN("fail to check zone active", K(ret), K(server));
-    } else {
-      is_valid = status_ptr->can_migrate_in()
-                 && !status_ptr->is_stopped()
-                 && zone_active;
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_servers_by_status(ObIServerArray &active_server_list,
-                                           ObIServerArray &inactive_server_list) const
-{
-  ObZone empty_zone;
-  return get_servers_by_status(empty_zone, active_server_list, inactive_server_list);
-}
-
-
-int ObServerManager::get_servers_by_status(const ObZone &zone,
-                                           ObIServerArray &active_server_list,
-                                           ObIServerArray &inactive_server_list) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else {
-    active_server_list.reuse();
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
-      if (server_statuses_[i].zone_ == zone || zone.is_empty()) {
-        if (server_statuses_[i].is_alive()) {
-          ret = active_server_list.push_back(server_statuses_[i].server_);
-          if (OB_FAIL(ret)) {
-            LOG_WARN("push back to active_server_list failed", K(ret));
-          }
-        } else if (OB_FAIL(inactive_server_list.push_back(server_statuses_[i].server_))) {
-          LOG_WARN("fail to push back to inactive_server_list", KR(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_servers_takenover_by_rs(
-    const ObZone &zone,
-    ObIServerArray &server_list) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else {
-    server_list.reuse();
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
-      if (zone.is_empty() || server_statuses_[i].zone_ == zone) {
-        if (ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS != server_statuses_[i].admin_status_) {
-          // bypass since this server not taken over by rs
-        } else if (OB_FAIL(server_list.push_back(server_statuses_[i].server_))) {
-          LOG_WARN("fail to push back to server list", K(ret));
-        }
-      } else {} // zone not match
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_alive_servers(const ObZone &zone,
-                                       ObIServerArray &server_list) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else {
-    server_list.reuse();
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
-      if ((server_statuses_[i].zone_ == zone || zone.is_empty())
-          && server_statuses_[i].is_alive()) {
-        ret = server_list.push_back(server_statuses_[i].server_);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("push back to server_list failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_alive_server_count(const ObZone &zone, int64_t &count) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else {
-    count = 0;
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; i < server_statuses_.count(); ++i) {
-      if ((server_statuses_[i].zone_ == zone || zone.is_empty())
-          && server_statuses_[i].is_alive()) {
-        ++count;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_active_server_array(
-    const common::ObZone &zone,
-    ObIServerArray &active_server_array) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else {
-    active_server_array.reset();
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
-      if (!zone.is_empty() && zone != server_statuses_.at(i).zone_) {
-        // zone not match, bypass
-      } else if (server_statuses_.at(i).is_active()) {
-        if (OB_FAIL(active_server_array.push_back(server_statuses_.at(i).server_))) {
-          LOG_WARN("fail to push back", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-// We want count in active servers defined by struct ObServerStatus,
-// and to avoid server is temporary offline when counting server’s number,
-// we also count in the server which is temporary offline.
-int ObServerManager::get_zone_max_unit_num(const ObZone &zone, int64_t &count) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", KR(ret));
-  } else {
-    count = 0;
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; i < server_statuses_.count(); ++i) {
-      if ((server_statuses_[i].zone_ == zone || zone.is_empty())
-          && (server_statuses_[i].is_active() || server_statuses_[i].is_temporary_offline())) {
-        ++count;
-      }
     }
   }
   return ret;
@@ -1797,6 +1349,23 @@ int ObServerManager::get_server_status(const ObAddr &server,
   return ret;
 }
 
+int ObServerManager::get_server_resource_info(
+      const common::ObAddr &server,
+      share::ObServerResourceInfo &resource_info)
+{
+  int ret = OB_SUCCESS;
+  ObServerStatus server_status;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(get_server_status(server, server_status))) {
+    LOG_WARN("fail to get server status", KR(ret), K(server));
+  } else {
+    resource_info = server_status.resource_info_;
+  }
+  return ret;
+}
+
 int ObServerManager::update_server_status(const ObServerStatus &server_status)
 {
   int ret = OB_SUCCESS;
@@ -1917,18 +1486,6 @@ bool ObServerManager::has_build() const
   return has_build_;
 }
 
-int ObServerManager::get_lease_duration(int64_t &lease_time) const
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    lease_time = config_->lease_time;
-  }
-  return ret;
-}
-
 int ObServerManager::get_server_zone(const ObAddr &addr, ObZone &zone) const
 {
   int ret = OB_SUCCESS;
@@ -1944,29 +1501,6 @@ int ObServerManager::get_server_zone(const ObAddr &addr, ObZone &zone) const
       LOG_WARN("get_server_status failed", K(addr), K(ret));
     } else {
       zone = server_status.zone_;
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_all_server_list(
-    common::ObIArray<ObAddr> &server_list)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else {
-    server_list.reset();
-    SpinRLockGuard guard(server_status_rwlock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
-      ObAddr &addr = server_statuses_[i].server_;
-      if (!addr.is_valid()) {
-        ret = OB_INVALID_SERVER_STATUS;
-        LOG_WARN("invalid addr", K(ret), K(addr));
-      } else if (OB_FAIL(server_list.push_back(addr))) {
-        LOG_WARN("fail to push back addr", K(ret), K(addr));
-      }
     }
   }
   return ret;
@@ -1992,6 +1526,37 @@ int ObServerManager::get_server_statuses(const ObZone &zone,
           } else if (OB_SUCCESS != (ret = server_statuses.push_back(server_statuses_[i]))) {
             LOG_WARN("push back to server_statuses failed", K(ret));
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerManager::build_server_resource_info_result(
+    const common::ObZone &zone,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &active_servers_resource_info)
+{
+  // empty zone means that get all
+  int ret = OB_SUCCESS;
+  active_servers_resource_info.reset();
+  obrpc::ObGetServerResourceInfoResult result;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server manager has not inited", KR(ret), K(inited_));
+  } else {
+    SpinRLockGuard guard(server_status_rwlock_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_statuses_.count(); ++i) {
+      const ObServerStatus &status = server_statuses_.at(i);
+      result.reset();
+      if (OB_UNLIKELY(!status.is_valid())) {
+        ret = OB_INVALID_SERVER_STATUS;
+        LOG_WARN("server status is not valid", KR(ret), K(status));
+      } else if (status.is_active() && (status.zone_ == zone || zone.is_empty())) {
+        if (OB_FAIL(result.init(status.server_, status.resource_info_))) {
+          LOG_WARN("fail to init", KR(ret), K(status.server_), K(status.resource_info_));
+        } else if (OB_FAIL(active_servers_resource_info.push_back(result))) {
+          LOG_WARN("push back to active_servers_resource_info failed", KR(ret), K(result));
         }
       }
     }
@@ -2102,55 +1667,6 @@ void ObServerManager::reset()
   server_statuses_.reset();
 }
 
-int ObServerManager::have_server_stopped(const common::ObZone &zone, bool &stopped) const
-{
-  int ret = OB_SUCCESS;
-  stopped = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (zone.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("zone is empty", K(zone), K(ret));
-  } else {
-    for (int64_t i = 0; i < server_statuses_.count(); ++i) {
-      if (server_statuses_[i].is_stopped() &&
-          server_statuses_[i].zone_ == zone)
-      {
-        stopped = true;
-        LOG_DEBUG("have server in stopped status", K(zone), "other_server", server_statuses_[i].server_, "other_zone", server_statuses_[i].zone_);
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::check_other_zone_stopped(const common::ObZone &zone,
-                                              bool &stopped)
-{
-  int ret = OB_SUCCESS;
-  stopped = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (zone.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("zone is empty", K(zone), K(ret));
-  } else {
-    for (int64_t i = 0; i < server_statuses_.count(); ++i) {
-      if (server_statuses_[i].is_stopped() &&
-          server_statuses_[i].zone_ != zone)
-      {
-        stopped = true;
-        LOG_WARN("have other server in stopped status", K(zone), "other_server", server_statuses_[i].server_, "other_zone", server_statuses_[i].zone_);
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
 int64_t ObServerManager::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -2236,27 +1752,6 @@ int ObServerManager::fetch_new_server_id(uint64_t &server_id)
   return ret;
 }
 
-int ObServerManager::check_server_id_used(const uint64_t server_id, bool &server_id_used)
-{
-  int ret = OB_SUCCESS;
-  server_id_used = false;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_INVALID_ID == server_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server_id", K(server_id), K(ret));
-  } else {
-    for (int64_t i = 0; i < server_statuses_.count(); ++i) {
-      if (server_statuses_[i].id_ == server_id) {
-        server_id_used = true;
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObServerManager::get_server_id(const ObZone &zone, const ObAddr &server, uint64_t &server_id) const
 {
   int ret = OB_SUCCESS;
@@ -2278,148 +1773,6 @@ int ObServerManager::get_server_id(const ObZone &zone, const ObAddr &server, uin
     if (OB_SUCC(ret) && OB_INVALID_ID == server_id) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("get invalid server_id", K(ret), K(server_id), K(server_id));
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::update_merged_version(const ObAddr &addr,
-    int64_t frozen_version, bool &zone_merged)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else if (!addr.is_valid() || frozen_version <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(addr), K(frozen_version), K(ret));
-  } else {
-    SpinWLockGuard guard(server_status_rwlock_);
-    ObServerStatus *status = NULL;
-    if (OB_FAIL(find(addr, status))) {
-      LOG_WARN("find failed", K(addr), K(ret));
-    } else if (NULL == status) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("status is null", "status ptr", OB_P(status), K(ret));
-    } else if (status->merged_version_ > frozen_version) {
-      LOG_WARN("receive obs report merge finish, version is invallid", K(frozen_version), "server version", status->merged_version_);
-    } else {
-      status->merged_version_ = frozen_version;
-      zone_merged = true;
-      FOREACH_X(s, server_statuses_, zone_merged) {
-        if (s->zone_ == status->zone_
-            && s->is_alive()
-            && s->merged_version_ < frozen_version) {
-          zone_merged = false;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_merged_version(const common::ObAddr &addr,
-                                        int64_t &merged_version) const
-{
-  int ret = OB_SUCCESS;
-  merged_version = 0;
-  SpinRLockGuard guard(server_status_rwlock_);
-  const ObServerStatus *status = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!addr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid addr", K(addr), K(ret));
-  } else if (OB_FAIL(find(addr, status))) {
-    LOG_WARN("find failed", K(addr), K(ret));
-  } else if (NULL == status) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("status is null", "status ptr", OB_P(status), K(ret));
-  } else {
-    merged_version = status->merged_version_;
-  }
-  return ret;
-}
-
-int ObServerManager::block_migrate_in(const ObAddr &addr)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else if (!addr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid addr", K(addr), K(ret));
-  } else {
-    const bool blocked = true;
-    if (OB_FAIL(set_migrate_in_blocked(addr, blocked))) {
-      LOG_WARN("set_migrate_in_blocked failed", K(addr), K(blocked), K(ret));
-    } else {
-      ROOTSERVICE_EVENT_ADD("server", "block_migrate_in",
-          "server", addr);
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::unblock_migrate_in(const ObAddr &addr)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else if (!addr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid addr", K(addr), K(ret));
-  } else {
-    const bool blocked = false;
-    if (OB_FAIL(set_migrate_in_blocked(addr, blocked))) {
-      LOG_WARN("set_migrate_in_blocked failed", K(addr), K(blocked), K(ret));
-    } else {
-      ROOTSERVICE_EVENT_ADD("server", "unblock_migrate_in",
-          "server", addr);
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::set_migrate_in_blocked(const common::ObAddr &addr, const bool blocked)
-{
-  int ret = OB_SUCCESS;
-  SpinWLockGuard guard(server_status_rwlock_);
-  ObServerStatus *status_ptr = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager has not inited", K(ret));
-  } else if (!addr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid addr", K(addr), K(ret));
-  } else if (OB_FAIL(find(addr, status_ptr))) {
-    LOG_WARN("find failed", K(addr), K(ret));
-  } else if (NULL == status_ptr) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_INFO("status_ptr is null", "status_ptr", OB_P(status_ptr), K(ret));
-  } else {
-    if (!blocked) {
-      status_ptr->unblock_migrate_in();
-    } else {
-      status_ptr->block_migrate_in();
-    }
-    // ignore wakeup balancer and wakeup daily merger failed
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_balancer())) {
-      LOG_WARN("wakeup_balancer failed", K(temp_ret));
-    } else if (OB_SUCCESS != (temp_ret = status_change_callback_->wakeup_daily_merger())) {
-      LOG_WARN("wakeup_daily_merger failed", K(temp_ret));
-    }
-    ret = status_change_callback_->on_server_status_change(addr);
-    if (OB_FAIL(ret)) {
-      LOG_WARN("commit block migrate in status change task failed", K(addr),
-          K(blocked), "block_migrate_in_time", status_ptr->block_migrate_in_time_, K(ret));
-    } else {
-      LOG_INFO("commit block migrate in status change task succeed", K(addr),
-          K(blocked), "block_migrate_in_time", status_ptr->block_migrate_in_time_, K(ret));
     }
   }
   return ret;
@@ -2481,265 +1834,6 @@ int ObServerManager::check_in_service(const common::ObAddr &addr, bool &in_servi
   return ret;
 }
 
-int ObServerManager::set_with_partition(const common::ObAddr &server)
-{
-  int ret = OB_SUCCESS;
-  bool need_update = false;
-  ObServerStatus *status = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else if (!server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(ret), K(server));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    if (OB_FAIL(find(server, status))) {
-      LOG_WARN("find server failed", K(ret), K(server));
-    } else if (NULL == status) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL server status", K(ret));
-    } else if (!status->is_alive()) {
-      ret = OB_SERVER_NOT_ALIVE;
-      LOG_WARN("server not alive", K(ret));
-    } else {
-      need_update = !status->with_partition_;
-    }
-    status = NULL;
-  }
-
-  if (OB_SUCC(ret) && need_update) {
-    need_update = false;
-    SpinWLockGuard guard(maintaince_lock_);
-    {
-      SpinRLockGuard guard(server_status_rwlock_);
-      // check status again
-      if (OB_FAIL(find(server, status))) {
-        LOG_WARN("find server failed", K(ret), K(server));
-      } else if (NULL == status) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL server status", K(ret));
-      } else if (!status->is_alive()) {
-        ret = OB_SERVER_NOT_ALIVE;
-        LOG_WARN("server not alive", K(ret));
-      } else if (!status->with_partition_) {
-        status = NULL;
-        need_update = true;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (need_update) {
-      bool with_partition = true;
-      if (OB_FAIL(st_operator_.update_with_partition(server, with_partition))) {
-        LOG_WARN("update with partition failed", K(ret), K(server), K(with_partition));
-      } else {
-        ROOTSERVICE_EVENT_ADD("server", "set_with_partition", K(server));
-        LOG_INFO("set with partition", K(server));
-      }
-
-      if (OB_SUCC(ret)) {
-        SpinWLockGuard guard(server_status_rwlock_);
-        if (OB_FAIL(find(server, status))) {
-          LOG_WARN("find server failed", K(ret), K(server));
-        } else if (NULL == status) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL server status", K(ret));
-        } else {
-          // It's safe to update with partition flag here because we hold %maintaince_lock_,
-          // flag will not be modified after previous check.
-          status->with_partition_ = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::clear_with_partiton(const common::ObAddr &server,
-    const int64_t last_hb_time)
-{
-  int ret = OB_SUCCESS;
-  ObServerStatus *status = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else if (!server.is_valid() || last_hb_time < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(ret), K(server), K(last_hb_time));
-  } else {
-    SpinWLockGuard guard(maintaince_lock_);
-    bool need_update = false;
-    {
-      SpinRLockGuard guard(server_status_rwlock_);
-      if (OB_FAIL(find(server, status))) {
-        LOG_WARN("find server failed", K(ret), K(server));
-      } else if (NULL == status) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("NULL server status", K(ret));
-      } else if (!status->with_partition_) {
-        // with partition flag not set, do nothing
-      } else if (last_hb_time != status->last_hb_time_) {
-        // last heartbeat time mismatch, do nothing, return success.
-        LOG_WARN("last hb time mismatch, do not clear with partition flag",
-                 K(server), K(last_hb_time), "status", *status);
-      } else {
-        need_update = true;
-        status = NULL;
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (!need_update) {
-    } else {
-      bool with_partition = false;
-      if (OB_FAIL(st_operator_.update_with_partition(server, with_partition))) {
-        LOG_WARN("update with partition failed", K(ret), K(server), K(with_partition));
-      } else {
-        ROOTSERVICE_EVENT_ADD("server", "clear_with_partition", K(server));
-        LOG_INFO("clear with partition", K(server));
-      }
-
-      if (OB_SUCC(ret)) {
-        SpinWLockGuard guard(server_status_rwlock_);
-        if (OB_FAIL(find(server, status))) {
-          LOG_WARN("find server failed", K(ret), K(server));
-        } else if (NULL == status) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL server status", K(ret));
-        } else {
-          // It's safe to update with partition flag here because we hold %maintaince_lock_,
-          // flag will not be modified after previous check.
-          status->with_partition_ = false;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::set_force_stop_hb(const ObAddr &server,
-    const bool &force_stop_hb)
-{
-  int ret = OB_SUCCESS;
-  ObServerStatus *status = NULL;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else if (!server.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid server", K(ret));
-  } else {
-    // force_stop_hb_ is only in memory
-    SpinWLockGuard guard(server_status_rwlock_);
-    if (OB_FAIL(find(server, status))) {
-      LOG_WARN("find server failed", K(ret), K(server));
-    } else if (NULL == status) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("server status is NULL", K(ret));
-    } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING != status->admin_status_
-        && ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS != status->admin_status_) {
-      ret = OB_SERVER_NOT_DELETING;
-      LOG_WARN("server not in deleting status, cannot set force stop hb", K(ret), K(status));
-    } else {
-      status->force_stop_hb_ = force_stop_hb;
-      LOG_INFO("success to set force stop hb!", K(force_stop_hb));
-    }
-  }
-  return ret;
-}
-
-int ObServerManager::get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH])
-{
-  int ret = OB_SUCCESS;
-  ObZone zone; // empty zone, get all server statuses
-  ObArray<ObServerStatus> server_statuses;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not inited", K(ret));
-  } else {
-    // no need to add lock
-    // check all servers' build versions are identical
-    if (OB_FAIL(get_server_statuses(zone, server_statuses))) {
-      LOG_WARN("get all server statuses failed", K(ret));
-    } else if (OB_UNLIKELY(true == server_statuses.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("server_statuses is empty", K(ret));
-    } else {
-      ObClusterVersion version_parser;
-      uint64_t cur_min_version = UINT64_MAX;
-      FOREACH_CNT_X(status, server_statuses, OB_SUCC(ret)) {
-        char *saveptr = NULL;
-        char *version = STRTOK_R(status->build_version_, "_", &saveptr);
-        if (NULL == version || strlen(version) + 1 > OB_SERVER_VERSION_LENGTH) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid build version format", "build_version", status->build_version_);
-        } else if (OB_FAIL(version_parser.refresh_cluster_version(version))) {
-          LOG_WARN("failed to parse version", "version", version);
-        } else {
-          if (version_parser.get_cluster_version() < cur_min_version) {
-            size_t len = strlen(version);
-            MEMCPY(min_server_version, version, len);
-            min_server_version[len] = '\0';
-            cur_min_version = version_parser.get_cluster_version();
-          }
-        }
-      }
-      if (OB_SUCC(ret) && UINT64_MAX == cur_min_version) {
-        ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("no valid server version found", K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
-bool ObServerManager::have_server_deleting() const
-{
-  bool bret = false;
-  int tmp_ret = OB_SUCCESS;
-  ObZone zone;
-  ObArray<ObServerStatus> server_statuses;
-  if (!inited_) {
-    tmp_ret = OB_NOT_INIT;
-    LOG_WARN_RET(tmp_ret, "server manager not inited", K(tmp_ret));
-  } else if (OB_SUCCESS != (tmp_ret = get_server_statuses(zone, server_statuses))) {
-    LOG_WARN_RET(tmp_ret, "fail to get server status", K(zone), K(tmp_ret));
-  } else {
-    FOREACH_CNT_X(status, server_statuses, OB_SUCCESS == tmp_ret) {
-      if (OB_ISNULL(status)) {
-        tmp_ret = OB_ERR_UNEXPECTED;
-        LOG_WARN_RET(tmp_ret, "get invalid status", K(tmp_ret));
-      } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING == status->admin_status_) {
-        bret = true;
-        break;
-      }
-    }
-  }
-  return bret;
-}
-int ObServerManager::check_all_server_active(bool &all_active) const
-{
-  int ret = OB_SUCCESS;
-  all_active = true;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else {
-    SpinRLockGuard guard(server_status_rwlock_);
-    FOREACH_CNT_X(status, server_statuses_, all_active && OB_SUCC(ret)) {
-      if (OB_ISNULL(status)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get invalid status", K(ret));
-      } else if (status->in_service() && status->is_active()) {
-      } else {
-        all_active = false;
-        LOG_WARN("server status not valid", "server status", *status);
-      }
-    }
-  }
-  return ret;
-}
-
 //////////////////////////////////////
 //////////////////////////////////////
 ObHeartbeatChecker::ObHeartbeatChecker()
@@ -2782,22 +1876,28 @@ void ObHeartbeatChecker::run3()
     int64_t last_renew_rs_time = 0;
     int64_t RENEW_INTERVAL = 3 * 1000 * 1000; //3s
     while (!stop_) {
-      update_last_run_timestamp();
-      LOG_TRACE("begin check all server heartbeat");
-      ret = server_manager_->check_servers();
-      if (OB_FAIL(ret)) {
-        LOG_WARN("server managers check servers failed", K(ret));
-      }
-      //ignore ret
-      now = ObTimeUtility::current_time();
-      if (now - last_renew_rs_time > RENEW_INTERVAL) {
-        last_renew_rs_time = now;
-        if (OB_FAIL(server_manager_->try_renew_rs_list())) {
-          LOG_WARN("fail to try renew rs list", KR(ret));
+      if (ObHeartbeatService::is_service_enabled()) { // the new logic
+        reset_last_run_timestamp();
+        stop_ = true;
+        LOG_INFO("no need to run thread ObHeartbeatChecker in version >= 4.2");
+      } else {
+        update_last_run_timestamp();
+        LOG_TRACE("begin check all server heartbeat");
+        ret = server_manager_->check_servers();
+        if (OB_FAIL(ret)) {
+          LOG_WARN("server managers check servers failed", K(ret));
         }
+        // //ignore ret
+        now = ObTimeUtility::current_time();
+        if (now - last_renew_rs_time > RENEW_INTERVAL) {
+          last_renew_rs_time = now;
+          if (OB_FAIL(server_manager_->try_renew_rs_list())) {
+            LOG_WARN("fail to try renew rs list", KR(ret));
+          }
+        }
+        DEBUG_SYNC(HUNG_HEARTBEAT_CHECK);
+        ob_usleep(CHECK_INTERVAL_US);
       }
-      DEBUG_SYNC(HUNG_HEARTBEAT_CHECK);
-      ob_usleep(CHECK_INTERVAL_US);
     }
     LOG_INFO("heartbeat checker stop");
   }

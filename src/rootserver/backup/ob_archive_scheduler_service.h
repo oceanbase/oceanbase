@@ -38,7 +38,6 @@ namespace share {
 namespace rootserver
 {
 
-class ObServerManager;
 class ObZoneManager;
 class ObUnitManager;
 
@@ -66,7 +65,6 @@ public:
   ~ObArchiveSchedulerService() {}
 
   int init(
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     ObUnitManager &unit_manager,
     share::schema::ObMultiVersionSchemaService *schema_service,
@@ -129,7 +127,6 @@ private:
   bool is_inited_;
   bool is_working_;
   mutable ObArchiveThreadIdling idling_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

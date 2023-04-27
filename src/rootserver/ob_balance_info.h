@@ -41,7 +41,7 @@ class ObSchemaGetterGuard;
 namespace rootserver
 {
 class ObUnitManager;
-class ObServerManager;
+
 class ObZoneManager;
 
 class ObDataSourceCandidateChecker

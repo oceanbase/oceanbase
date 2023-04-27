@@ -331,8 +331,6 @@ public:
   virtual int clone(void *input_ptr, ObDRTask *&output_task) const = 0;
   int deep_copy(const ObDRTask &that);
 public:
-  int update_with_partition(
-      const common::ObAddr &dst_server) const;
   void set_schedule();
   bool is_manual_task() const { return obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL == invoked_source_; }
 public:

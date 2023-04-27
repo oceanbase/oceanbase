@@ -268,6 +268,7 @@ public:
            ObZoneManager &zone_mgr,
            ObServerManager &server_mgr,
            ObUnitStatManager &unit_stat_mgr);
+  int build_active_servers_resource_info();
   // 1. migrate units to balance the load
   // 2. migrate units from offline servers
   int balance_servers();
@@ -285,19 +286,9 @@ public:
       common::ObIArray<ObTenantGroupParser::TenantNameGroup> &tenant_groups,
       bool &legal);
 private:
-  int check_is_ofs_zone_zombie_unit(
-      const share::ObUnitInfo &unit_info,
-      bool &is_ofs_zone_zombie_unit);
   bool check_inner_stat() const { return inited_; }
   // distribute for server online/permanent_offline/migrate_in_blocked
   int distribute_for_server_status_change();
-  int check_if_ofs_rs_without_sys_unit(
-      const share::ObServerStatus &status,
-      const share::ObUnitInfo &unit_info,
-      bool &ofs_rs_without_sys_unit);
-  int distribute_for_ofs_sys_unit(
-      const share::ObServerStatus &status,
-      const share::ObUnitInfo &unit_info);
   int check_has_unit_in_migration(
       const common::ObIArray<ObUnitManager::ObUnitLoad> *unit_load_array,
       bool &has_unit_in_migration);
@@ -307,10 +298,11 @@ private:
   int distribute_by_pool(share::ObResourcePool *pool);
   int distribute_for_migrate_in_blocked(const share::ObUnitInfo &unit_info);
   int distribute_zone_unit(const ObUnitManager::ZoneUnit &zone_unit);
-  int distribute_for_active(const share::ObServerStatus &status,
-                            const share::ObUnitInfo &unit_info);
+  int distribute_for_active(
+      const share::ObServerInfoInTable &server_info,
+      const share::ObUnitInfo &unit_info);
   int distribute_for_permanent_offline_or_delete(
-      const share::ObServerStatus &status,
+      const share::ObServerInfoInTable &server_info,
       const share::ObUnitInfo &unit_info);
 
   int distribute_for_standalone_sys_unit();
@@ -330,6 +322,10 @@ private:
                        const common::ObAddr &dst);
 
   int try_cancel_migrate_unit(const share::ObUnit &unit, bool &is_canceled);
+  int get_active_servers_info_and_resource_info_of_zone(
+      const ObZone &zone,
+      ObIArray<share::ObServerInfoInTable> &servers_info,
+      ObIArray<obrpc::ObGetServerResourceInfoResult> &server_resources_info);
 
   // the new version server balance
 private:
@@ -1421,7 +1417,7 @@ protected:
   ObUnitStatManager *unit_stat_mgr_;
   CountBalanceStrategy count_balance_strategy_;
   InnerTenantGroupBalanceStrategy &inner_ttg_balance_strategy_;
-  // Each time the unit balance between servers is executed, 
+  // Each time the unit balance between servers is executed,
   // the disk information of each server in the zone is calculated
   ZoneServerDiskStatistic zone_disk_statistic_;
 

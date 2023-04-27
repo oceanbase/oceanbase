@@ -30,7 +30,6 @@ ObRootServiceUtilChecker::~ObRootServiceUtilChecker()
 
 int ObRootServiceUtilChecker::init(
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     common::ObAddr &self,
@@ -44,7 +43,6 @@ int ObRootServiceUtilChecker::init(
     LOG_WARN("init twice", KR(ret));
   } else if (OB_FAIL(migrate_unit_finish_checker_.init(
           unit_mgr,
-          server_mgr,
           zone_mgr,
           schema_service,
           sql_proxy,
@@ -55,7 +53,6 @@ int ObRootServiceUtilChecker::init(
           common_rpc_proxy,
           self,
           unit_mgr,
-          server_mgr,
           zone_mgr,
           sql_proxy,
           lst_operator))) {

@@ -26,7 +26,6 @@ class SCN;
 }
 namespace rootserver
 {
-class ObServerManager;
 class ObTableCreator
 {
 public:

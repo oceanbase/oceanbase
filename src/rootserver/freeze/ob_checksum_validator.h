@@ -29,7 +29,6 @@ namespace rootserver
 {
 class ObZoneMergeManager;
 class ObFreezeInfoManager;
-class ObServerManager;
 struct ObMergeTimeStatistics;
 
 class ObMergeErrorCallback

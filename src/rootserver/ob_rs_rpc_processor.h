@@ -297,8 +297,8 @@ DEFINE_LIMITED_RS_RPC_PROCESSOR(obrpc::OB_EXECUTE_BOOTSTRAP, ObRpcExecuteBootstr
 // check server_refreshed_ flag in rootservice
 DEFINE_LIMITED_RS_RPC_PROCESSOR(obrpc::OB_FETCH_ALIVE_SERVER, ObRpcFetchAliveServerP, fetch_alive_server(arg_, result_));
 
-DEFINE_RS_RPC_PROCESSOR(obrpc::OB_MERGE_FINISH, ObRpcMergeFinishP, merge_finish(arg_));
-DEFINE_RS_RPC_PROCESSOR(obrpc::OB_FETCH_ACTIVE_SERVER_STATUS, ObRpcFetchActiveServerStatusP, fetch_active_server_status(arg_, result_));
+// DEFINE_RS_RPC_PROCESSOR(obrpc::OB_MERGE_FINISH, ObRpcMergeFinishP, merge_finish(arg_));
+// DEFINE_RS_RPC_PROCESSOR(obrpc::OB_FETCH_ACTIVE_SERVER_STATUS, ObRpcFetchActiveServerStatusP, fetch_active_server_status(arg_, result_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DISASTER_RECOVERY_TASK_REPLY, ObRpcDisasterRecoveryTaskReplyP, disaster_recovery_task_reply(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_LS_DATA_RES, ObRpcBackupDataResP, receive_backup_over(arg_));
@@ -492,7 +492,6 @@ protected:
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DO_SEQUENCE_DDL, ObRpcDoSequenceDDLP, do_sequence_ddl(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BROADCAST_SCHEMA, ObBroadcastSchemaP, broadcast_schema(arg_));
 // only for upgrade
-DEFINE_RS_RPC_PROCESSOR(obrpc::OB_CHECK_MERGE_FINISH, ObCheckMergeFinishP, check_merge_finish(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_RECYCLE_SCHEMA_VERSIONS, ObGetRecycleSchemaVersionsP, get_recycle_schema_versions(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPGRADE_TABLE_SCHEMA, ObRpcUpgradeTableSchemaP, upgrade_table_schema(arg_));
 //label security ddl

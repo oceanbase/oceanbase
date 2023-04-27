@@ -68,6 +68,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcWashMemFragmentationP, gctx_);
     RPC_PROCESSOR(ObRpcBootstrapP, gctx_);
     RPC_PROCESSOR(ObRpcIsEmptyServerP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerForAddingServerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
     RPC_PROCESSOR(ObRpcSyncAutoincValueP, gctx_);
     RPC_PROCESSOR(ObRpcClearAutoincCacheP, gctx_);
