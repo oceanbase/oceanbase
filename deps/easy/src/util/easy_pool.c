@@ -158,7 +158,6 @@ void easy_pool_set_allocator(easy_pool_realloc_pt alloc)
 {
     easy_pool_realloc = (alloc ? alloc : easy_pool_default_realloc);
     realloc_lowlevel = easy_pool_realloc;
-    easy_pool_realloc = realloc_with_mod_stat;
 }
 
 void *easy_pool_default_realloc(void *ptr, size_t size)
