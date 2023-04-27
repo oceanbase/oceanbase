@@ -956,11 +956,6 @@ int ObLocalDevice::pwrite(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(this->fsync_block())) {
-      SHARE_LOG(WARN, "fsync fail", K(ret), K(write_size), K(offset), K(size), KP(buf));
-    }
-  }
   return ret;
 }
 
