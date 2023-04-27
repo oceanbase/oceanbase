@@ -112,6 +112,16 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
     } else {
       type.set_scale(-1);
     }
+    if (lib::is_mysql_mode() && SCALE_UNKNOWN_YET != type.get_scale()) {
+      if (ob_is_real_type(type.get_type())) {
+        type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
+      } else if (ob_is_number_tc(type.get_type())) { // TODO:@zuojiao.hzj add decimal_int here
+        const int16_t intd1 = type1.get_precision() - type1.get_scale();
+        const int16_t intd2 = type2.get_precision() - type2.get_scale();
+        const int16_t prec = MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale());
+        type.set_precision(static_cast<ObPrecision>(prec));
+      }
+    }
     type.set_length(MAX(type1.get_length(), type2.get_length()));
     //对于 int 和uint64的混合类型，需要提升类型至decimal
     if (lib::is_mysql_mode()
