@@ -102,10 +102,20 @@ int ObTableReplaceOp::check_need_exec_single_row()
     ObReplaceCtDef *replace_ctdef = MY_SPEC.replace_ctdefs_.at(0);
     const ObInsCtDef *ins_ctdef = replace_ctdef->ins_ctdef_;
     const ObDelCtDef *del_ctdef = replace_ctdef->del_ctdef_;
-    if (OB_NOT_NULL(ins_ctdef) || OB_NOT_NULL(del_ctdef)) {
-      if (has_before_row_trigger(*ins_ctdef) || has_after_row_trigger(*ins_ctdef)
-          || has_before_row_trigger(*del_ctdef) || has_after_row_trigger(*del_ctdef)) {
-        execute_single_row_ = true;
+    if (OB_NOT_NULL(ins_ctdef)) {
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < ins_ctdef->trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = ins_ctdef->trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
+      }
+    }
+    if (OB_NOT_NULL(del_ctdef)) {
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < del_ctdef->trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = del_ctdef->trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
       }
     } else {
       ret = OB_ERR_UNEXPECTED;

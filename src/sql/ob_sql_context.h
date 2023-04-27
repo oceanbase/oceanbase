@@ -547,7 +547,7 @@ public:
       anonymous_view_count_(0),
       all_user_variable_(),
       has_udf_(false),
-      has_pl_udf_(false),
+      disable_udf_parallel_(false),
       has_is_table_(false),
       reference_obj_tables_(),
       is_table_gen_col_with_udf_(false),
@@ -584,7 +584,7 @@ public:
     anonymous_view_count_ = 0;
     all_user_variable_.reset();
     has_udf_ = false;
-    has_pl_udf_ = false;
+    disable_udf_parallel_ = false;
     has_is_table_ = false;
     sql_schema_guard_.reset();
     reference_obj_tables_.reset();
@@ -657,7 +657,7 @@ public:
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool has_udf_;
-  bool has_pl_udf_; //used to mark query has pl udf
+  bool disable_udf_parallel_; //used to deterministic pl udf parallel execute
   bool has_is_table_; // used to mark query has information schema table
   ObSqlSchemaGuard sql_schema_guard_;
   share::schema::ObReferenceObjTable reference_obj_tables_;

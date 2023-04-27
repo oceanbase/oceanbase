@@ -512,13 +512,18 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt &stmt,
   } else if (stmt_has_dblink) {
     is_use_pdml = false;
     ctx_.set_has_dblink(true);
-  } else if (ctx_.contain_user_nested_sql()) {
+  } else if (!ctx_.has_trigger() && ctx_.contain_user_nested_sql()) {
     //user nested sql can't use PDML plan, force to use DAS plan
     //if online ddl has pl udf, only this way, allow it use PDML plan
     //such as:
     //create table t1(a int primary key, b int as(udf()));
     //create index i1 on t1(b);
     //create index with PL UDF allow to use PDML plan during build index table
+    is_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
+  } else if (ctx_.has_trigger() && !ctx_.is_allow_parallel_trigger()) {
+    // if sql linked trigger, and trigger do not access package var, sequence, sql stmt etc..,
+    // allow it use PDML plan
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
   } else if (stmt::T_DELETE == stmt.get_stmt_type()) {
@@ -758,7 +763,7 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   const ObDelUpdStmt *del_upd_stmt = nullptr;
-  if (stmt.get_query_ctx()->has_pl_udf_) {
+  if (stmt.get_query_ctx()->disable_udf_parallel_) {
     ctx_.set_has_pl_udf(true);
   }
   if (ObSQLUtils::is_nested_sql(ctx_.get_exec_ctx())) {
@@ -775,6 +780,7 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
       const ObTableSchema *table_schema = nullptr;
       ObSQLSessionInfo *session = ctx_.get_session_info();
       bool trigger_exists = false;
+      bool is_forbid_parallel = false;
       if (OB_ISNULL(table_info) || OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql schema guard is nullptr", K(ret), K(table_info), K(schema_guard), K(session));
@@ -791,6 +797,13 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
           LOG_WARN("check has trigger on table failed", K(ret));
         } else if (trigger_exists) {
           ctx_.set_has_trigger(true);
+        }
+      }
+      if (OB_SUCC(ret) && trigger_exists) {
+        if (OB_FAIL(table_schema->is_allow_parallel_of_trigger(*schema_guard, is_forbid_parallel))) {
+          LOG_WARN("check allow parallel failed", K(ret));
+        } else if (!is_forbid_parallel) {
+          ctx_.set_allow_parallel_trigger(true);
         }
       }
     }

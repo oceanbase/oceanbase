@@ -566,7 +566,7 @@ private:
                            bool is_for_param_type = false);
   int resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStmt *stmt, ObPLFunctionAST &func);
   int resolve_if(const ObStmtNodeTree *parse_tree, ObPLIfStmt *stmt, ObPLFunctionAST &func);
-  int resolve_case(const ObStmtNodeTree *parse_tree, ObPLIfStmt *stmt, ObPLFunctionAST &func);
+  int resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *stmt, ObPLFunctionAST &func);
   int resolve_iterate(const ObStmtNodeTree *parse_tree, ObPLIterateStmt *stmt, ObPLFunctionAST &func);
   int resolve_leave(const ObStmtNodeTree *parse_tree, ObPLLeaveStmt *stmt, ObPLFunctionAST &func);
   int resolve_while(const ObStmtNodeTree *parse_tree, ObPLWhileStmt *stmt, ObPLFunctionAST &func);
@@ -641,6 +641,8 @@ private:
                      const ObPLDataType *expected_type = NULL);
   int get_actually_pl_type(const ObPLDataType *&type);
   int set_cm_warn_on_fail(ObRawExpr *&expr);
+  int analyze_expr_type(ObRawExpr *&expr,
+                        ObPLCompileUnitAST &unit_ast);
   int resolve_expr(const ParseNode *node, ObPLCompileUnitAST &unit_ast,
                    sql::ObRawExpr *&expr, uint64_t line_number = 0, /* where this expr called */
                    bool need_add = true, const ObPLDataType *expected_type = NULL,
@@ -683,7 +685,7 @@ private:
   int resolve_package_stmt_list(const ObStmtNodeTree *node, ObPLStmtBlock *&block, ObPLPackageAST &package);
   int resolve_stmt_list(const ObStmtNodeTree *parse_tree, ObPLStmtBlock *&stmt, ObPLFunctionAST &func,
                         bool stop_search_label = false, bool in_handler_scope = false);
-  int resolve_when(const ObStmtNodeTree *parse_tree, const ObRawExpr *case_expr, ObPLIfStmt *stmt, ObPLFunctionAST &func);
+  int resolve_when(const ObStmtNodeTree *parse_tree, ObRawExpr *case_expr_var, ObPLCaseStmt *stmt, ObPLFunctionAST &func);
   int resolve_then(const ObStmtNodeTree *parse_tree,
                    ObPLFunctionAST &func,
                    ObPLDataType *data_type,

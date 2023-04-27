@@ -2247,6 +2247,7 @@ all_trigger_def = dict(
     ('ref_trg_db_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
     ('ref_trg_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
     ('action_order', 'int', 'false'),
+    ('analyze_flag', 'int', 'false', 0),
   ],
 )
 

@@ -92,7 +92,7 @@ int ObCreateRoutineResolver::analyze_router_sql(obrpc::ObCreateRoutineArg *crt_r
   if (OB_SUCC(ret)) {
     pl::ObPLRouter router(routine_info, *session_info_, *schema_checker_->get_schema_guard(), *params_.sql_proxy_);
     ObString route_sql;
-    if (OB_FAIL(router.analyze(route_sql, crt_routine_arg->dependency_infos_))) {
+    if (OB_FAIL(router.analyze(route_sql, crt_routine_arg->dependency_infos_, routine_info))) {
       LOG_WARN("failed to analyze route sql", K(route_sql), K(ret));
     } else if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
                          *allocator_, session_info_->get_dtc_params(), route_sql))) {
@@ -514,6 +514,28 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
   return ret;
 }
 
+int ObCreateRoutineResolver::analyze_expr_type(ObRawExpr *&expr,
+                                               ObRoutineInfo &routine_info)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
+    OX (routine_info.set_rps());
+  } else if (T_FUN_UDF == expr->get_expr_type()) {
+    OX (routine_info.set_external_state());
+  } else {
+    for (int64_t i = 0;
+         OB_SUCC(ret) &&
+         (!routine_info.is_rps() || !routine_info.is_external_state()) &&
+         i < expr->get_param_count();
+         ++i) {
+      OZ (analyze_expr_type(expr->get_param_expr(i), routine_info));
+    }
+  }
+  return ret;
+}
+
 int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObRoutineInfo &routine_info)
 {
   int ret = OB_SUCCESS;
@@ -568,9 +590,11 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
           break;
         case MODE_OUT:
           routine_param.set_out_sp_param_flag();
+          routine_info.set_has_out_param();
           break;
         case MODE_INOUT:
           routine_param.set_inout_sp_param_flag();
+          routine_info.set_has_out_param();
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -625,6 +649,7 @@ int ObCreateRoutineResolver::resolve_param_list(const ParseNode *param_list, ObR
               *allocator_, session_info_->get_dtc_params(), default_value));
             OZ (routine_param.set_default_value(default_value));
             OX (match_info.need_cast_ ? routine_param.set_default_cast() : void(NULL));
+            OZ (analyze_expr_type(default_expr, routine_info));
           }
         }
       }

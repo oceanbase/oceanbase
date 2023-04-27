@@ -235,6 +235,7 @@ public:
     TgTimingEvent tg_timing_event_;
     uint64_t rowid_table_id_;
     ObString ps_sql_; // sql prepare过后的参数化sql
+    bool is_bulk_;
   };
 
   struct PLPrepareCtx
@@ -338,16 +339,23 @@ public:
   static int spi_set_package_variable(pl::ObPLExecCtx *ctx,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value);
+                             const ObObj &value,
+                             bool need_deep_copy = false);
   static int spi_set_package_variable(ObExecContext *exec_ctx,
                              pl::ObPLPackageGuard *guard,
                              uint64_t package_id,
                              int64_t var_idx,
-                             const ObObj &value);
+                             const ObObj &value,
+                             ObIAllocator *allocator = NULL,
+                             bool need_deep_copy = false);
+  static int check_and_deep_copy_result(ObIAllocator &alloc,
+                                        const ObObj &src,
+                                        ObObj &dst);
   static int spi_set_variable(pl::ObPLExecCtx *ctx,
                               const ObSqlExpression* expr,
                               const ObObjParam *value,
-                              bool is_default = false);
+                              bool is_default = false,
+                              bool need_copy = false);
   static int spi_query(pl::ObPLExecCtx *ctx,
                        const char* sql,
                        int64_t type,
@@ -358,6 +366,7 @@ public:
                        const bool *exprs_not_null_flag = NULL,
                        const int64_t *pl_integer_ranges = NULL,
                        bool is_bulk = false,
+                       bool is_type_record = false,
                        bool for_update = false);
   static int spi_check_autonomous_trans(pl::ObPLExecCtx *ctx);
   static int spi_prepare(common::ObIAllocator &allocator,
@@ -382,6 +391,7 @@ public:
                          const int64_t *pl_integer_rangs,
                          bool is_bulk = false,
                          bool is_forall = false,
+                         bool is_type_record = false,
                          bool for_update = false);
 
   static int spi_execute_immediate(pl::ObPLExecCtx *ctx,
@@ -396,7 +406,8 @@ public:
                                    const bool *exprs_not_null_flag,
                                    const int64_t *pl_integer_rangs,
                                    bool is_bulk = false,
-                                   bool is_returning = false);
+                                   bool is_returning = false,
+                                   bool is_type_record = false);
 
   static int spi_get_subprogram_cursor_info(pl::ObPLExecCtx *ctx,
                                  uint64_t package_id,
@@ -477,7 +488,8 @@ public:
                               bool is_bulk,
                               int64_t limit,
                               const ObDataType *return_types,
-                              int64_t return_type_count);
+                              int64_t return_type_count,
+                              bool is_type_record = false);
   static int spi_cursor_close(pl::ObPLExecCtx *ctx,
                               uint64_t package_id,
                               uint64_t routine_id,
@@ -663,6 +675,7 @@ public:
                         ObSPIOutParams &out_params);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
+  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor);
 
 private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
@@ -731,6 +744,7 @@ private:
                                const int64_t *pl_integer_rangs,
                                int64_t is_bulk,
                                bool is_forall = false,
+                               bool is_type_record = false,
                                bool for_update = false);
 
   static int dbms_cursor_execute(pl::ObPLExecCtx *ctx,
@@ -795,7 +809,8 @@ private:
                          bool for_cursor = false,
                          int64_t limit = INT64_MAX,
                          const ObDataType *return_types = nullptr,
-                         int64_t return_type_count = 0);
+                         int64_t return_type_count = 0,
+                         bool is_type_record = false);
     static int inner_fetch_with_retry(
                          pl::ObPLExecCtx *ctx,
                          ObSPIResultSet &spi_result,
@@ -813,7 +828,8 @@ private:
                          int64_t limit,
                          int64_t last_exec_time,
                          const ObDataType *return_types = nullptr,
-                         int64_t return_type_count = 0);
+                         int64_t return_type_count = 0,
+                         bool is_type_record = false);
 
   static int convert_obj(pl::ObPLExecCtx *ctx,
                           ObCastCtx &cast_ctx,
@@ -845,14 +861,16 @@ private:
                          bool is_forall = false,
                          int64_t limit = INT64_MAX,
                          const ObDataType *return_types = nullptr,
-                         int64_t return_type_count = 0);
+                         int64_t return_type_count = 0,
+                         bool is_type_record = false);
 
   static int fetch_row(void *result_set,
                        bool is_streaming,
                        int64_t &row_count,
                        ObNewRow &row);
 
-  static int collect_cells(ObNewRow &row,
+  static int collect_cells(pl::ObPLExecCtx &ctx,
+                           ObNewRow &row,
                            const ObDataType *result_types,
                            int64_t type_count,
                            const ObIArray<ObDataType> &row_desc,
@@ -871,22 +889,39 @@ private:
                           ObCastCtx &cast_ctx,
                           ObIArray<ObObj> &obj_array,
                           const ObDataType *return_types,
-                          int64_t return_type_count);
+                          int64_t return_type_count,
+                          bool is_type_record = false);
 
   static int get_package_var_info_by_expr(const ObSqlExpression *expr,
                                           uint64_t &package_id,
                                           uint64_t &var_idx);
-  static int store_result(ObIArray<pl::ObPLCollection*> &bulk_tables,
+  static int store_result(pl::ObPLExecCtx *ctx,
+                          ObIArray<pl::ObPLCollection*> &bulk_tables,
                           int64_t row_count,
                           int64_t column_count,
-                          const ObIArray<ObObj> &obj_array,
-                          bool append_mode);
+                          ObIArray<ObObj> &obj_array,
+                          bool append_mode,
+                          bool is_type_record);
 
-  static int store_datums(ObObj &dest_addr, const ObIArray<ObObj> &result);
+  static int store_into_result(pl::ObPLExecCtx *ctx,
+                                ObCastCtx &cast_ctx,
+                                ObNewRow &cur_row,
+                                const ObSqlExpression **into_exprs,
+                                const ObDataType *column_types,
+                                int64_t type_count,
+                                int64_t into_count,
+                                const bool *exprs_not_null,
+                                const int64_t *pl_integer_ranges,
+                                const ObDataType *return_types,
+                                int64_t return_type_count,
+                                int64_t actual_column_count,
+                                ObIArray<ObDataType> &row_desc,
+                                bool is_type_record);
+
+  static int store_datums(ObObj &dest_addr, const ObIArray<ObObj> &result,
+                          ObIAllocator *alloc, bool is_schema_object);
 
   static int store_datum(int64_t &current_addr, const ObObj &obj);
-
-  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor);
 
   static const ObPostExprItem &get_last_expr_item(const ObSqlExpression &expr);
 
@@ -954,7 +989,8 @@ private:
                                      bool is_bulk,
                                      int64_t limit,
                                      const ObDataType *return_types = nullptr,
-                                     int64_t return_type_count = 0);
+                                     int64_t return_type_count = 0,
+                                     bool is_type_record = false);
 
 
   static int check_package_dest_and_deep_copy(pl::ObPLExecCtx &ctx,

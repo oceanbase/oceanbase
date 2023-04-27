@@ -59,6 +59,7 @@ class ObPLCodeGenerator;
 namespace sql
 {
 class ObStmt;
+class ObCallProcedureInfo;
 class ObSQLSessionInfo;
 class ObExprOperator;
 class ObRawExprFactory;
@@ -1607,6 +1608,7 @@ public:
   friend sql::ObExpr *ObStaticEngineExprCG::get_rt_expr(const ObRawExpr &raw_expr);
   friend sql::ObExpr *ObExprOperator::get_rt_expr(const ObRawExpr &raw_expr) const;
   friend class pl::ObPLCodeGenerator;
+  friend class sql::ObCallProcedureInfo;
   friend class sql::ObRTDatumArith;
 
   explicit ObRawExpr(ObItemType expr_type = T_INVALID)

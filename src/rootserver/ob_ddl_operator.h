@@ -793,7 +793,6 @@ public:
                      share::schema::ObErrorInfo &error_info,
                      ObIArray<ObDependencyInfo> &dep_infos,
                      const common::ObString *ddl_stmt_str/*=NULL*/,
-                     bool for_insert_errors,
                      bool is_update_table_schema_version = true,
                      bool is_for_truncate_table = false);
   // set ddl_stmt_str to NULL if the statement is not 'drop trigger xxx'.

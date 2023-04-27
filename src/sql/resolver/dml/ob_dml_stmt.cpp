@@ -385,7 +385,8 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type)
       user_var_exprs_(),
       check_constraint_items_(),
       dblink_id_(OB_INVALID_ID),
-      is_reverse_link_(false)
+      is_reverse_link_(false),
+      is_bulk_(false)
 {
 }
 
@@ -495,6 +496,7 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     transpose_item_ = other.transpose_item_;
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
+    is_bulk_ = other.is_bulk_;
   }
   return ret;
 }
@@ -657,6 +659,7 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     is_fetch_with_ties_ = other.is_fetch_with_ties_;
     dblink_id_ = other.dblink_id_;
     is_reverse_link_ = other.is_reverse_link_;
+    is_bulk_ = other.is_bulk_;
   }
   if (OB_SUCC(ret)) {
     TransposeItem *tmp = NULL;

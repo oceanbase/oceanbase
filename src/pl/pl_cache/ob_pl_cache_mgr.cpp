@@ -54,7 +54,8 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
               (!guard.get_cache_obj()->is_prcr() &&
                 !guard.get_cache_obj()->is_sfc() &&
                 !guard.get_cache_obj()->is_pkg() &&
-                !guard.get_cache_obj()->is_anon())) {
+                !guard.get_cache_obj()->is_anon() &&
+                guard.get_cache_obj()->get_ns() != ObLibCacheNameSpace::NS_CALLSTMT)) {
       ret = OB_ERR_UNEXPECTED;
       PL_CACHE_LOG(WARN, "cache obj is invalid", KPC(guard.get_cache_obj()));
     }
@@ -89,7 +90,8 @@ int ObPLCacheMgr::get_pl_cache(ObPlanCache *lib_cache, ObCacheObjGuard& guard, O
     // update pl func/package stat
     pl::PLCacheObjStat *stat = NULL;
     int64_t current_time = ObTimeUtility::current_time();
-    if (ObLibCacheNameSpace::NS_PKG != guard.get_cache_obj()->get_ns()) {
+    if (ObLibCacheNameSpace::NS_PKG != guard.get_cache_obj()->get_ns() &&
+        ObLibCacheNameSpace::NS_CALLSTMT != guard.get_cache_obj()->get_ns()) {
       pl::ObPLFunction* pl_func = static_cast<pl::ObPLFunction*>(guard.get_cache_obj());
       stat = &pl_func->get_stat_for_update();
       ATOMIC_INC(&(stat->hit_count_));
@@ -156,7 +158,8 @@ int ObPLCacheMgr::add_pl_cache(ObPlanCache *lib_cache, ObILibCacheObject *pl_obj
       }
         break;
       case NS_PKG:
-      case NS_ANON: {
+      case NS_ANON:
+      case NS_CALLSTMT: {
         ns = pl_object->get_ns();
       }
         break;

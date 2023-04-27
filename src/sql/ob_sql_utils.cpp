@@ -494,7 +494,7 @@ int ObSQLUtils::calc_sql_expression_without_row(
     LOG_WARN("session is NULL", K(ret));
   } else {
     const sql::ObExpr *new_expr = expr.get_expr();
-    exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time());
+    exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
     if (NULL == new_expr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));

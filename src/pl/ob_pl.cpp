@@ -966,36 +966,43 @@ int ObPLContext::set_role_id_array(ObPLFunction &routine,
 
   if (ObSchemaChecker::is_ora_priv_check() && !routine.is_invoker_right()
       && routine.get_proc_type() != STANDALONE_ANONYMOUS) {
-    uint64_t priv_user_id = OB_INVALID_ID;
-    CK (OB_NOT_NULL(session_info_));
-    /* 1. save in definer, just for more information */
-    OX (old_in_definer_ = session_info_->get_in_definer_named_proc());
-    OX (session_info_->set_in_definer_named_proc(true));
-    if (OB_SUCC(ret)) {
-      if (0 == session_info_->get_database_name().case_compare(OB_SYS_DATABASE_NAME)) {
-        OX (priv_user_id = OB_ORA_SYS_USER_ID);
-      } else {
-        OZ (guard.get_user_id(session_info_->get_effective_tenant_id(),
-                              session_info_->get_database_name(),
-                              ObString(OB_DEFAULT_HOST_NAME),
-                              priv_user_id,
-                              false));
+    bool is_special_ir = false;
+    if (OB_FAIL(routine.is_special_pkg_invoke_right(guard, is_special_ir))){
+      LOG_WARN("failed to check special pkg invoke right", K(ret));
+    } else if (is_special_ir){
+      need_reset_role_id_array_ = false;
+    } else {
+      uint64_t priv_user_id = OB_INVALID_ID;
+      CK (OB_NOT_NULL(session_info_));
+      /* 1. save in definer, just for more information */
+      OX (old_in_definer_ = session_info_->get_in_definer_named_proc());
+      OX (session_info_->set_in_definer_named_proc(true));
+      if (OB_SUCC(ret)) {
+        if (0 == session_info_->get_database_name().case_compare(OB_SYS_DATABASE_NAME)) {
+          OX (priv_user_id = OB_ORA_SYS_USER_ID);
+        } else {
+          OZ (guard.get_user_id(session_info_->get_effective_tenant_id(),
+                                session_info_->get_database_name(),
+                                ObString(OB_DEFAULT_HOST_NAME),
+                                priv_user_id,
+                                false));
+        }
       }
+      if (OB_SUCC(ret) && OB_INVALID_ID == priv_user_id) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_WARN("fail to get procedure owner id",
+                K(session_info_->get_effective_tenant_id()),
+                K(session_info_->get_database_name()));
+      }
+      /* 2. save priv user id, and set new priv user id, change grantee_id, for priv check */
+      OX (old_priv_user_id_ = session_info_->get_priv_user_id());
+      OX (session_info_->set_priv_user_id(priv_user_id));
+      /* 3. save role id array , remove role id array for priv check */
+      OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
+      OX (session_info_->get_enable_role_array().reset());
+      OZ (session_info_->get_enable_role_array().push_back(OB_ORA_PUBLIC_ROLE_ID));
+      OX (need_reset_role_id_array_ = true);
     }
-    if (OB_SUCC(ret) && OB_INVALID_ID == priv_user_id) {
-      ret = OB_USER_NOT_EXIST;
-      LOG_WARN("fail to get procedure owner id",
-               K(session_info_->get_effective_tenant_id()),
-               K(session_info_->get_database_name()));
-    }
-    /* 2. save priv user id, and set new priv user id, change grantee_id, for priv check */
-    OX (old_priv_user_id_ = session_info_->get_priv_user_id());
-    OX (session_info_->set_priv_user_id(priv_user_id));
-    /* 3. save role id array , remove role id array for priv check */
-    OZ (old_role_id_array_.assign(session_info_->get_enable_role_array()));
-    OX (session_info_->get_enable_role_array().reset());
-    OZ (session_info_->get_enable_role_array().push_back(OB_ORA_PUBLIC_ROLE_ID));
-    OX (need_reset_role_id_array_ = true);
   } else if (lib::is_mysql_mode() && !routine.is_invoker_right() &&
              0 != routine.get_priv_user().length()
              /* 兼容存量存储过程，存量存储过程的priv_user为空。mysql存储过程默认为definer行为，
@@ -3451,59 +3458,6 @@ ObPLCompileUnit::~ObPLCompileUnit()
   }
 }
 
-void ObPLCompileUnit::reset()
-{
-  ObILibCacheObject::reset();
-  tenant_schema_version_ = OB_INVALID_VERSION;
-  sys_schema_version_ = OB_INVALID_VERSION;
-  dependency_tables_.reset();
-  params_info_.reset();
-}
-
-int ObPLCompileUnit::set_params_info(const ParamStore &params)
-{
-  int ret = OB_SUCCESS;
-  int64_t N = params.count();
-  ObParamInfo param_info;
-  if (N > 0 && OB_FAIL(params_info_.reserve(N))) {
-    OB_LOG(WARN, "fail to reserve params info", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-    param_info.flag_ = params.at(i).get_param_flag();
-    param_info.type_ = params.at(i).get_param_meta().get_type();
-    param_info.col_type_ = params.at(i).get_collation_type();
-    if (ObSQLUtils::is_oracle_empty_string(params.at(i))) {
-      param_info.is_oracle_empty_string_ = true;
-    }
-    if (params.at(i).get_param_meta().get_type() != params.at(i).get_type()) {
-      LOG_TRACE("differ in set_params_info",
-                K(params.at(i).get_param_meta().get_type()),
-                K(params.at(i).get_type()),
-                K(common::lbt()));
-    }
-    //todo:it is for arraybinding check, not pl ext check
-    if (params.at(i).is_ext()) {
-      ObDataType data_type;
-      if (OB_FAIL(ObSQLUtils::get_ext_obj_data_type(params.at(i), data_type))) {
-        LOG_WARN("fail to get ext obj data type", K(ret));
-      } else {
-        param_info.ext_real_type_ = data_type.get_obj_type();
-        param_info.scale_ = data_type.get_meta_type().get_scale();
-      }
-      LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
-    } else {
-      param_info.scale_ = params.at(i).get_scale();
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(params_info_.push_back(param_info))) {
-        LOG_WARN("failed to push back param info", K(ret));
-      }
-    }
-    param_info.reset();
-  }
-  return ret;
-}
-
 int ObPLCompileUnit::add_routine(ObPLFunction *routine)
 {
   int ret = OB_SUCCESS;
@@ -3524,6 +3478,14 @@ int ObPLCompileUnit::get_routine(int64_t routine_idx, ObPLFunction *&routine) co
     routine = routine_table_.at(routine_idx);
   }
   return ret;
+}
+
+void ObPLCompileUnit::reset()
+{
+  ObPLCacheObject::reset();
+  tenant_schema_version_ = OB_INVALID_VERSION;
+  sys_schema_version_ = OB_INVALID_VERSION;
+  dependency_tables_.reset();
 }
 
 
@@ -3771,12 +3733,14 @@ int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &
   static const char *name_pair[] = { "dbms_utility", "name_resolve" };
   static const char *name_pair1[] = { "dbms_utility", "ICD_NAME_RES" };
   static const char *name_pair2[] = { "dbms_utility", "old_current_schema" };
-  static const char *name_pair3[] = { "dbms_describe", "describe_procedure" };
+  static const char *name_pair3[] = { "dbms_utility", "exec_ddl_statement" };
+  static const char *name_pair4[] = { "dbms_describe", "describe_procedure" };
   static name_pair_ptr name_arr[] = {
     &name_pair,
     &name_pair1,
     &name_pair2,
-    &name_pair3
+    &name_pair3,
+    &name_pair4
     // { "dbms_utility", "name_resolve" }
   };
   int ret = OB_SUCCESS;

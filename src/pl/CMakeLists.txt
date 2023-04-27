@@ -39,6 +39,7 @@ ob_set_subtarget(ob_pl common
 ob_set_subtarget(ob_pl common_mixed
   pl_cache/ob_pl_cache.cpp
   pl_cache/ob_pl_cache_mgr.cpp
+  pl_cache/ob_pl_cache_object.cpp
 )
 
 ob_set_subtarget(ob_pl sys_package

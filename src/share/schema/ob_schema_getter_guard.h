@@ -312,9 +312,17 @@ public:
   int get_udt_infos_in_database(const uint64_t tenant_id,
                                 const uint64_t database_id,
                                 common::ObIArray<const ObUDTTypeInfo *> &udt_infos);
+  int get_routine_info_in_udt(const uint64_t tenant_id,
+                              const uint64_t udt_id,
+                              const uint64_t subprogram_id,
+                              const ObRoutineInfo *&routine_info);
   int get_routine_infos_in_udt(const uint64_t tenant_id,
                                const uint64_t udt_id,
                                common::ObIArray<const ObRoutineInfo *> &routine_infos);
+  int get_routine_info_in_package(const uint64_t tenant_id,
+                                  const uint64_t package_id,
+                                  const uint64_t subprogram_id,
+                                  const ObRoutineInfo *&routine_info);
   int get_routine_infos_in_package(const uint64_t tenant_id,
                                    const uint64_t package_id,
                                    common::ObIArray<const ObRoutineInfo *> &routine_infos);

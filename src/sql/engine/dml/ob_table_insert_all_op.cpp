@@ -111,8 +111,11 @@ int ObTableInsertAllOp::check_need_exec_single_row()
       const ObInsCtDef &ins_ctdef = *(ctdefs.at(0));
       const uint64_t table_id = ins_ctdef.das_base_ctdef_.index_tid_;
       const ObForeignKeyArgArray &fk_args = ins_ctdef.fk_args_;
-      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
-        execute_single_row_ = true;
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < ins_ctdef.trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = ins_ctdef.trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
       }
       for (int j = 0; OB_SUCC(ret) && j < fk_args.count() && !execute_single_row_; j++) {
         const ObForeignKeyArg &fk_arg = fk_args.at(j);

@@ -347,7 +347,7 @@ int ObCreatePackageResolver::resolve_functions_spec(const ObPackageInfo &package
         routine_info.set_reads_sql_data();
       } else if (pl_routine_info->is_modifies_sql_data()) {
         routine_info.set_modifies_sql_data();
-      } else {
+      } else if (pl_routine_info->is_contains_sql()) {
         routine_info.set_contains_sql();
       }
       // udt type 相关信息设置
@@ -713,6 +713,32 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
         OX (routine_info.set_route_sql(route_sql));
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
         OX (routine_info.set_routine_body(routine_body));
+        if (OB_SUCC(ret)) {
+          if (pl_routine_info->is_modifies_sql_data()) {
+            routine_info.set_modifies_sql_data();
+          } else if (pl_routine_info->is_reads_sql_data()) {
+            routine_info.set_reads_sql_data();
+          } else if (pl_routine_info->is_contains_sql()) {
+            routine_info.set_contains_sql();
+          } else if (pl_routine_info->is_no_sql()) {
+            routine_info.set_no_sql();
+          }
+          if (pl_routine_info->is_wps()) {
+            routine_info.set_wps();
+          }
+          if (pl_routine_info->is_rps()) {
+            routine_info.set_rps();
+          }
+          if (pl_routine_info->is_has_sequence()) {
+            routine_info.set_has_sequence();
+          }
+          if (pl_routine_info->is_has_out_param()) {
+            routine_info.set_has_out_param();
+          }
+          if (pl_routine_info->is_external_state()) {
+            routine_info.set_external_state();
+          }
+        }
       }
     }
     OZ (public_routine_list.push_back(routine_info));

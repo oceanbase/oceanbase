@@ -268,7 +268,6 @@ public:
                      const int64_t &cursor_index,
                      const int64_t &limit,
                      const ObUserDefinedType *user_defined_type,
-                     const ObIArray<ObDataType> &user_types,
                      jit::ObLLVMValue &ret_err);
   int generate_close(const ObPLStmt &s,
                      const uint64_t &package_id,
@@ -786,6 +785,7 @@ public:
   virtual int visit(const ObPLTrimStmt &s);
   virtual int visit(const ObPLInterfaceStmt &s);
   virtual int visit(const ObPLDoStmt &s);
+  virtual int visit(const ObPLCaseStmt &s);
 
 private:
   int find_next_procedence_condition(common::ObIArray<std::pair<ObPLConditionType, int64_t>> &conditions,

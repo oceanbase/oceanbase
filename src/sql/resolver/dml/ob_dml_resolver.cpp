@@ -1733,6 +1733,67 @@ int ObDMLResolver::resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<Ob
   return ret;
 }
 
+static int check_is_pl_jsontype(const oceanbase::pl::ObUserDefinedType *user_type)
+{
+  INIT_SUCC(ret);
+
+  if (OB_ISNULL(user_type)) {
+  } else if (user_type->get_type() == oceanbase::pl::PL_OPAQUE_TYPE) {
+    if (user_type->get_name().compare("JSON_OBJECT_T") == 0
+        || user_type->get_name().compare("JSON_ELEMENT_T") == 0) {
+      ret = OB_ERR_PL_JSONTYPE_USAGE;
+      LOG_WARN("invalid pl json type userage in pl/sql", K(ret),
+                K(user_type->get_type()), K(user_type->get_user_type_id()));
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type)
+{
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(expr));
+  CK (OB_NOT_NULL(params_.secondary_namespace_));
+  CK (expr->get_result_type().is_valid());
+  if (OB_SUCC(ret)) {
+    pl::ObPLDataType final_type;
+    // T_OBJ_ACCESS_REF expr, access obj type (not user defined type)
+    bool access_obj_type = false;
+    if (expr->is_obj_access_expr()) {
+      // T_OBJ_ACCESS_REF return ObExtendType for object access for writing, get obj type
+      // from %final_type;
+      // see comment in ObPLInto::add_into
+      const auto &access_expr = static_cast<const ObObjAccessRawExpr &>(*expr);
+      OZ(access_expr.get_final_type(final_type));
+      OX(access_obj_type = !final_type.is_user_type());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (expr->get_result_type().is_ext() && !access_obj_type) {
+      CK (expr->is_obj_access_expr());
+      OX (pl_data_type = final_type);
+      if (OB_SUCC(ret) && NULL != params_.secondary_namespace_) {
+        const pl::ObUserDefinedType *user_type = NULL;
+        OZ (params_.secondary_namespace_->get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
+        OZ (check_is_pl_jsontype(user_type));
+      }
+    } else {
+      ObDataType type;
+      if (access_obj_type) {
+        type.set_meta_type(final_type.get_data_type()->get_meta_type());
+        type.set_accuracy(final_type.get_data_type()->get_accuracy());
+      } else {
+        type.set_meta_type(expr->get_result_type().get_obj_meta());
+        type.set_accuracy(expr->get_result_type().get_accuracy());
+      }
+      OX (pl_data_type.set_data_type(type));
+      OX (pl_data_type.set_type(PL_OBJ_TYPE));
+    }
+  }
+
+  return ret;
+}
+
 int ObDMLResolver::resolve_into_variables(const ParseNode *node,
                                           ObIArray<ObString> &user_vars,
                                           ObIArray<ObRawExpr*> &pl_vars,
@@ -1818,43 +1879,6 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("dynamic sql returning bulk collect is not supported!", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic sql returning bulk collect");
-      } else { //非BULK
-        for (uint64_t i = 0; OB_SUCC(ret) && i < pl_vars.count(); ++i) {
-          CK (OB_NOT_NULL(pl_vars.at(i)));
-          if (OB_SUCC(ret) && pl_vars.at(i)->is_obj_access_expr()) {
-            pl::ObPLDataType pl_type;
-            const ObUserDefinedType *user_type = NULL;
-            const ObRecordType *record_type = NULL;
-            ObObjAccessRawExpr* access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(i));
-            OZ (access_expr->get_final_type(pl_type));
-            if (OB_FAIL(ret)) {
-            } else if (pl_type.is_collection_type()) {
-              if (pl_type.is_udt_type()) {
-                ret = OB_ERR_INVALID_TYPE_FOR_OP;
-                LOG_WARN("inconsistent datatypes", K(ret), K(pl_type));
-              } else {
-                ret = OB_ERR_LOCAL_COLL_IN_SQL;
-                LOG_WARN("local collection types not allowed in SQL statements",
-                          K(ret), K(pl_type));
-              }
-            } else if (pl_type.is_record_type()) {
-              CK (OB_NOT_NULL(params_.secondary_namespace_));
-              OZ (params_.secondary_namespace_->get_pl_data_type_by_id(pl_type.get_user_type_id(),
-                                                                       user_type));
-              CK (OB_NOT_NULL(user_type));
-              CK (user_type->is_record_type());
-              CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType*>(user_type)));
-              for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
-                const ObPLDataType *member = record_type->get_record_member_type(i);
-                CK (OB_NOT_NULL(member));
-                if (OB_SUCC(ret) && !member->is_obj_type()) {
-                  ret = OB_ERR_INTO_EXPR_ILLEGAL;
-                  LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(i));
-                }
-              }
-            }
-          }
-        }
       }
     }
     if (OB_SUCC(ret) && !pl_vars.empty() && !user_vars.empty()) {
@@ -1884,6 +1908,301 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
       }
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (!user_vars.empty()) {
+      // into user var in mysql mode
+      CK (OB_NOT_NULL(select_stmt));
+      if (OB_SUCC(ret) && NULL != params_.secondary_namespace_ &&
+          select_stmt->get_select_items().count() != user_vars.count()) {
+        ret = OB_ERR_COLUMN_SIZE;
+        LOG_WARN("The used SELECT statements have a different number of columns", K(ret));
+      }
+    } else if (1 == node->value_) { // bulk into
+      bool has_type_record_type = false;
+      const ObPLDataType *into_var_type = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && !has_type_record_type && i < pl_vars.count(); ++i) {
+        CK (OB_NOT_NULL(pl_vars.at(i)));
+        if (OB_SUCC(ret) && pl_vars.at(i)->is_obj_access_expr()) {
+          pl::ObPLDataType pl_type;
+          const ObUserDefinedType *user_type = NULL;
+          ObObjAccessRawExpr* access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(i));
+          OZ (access_expr->get_final_type(pl_type));
+          CK (pl_type.is_collection_type());
+          CK (OB_NOT_NULL(params_.secondary_namespace_));
+          OZ (params_.secondary_namespace_->get_pl_data_type_by_id(pl_type.get_user_type_id(),
+                                                                    user_type));
+          CK (OB_NOT_NULL(user_type));
+          if (OB_SUCC(ret)) {
+            const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(user_type);
+            CK (OB_NOT_NULL(coll_type));
+            if (OB_FAIL(ret)) {
+            } else if (coll_type->get_element_type().is_type_record()) {
+              has_type_record_type = true;
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (has_type_record_type && pl_vars.count() != 1) {
+        ret = OB_ERR_MULTI_RECORD;
+        LOG_WARN("coercion into multiple record targets not supported", K(ret));
+      }
+      /* 走到这里如果没报错，有两种可能:
+        1.into 变量中, 元素成员是type record的nested table变量只有唯一一个.
+        2.into 变量中, 没有元素成员是type record的nested table变量 */
+      if (OB_SUCC(ret)) {
+        pl::ObPLDataType pl_type;
+        const ObUserDefinedType *into_user_type = NULL;
+        const ObUserDefinedType *elem_user_type = NULL;
+        const ObRecordType *into_record_type = NULL;
+        int64_t value_expr_count = 0;
+        int64_t into_data_type_count = 0;
+        bool is_compatible = true;
+        bool skip_comp = false;
+        if (has_type_record_type) {
+          ObObjAccessRawExpr* access_expr = NULL;
+          const ObCollectionType *coll_type = NULL;
+          CK (1 == pl_vars.count());
+          OX (access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(0)));
+          OZ (access_expr->get_final_type(pl_type));
+          OZ (params_.secondary_namespace_->get_pl_data_type_by_id(pl_type.get_user_type_id(), into_user_type));
+          CK (OB_NOT_NULL(into_user_type));
+          OX (coll_type = static_cast<const ObCollectionType*>(into_user_type));
+          CK (OB_NOT_NULL(coll_type));
+          CK (coll_type->get_element_type().is_record_type());
+          OZ (params_.secondary_namespace_->get_pl_data_type_by_id(coll_type->get_element_type().get_user_type_id(), elem_user_type));
+          CK (OB_NOT_NULL(elem_user_type));
+          OX (into_record_type = static_cast<const ObRecordType*>(elem_user_type));
+          OX (into_data_type_count = into_record_type->get_record_member_count());
+        } else {
+          into_data_type_count = pl_vars.count();
+        }
+        if (OB_FAIL(ret)) {
+        } else if (NULL != select_stmt) { // select into
+          ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+          value_expr_count = select_items.count();
+        } else {
+          ObDelUpdStmt *del_up_stmt = static_cast<ObDelUpdStmt*>(get_basic_stmt());
+          CK (OB_NOT_NULL(del_up_stmt));
+          OX (value_expr_count = del_up_stmt->get_returning_exprs().count());
+        }
+        if (OB_SUCC(ret)) {
+          if (value_expr_count > into_data_type_count) {
+            ret = OB_ERR_NOT_ENOUGH_VALUES;
+            LOG_WARN("type not compatible", K(ret));
+          } else if (value_expr_count < into_data_type_count) {
+            ret = OB_ERR_TOO_MANY_VALUES;
+            LOG_WARN("type not compatible", K(ret));
+          }
+          CK(OB_NOT_NULL(params_.session_info_));
+          for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < into_data_type_count; ++i) {
+            ObRawExpr *value_expr = NULL;
+            if (NULL != select_stmt) {
+              value_expr = select_stmt->get_select_items().at(i).expr_;
+            } else {
+              value_expr = static_cast<ObDelUpdStmt*>(get_basic_stmt())->get_returning_exprs().at(i);
+            }
+            pl::ObPLDataType into_pl_type;
+            if (OB_ISNULL(value_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr of select item is null", K(ret));
+            } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
+              LOG_WARN("formailize column reference expr failed", K(ret));
+            } else {
+              if (has_type_record_type) {
+                CK (OB_NOT_NULL(into_record_type));
+                CK (OB_NOT_NULL(into_record_type->get_record_member_type(i)));
+                OX (into_pl_type = *(into_record_type->get_record_member_type(i)));
+              } else if (pl_vars.at(i)->get_expr_type() == T_QUESTIONMARK) {
+                skip_comp = true;
+              } else if (!pl_vars.at(i)->is_obj_access_expr()) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("into variable need obj access", K(ret));
+              } else {
+                pl::ObPLDataType pl_type;
+                const ObUserDefinedType *into_user_type = NULL;
+                const ObCollectionType *coll_type = NULL;
+                const ObUserDefinedType *elem_user_type = NULL;
+                ObObjAccessRawExpr* access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(i));
+                OZ (access_expr->get_final_type(pl_type));
+                OZ (params_.secondary_namespace_->get_pl_data_type_by_id(pl_type.get_user_type_id(), into_user_type));
+                CK (OB_NOT_NULL(into_user_type));
+                OX (coll_type = static_cast<const ObCollectionType*>(into_user_type));
+                CK (OB_NOT_NULL(coll_type));
+                OX (into_pl_type = coll_type->get_element_type());
+              }
+            }
+            if (OB_SUCC(ret) && !skip_comp) {
+              if (value_expr->get_data_type() != ObExtendType && into_pl_type.is_obj_type()) {
+                CK (OB_NOT_NULL(into_pl_type.get_data_type()));
+                OX (is_compatible = cast_supported(value_expr->get_data_type(),
+                                                  value_expr->get_collation_type(),
+                                                  into_pl_type.get_data_type()->get_obj_type(),
+                                                  into_pl_type.get_data_type()->get_collation_type()));
+              } else if (value_expr->get_data_type() == ObExtendType &&
+                        (!into_pl_type.is_obj_type() ||
+                         (into_pl_type.get_data_type() != NULL && into_pl_type.get_data_type()->get_meta_type().is_ext()))) {
+                uint64_t left_udt_id = value_expr->get_udt_id();
+                uint64_t right_udt_id = (NULL == into_pl_type.get_data_type()) ? into_pl_type.get_user_type_id()
+                                                                                : into_pl_type.get_data_type()->get_udt_id();
+                if (left_udt_id != right_udt_id) {
+                  is_compatible = false;
+                } else {
+                  // same composite type, compatible is true, do nothing.
+                }
+              } else {
+                is_compatible = false;
+              }
+            }
+            if (OB_SUCC(ret) && !is_compatible) {
+              if (into_pl_type.is_udt_type()) {
+                ret = OB_ERR_INVALID_TYPE_FOR_OP;
+                LOG_WARN("inconsistent datatypes", K(ret), K(into_pl_type));
+              } else {
+                ret = OB_ERR_LOCAL_COLL_IN_SQL;
+                LOG_WARN("local collection types not allowed in SQL statements",
+                          K(ret), K(pl_type));
+              }
+            }
+          }
+        }
+      }
+    } else { // into
+      bool has_type_record_type = false;
+      const ObPLDataType *into_var_type = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && !has_type_record_type && i < pl_vars.count(); ++i) {
+        CK (OB_NOT_NULL(pl_vars.at(i)));
+        if (OB_SUCC(ret) && pl_vars.at(i)->is_obj_access_expr()) {
+          pl::ObPLDataType pl_type;
+          ObObjAccessRawExpr* access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(i));
+          OZ (access_expr->get_final_type(pl_type));
+          if (OB_FAIL(ret)) {
+          } else if (pl_type.is_type_record()) {
+            has_type_record_type = true;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (has_type_record_type && pl_vars.count() != 1) {
+        ret = OB_ERR_MULTI_RECORD;
+        LOG_WARN("coercion into multiple record targets not supported", K(ret));
+      }
+
+      /* 走到这里如果没报错，有两种可能:
+        1.into变量只有唯一一个type record.
+        2.into变量无type record */
+      if (OB_SUCC(ret)) {
+        pl::ObPLDataType pl_type;
+        const ObUserDefinedType *into_user_type = NULL;
+        const ObRecordType *into_record_type = NULL;
+        int64_t value_expr_count = 0;
+        int64_t into_data_type_count = 0;
+        bool is_compatible = true;
+        bool skip_comp = false;
+        if (has_type_record_type) {
+          ObObjAccessRawExpr* access_expr = NULL;
+          const pl::ObPLDataType *element_type = NULL;
+          CK (1 == pl_vars.count());
+          OX (access_expr = static_cast<ObObjAccessRawExpr*>(pl_vars.at(0)));
+          OZ (access_expr->get_final_type(pl_type));
+          OZ (params_.secondary_namespace_->get_pl_data_type_by_id(pl_type.get_user_type_id(), into_user_type));
+          CK (OB_NOT_NULL(into_user_type));
+          CK (into_user_type->is_record_type());
+          OX (into_record_type = static_cast<const ObRecordType*>(into_user_type));
+          OX (into_data_type_count = into_record_type->get_record_member_count());
+          for (int64_t i = 0; OB_SUCC(ret) && i < into_data_type_count; ++i) {
+            element_type = into_record_type->get_record_member_type(i);
+            CK (OB_NOT_NULL(element_type));
+            if (OB_SUCC(ret) && element_type->is_type_record()) {
+              ret = OB_ERR_INTO_EXPR_ILLEGAL;
+              LOG_WARN("inconsistent datatypes", K(ret));
+            }
+          }
+        } else {
+          into_data_type_count = pl_vars.count();
+        }
+        if (OB_FAIL(ret)) {
+        } else if (NULL != select_stmt) { // select into
+          ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+          value_expr_count = select_items.count();
+        } else {
+          ObDelUpdStmt *del_up_stmt = static_cast<ObDelUpdStmt*>(get_basic_stmt());
+          CK (OB_NOT_NULL(del_up_stmt));
+          OX (value_expr_count = del_up_stmt->get_returning_exprs().count());
+        }
+        if (OB_SUCC(ret)) {
+          if (value_expr_count > into_data_type_count) {
+            ret = OB_ERR_NOT_ENOUGH_VALUES;
+            LOG_WARN("type not compatible", K(ret));
+          } else if (value_expr_count < into_data_type_count) {
+            ret = OB_ERR_TOO_MANY_VALUES;
+            LOG_WARN("type not compatible", K(ret));
+          }
+          CK(OB_NOT_NULL(params_.session_info_));
+          for (int64_t i = 0; OB_SUCC(ret) && is_compatible && i < into_data_type_count; ++i) {
+            ObRawExpr *value_expr = NULL;
+            if (NULL != select_stmt) {
+              value_expr = select_stmt->get_select_items().at(i).expr_;
+            } else {
+              value_expr = static_cast<ObDelUpdStmt*>(get_basic_stmt())->get_returning_exprs().at(i);
+            }
+            pl::ObPLDataType into_pl_type;
+            if (OB_ISNULL(value_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr of select item is null", K(ret));
+            } else if (OB_FAIL(value_expr->formalize(params_.session_info_))) {
+              LOG_WARN("formailize column reference expr failed", K(ret));
+            } else {
+              if (has_type_record_type) {
+                CK (OB_NOT_NULL(into_record_type));
+                CK (OB_NOT_NULL(into_record_type->get_record_member_type(i)));
+                OX (into_pl_type = *(into_record_type->get_record_member_type(i)));
+              } else if (pl_vars.at(i)->get_expr_type() == T_QUESTIONMARK) {
+                skip_comp = true;
+              } else {
+                OZ (generate_pl_data_type(pl_vars.at(i), into_pl_type));
+              }
+            }
+            if (OB_SUCC(ret) && !skip_comp) {
+              if (value_expr->get_data_type() != ObExtendType && into_pl_type.is_obj_type()) {
+                CK (OB_NOT_NULL(into_pl_type.get_data_type()));
+                OX (is_compatible = cast_supported(value_expr->get_data_type(),
+                                                  value_expr->get_collation_type(),
+                                                  into_pl_type.get_data_type()->get_obj_type(),
+                                                  into_pl_type.get_data_type()->get_collation_type()));
+              } else if (value_expr->get_data_type() == ObExtendType &&
+                        (!into_pl_type.is_obj_type() ||
+                         (into_pl_type.get_data_type() != NULL && into_pl_type.get_data_type()->get_meta_type().is_ext()))) {
+                uint64_t left_udt_id = value_expr->get_udt_id();
+                uint64_t right_udt_id = (NULL == into_pl_type.get_data_type()) ? into_pl_type.get_user_type_id()
+                                                                                : into_pl_type.get_data_type()->get_udt_id();
+                if (left_udt_id != right_udt_id) {
+                  is_compatible = false;
+                } else {
+                  // same composite type, compatible is true, do nothing.
+                }
+              } else {
+                is_compatible = false;
+              }
+            }
+            if (OB_SUCC(ret) && !is_compatible) {
+              if (into_pl_type.is_udt_type()) {
+                ret = OB_ERR_INVALID_TYPE_FOR_OP;
+                LOG_WARN("inconsistent datatypes", K(ret), K(into_pl_type));
+              } else {
+                ret = OB_ERR_LOCAL_COLL_IN_SQL;
+                LOG_WARN("local collection types not allowed in SQL statements",
+                          K(ret), K(pl_type));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && NULL != select_stmt) {
     ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
     CK(OB_NOT_NULL(params_.session_info_));
@@ -2189,14 +2508,19 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
         LOG_WARN("function 'string' may not be used in SQL", K(ret), KPC(udf));
       } else {
-        stmt_->get_query_ctx()->has_pl_udf_ = true;
+        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
       }
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == real_ref_expr->get_expr_type()) {
       if (!params_.is_resolve_table_function_expr_) {
         //such as insert into tbl values(1,3, coll('a', 1));
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("dml with collection or record construction function is not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
+        if ((NULL == params_.secondary_namespace_ && NULL == session_info_->get_pl_context()) ||
+            (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("dml with collection or record construction function is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
+        } else {
+          is_external = false;
+        }
       } else {
         is_external = false;
       }
@@ -2282,7 +2606,10 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         }
       }
       if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && real_ref_expr->is_udf_expr()) {
-        stmt_->get_query_ctx()->has_pl_udf_ = true;
+        ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
+        if (OB_NOT_NULL(udf)) {
+          OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
+        }
       }
     }
   }
@@ -4123,6 +4450,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
         OZ (stmt->add_global_dependency_table(table_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
       }
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
     } else if (OB_SUCC(ret) && function_table_expr->is_sys_func_expr()) {
       // xxx
     }
@@ -10167,6 +10495,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         //the flag will change to false;
         OX (expr->set_is_called_in_sql(true));
       }
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);

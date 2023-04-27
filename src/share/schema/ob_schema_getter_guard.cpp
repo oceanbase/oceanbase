@@ -817,6 +817,107 @@ int ObSchemaGetterGuard::get_routine_infos_in_udt(
   return ret;
 }
 
+int ObSchemaGetterGuard::get_routine_info_in_udt(const uint64_t tenant_id,
+                                                 const uint64_t udt_id,
+                                                 const uint64_t subprogram_id,
+                                                 const ObRoutineInfo *&routine_info)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  routine_info = NULL;
+
+  ObArray<const ObSimpleRoutineSchema *> schemas;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == udt_id || OB_INVALID_ID == subprogram_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(udt_id), K(subprogram_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->routine_mgr_.get_routine_schemas_in_udt(tenant_id, udt_id, schemas))) {
+    LOG_WARN("get routine schemas in package failed", KR(ret), K(tenant_id), K(udt_id));
+  } else {
+    bool is_break = false;
+    FOREACH_CNT_X(schema, schemas, (OB_SUCC(ret) && !is_break)) {
+      const ObSimpleRoutineSchema *tmp_schema = *schema;
+      const ObRoutineInfo *sub_routine_info = NULL;
+      if (OB_ISNULL(tmp_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret), KP(tmp_schema));
+      } else if (OB_FAIL(get_schema(ROUTINE_SCHEMA,
+                                    tmp_schema->get_tenant_id(),
+                                    tmp_schema->get_routine_id(),
+                                    sub_routine_info,
+                                    tmp_schema->get_schema_version()))) {
+        LOG_WARN("get schema failed", KR(ret), K(tenant_id),
+                 "routine_id", tmp_schema->get_routine_id(),
+                 "schema_version", tmp_schema->get_schema_version());
+      } else if (OB_ISNULL(sub_routine_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("routine info is null", KR(ret));
+      } else if (subprogram_id == sub_routine_info->get_subprogram_id()) {
+        routine_info = sub_routine_info;
+        is_break = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::get_routine_info_in_package(const uint64_t tenant_id,
+                                                     const uint64_t package_id,
+                                                     const uint64_t subprogram_id,
+                                                     const ObRoutineInfo *&routine_info)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  routine_info = NULL;
+
+  ObArray<const ObSimpleRoutineSchema *> schemas;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == package_id || OB_INVALID_ID == subprogram_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(package_id), K(subprogram_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->routine_mgr_.get_routine_schemas_in_package(tenant_id, package_id, schemas))) {
+    LOG_WARN("get routine schemas in package failed", KR(ret), K(tenant_id), K(package_id));
+  } else {
+    bool is_break = false;
+    FOREACH_CNT_X(schema, schemas, (OB_SUCC(ret) && !is_break)) {
+      const ObSimpleRoutineSchema *tmp_schema = *schema;
+      const ObRoutineInfo *sub_routine_info = NULL;
+      if (OB_ISNULL(tmp_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL ptr", KR(ret), KP(tmp_schema));
+      } else if (OB_FAIL(get_schema(ROUTINE_SCHEMA,
+                                    tmp_schema->get_tenant_id(),
+                                    tmp_schema->get_routine_id(),
+                                    sub_routine_info,
+                                    tmp_schema->get_schema_version()))) {
+        LOG_WARN("get schema failed", KR(ret), K(tenant_id),
+                 "routine_id", tmp_schema->get_routine_id(),
+                 "schema_version", tmp_schema->get_schema_version());
+      } else if (OB_ISNULL(sub_routine_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("routine info is null", KR(ret));
+      } else if (subprogram_id == sub_routine_info->get_subprogram_id()) {
+        routine_info = sub_routine_info;
+        is_break = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObSchemaGetterGuard::get_routine_infos_in_package(
   const uint64_t tenant_id, const uint64_t package_id,
   common::ObIArray<const ObRoutineInfo *> &routine_infos)

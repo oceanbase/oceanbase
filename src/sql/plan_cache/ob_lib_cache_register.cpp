@@ -18,6 +18,7 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_package.h"
 #include "observer/table/ob_table_cache.h"
+#include "sql/resolver/cmd/ob_call_procedure_stmt.h"
 
 #define USING_LOG_PREFIX SQL_PC
 

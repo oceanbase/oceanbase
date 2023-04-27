@@ -305,6 +305,27 @@ int ObDBMSSession::set_identifier(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObDBMSSession::reset_package(sql::ObExecContext &ctx,
+                                  sql::ParamStore &params,
+                                  common::ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionInfo *session = ctx.get_my_session();
+  ObPLContext *pl_ctx = nullptr;
+  ObString client_id;
+  if (OB_UNLIKELY(OB_ISNULL(session))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is nullptr", K(ret));
+  } else if (OB_UNLIKELY(0 != params.count())) {
+    ObString func_name("RESET_PACKAGE");
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, func_name.length(), func_name.ptr());
+  } else {
+    session->set_need_reset_package(true);
+  }
+  return ret;
+}
+
 int ObDBMSSession::check_argument(const ObObj &input_param, bool allow_null,
                                   bool need_case_up, int32_t param_idx,
                                   int64_t max_len, ObString &output_param)

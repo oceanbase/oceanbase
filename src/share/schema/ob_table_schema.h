@@ -1284,6 +1284,8 @@ public:
                                     bool &trigger_exist) const;
   int has_before_update_row_trigger(ObSchemaGetterGuard &schema_guard,
                                     bool &trigger_exist) const;
+  int is_allow_parallel_of_trigger(ObSchemaGetterGuard &schema_guard,
+                                    bool &is_forbid_parallel) const;
 
   //label security
   inline bool has_label_se_column() const { return label_se_column_ids_.count() > 0; }

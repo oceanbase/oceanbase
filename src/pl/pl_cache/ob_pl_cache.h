@@ -21,15 +21,11 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/plan_cache/ob_lib_cache_register.h"
 #include "pl/ob_pl.h"
+#include "pl/pl_cache/ob_pl_cache_object.h"
 
 namespace oceanbase
 {
 
-
-namespace pl
-{
-  class ObPLCompileUnit;
-}
 
 namespace pl
 {
@@ -156,6 +152,7 @@ struct ObPLObjectKey : public ObILibCacheKey
   common::ObString name_;
 };
 
+
 class ObPLObjectValue : public common::ObDLinkBase<ObPLObjectValue>
 {
 public:
@@ -241,7 +238,7 @@ public:
   common::ObFixedArray<PCVPlSchemaObj *, common::ObIAllocator> stored_schema_objs_;
   common::Ob2DArray<ObParamInfo, common::OB_MALLOC_BIG_BLOCK_SIZE,
                     common::ObWrapperAllocator, false> params_info_;
-  pl::ObPLCompileUnit *pl_routine_obj_;
+  pl::ObPLCacheObject *pl_routine_obj_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLObjectValue);
 };

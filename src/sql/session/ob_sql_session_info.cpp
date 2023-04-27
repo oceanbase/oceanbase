@@ -1723,6 +1723,57 @@ void ObSQLSessionInfo::reset_all_package_state()
   }
 }
 
+int ObSQLSessionInfo::reset_all_package_state_by_dbms_session(bool need_set_sync_var)
+{
+  /* its called by dbms_session.reset_package()
+   * in this mode
+   *  1. we also should reset all user variable mocked by package var
+   *  2. if the package is a trigger, we should do nothing
+   *
+   */
+  int ret = OB_SUCCESS;
+  if (0 == package_state_map_.size()
+      || NULL != get_pl_context()
+      || false == need_reset_package()) {
+    // do nothing
+  } else {
+    ObSEArray<int64_t, 4> remove_packages;
+    if (0 != package_state_map_.size()) {
+      FOREACH(it, package_state_map_) {
+        if (!share::schema::ObTriggerInfo::is_trigger_package_id(it->second->get_package_id())) {
+          ret = ret != OB_SUCCESS ? ret : remove_packages.push_back(it->first);
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < remove_packages.count(); ++i) {
+      ObPLPackageState *package_state = NULL;
+      bool need_reset = false;
+      OZ (package_state_map_.get_refactored(remove_packages.at(i), package_state));
+      CK (OB_NOT_NULL(package_state));
+      OZ (package_state_map_.erase_refactored(remove_packages.at(i)));
+      OX (need_reset = true);
+      OZ (package_state->remove_user_variables_for_package_state(*this));
+      if (need_reset && NULL != package_state) {
+        package_state->reset(this);
+        package_state->~ObPLPackageState();
+        get_package_allocator().free(package_state);
+      }
+    }
+    if (OB_SUCC(ret) && need_set_sync_var) {
+      ObSessionVariable sess_var;
+      ObString key("##__OB_RESET_ALL_PACKAGE_BY_DBMS_SESSION_RESET_PACKAGE__");
+      sess_var.meta_.set_timestamp();
+      sess_var.value_.set_timestamp(ObTimeUtility::current_time());
+      if (OB_FAIL(ObBasicSessionInfo::replace_user_variable(key, sess_var))) {
+        LOG_WARN("add user var failed", K(ret));
+      }
+    }
+    // wether reset succ or not, set need_reset_package to false
+    set_need_reset_package(false);
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::reset_all_serially_package_state()
 {
   int ret = OB_SUCCESS;
@@ -1832,7 +1883,13 @@ int ObSQLSessionInfo::replace_user_variable(
       }
     }
   }
-  if (is_package_variable && OB_NOT_NULL(get_pl_engine())) {
+  if (0 == name.case_compare("##__OB_RESET_ALL_PACKAGE_BY_DBMS_SESSION_RESET_PACKAGE__")) {
+    // "##__OB_RESET_ALL_PACKAGE_BY_DBMS_SESSION_RESET_PACKAGE__"
+    // this variable is used to reset_package.
+    // if we get a set stmt of OB_RESET_ALL_PACKAGE_BY_DBMS_SESSION_RESET_PACKAGE
+    // we should only reset_all_package, do not need set_user_variable
+    OZ (reset_all_package_state_by_dbms_session(false));
+  } else if (is_package_variable && OB_NOT_NULL(get_pl_engine())) {
     OZ (set_package_variable(ctx, name, value.value_, true));
   } else {
     OZ (ObBasicSessionInfo::replace_user_variable(name, value));

@@ -6890,6 +6890,26 @@ int ObTableSchema::has_before_update_row_trigger(ObSchemaGetterGuard &schema_gua
   return ret;
 }
 
+int ObTableSchema::is_allow_parallel_of_trigger(ObSchemaGetterGuard &schema_guard,
+                                                 bool &is_forbid_parallel) const
+{
+  int ret = OB_SUCCESS;
+  const ObTriggerInfo *trigger_info = NULL;
+  is_forbid_parallel = false;
+  const uint64_t tenant_id = get_tenant_id();
+  for (int i = 0; OB_SUCC(ret) && !is_forbid_parallel && i < trigger_list_.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
+    OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
+    OX (is_forbid_parallel = trigger_info->is_reads_sql_data() ||
+                             trigger_info->is_modifies_sql_data() ||
+                             trigger_info->is_wps() ||
+                             trigger_info->is_rps() ||
+                             trigger_info->is_has_sequence() ||
+                             trigger_info->is_external_state());
+  }
+  return ret;
+}
+
 const ObColumnSchemaV2 *ObColumnIterByPrevNextID::get_first_column() const
 {
   ObColumnSchemaV2 *ret_col = NULL;

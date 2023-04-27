@@ -2186,6 +2186,7 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
   ObString default_value;
   int64_t order_type_defualt_value = 0;
   int64_t action_order_default_value = 1;
+  uint64_t analyze_flag_default_value = 0;
   trigger_info.set_tenant_id(tenant_id);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, trigger_id, trigger_info, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
@@ -2222,6 +2223,8 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
       true, true, default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, action_order, trigger_info, int64_t,
       false, true, action_order_default_value);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, analyze_flag, trigger_info, uint64_t,
+      true, true, analyze_flag_default_value);
   }
   return ret;
 }

@@ -326,11 +326,12 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           LOG_WARN("fail to get expr", K(ret), K(i), K(size));
         }
         if (OB_SUCC(ret)) {
-          ObCollationType charsetnr;
-          if (OB_FAIL(ObCharset::get_default_collation(expr->get_collation_type(), charsetnr))) {
-            LOG_WARN("fail to get table item charset collation", K(expr->get_collation_type()), K(i), K(ret));
+          if (ob_is_string_or_lob_type(expr->get_data_type())
+              && CS_TYPE_BINARY != expr->get_collation_type()
+              && ObCharset::is_valid_collation(collation_type)) {
+            field.charsetnr_ = static_cast<uint16_t>(collation_type);
           } else {
-            field.charsetnr_ = static_cast<uint16_t>(charsetnr);
+            field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
           }
         }
         if (OB_SUCC(ret)) {
@@ -433,115 +434,119 @@ int ObSql::fill_result_set(ObResultSet &result_set,
     case stmt::T_CALL_PROCEDURE: {
       ObCallProcedureStmt &call_stmt = static_cast<ObCallProcedureStmt&>(basic_stmt);
       ObString tname = ObString::make_string("procedure");
+      if (NULL == call_stmt.get_call_proc_info()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("call proc info is null", K(ret));
+      } else {
+        int64_t size = call_stmt.get_call_proc_info()->get_output_count();
+        field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
 
-      int64_t size = call_stmt.get_output_count();
-      field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+        if (0 == size) {
+          break;
+        }
 
-      if (0 == call_stmt.get_output_count()) {
+        if (OB_SUCC(ret) && OB_FAIL(result_set.reserve_field_columns(size))) {
+          LOG_WARN("reserve field columns failed", K(ret), K(size));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObCollationType charsetnr;
+          ObDataType *type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_data_type();
+          ObObjType out_obj_type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_obj_type();
+          if (ObUnknownType == out_obj_type
+            || ObExtendType == out_obj_type) {
+            // do nothing ...
+          } else if (OB_NOT_NULL(type)) {
+            if (ob_is_string_or_lob_type(out_obj_type)
+                  && CS_TYPE_ANY == type->get_collation_type()) {
+              charsetnr = ObCharset::is_valid_collation(collation_type)
+                            ? collation_type
+                            : CS_TYPE_UTF8MB4_BIN;
+            } else {
+              OZ (ObCharset::get_default_collation(type->get_collation_type(), charsetnr));
+            }
+            OX (field.charsetnr_ = static_cast<uint16_t>(charsetnr));
+          }
+          if (OB_SUCC(ret)) {
+            field.type_.set_type(out_obj_type);
+            if (OB_NOT_NULL(type)) {
+              field.accuracy_ = type->get_accuracy();
+              // Setup Collation and Collation levl
+              if (ob_is_string_or_lob_type(out_obj_type)
+                  || ob_is_raw(out_obj_type)
+                  || ob_is_enum_or_set_type(out_obj_type)) {
+                field.type_.set_collation_type(type->get_collation_type());
+                field.type_.set_collation_level(type->get_collation_level());
+              }
+            }
+            if (ObExtendType == out_obj_type) {
+              field.length_ = field.accuracy_.get_length();
+            } else if (ObCharType == out_obj_type
+                      || ObVarcharType == out_obj_type
+                      || ob_is_nstring_type(out_obj_type)) {
+              if (-1 == field.accuracy_.get_length()) {
+                field.length_ = ObCharType == out_obj_type ?
+                  OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_VARCHAR_LENGTH;
+              } else {
+                field.length_ = field.accuracy_.get_length();
+              }
+            } else if (ob_is_enum_or_set_type(out_obj_type)) {
+              CK (OB_NOT_NULL(type));
+              OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
+                                                      field.accuracy_,
+                                                      type->get_collation_type(),
+                                                      field.length_));
+              OX (field.type_.set_type(ObVarcharType));
+            } else {
+              OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
+                                                      field.accuracy_,
+                                                      common::CS_TYPE_INVALID,
+                                                      field.length_));
+            }
+            // Setup Scale
+            if (OB_SUCC(ret)) {
+              if (ObVarcharType == field.type_.get_type()) {
+                field.type_.set_varchar(type_name);
+              } else if (ObNumberType == field.type_.get_type()) {
+                field.type_.set_number(number);
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ob_write_string(alloc, tname, field.tname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, tname, field.org_tname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_name().at(i), field.cname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_name().at(i), field.org_cname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_type_name().at(i), field.type_name_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_type_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_type_owner().at(i), field.type_owner_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_type_owner().at(i)), K(ret));
+            } else { /*do nothing*/ }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(result_set.add_field_column(field))) {
+              LOG_WARN("fail to add field column to result_set.", K(ret));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            field.cname_.assign(NULL, 0);
+            field.org_cname_.assign(NULL, 0);
+            field.dname_.assign(NULL, 0);
+            field.tname_.assign(NULL, 0);
+            field.org_tname_.assign(NULL, 0);
+            field.type_.reset();
+            field.type_.set_type(ObExtendType);
+            field.type_name_.assign(NULL, 0);
+            field.type_owner_.assign(NULL, 0);
+          }
+        }
         break;
       }
-
-      if (OB_SUCC(ret) && OB_FAIL(result_set.reserve_field_columns(size))) {
-        LOG_WARN("reserve field columns failed", K(ret), K(size));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-        ObCollationType charsetnr;
-        ObDataType *type = call_stmt.get_out_type().at(i).get_data_type();
-        ObObjType out_obj_type = call_stmt.get_out_type().at(i).get_obj_type();
-        if (ObUnknownType == out_obj_type
-          || ObExtendType == out_obj_type) {
-          // do nothing ...
-        } else if (OB_NOT_NULL(type)) {
-          if (ob_is_string_or_lob_type(out_obj_type)
-                && CS_TYPE_ANY == type->get_collation_type()) {
-            charsetnr = ObCharset::is_valid_collation(collation_type)
-                          ? collation_type
-                          : CS_TYPE_UTF8MB4_BIN;
-          } else {
-            OZ (ObCharset::get_default_collation(type->get_collation_type(), charsetnr));
-          }
-          OX (field.charsetnr_ = static_cast<uint16_t>(charsetnr));
-        }
-        if (OB_SUCC(ret)) {
-          field.type_.set_type(out_obj_type);
-          if (OB_NOT_NULL(type)) {
-            field.accuracy_ = type->get_accuracy();
-            // Setup Collation and Collation levl
-            if (ob_is_string_or_lob_type(out_obj_type)
-                || ob_is_raw(out_obj_type)
-                || ob_is_enum_or_set_type(out_obj_type)) {
-              field.type_.set_collation_type(type->get_collation_type());
-              field.type_.set_collation_level(type->get_collation_level());
-            }
-          }
-          if (ObExtendType == out_obj_type) {
-            field.length_ = field.accuracy_.get_length();
-          } else if (ObCharType == out_obj_type
-                     || ObVarcharType == out_obj_type
-                     || ob_is_nstring_type(out_obj_type)) {
-            if (-1 == field.accuracy_.get_length()) {
-              field.length_ = ObCharType == out_obj_type ?
-                OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_VARCHAR_LENGTH;
-            } else {
-              field.length_ = field.accuracy_.get_length();
-            }
-          } else if (ob_is_enum_or_set_type(out_obj_type)) {
-            CK (OB_NOT_NULL(type));
-            OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
-                                                     field.accuracy_,
-                                                     type->get_collation_type(),
-                                                     field.length_));
-            OX (field.type_.set_type(ObVarcharType));
-          } else {
-            OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
-                                                     field.accuracy_,
-                                                     common::CS_TYPE_INVALID,
-                                                     field.length_));
-          }
-          // Setup Scale
-          if (OB_SUCC(ret)) {
-            if (ObVarcharType == field.type_.get_type()) {
-              field.type_.set_varchar(type_name);
-            } else if (ObNumberType == field.type_.get_type()) {
-              field.type_.set_number(number);
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(ob_write_string(alloc, tname, field.tname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, tname, field.org_tname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_name().at(i), field.cname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_name().at(i), field.org_cname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_type_name().at(i), field.type_name_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_type_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_type_owner().at(i), field.type_owner_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_type_owner().at(i)), K(ret));
-          } else { /*do nothing*/ }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(result_set.add_field_column(field))) {
-            LOG_WARN("fail to add field column to result_set.", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          field.cname_.assign(NULL, 0);
-          field.org_cname_.assign(NULL, 0);
-          field.dname_.assign(NULL, 0);
-          field.tname_.assign(NULL, 0);
-          field.org_tname_.assign(NULL, 0);
-          field.type_.reset();
-          field.type_.set_type(ObExtendType);
-          field.type_name_.assign(NULL, 0);
-          field.type_owner_.assign(NULL, 0);
-        }
-      }
-      break;
     }
     default:
       break;
@@ -573,7 +578,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
           OZ (result_set.add_field_column(column_field),
               K(i), K(question_marks_count), K(column_field));
-        } else if (OB_NOT_NULL(call_stmt) && call_stmt->is_out_param(i)) {
+        } else if (OB_NOT_NULL(call_stmt) && call_stmt->get_call_proc_info()->is_out_param(i)) {
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
         }
         OZ (result_set.add_param_column(param_field),
@@ -2068,6 +2073,9 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_dynamic_sql_) {
           // call procedure stmt call always parse as dynamic sql
           context.is_dynamic_sql_ = true;
+        }
+        if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_execute_call_stmt_) {
+          context.is_execute_call_stmt_ = true;
         }
         ObParser parser(allocator, session.get_sql_mode(),
                         session.get_local_collation_connection());

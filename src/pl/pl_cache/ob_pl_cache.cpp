@@ -173,7 +173,7 @@ bool ObPLObjectKey::is_equal(const ObILibCacheKey &other) const
 int ObPLObjectValue::init(const ObILibCacheObject &cache_obj, ObPLCacheCtx &pc_ctx)
 {
   int ret = OB_SUCCESS;
-  const pl::ObPLCompileUnit &pl_object = static_cast<const pl::ObPLCompileUnit &>(cache_obj);
+  const pl::ObPLCacheObject &pl_object = static_cast<const pl::ObPLCacheObject &>(cache_obj);
   if (OB_FAIL(add_match_info(pc_ctx, &pc_ctx.key_, cache_obj))) {
     LOG_WARN("failed to add_match_info", K(ret));
   } else {
@@ -497,8 +497,12 @@ int ObPLObjectValue::add_match_info(ObILibCacheCtx &ctx,
   int ret = OB_SUCCESS;
 
   ObPLCacheCtx& pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
-  const pl::ObPLCompileUnit &cache_object = static_cast<const pl::ObPLCompileUnit &>(cache_obj);
-  if (OB_UNLIKELY(!cache_object.is_prcr() && !cache_object.is_sfc() && !cache_object.is_pkg() && !cache_object.is_anon())) {
+  const pl::ObPLCacheObject &cache_object = static_cast<const pl::ObPLCacheObject &>(cache_obj);
+  if (OB_UNLIKELY(!cache_object.is_prcr() &&
+                  !cache_object.is_sfc() &&
+                  !cache_object.is_pkg() &&
+                  !cache_object.is_anon() &&
+                  !cache_object.is_call_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cache object is invalid", K(cache_object));
   } else if (OB_UNLIKELY(pl_routine_obj_ != nullptr)) {
@@ -888,7 +892,7 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
   int ret = OB_SUCCESS;
 
   ObPLCacheCtx& pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
-  pl::ObPLCompileUnit *cache_object = static_cast<pl::ObPLCompileUnit *>(cache_obj);
+  pl::ObPLCacheObject *cache_object = static_cast<pl::ObPLCacheObject *>(cache_obj);
   ObSEArray<PCVPlSchemaObj, 4> schema_array;
 
   if (OB_ISNULL(cache_object)) {
@@ -897,14 +901,15 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
   } else if (OB_UNLIKELY(!cache_object->is_prcr() &&
                          !cache_object->is_sfc() &&
                          !cache_object->is_pkg() &&
-                         !cache_object->is_anon())) {
+                         !cache_object->is_anon() &&
+                         !cache_object->is_call_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("cache object is invalid", K(cache_object));
   } else if (OB_FAIL(ObPLObjectValue::get_all_dep_schema(*pc_ctx.schema_guard_,
                                                           cache_object->get_dependency_table(),
                                                           schema_array))) {
     LOG_WARN("failed to get all dep schema", K(ret));
-  } else  {
+  } else {
     DLIST_FOREACH(pl_object_value, object_value_sets_) {
       bool is_same = true;
       bool is_old_version = false;

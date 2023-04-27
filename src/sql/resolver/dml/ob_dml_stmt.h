@@ -973,6 +973,8 @@ public:
   inline bool is_dblink_stmt() const { return OB_INVALID_ID != dblink_id_; }
   inline void set_reverse_link() { is_reverse_link_ = true; }
   inline bool is_reverse_link() const { return is_reverse_link_; }
+  inline void set_bulk() { is_bulk_ = true; }
+  inline bool is_bulk() const { return is_bulk_; }
   int add_subquery_ref(ObQueryRefRawExpr *query_ref);
   virtual int get_child_stmt_size(int64_t &child_size) const;
   int64_t get_subquery_expr_size() const { return subquery_exprs_.count(); }
@@ -1210,6 +1212,7 @@ protected:
    */
   int64_t dblink_id_;
   bool is_reverse_link_;
+  bool is_bulk_;
 };
 
 template <typename T>

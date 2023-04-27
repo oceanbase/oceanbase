@@ -597,8 +597,6 @@ int add_procs_priv_in_dml(
   if (OB_ISNULL(dml_stmt) || OB_ISNULL(dml_stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (!dml_stmt->get_query_ctx()->has_pl_udf_) {
-    // do nothing
   } else if (dml_stmt->get_relation_exprs(relation_exprs)) {
     LOG_WARN("failed to get relation exprs", K(ret));
   }
@@ -2695,10 +2693,10 @@ int get_call_ora_need_privs(
   int ret = OB_SUCCESS;
   ObOraNeedPriv need_priv;
   ObPackedObjPriv packed_privs = 0;
-  const ObCallProcedureStmt * call_stmt = dynamic_cast<const ObCallProcedureStmt*>(basic_stmt);
-  if (call_stmt != NULL) {
-    need_priv.db_name_ = call_stmt->get_db_name();
-    uint64_t pkg_id = call_stmt->get_package_id();
+  ObCallProcedureStmt * call_stmt = const_cast<ObCallProcedureStmt *>(dynamic_cast<const ObCallProcedureStmt*>(basic_stmt));
+  if (call_stmt != NULL && call_stmt->get_call_proc_info() != NULL) {
+    need_priv.db_name_ = call_stmt->get_call_proc_info()->get_db_name();
+    uint64_t pkg_id = call_stmt->get_call_proc_info()->get_package_id();
     /* 对于sys库的package，不需要权限 */
     if (need_priv.db_name_ == OB_SYS_DATABASE_NAME
        && (OB_INVALID_ID == pkg_id
@@ -2727,11 +2725,11 @@ int get_call_ora_need_privs(
       }
     } else {
       need_priv.grantee_id_ = user_id;
-      if (call_stmt->get_package_id() != OB_INVALID_ID) {
-        need_priv.obj_id_ = call_stmt->get_package_id();
+      if (call_stmt->get_call_proc_info()->get_package_id() != OB_INVALID_ID) {
+        need_priv.obj_id_ = call_stmt->get_call_proc_info()->get_package_id();
         need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::PACKAGE);
       } else {
-        need_priv.obj_id_ = call_stmt->get_routine_id();
+        need_priv.obj_id_ = call_stmt->get_call_proc_info()->get_routine_id();
         need_priv.obj_type_ = static_cast<uint64_t>(ObObjectType::PROCEDURE);
       }
       need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;

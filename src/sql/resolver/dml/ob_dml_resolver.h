@@ -303,6 +303,7 @@ public:
                                        const ObIArray<uint64_t> &db_ids);
   ObDMLStmt *get_stmt();
 protected:
+  int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
                              ObIArray<ObString> &user_vars,
                              ObIArray<ObRawExpr*> &pl_vars,

@@ -5827,7 +5827,7 @@ public:
                K(base_object_name_),
                K(trigger_info_),
                K(with_replace_),
-               K(for_insert_errors_),
+               K(in_second_stage_),
                K(error_info_),
                K(dependency_infos_));
 public:
@@ -5841,7 +5841,7 @@ public:
     struct
     {
       uint32_t with_replace_:1;
-      uint32_t for_insert_errors_:1;
+      uint32_t in_second_stage_:1; // is second create trigger stage
       uint32_t reserved_:30;
     };
   };

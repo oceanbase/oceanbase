@@ -53,7 +53,8 @@ OB_SERIALIZE_MEMBER((ObTriggerInfo, ObSimpleTriggerSchema),
                     order_type_,
                     ref_trg_db_name_,
                     ref_trg_name_,
-                    action_order_);
+                    action_order_,
+                    analyze_flag_);
 
 ObTriggerInfo &ObTriggerInfo::operator =(const ObTriggerInfo &other)
 {
@@ -103,6 +104,7 @@ void ObTriggerInfo::reset()
   reset_string(ref_trg_name_);
   action_order_ = 0;
   ObSimpleTriggerSchema::reset();
+  analyze_flag_ = 0;
 }
 
 bool ObTriggerInfo::is_valid_for_create() const
@@ -164,6 +166,7 @@ int ObTriggerInfo::deep_copy(const ObTriggerInfo &other)
   OZ (set_ref_trg_db_name(other.get_ref_trg_db_name()));
   OZ (set_ref_trg_name(other.get_ref_trg_name()));
   OX (set_action_order(other.get_action_order()));
+  OX (set_analyze_flag(other.get_analyze_flag()));
   return ret;
 }
 

@@ -59,10 +59,7 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
                            ctx.get_allocator(),
                            arg));
   if (OB_SUCC(ret)) {
-    if (lib::is_oracle_mode() ||
-        (lib::is_mysql_mode() && arg.error_info_.get_error_status() != ERROR_STATUS_NO_ERROR)) {
-      OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
-    }
+    OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
   }
   OZ (ctx.get_sql_ctx()->schema_guard_->reset());
   return ret;
@@ -134,7 +131,8 @@ int ObCreateTriggerExecutor::analyze_dependencies(ObSchemaGetterGuard &schema_gu
     if (OB_SUCC(ret)) {
       arg.trigger_info_.deep_copy(*trigger_info);
       arg.error_info_.collect_error_info(&arg.trigger_info_);
-      arg.for_insert_errors_ = true;
+      arg.in_second_stage_ = true;
+      arg.with_replace_ = true;
     }
   }
   return ret;

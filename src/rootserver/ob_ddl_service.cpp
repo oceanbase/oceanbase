@@ -14703,7 +14703,7 @@ int ObDDLService::rebuild_triggers_on_hidden_table(
       if (OB_SUCC(ret)) {
         ObSEArray<ObDependencyInfo, 1> dep_infos;
         OZ (ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
-        nullptr, false/*for_insert_errors*/, false/*is_update_table_schema_version*/));
+        nullptr, false/*is_update_table_schema_version*/));
       }
     }
   }
@@ -28202,7 +28202,7 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   ObTriggerInfo new_trigger_info;
-  //for_insert_errors_ is false, Indicates that the trigger is created normally
+  //in_second_stage_ is false, Indicates that the trigger is created normally
   //true Indicates that the error message is inserted into the system table after the trigger is created
   //So the following steps can be skipped
   uint64_t tenant_id = OB_INVALID_ID;
@@ -28217,7 +28217,7 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
   } else if (FALSE_IT(tenant_id = new_trigger_info.get_tenant_id())) {
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("o get schema guard in inner table failed", KR(ret), K(tenant_id));
-  } else if (!arg.for_insert_errors_) {
+  } else {
     const ObTriggerInfo *old_trigger_info = NULL;
     if (!arg.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
@@ -28245,7 +28245,7 @@ int ObDDLService::create_trigger(const ObCreateTriggerArg &arg)
                                       const_cast<ObErrorInfo &>(arg.error_info_),
                                       const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_),
                                       &arg.ddl_stmt_str_,
-                                      arg.for_insert_errors_,
+                                      arg.in_second_stage_,
                                       schema_guard))) {
     LOG_WARN("create trigger in trans failed", K(ret));
   }
@@ -28256,7 +28256,7 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
                                           ObErrorInfo &error_info,
                                           ObIArray<ObDependencyInfo> &dep_infos,
                                           const ObString *ddl_stmt_str,
-                                          bool for_insert_errors,
+                                          bool in_second_stage,
                                           share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -28269,10 +28269,10 @@ int ObDDLService::create_trigger_in_trans(ObTriggerInfo &trigger_info,
   } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
   }
-  if (OB_SUCC(ret) && !for_insert_errors) {
+  if (OB_SUCC(ret) && !in_second_stage) {
       OZ (adjust_trigger_action_order(schema_guard, trans, ddl_operator, trigger_info, true));
   }
-  OZ (ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, ddl_stmt_str, for_insert_errors));
+  OZ (ddl_operator.create_trigger(trigger_info, trans, error_info, dep_infos, ddl_stmt_str));
   if (trans.is_started()) {
     int temp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
@@ -28527,7 +28527,6 @@ int ObDDLService::create_trigger_for_truncate_table(ObSchemaGetterGuard &schema_
           ObSEArray<ObDependencyInfo, 1> dep_infos;
           if (OB_FAIL(ddl_operator.create_trigger(new_trigger_info, trans, error_info, dep_infos,
                                                   &origin_trigger_info->get_trigger_body(),
-                                                  false, /* for_insert_error */
                                                   is_update_table_schema_version,
                                                   true))) {
             LOG_WARN("failed to create trigger for truncate table", K(ret));

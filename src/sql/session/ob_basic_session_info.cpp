@@ -89,6 +89,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       name_pool_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       trans_flags_(),
       sql_scope_flags_(),
+      need_reset_package_(false),
       base_sys_var_alloc_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       inc_sys_var_alloc1_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       inc_sys_var_alloc2_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -144,6 +145,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       thread_id_(0),
       is_password_expired_(false),
       process_query_time_(0)
+
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -334,6 +336,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   package_info_allocator_.reset();
   trans_flags_.reset();
   sql_scope_flags_.reset();
+  need_reset_package_ = false;
 //bucket_allocator_wrapper_.reset();
   user_var_val_map_.reuse();
   if (!skip_sys_var) {
@@ -4754,6 +4757,25 @@ int ObBasicSessionInfo::track_user_var(const common::ObString &user_var)
       LOG_WARN("fail to write string", K(user_var), K(ret));
     } else if (OB_FAIL(add_changed_user_var(name, changed_user_vars_))) {
       LOG_WARN("fail to add changed user var", K(name), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::remove_changed_user_var(const common::ObString &user_var)
+{
+  int ret = OB_SUCCESS;
+  if (user_var.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input value", K(user_var), K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; !found && OB_SUCC(ret) && i < changed_user_vars_.count(); ++i) {
+      if (changed_user_vars_.at(i) == user_var) {
+        OZ (changed_user_vars_.remove(i));
+        OX (found = true);
+        break;
+      }
     }
   }
   return ret;

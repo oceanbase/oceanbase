@@ -161,22 +161,31 @@ int ObTableMergeOp::check_need_exec_single_row()
     ObMergeCtDef *merge_ctdef = MY_SPEC.merge_ctdefs_.at(0);
     if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->ins_ctdef_)) {
       const ObInsCtDef &ins_ctdef = *merge_ctdef->ins_ctdef_;
-      if (has_before_row_trigger(ins_ctdef) || has_after_row_trigger(ins_ctdef)) {
-        execute_single_row_ = true;
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < ins_ctdef.trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = ins_ctdef.trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
       }
     }
 
     if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->upd_ctdef_)) {
       const ObUpdCtDef &upd_ctdef = *merge_ctdef->upd_ctdef_;
-      if (has_before_row_trigger(upd_ctdef) || has_after_row_trigger(upd_ctdef)) {
-        execute_single_row_ = true;
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < upd_ctdef.trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = upd_ctdef.trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
       }
     }
 
     if (!execute_single_row_ && OB_NOT_NULL(merge_ctdef->del_ctdef_)) {
       const ObDelCtDef &del_ctdef = *merge_ctdef->del_ctdef_;
-      if (has_before_row_trigger(del_ctdef) || has_after_row_trigger(del_ctdef)) {
-        execute_single_row_ = true;
+      for (int64_t j = 0;
+          OB_SUCC(ret) && !execute_single_row_ && j < del_ctdef.trig_ctdef_.tg_args_.count();
+          ++j) {
+        const ObTriggerArg &tri_arg = del_ctdef.trig_ctdef_.tg_args_.at(j);
+        execute_single_row_ = tri_arg.is_execute_single_row();
       }
     }
   }

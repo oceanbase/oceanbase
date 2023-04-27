@@ -264,6 +264,18 @@ int ObTriggerSqlService::fill_dml_sql(const ObTriggerInfo &trigger_info,
   OZ (dml.add_column("ref_trg_db_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_db_name())));
   OZ (dml.add_column("ref_trg_name", ObHexEscapeSqlStr(trigger_info.get_ref_trg_name())));
   OZ (dml.add_column("action_order", trigger_info.get_action_order()));
+  if (OB_SUCC(ret)) {
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(trigger_info.get_tenant_id(), data_version))) {
+      LOG_WARN("failed to get data version", K(ret));
+    } else if (data_version < DATA_VERSION_4_2_0_0 && 0 != trigger_info.get_analyze_flag()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.2, analyze_flag column is not supported", K(ret), K(data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, analyze_flag column");
+    } else if (data_version >= DATA_VERSION_4_2_0_0) {
+      OZ (dml.add_column("analyze_flag", trigger_info.get_analyze_flag()));
+    }
+  }
   return ret;
 }
 

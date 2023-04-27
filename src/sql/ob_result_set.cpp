@@ -882,6 +882,15 @@ int ObResultSet::close()
     }
     ret = auto_end_plan_trans(*physical_plan_, ret, async);
   }
+
+  if (is_user_sql_ && my_session_.need_reset_package()) {
+    // need_reset_package is set, it must be reset package, wether exec succ or not.
+    int tmp_ret = my_session_.reset_all_package_state_by_dbms_session(true);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("reset all package fail. ", K(tmp_ret), K(ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
+  }
   //NG_TRACE_EXT(result_set_close, OB_ID(ret), ret, OB_ID(arg1), prev_ret,
                //OB_ID(arg2), ins_ret, OB_ID(arg3), errcode_, OB_ID(async), async);
   return ret;  // 后面所有的操作都通过callback来完成
@@ -1160,22 +1169,6 @@ bool ObResultSet::need_end_trans_callback() const
   return need;
 }
 
-static int check_is_pl_jsontype(const oceanbase::pl::ObUserDefinedType *user_type)
-{
-  INIT_SUCC(ret);
-
-  if (OB_ISNULL(user_type)) {
-  } else if (user_type->get_type() == oceanbase::pl::PL_OPAQUE_TYPE) {
-    if (user_type->get_name().compare("JSON_OBJECT_T") == 0
-        || user_type->get_name().compare("JSON_ELEMENT_T") == 0) {
-      ret = OB_ERR_PL_JSONTYPE_USAGE;
-      LOG_WARN("invalid pl json type userage in pl/sql", K(ret),
-                K(user_type->get_type()), K(user_type->get_user_type_id()));
-    }
-  }
-  return ret;
-}
-
 int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
         ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql)
 {
@@ -1187,56 +1180,13 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
     }
     is_select_for_update_ = (static_cast<ObSelectStmt&>(stmt)).has_for_update();
     has_hidden_rowid_ = (static_cast<ObSelectStmt&>(stmt)).has_hidden_rowid();
+    is_bulk_ = (static_cast<ObDMLStmt&>(stmt)).is_bulk();
   } else if (stmt.is_insert_stmt() || stmt.is_update_stmt() || stmt.is_delete_stmt()) {
     ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(stmt);
     OZ (into_exprs_.assign(dml_stmt.get_returning_into_exprs()));
+    is_bulk_ = (static_cast<ObDMLStmt&>(stmt)).is_bulk();
   }
 
-  bool need_check = !into_exprs_.empty() && !is_dynamic_sql;
-  if (OB_SUCC(ret) && need_check) {
-    ObArray<ObDataType> basic_types;
-    ObBitSet<> basic_into;
-    for (int64_t i = 0; OB_SUCC(ret) && i < into_exprs_.count(); ++i) {
-      ObRawExpr *expr = into_exprs_.at(i);
-      CK (OB_NOT_NULL(expr));
-      CK (expr->get_result_type().is_valid());
-      if (OB_SUCC(ret)) {
-        pl::ObPLDataType final_type;
-        // T_OBJ_ACCESS_REF expr, access obj type (not user defined type)
-        bool access_obj_type = false;
-        if (expr->is_obj_access_expr()) {
-          // T_OBJ_ACCESS_REF return ObExtendType for object access for writing, get obj type
-          // from %final_type;
-          // see comment in ObPLInto::add_into
-          const auto &access_expr = static_cast<const ObObjAccessRawExpr &>(*expr);
-          OZ(access_expr.get_final_type(final_type));
-          OX(access_obj_type = !final_type.is_user_type());
-        }
-        if (OB_FAIL(ret)) {
-        } else if (expr->get_result_type().is_ext() && !access_obj_type) {
-          CK (expr->is_obj_access_expr());
-          if (OB_SUCC(ret) && NULL != ns) {
-            const pl::ObUserDefinedType *user_type = NULL;
-            OZ (ns->get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
-            OZ (ns->expand_data_type(user_type, basic_types));
-            OZ (check_is_pl_jsontype(user_type));
-          }
-        } else {
-          ObDataType type;
-          if (access_obj_type) {
-            type.set_meta_type(final_type.get_data_type()->get_meta_type());
-            type.set_accuracy(final_type.get_data_type()->get_accuracy());
-          } else {
-            type.set_meta_type(expr->get_result_type().get_obj_meta());
-            type.set_accuracy(expr->get_result_type().get_accuracy());
-          }
-          OZ (basic_types.push_back(type));
-          OZ (basic_into.add_member(basic_types.count() - 1));
-        }
-      }
-    }
-    OZ (check_into_exprs(stmt, basic_types, basic_into));
-  }
   return ret;
 }
 

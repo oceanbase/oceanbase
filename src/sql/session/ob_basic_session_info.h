@@ -945,6 +945,8 @@ public:
   const ObSessionVariable *get_user_variable(const common::ObString &var) const;
   const common::ObObj *get_user_variable_value(const common::ObString &var) const;
   bool user_variable_exists(const common::ObString &var) const;
+  inline void set_need_reset_package(bool need_reset) { need_reset_package_ = need_reset; }
+  bool need_reset_package() { return need_reset_package_; }
   /// @}
 
   inline static ObDataTypeCastParams create_dtc_params(const ObBasicSessionInfo *session_info)
@@ -1029,6 +1031,7 @@ public:
   int add_changed_user_var(const common::ObString &name, common::ObIArray<common::ObString> &array);
   int track_sys_var(const share::ObSysVarClassType &sys_var_id, const common::ObObj &old_val);
   int track_user_var(const common::ObString &user_var);
+  int remove_changed_user_var(const common::ObString &user_var);
   int is_sys_var_actully_changed(const share::ObSysVarClassType &sys_var_id,
                                  const common::ObObj &old_val,
                                  common::ObObj &new_val,
@@ -1936,6 +1939,7 @@ protected:
   common::ObStringBuf name_pool_; // for variables names and statement names
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
+  bool need_reset_package_; // for dbms_session.reset_package
 
 private:
   common::ObStringBuf base_sys_var_alloc_; // for variables names and statement names

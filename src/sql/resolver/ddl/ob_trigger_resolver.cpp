@@ -1063,6 +1063,16 @@ int ObTriggerResolver::analyze_trigger(ObSchemaGetterGuard &schema_guard,
                                    &(package_spec_ast.get_body()->get_namespace()),
                                    package_body_ast,
                                    true));
+      if (OB_SUCC(ret)) {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(trigger_info.get_tenant_id(), data_version))) {
+          LOG_WARN("failed to get data version", K(ret));
+        } else if (data_version < DATA_VERSION_4_2_0_0) {
+          // do nothing
+        } else {
+          OX (const_cast<ObTriggerInfo&>(trigger_info).set_analyze_flag(package_body_ast.get_analyze_flag()));
+        }
+      }
       if (OB_SUCC(ret) && lib::is_oracle_mode()) {
         if (is_alter_compile) {
           OZ (ObPLCompiler::update_schema_object_dep_info(package_body_ast,

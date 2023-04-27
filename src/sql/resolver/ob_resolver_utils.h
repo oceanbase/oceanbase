@@ -280,6 +280,7 @@ public:
                                          const ParseNode *node,
                                          ObQualifiedName &q_name,
                                          const ObSQLSessionInfo &session_info);
+
   static int resolve_external_symbol(common::ObIAllocator &allocator,
                                      sql::ObRawExprFactory &expr_factory,
                                      sql::ObSQLSessionInfo &session_info,

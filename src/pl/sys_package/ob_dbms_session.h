@@ -34,6 +34,8 @@ public:
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
   static int set_identifier(
     sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
+  static int reset_package(
+    sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);
 private:
   static int check_argument(const ObObj &input_param, bool allow_null,
                             bool need_case_up, int32_t param_idx,

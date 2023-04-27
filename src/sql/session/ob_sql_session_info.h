@@ -828,6 +828,7 @@ public:
   void reset_pl_debugger_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
+  int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
   int reset_all_serially_package_state();
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;

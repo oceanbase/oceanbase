@@ -8606,39 +8606,37 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                   ObErrorInfo &error_info,
                                   ObIArray<ObDependencyInfo> &dep_infos,
                                   const ObString *ddl_stmt_str,
-                                  bool for_insert_errors,
                                   bool is_update_table_schema_version,
                                   bool is_for_truncate_table)
 {
   int ret = OB_SUCCESS;
-  //for_insert_errors is false: create trigger normally
-  //for_insert_errors is true: Insert error information into the system table after the trigger is built so the following steps can be skipped
-  if (!for_insert_errors) {
-    ObSchemaService *schema_service = schema_service_.get_schema_service();
-    const uint64_t tenant_id = trigger_info.get_tenant_id();
-    int64_t new_schema_version = OB_INVALID_VERSION;
-    bool is_replace = false;
-    OV (OB_NOT_NULL(schema_service));
-    if (!is_for_truncate_table) {
-      // If create_trigger through truncate table, trigger_info already has its own trigger_id.
-      // but there is no such trigger in the internal table at this time, so is_replace must be false
-      OX (is_replace = (OB_INVALID_ID != trigger_info.get_trigger_id()));
-      if (!is_replace) {
-        OZ (fill_trigger_id(*schema_service, trigger_info), trigger_info.get_trigger_name());
-      }
+
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  const uint64_t tenant_id = trigger_info.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  bool is_replace = false;
+  OV (OB_NOT_NULL(schema_service));
+  if (!is_for_truncate_table) {
+    // If create_trigger through truncate table, trigger_info already has its own trigger_id.
+    // but there is no such trigger in the internal table at this time, so is_replace must be false
+    OX (is_replace = (OB_INVALID_ID != trigger_info.get_trigger_id()));
+    if (!is_replace) {
+      OZ (fill_trigger_id(*schema_service, trigger_info), trigger_info.get_trigger_name());
     }
-    OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version),
-        tenant_id, trigger_info.get_trigger_name());
-    OX (trigger_info.set_schema_version(new_schema_version));
-    OZ (schema_service->get_trigger_sql_service().create_trigger(trigger_info, is_replace,
-                                                                trans, ddl_stmt_str),
-        trigger_info.get_trigger_name(), is_replace);
-    if (!trigger_info.is_system_type() && is_update_table_schema_version) {
-      uint64_t base_table_id = trigger_info.get_base_object_id();
-      OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
-          trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
-          base_table_id, trigger_info.get_trigger_name());
-    }
+  }
+  OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version),
+      tenant_id, trigger_info.get_trigger_name());
+  OX (trigger_info.set_schema_version(new_schema_version));
+  OZ (schema_service->get_trigger_sql_service().create_trigger(trigger_info, is_replace,
+                                                              trans, ddl_stmt_str),
+      trigger_info.get_trigger_name(), is_replace);
+  if (!trigger_info.is_system_type() && is_update_table_schema_version) {
+    uint64_t base_table_id = trigger_info.get_base_object_id();
+    OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
+        trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
+        base_table_id, trigger_info.get_trigger_name());
+  }
+  if (OB_FAIL(ret)) {
   } else if (0 == dep_infos.count()) {
     // create trigger in mysql mode or create trigger when truncate table, dep_infos.count() is 0,
     // no need to deal with dependencies.
