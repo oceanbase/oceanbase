@@ -1500,7 +1500,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
 // open_cursors is 0 to indicate a special state, no limit is set
 #define NEED_CHECK_SESS_MAX_PS_HANDLE_LIMIT(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
-  ObString cur_query;
   // trimed_stmt仅用于query empty检查, prepare语句需要用原始语句, 避免checksum不一致
   ObString trimed_stmt = const_cast<ObString &>(stmt).trim();
   if (trimed_stmt.empty()) {
@@ -1514,7 +1513,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ObSQLSessionInfo &session = result.get_session();
     ObPsCache *ps_cache = session.get_ps_cache();
     ObExecContext &ectx = result.get_exec_context();
-    ObIAllocator &allocator = result.get_mem_pool();
     ObPhysicalPlanCtx *pctx = ectx.get_physical_plan_ctx();
     ObSchemaGetterGuard *schema_guard = context.schema_guard_;
     ectx.set_is_ps_prepare_stage(true);
@@ -1528,8 +1526,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("physical plan context or ps plan cache is NULL or schema_guard is null",
                 K(ret), K(pctx), K(ps_cache));
-    } else if (OB_FAIL(ob_write_string(allocator, session.get_current_query_string(), cur_query))) {
-      LOG_WARN("failed to write string", K(ret));
     } else if (OB_FAIL(session.store_query_string(trimed_stmt))) {
       LOG_WARN("store query string fail", K(ret));
     } else {
@@ -1645,7 +1641,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
         }
       }
     }
-    OZ (session.store_query_string(cur_query));
   }
   return ret;
 }

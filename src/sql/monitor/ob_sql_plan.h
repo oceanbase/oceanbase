@@ -263,6 +263,10 @@ private:
 
   int refine_buffer(PlanText &plan_text);
 
+  int prepare_and_store_session(ObSQLSessionInfo *session);
+
+  int restore_session(ObSQLSessionInfo *session);
+
 public:
   static int format_one_output_expr(char *buf,
                                     int64_t buf_len,
@@ -275,6 +279,8 @@ public:
 
 private:
   common::ObIAllocator &allocator_;
+  int64_t save_nested_count_;
+  ObSQLSessionInfo::StmtSavedValue *saved_session_;
 };
 
 } // end of namespace sql
