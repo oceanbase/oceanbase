@@ -95,6 +95,7 @@ ObTenantMetaMemMgr::ObTenantMetaMemMgr(const uint64_t tenant_id)
     gc_queue_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
     last_min_minor_sstable_set_(),
     sstable_set_lock_(common::ObLatchIds::TENANT_META_MEM_MGR_LOCK),
+    pin_set_lock_(),
     pinned_tablet_set_(),
     memtable_pool_(tenant_id, get_default_memtable_pool_count(), "MemTblObj", ObCtxIds::DEFAULT_CTX_ID, wash_func_),
     sstable_pool_(tenant_id, get_default_sstable_pool_count(), "SSTblObj", ObCtxIds::META_OBJ_CTX_ID, wash_func_),
@@ -149,7 +150,10 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
     LOG_WARN("fail to create last min minor sstable set", K(ret));
-  } else if (pinned_tablet_set_.create(DEFAULT_BUCKET_NUM)) {
+  } else if (OB_FAIL(pin_set_lock_.init(DEFAULT_BUCKET_NUM, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MPinLock",
+      tenant_id_))) {
+    LOG_WARN("fail to init pin set lock", K(ret));
+  } else if (OB_FAIL(pinned_tablet_set_.create(DEFAULT_BUCKET_NUM))) {
     LOG_WARN("fail to create pinned tablet set", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
@@ -225,6 +229,7 @@ void ObTenantMetaMemMgr::destroy()
   bool is_all_clean = false;
   tablet_map_.destroy();
   last_min_minor_sstable_set_.destroy();
+  pin_set_lock_.destroy();
   pinned_tablet_set_.destroy();
   while (!is_all_clean && OB_SUCC(gc_tables_in_queue(is_all_clean)));
   bucket_lock_.destroy();
@@ -1323,12 +1328,16 @@ void ObTenantMetaMemMgr::dump_tablet()
   }
 }
 
-void ObTenantMetaMemMgr::dump_pinned_tablet() const
+void ObTenantMetaMemMgr::dump_pinned_tablet()
 {
-  PinnedTabletSet::const_iterator iter = pinned_tablet_set_.begin();
-  for (; iter != pinned_tablet_set_.end(); ++iter) {
-    const ObTabletMapKey &key = iter->first;
-    FLOG_INFO("dump pinned tablet", K(key));
+  ObBucketTryRLockAllGuard try_rd_all_guard(pin_set_lock_);
+  int ret = try_rd_all_guard.get_ret();
+  if (OB_SUCC(ret)) {
+    PinnedTabletSet::const_iterator iter = pinned_tablet_set_.begin();
+    for (; iter != pinned_tablet_set_.end(); ++iter) {
+      const ObTabletMapKey &key = iter->first;
+      FLOG_INFO("dump pinned tablet", K(key));
+    }
   }
 }
 
@@ -1428,7 +1437,7 @@ int ObTenantMetaMemMgr::GetWashTabletCandidate::operator()(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet is nullptr", K(ret), KP(tablet));
       } else {
-        int tmp_ret = t3m_.pinned_tablet_set_.exist_refactored(tablet_key);
+        int tmp_ret = t3m_.exist_pinned_tablet(tablet_key);
         if (OB_HASH_EXIST == tmp_ret) {
           need_check = false;
           LOG_DEBUG("tablet is in tx, should no be washed", K(tmp_ret), K(tablet_key));
@@ -1561,13 +1570,24 @@ int ObTenantMetaMemMgr::do_wash_candidate_tablet(
     const ObLSID ls_id(candidate.ls_id_);
     const ObTabletID tablet_id(candidate.tablet_id_);
     const ObTabletMapKey key(ls_id, tablet_id);
-    if (OB_FAIL(tablet_map_.wash_meta_obj(key, is_wash))) {
-      LOG_WARN("wash tablet obj fail", K(ret), K(candidate));
-    } else if (is_wash) {
-      if (!key.tablet_id_.is_inner_tablet()) {
-        ++wash_user_cnt;
+    {
+      ObBucketHashRLockGuard guard(pin_set_lock_, key.hash());
+      ret = pinned_tablet_set_.exist_refactored(key);
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS; // tablet was pinned, skip
+      } else if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("check pinned set fail", K(ret), K(candidate));
       } else {
-        ++wash_inner_cnt;
+        ret = OB_SUCCESS;
+        if (OB_FAIL(tablet_map_.wash_meta_obj(key, is_wash))) {
+          LOG_WARN("wash tablet obj fail", K(ret), K(candidate));
+        } else if (is_wash) {
+          if (!key.tablet_id_.is_inner_tablet()) {
+            ++wash_user_cnt;
+          } else {
+            ++wash_inner_cnt;
+          }
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -1680,12 +1700,15 @@ int ObTenantMetaMemMgr::insert_pinned_tablet(const ObTabletMapKey &key)
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_UNLIKELY(!key.is_valid())) {
     LOG_WARN("invalid args", K(ret), K(key));
-  } else if (OB_FAIL(pinned_tablet_set_.set_refactored(key, 0/*flag, not overwrite*/))) {
-    if (OB_HASH_EXIST == ret) {
-      LOG_DEBUG("tablet already exists", K(ret), K(key));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to insert into hash set", K(ret), K(key));
+  } else {
+    ObBucketHashWLockGuard guard(pin_set_lock_, key.hash());
+    if (OB_FAIL(pinned_tablet_set_.set_refactored(key, 0/*flag, not overwrite*/))) {
+      if (OB_HASH_EXIST == ret) {
+        LOG_DEBUG("tablet already exists", K(ret), K(key));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to insert into hash set", K(ret), K(key));
+      }
     }
   }
 
@@ -1701,13 +1724,33 @@ int ObTenantMetaMemMgr::erase_pinned_tablet(const ObTabletMapKey &key)
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_UNLIKELY(!key.is_valid())) {
     LOG_WARN("invalid args", K(ret), K(key));
-  } else if (OB_FAIL(pinned_tablet_set_.erase_refactored(key))) {
-    if (OB_HASH_NOT_EXIST == ret) {
-      LOG_DEBUG("tablet does not exist in t3m pinned set", K(ret), K(key));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to erase from hash set", K(ret), K(key));
+  } else {
+    ObBucketHashWLockGuard guard(pin_set_lock_, key.hash());
+    if (OB_FAIL(pinned_tablet_set_.erase_refactored(key))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        LOG_DEBUG("tablet does not exist in t3m pinned set", K(ret), K(key));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to erase from hash set", K(ret), K(key));
+      }
     }
+  }
+
+  return ret;
+}
+
+int ObTenantMetaMemMgr::exist_pinned_tablet(const ObTabletMapKey &key)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!key.is_valid())) {
+    LOG_WARN("invalid args", K(ret), K(key));
+  } else {
+    ObBucketHashRLockGuard guard(pin_set_lock_, key.hash());
+    ret = pinned_tablet_set_.exist_refactored(key);
   }
 
   return ret;

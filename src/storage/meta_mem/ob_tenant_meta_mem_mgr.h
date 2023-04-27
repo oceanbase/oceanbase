@@ -338,7 +338,7 @@ private:
   static const int64_t SSTABLE_GC_MAX_TIME = 500; // 500us
   typedef common::ObBinaryHeap<CandidateTabletInfo, HeapCompare, DEFAULT_TABLET_WASH_HEAP_COUNT> Heap;
   typedef common::hash::ObHashSet<MinMinorSSTableInfo, common::hash::NoPthreadDefendMode> SSTableSet;
-  typedef common::hash::ObHashSet<ObTabletMapKey> PinnedTabletSet;
+  typedef common::hash::ObHashSet<ObTabletMapKey, hash::NoPthreadDefendMode> PinnedTabletSet;
 
   class GetWashTabletCandidate final
   {
@@ -408,7 +408,7 @@ private:
       bool &is_wash);
   int64_t calc_wash_tablet_cnt() const;
   void dump_tablet();
-  void dump_pinned_tablet() const;
+  void dump_pinned_tablet();
   void dump_ls(ObLSService &ls_service) const;
   void init_pool_arr();
   void release_memtable(memtable::ObMemtable *memtable);
@@ -427,7 +427,7 @@ private:
       const char *name,
       common::ObIArray<ObTenantMetaMemStatus> &info) const;
   int get_allocator_info(common::ObIArray<ObTenantMetaMemStatus> &info) const;
-
+  int exist_pinned_tablet(const ObTabletMapKey &key);
 private:
   int cmp_ret_;
   HeapCompare compare_;
@@ -445,6 +445,7 @@ private:
   common::ObSpinLock gc_queue_lock_;
   SSTableSet last_min_minor_sstable_set_;
   common::SpinRWLock sstable_set_lock_;
+  ObBucketLock pin_set_lock_;
   PinnedTabletSet pinned_tablet_set_; // tablets which are in multi source data transaction procedure
 
   ObTenantMetaObjPool<memtable::ObMemtable> memtable_pool_;
