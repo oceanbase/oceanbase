@@ -123,7 +123,7 @@ static const int64_t MAX_MEMORY = 1L << 40; // 1T
 static const int MAX_CHUNK_CNT = MAX_MEMORY / (2L << 20);
 static const int MAX_TENANT_CNT = OB_MAX_SERVER_TENANT_CNT;
 static const int MAX_LABEL_ITEM_CNT = 16L << 10;
-static const int64_t STAT_LABEL_INTERVAL = 60L * 1000L * 1000L;
+static const int64_t STAT_LABEL_INTERVAL = 10L * 1000L * 1000L;
 static const int64_t LOG_BUF_LEN = 64L << 10;
 
 struct TenantCtxRange
