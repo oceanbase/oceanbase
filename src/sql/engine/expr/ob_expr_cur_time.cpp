@@ -27,7 +27,7 @@ using namespace share;
 namespace sql
 {
 ObExprUtcTimestamp::ObExprUtcTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_TIMESTAMP, N_UTC_TIMESTAMP, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_TIMESTAMP, N_UTC_TIMESTAMP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprUtcTimestamp::~ObExprUtcTimestamp()
@@ -73,7 +73,7 @@ int ObExprUtcTimestamp::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_exp
 }
 
 ObExprUtcTime::ObExprUtcTime(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_TIME, N_UTC_TIME, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_TIME, N_UTC_TIME, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprUtcTime::~ObExprUtcTime()
@@ -124,7 +124,7 @@ int ObExprUtcTime::eval_utc_time(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 ObExprUtcDate::ObExprUtcDate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_DATE, N_UTC_DATE, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UTC_DATE, N_UTC_DATE, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprUtcDate::~ObExprUtcDate()
@@ -173,7 +173,7 @@ int ObExprUtcDate::eval_utc_date(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 ObExprCurTimestamp::ObExprCurTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_TIMESTAMP, N_CUR_TIMESTAMP, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_TIMESTAMP, N_CUR_TIMESTAMP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprCurTimestamp::~ObExprCurTimestamp()
@@ -253,7 +253,7 @@ int ObExprCurTimestamp::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_exp
 }
 
 ObExprSysdate::ObExprSysdate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SYSDATE, N_SYSDATE, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SYSDATE, N_SYSDATE, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprSysdate::~ObExprSysdate()
@@ -342,7 +342,7 @@ int ObExprSysdate::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
 
 
 ObExprCurDate::ObExprCurDate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_DATE, N_CUR_DATE, 0, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_DATE, N_CUR_DATE, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -417,7 +417,7 @@ int ObExprCurDate::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr,
 
 
 ObExprCurTime::ObExprCurTime(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_TIME, N_CUR_TIME, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CUR_TIME, N_CUR_TIME, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

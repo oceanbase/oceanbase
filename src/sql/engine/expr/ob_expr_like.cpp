@@ -85,7 +85,7 @@ int ObExprLike::InstrInfo::add_instr_info(const char *start, const uint32_t leng
 }
 
 ObExprLike::ObExprLike(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_OP_LIKE, N_LIKE, 3, NOT_ROW_DIMENSION),
+    : ObFuncExprOperator(alloc, T_OP_LIKE, N_LIKE, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
       is_pattern_literal_(false), is_text_literal_(true), is_escape_literal_(false),
       like_id_(-1)
 {

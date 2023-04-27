@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprLastExecId::ObExprLastExecId(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_GET_LAST_EXEC_ID, N_LAST_EXECUTION_ID, 0)
+  : ObStringExprOperator(alloc, T_FUN_GET_LAST_EXEC_ID, N_LAST_EXECUTION_ID, 0, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

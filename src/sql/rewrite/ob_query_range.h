@@ -881,6 +881,7 @@ private:
                                     uint64_t &part_column_id);
   int get_calculable_expr_val(const ObRawExpr *expr, ObObj &val, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
+  int add_prefix_pattern_constraint(const ObRawExpr *expr);
   int get_final_expr_val(const ObRawExpr *expr, ObObj &val);
   int generate_expr_final_info();
   int check_null_param_compare_in_row(const ObRawExpr *l_expr,

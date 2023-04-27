@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprTrim::ObExprTrim(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_TRIM, N_TRIM, MORE_THAN_ZERO)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TRIM, N_TRIM, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }
@@ -36,7 +36,7 @@ ObExprTrim::ObExprTrim(ObIAllocator &alloc,
                        ObExprOperatorType type,
                        const char *name,
                        int32_t param_num)
-    : ObStringExprOperator(alloc, type, name, param_num)
+    : ObStringExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL)
 {
 }
 

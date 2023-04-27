@@ -226,7 +226,7 @@ int ObEnumSetInfo::deep_copy(common::ObIAllocator &allocator,
 //////////////////////////// ObExprSetToStr ////////////////////////////
 
 ObExprSetToStr::ObExprSetToStr(ObIAllocator &alloc)
-    : ObExprTypeToStr(alloc, T_FUN_SET_TO_STR, N_SET_TO_STR, 2, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+    : ObExprTypeToStr(alloc, T_FUN_SET_TO_STR, N_SET_TO_STR, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
 {
 }
 
@@ -324,7 +324,7 @@ int ObExprSetToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 
 //////////////////////////// ObExprEnumTostr ////////////////////////////
 ObExprEnumToStr::ObExprEnumToStr(ObIAllocator &alloc)
-    : ObExprTypeToStr(alloc, T_FUN_ENUM_TO_STR, N_ENUM_TO_STR, 2, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+    : ObExprTypeToStr(alloc, T_FUN_ENUM_TO_STR, N_ENUM_TO_STR, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
 {
 }
 
@@ -397,7 +397,7 @@ int ObExprEnumToStr::calc_to_str_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 //////////////////////////// ObExprSetToInnerType ////////////////////////////
 ObExprSetToInnerType::ObExprSetToInnerType(ObIAllocator &alloc)
     : ObExprTypeToStr(alloc, T_FUN_SET_TO_INNER_TYPE, N_SET_TO_INNER_TYPE,
-                      2, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+                      2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
 {
 }
 
@@ -501,7 +501,7 @@ int ObExprSetToInnerType::calc_to_inner_expr(const ObExpr &expr, ObEvalCtx &ctx,
 //////////////////////////// ObExprEnumToInnerType ////////////////////////////
 ObExprEnumToInnerType::ObExprEnumToInnerType(ObIAllocator &alloc)
     : ObExprTypeToStr(alloc, T_FUN_ENUM_TO_INNER_TYPE, N_ENUM_TO_INNER_TYPE,
-                      2, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+                      2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
 {
 }
 

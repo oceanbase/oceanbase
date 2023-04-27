@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 namespace sql
 {
 
-ObExprIfNull::ObExprIfNull(ObIAllocator &alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_IFNULL, N_IFNULL, 2, NOT_ROW_DIMENSION)
+ObExprIfNull::ObExprIfNull(ObIAllocator &alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_IFNULL, N_IFNULL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

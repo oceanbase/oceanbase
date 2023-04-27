@@ -2263,6 +2263,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         if (OB_SUCC(ret) && OB_FAIL(add_new_indexkey_for_oracle_temp_table(index_column_list_node->num_child_))) {
           SQL_RESV_LOG(WARN, "add session id key failed", K(ret));
         }
+        bool cnt_func_index_mysql = false;
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
           if (NULL == index_column_list_node->children_[i]
@@ -2283,6 +2284,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               //column_name
               if (index_column_node->children_[0]->type_ != T_IDENT) {
                 sort_item.is_func_index_ = true;
+                cnt_func_index_mysql = true;
               } else {
                 sort_item.is_func_index_ = false;
               }
@@ -2309,25 +2311,36 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                                       *session_info_,
                                                                       tbl_schema,
                                                                       expr,
-                                                                      schema_checker_))) {
+                                                                      schema_checker_,
+                                                                      ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
                 LOG_WARN("build generated column expr failed", K(ret));
               } else if (!expr->is_column_ref_expr()) {
                 //real index expr, so generate hidden generated column in data table schema
-                if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
+                if (ob_is_geometry(expr->get_data_type()) || static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY) == node->value_) {
+                  ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
+                  LOG_WARN("Spatial functional index is not supported.", K(ret), K(column_name));
+                } else if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
                                                                                    session_info_->get_sql_mode(),
                                                                                    tbl_schema,
                                                                                    column_schema,
                                                                                    schema_checker_->get_schema_guard()))) {
                   LOG_WARN("generate ordinary generated column failed", K(ret));
                 } else {
+                  ObColumnNameHashWrapper column_name_key(column_schema->get_column_name_str());
                   sort_item.column_name_ = column_schema->get_column_name_str();
                   sort_item.is_func_index_ = false;
+                  if (OB_FAIL(column_name_set_.set_refactored(column_name_key))) {
+                    LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                  }
                 }
-              } else {
+              } else if (is_oracle_mode) {
                 const ObColumnRefRawExpr *ref_expr = static_cast<const ObColumnRefRawExpr*>(expr);
                 sort_item.column_name_ = ref_expr->get_column_name();
                 sort_item.is_func_index_ = false;
                 column_schema = tbl_schema.get_column_schema(ref_expr->get_column_id());
+              } else {
+                ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
               }
             } else {
               if (NULL == (column_schema = tbl_schema.get_column_schema(column_name))) {
@@ -2343,7 +2356,11 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ret = OB_WRONG_SUB_KEY;
                 SQL_RESV_LOG(WARN, "prefix length is longer than column length", K(sort_item), K(column_schema->get_data_length()), K(ret));
               } else if (ob_is_text_tc(column_schema->get_data_type())) {
-                if(sort_item.prefix_len_ <= 0) {
+                if (column_schema->is_hidden()) {
+                  //functional index in mysql mode
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
+                  LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
+                } else if(sort_item.prefix_len_ <= 0) {
                   ret = OB_ERR_WRONG_KEY_COLUMN;
                   LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
                 }
@@ -2413,6 +2430,24 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               }
             }
           }
+        }
+
+        if (OB_SUCC(ret) && cnt_func_index_mysql) {
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
+          }
+        }
+
+        if (OB_SUCC(ret) && cnt_func_index_mysql) {
+          first_column_name = ObString::make_string("functional_index");
         }
       }
     } else {

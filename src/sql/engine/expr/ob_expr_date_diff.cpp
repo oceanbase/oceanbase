@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprDateDiff::ObExprDateDiff(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_DATE_DIFF, N_DATE_DIFF, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_DATE_DIFF, N_DATE_DIFF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -32,7 +32,7 @@ ObExprDateDiff::~ObExprDateDiff()
 }
 
 ObExprMonthsBetween::ObExprMonthsBetween(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MONTHS_BETWEEN, N_MONTHS_BETWEEN, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MONTHS_BETWEEN, N_MONTHS_BETWEEN, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

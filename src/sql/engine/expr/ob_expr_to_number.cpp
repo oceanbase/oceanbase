@@ -28,7 +28,7 @@ namespace sql
 ObExprToNumberBase::ObExprToNumberBase(common::ObIAllocator &alloc,
                                        const ObExprOperatorType type,
                                        const char *name)
-    : ObFuncExprOperator(alloc, type, name, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, type, name, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

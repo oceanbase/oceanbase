@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprFindInSet::ObExprFindInSet(ObIAllocator &alloc)
-: ObFuncExprOperator(alloc, T_FUN_SYS_FIND_IN_SET, "find_in_set", 2, NOT_ROW_DIMENSION)
+: ObFuncExprOperator(alloc, T_FUN_SYS_FIND_IN_SET, "find_in_set", 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

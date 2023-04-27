@@ -55,6 +55,7 @@ ObExprJoinFilter::ObExprJoinFilter(ObIAllocator& alloc)
                      T_OP_JOIN_BLOOM_FILTER,
                      "JOIN_BLOOM_FILTER",
                      MORE_THAN_ZERO,
+                     VALID_FOR_GENERATED_COL,
                      NOT_ROW_DIMENSION,
                      INTERNAL_IN_MYSQL_MODE)
 {

@@ -21,7 +21,7 @@ namespace sql
 {
 
 ObExprWrapperInner::ObExprWrapperInner(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_WRAPPER_INNER, N_WRAPPER_INNER, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_WRAPPER_INNER, N_WRAPPER_INNER, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

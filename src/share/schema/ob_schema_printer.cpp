@@ -2269,7 +2269,7 @@ int ObSchemaPrinter::print_index_definition_columns(
                             buf, buf_len, pos, is_first, is_agent_mode))) {
                 OB_LOG(WARN, "failed to print full text columns", K(ret));
               }
-            } else if (data_col->is_func_idx_column(is_oracle_mode)) {
+            } else if (data_col->is_func_idx_column()) {
               const ObString &expr_str = data_col->get_cur_default_value().is_null() ?
                 data_col->get_orig_default_value().get_string() :
                 data_col->get_cur_default_value().get_string();

@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprInitcap::ObExprInitcap(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

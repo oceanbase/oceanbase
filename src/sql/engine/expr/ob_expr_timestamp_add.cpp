@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprTimeStampAdd::ObExprTimeStampAdd(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_STAMP_ADD, N_TIME_STAMP_ADD, 3, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_STAMP_ADD, N_TIME_STAMP_ADD, 3, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -258,6 +258,21 @@ int ObExprTimeStampAdd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_e
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_timestampadd_expr;
+  return ret;
+}
+
+int ObExprTimeStampAdd::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (OB_UNLIKELY(exprs.count() != 3)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param num is invalid", K(ret), K(exprs.count()));
+  } else if (OB_ISNULL(exprs.at(2))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the third param is invalid", K(ret), K(exprs.at(2)));
+  } else if (ObTimeType == exprs.at(2)->get_result_type().get_type()) {
+    is_valid = false;
+  }
   return ret;
 }
 } //namespace sql

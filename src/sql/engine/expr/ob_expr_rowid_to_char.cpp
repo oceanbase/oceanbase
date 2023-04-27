@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprRowIDToChar::ObExprRowIDToChar(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_ROWID_TO_CHAR, N_ROWID_TO_CHAR, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_ROWID_TO_CHAR, N_ROWID_TO_CHAR, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

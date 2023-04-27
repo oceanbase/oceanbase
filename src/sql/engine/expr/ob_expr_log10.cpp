@@ -26,7 +26,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprLog10::ObExprLog10(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_LOG_TEN, N_LOG10, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_LOG_TEN, N_LOG10, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

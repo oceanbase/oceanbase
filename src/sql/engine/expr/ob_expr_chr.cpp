@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprChr::ObExprChr(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_CHR, N_CHR, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_CHR, N_CHR, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

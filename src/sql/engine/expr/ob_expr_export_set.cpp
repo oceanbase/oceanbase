@@ -22,7 +22,7 @@ namespace oceanbase {
 namespace sql {
 
 ObExprExportSet::ObExprExportSet(ObIAllocator& alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_EXPORT_SET, N_EXPORT_SET, MORE_THAN_TWO)
+    : ObStringExprOperator(alloc, T_FUN_SYS_EXPORT_SET, N_EXPORT_SET, MORE_THAN_TWO, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

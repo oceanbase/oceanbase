@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprHex::ObExprHex(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_HEX, N_HEX, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_HEX, N_HEX, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

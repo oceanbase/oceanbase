@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprSqrt::ObExprSqrt(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SQRT, N_SQRT, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SQRT, N_SQRT, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

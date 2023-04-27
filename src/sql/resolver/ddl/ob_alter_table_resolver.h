@@ -88,7 +88,8 @@ private:
   int resolve_index_column_list(const ParseNode &node,
                                 obrpc::ObCreateIndexArg &index_arg,
                                 const int64_t index_name_value,
-                                ObIArray<ObString> &input_index_columns_name);
+                                ObIArray<ObString> &input_index_columns_name,
+                                bool &cnt_func_index);
 
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column,
                       obrpc::ObCreateIndexArg &index_arg);

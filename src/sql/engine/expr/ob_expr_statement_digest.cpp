@@ -77,7 +77,7 @@ int calc_digest_text(ObIAllocator &allocator,
 }
 
 ObExprStatementDigest::ObExprStatementDigest(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_STATEMENT_DIGEST, N_STATEMENT_DIGEST, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_STATEMENT_DIGEST, N_STATEMENT_DIGEST, 1, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -145,7 +145,7 @@ int ObExprStatementDigest::eval_statement_digest(const ObExpr &expr, ObEvalCtx &
 }
 
 ObExprStatementDigestText::ObExprStatementDigestText(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_STATEMENT_DIGEST_TEXT, N_STATEMENT_DIGEST_TEXT, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_STATEMENT_DIGEST_TEXT, N_STATEMENT_DIGEST_TEXT, 1, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

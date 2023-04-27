@@ -26,7 +26,7 @@ namespace sql
 typedef int (*CheckIsMatchFunc)(const ObDatum *when_datum, bool &match_when);
 
 ObExprCase::ObExprCase(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_OP_CASE, N_CASE, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+    : ObExprOperator(alloc, T_OP_CASE, N_CASE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   disable_operand_auto_cast();
   param_lazy_eval_ = true;

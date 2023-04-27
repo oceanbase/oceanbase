@@ -410,7 +410,8 @@ public:
       const common::ObString &column_name,
       int64_t column_num,
       const int64_t index_keyname_value,
-      bool is_explicit_order);
+      bool is_explicit_order,
+      bool is_func_index);
   int resolve_spatial_index_constraint(
       const share::schema::ObColumnSchemaV2 &column_schema,
       int64_t column_num,

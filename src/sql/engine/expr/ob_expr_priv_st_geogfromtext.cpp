@@ -29,7 +29,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprPrivSTGeogFromText::ObExprPrivSTGeogFromText(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_GEOGFROMTEXT, N_PRIV_ST_GEOGFROMTEXT, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_GEOGFROMTEXT, N_PRIV_ST_GEOGFROMTEXT, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -37,7 +37,7 @@ ObExprPrivSTGeogFromText::ObExprPrivSTGeogFromText(ObIAllocator &alloc,
                                                    ObExprOperatorType type,
                                                    const char *name,
                                                    int32_t param_num,
-                                                   int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+                                                   int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 

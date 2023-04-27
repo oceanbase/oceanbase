@@ -5236,6 +5236,66 @@ bool ObTableSchema::has_generated_and_partkey_column() const
   return result;
 }
 
+int ObTableSchema::check_functional_index_columns_depend(
+  const ObColumnSchemaV2 &data_column_schema,
+  ObSchemaGetterGuard &schema_guard,
+  bool &has_func_idx_col_deps) const
+{
+  int ret = OB_SUCCESS;
+  has_func_idx_col_deps = false;
+  const uint64_t tenant_id = get_tenant_id();
+  ObHashSet<ObString> deps_gen_columns; // generated columns depend on the data column.
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (!data_column_schema.has_generated_column_deps()) {
+  } else if (OB_FAIL(deps_gen_columns.create(OB_MAX_COLUMN_NUMBER/2))) {
+    LOG_WARN("create hashset failed", K(ret));
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple index infos failed", K(ret));
+  } else {
+    for (ObTableSchema::const_column_iterator iter = column_begin();
+        OB_SUCC(ret) && iter != column_end(); iter++) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(this));
+      } else if (column->is_func_idx_column()) {
+        // prefix index columns are hidden generated column in data table.
+        if (column->has_cascaded_column_id(data_column_schema.get_column_id())
+          && OB_FAIL(deps_gen_columns.set_refactored(column->get_column_name()))) {
+          LOG_WARN("set refactored failed", K(ret));
+        }
+      } else {/* do nothing. */}
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !has_func_idx_col_deps && i < simple_index_infos.count(); i++) {
+      const ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else {
+        const ObIndexInfo &index_info = index_schema->get_index_info();
+        for (int j = 0; OB_SUCC(ret) && !has_func_idx_col_deps && j < index_info.get_size(); j++) {
+          const ObColumnSchemaV2 *index_col = nullptr;
+          if (OB_ISNULL(index_col = index_schema->get_column_schema(index_info.get_column(j)->column_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected err", K(ret), "column_id", index_info.get_column(j)->column_id_);
+          } else if (OB_FAIL(deps_gen_columns.exist_refactored(index_col->get_column_name()))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else if (OB_HASH_EXIST == ret) {
+              has_func_idx_col_deps = true;
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check whether column has functional index dependancy", K(ret), K(index_col));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 int ObTableSchema::check_prefix_index_columns_depend(
     const ObColumnSchemaV2 &data_column_schema,
     ObSchemaGetterGuard &schema_guard,

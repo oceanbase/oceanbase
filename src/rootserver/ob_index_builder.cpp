@@ -596,6 +596,7 @@ int ObIndexBuilder::generate_schema(
     ObTableSchema &schema)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
   // some items in arg may be invalid, don't check arg here(when create table with index, alter
   // table add index)
   if (OB_UNLIKELY(!ddl_service_.is_inited())) {
@@ -604,6 +605,8 @@ int ObIndexBuilder::generate_schema(
   } else if (OB_UNLIKELY(!data_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument",  K(ret), K(data_schema));
+  } else if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check_if_oracle_compat_mode failed", K(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -655,6 +658,7 @@ int ObIndexBuilder::generate_schema(
       }
       int64_t index_data_length = 0;
       bool is_ctxcat_added = false;
+      bool is_mysql_func_index = false;
       for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
         const ObColumnSchemaV2 *data_column = NULL;
         const ObColumnSortItem &sort_item = arg.index_columns_.at(i);
@@ -680,6 +684,10 @@ int ObIndexBuilder::generate_schema(
             LOG_WARN("index table rowkey length over max_user_row_key_length",
                 K(index_data_length), LITERAL_K(OB_MAX_USER_ROW_KEY_LENGTH), K(ret));
           }
+        } else if (FALSE_IT(is_mysql_func_index |= !is_oracle_mode && data_column->is_func_idx_column())) {
+        } else if (!is_oracle_mode && data_column->is_func_idx_column() && ob_is_text_tc(data_column->get_data_type())) {
+          ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
+          LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
         } else if (ob_is_text_tc(data_column->get_data_type()) && !data_column->is_fulltext_column()) {
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
@@ -694,15 +702,17 @@ int ObIndexBuilder::generate_schema(
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("fulltext index created on blob column is not supported", K(arg.index_type_), K(ret));
         } else if (ob_is_json_tc(data_column->get_data_type())) {
-          ret = OB_ERR_JSON_USED_AS_KEY;
-          LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
-          LOG_WARN("JSON column cannot be used in key specification.", K(arg.index_type_), K(ret));
+          if (!is_oracle_mode && data_column->is_func_idx_column()) {
+            ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
+            LOG_WARN("Cannot create a functional index on an expression that returns a JSON or GEOMETRY.",K(ret));
+          } else {
+            ret = OB_ERR_JSON_USED_AS_KEY;
+            LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+            LOG_WARN("JSON column cannot be used in key specification.", K(arg.index_type_), K(ret));
+          }
         } else if (data_column->is_string_type()) {
           int64_t length = 0;
-          bool is_oracle_mode = false;
-          if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
-            LOG_WARN("check_if_oracle_compat_mode failed", K(ret));
-          } else if (data_column->is_fulltext_column()) {
+          if (data_column->is_fulltext_column()) {
             if (!is_ctxcat_added) {
               length = OB_MAX_OBJECT_NAME_LENGTH;
               is_ctxcat_added = true;
@@ -724,6 +734,16 @@ int ObIndexBuilder::generate_schema(
                        K(index_data_length), LITERAL_K(OB_MAX_USER_ROW_KEY_LENGTH), K(ret));
             }
           }
+        }
+      }
+      if (OB_SUCC(ret) && is_mysql_func_index) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(data_schema.get_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
         }
       }
     }

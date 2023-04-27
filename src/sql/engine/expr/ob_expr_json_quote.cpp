@@ -26,7 +26,7 @@ ObExprJsonQuote::ObExprJsonQuote(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
       T_FUN_SYS_JSON_QUOTE,
       N_JSON_QUOTE, 
-      1, NOT_ROW_DIMENSION)
+      1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

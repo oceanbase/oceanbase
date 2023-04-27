@@ -28,7 +28,7 @@ namespace sql
 
 ObExprFromUnixTime::ObExprFromUnixTime(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_UNIX_TIME,
-                         N_FROM_UNIX_TIME, ONE_OR_TWO, NOT_ROW_DIMENSION)
+                         N_FROM_UNIX_TIME, ONE_OR_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

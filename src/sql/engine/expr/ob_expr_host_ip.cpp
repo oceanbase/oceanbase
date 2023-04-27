@@ -27,7 +27,7 @@ namespace sql
 
 
 ObExprHostIP::ObExprHostIP(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_HOST_IP, N_HOST_IP, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_HOST_IP, N_HOST_IP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -22,7 +22,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprDesHexStr::ObExprDesHexStr(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_DES_HEX_STR, N_DES_HEX_STR, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_DES_HEX_STR, N_DES_HEX_STR, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

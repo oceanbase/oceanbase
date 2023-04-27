@@ -434,7 +434,7 @@ END_P SET_VAR DELIMITER
 %type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
-%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint
+%type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr
 %type <node> opt_when check_state constraint_definition
 %type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra
 %type <reserved_keyword> mysql_reserved_keyword
@@ -7108,7 +7108,25 @@ column_name opt_sort_column_key_length opt_asc_desc opt_column_id
   malloc_non_terminal_node($$, result->malloc_pool_, T_SPLIT_KEY, 1, col_list);
   }
 */
+| '(' index_expr ')' opt_asc_desc opt_column_id
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SORT_COLUMN_KEY, 4, $2, NULL, $4, $5);
+}
 ;
+
+index_expr:
+expr
+{
+  if (NULL == $1) {
+    yyerror(NULL, result, "index_expr is null\n");
+    YYERROR;
+  } else {
+    $$ = $1;
+    dup_string($$, result, @1.first_column, @1.last_column);
+  }
+}
+;
+
 opt_column_id:
 /* EMPTY */
 { $$ = 0; }

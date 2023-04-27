@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprToBlob::ObExprToBlob(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_TO_BLOB, N_TO_BLOB, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TO_BLOB, N_TO_BLOB, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

@@ -26,7 +26,7 @@ namespace sql
 {
 using namespace common;
 ObExprSpace::ObExprSpace(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_SPACE, N_SPACE, 1, NOT_ROW_DIMENSION) {}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_SPACE, N_SPACE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
 
 inline int ObExprSpace::calc_result_type1(
     ObExprResType &type,

@@ -40,6 +40,7 @@ ObExprDbmsCryptoEncrypt::ObExprDbmsCryptoEncrypt(ObIAllocator& alloc)
                          T_FUC_SYS_DBMS_CRYPTO_ENCRYPT, 
                          N_DBMS_CRYPTO_ENCRYPT,
                          MORE_THAN_TWO,
+                         VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION,
                          false,
                          INTERNAL_IN_ORACLE_MODE)
@@ -77,6 +78,7 @@ ObExprDbmsCryptoDecrypt::ObExprDbmsCryptoDecrypt(ObIAllocator& alloc)
                          T_FUC_SYS_DBMS_CRYPTO_DECRYPT, 
                          N_DBMS_CRYPTO_DECRYPT,
                          MORE_THAN_TWO,
+                         VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION,
                          false,
                          INTERNAL_IN_ORACLE_MODE)

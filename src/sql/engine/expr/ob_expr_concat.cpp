@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprConcat::ObExprConcat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_OP_CNN, N_CONCAT, MORE_THAN_ZERO)
+    : ObStringExprOperator(alloc, T_OP_CNN, N_CONCAT, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

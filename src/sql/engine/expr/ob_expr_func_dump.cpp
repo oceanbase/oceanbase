@@ -37,7 +37,7 @@ enum ReturnFormat {
 };
 
 ObExprFuncDump::ObExprFuncDump(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_DUMP, N_DUMP, MORE_THAN_ZERO)
+    : ObStringExprOperator(alloc, T_FUN_SYS_DUMP, N_DUMP, MORE_THAN_ZERO, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

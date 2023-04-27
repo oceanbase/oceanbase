@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprSign::ObExprSign(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_OP_SIGN, N_SIGN, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_OP_SIGN, N_SIGN, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

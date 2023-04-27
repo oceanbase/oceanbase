@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprLastInsertID::ObExprLastInsertID(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_LAST_INSERT_ID, N_LAST_INSERT_ID, ZERO_OR_ONE, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_LAST_INSERT_ID, N_LAST_INSERT_ID, ZERO_OR_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

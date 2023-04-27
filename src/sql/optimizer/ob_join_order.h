@@ -2353,6 +2353,7 @@ struct NullAwareAntiJoinInfo {
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_persistent);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                           bool is_persistent, ObExprEqualCheckContext &equal_ctx);
+    int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

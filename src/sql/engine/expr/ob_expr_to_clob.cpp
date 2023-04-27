@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprToClob::ObExprToClob(ObIAllocator &alloc)
-    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CLOB, N_TO_CLOB, 1)
+    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CLOB, N_TO_CLOB, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

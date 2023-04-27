@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprDllUdf::ObExprDllUdf(ObIAllocator &alloc) :
-    ObFuncExprOperator(alloc, T_FUN_NORMAL_UDF, N_NORMAL_UDF, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE),
+    ObFuncExprOperator(alloc, T_FUN_NORMAL_UDF, N_NORMAL_UDF, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE),
     allocator_(alloc),
     udf_func_(),
     udf_meta_(),
@@ -38,7 +38,7 @@ ObExprDllUdf::ObExprDllUdf(ObIAllocator &alloc) :
 }
 
 ObExprDllUdf::ObExprDllUdf(ObIAllocator &alloc, ObExprOperatorType type, const char *name) :
-    ObFuncExprOperator(alloc, type, name, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION),
+    ObFuncExprOperator(alloc, type, name, PARAM_NUM_UNKNOWN, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
     allocator_(alloc),
     udf_func_(),
     udf_meta_(),

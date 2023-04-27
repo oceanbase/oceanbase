@@ -30,7 +30,7 @@ namespace sql
 
 
 ObExprEffectiveTenant::ObExprEffectiveTenant(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_EFFECTIVE_TENANT, N_EFFECTIVE_TENANT, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_EFFECTIVE_TENANT, N_EFFECTIVE_TENANT, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

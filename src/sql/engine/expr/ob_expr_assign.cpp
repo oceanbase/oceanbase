@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprAssign::ObExprAssign(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_OP_ASSIGN, N_ASSIGN, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_OP_ASSIGN, N_ASSIGN, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

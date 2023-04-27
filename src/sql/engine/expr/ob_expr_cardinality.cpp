@@ -31,7 +31,7 @@ namespace sql
 }
 
 ObExprCardinality::ObExprCardinality(ObIAllocator &alloc)
-  :ObFuncExprOperator(alloc, T_FUN_SYS_CARDINALITY, N_CARDINALITY, 1, NOT_ROW_DIMENSION)
+  :ObFuncExprOperator(alloc, T_FUN_SYS_CARDINALITY, N_CARDINALITY, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

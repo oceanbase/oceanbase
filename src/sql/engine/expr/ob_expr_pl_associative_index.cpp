@@ -26,7 +26,7 @@ OB_SERIALIZE_MEMBER((ObExprPLAssocIndex, ObExprOperator),
                     info_.parent_expr_type_);
 
 ObExprPLAssocIndex::ObExprPLAssocIndex(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_PL_ASSOCIATIVE_INDEX, N_PL_ASSOCIATIVE_INDEX, 2, NOT_ROW_DIMENSION,
+  : ObExprOperator(alloc, T_FUN_PL_ASSOCIATIVE_INDEX, N_PL_ASSOCIATIVE_INDEX, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                   false, INTERNAL_IN_ORACLE_MODE),
     info_()
 {

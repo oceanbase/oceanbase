@@ -4011,8 +4011,10 @@ int ObDDLService::get_all_dropped_column_ids(
 int ObDDLService::check_can_drop_column(
     const ObString &orig_column_name,
     const ObColumnSchemaV2 *orig_column_schema,
+    const ObTableSchema &orig_table_schema,
     const ObTableSchema &new_table_schema,
-    const int64_t new_table_cols_cnt)
+    const int64_t new_table_cols_cnt,
+    ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   int64_t column_count = new_table_cols_cnt;
@@ -4022,9 +4024,21 @@ int ObDDLService::check_can_drop_column(
     LOG_WARN("fail to find old column schema!", K(ret), K(orig_column_name), KP(orig_column_schema),
         K(new_table_schema));
   } else if (orig_column_schema->has_generated_column_deps()) {
-    ret = OB_ERR_DEPENDENT_BY_GENERATED_COLUMN;
-    LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_GENERATED_COLUMN, orig_column_name.length(), orig_column_name.ptr());
-    LOG_WARN("Dropping column has generated column deps", K(ret), K(orig_column_name));
+    bool has_func_idx_col_deps = false;
+    bool is_oracle_mode = false;
+    if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check if oracle compat mode", K(ret));
+    } else if (!is_oracle_mode && OB_FAIL(orig_table_schema.check_functional_index_columns_depend(*orig_column_schema, schema_guard, has_func_idx_col_deps))) {
+      LOG_WARN("fail to check if column has functional index dependency.", K(ret));
+    } else if (!has_func_idx_col_deps) {
+      ret = OB_ERR_DEPENDENT_BY_GENERATED_COLUMN;
+      LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_GENERATED_COLUMN, orig_column_name.length(), orig_column_name.ptr());
+      LOG_WARN("Dropping column has generated column deps", K(ret), K(orig_column_name));
+    } else {
+      ret = OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX;
+      LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, orig_column_name.length(), orig_column_name.ptr());
+      LOG_WARN("Dropping column has functional index column deps", K(ret), K(orig_column_name));
+    }
   } else if (orig_column_schema->is_tbl_part_key_column()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop partitioning column is");
@@ -7618,9 +7632,11 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
             ObColumnNameHashWrapper orig_column_key(orig_column_name);
             if (OB_FAIL(check_can_drop_column(orig_column_name,
                                               orig_column_schema,
+                                              origin_table_schema,
                                               new_table_schema,
                                               new_table_schema.get_column_count() > new_table_cols_cnt + 1 ?
-                                              new_table_schema.get_column_count() : new_table_cols_cnt + 1))) {
+                                              new_table_schema.get_column_count() : new_table_cols_cnt + 1,
+                                              schema_guard))) {
               LOG_WARN("column cannot be dropped", K(ret), K(new_table_cols_cnt), KPC(orig_column_schema));
             } else if (OB_FAIL(drop_column_update_new_table(origin_table_schema,
                                                             new_table_schema,
@@ -8415,7 +8431,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
           case OB_DDL_DROP_COLUMN: {
             orig_column_schema = origin_table_schema.get_column_schema(orig_column_name);
             ObColumnNameHashWrapper orig_column_key(orig_column_name);
-            if (OB_FAIL(check_can_drop_column(orig_column_name, orig_column_schema, new_table_schema, new_table_schema.get_column_count()))) {
+            if (OB_FAIL(check_can_drop_column(orig_column_name, orig_column_schema, origin_table_schema, new_table_schema, new_table_schema.get_column_count(), schema_guard))) {
               LOG_WARN("column cannot be dropped", K(ret), KPC(orig_column_schema));
             } else if (OB_HASH_EXIST == update_column_name_set.exist_refactored(orig_column_key)) {
               //column that has been modified, can't not modify again

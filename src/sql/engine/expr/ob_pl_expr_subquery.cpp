@@ -37,7 +37,7 @@ OB_SERIALIZE_MEMBER(
 ObExprOpSubQueryInPl::ObExprOpSubQueryInPl(common::ObIAllocator &alloc)
     : ObFuncExprOperator(
         alloc, T_FUN_SUBQUERY, N_PL_SUBQUERY_CONSTRUCT,
-        PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE),
+        PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE),
       id_(common::OB_INVALID_ID),
       ps_sql_(ObString()),
       type_(stmt::T_NONE),

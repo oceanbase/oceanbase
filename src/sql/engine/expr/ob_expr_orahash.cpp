@@ -25,7 +25,7 @@ using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
 ObExprOrahash::ObExprOrahash(ObIAllocator &alloc)
-  :ObFuncExprOperator(alloc, T_FUN_SYS_ORAHASH, N_ORAHASH, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION)
+  :ObFuncExprOperator(alloc, T_FUN_SYS_ORAHASH, N_ORAHASH, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

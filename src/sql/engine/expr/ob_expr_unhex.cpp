@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprUnhex::ObExprUnhex(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_UNHEX, N_UNHEX, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_UNHEX, N_UNHEX, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

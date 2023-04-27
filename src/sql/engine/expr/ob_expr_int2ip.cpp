@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprInt2ip::ObExprInt2ip(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_INT2IP, N_INT2IP, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INT2IP, N_INT2IP, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

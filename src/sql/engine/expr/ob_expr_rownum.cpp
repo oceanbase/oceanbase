@@ -26,7 +26,7 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObExprRowNum, ObFuncExprOperator), operator_id_);
 
 ObExprRowNum::ObExprRowNum(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_ROWNUM, "rownum", 0, NOT_ROW_DIMENSION),
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ROWNUM, "rownum", 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
     operator_id_(OB_INVALID_ID)
 {
 }

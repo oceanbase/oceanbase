@@ -25,7 +25,7 @@ namespace sql
 
 ObExprArgCase::ObExprArgCase(ObIAllocator &alloc)
     : ObExprOperator(alloc, T_OP_ARG_CASE,
-                     N_ARG_CASE, MORE_THAN_ONE, NOT_ROW_DIMENSION,
+                     N_ARG_CASE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                      INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE), need_cast_(true)
 {
   disable_operand_auto_cast();

@@ -34,6 +34,7 @@ public:
                                 ObExprResType &unit,
                                 common::ObExprTypeCtx &type_ctx) const;
   static int calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum, bool is_add);
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprDateAdjust);
 };

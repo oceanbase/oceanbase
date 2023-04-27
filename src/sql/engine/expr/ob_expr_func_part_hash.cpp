@@ -29,7 +29,7 @@ ObExprFuncPartHashBase::ObExprFuncPartHashBase(common::ObIAllocator &alloc, ObEx
           const char *name, int32_t param_num, int32_t dimension,
           bool is_internal_for_mysql,
           bool is_internal_for_oracle)
-    : ObFuncExprOperator(alloc, type, name, param_num, dimension,
+    : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension,
                          is_internal_for_mysql, is_internal_for_oracle)
 {
 }

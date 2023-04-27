@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprToOutfileRow::ObExprToOutfileRow(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_OP_TO_OUTFILE_ROW, N_TO_OUTFILE_ROW, MORE_THAN_ZERO, INTERNAL_IN_MYSQL_MODE)
+    : ObStringExprOperator(alloc, T_OP_TO_OUTFILE_ROW, N_TO_OUTFILE_ROW, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE)
 {
   need_charset_convert_ = false;
 }

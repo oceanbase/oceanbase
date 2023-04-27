@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprSqlModeConvert::ObExprSqlModeConvert(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_SYS_SQL_MODE_CONVERT, N_SQL_MODE_CONVERT, 1)
+  : ObStringExprOperator(alloc, T_FUN_SYS_SQL_MODE_CONVERT, N_SQL_MODE_CONVERT, 1, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

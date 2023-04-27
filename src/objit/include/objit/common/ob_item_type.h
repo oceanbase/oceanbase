@@ -418,6 +418,7 @@ typedef enum ObItemType
   //following T_FUN_SYS_PART_HASH_V2 has been removed, it's useless now.
   T_FUN_SYS_PART_HASH_V2 = 697,
   T_FUN_SYS_SQL_MODE_CONVERT = 698,
+  T_FUN_SYS_PREFIX_PATTERN = 699,
 
   ///< @note add new mysql/oracle function type before this line
   T_COMMON_FUN_SYS_END = 700,

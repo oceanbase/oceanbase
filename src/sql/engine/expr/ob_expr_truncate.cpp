@@ -38,6 +38,7 @@ ObExprTruncate::ObExprTruncate(common::ObIAllocator &alloc)
                        T_FUN_SYS_TRUNCATE,
                        N_TRUNCATE,
                        2,
+                       VALID_FOR_GENERATED_COL,
                        NOT_ROW_DIMENSION) {}
 
 int ObExprTruncate::calc_result_type2(ObExprResType &type,

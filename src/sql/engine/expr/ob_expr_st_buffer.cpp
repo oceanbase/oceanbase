@@ -36,7 +36,7 @@ const static int64_t ST_BUFFER_MAX_INPUT_NUM = 5;
 
 // ObExprSTBufferStrategy
 ObExprSTBufferStrategy::ObExprSTBufferStrategy(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_ST_BUFFER_STRATEGY, N_ST_BUFFER_STRATEGY, ONE_OR_TWO, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ST_BUFFER_STRATEGY, N_ST_BUFFER_STRATEGY, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -174,7 +174,7 @@ int ObExprSTBufferStrategy::cg_expr(ObExprCGCtx &expr_cg_ctx,
 
 // ObExprSTBuffer
 ObExprSTBuffer::ObExprSTBuffer(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_ST_BUFFER, N_ST_BUFFER, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ST_BUFFER, N_ST_BUFFER, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -182,7 +182,8 @@ ObExprSTBuffer::ObExprSTBuffer(ObIAllocator &alloc,
                                ObExprOperatorType type,
                                const char *name,
                                int32_t param_num,
-                               int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+                               ObValidForGeneratedColFlag valid_for_generated_col,
+                               int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, dimension)
 {
 }
 
@@ -744,7 +745,7 @@ int ObExprSTBuffer::parse_text_strategy(ObString &str, ObGeoBufferStrategy &stra
 
 // ObExprPrivSTBuffer
 ObExprPrivSTBuffer::ObExprPrivSTBuffer(ObIAllocator &alloc)
-  : ObExprSTBuffer(alloc, T_FUN_SYS_PRIV_ST_BUFFER, N_PRIV_ST_BUFFER, TWO_OR_THREE, NOT_ROW_DIMENSION)
+  : ObExprSTBuffer(alloc, T_FUN_SYS_PRIV_ST_BUFFER, N_PRIV_ST_BUFFER, TWO_OR_THREE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

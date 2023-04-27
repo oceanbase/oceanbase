@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprInnerTrim::ObExprInnerTrim(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_INNER_TRIM, N_INNER_TRIM, 3, INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
+    : ObStringExprOperator(alloc, T_FUN_INNER_TRIM, N_INNER_TRIM, 3, VALID_FOR_GENERATED_COL, INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
   need_charset_convert_ = false;
 }

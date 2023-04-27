@@ -24,7 +24,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprCoalesce::ObExprCoalesce(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_COALESCE, N_COALESCE, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObExprOperator(alloc, T_FUN_SYS_COALESCE, N_COALESCE, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprCoalesce::~ObExprCoalesce()

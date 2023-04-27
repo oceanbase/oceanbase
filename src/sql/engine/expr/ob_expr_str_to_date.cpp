@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprStrToDate::ObExprStrToDate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_STR_TO_DATE, N_STR_TO_DATE, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_STR_TO_DATE, N_STR_TO_DATE, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

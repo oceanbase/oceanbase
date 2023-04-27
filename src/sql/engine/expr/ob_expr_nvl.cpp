@@ -76,8 +76,9 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
 }
 
 ObExprNvl::ObExprNvl(ObIAllocator &alloc)
- : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, NOT_ROW_DIMENSION)
-{}
+ : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprNvl::~ObExprNvl()
 {}
@@ -169,8 +170,9 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
 
 
 ObExprOracleNvl::ObExprOracleNvl(ObIAllocator &alloc)
- : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, NOT_ROW_DIMENSION)
-{}
+ : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprOracleNvl::~ObExprOracleNvl()
 {}
@@ -280,8 +282,9 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
 }
 
 ObExprNaNvl::ObExprNaNvl(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_NANVL, T_NANVL, 2, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_NANVL, T_NANVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprNaNvl::~ObExprNaNvl()
 {}

@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprConvert::ObExprConvert(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -100,7 +100,7 @@ int ObExprConvert::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 }
 
 ObExprConvertOracle::ObExprConvertOracle(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, TWO_OR_THREE)
+    : ObStringExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, TWO_OR_THREE, VALID_FOR_GENERATED_COL)
 {
 }
 

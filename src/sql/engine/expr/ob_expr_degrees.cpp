@@ -28,7 +28,7 @@ namespace sql
 const double ObExprDegrees::degrees_ratio_ = 180.0/std::acos(-1);
 
 ObExprDegrees::ObExprDegrees(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_DEGREES, N_DEGREES, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_DEGREES, N_DEGREES, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

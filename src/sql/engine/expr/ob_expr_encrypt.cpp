@@ -20,7 +20,7 @@ ObExprDesEncrypt::ObExprDesEncrypt(ObIAllocator& alloc)
                          T_FUN_SYS_DES_ENCRYPT,
                          N_DES_ENCRYPT,
                          ONE_OR_TWO,
-                         NOT_ROW_DIMENSION)
+                         NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprDesEncrypt::~ObExprDesEncrypt() {}
@@ -321,7 +321,7 @@ ObExprDesDecrypt::ObExprDesDecrypt(ObIAllocator& alloc)
                          T_FUN_SYS_DES_DECRYPT,
                          N_DES_DECRYPT,
                          ONE_OR_TWO,
-                         NOT_ROW_DIMENSION)
+                         NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprDesDecrypt::~ObExprDesDecrypt() {}
@@ -554,7 +554,7 @@ ObExprEncrypt::ObExprEncrypt(ObIAllocator& alloc)
                          T_FUN_SYS_ENCRYPT,
                          N_ENCRYPT,
                          ONE_OR_TWO,
-                         NOT_ROW_DIMENSION)
+                         NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprEncrypt::~ObExprEncrypt() {}
@@ -763,7 +763,7 @@ ObExprEncode::ObExprEncode(ObIAllocator& alloc)
                          T_FUN_SYS_ENCODE,
                          N_ENCODE,
                          2,
-                         NOT_ROW_DIMENSION)
+                         VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprEncode::~ObExprEncode() {}
@@ -905,7 +905,7 @@ ObExprDecode::ObExprDecode(ObIAllocator& alloc)
                          T_FUN_SYS_DECODE,
                          N_DECODE,
                          2,
-                         NOT_ROW_DIMENSION)
+                         VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprDecode::~ObExprDecode() {}

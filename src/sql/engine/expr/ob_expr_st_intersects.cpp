@@ -30,7 +30,7 @@ namespace sql
 {
 
 ObExprSTIntersects::ObExprSTIntersects(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_INTERSECTS, N_ST_INTERSECTS, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_INTERSECTS, N_ST_INTERSECTS, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

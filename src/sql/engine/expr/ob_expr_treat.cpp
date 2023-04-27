@@ -29,6 +29,7 @@ ObExprTreat::ObExprTreat(ObIAllocator &alloc)
     : ObFuncExprOperator::ObFuncExprOperator(alloc, T_FUN_SYS_TREAT,
                                              N_TREAT,
                                              2,
+                                             VALID_FOR_GENERATED_COL,
                                              NOT_ROW_DIMENSION)
 {
 }

@@ -19,7 +19,7 @@ namespace sql
 {
 
 ObExprNameConst::ObExprNameConst(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_NAME_CONST, N_NAME_CONST, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_NAME_CONST, N_NAME_CONST, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, false)
 {
 }

@@ -23,7 +23,7 @@ namespace sql
 
 ObExprSysViewBigintParam::ObExprSysViewBigintParam(ObIAllocator &alloc)
   : ObFuncExprOperator(alloc, T_FUN_SYS_SYS_VIEW_BIGINT_PARAM,
-                       N_SYS_VIEW_BIGINT_PARAM, 1, NOT_ROW_DIMENSION,
+                       N_SYS_VIEW_BIGINT_PARAM, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                        INTERNAL_IN_MYSQL_MODE)
 {
 }

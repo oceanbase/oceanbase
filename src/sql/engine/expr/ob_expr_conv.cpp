@@ -29,7 +29,7 @@ namespace sql
 {
 
 ObExprConv::ObExprConv(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_OP_CONV, N_CONV, 3)
+    : ObStringExprOperator(alloc, T_OP_CONV, N_CONV, 3, VALID_FOR_GENERATED_COL)
 {
 }
 

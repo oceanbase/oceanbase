@@ -25,7 +25,7 @@ namespace sql
 {
 ObExprAtTimeZoneBase::ObExprAtTimeZoneBase(common::ObIAllocator &alloc, ObExprOperatorType type,
                                           const char *name, int32_t param_num, int32_t dimension)
- : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+ : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 

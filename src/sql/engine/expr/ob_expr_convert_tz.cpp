@@ -25,7 +25,8 @@ namespace sql
 {
 
 ObExprConvertTZ::ObExprConvertTZ(common::ObIAllocator &alloc):
-ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT_TZ, "convert_TZ", 3, NOT_ROW_DIMENSION){}
+ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT_TZ, "convert_TZ", 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION){
+}
 
 int ObExprConvertTZ::calc_result_type3(ObExprResType &type,
                                         ObExprResType &input1,

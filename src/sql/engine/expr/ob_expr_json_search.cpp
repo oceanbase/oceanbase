@@ -197,7 +197,7 @@ int ObExprJsonSearch::find_matches(common::ObIAllocator *allocator,
 }
 
 ObExprJsonSearch::ObExprJsonSearch(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_SEARCH, N_JSON_SEARCH, MORE_THAN_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_SEARCH, N_JSON_SEARCH, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

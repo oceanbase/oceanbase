@@ -318,6 +318,7 @@
 #include "ob_expr_zipf.h"
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
+#include "ob_expr_prefix_pattern.h"
 
 namespace oceanbase
 {
@@ -1002,7 +1003,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprRandom::calc_random_expr_const_seed,                          /* 589 */
   ObExprRandom::calc_random_expr_nonconst_seed,                       /* 590 */
   ObExprRandstr::calc_random_str,                                     /* 591 */
-  NULL //ObExprNlsInitCap::calc_nls_initcap_expr                      /* 592 */
+  NULL, //ObExprNlsInitCap::calc_nls_initcap_expr                     /* 592 */
+  ObExprPrefixPattern::eval_prefix_pattern,                           /* 593 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

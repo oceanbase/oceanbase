@@ -5351,16 +5351,44 @@ int ObDDLResolver::resolve_spatial_index_constraint(
     const common::ObString &column_name,
     int64_t column_num,
     const int64_t index_keyname_value,
-    bool is_explicit_order)
+    bool is_explicit_order,
+    bool is_func_index)
 {
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
   bool is_oracle_mode = false;
 
-  if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(session_info_), K(allocator_));
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("check oracle compat mode failed", K(ret));
   } else if (is_oracle_mode) {
     // oracle mode not support geometry
+  } else if (is_func_index && is_mysql_mode()) {
+    ObRawExprFactory expr_factory(*allocator_);
+    ObRawExpr *expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(NULL,
+                                                            column_name,
+                                                            expr_factory,
+                                                            *session_info_,
+                                                            table_schema,
+                                                            expr,
+                                                            schema_checker_,
+                                                            ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
+      LOG_WARN("build generated column expr failed", K(ret));
+    } else if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to build generated column expr", K(ret));
+    } else if (expr->is_column_ref_expr()) {
+      ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+      LOG_WARN("Functional index on a column is not supported.", K(ret), K(column_name));
+    } else if (index_keyname_value == static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
+      ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
+      LOG_WARN("Spatial functional index is not supported.", K(ret), K(column_name));
+    } else {
+      //do nothing, check result type of expr on rootserver later
+    }
   } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_name))) {
     if (index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY)) {
       // do nothing

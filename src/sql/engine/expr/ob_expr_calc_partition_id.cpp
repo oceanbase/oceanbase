@@ -599,7 +599,7 @@ ObExprCalcTabletId::ObExprCalcTabletId(ObIAllocator &alloc)
                               T_FUN_SYS_CALC_TABLET_ID,
                               N_CALC_TABLET_ID,
                               PARAM_NUM_UNKNOWN,
-                              NOT_ROW_DIMENSION)
+                               NOT_ROW_DIMENSION)
 {
 }
 

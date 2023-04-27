@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprPeriodDiff::ObExprPeriodDiff(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PERIOD_DIFF, N_PERIOD_DIFF, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PERIOD_DIFF, N_PERIOD_DIFF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -119,7 +119,7 @@ int ObExprPeriodDiff::calc_perioddiff(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 }
 
 ObExprPeriodAdd::ObExprPeriodAdd(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PERIOD_ADD, N_PERIOD_ADD, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PERIOD_ADD, N_PERIOD_ADD, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

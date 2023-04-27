@@ -30,7 +30,7 @@ namespace sql
 {
 
 ObExprLength::ObExprLength(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_LENGTH, N_LENGTH, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_LENGTH, N_LENGTH, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -31,7 +31,7 @@ const int64_t HOSTNAME_MAX_LENGTH = 256;
 static const int64_t HOST_BUF_LENGTH = 1024;
 ObExprUtlInaddrGetHostAddr::ObExprUtlInaddrGetHostAddr(ObIAllocator &alloc)
     : ObExprOperator(alloc, T_FUN_SYS_UTL_INADDR_GET_HOST_ADDR, N_UTL_INADDR_GET_HOST_ADDR, 1,
-                     false, INTERNAL_IN_ORACLE_MODE)
+                     VALID_FOR_GENERATED_COL, false, INTERNAL_IN_ORACLE_MODE)
 {
 }
 
@@ -56,7 +56,7 @@ int ObExprUtlInaddrGetHostAddr::calc_result_type1(
 }
 
 ObExprUtlInaddrGetHostName::ObExprUtlInaddrGetHostName(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_UTL_INADDR_GET_HOST_NAME, N_UTL_INADDR_GET_HOST_NAME, 1,
+    : ObExprOperator(alloc, T_FUN_SYS_UTL_INADDR_GET_HOST_NAME, N_UTL_INADDR_GET_HOST_NAME, 1, VALID_FOR_GENERATED_COL,
                      false, INTERNAL_IN_ORACLE_MODE)
 {
 }

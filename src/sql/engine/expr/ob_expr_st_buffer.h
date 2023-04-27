@@ -65,6 +65,7 @@ public:
                           ObExprOperatorType type,
                           const char *name,
                           int32_t param_num,
+                          ObValidForGeneratedColFlag valid_for_genetated_col,
                           int32_t dimension);
   virtual ~ObExprSTBuffer() {}
   virtual int calc_result_typeN(ObExprResType &type,

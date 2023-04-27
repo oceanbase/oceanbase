@@ -21,7 +21,7 @@ class ObExprShadowUKProject : public ObExprOperator
 {
 public:
   ObExprShadowUKProject(common::ObIAllocator &alloc)
-      : ObExprOperator(alloc, T_OP_SHADOW_UK_PROJECT, N_SHADOW_UK_PROJECTOR, MORE_THAN_ONE, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+      : ObExprOperator(alloc, T_OP_SHADOW_UK_PROJECT, N_SHADOW_UK_PROJECTOR, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
   {
   }
   virtual ~ObExprShadowUKProject()

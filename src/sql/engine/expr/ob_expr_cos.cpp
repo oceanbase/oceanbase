@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprCos::ObExprCos(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_COS, N_COS, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_COS, N_COS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

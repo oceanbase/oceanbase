@@ -216,10 +216,10 @@ bool ObColumnSchemaV2::is_prefix_column() const
   return bret;
 }
 
-bool ObColumnSchemaV2::is_func_idx_column(const bool is_oracle_mode) const
+bool ObColumnSchemaV2::is_func_idx_column() const
 {
   bool bret = false;
-  if (is_hidden() && is_generated_column() && is_oracle_mode) {
+  if (is_hidden() && is_generated_column()) {
     const char *func_idx_str = "SYS_NC";
     int64_t min_len = min(column_name_.length(), static_cast<int64_t>(strlen(func_idx_str)));
     bret = (0 == strncmp(get_column_name(), func_idx_str, min_len));

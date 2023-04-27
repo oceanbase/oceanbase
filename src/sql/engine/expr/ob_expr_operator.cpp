@@ -153,7 +153,7 @@ int ObExprOperator::cg_expr(ObExprCGCtx &,
 bool ObExprOperator::is_default_expr_cg() const
 {
   static ObArenaAllocator alloc;
-  static ObExprOperator base(alloc, T_NULL, "fake_null_operator", 0);
+  static ObExprOperator base(alloc, T_NULL, "fake_null_operator", 0, VALID_FOR_GENERATED_COL);
   typedef int (ObExprOperator::*CGFunc)(
       ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const;
   union {
@@ -2102,6 +2102,28 @@ int ObExprOperator::calc_trig_function_result_type2(ObExprResType &type,
 ObCastMode ObExprOperator::get_cast_mode() const
 {
   return CM_NONE;
+}
+
+int ObExprOperator::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const
+{
+  is_valid = is_valid_for_generated_col_;
+  return OB_SUCCESS;
+}
+
+int ObExprOperator::check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time) {
+  int ret = OB_SUCCESS;
+  if (exprs.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
+  } else if (OB_ISNULL(exprs.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
+  } else if (ObTimeType == exprs.at(0)->get_result_type().get_type()) {
+    not_time = false;
+  } else {
+    not_time = true;
+  }
+  return ret;
 }
 
 ObExpr *ObExprOperator::get_rt_expr(const ObRawExpr &raw_expr) const

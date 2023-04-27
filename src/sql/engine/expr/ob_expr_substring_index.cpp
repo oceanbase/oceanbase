@@ -27,7 +27,7 @@ namespace sql
 
 
 ObExprSubstringIndex::ObExprSubstringIndex(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_SUBSTRING_INDEX, N_SUBSTRING_INDEX, 3)
+    : ObStringExprOperator(alloc, T_FUN_SYS_SUBSTRING_INDEX, N_SUBSTRING_INDEX, 3, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

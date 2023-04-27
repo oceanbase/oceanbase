@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprPrior::ObExprPrior(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_OP_PRIOR, N_NEG, 1, NOT_ROW_DIMENSION) {
+  : ObExprOperator(alloc, T_OP_PRIOR, N_NEG, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {
 };
 
 int ObExprPrior::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObExprTypeCtx &type_ctx) const

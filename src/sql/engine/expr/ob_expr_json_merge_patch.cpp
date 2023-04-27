@@ -27,6 +27,7 @@ ObExprJsonMergePatch::ObExprJsonMergePatch(ObIAllocator &alloc)
       T_FUN_SYS_JSON_MERGE_PATCH,
       N_JSON_MERGE_PATCH, 
       PARAM_NUM_UNKNOWN,
+      VALID_FOR_GENERATED_COL,
       NOT_ROW_DIMENSION)
 {
 }

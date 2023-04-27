@@ -34,7 +34,7 @@ ObExprBaseLRpad::ObExprBaseLRpad(ObIAllocator &alloc,
                                  ObExprOperatorType type,
                                  const char *name,
                                  int32_t param_num)
-    : ObStringExprOperator(alloc, type, name, param_num)
+    : ObStringExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL)
 {
 }
 

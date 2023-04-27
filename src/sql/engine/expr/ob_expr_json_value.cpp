@@ -48,7 +48,7 @@ namespace sql
 
 
 ObExprJsonValue::ObExprJsonValue(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_VALUE, N_JSON_VALUE, MORE_THAN_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_VALUE, N_JSON_VALUE, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

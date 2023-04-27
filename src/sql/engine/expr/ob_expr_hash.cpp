@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprHash::ObExprHash(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_SYS_HASH, N_HASH, MORE_THAN_ONE, NOT_ROW_DIMENSION,
+  : ObExprOperator(alloc, T_FUN_SYS_HASH, N_HASH, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                    INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

@@ -388,6 +388,7 @@
 #include "sql/engine/expr/ob_expr_encrypt.h"
 #include "sql/engine/expr/ob_expr_icu_version.h"
 #include "sql/engine/expr/ob_expr_sql_mode_convert.h"
+#include "sql/engine/expr/ob_expr_prefix_pattern.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -981,6 +982,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprUniform);
     REG_OP(ObExprRandom);
     REG_OP(ObExprRandstr);
+    REG_OP(ObExprPrefixPattern);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1276,6 +1278,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprUniform);
   REG_OP_ORCL(ObExprRandom);
   REG_OP_ORCL(ObExprRandstr);
+  REG_OP_ORCL(ObExprPrefixPattern);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

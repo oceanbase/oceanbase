@@ -482,6 +482,12 @@ public:
                                        ObRawExpr *first_expr,
                                        ObRawExpr *second_expr,
                                        ObOpRawExpr *&out_expr);
+  static int create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
+                                        ObSQLSessionInfo *session_info,
+                                        ObRawExpr *first_expr,
+                                        ObRawExpr *second_expr,
+                                        ObRawExpr *third_expr,
+                                        ObSysFunRawExpr *&out_expr);
   static int create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,
@@ -1077,6 +1083,8 @@ public:
                               ObConstRawExpr *&type_expr,
                               const ObExprResType &dst_type,
                               bool avoid_zero_len = false);
+
+  static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
 private :
 

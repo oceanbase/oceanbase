@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprErrno::ObExprErrno(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ERRNO, N_SYS_ERRNO, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ERRNO, N_SYS_ERRNO, ONE_OR_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

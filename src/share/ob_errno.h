@@ -836,6 +836,10 @@ constexpr int OB_ERR_MYSQL_CHARACTER_SET_MISMATCH = -5492;
 constexpr int OB_ERR_RENAME_PARTITION_NAME_DUPLICATE = -5493;
 constexpr int OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE = -5494;
 constexpr int OB_ERR_INVALID_WAIT_INTERVAL = -5495;
+constexpr int OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT = -5496;
+constexpr int OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX = -5497;
+constexpr int OB_ERR_FUNCTIONAL_INDEX_ON_LOB = -5498;
+constexpr int OB_ERR_FUNCTIONAL_INDEX_ON_FIELD = -5499;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2724,6 +2728,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
 #define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__USER_ERROR_MSG "Duplicate partition name %.*s"
 #define OB_ERR_INVALID_WAIT_INTERVAL__USER_ERROR_MSG "missing or invalid WAIT interval"
+#define OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT__USER_ERROR_MSG "Functional index '%.*s' cannot refer to an auto-increment column."
+#define OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX__USER_ERROR_MSG "Column '%.*s' has a functional index dependency and cannot be dropped."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_LOB__USER_ERROR_MSG "Cannot create a functional index on an expression that returns a BLOB or TEXT. Please consider using CAST."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_FIELD__USER_ERROR_MSG "Functional index on a column is not supported. Consider using a regular index instead."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__USER_ERROR_MSG "Undeclared variable: %.*s"
@@ -3079,7 +3087,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ROWID_VIEW_NO_KEY_PRESERVED__USER_ERROR_MSG "cannot select ROWID from, or sample, a join view without a key-preserved table"
 #define OB_ROWID_VIEW_HAS_DISTINCT_ETC__USER_ERROR_MSG "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc"
 #define OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL__USER_ERROR_MSG "A table must have at least 1 column"
-#define OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED__USER_ERROR_MSG "only pure functions can be indexed"
+#define OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED__USER_ERROR_MSG "Expression of functional index contains a disallowed function."
 #define OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION__USER_ERROR_MSG "Expression of generated column contains a disallowed function"
 #define OB_ERR_UPDATE_OPERATION_ON_VIRTUAL_COLUMNS__USER_ERROR_MSG "UPDATE operation disallowed on virtual columns"
 #define OB_ERR_INVALID_COLUMN_EXPRESSION__USER_ERROR_MSG "Invalid column expression was specified"
@@ -4778,6 +4786,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RENAME_PARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14082: New partition name %.*s must differ from that of any other partition or subpartition of the object."
 #define OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE__ORA_USER_ERROR_MSG "ORA-14263: New subpartition name %.*s must differ from that of any other partition or subpartition of the object."
 #define OB_ERR_INVALID_WAIT_INTERVAL__ORA_USER_ERROR_MSG "ORA-30005: missing or invalid WAIT interval"
+#define OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5496, Functional index '%.*s' cannot refer to an auto-increment column."
+#define OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5497, Column '%.*s' has a functional index dependency and cannot be dropped."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_LOB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5498, Cannot create a functional index on an expression that returns a BLOB or TEXT. Please consider using CAST."
+#define OB_ERR_FUNCTIONAL_INDEX_ON_FIELD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5499, Functional index on a column is not supported. Consider using a regular index instead."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
 #define OB_ERR_SP_UNDECLARED_VAR__ORA_USER_ERROR_MSG "PLS-00201: identifier '%.*s' must be declared"
@@ -5829,7 +5841,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2050];
+extern int g_all_ob_errnos[2054];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

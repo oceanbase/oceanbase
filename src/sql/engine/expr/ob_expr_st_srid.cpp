@@ -29,7 +29,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprSTSRID::ObExprSTSRID(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_SRID, N_ST_SRID, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_SRID, N_ST_SRID, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -37,7 +37,7 @@ ObExprSTSRID::ObExprSTSRID(ObIAllocator &alloc,
                            ObExprOperatorType type,
                            const char *name,
                            int32_t param_num,
-                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+                           int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
 {
 }
 

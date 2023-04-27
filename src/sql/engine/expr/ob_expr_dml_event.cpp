@@ -26,6 +26,7 @@ ObExprDmlEvent::ObExprDmlEvent(ObIAllocator& alloc)
                          T_FUN_SYS_DML_EVENT,
                          N_DML_EVENT,
                          ONE_OR_TWO,
+                         VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION,
                          false,
                          INTERNAL_IN_ORACLE_MODE)

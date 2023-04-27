@@ -1055,6 +1055,7 @@ public:
                                bool &is_match);
 
   static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless);
+  static bool is_lossless_type_conv(const ObExprResType &child_type, const ObExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
   static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr);
   static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);

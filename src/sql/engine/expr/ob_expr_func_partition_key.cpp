@@ -20,7 +20,7 @@ namespace sql
 {
 
 ObExprFuncPartKey::ObExprFuncPartKey(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc,T_FUN_SYS_PART_KEY, N_PART_KEY, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc,T_FUN_SYS_PART_KEY, N_PART_KEY, MORE_THAN_ZERO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

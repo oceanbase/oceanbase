@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprFunValues::ObExprFunValues(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_VALUES, N_VALUES, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_VALUES, N_VALUES, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

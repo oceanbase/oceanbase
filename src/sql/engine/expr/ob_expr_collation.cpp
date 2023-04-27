@@ -28,7 +28,7 @@ namespace sql
 //{}
 
 ObExprCharset::ObExprCharset(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1, NOT_VALID_FOR_GENERATED_COL)
 {}
 
 ObExprCharset::~ObExprCharset()
@@ -100,7 +100,7 @@ namespace sql
 //{}
 
 ObExprCollation::ObExprCollation(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1, NOT_VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }
@@ -168,14 +168,14 @@ namespace sql
 //    :ObExprOperator(T_FUN_SYS_COERCIBILITY,
 //                    N_COERCIBILITY,
 //                    1,
-//                    NOT_ROW_DIMENSION)
+//                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 //{}
 
 ObExprCoercibility::ObExprCoercibility(ObIAllocator &alloc)
     :ObExprOperator(alloc, T_FUN_SYS_COERCIBILITY,
                     N_COERCIBILITY,
                     1,
-                    NOT_ROW_DIMENSION)
+                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   disable_operand_auto_cast();
 }
@@ -229,13 +229,14 @@ namespace sql
 //    :ObExprOperator(T_FUN_SYS_SET_COLLATION,
 //                    N_SET_COLLATION,
 //                    2,
-//                    NOT_ROW_DIMENSION)
+//                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 //{}
 
 ObExprSetCollation::ObExprSetCollation(ObIAllocator &alloc)
     :ObExprOperator(alloc, T_FUN_SYS_SET_COLLATION,
                     N_SET_COLLATION,
                     2,
+                    VALID_FOR_GENERATED_COL,
                     NOT_ROW_DIMENSION,
                     INTERNAL_IN_MYSQL_MODE,
                     INTERNAL_IN_ORACLE_MODE)
@@ -345,7 +346,7 @@ namespace sql
 {
 
 ObExprCmpMeta::ObExprCmpMeta(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CMP_META, "cmp_meta", 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CMP_META, "cmp_meta", 1, NOT_VALID_FOR_GENERATED_COL)
 {
   /*
    * CmpMeta需要显示CalcMeta，type1的get_type()是int，meta_type是varchar，不需要转换

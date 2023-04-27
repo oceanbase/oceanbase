@@ -34,7 +34,7 @@ OB_SERIALIZE_MEMBER((ObExprUDF, ObFuncExprOperator),
                      nocopy_params_, subprogram_path_, call_in_sql_, loc_, is_udt_cons_);
 
 ObExprUDF::ObExprUDF(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_UDF, N_UDF, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_UDF, N_UDF, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE),
       udf_id_(OB_INVALID_ID),
       udf_package_id_(OB_INVALID_ID),

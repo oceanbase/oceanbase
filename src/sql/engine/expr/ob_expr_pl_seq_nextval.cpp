@@ -28,7 +28,7 @@ using namespace share;
 namespace sql
 {
 ObExprPLSeqNextval::ObExprPLSeqNextval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PL_SEQ_NEXT_VALUE, N_PL_SEQ_NEXTVAL, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PL_SEQ_NEXT_VALUE, N_PL_SEQ_NEXTVAL, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }

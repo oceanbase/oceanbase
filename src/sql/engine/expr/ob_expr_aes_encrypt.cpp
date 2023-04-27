@@ -45,6 +45,7 @@ ObExprAesEncrypt::ObExprAesEncrypt(ObIAllocator& alloc)
                          T_FUN_AES_ENCRYPT,
                          N_AES_ENCRYPT,
                          TWO_OR_THREE,
+                         NOT_VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
 }
@@ -150,6 +151,7 @@ ObExprAesDecrypt::ObExprAesDecrypt(ObIAllocator& alloc)
                          T_FUN_AES_DECRYPT,
                          N_AES_DECRYPT,
                          TWO_OR_THREE,
+                         NOT_VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
 }

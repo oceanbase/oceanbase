@@ -32,7 +32,7 @@ namespace sql
 
 
 ObExprRepeat::ObExprRepeat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_REPEAT, N_REPEAT, 2)
+    : ObStringExprOperator(alloc, T_FUN_SYS_REPEAT, N_REPEAT, 2, VALID_FOR_GENERATED_COL)
 {
 }
 

@@ -26,7 +26,7 @@ using namespace share;
 namespace sql
 {
 ObExprSysTimestamp::ObExprSysTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SYSTIMESTAMP, N_SYSTIMESTAMP, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SYSTIMESTAMP, N_SYSTIMESTAMP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprSysTimestamp::~ObExprSysTimestamp()
@@ -113,7 +113,7 @@ int ObExprSysTimestamp::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_exp
 
 
 ObExprLocalTimestamp::ObExprLocalTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_LOCALTIMESTAMP, N_LOCALTIMESTAMP, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_LOCALTIMESTAMP, N_LOCALTIMESTAMP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprLocalTimestamp::~ObExprLocalTimestamp()
@@ -206,7 +206,7 @@ int ObExprToTimestampTZ::set_my_result_from_ob_time(ObExprCtx &expr_ctx, ObTime 
 
 
 ObExprTimestamp::ObExprTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIMESTAMP, N_TIMESTAMP, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIMESTAMP, N_TIMESTAMP, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

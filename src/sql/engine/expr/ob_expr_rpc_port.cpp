@@ -24,7 +24,7 @@ namespace sql
 
 
 ObExprRpcPort::ObExprRpcPort(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_RPC_PORT, N_RPC_PORT, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_RPC_PORT, N_RPC_PORT, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

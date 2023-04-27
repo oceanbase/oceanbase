@@ -26,7 +26,7 @@ namespace sql{
 
 ObExprOutputPack::ObExprOutputPack(ObIAllocator &alloc)
     : ObExprOperator(alloc, T_OP_OUTPUT_PACK, N_OUTPUT_PACK,
-                     MORE_THAN_ONE, NOT_ROW_DIMENSION,
+                     MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                      INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprNLSSort::ObExprNLSSort(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_NLSSORT, N_NLSSORT, ONE_OR_TWO, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_NLSSORT, N_NLSSORT, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

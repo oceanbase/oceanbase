@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprTimestampNvl::ObExprTimestampNvl(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_TIMESTAMP_NVL, N_TIMESTAMP_NVL, 2)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TIMESTAMP_NVL, N_TIMESTAMP_NVL, 2, VALID_FOR_GENERATED_COL)
 {
 }
 

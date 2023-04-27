@@ -34,7 +34,10 @@ ObExprAscii::ObExprAscii(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_ASCII,
                          N_ASCII, 1,
-                         NOT_ROW_DIMENSION) {}
+                         VALID_FOR_GENERATED_COL,
+                         NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprAscii::calc_result_type1(ObExprResType &type,
                                    ObExprResType &type1,
@@ -169,7 +172,9 @@ ObExprOrd::ObExprOrd(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,
                          T_FUN_SYS_ORD,
                          N_ORD, 1,
-                         NOT_ROW_DIMENSION) {}
+                         VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprOrd::calc_result_type1(ObExprResType &type,
                                  ObExprResType &type1,

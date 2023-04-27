@@ -19,7 +19,7 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 ObExprEstimateNdv::ObExprEstimateNdv(ObIAllocator &alloc)
-:  ObFuncExprOperator(alloc, T_FUN_SYS_ESTIMATE_NDV, "estimate_ndv", 1, NOT_ROW_DIMENSION,
+:  ObFuncExprOperator(alloc, T_FUN_SYS_ESTIMATE_NDV, "estimate_ndv", 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                       INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

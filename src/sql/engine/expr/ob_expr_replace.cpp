@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprReplace::ObExprReplace(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_REPLACE, N_REPLACE, TWO_OR_THREE)
+    : ObStringExprOperator(alloc, T_FUN_SYS_REPLACE, N_REPLACE, TWO_OR_THREE, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

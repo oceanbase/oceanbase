@@ -31,7 +31,7 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObExprObjectConstruct, ObFuncExprOperator), rowsize_, elem_types_, udt_id_);
 
 ObExprObjectConstruct::ObExprObjectConstruct(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_PL_OBJECT_CONSTRUCT, N_PL_OBJECT_CONSTRUCT, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_PL_OBJECT_CONSTRUCT, N_PL_OBJECT_CONSTRUCT, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE),
       rowsize_(0),
       udt_id_(OB_INVALID_ID),

@@ -29,7 +29,7 @@ namespace sql
 {
 
 ObExprUnixTimestamp::ObExprUnixTimestamp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UNIX_TIMESTAMP, N_UNIX_TIMESTAMP, ZERO_OR_ONE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UNIX_TIMESTAMP, N_UNIX_TIMESTAMP, ZERO_OR_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprCot::ObExprCot(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_COT, N_COT, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_COT, N_COT, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

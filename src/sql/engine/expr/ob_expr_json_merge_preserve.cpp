@@ -28,6 +28,7 @@ ObExprJsonMergePreserve::ObExprJsonMergePreserve(ObIAllocator &alloc)
       T_FUN_SYS_JSON_MERGE_PRESERVE,
       N_JSON_MERGE_PRESERVE, 
       MORE_THAN_ONE,
+      VALID_FOR_GENERATED_COL,
       NOT_ROW_DIMENSION)
 {
 }
@@ -37,9 +38,8 @@ ObExprJsonMergePreserve::ObExprJsonMergePreserve(
     ObExprOperatorType type,
     const char *name,
     int32_t param_num, 
-    int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, dimension) 
+    int32_t dimension) : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
 {
-  ;
 }
 
 ObExprJsonMergePreserve::~ObExprJsonMergePreserve()

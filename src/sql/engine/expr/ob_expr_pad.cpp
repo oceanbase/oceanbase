@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprPad::ObExprPad(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_PAD, N_PAD, 3)
+    : ObStringExprOperator(alloc, T_FUN_PAD, N_PAD, 3, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

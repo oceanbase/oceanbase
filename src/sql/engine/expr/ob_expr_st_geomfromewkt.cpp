@@ -30,7 +30,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprPrivSTGeomFromEwkt::ObExprPrivSTGeomFromEwkt(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_GEOMFROMEWKT, N_PRIV_ST_GEOMFROMEWKT, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_GEOMFROMEWKT, N_PRIV_ST_GEOMFROMEWKT, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

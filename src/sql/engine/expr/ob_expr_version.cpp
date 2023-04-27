@@ -25,7 +25,7 @@ namespace sql
 
 
 ObExprVersion::ObExprVersion(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_SYS_VERSION, N_VERSION, 0)
+  : ObStringExprOperator(alloc, T_FUN_SYS_VERSION, N_VERSION, 0, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

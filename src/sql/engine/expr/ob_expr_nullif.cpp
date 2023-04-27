@@ -32,9 +32,10 @@ namespace sql
 {
 
 ObExprNullif::ObExprNullif(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_NULLIF, N_NULLIF, 2, NOT_ROW_DIMENSION),
+  : ObFuncExprOperator(alloc, T_FUN_SYS_NULLIF, N_NULLIF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
   first_param_can_be_null_(true)
-{}
+{
+}
 
 // in engine 3.0, we have 3 copy of params
 // eg:

@@ -43,6 +43,7 @@ public:
                   const common::ObTimeConvertCtx &cvrt_ctx, int64_t interval,
                   int64_t &delta);
 
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTimeStampAdd);

@@ -992,7 +992,8 @@ int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& n
 int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
                                                     obrpc::ObCreateIndexArg &index_arg,
                                                     const int64_t index_name_value,
-                                                    ObIArray<ObString> &input_index_columns_name)
+                                                    ObIArray<ObString> &input_index_columns_name,
+                                                    bool &cnt_func_index)
 {
   int ret = OB_SUCCESS;
   if (T_INDEX_COLUMN_LIST != node.type_ || node.num_child_ <= 0 ||
@@ -1003,6 +1004,7 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
     obrpc::ObColumnSortItem sort_item;
     //reset sort column set
     sort_column_array_.reset();
+    cnt_func_index = false;
     for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *sort_column_node = node.children_[i];
       if (OB_ISNULL(sort_column_node) ||
@@ -1016,6 +1018,11 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
         } else {
+          //if the type of node is not identifiter, the index is considered as a fuctional index
+          if (is_mysql_mode() && sort_column_node->children_[0]->type_ != T_IDENT) {
+            sort_item.is_func_index_ = true;
+            cnt_func_index = true;
+          }
           sort_item.column_name_.assign_ptr(sort_column_node->children_[0]->str_value_,
               static_cast<int32_t>(sort_column_node->children_[0]->str_len_));
         }
@@ -1040,7 +1047,7 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           bool is_explicit_order = (NULL != sort_column_node->children_[2]
               && 1 != sort_column_node->children_[2]->is_empty_);
           if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
-              node.num_child_, index_name_value, is_explicit_order))) {
+              node.num_child_, index_name_value, is_explicit_order, sort_item.is_func_index_))) {
             SQL_RESV_LOG(WARN, "check spatial index constraint fail",K(ret),
                 K(sort_item.column_name_), K(node.num_child_));
           }
@@ -1069,6 +1076,20 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
             SQL_RESV_LOG(WARN, "add column name to input_index_columns_name failed",K(sort_item.column_name_), K(ret));
           }
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
+      uint64_t tenant_data_version = 0;
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
       }
     }
   }
@@ -1166,6 +1187,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
           obrpc::ObCreateIndexArg *create_index_arg = NULL;
           void *tmp_ptr = NULL;
           ObSEArray<ObString, 8> input_index_columns_name;
+          bool cnt_func_index = false;
           if (NULL == (tmp_ptr = (ObCreateIndexArg *)allocator_->alloc(
                   sizeof(obrpc::ObCreateIndexArg)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1178,7 +1200,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             } else if (OB_FAIL(resolve_index_column_list(*column_list_node,
                                                          *create_index_arg,
                                                          node.value_,
-                                                         input_index_columns_name))) {
+                                                         input_index_columns_name,
+                                                         cnt_func_index))) {
               SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
             }
           }
@@ -1232,7 +1255,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 ret = OB_ERR_UNEXPECTED;
                 SQL_RESV_LOG(WARN, "size of index columns is less than 1", K(ret));
               } else {
-                ObString first_column_name = input_index_columns_name.at(0);
+                ObString first_column_name = cnt_func_index ? ObString::make_string("functional_index") : input_index_columns_name.at(0);
                 if (lib::is_oracle_mode()) {
                   if (OB_FAIL(ObTableSchema::create_cons_name_automatically(index_name, table_name_, *allocator_, CONSTRAINT_TYPE_UNIQUE_KEY, lib::is_oracle_mode()))) {
                     SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
@@ -1240,9 +1263,9 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 } else { // mysql mode
                   if (OB_FAIL(generate_index_name(index_name, current_index_name_set_, first_column_name))) {
                     SQL_RESV_LOG(WARN, "failed to generate index name", K(first_column_name));
-                   }
-                 }
-                 if (OB_SUCC(ret)) {
+                  }
+                }
+                if (OB_SUCC(ret)) {
                   ObIndexNameHashWrapper index_key(index_name);
                   if (OB_FAIL(current_index_name_set_.set_refactored(index_key))) {
                     LOG_WARN("fail to push back current_index_name_set_", K(ret), K(index_name));

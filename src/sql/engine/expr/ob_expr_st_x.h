@@ -29,7 +29,7 @@ public:
   ObExprSTCoordinate(common::ObIAllocator &alloc,
                      ObExprOperatorType type,
                      const char *name)
-    :ObExprOperator(alloc, type, name, ONE_OR_TWO, NOT_ROW_DIMENSION) {}
+    :ObExprOperator(alloc, type, name, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) { }
   virtual ~ObExprSTCoordinate() {}
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *texts,

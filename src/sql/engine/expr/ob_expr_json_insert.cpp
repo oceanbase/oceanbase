@@ -28,6 +28,7 @@ ObExprJsonInsert::ObExprJsonInsert(ObIAllocator &alloc)
       T_FUN_SYS_JSON_INSERT,
       N_JSON_INSERT, 
       MORE_THAN_TWO,
+      VALID_FOR_GENERATED_COL,
       NOT_ROW_DIMENSION)
 {
 }

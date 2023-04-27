@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprOracleDecode::ObExprOracleDecode(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_ORA_DECODE, N_ORA_DECODE, MORE_THAN_TWO, NOT_ROW_DIMENSION),
+    : ObExprOperator(alloc, T_FUN_SYS_ORA_DECODE, N_ORA_DECODE, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
       param_flags_(0)
 {
 }

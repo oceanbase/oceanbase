@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprDateFormat::ObExprDateFormat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2)
+    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2, VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -183,7 +183,7 @@ const char* ObExprGetFormat::DATETIME_FORMAT[FORMAT_MAX + 1] =
 };
 
 ObExprGetFormat::ObExprGetFormat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_GET_FORMAT, N_GET_FORMAT, 2)
+    : ObStringExprOperator(alloc, T_FUN_SYS_GET_FORMAT, N_GET_FORMAT, 2, VALID_FOR_GENERATED_COL)
 {
 }
 

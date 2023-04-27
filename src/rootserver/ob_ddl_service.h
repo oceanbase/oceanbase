@@ -1738,8 +1738,10 @@ private:
   int check_can_drop_column(
       const common::ObString &orig_column_name,
       const share::schema::ObColumnSchemaV2 *orig_column_schema,
+      const ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &new_table_schema,
-      const int64_t new_table_cols_cnt);
+      const int64_t new_table_cols_cnt,
+      ObSchemaGetterGuard &schema_guard);
   int check_drop_column_with_drop_foreign_key(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,

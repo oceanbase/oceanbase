@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprJsonMemberOf::ObExprJsonMemberOf(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_MEMBER_OF, N_JSON_MEMBER_OF, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_MEMBER_OF, N_JSON_MEMBER_OF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

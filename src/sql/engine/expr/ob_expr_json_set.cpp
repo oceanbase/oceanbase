@@ -24,7 +24,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonSet::ObExprJsonSet(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_SET, N_JSON_SET, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_SET, N_JSON_SET, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

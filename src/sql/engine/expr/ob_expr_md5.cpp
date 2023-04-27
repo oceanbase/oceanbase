@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprMd5::ObExprMd5(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_MD5, N_MD5, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_MD5, N_MD5, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

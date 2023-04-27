@@ -28,7 +28,7 @@ ObExprJsonArrayAppend::ObExprJsonArrayAppend(ObIAllocator &alloc)
       T_FUN_SYS_JSON_ARRAY_APPEND,
       N_JSON_ARRAY_APPEND, 
       MORE_THAN_TWO,
-      NOT_ROW_DIMENSION)
+      VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

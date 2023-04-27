@@ -27,7 +27,7 @@ ObExprJsonPretty::ObExprJsonPretty(ObIAllocator &alloc)
       :ObFuncExprOperator(alloc,
       T_FUN_SYS_JSON_PRETTY,
       N_JSON_PRETTY, 
-      1, NOT_ROW_DIMENSION)
+      1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

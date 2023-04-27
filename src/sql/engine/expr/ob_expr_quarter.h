@@ -32,6 +32,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_quater(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObExprQuarter);                         
 };

@@ -1972,6 +1972,20 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
     if (OB_SUCC(ret)) {
       OZ (expr->formalize(&session_info));
     }
+    if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+
+      if (OB_FAIL(check_is_valid_generated_col(expr, expr_factory.get_allocator()))) {
+        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+        } else {
+          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -2427,7 +2441,9 @@ int ObRawExprUtils::try_add_nls_fmt_in_to_char_expr(const ObSQLSessionInfo &sess
           || ObTimestampLTZType == data_type
           || ObTimestampNanoType == data_type
           || ObTimestampType == data_type
-          || ObDateTimeType == data_type) {
+          || ObDateTimeType == data_type
+          || ObIntervalYMType == data_type
+          || ObIntervalDSType == data_type) {
         need_add_nls_fmt = true;
       }
     }
@@ -3736,7 +3752,30 @@ int ObRawExprUtils::create_concat_expr(ObRawExprFactory &expr_factory,
                OB_FAIL(out_expr->add_param_expr(second_expr))) {
     LOG_WARN("add param expr failed", K(ret));
   }
+  if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
+    LOG_WARN("formalize to_type expr failed", K(ret));
+  }
+  return ret;
+}
 
+int ObRawExprUtils::create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
+                                              ObSQLSessionInfo *session_info,
+                                              ObRawExpr *first_expr,
+                                              ObRawExpr *second_expr,
+                                              ObRawExpr *third_expr,
+                                              ObSysFunRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_PREFIX_PATTERN, out_expr))) {
+    LOG_WARN("create to_type expr failed", K(ret));
+  } else if (OB_ISNULL(out_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("to_type is null");
+  } else if (OB_FAIL(out_expr->set_param_exprs(first_expr, second_expr, third_expr))) {
+    LOG_WARN("add param expr failed", K(ret));
+  } else {
+    out_expr->set_func_name(N_PREFIX_PATTERN);
+  }
   if (OB_SUCC(ret) && OB_FAIL(out_expr->formalize(session_info))) {
     LOG_WARN("formalize to_type expr failed", K(ret));
   }
@@ -7888,5 +7927,43 @@ int ObRawExprUtils::check_contain_case_when_exprs(const ObRawExpr *raw_expr, boo
   return ret;
 }
 
+int ObRawExprUtils::check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator) {
+  int ret = OB_SUCCESS;
+  ObList<ObRawExpr *, ObIAllocator> expr_queue(allocator);
+  ObRawExpr *cur_expr = NULL;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is invalid null", K(ret));
+  } else if (OB_FAIL(expr_queue.push_back(expr))) {
+    LOG_WARN("fail to push back expr", K(ret));
+  } else {
+    while (OB_SUCC(ret) && expr_queue.size() > 0) {
+      if (OB_FAIL(expr_queue.pop_front(cur_expr))) {
+        LOG_WARN("fail to pop expr", K(ret));
+      } else if (cur_expr->is_sys_func_expr()) {
+        ObSysFunRawExpr *sys_expr = static_cast<ObSysFunRawExpr *>(cur_expr);
+        const ObExprOperator *op = sys_expr->get_op();
+        bool is_valid = false;
+        if (OB_ISNULL(op)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("operator is unexpected null", K(ret));
+        } else if (OB_FAIL(op->is_valid_for_generated_column(sys_expr, sys_expr->get_param_exprs(), is_valid))) {
+          LOG_WARN("fail to check if op is valid for generated column", K(ret));
+        } else if (!is_valid) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION;
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*cur_expr));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < cur_expr->get_param_count(); ++i) {
+          if (OB_FAIL(expr_queue.push_back(cur_expr->get_param_expr(i)))) {
+            LOG_WARN("fail to push back expr", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 }
 }

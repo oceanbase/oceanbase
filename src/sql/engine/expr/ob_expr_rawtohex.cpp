@@ -74,7 +74,7 @@ int internal_calc_result_length(ObExprResType &type, ObExprResType &text)
 }
 
 ObExprRawtohex::ObExprRawtohex(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_RAWTOHEX, N_RAWTOHEX, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_RAWTOHEX, N_RAWTOHEX, 1, VALID_FOR_GENERATED_COL)
 {
   disable_operand_auto_cast();
 }
@@ -137,7 +137,7 @@ int ObExprRawtohex::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 
 
 ObExprRawtonhex::ObExprRawtonhex(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_RAWTONHEX, N_RAWTONHEX, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_RAWTONHEX, N_RAWTONHEX, 1, VALID_FOR_GENERATED_COL)
 {
   disable_operand_auto_cast();
 }

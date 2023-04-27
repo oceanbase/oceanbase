@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprRegexp::ObExprRegexp(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_OP_REGEXP, N_REGEXP, 2, NOT_ROW_DIMENSION),
+    : ObFuncExprOperator(alloc, T_OP_REGEXP, N_REGEXP, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
       regexp_idx_(OB_COMPACT_INVALID_INDEX),
       pattern_is_const_(false),
       value_is_const_(false)

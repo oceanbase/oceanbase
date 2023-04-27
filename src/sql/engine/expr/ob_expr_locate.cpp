@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprLocate::ObExprLocate(ObIAllocator &alloc)
-    : ObLocationExprOperator(alloc, T_FUN_SYS_LOCATE, N_LOCATE, TWO_OR_THREE, NOT_ROW_DIMENSION) {}
+    : ObLocationExprOperator(alloc, T_FUN_SYS_LOCATE, N_LOCATE, TWO_OR_THREE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
 
 ObExprLocate::~ObExprLocate()
 {

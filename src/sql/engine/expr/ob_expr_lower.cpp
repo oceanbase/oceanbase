@@ -26,8 +26,9 @@ using namespace common;
 namespace sql {
 
 ObExprLowerUpper::ObExprLowerUpper(ObIAllocator &alloc, ObExprOperatorType type, const char *name, int32_t param_num)
-    : ObStringExprOperator(alloc, type, name, param_num)
-{}
+    : ObStringExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL)
+{
+}
 
 ObExprLower::ObExprLower(ObIAllocator &alloc)
     : ObExprLowerUpper(alloc, T_FUN_SYS_LOWER, N_LOWER, 1)

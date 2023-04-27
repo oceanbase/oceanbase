@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprQuote::ObExprQuote(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_OP_QUOTE, N_QUOTE, 1)
+    : ObStringExprOperator(alloc, T_OP_QUOTE, N_QUOTE, 1, VALID_FOR_GENERATED_COL)
 {
 }
 

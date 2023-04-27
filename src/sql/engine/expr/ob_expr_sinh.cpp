@@ -27,7 +27,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprSinh::ObExprSinh(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SINH, N_SINH, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SINH, N_SINH, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

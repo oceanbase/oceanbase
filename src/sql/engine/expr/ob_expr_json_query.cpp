@@ -45,7 +45,7 @@ namespace sql
 
 
 ObExprJsonQuery::ObExprJsonQuery(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_QUERY, N_JSON_QUERY, MORE_THAN_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_QUERY, N_JSON_QUERY, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

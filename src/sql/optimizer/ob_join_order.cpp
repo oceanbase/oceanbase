@@ -12581,11 +12581,16 @@ int ObJoinOrder::deduce_prefix_str_idx_exprs(ObRawExpr *expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(*expr), K(expr->get_param_expr(0)), K(expr->get_param_expr(1)), K(ret));
       } else if (T_OP_LIKE == expr->get_expr_type()) {
-        if (param_expr1->is_column_ref_expr()
-          && param_expr1->get_result_type().is_string_type()
-          && param_expr2->get_result_type().is_string_type()) {
-          column_expr = static_cast<ObColumnRefRawExpr*>(param_expr1);
-          value_expr = param_expr2;
+        if (3 != expr->get_param_count() || OB_ISNULL(expr->get_param_expr(2))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("escape param is unexpected null", K(ret));
+        } else if (param_expr1->is_column_ref_expr()
+           && param_expr1->get_result_type().is_string_type()
+           && param_expr2->get_result_type().is_string_type()
+           && expr->get_param_expr(1)->is_static_scalar_const_expr()
+           && expr->get_param_expr(2)->is_static_scalar_const_expr()) {
+          column_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(0));
+          value_expr = expr->get_param_expr(1);
           escape_expr = expr->get_param_expr(2);
         }
       } else if (T_OP_IN == expr->get_expr_type()) {
@@ -12698,6 +12703,8 @@ int ObJoinOrder::get_prefix_str_idx_exprs(ObRawExpr *expr,
                                                               new_expr,
                                                               helper))) {
             LOG_WARN("build prefix index compare expr failed", K(ret));
+          } else if (OB_ISNULL(new_expr)) {
+            //do nothing
           } else if (OB_FAIL(new_expr->formalize(get_plan()->get_optimizer_context().get_session_info()))) {
             LOG_WARN("formalize failed", K(ret));
           } else if (OB_FAIL(new_expr->pull_relation_id())) {
@@ -12729,213 +12736,42 @@ int ObJoinOrder::build_prefix_index_compare_expr(ObRawExpr &column_expr,
   if (T_OP_LIKE == type) {
     //build value substr expr
     ObOpRawExpr *like_expr = NULL;
-    ObRawExpr *wildcard_over_length = NULL;
-    ObRawExpr *has_no_wildcard = NULL;
-    ObRawExpr *has_no_escape = NULL;
-    ObOpRawExpr *and_expr = NULL;
-    ObOpRawExpr *or_expr = NULL;
-    ObConstRawExpr *zero_expr = NULL;
-    ObConstRawExpr *wild_expr = NULL;
-    ObSysFunRawExpr *instr_wild_expr = NULL;
-    ObSysFunRawExpr *instr_escape_expr = NULL;
-    ObSysFunRawExpr *substr_value = NULL;
-    ObObj res;
-    bool is_true = false;
-
-    ObTransformerCtx ctx; //For getting constraints only
-    ctx.session_info_ = NULL;
-    ctx.exec_ctx_ = NULL;
-    if (OB_ISNULL(ctx.session_info_ = OPT_CTX.get_session_info()) || OB_ISNULL(ctx.exec_ctx_ = OPT_CTX.get_exec_ctx())
-       || OB_ISNULL(OPT_CTX.get_exec_ctx()->get_physical_plan_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected error", K(ret));
-    } else if (!lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_int_expr(
-                  OPT_CTX.get_expr_factory(), ObIntType, 0L, zero_expr))) {
-      LOG_WARN("build const failed", K(ret));
-    } else if (lib::is_oracle_mode() && OB_FAIL(ObRawExprUtils::build_const_number_expr(OPT_CTX.get_expr_factory(),
-                                                              ObNumberType,
-                                                              number::ObNumber::get_zero(),
-                                                              zero_expr))) {
-    } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(OPT_CTX.get_expr_factory(),
-                                                      ObVarcharType,
-                                                      ObString::make_string("%"),
-                                                      value_expr.get_result_type().get_collation_type(),
-                                                      wild_expr))) {
-      LOG_WARN("build const failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_substr_expr(OPT_CTX.get_expr_factory(),
-                                            OPT_CTX.get_session_info(),
-                                            &value_expr,
-                                            prefix_expr->get_param_expr(1),
-                                            prefix_expr->get_param_expr(2),
-                                            substr_value))) { //value's substr
+    bool got_result = false;
+    ObObj result;
+    ObOptimizerContext *opt_ctx = NULL;
+    if (OB_ISNULL(get_plan()) ||
+        OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
+        OB_ISNULL(allocator_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::create_prefix_pattern_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                            get_plan()->get_optimizer_context().get_session_info(),
+                                                            &value_expr,
+                                                            prefix_expr->get_param_expr(2),
+                                                            escape_expr,
+                                                            substr_expr))) {
       LOG_WARN("create substr expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_instr_expr(OPT_CTX.get_expr_factory(),
-                                                          OPT_CTX.get_session_info(),
-                                                          substr_value,
-                                                          escape_expr,
-                                                          lib::is_oracle_mode() ?
-                                                                  prefix_expr->get_param_expr(1) : NULL,
-                                                          lib::is_oracle_mode() ?
-                                                                  prefix_expr->get_param_expr(1) : NULL,
-                                                          instr_escape_expr))) {//the escape's position
-      LOG_WARN("create instr expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(OPT_CTX.get_expr_factory(),
-                                                              OPT_CTX.get_session_info(),
-                                                              T_OP_EQ,
-                                                              has_no_escape,
-                                                              instr_escape_expr,
-                                                              zero_expr))) {
-      LOG_WARN("create op expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_instr_expr(OPT_CTX.get_expr_factory(),
-                                                          OPT_CTX.get_session_info(),
-                                                          substr_value,
-                                                          wild_expr,
-                                                          lib::is_oracle_mode() ?
-                                                                  prefix_expr->get_param_expr(1) : NULL,
-                                                          lib::is_oracle_mode() ?
-                                                                  prefix_expr->get_param_expr(1) : NULL,
-                                                          instr_wild_expr))) { // the wild position
-      LOG_WARN("create instr expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(OPT_CTX.get_expr_factory(),
-                                                              OPT_CTX.get_session_info(),
-                                                              T_OP_EQ,
-                                                              has_no_wildcard,
-                                                              instr_wild_expr,
-                                                              zero_expr))) { //wild position is 0, then it does not exist
-      LOG_WARN("create op expr failed", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(OPT_CTX.get_expr_factory(),
-                                                              OPT_CTX.get_session_info(),
-                                                              T_OP_GT,
-                                                              wildcard_over_length,
-                                                              instr_wild_expr,
-                                                              prefix_expr->get_param_expr(2)))) {// if wild wild position exists then it should larger than substr_length
-      LOG_WARN("create op expr failed", K(ret));
-    } else if (OB_FAIL(OPT_CTX.get_expr_factory().create_raw_expr(T_OP_OR, or_expr))) {
-      LOG_WARN("failed to create a new expr", K(ret));
-    } else if (OB_FAIL(or_expr->add_param_expr(has_no_wildcard)) ||     // (wildcard not existed or occurs after length) and has no escape
-                OB_FAIL(or_expr->add_param_expr(wildcard_over_length))) {
-      LOG_WARN("set param expr failed", K(ret));
-    } else if (OB_FAIL(OPT_CTX.get_expr_factory().create_raw_expr(T_OP_AND, and_expr))) {
-      LOG_WARN("failed to create a new expr", K(ret));
-    } else if (OB_FAIL(and_expr->add_param_expr(or_expr)) ||
-                OB_FAIL(and_expr->add_param_expr(has_no_escape))) {
-      LOG_WARN("set param expr failed", K(ret));
-    } else if (OB_FAIL(or_expr->formalize(OPT_CTX.get_session_info())) ||
-                OB_FAIL(and_expr->formalize(OPT_CTX.get_session_info()))) {
-      LOG_WARN("formalize failed", K(ret));
-    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(OPT_CTX.get_exec_ctx(), and_expr, res, got_result, *allocator_))) {
-      LOG_WARN("calc const failed", K(ret));
-    } else if (OB_FAIL(ObObjEvaluator::is_true(res, is_true))) {
-      LOG_WARN("Failed to get bool value", K(ret));
-    } else if (is_true) {// wildcard and escapes matched,
-      LOG_TRACE("have wildcard or escape ", K(is_true));
-      if (OB_FAIL(ObRawExprUtils::create_substr_expr(OPT_CTX.get_expr_factory(),
-                                                   OPT_CTX.get_session_info(),
-                                                   &value_expr,
-                                                   prefix_expr->get_param_expr(1),
-                                                   prefix_expr->get_param_expr(2),
-                                                   substr_expr))) {
-        LOG_WARN("create substr expr failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(OPT_CTX.get_expr_factory(),
-                                                        OPT_CTX.get_session_info(),
-                                                        &column_expr,
-                                                        substr_expr,
-                                                        escape_expr,
-                                                        like_expr))) {
-        LOG_WARN("build like expr failed", K(ret));
-      } else {
-        new_op_expr = like_expr;
-        if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, and_expr, is_true))) {
-          LOG_WARN("add constraint failed", K(ret));
-        } else {
-          ret = append(helper.expr_constraints_, ctx.expr_constraints_);
-        }
-      }
-    } else {// if has wildcard and escpae, make is specail and add some constraints.
-      LOG_TRACE("have wildcard or escape ", K(is_true));
-      int64_t str_len;
-      ObNumber str_len_nm;
-      ObConstRawExpr *str_len_expr = NULL;
-      ObOpRawExpr *new_pattern = NULL;
-      if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(
-                            OPT_CTX.get_exec_ctx(), prefix_expr->get_param_expr(2),
-                            res, got_result, *allocator_))) {
-        LOG_WARN("calc const failed", K(ret));   //calc the substr length
-      } else if (lib::is_oracle_mode()) {
-        res.get_number().extract_valid_int64_with_trunc(str_len);
-      } else {
-        str_len = res.get_int();
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(OPT_CTX.get_exec_ctx(),
-                            instr_escape_expr, res, got_result,
-                            *allocator_))) {
-        LOG_WARN("calc const failed", K(ret));  //calc the escape position
-      } else {
-        int64_t instr_len = 0;
-        if (lib::is_oracle_mode()) {
-          ret = res.get_number().extract_valid_int64_with_trunc(instr_len);
-        } else {
-          instr_len = res.get_int();
-        }
-        str_len = instr_len != 0 ? std::min(str_len, instr_len + 1 <= str_len ?
-                                                                      instr_len + 1
-                                                                      : instr_len - 1) : str_len ;
-      }// if substr length  < escape pos then do nothing else make strlen=espace length
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(OPT_CTX.get_exec_ctx(), instr_wild_expr, res,
-                                                                   got_result, *allocator_))) {
-        LOG_WARN("calc const failed", K(ret)); // calc the wildcard position
-      } else {
-        int64_t instr_len = 0;
-        if (lib::is_oracle_mode()) {
-          ret = res.get_number().extract_valid_int64_with_trunc(instr_len);
-        } else {
-          instr_len = res.get_int();
-        }
-        str_len = instr_len != 0 ? std::min(str_len, instr_len) : str_len;
-        //get the min value between(str len and wildcard position)
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
-                  OPT_CTX.get_expr_factory(), ObIntType, str_len, str_len_expr))) {
-        LOG_WARN("build const failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::create_substr_expr(OPT_CTX.get_expr_factory(),
-                                                   OPT_CTX.get_session_info(),
-                                                   &value_expr,
-                                                   prefix_expr->get_param_expr(1),
-                                                   str_len_expr, //use the calculated length be the str len, should >=1
-                                                   substr_expr))) {
-        LOG_WARN("create substr expr failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::create_concat_expr(OPT_CTX.get_expr_factory(),
-                                                   OPT_CTX.get_session_info(),
-                                                   substr_expr,
-                                                   wild_expr, //add a % at the substr end
-                                                   new_pattern))) {
-        LOG_WARN("create concat expr failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(OPT_CTX.get_expr_factory(),
-                                                        OPT_CTX.get_session_info(),
-                                                        &column_expr,
-                                                        new_pattern, //build like expr
-                                                        escape_expr,
-                                                        like_expr))) {
-        LOG_WARN("build like expr failed", K(ret));
-      } else {
-        new_op_expr = like_expr;
-        if (OB_FAIL(ObTransformUtils::add_param_bool_constraint(&ctx, and_expr, is_true))) {
-          LOG_WARN("add constraint failed", K(ret));
-        } else {
-          ret = append(helper.expr_constraints_, ctx.expr_constraints_);
-        }
-      }
-    }
-    if (OB_FAIL(ret) || OB_ISNULL(substr_expr) || OB_ISNULL(new_op_expr)) {
-    } else if (OB_FAIL(substr_expr->extract_info())) {
+    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(opt_ctx->get_exec_ctx(),
+                                                                 substr_expr,
+                                                                 result,
+                                                                 got_result,
+                                                                 *allocator_))) {
+      LOG_WARN("fail to calc prefix pattern expr", K(ret));
+    } else if (!got_result || result.is_null()) {
+      // prefix pattern is invalid, do nothing
+    } else if (OB_FAIL(ObRawExprUtils::build_like_expr(get_plan()->get_optimizer_context().get_expr_factory(),
+                                                       get_plan()->get_optimizer_context().get_session_info(),
+                                                       &column_expr,
+                                                       substr_expr,
+                                                       escape_expr,
+                                                       like_expr))) {
+      LOG_WARN("build like expr failed", K(ret));
+    } else if (OB_FAIL(like_expr->extract_info())) {
       LOG_WARN("extract info failed", K(ret));
-    } else if (OB_FAIL(new_op_expr->extract_info())) {
-      LOG_WARN("extract info failed", K(ret));
-    } else if (OB_FAIL(new_op_expr->pull_relation_id())) {
+    } else if (OB_FAIL(like_expr->pull_relation_id())) {
       LOG_WARN("pullup rel ids failed", K(ret));
+    } else {
+      new_op_expr = like_expr;
     }
   } else {
     ObRawExpr *right_expr = NULL;
@@ -13023,6 +12859,7 @@ int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *qual,
       } else {
         ObRawExpr* depend_expr = column_expr->get_dependant_expr();
         bool is_lossless = true;
+        bool is_valid = true;
         if (OB_ISNULL(depend_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("depend epxr is null", K(ret));
@@ -13070,13 +12907,27 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
       ObRawExpr *child = qual->get_param_expr(j);
       //to replace the j-th child
       //remove inner cast's influence.
-      ObRawExpr *real_child_expr = NULL;
       ObExprEqualCheckContext equal_ctx;
       equal_ctx.override_const_compare_ = true;
+      bool is_same = false;
       if (OB_ISNULL(child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child is null", K(ret));
+      } else if (ObOptimizerUtil::get_expr_without_lossless_cast(child, child)) {
+        LOG_WARN("fail to get real child without lossless cast", K(ret));
+      } else if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("real child is null", K(ret));
       } else if (depend_expr->same_as(*child, &equal_ctx)) {
+        is_same = true;
+      } else {
+        equal_ctx.reset();
+        equal_ctx.override_const_compare_ = true;
+        if (OB_FAIL(check_match_to_type(depend_expr, child, is_same, equal_ctx))) {
+          LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && is_same) {
         ObRawExprCopier copier(expr_factory);
         ObSEArray<ObRawExpr *, 4> column_exprs;
         if (OB_FAIL(ObRawExprUtils::extract_column_exprs(qual, column_exprs))) {
@@ -13102,6 +12953,72 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
         } else if (OB_FAIL(add_deduced_expr(new_qual, qual, true, equal_ctx))) {
           LOG_WARN("push back failed", K(ret));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_match_to_type(ObRawExpr *to_type_expr, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx) {
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  is_same = false;
+  ObRawExpr *to_type_child = NULL;
+  //check expr type and param type of to_<type> expr
+  if (OB_ISNULL(to_type_expr) || OB_ISNULL(candi_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is unexpected null", K(ret), K(to_type_expr), K(candi_expr));
+  } else {
+    ObItemType type = to_type_expr->get_expr_type();
+    ObItemType candi_type = candi_expr->get_expr_type();
+    if (T_FUN_SYS_TO_CHAR == type
+        || T_FUN_SYS_TO_NCHAR == type
+        || T_FUN_SYS_TO_NUMBER == type
+        || T_FUN_SYS_TO_BINARY_FLOAT == type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == type
+        || T_FUN_SYS_DATE == type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == type) {
+      is_valid = true;
+    } else if (T_FUN_SYS_TO_CHAR == candi_type
+        || T_FUN_SYS_TO_NCHAR == candi_type
+        || T_FUN_SYS_TO_NUMBER == candi_type
+        || T_FUN_SYS_TO_BINARY_FLOAT == candi_type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type
+        || T_FUN_SYS_DATE == candi_type
+        || T_FUN_SYS_TO_BINARY_DOUBLE == candi_type) {
+      std::swap(to_type_expr, candi_expr);
+      is_valid = true;
+    }
+    if (is_valid && to_type_expr->get_param_count() > 1) {
+      is_valid = false; //TODO: if the fmt param is same as session default fmt, to_date/to_char/to_timestamp/to_timestamp_tz is the same as cast expr
+    }
+  }
+  if (OB_SUCC(ret) && is_valid) {
+    if (OB_ISNULL(to_type_child = to_type_expr->get_param_expr(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null",K(ret));
+    } else if (ObOptimizerUtil::is_lossless_type_conv(to_type_child->get_result_type(),to_type_expr->get_result_type())) {
+      if (ObOptimizerUtil::get_expr_without_lossless_cast(to_type_child, to_type_child)) {
+        LOG_WARN("fail to get real child without lossless cast", K(ret));
+      } else if (OB_ISNULL(to_type_child) || OB_ISNULL(candi_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(to_type_child), K(candi_expr));
+      } else {
+        is_same = to_type_child->same_as(*candi_expr, &equal_ctx);
+      }
+    } else if (to_type_expr->get_result_type().get_type() == candi_expr->get_result_type().get_type()
+               && T_FUN_SYS_CAST == candi_expr->get_expr_type()) {
+      if (ob_is_string_tc(to_type_expr->get_result_type().get_type())) {
+        if (to_type_expr->get_result_type().get_accuracy() == candi_expr->get_result_type().get_accuracy()
+            && to_type_expr->get_result_type().get_collation_type() == candi_expr->get_result_type().get_collation_type()) {
+          is_same = true;
+        }
+      } else if (to_type_expr->get_result_type().get_scale() == candi_expr->get_result_type().get_scale()
+                 && to_type_expr->get_result_type().get_precision() == candi_expr->get_result_type().get_precision()) {
+        is_same = true;
+      }
+      if (is_same) {
+        is_same = to_type_child->same_as(*(candi_expr->get_param_expr(0)), &equal_ctx);
       }
     }
   }

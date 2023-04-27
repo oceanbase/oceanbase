@@ -30,7 +30,7 @@ namespace sql
 {
 ObExprEffectiveTenantId::ObExprEffectiveTenantId(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_EFFECTIVE_TENANT_ID,
-                         N_EFFECTIVE_TENANT_ID, 0, NOT_ROW_DIMENSION)
+                         N_EFFECTIVE_TENANT_ID, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
   {
   }
 ObExprEffectiveTenantId::~ObExprEffectiveTenantId()

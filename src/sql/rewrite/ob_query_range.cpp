@@ -1796,6 +1796,8 @@ int ObQueryRange::get_column_key_part(const ObRawExpr *l_expr,
               } else if (OB_FAIL(add_precise_constraint(const_expr,
                                                         query_range_ctx_->cur_expr_is_precise_))) {
                 LOG_WARN("failed to add precise constraint", K(ret));
+              } else if (OB_FAIL(add_prefix_pattern_constraint(const_expr))) {
+                LOG_WARN("failed to add prefix pattern constraint", K(ret));
               }
             }
           } else {
@@ -8714,6 +8716,27 @@ int ObQueryRange::add_precise_constraint(const ObRawExpr *expr, bool is_precise)
     // do nothing
   } else if (OB_FAIL(add_var_to_array_no_dup(*query_range_ctx_->expr_constraints_, cons))) {
     LOG_WARN("failed to add precise constraint", K(ret));
+  }
+  return ret;
+}
+
+int ObQueryRange::add_prefix_pattern_constraint(const ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(expr, expr))) {
+    LOG_WARN("fail to get real expr", K(ret));
+  } else if (OB_ISNULL(expr)) {
+    LOG_WARN("unexpected null", K(ret));
+  } else if (T_FUN_SYS_PREFIX_PATTERN == expr->get_expr_type()) {
+    ObExprConstraint cons(const_cast<ObRawExpr*>(expr), PreCalcExprExpectResult::PRE_CALC_RESULT_NOT_NULL);
+    if (OB_ISNULL(query_range_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (NULL == query_range_ctx_->expr_constraints_) {
+      // do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(*query_range_ctx_->expr_constraints_, cons))) {
+      LOG_WARN("failed to add precise constraint", K(ret));
+    }
   }
   return ret;
 }

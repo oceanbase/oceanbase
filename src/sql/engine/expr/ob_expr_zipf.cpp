@@ -73,7 +73,7 @@ int ObExprZipf::ObExprZipfCtx::generate_next_value(int64_t seed, int64_t &result
 }
 
 ObExprZipf::ObExprZipf(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_ZIPF, "zipf", 3, NOT_ROW_DIMENSION)
+	: ObFuncExprOperator(alloc, T_FUN_SYS_ZIPF, "zipf", 3, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

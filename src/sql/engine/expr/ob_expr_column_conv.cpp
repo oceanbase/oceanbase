@@ -96,7 +96,7 @@ OB_SERIALIZE_MEMBER(ObExprColumnConv, row_dimension_, real_param_num_, result_ty
 
 ObExprColumnConv::ObExprColumnConv(ObIAllocator &alloc)
     : ObBaseExprColumnConv(alloc),
-      ObFuncExprOperator(alloc, T_FUN_COLUMN_CONV, N_COLUMN_CONV, -1, NOT_ROW_DIMENSION,
+      ObFuncExprOperator(alloc, T_FUN_COLUMN_CONV, N_COLUMN_CONV, -1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
   disable_operand_auto_cast();

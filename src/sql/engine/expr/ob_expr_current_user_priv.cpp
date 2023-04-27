@@ -30,7 +30,7 @@ namespace sql
 ObExprCurrentUserPriv::ObExprCurrentUserPriv(ObIAllocator &alloc)
   : ObFuncExprOperator(alloc, T_FUN_SYS_CURRENT_USER_PRIV,
                        N_CURRENT_USER_PRIV, 0,
-                       NOT_ROW_DIMENSION) {
+                       NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {
 }
 
 ObExprCurrentUserPriv::~ObExprCurrentUserPriv() {

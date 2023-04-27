@@ -29,9 +29,9 @@ ObExprPoint::ObExprPoint(common::ObIAllocator &alloc)
                          T_FUN_SYS_POINT,
                          N_POINT,
                          2,
+                         VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
-
 }
 
 ObExprPoint::~ObExprPoint()

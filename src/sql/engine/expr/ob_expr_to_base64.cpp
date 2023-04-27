@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprToBase64::ObExprToBase64(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_TO_BASE64, N_TO_BASE64, 1, VALID_FOR_GENERATED_COL)
 {
 }
 
