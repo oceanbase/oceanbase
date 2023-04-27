@@ -90,7 +90,7 @@ int64_t TenantConfigInfo::to_string(char *buf, const int64_t buf_len) const
 }
 
 ObTenantConfigMgr::ObTenantConfigMgr()
-    : inited_(false), self_(), sql_proxy_(nullptr), rwlock_(ObLatchIds::CONFIG_LOCK),
+    : rwlock_(ObLatchIds::CONFIG_LOCK), inited_(false), self_(), sql_proxy_(nullptr),
       config_map_(), config_version_map_(), sys_config_mgr_(nullptr),
       version_has_refreshed_(false), update_tenant_config_cb_()
 {
