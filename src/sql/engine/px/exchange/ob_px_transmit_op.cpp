@@ -590,6 +590,10 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
                        get_spec().output_, eval_ctx_, slice_idx_array))) {
       LOG_WARN("fail get slice idx", K(ret));
     } else if (dfc_.all_ch_drained()) {
+      int tmp_ret = drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
       ret = OB_ITER_END;
       LOG_DEBUG("all channel has been drained");
     } else if (NULL != spec.tablet_id_expr_
