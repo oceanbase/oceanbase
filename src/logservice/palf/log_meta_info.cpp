@@ -569,14 +569,14 @@ int LogConfigMeta::generate_for_default(
     const LogConfigInfo &curr_config_info)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   if (INVALID_PROPOSAL_ID == proposal_id) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    PALF_LOG(WARN, "get tenant data version failed", K(ret));
   } else {
-    const bool is_cluster_already_4100 = (tenant_data_version >= DATA_VERSION_4_1_0_0);
-    version_ = (is_cluster_already_4100)? LOG_CONFIG_META_VERSION_INC: LOG_CONFIG_META_VERSION;
+    // Note: we generate a default META_VERSION rather than according to DATA_VERSION,
+    //       because DATA_VERSION of the tenant may be empty it the server is just added
+    //       to the cluster. It's fine because real LogConfigMeta will be set by the
+    //       set_initial_member_list interface.
+    version_ = LOG_CONFIG_META_VERSION_INC;
     proposal_id_ = proposal_id;
     prev_ = prev_config_info;
     curr_ = curr_config_info;

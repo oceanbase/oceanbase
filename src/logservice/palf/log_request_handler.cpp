@@ -450,6 +450,7 @@ int LogRequestHandler::handle_sync_request<LogGetMCStReq, LogGetMCStResp>(
     IPalfHandleImplGuard guard;
     if (false == palf_env_impl_->check_disk_space_enough()) {
       resp.is_normal_replica_ = false;
+      PALF_LOG(WARN, "check_disk_space_enough returns false", K(req), K(resp));
     } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
     } else if (OB_FAIL(guard.get_palf_handle_impl()->config_change_pre_check(server, req, resp))) {
