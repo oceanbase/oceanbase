@@ -162,7 +162,8 @@ public:
     }
     return id;
   }
-
+  // protect config_map_
+  mutable common::DRWLock rwlock_;
   OB_UNIS_VERSION(1);
 
 private:
@@ -171,8 +172,6 @@ private:
   bool inited_;
   common::ObAddr self_;
   common::ObMySQLProxy *sql_proxy_;
-  // protect config_map_
-  mutable common::DRWLock rwlock_;
   // 租户配置项的映射
   TenantConfigMap config_map_;
   TenantConfigVersionMap config_version_map_;
