@@ -2697,8 +2697,10 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                             is_type_record));
 
             //此处仅需要处理非DML RETURNING返回的USING OUT参数
-            OZ (dynamic_out_params(
-              *(ctx->allocator_), spi_result.get_result_set(), params, exec_param_cnt));
+            // if it is bulk into, not allow using out param, so no need deep copy
+            if (OB_SUCC(ret) && !is_bulk) {
+              OZ (dynamic_out_params(*(ctx->allocator_), spi_result.get_result_set(), params, exec_param_cnt));
+            }
             if (enable_sql_audit) {
               time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
               exec_record.record_end();
