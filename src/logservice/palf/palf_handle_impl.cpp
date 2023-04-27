@@ -519,16 +519,9 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
                                             LogGetMCStResp &resp)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
-  int tmp_ret = common::OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret), K_(palf_id));
-  } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    // Note: if the DATA_VERSION in the replica is empty, it is not allowed
-    //       to be added in the Paxos group. Check PalfHandleImpl only
-    resp.is_normal_replica_ = false;
-    PALF_LOG(WARN, "get tenant data version failed", K(tmp_ret), K(req), K(resp));
   } else {
     RLockGuard guard(lock_);
     int64_t curr_proposal_id = state_mgr_.get_proposal_id();

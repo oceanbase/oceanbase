@@ -162,7 +162,6 @@ public:
   ~LogConfigMeta();
 
 public:
-  // Note: the function will generate a default version_.
   int generate_for_default(const int64_t proposal_id,
                            const LogConfigInfo &prev_config_info,
                            const LogConfigInfo &curr_config_info);

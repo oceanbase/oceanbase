@@ -1284,21 +1284,6 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
   PALF_LOG(INFO, "test_handle_retire_msg end case");
 }
 
-TEST_F(TestLogConfigMgr, test_init_by_default_config_meta)
-{
-  const int64_t init_log_proposal_id = 0;
-  LogConfigInfo init_config_info;
-  LogConfigVersion init_config_version;
-  init_config_version.generate(init_log_proposal_id, 0);
-  init_config_info.config_version_ = init_config_version;
-  LogConfigMeta log_config_meta;
-  LogConfigMgr cm;
-  EXPECT_EQ(OB_SUCCESS, log_config_meta.generate_for_default(init_log_proposal_id,
-      init_config_info, init_config_info));
-  EXPECT_EQ(OB_SUCCESS, cm.init(1, addr1, log_config_meta, mock_log_engine_,
-      mock_sw_, mock_state_mgr_, mock_election_,
-      mock_mode_mgr_, mock_reconfirm_));
-}
 
 } // end namespace unittest
 } // end namespace oceanbase

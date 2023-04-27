@@ -21,8 +21,6 @@ namespace oceanbase
 {
 using namespace common;
 using namespace palf;
-constexpr int64_t palf::LogConfigMeta::LOG_CONFIG_META_VERSION;
-constexpr int64_t palf::LogConfigMeta::LOG_CONFIG_META_VERSION_INC;
 namespace unittest
 {
 
@@ -121,12 +119,6 @@ TEST(TestLogMetaInfos, test_log_config_meta)
   const int64_t barrier_log_proposal_id = 3;
   const LSN barrier_lsn = LSN(300);
   const int64_t barrier_mode_pid = 4;
-
-  // Test default version
-  LogConfigMeta default_config_meta;
-  EXPECT_EQ(OB_SUCCESS, default_config_meta.generate_for_default(curr_log_proposal_id, prev_config_info, curr_config_info));
-  EXPECT_TRUE(default_config_meta.is_valid());
-  EXPECT_EQ(palf::LogConfigMeta::LOG_CONFIG_META_VERSION_INC, default_config_meta.version_);
 
   // Test invalid argument
   LogConfigMeta log_config_meta;
