@@ -2240,6 +2240,13 @@ int ObAdminDumpBackupDataExecutor::dump_backup_ls_meta_infos_file_(const share::
 int ObAdminDumpBackupDataExecutor::dump_backup_set_info(const share::ObBackupSetFileDesc &backup_set_info)
 {
   int ret = OB_SUCCESS;
+  char tenant_version_display[OB_CLUSTER_VERSION_LENGTH] = "";
+  char cluster_version_display[OB_CLUSTER_VERSION_LENGTH] = "";
+  int64_t pos =  ObClusterVersion::print_version_str(
+    tenant_version_display, OB_CLUSTER_VERSION_LENGTH, backup_set_info.tenant_compatible_);
+  pos =  ObClusterVersion::print_version_str(
+    cluster_version_display, OB_CLUSTER_VERSION_LENGTH, backup_set_info.cluster_version_);
+
   PrintHelper::print_dump_title("backup set info");
   PrintHelper::print_dump_line("tenant_id", backup_set_info.tenant_id_);
   PrintHelper::print_dump_line("backup_set_id", backup_set_info.backup_set_id_);
@@ -2267,7 +2274,8 @@ int ObAdminDumpBackupDataExecutor::dump_backup_set_info(const share::ObBackupSet
   PrintHelper::print_dump_line("backup_path", backup_set_info.backup_path_.ptr());
   PrintHelper::print_dump_line("start_replay_scn", backup_set_info.start_replay_scn_.get_val_for_logservice());
   PrintHelper::print_dump_line("min_restore_scn", backup_set_info.min_restore_scn_.get_val_for_logservice());
-  PrintHelper::print_dump_line("tenant_compatible", backup_set_info.tenant_compatible_);
+  PrintHelper::print_dump_line("tenant_compatible", tenant_version_display);
+  PrintHelper::print_dump_line("cluster_version", cluster_version_display);
   PrintHelper::print_dump_line("backup_compatible", backup_set_info.backup_compatible_);
   PrintHelper::print_dump_line("meta_turn_id", backup_set_info.meta_turn_id_);
   PrintHelper::print_dump_line("data_turn_id", backup_set_info.data_turn_id_);
