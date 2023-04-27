@@ -362,6 +362,31 @@ int ObPlanCache::init(int64_t hash_bucket, uint64_t tenant_id)
   return ret;
 }
 
+int ObPlanCache::get_normalized_pattern_digest(const ObPlanCacheCtx &pc_ctx, uint64_t &pattern_digest)
+{
+  int ret = OB_SUCCESS;
+  pattern_digest = 0;
+  if (pc_ctx.mode_ == PC_PS_MODE || pc_ctx.mode_ == PC_PL_MODE || pc_ctx.fp_result_.pc_key_.name_.empty()) {
+    ObFastParserResult fp_result;
+    ObSQLMode sql_mode = pc_ctx.sql_ctx_.session_info_->get_sql_mode();
+    ObCollationType conn_coll = pc_ctx.sql_ctx_.session_info_->get_local_collation_connection();
+    FPContext fp_ctx(conn_coll);
+    fp_ctx.enable_batched_multi_stmt_ = pc_ctx.sql_ctx_.handle_batched_multi_stmt();
+    fp_ctx.sql_mode_ = sql_mode;
+    if (OB_FAIL(ObSqlParameterization::fast_parser(pc_ctx.allocator_,
+                                                   fp_ctx,
+                                                   pc_ctx.raw_sql_,
+                                                   fp_result))) {
+      LOG_WARN("failed to fast parser", K(ret), K(sql_mode), K(pc_ctx.raw_sql_));
+    } else {
+      pattern_digest = fp_result.pc_key_.name_.hash();
+    }
+  } else {
+    pattern_digest = pc_ctx.fp_result_.pc_key_.name_.hash();
+  }
+  return ret;
+}
+
 int ObPlanCache::check_after_get_plan(int tmp_ret,
                                       ObILibCacheCtx &ctx,
                                       ObILibCacheObject *cache_obj)
@@ -391,12 +416,15 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   }
   if (OB_SUCC(ret) && plan != NULL) {
     bool is_exists = false;
+    uint64_t pattern_digest = 0;
     sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);
     // when the global rule version changes or enable_user_defined_rewrite_rules changes
     // it is necessary to check whether the physical plan are expired
     if ((plan->get_rule_version() != rule_mgr->get_rule_version()
       || plan->is_enable_udr() != enable_udr)) {
-      if (OB_FAIL(rule_mgr->fuzzy_check_by_pattern_digest(pc_ctx.get_normalized_pattern_digest(), is_exists))) {
+      if (OB_FAIL(get_normalized_pattern_digest(pc_ctx, pattern_digest))) {
+        LOG_WARN("failed to calc normalized pattern digest", K(ret));
+      } else if (OB_FAIL(rule_mgr->fuzzy_check_by_pattern_digest(pattern_digest, is_exists))) {
         LOG_WARN("failed to fuzzy check by pattern digest", K(ret));
       } else if (is_exists || plan->is_rewrite_sql()) {
         ret = OB_OLD_SCHEMA_VERSION;

@@ -427,6 +427,7 @@ private:
                               ObPlanCacheCtx &pc_ctx,
                               const ObILibCacheObject &cache_object);
   int check_after_get_plan(int tmp_ret, ObILibCacheCtx &ctx, ObILibCacheObject *cache_obj);
+  int get_normalized_pattern_digest(const ObPlanCacheCtx &pc_ctx, uint64_t &pattern_digest);
 private:
   enum PlanCacheGCStrategy { INVALID = -1, OFF = 0, REPORT = 1, AUTO = 2};
   static int get_plan_cache_gc_strategy();

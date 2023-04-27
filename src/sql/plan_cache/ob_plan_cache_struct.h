@@ -347,17 +347,6 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     return ret;
   }
 
-  uint64_t get_normalized_pattern_digest() const
-  {
-    common::ObString normalized_pattern;
-    if (mode_ == PC_PS_MODE || mode_ == PC_PL_MODE || fp_result_.pc_key_.name_.empty()) {
-      normalized_pattern = raw_sql_;
-    } else {
-      normalized_pattern = fp_result_.pc_key_.name_;
-    }
-    return normalized_pattern.hash();
-  }
-
   int is_retry(bool &v) const;  //是否在重试之中
   int is_retry_for_dup_tbl(bool &v) const; //仅复制表原因的重试才会设置为true
   void set_begin_commit_stmt() { begin_commit_stmt_ = true; }
