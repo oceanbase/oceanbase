@@ -243,7 +243,7 @@ char *easy_pool_strdup(easy_pool_t *pool, const char *str)
 easy_pool_cleanup_t *easy_pool_cleanup_new(easy_pool_t *pool, const void *data, easy_pool_cleanup_pt *handler)
 {
     easy_pool_cleanup_t *cl;
-    cl = easy_pool_alloc(pool, sizeof(easy_pool_t));
+    cl = easy_pool_alloc(pool, sizeof(easy_pool_cleanup_t));
 
     if (cl) {
         cl->handler = handler;
