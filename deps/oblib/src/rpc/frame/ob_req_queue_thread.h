@@ -41,7 +41,7 @@ public:
   void set_qhandler(ObiReqQHandler *handler);
 
   bool push(ObRequest *req, int max_queue_len, bool block = true);
-
+  ObRequest * pop(); // only for dispatch_req of mysql queue. pop req when tenant is stopped.
   void set_host(const common::ObAddr &host);
   void loop();
 
@@ -50,13 +50,28 @@ public:
     return queue_.size();
   }
 
+  void inc_push_worker_count()
+  {
+    ATOMIC_INC(&push_worker_count_);
+  }
+  void dec_push_worker_count()
+  {
+    ATOMIC_DEC(&push_worker_count_);
+  }
+  bool get_push_worker_count()
+  {
+    return ATOMIC_LOAD(&push_worker_count_);
+  }
+
 private:
   int process_task(void *task);
 
   DISALLOW_COPY_AND_ASSIGN(ObReqQueue);
 
 protected:
+
   bool wait_finish_;
+  int push_worker_count_;
   common::ObLightyQueue queue_;
   ObiReqQHandler *qhandler_;
 
