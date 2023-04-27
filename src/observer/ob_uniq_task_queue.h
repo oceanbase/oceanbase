@@ -21,6 +21,8 @@
 #include "lib/queue/ob_dedup_queue.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "share/ob_thread_pool.h"
+#include "share/ob_debug_sync.h"
+#include "share/ob_debug_sync_point.h"
 
 namespace oceanbase
 {
@@ -348,6 +350,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
     SERVER_LOG(WARN, "not init", K(ret));
   } else {
     while (!lib::Thread::current().has_set_stop()) {
+      DEBUG_SYNC(common::BEFORE_UNIQ_TASK_RUN);
       Task *t = NULL;
       tasks.reuse();
       if (OB_SUCC(tasks.reserve(batch_exec_cnt))) {
@@ -390,7 +393,10 @@ void ObUniqTaskQueue<Task, Process>::run1()
             if (common::OB_SUCCESS == ret && tasks.count() > 0) {
               ++processing_thread_count_;
               if (group->list_.get_size() <= 0) {
-                if (cur_group_ == group) {
+                if (group->get_next() == groups_.get_header()) {
+                  // bugfix: workitem/49006474
+                  cur_group_ = group->get_next();
+                } else {
                   cur_group_ = group->get_prev();
                 }
                 if (NULL == groups_.remove(group)) {
