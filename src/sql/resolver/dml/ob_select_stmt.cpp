@@ -1197,3 +1197,39 @@ bool ObSelectStmt::has_hidden_rowid() const {
   }
   return res;
 }
+
+int ObSelectStmt::get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const
+{
+  int ret = OB_SUCCESS;
+  pure_set_exprs.reuse();
+  if (is_set_stmt()) {
+    ObRawExpr *select_expr = NULL;
+    ObRawExpr *set_op_expr = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_select_item_size(); ++i) {
+      if (OB_ISNULL(select_expr = get_select_item(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(i));
+      } else if (!select_expr->has_flag(CNT_SET_OP)) {
+        /* do nothing, for recursive union all, exists search/cycle pseudo columns*/
+      } else if (OB_ISNULL(set_op_expr = get_pure_set_expr(select_expr))
+                 || OB_UNLIKELY(!set_op_expr->is_set_op_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected expr", K(ret), K(i), K(*select_expr));
+      } else if (OB_FAIL(pure_set_exprs.push_back(set_op_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// cast sys functions above set op expr can be:
+//   T_FUN_SYS_CAST/T_FUN_SYS_RAWTOHEX/T_FUN_SYS_TO_NCHAR/T_FUN_SYS_TO_CHAR
+// use this function to get set op expr from expr child recursively
+ObRawExpr* ObSelectStmt::get_pure_set_expr(ObRawExpr *expr)
+{
+  while (OB_NOT_NULL(expr) && !expr->is_set_op_expr() && 0 < expr->get_param_count()) {
+    expr = expr->get_param_expr(0);
+  }
+  return expr;
+}

@@ -11572,6 +11572,7 @@ def_table_schema(
 # 12399: __all_virtual_storage_leak_info
 #
 # 12400 __all_virtual_ls_log_restore_status
+# 12401: __all_virtual_tenant_parameter
 #
 # 余留位置
 #
@@ -11883,6 +11884,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
 # 15387: __all_virtual_ls_log_restore_status
+# 15388: __all_virtual_tenant_parameter
 
 ################################################################################
 # System View (20000,30000]

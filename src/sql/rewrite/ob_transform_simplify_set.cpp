@@ -145,7 +145,6 @@ int ObTransformSimplifySet::add_order_by(ObSelectStmt *stmt, ObSelectStmt *upper
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> set_exprs;
-  ObSEArray<ObRawExpr *, 4> select_exprs;
 
   //add order by
   if (OB_ISNULL(stmt) || OB_ISNULL(upper_stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
@@ -154,9 +153,7 @@ int ObTransformSimplifySet::add_order_by(ObSelectStmt *stmt, ObSelectStmt *upper
   } else if (stmt->get_order_item_size() > 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt should not have order by", K(ret), K(stmt->get_order_item_size()));
-  } else if (OB_FAIL(upper_stmt->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(select_exprs, set_exprs))) {
+  } else if (OB_FAIL(upper_stmt->get_pure_set_exprs(set_exprs))) {
     LOG_WARN("failed to get expr in cast", K(ret));
   } else {
     ObRawExprCopier copier(*ctx_->expr_factory_);

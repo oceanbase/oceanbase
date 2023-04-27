@@ -269,8 +269,6 @@ private:
 
   int candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans);
 
-  int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs);
-
   int get_allowed_branch_order(const bool ignore_hint,
                                const ObSelectStmt::SetOperator set_op,
                                bool &no_swap,

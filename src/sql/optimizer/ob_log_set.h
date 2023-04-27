@@ -45,7 +45,6 @@ public:
   const ObSelectStmt *get_left_stmt() const;
   const ObSelectStmt *get_right_stmt() const;
   int get_my_set_exprs(ObIArray<ObRawExpr*> &set_exprs);
-  int is_my_set_expr(const ObRawExpr *expr, bool &bret);
   const char *get_name() const;
   inline void assign_set_distinct(const bool is_distinct) { is_distinct_ = is_distinct; }
   inline void set_recursive_union(bool is_recursive_union) { is_recursive_union_ = is_recursive_union; }
@@ -72,7 +71,7 @@ public:
   int set_set_directions(const common::ObIArray<ObOrderDirection> &directions) { return set_directions_.assign(directions); }
   int add_set_direction(const ObOrderDirection direction = default_asc_direction()) { return set_directions_.push_back(direction); }
   int get_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
-  int extra_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
+  int get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;

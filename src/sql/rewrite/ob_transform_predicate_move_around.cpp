@@ -1743,7 +1743,6 @@ int ObTransformPredicateMoveAround::rename_set_op_predicates(ObSelectStmt &child
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> child_select_list;
-  ObSEArray<ObRawExpr *, 4> parent_select_list;
   ObSEArray<ObRawExpr *, 4> parent_set_exprs;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || 
       OB_ISNULL(ctx_->session_info_)) {
@@ -1751,9 +1750,7 @@ int ObTransformPredicateMoveAround::rename_set_op_predicates(ObSelectStmt &child
     LOG_WARN("param has null", K(ctx_), K(ret));
   } else if (OB_FAIL(child_stmt.get_select_exprs(child_select_list))) {
     LOG_WARN("get child stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(parent_stmt.get_select_exprs(parent_select_list))) {
-    LOG_WARN("get parent stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(parent_select_list, parent_set_exprs))) {
+  } else if (OB_FAIL(parent_stmt.get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get parent set exprs", K(ret));
   } else if (child_select_list.count() != parent_set_exprs.count()) {
     ret = OB_ERR_UNEXPECTED;

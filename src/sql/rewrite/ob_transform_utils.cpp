@@ -4061,7 +4061,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
     LOG_WARN("failed to append fd equal set", K(ret));
   } else if (OB_FAIL(append(tmp_equal_sets, right_info.equal_sets_))) {
     LOG_WARN("failed to append fd equal set", K(ret));
-  } else if (OB_FAIL(get_expr_in_cast(select_exprs, set_exprs))) {
+  } else if (OB_FAIL(stmt->get_pure_set_exprs(set_exprs))) {
     LOG_WARN("failed to get first set op exprs", K(ret));
   } else if (OB_FAIL(get_equal_set_conditions(*check_helper.expr_factory_,
                                               check_helper.session_info_,
@@ -4133,37 +4133,6 @@ int ObTransformUtils::get_equal_set_conditions(ObRawExprFactory &expr_factory,
     }
   }
   return ret;
-}
-
-int ObTransformUtils::get_expr_in_cast(ObIArray<ObRawExpr*> &input_exprs,
-                                       ObIArray<ObRawExpr*> &output_exprs)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(input_exprs);
-  UNUSED(output_exprs);
-  for (int64_t i = 0; OB_SUCC(ret) && i < input_exprs.count(); i++) {
-    ObRawExpr *expr = input_exprs.at(i);
-    int64_t cast_level = 0;
-    while (OB_NOT_NULL(expr) && T_FUN_SYS_CAST == expr->get_expr_type()) {
-      expr = ++cast_level <= OB_MAX_SET_STMT_SIZE ? expr->get_param_expr(0) : NULL;
-    }
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(output_exprs.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-ObRawExpr* ObTransformUtils::get_expr_in_cast(ObRawExpr *expr)
-{
-  int64_t cast_level = 0;
-  while (OB_NOT_NULL(expr) && T_FUN_SYS_CAST == expr->get_expr_type()) {
-    expr = ++cast_level <= OB_MAX_SET_STMT_SIZE ? expr->get_param_expr(0) : NULL;
-  }
-  return expr;
 }
 
 int ObTransformUtils::add_cast_for_replace(ObRawExprFactory &expr_factory,
@@ -6073,7 +6042,7 @@ int ObTransformUtils::remove_select_items(ObTransformerCtx *ctx,
           /*do nothing*/
         } else if (OB_FAIL(new_select_items.push_back(union_stmt.get_select_item(i)))) {
           LOG_WARN("failed to push back select items", K(ret));
-        } else if (OB_ISNULL(set_expr = get_expr_in_cast(new_select_items.at(idx).expr_))
+        } else if (OB_ISNULL(set_expr = ObSelectStmt::get_pure_set_expr(new_select_items.at(idx).expr_))
                    || OB_UNLIKELY(!set_expr->is_set_op_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected set expr", K(ret), K(set_expr));
@@ -10071,7 +10040,7 @@ int ObTransformUtils::check_select_item_need_remove(const ObSelectStmt *stmt,
     if (stmt->is_scala_group_by() && expr->has_flag(CNT_AGG)) {
       need_remove = false;
     }
-  } else if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(expr))
+  } else if (OB_ISNULL(expr = ObSelectStmt::get_pure_set_expr(expr))
              || OB_UNLIKELY(!expr->is_set_op_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected set expr", K(ret), KPC(expr));

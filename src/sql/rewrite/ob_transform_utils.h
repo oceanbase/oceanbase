@@ -877,10 +877,6 @@ public:
                                       ObIArray<ObRawExpr*> &set_exprs,
                                       ObIArray<ObRawExpr*> &equal_conds);
 
-  static int get_expr_in_cast(ObIArray<ObRawExpr*> &input_exprs,
-                              ObIArray<ObRawExpr*> &output_exprs);
-  static ObRawExpr* get_expr_in_cast(ObRawExpr *expr);
-
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,
