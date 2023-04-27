@@ -1298,7 +1298,7 @@ int64_t ObLocalDevice::get_reserved_block_count() const
 
 int64_t ObLocalDevice::get_max_block_count(int64_t reserved_size) const
 {
-  return get_max_block_size(reserved_size) / block_size_;
+  return block_size_ > 0 ? get_max_block_size(reserved_size) / block_size_ : 0;
 }
 
 int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
