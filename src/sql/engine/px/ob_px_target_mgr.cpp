@@ -299,11 +299,17 @@ int ObPxTargetMgr::get_version(uint64_t tenant_id, uint64_t &version)
 int ObPxTargetMgr::update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used)
 {
   int ret = OB_SUCCESS;
+  // return OB_HASH_EXIST instead of replacing the element.
+  int flag = 0;
   GET_TARGET_MONITOR(tenant_id, {
     if (OB_FAIL(target_monitor->update_peer_target_used(server, peer_used))) {
       LOG_WARN("update peer target_used failed", K(ret), K(tenant_id), K(peer_used));
-    } else if (server_ != server && OB_FAIL(alive_server_set_.set_refactored(server, 1))) {
-      LOG_WARN("alive_server_set_ push_back failed", K(ret), K(server));
+    } else if (server_ != server && OB_FAIL(alive_server_set_.set_refactored(server, flag))) {
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("alive_server_set_ push_back failed", K(ret), K(server));
+      }
     }
   });
   return ret;
