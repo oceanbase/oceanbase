@@ -18,6 +18,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/optimizer/ob_del_upd_log_plan.h"
+#include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::common;
 
@@ -190,6 +191,24 @@ int ObLogExprValues::compute_op_ordering()
 int ObLogExprValues::est_cost()
 {
   int ret = OB_SUCCESS;
+  double card = 0.0;
+  double op_cost = 0.0;
+  double cost = 0.0;
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+    LOG_WARN("failed to get re est cost infos", K(ret));
+  } else {
+    set_card(card);
+    set_op_cost(op_cost);
+    set_cost(cost);
+  }
+  return ret;
+}
+
+int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
+{
+  int ret = OB_SUCCESS;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -197,14 +216,14 @@ int ObLogExprValues::est_cost()
   } else if (get_stmt()->is_insert_stmt()) {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     const ObInsertStmt *insert_stmt = static_cast<const ObInsertStmt*>(get_stmt());
-    set_card(insert_stmt->get_insert_row_count());
-    set_op_cost(ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type()));
-    set_cost(get_op_cost());
+    card = insert_stmt->get_insert_row_count();
+    op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type());
+    cost = op_cost;
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    set_card(1.0);
-    set_op_cost(ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx.get_cost_model_type()));
-    set_cost(get_op_cost());
+    card = 1.0;
+    op_cost = ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx.get_cost_model_type());
+    cost = op_cost;
   }
   return ret;
 }
@@ -477,6 +496,17 @@ int ObLogExprValues::inner_replace_op_exprs(
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_exprs_action(to_replace_exprs, value_exprs_))) {
     LOG_WARN("failed to replace exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogExprValues::compute_op_parallel_and_server_info()
+{
+  int ret = common::OB_SUCCESS;
+  if (get_num_of_child() == 0) {
+    ret = set_parallel_and_server_info_for_match_all();
+  } else {
+    ret = ObLogicalOperator::compute_op_parallel_and_server_info();
   }
   return ret;
 }

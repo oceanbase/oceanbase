@@ -1309,11 +1309,10 @@ public:
                                               const int64_t reselected_pos,
                                               ObShardingInfo *&target_sharding);
 
-  static int get_join_style_parallel(ObOptimizerContext &opt_ctx,
-                                     int64_t left_parallel,
-                                     int64_t right_parallel,
-                                     const DistAlgo join_dist_algo,
-                                     int64_t &parallel);
+  static int64_t get_join_style_parallel(const int64_t left_parallel,
+                                         const int64_t right_parallel,
+                                         const DistAlgo join_dist_algo,
+                                         const bool use_left = false);
 
   static bool is_left_need_exchange(const ObShardingInfo &sharding, const DistAlgo dist_algo);
   static bool is_right_need_exchange(const ObShardingInfo &sharding, const DistAlgo dist_algo);

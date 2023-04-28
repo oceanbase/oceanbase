@@ -21,6 +21,7 @@ namespace sql
 {
   class ObDMLStmt;
   class ObSelectStmt;
+  class ObDelUpdStmt;
   class ObLogPlan;
   class ObOptimizerContext;
   class ObRawExpr;
@@ -191,24 +192,19 @@ namespace sql
     bool exists_temp_table(const ObIArray<ObSqlTempTableInfo*> &temp_table_infos,
                            const ObSelectStmt *table_query) const;
     int init_env_info(ObDMLStmt &stmt);
-    int get_stmt_max_table_dop(ObDMLStmt &stmt,
-                               int64_t &max_table_dop);
-    int get_stmt_parallel_info(ObDMLStmt *stmt,
-                               int64_t &max_table_dop,
-                               int64_t &max_table_parallel);
-    int get_session_parallel_info(ObDMLStmt &stmt,
-                                  bool use_pdml,
-                                  bool &session_px_enable_parallel,
-                                  uint64_t &session_force_parallel_dop);
+    int get_session_parallel_info(int64_t &force_parallel_dop,
+                                  bool &enable_auto_dop,
+                                  bool &enable_manual_dop);
+    int extract_opt_ctx_basic_flags(const ObDMLStmt &stmt,
+                                    ObSQLSessionInfo &session);
+    int init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &session);
+    int set_auto_dop_params(const ObSQLSessionInfo &session);
     int check_pdml_enabled(const ObDMLStmt &stmt,
-                           const ObSQLSessionInfo &session,
-                           bool &is_use_pdml);
-    int check_pdml_supported_feature(const ObDMLStmt &stmt,
+                           const ObSQLSessionInfo &session);
+    int check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
                                      const ObSQLSessionInfo &session,
                                      bool &is_use_pdml);
     int check_is_heap_table(const ObDMLStmt &stmt);
-    int check_unique_index(const common::ObIArray<ObColumnRefRawExpr*> &column_exprs,
-                           bool &has_unique_index) const;
     int extract_column_usage_info(const ObDMLStmt &stmt);
     int analyze_one_expr(const ObDMLStmt &stmt, const ObRawExpr *expr);
     int add_column_usage_arg(const ObDMLStmt &stmt,

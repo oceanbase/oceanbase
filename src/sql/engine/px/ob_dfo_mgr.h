@@ -33,11 +33,9 @@ public:
   void destroy();
   void reset();
   int init(ObExecContext &exec_ctx,
-                   const ObOpSpec &root_op_spec,
-                   int64_t expected_worker_count,
-                   int64_t admited_worker_count,
-                   const ObDfoInterruptIdGen &dfo_int_gen,
-                   ObPxCoordInfo &px_coord_info);
+           const ObOpSpec &root_op_spec,
+           const ObDfoInterruptIdGen &dfo_int_gen,
+           ObPxCoordInfo &px_coord_info);
   ObDfo *get_root_dfo() { return root_dfo_; }
   
   virtual int get_ready_dfo(ObDfo *&dfo) const; // 仅用于单层dfo调度
@@ -99,7 +97,17 @@ class ObDfoWorkerAssignment
 public:
   static int assign_worker(ObDfoMgr &dfo_mgr,
                            int64_t expected_worker_count,
+                           int64_t minimal_worker_count,
                            int64_t admited_worker_count);
+  static int get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
+                                   const bool get_minimal,
+                                   int64_t &total_assigned);
+  static int calc_admited_worker_count(const ObIArray<ObDfo*> &dfos,
+                                       ObExecContext &exec_ctx,
+                                       const ObOpSpec &root_op_spec,
+                                       int64_t &px_expected,
+                                       int64_t &px_minimal,
+                                       int64_t &px_admited);
 };
 
 }

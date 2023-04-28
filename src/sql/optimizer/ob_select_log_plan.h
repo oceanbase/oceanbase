@@ -241,7 +241,7 @@ private:
 
   int get_largest_sharding_child(const ObIArray<ObLogicalOperator*> &child_ops,
                                  const int64_t candi_pos,
-                                 int64_t &largest_pos);
+                                 ObLogicalOperator *&largest_op);
 
   int allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_plans,
                                 DistAlgo dist_set_method,

@@ -116,7 +116,7 @@ namespace sql
     virtual int get_explain_name_internal(char *buf,
                                           const int64_t buf_len,
                                           int64_t &pos);
-    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
     /*
      * IN         right_child_sharding_info   the join's right child sharding info
      * IN         right_keys                  the right join equal condition

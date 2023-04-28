@@ -33,7 +33,8 @@ namespace sql
     { return nextval_seq_ids_; }
     virtual int est_cost() override;
     virtual int est_width() override;
-    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+    virtual int compute_op_parallel_and_server_info() override;
   private:
     SequenceIdArray nextval_seq_ids_;
   };

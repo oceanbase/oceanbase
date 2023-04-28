@@ -29,7 +29,7 @@ public:
   int generate_access_expr();
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   virtual bool is_block_op() const override { return false; }
   void set_table_id(uint64_t table_id) { table_id_ = table_id; }
   uint64_t get_table_id() const { return table_id_; }

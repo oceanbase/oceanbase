@@ -140,12 +140,13 @@ public:
   virtual uint64_t hash(uint64_t seed) const override;
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double child_card,
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  int inner_est_cost(const int64_t parallel,
+                     double child_card,
                      double &child_ndv,
                      double &per_dop_ndv,
                      double &op_cost);
-  int get_child_est_info(double &child_card, double &child_ndv, double &selectivity);
+  int get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
   virtual bool is_block_op() const override
   { return (MERGE_AGGREGATE != get_algo() && !is_adaptive_aggregate())

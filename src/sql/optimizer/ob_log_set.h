@@ -75,8 +75,11 @@ public:
   int get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs);
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int get_children_cost_info(ObIArray<ObBasicCostInfo> &children_cost_info);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  int get_re_est_cost_infos(const EstimateCostInfo &param,
+                            ObIArray<ObBasicCostInfo> &cost_infos,
+                            double &child_cost,
+                            double &card);
   int set_search_ordering(const common::ObIArray<OrderItem> &search_ordering);
   int set_cycle_items(const common::ObIArray<ColumnItem> &cycle_items);
   virtual uint64_t hash(uint64_t seed) const override;
@@ -90,6 +93,7 @@ public:
   virtual int compute_op_ordering() override;
   virtual int compute_one_row_info() override;
   virtual int compute_sharding_info() override;
+  virtual int compute_op_parallel_and_server_info() override;
 
   int get_equal_set_conditions(ObIArray<ObRawExpr*> &equal_conds);
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
@@ -109,7 +113,6 @@ public:
   inline void set_algo_type(const SetAlgo type) { set_algo_ = type; }
   inline void set_distributed_algo(const DistAlgo set_dist_algo) { set_dist_algo_ = set_dist_algo; }
   inline DistAlgo get_distributed_algo() { return set_dist_algo_; }
-  int estimate_row_count(double &rows);
   int allocate_startup_expr_post() override;
   virtual int print_outline_data(PlanText &plan_text) override;
   virtual int print_used_hint(PlanText &plan_text) override;

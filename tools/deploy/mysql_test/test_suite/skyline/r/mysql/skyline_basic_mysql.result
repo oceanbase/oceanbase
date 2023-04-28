@@ -1523,17 +1523,18 @@ Outputs & filters:
       range_cond([:0 > t2.pk2])
 explain select a, b, c from t1 where b = 100 and c < 100 and c > 100 order by c desc limit 0, 100;
 Query Plan
-==============================================================
-|ID|OPERATOR       |NAME               |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------
-|0 |TABLE FULL SCAN|t1(idx_b_c,Reverse)|0       |2           |
-==============================================================
+=============================================================
+|ID|OPERATOR        |NAME             |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(idx_c,Reverse)|0       |2           |
+=============================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.c < 100], [t1.c > 100], [t1.b = 100]), rowset=256
+  0 - output([t1.a], [t1.b], [t1.c]), filter([t1.b = 100]), rowset=256
       access([t1.pk1], [t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=true, is_global_index=false, filter_before_indexback[true,true,true],
-      range_key([t1.b], [t1.c], [t1.pk1]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false
+      limit(100), offset(0), is_index_back=true, is_global_index=false, filter_before_indexback[false],
+      range_key([t1.c], [t1.pk1]), range(MAX,MAX ; MIN,MIN)always false,
+      range_cond([t1.c < 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
 Query Plan
 ================================================================

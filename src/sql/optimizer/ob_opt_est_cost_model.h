@@ -921,13 +921,22 @@ public:
 	  /*
    * entry point for estimating table access cost
    */
-  int cost_table(ObCostTableScanInfo &est_cost_info,
+  int cost_table(const ObCostTableScanInfo &est_cost_info,
 								int64_t parallel,
 								double query_range_row_count,
 								double phy_query_range_row_count,
 								double &cost,
 								double &index_back_cost);
 
+  int cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
+                              const int64_t parallel,
+                              const double part_cnt_per_dop,
+                              double query_range_row_count,
+                              double phy_query_range_row_count,
+                              double &px_cost,
+                              double &cost);
+
+  int cost_px(int64_t parallel, double &px_cost);
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,
 								const common::ObIArray<ObExprResType> &order_col_types,
@@ -966,7 +975,7 @@ protected:
 																	double &cost);
 
   // estimate cost for non-virtual table
-  int cost_normal_table(ObCostTableScanInfo &est_cost_info,
+  int cost_normal_table(const ObCostTableScanInfo &est_cost_info,
 												int64_t parallel,
 												const double query_range_row_count,
 												const double phy_query_range_row_count,
@@ -975,7 +984,7 @@ protected:
 
   //estimate one batch
   int cost_table_one_batch(const ObCostTableScanInfo &est_cost_info,
-													const int64_t parallel,
+                          const double part_cnt_per_dop,
 													const common::ObSimpleBatch::ObBatchType &type,
 													const double logical_output_row_count,
 													const double physical_output_row_count,
@@ -1018,6 +1027,13 @@ protected:
                                               const ObCostTableScanInfo &est_cost_info,
                                               bool is_scan_index,
                                               double &res);
+  int cost_table_scan_one_batch_io_cost(double row_count,
+                                        const ObCostTableScanInfo &est_cost_info,
+                                        double &io_cost);
+  int cost_table_get_one_batch_io_cost(const double row_count,
+                                       const ObCostTableScanInfo &est_cost_info,
+																			 bool is_scan_index,
+                                       double &io_cost);
 
   int cost_skip_scan_prefix_scan_one_row(const ObCostTableScanInfo &est_cost_info,
                                          double &cost);

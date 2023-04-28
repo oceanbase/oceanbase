@@ -19,36 +19,6 @@ using namespace observer;
 
 namespace sql
 {
-// Direct-insert is enabled only when:
-// 1. _ob_enable_direct_load
-// 2. insert into select clause
-// 3. append hint + pdml
-// 4. auto_commit, not in a transaction
-int ObTableDirectInsertService::check_direct_insert(ObOptimizerContext &optimizer_ctx,
-                                                    const ObDMLStmt &stmt,
-                                                    bool &is_direct_insert)
-{
-  int ret = OB_SUCCESS;
-  bool auto_commit = false;
-  const ObSQLSessionInfo* session_info = optimizer_ctx.get_session_info();
-  is_direct_insert = false;
-  if (OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", KR(ret), KP(session_info));
-  } else if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
-    LOG_WARN("failed to get auto commit", KR(ret));
-  } else if (GCONF._ob_enable_direct_load
-      && stmt::T_INSERT == stmt.get_stmt_type()
-      && static_cast<const ObInsertStmt &>(stmt).value_from_select()
-      && optimizer_ctx.get_global_hint().has_append()
-      && optimizer_ctx.use_pdml()
-      && auto_commit
-      && (!session_info->is_in_transaction())){
-    is_direct_insert = true;
-  }
-  return ret;
-}
-
 bool ObTableDirectInsertService::is_direct_insert(const ObPhysicalPlan &phy_plan)
 {
   return (phy_plan.get_enable_append() && (0 != phy_plan.get_append_table_id()));

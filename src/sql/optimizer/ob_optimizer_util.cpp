@@ -7557,22 +7557,20 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
   return ret;
 }
 
-int ObOptimizerUtil::get_join_style_parallel(ObOptimizerContext &opt_ctx,
-                                             int64_t left_parallel,
-                                             int64_t right_parallel,
-                                             const DistAlgo join_dist_algo,
-                                             int64_t &parallel)
+int64_t ObOptimizerUtil::get_join_style_parallel(const int64_t left_parallel,
+                                                 const int64_t right_parallel,
+                                                 const DistAlgo join_dist_algo,
+                                                 const bool use_left /* default false */)
 {
-  int ret = OB_SUCCESS;
-  parallel = 1.0;
+  int64_t parallel = ObGlobalHint::UNSET_PARALLEL;
   if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo ||
              DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo) {
-    parallel = 1.0;
-  } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo) {
-    parallel = opt_ctx.get_parallel();
-  } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
+    parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo ||
+             DistAlgo::DIST_PARTITION_WISE == join_dist_algo ||
+             DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo) {
+    parallel = (use_left || (left_parallel > right_parallel)) ? left_parallel : right_parallel;
+  } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
              DistAlgo::DIST_BC2HOST_NONE == join_dist_algo ||
              DistAlgo::DIST_HASH_NONE == join_dist_algo ||
              DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
@@ -7580,7 +7578,7 @@ int ObOptimizerUtil::get_join_style_parallel(ObOptimizerContext &opt_ctx,
   } else {
     parallel = left_parallel;
   }
-  return ret;
+  return parallel;
 }
 
 bool ObOptimizerUtil::is_left_need_exchange(const ObShardingInfo &sharding,

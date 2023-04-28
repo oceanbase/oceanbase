@@ -6468,7 +6468,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_is_affect_found_row(log_plan.get_stmt()->is_affect_found_rows());
     phy_plan.set_has_top_limit(log_plan.get_stmt()->has_top_limit());
     phy_plan.set_use_px(true);
-    phy_plan.set_px_dop(log_plan.get_optimizer_context().get_parallel());
+    phy_plan.set_px_dop(log_plan.get_optimizer_context().get_max_parallel());
     phy_plan.set_expected_worker_count(log_plan.get_optimizer_context().get_expected_worker_count());
     phy_plan.set_minimal_worker_count(log_plan.get_optimizer_context().get_minimal_worker_count());
     phy_plan.set_is_batched_multi_stmt(log_plan.get_optimizer_context().is_batched_multi_stmt());

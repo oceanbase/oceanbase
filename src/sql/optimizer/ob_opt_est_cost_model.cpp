@@ -893,6 +893,8 @@ int ObOptEstCostModel::cost_exchange_in(const ObExchInCostInfo &cost_info,
   if (OB_SUCC(ret)) {
     cost = cost_params_.CPU_TUPLE_COST * per_dop_rows;
     cost += cost_params_.NETWORK_DESER_PER_BYTE_COST * per_dop_rows * cost_info.width_;
+    LOG_TRACE("OPT: [COST EXCHANGE IN]", K(cost_info.rows_), K(cost_info.width_),
+                              K(cost_info.dist_method_), K(cost_info.parallel_), K(cost));
     if (ObPQDistributeMethod::BROADCAST == cost_info.dist_method_) {
       //每个线程都需要拷贝一份当前机器收到的数据
       cost += ObOptEstCostModel::cost_material(per_dop_rows, cost_info.width_);
@@ -923,22 +925,27 @@ int ObOptEstCostModel::cost_exchange_out(const ObExchOutCostInfo &cost_info,
                                     		 double &cost)
 {
   int ret = OB_SUCCESS;
-  double per_dop_rows = 0.0;
+  double per_dop_ser_rows = 0.0;
+  double per_dop_trans_rows = 0.0;
   cost = 0.0;
   if (OB_UNLIKELY(cost_info.parallel_ < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(cost_info.parallel_), K(ret));
   } else if (ObPQDistributeMethod::BC2HOST == cost_info.dist_method_ ||
              ObPQDistributeMethod::BROADCAST == cost_info.dist_method_) {
-    per_dop_rows = cost_info.rows_ * cost_info.server_cnt_ / cost_info.parallel_;
+    per_dop_ser_rows = cost_info.rows_ / cost_info.parallel_;
+    per_dop_trans_rows = cost_info.rows_ * cost_info.server_cnt_ / cost_info.parallel_;
   } else {
-    per_dop_rows = cost_info.rows_ / cost_info.parallel_;
+    per_dop_ser_rows = cost_info.rows_ / cost_info.parallel_;
+    per_dop_trans_rows = per_dop_ser_rows;
   }
   if (OB_SUCC(ret)) {
     // add repartition cost, hash-hash cost ?
-    cost = cost_params_.CPU_TUPLE_COST * per_dop_rows;
-    cost += cost_params_.NETWORK_SER_PER_BYTE_COST * per_dop_rows * cost_info.width_;
-    cost += cost_params_.NETWORK_TRANS_PER_BYTE_COST * per_dop_rows * cost_info.width_;
+    cost = cost_params_.CPU_TUPLE_COST * per_dop_ser_rows;
+    cost += cost_params_.NETWORK_SER_PER_BYTE_COST * per_dop_ser_rows * cost_info.width_;
+    cost += cost_params_.NETWORK_TRANS_PER_BYTE_COST * per_dop_trans_rows * cost_info.width_;
+    LOG_TRACE("OPT: [COST EXCHANGE OUT]", K(cost_info.rows_), K(cost_info.width_),
+                              K(cost_info.dist_method_), K(cost_info.parallel_), K(cost));
   }
   return ret;
 }
@@ -1154,7 +1161,7 @@ void ObOptEstCostModel::cost_late_materialization(double left_card,
 }
 
 // entry point to estimate table cost
-int ObOptEstCostModel::cost_table(ObCostTableScanInfo &est_cost_info,
+int ObOptEstCostModel::cost_table(const ObCostTableScanInfo &est_cost_info,
 																	int64_t parallel,
 																	double query_range_row_count,
 																	double phy_query_range_row_count,
@@ -1173,6 +1180,54 @@ int ObOptEstCostModel::cost_table(ObCostTableScanInfo &est_cost_info,
   return ret;
 }
 
+int ObOptEstCostModel::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
+                                               const int64_t parallel,
+                                               const double part_cnt_per_dop,
+                                               double query_range_row_count,
+                                               double phy_query_range_row_count,
+                                               double &px_cost,
+                                               double &cost)
+{
+  int ret = OB_SUCCESS;
+  px_cost = 0.0;
+  cost = 0.0;
+  double index_back_cost = 0.0;
+  double table_cost = 0.0;
+  if (OB_UNLIKELY(is_virtual_table(est_cost_info.ref_table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected virtual table", K(ret), K(est_cost_info.ref_table_id_));
+  } else if (OB_FAIL(ObOptEstCostModel::cost_table_one_batch(est_cost_info,
+                                                            part_cnt_per_dop,
+                                                            est_cost_info.batch_type_,
+                                                            query_range_row_count,
+                                                            phy_query_range_row_count,
+                                                            table_cost,
+                                                            index_back_cost))) {
+    LOG_WARN("Failed to estimate cost", K(ret), K(est_cost_info));
+  } else if (OB_FAIL(ObOptEstCostModel::cost_px(parallel, px_cost))) {
+    LOG_WARN("Failed to estimate px cost", K(ret), K(parallel));
+  } else {
+    cost = table_cost + px_cost;
+    LOG_TRACE("OPT:[ESTIMATE TABLE PARALLEL FINISH]", K(cost), K(table_cost), K(px_cost),
+              K(parallel), K(part_cnt_per_dop),
+              K(phy_query_range_row_count), K(query_range_row_count),
+              K(est_cost_info));
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_px(int64_t parallel, double &px_cost)
+{
+  int ret = OB_SUCCESS;
+  px_cost = 0.0;
+  if (parallel <= 1) {
+    /* do nothing */
+  } else {
+    px_cost = 0.1 * parallel * parallel;
+  }
+  return ret;
+}
+
 // estimate cost for real table
 // 1. 计算filter选择率
 // 2. 判断使用哪种估行方式
@@ -1180,7 +1235,7 @@ int ObOptEstCostModel::cost_table(ObCostTableScanInfo &est_cost_info,
 // 4. 估算每一个ObBatch行数
 // 5. 计算每一个ObBatch代价
 // 6. 处理相关输出信息
-int ObOptEstCostModel::cost_normal_table(ObCostTableScanInfo &est_cost_info,
+int ObOptEstCostModel::cost_normal_table(const ObCostTableScanInfo &est_cost_info,
 																				int64_t parallel,
 																				const double query_range_row_count,
 																				const double phy_query_range_row_count,
@@ -1189,8 +1244,12 @@ int ObOptEstCostModel::cost_normal_table(ObCostTableScanInfo &est_cost_info,
 
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptEstCostModel::cost_table_one_batch(est_cost_info,
-                                                 parallel,
+  const double part_cnt = static_cast<double>(est_cost_info.index_meta_info_.index_part_count_);
+  if (OB_UNLIKELY(parallel < 1 || part_cnt < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(parallel), K(part_cnt), K(ret));
+  } else if (OB_FAIL(ObOptEstCostModel::cost_table_one_batch(est_cost_info,
+                                                 part_cnt / parallel,
                                                  est_cost_info.batch_type_,
                                                  query_range_row_count,
                                                  phy_query_range_row_count,
@@ -1206,7 +1265,7 @@ int ObOptEstCostModel::cost_normal_table(ObCostTableScanInfo &est_cost_info,
 }
 
 int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_info,
-																						const int64_t parallel,
+                                            const double part_cnt_per_dop,
 																						const ObSimpleBatch::ObBatchType &type,
 																						const double logical_row_count,
 																						const double physical_row_count,
@@ -1217,9 +1276,9 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
   int64_t part_cnt = est_cost_info.index_meta_info_.index_part_count_;
   double per_part_log_cnt = logical_row_count / part_cnt;
   double per_part_phy_cnt = physical_row_count / part_cnt;
-  if (OB_UNLIKELY(logical_row_count < 0.0) || OB_UNLIKELY(parallel < 1)) {
+  if (OB_UNLIKELY(logical_row_count < 0.0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected error", K(logical_row_count), K(parallel), K(ret));
+    LOG_WARN("get unexpected error", K(logical_row_count), K(ret));
   } else if (!est_cost_info.ss_ranges_.empty()) {
     double ss_prefix_scan_cost = 0.0;
     per_part_log_cnt /= est_cost_info.ss_prefix_ndv_;
@@ -1244,9 +1303,9 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
       LOG_WARN("Failed to estimate scan cost", K(ret));
     } else {
       // cost table scan/get one batch
-      cost = cost * part_cnt / parallel;
-      index_back_cost = index_back_cost * part_cnt / parallel;
-      ss_prefix_scan_cost = ss_prefix_scan_cost * part_cnt / parallel;
+      cost = cost * part_cnt_per_dop;
+      index_back_cost = index_back_cost * part_cnt_per_dop;
+      ss_prefix_scan_cost = ss_prefix_scan_cost * part_cnt_per_dop;
 
       // cost calculate skip scan prefix ndv
       ss_prefix_scan_cost *= est_cost_info.ss_prefix_ndv_;
@@ -1262,8 +1321,8 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
                                           index_back_cost))) {
       LOG_WARN("Failed to estimate get cost", K(ret));
     } else {
-      cost = cost * part_cnt / parallel;
-      index_back_cost = index_back_cost * part_cnt / parallel;
+      cost = cost * part_cnt_per_dop;
+      index_back_cost = index_back_cost * part_cnt_per_dop;
     }
   } else if (ObSimpleBatch::T_SCAN == type || ObSimpleBatch::T_MULTI_SCAN == type) {
     if (OB_FAIL(cost_table_scan_one_batch(est_cost_info,
@@ -1273,8 +1332,8 @@ int ObOptEstCostModel::cost_table_one_batch(const ObCostTableScanInfo &est_cost_
                                           index_back_cost))) {
       LOG_WARN("Failed to estimate scan cost", K(ret));
     } else {
-      cost = cost * part_cnt / parallel;
-      index_back_cost = index_back_cost * part_cnt / parallel;
+      cost = cost * part_cnt_per_dop;
+      index_back_cost = index_back_cost * part_cnt_per_dop;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1469,6 +1528,7 @@ int ObOptEstCostModel::cost_skip_scan_prefix_scan_one_row(const ObCostTableScanI
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
   const double row_count = 1.0;
   double project_cost = 0.0;
+  double io_cost = 0.0;
   if (OB_ISNULL(table_meta_info) ||
       OB_UNLIKELY(table_meta_info->table_row_count_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1477,44 +1537,9 @@ int ObOptEstCostModel::cost_skip_scan_prefix_scan_one_row(const ObCostTableScanI
                                                   est_cost_info,
                                                   project_cost))) {
     LOG_WARN("failed to cost project", K(ret));
+  } else if (OB_FAIL(cost_table_scan_one_batch_io_cost(row_count, est_cost_info, io_cost))) {
+    LOG_WARN("failed to cost table scan io cost", K(ret));
   } else {
-    //索引总的微块数 = 总大小/微块大小
-    double num_micro_blocks = index_meta_info.get_micro_block_numbers();
-    //读微块数 = 总微块数 * 读行比例
-    double num_micro_blocks_read = 0;
-    if (OB_LIKELY(table_meta_info->table_row_count_ > 0) &&
-        row_count <= table_meta_info->table_row_count_) {
-      num_micro_blocks_read = std::ceil(num_micro_blocks
-                                        * row_count
-                                        / static_cast<double> (table_meta_info->table_row_count_));
-    } else {
-      num_micro_blocks_read = num_micro_blocks;
-    }
-
-    // revise number of rows if is row sample scan
-    // 对于行采样，除了微块扫描数外，其他按比例缩小
-    // if (est_cost_info.sample_info_.is_row_sample()) {
-    //   row_count *= 0.01 * est_cost_info.sample_info_.percent_;
-    // }
-
-    // IO代价，主要包括读取微块、反序列化的代价的代价
-    double io_cost = 0.0;
-    double first_block_cost = cost_params_.MICRO_BLOCK_RND_COST;
-    double rows_in_one_block = static_cast<double> (table_meta_info->table_row_count_) / num_micro_blocks;
-    rows_in_one_block = rows_in_one_block <= 1 ? 1.000001 : rows_in_one_block;
-    if (!est_cost_info.pushdown_prefix_filters_.empty()) {
-      if (est_cost_info.can_use_batch_nlj_) {
-        first_block_cost = cost_params_.BATCH_NL_SCAN_COST;
-      } else {
-        first_block_cost = cost_params_.NL_SCAN_COST;
-      }
-    }
-    if (num_micro_blocks_read < 1) {
-      io_cost = first_block_cost;
-    } else {
-      io_cost = first_block_cost + cost_params_.MICRO_BLOCK_SEQ_COST * (num_micro_blocks_read-1);
-    }
-
     // filter cost, skip scan prefix scan do not calculate filter now
     double qual_cost = 0.0;
     // ObSEArray<ObRawExpr*, 8> filters;
@@ -1539,9 +1564,9 @@ int ObOptEstCostModel::cost_skip_scan_prefix_scan_one_row(const ObCostTableScanI
         cost = cpu_cost + memtable_cost + memtable_merge_cost;
     }
 
-    LOG_TRACE("OPT:[COST SKIP SCAN PREFIX SCAN ONE ROW]", K(num_micro_blocks), K(table_meta_info->table_row_count_),
+    LOG_TRACE("OPT:[COST SKIP SCAN PREFIX SCAN ONE ROW]", K(table_meta_info->table_row_count_),
               K(cost), K(io_cost), K(cpu_cost), K(memtable_cost), K(memtable_merge_cost), K(qual_cost),
-              K(project_cost), K(num_micro_blocks_read));
+              K(project_cost));
   }
   return ret;
 }
@@ -1560,6 +1585,7 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
 {
   int ret = OB_SUCCESS;
   double project_cost = 0.0;
+  double io_cost = 0.0;
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
   const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
   bool is_index_back = index_meta_info.is_index_back_;
@@ -1580,42 +1606,13 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
                                   true,
                                   project_cost))) {
     LOG_WARN("failed to cost project", K(ret));
+  } else if (OB_FAIL(cost_table_scan_one_batch_io_cost(row_count, est_cost_info, io_cost))) {
+    LOG_WARN("failed to cost table scan io cost", K(ret));
   } else {
-    //索引总的微块数 = 总大小/微块大小
-    double num_micro_blocks = index_meta_info.get_micro_block_numbers();
-    //读微块数 = 总微块数 * 读行比例
-    double num_micro_blocks_read = 0;
-    if (OB_LIKELY(table_meta_info->table_row_count_ > 0) &&
-        row_count <= table_meta_info->table_row_count_) {
-      num_micro_blocks_read = std::ceil(num_micro_blocks
-                                        * row_count
-                                        / static_cast<double> (table_meta_info->table_row_count_));
-    } else {
-      num_micro_blocks_read = num_micro_blocks;
-    }
-
     // revise number of rows if is row sample scan
     // 对于行采样，除了微块扫描数外，其他按比例缩小
     if (est_cost_info.sample_info_.is_row_sample()) {
       row_count *= 0.01 * est_cost_info.sample_info_.percent_;
-    }
-
-    // IO代价，主要包括读取微块、反序列化的代价的代价
-    double io_cost = 0.0;
-    double first_block_cost = cost_params_.MICRO_BLOCK_RND_COST;
-    double rows_in_one_block = static_cast<double> (table_meta_info->table_row_count_) / num_micro_blocks;
-    rows_in_one_block = rows_in_one_block <= 1 ? 1.000001 : rows_in_one_block;
-    if (!est_cost_info.pushdown_prefix_filters_.empty()) {
-      if (est_cost_info.can_use_batch_nlj_) {
-        first_block_cost = cost_params_.BATCH_NL_SCAN_COST;
-      } else {
-        first_block_cost = cost_params_.NL_SCAN_COST;
-      }
-    }
-    if (num_micro_blocks_read < 1) {
-      io_cost = first_block_cost;
-    } else {
-      io_cost = first_block_cost + cost_params_.MICRO_BLOCK_SEQ_COST * (num_micro_blocks_read-1);
     }
 
     // 谓词代价，主要指filter的代价
@@ -1649,9 +1646,106 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
         cost = cpu_cost + memtable_cost + memtable_merge_cost;
     }
 
-    LOG_TRACE("OPT:[COST TABLE SCAN INNER]", K(num_micro_blocks), K(table_meta_info->table_row_count_),
-              K(cost), K(io_cost), K(cpu_cost), K(memtable_cost), K(memtable_merge_cost), K(qual_cost),
-              K(project_cost), K(num_micro_blocks_read), K(row_count));
+    LOG_TRACE("OPT:[COST TABLE SCAN INNER]", K(table_meta_info->table_row_count_),
+            K(cost), K(io_cost), K(cpu_cost), K(memtable_cost), K(memtable_merge_cost), K(qual_cost),
+            K(project_cost), K(row_count));
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_table_scan_one_batch_io_cost(const double row_count,
+                                                         const ObCostTableScanInfo &est_cost_info,
+                                                         double &io_cost)
+{
+  int ret = OB_SUCCESS;
+  io_cost = 0.0;
+  const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
+  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
+  const bool is_index_back = index_meta_info.is_index_back_;
+  if (OB_ISNULL(table_meta_info) || OB_UNLIKELY(row_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(row_count), K(ret));
+  } else {
+    //索引总的微块数 = 总大小/微块大小
+    //计算涉及的微块数
+    double num_micro_blocks = index_meta_info.get_micro_block_numbers();
+    //读微块数 = 总微块数 * 读行比例
+    double num_micro_blocks_read = 0;
+    const double table_row_count = static_cast<double>(table_meta_info->table_row_count_);
+    if (OB_LIKELY(table_row_count > 0 && row_count <= table_row_count)) {
+      num_micro_blocks_read = std::ceil(num_micro_blocks * row_count / table_row_count);
+    } else {
+      num_micro_blocks_read = num_micro_blocks;
+    }
+
+    // IO代价，主要包括读取微块、反序列化的代价的代价
+    double first_block_cost = cost_params_.MICRO_BLOCK_RND_COST;
+    if (!est_cost_info.pushdown_prefix_filters_.empty()) {
+      if (est_cost_info.can_use_batch_nlj_) {
+        first_block_cost = cost_params_.BATCH_NL_SCAN_COST;
+      } else {
+        first_block_cost = cost_params_.NL_SCAN_COST;
+      }
+    }
+    if (num_micro_blocks_read < 1) {
+      io_cost = first_block_cost;
+    } else {
+      io_cost = first_block_cost + cost_params_.MICRO_BLOCK_SEQ_COST * (num_micro_blocks_read-1);
+    }
+    LOG_TRACE("OPT:[COST TABLE SCAN IO INNER]", K(num_micro_blocks), K(table_meta_info->table_row_count_),
+                          K(row_count), K(num_micro_blocks_read), K(io_cost));
+  }
+  return ret;
+}
+
+int ObOptEstCostModel::cost_table_get_one_batch_io_cost(const double row_count,
+                                                        const ObCostTableScanInfo &est_cost_info,
+																											  bool is_scan_index,
+                                                        double &io_cost)
+{
+  int ret = OB_SUCCESS;
+  io_cost = 0.0;
+  const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
+  const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
+  const bool is_index_back = index_meta_info.is_index_back_;
+  if (OB_ISNULL(table_meta_info) || OB_UNLIKELY(row_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(row_count), K(ret));
+  } else {
+    //索引总的微块数 = 总大小/微块大小
+    //计算涉及的微块数
+    double num_micro_blocks = 0;
+    if (is_index_back && !is_scan_index) {
+      num_micro_blocks = table_meta_info->get_micro_block_numbers();
+    } else {
+      num_micro_blocks = index_meta_info.get_micro_block_numbers();
+    }
+    double num_micro_blocks_read = 0;
+    const double table_row_count = static_cast<double>(table_meta_info->table_row_count_);
+    if (OB_LIKELY(table_row_count > 0 && row_count <= table_row_count)) {
+      num_micro_blocks_read = num_micro_blocks * (1.0 - std::pow((1.0 - row_count / table_row_count), table_row_count / num_micro_blocks));
+      num_micro_blocks_read = std::ceil(num_micro_blocks_read);
+    } else {
+      num_micro_blocks_read = num_micro_blocks;
+    }
+
+    // IO代价，包括读取整个微块及反序列化的代价和每行定位微块的代价
+    double first_block_cost = cost_params_.MICRO_BLOCK_RND_COST;
+    if (est_cost_info.is_inner_path_) {
+      if (est_cost_info.can_use_batch_nlj_) {
+        first_block_cost = cost_params_.BATCH_NL_GET_COST;
+      } else {
+        first_block_cost = cost_params_.NL_GET_COST;
+      }
+    }
+
+    if (num_micro_blocks_read < 1) {
+      io_cost = 0;
+    } else {
+      io_cost = first_block_cost + cost_params_.MICRO_BLOCK_RND_COST * (num_micro_blocks_read-1);
+    }
+    LOG_TRACE("OPT:[COST TABLE GET IO INNER]", K(num_micro_blocks), K(table_meta_info->table_row_count_),
+                          K(io_cost), K(num_micro_blocks_read));
   }
   return ret;
 }
@@ -1697,6 +1791,7 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
 {
   int ret = OB_SUCCESS;
   double project_cost = 0.0;
+  double io_cost = 0.0;
   const ObIndexMetaInfo &index_meta_info = est_cost_info.index_meta_info_;
   const ObTableMetaInfo *table_meta_info = est_cost_info.table_meta_info_;
   bool is_index_back = index_meta_info.is_index_back_;
@@ -1717,41 +1812,9 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
                                   false,
                                   project_cost))) {
     LOG_WARN("failed to cost project", K(ret));
+  } else if (OB_FAIL(cost_table_get_one_batch_io_cost(row_count, est_cost_info, is_scan_index, io_cost))) {
+    LOG_WARN("failed to cost table get io cost", K(ret));
   } else {
-    //计算涉及的微块数
-    double num_micro_blocks = 0;
-    if (is_index_back && !is_scan_index) {
-      num_micro_blocks = table_meta_info->get_micro_block_numbers();
-    } else {
-      num_micro_blocks = index_meta_info.get_micro_block_numbers();
-    }
-    double num_micro_blocks_read = 0;
-    if (OB_LIKELY(table_meta_info->table_row_count_ > 0) &&
-        row_count <= table_meta_info->table_row_count_) {
-      double table_row_count = static_cast<double>(table_meta_info->table_row_count_);
-      num_micro_blocks_read = num_micro_blocks * (1.0 - std::pow((1.0 - row_count / table_row_count), table_row_count / num_micro_blocks));
-      num_micro_blocks_read = std::ceil(num_micro_blocks_read);
-    } else {
-      num_micro_blocks_read = num_micro_blocks;
-    }
-
-    // IO代价，包括读取整个微块及反序列化的代价和每行定位微块的代价
-    double rows_in_one_block = static_cast<double> (table_meta_info->table_row_count_) / num_micro_blocks;
-    rows_in_one_block = rows_in_one_block <= 1 ? 1.000001 : rows_in_one_block;
-    double first_block_cost = cost_params_.MICRO_BLOCK_RND_COST;
-    if (est_cost_info.is_inner_path_) {
-      if (est_cost_info.can_use_batch_nlj_) {
-        first_block_cost = cost_params_.BATCH_NL_GET_COST;
-      } else {
-        first_block_cost = cost_params_.NL_GET_COST;
-      }
-    }
-    double io_cost = 0;
-    if (num_micro_blocks_read < 1) {
-      io_cost = 0;
-    } else {
-      io_cost = first_block_cost + cost_params_.MICRO_BLOCK_RND_COST * (num_micro_blocks_read-1);
-    }
     double fetch_row_cost = cost_params_.FETCH_ROW_RND_COST * row_count;
     io_cost += fetch_row_cost;
 
@@ -1793,7 +1856,7 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
     double scan_cpu_cost = row_count * cost_params_.TABLE_SCAN_CPU_TUPLE_COST + project_cost;
     cost = io_cost + scan_cpu_cost + cpu_cost + memtable_cost + memtable_merge_cost;
     LOG_TRACE("OPT:[COST TABLE GET INNER]", K(cost), K(io_cost), K(cpu_cost), K(fetch_row_cost),
-              K(qual_cost), K(memtable_cost), K(memtable_merge_cost), K(num_micro_blocks_read),
+              K(qual_cost), K(memtable_cost), K(memtable_merge_cost),
               K(row_count));
   }
   return ret;

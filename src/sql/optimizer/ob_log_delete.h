@@ -28,7 +28,7 @@ public:
   {
   }
   virtual int est_cost();
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual const char *get_name() const;

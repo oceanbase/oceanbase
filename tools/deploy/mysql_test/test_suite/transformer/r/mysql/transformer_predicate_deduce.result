@@ -3735,6 +3735,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -3744,11 +3746,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
 
 drop table t1, t2;
 create table t1 (c1 int, c2 int, index (c1));
@@ -3810,6 +3816,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:1
       output_rows:0
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[c1, t1]
       unstable_index_name:[t1]
       stats version:0
@@ -3820,12 +3828,16 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[c2, t2]
       pruned_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
 
 drop table t1, t2;
 create table t1 (c1 int, c2 int) partition by hash(c1) partitions 4;
@@ -3897,6 +3909,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -3906,11 +3920,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 
 
 drop table if exists t1, t2, t3;

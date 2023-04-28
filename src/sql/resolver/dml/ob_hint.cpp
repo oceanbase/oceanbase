@@ -156,10 +156,20 @@ void ObGlobalHint::merge_max_concurrent_hint(int64_t max_concurrent)
   }
 }
 
+/* global parallel hint priority:
+    1. with paralle degree: parallel(8)
+    2. enable auto dop: parallel(auto)
+    3. disable auto dop: parallel(manual)
+ */
 void ObGlobalHint::merge_parallel_hint(int64_t parallel)
 {
-  if (parallel > 0) {
-    if (UNSET_PARALLEL == parallel_) {
+  if (SET_ENABLE_MANUAL_DOP == parallel) {
+    parallel_ = UNSET_PARALLEL == parallel_ ? SET_ENABLE_MANUAL_DOP : parallel_;
+  } else if (SET_ENABLE_AUTO_DOP == parallel) {
+    parallel_ = (UNSET_PARALLEL == parallel_ || SET_ENABLE_MANUAL_DOP == parallel_)
+                ? SET_ENABLE_AUTO_DOP : parallel_;
+  } else if (UNSET_PARALLEL < parallel) {
+    if (UNSET_PARALLEL >= parallel_) {
       parallel_ = parallel;
     } else {
       parallel_ = std::min(parallel, parallel_);
@@ -277,7 +287,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || false != enable_lock_early_release_
          || false != force_refresh_lc_
          || !log_level_.empty()
-         || UNSET_PARALLEL != parallel_
+         || has_parallel_hint()
          || false != monitor_
          || ObPDMLOption::NOT_SPECIFIED != pdml_option_
          || ObParamOption::NOT_SPECIFIED != param_option_
@@ -453,8 +463,14 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
       LOG_WARN("failed to print log level hint", K(ret));
     }
   }
-  if (OB_SUCC(ret) && UNSET_PARALLEL != parallel_ && !ignore_parallel) { //PARALLEL
-    PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
+  if (OB_SUCC(ret) && has_parallel_hint() && !ignore_parallel) { //PARALLEL
+    if (has_parallel_degree()) {
+      PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
+    } else if (enable_auto_dop()) {
+      PRINT_GLOBAL_HINT_STR("PARALLEL( AUTO )");
+    } else if (enable_manual_dop()) {
+      PRINT_GLOBAL_HINT_STR("PARALLEL( MANUAL )");
+    }
   }
   if (OB_SUCC(ret) && monitor_) { //MONITOR
     PRINT_GLOBAL_HINT_STR("MONITOR");

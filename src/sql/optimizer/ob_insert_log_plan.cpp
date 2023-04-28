@@ -70,7 +70,11 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     bool need_osg = false;
     OSGShareInfo osg_info;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_need_online_stats_gather(need_osg))) {
+      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before check allocate stats gather
+        LOG_WARN("failed to compute dml parallel", K(ret));
+      } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
+        LOG_WARN("failed to set is direct insert", K(ret));
+      } else if (OB_FAIL(check_need_online_stats_gather(need_osg))) { // allocal optimizer stat gather operator.
         LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
       } else if (need_osg) {
         if (OB_FAIL(generate_osg_share_info(osg_info))) {
@@ -95,7 +99,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
-      } else if (get_optimizer_context().use_pdml() && insert_stmt->value_from_select()) {
+      } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_insert())) {
           LOG_WARN("failed to allocate pdml insert", K(ret));
         } else {
@@ -149,6 +153,34 @@ int ObInsertLogPlan::generate_normal_raw_plan()
   return ret;
 }
 
+
+// Direct-insert is enabled only:
+// 1. pdml insert
+// 2. _ob_enable_direct_load
+// 3. insert into select clause
+// 4. append hint
+// 5. auto_commit, not in a transaction
+int ObInsertLogPlan::set_is_direct_insert() {
+  int ret = OB_SUCCESS;
+  is_direct_insert_ = false;
+  bool auto_commit = false;
+  const ObSQLSessionInfo* session_info = get_optimizer_context().get_session_info();
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(session_info));
+  } else if (!get_stmt()->value_from_select()
+             || !get_optimizer_context().get_global_hint().has_append()
+             || !GCONF._ob_enable_direct_load
+             || session_info->is_in_transaction()) {
+    /* is not direct insert */
+  } else if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
+    LOG_WARN("failed to get auto commit", KR(ret));
+  } else {
+    is_direct_insert_ = auto_commit;
+  }
+  return ret;
+}
+
 int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
 {
   int ret = OB_SUCCESS;
@@ -182,7 +214,7 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
                && !get_optimizer_context().get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint()
                && online_sys_var
                && ((get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator())
-               || (get_optimizer_context().use_pdml()));
+                   || use_pdml());
     LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg), K(need_gathering));
   }
   return ret;

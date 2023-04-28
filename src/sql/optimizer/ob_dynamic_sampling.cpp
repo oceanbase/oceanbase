@@ -1433,7 +1433,7 @@ int ObDynamicSamplingUtils::get_ds_table_degree(ObOptimizerContext &ctx,
                                                 int64_t &degree)
 {
   int ret = OB_SUCCESS;
-  degree = ctx.get_parallel();
+  degree = ObGlobalHint::DEFAULT_PARALLEL;
   const ObTableSchema *table_schema = NULL;
   const ObSqlSchemaGuard *schema_guard = NULL;
   if (OB_ISNULL(schema_guard = ctx.get_sql_schema_guard())) {
@@ -1444,16 +1444,13 @@ int ObDynamicSamplingUtils::get_ds_table_degree(ObOptimizerContext &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(table_schema));
+  } else if (ObGlobalHint::DEFAULT_PARALLEL <= (degree = log_plan->get_log_plan_hint().get_parallel(table_id))) {
+    // use table parallel hint
   } else if (ctx.is_use_table_dop()) {
+    // use table dop
     degree = table_schema->get_dop();
-  } else if (ctx.is_use_table_parallel_hint()) {
-    const ObTableParallelHint *hint = log_plan->get_log_plan_hint().get_parallel_hint(table_id);
-    if (NULL != hint) {
-      degree = hint->get_parallel();
-    } else {
-      // if not specified by object hint, use table dop by default
-      degree = table_schema->get_dop();
-    }
+  } else {
+    degree = std::max(degree, ctx.get_parallel());
   }
   LOG_TRACE("succeed to get ds table degree", K(degree));
   return ret;

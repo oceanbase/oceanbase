@@ -9141,11 +9141,29 @@ parallel_hint:
 INTNUM
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PARALLEL, 1, $1);
+  $$->value_ = 0;
 }
-| qb_name_option relation_factor_in_hint opt_comma INTNUM
+| MANUAL
 {
-  (void)$3;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_PARALLEL, 3, $1, $2, $4);
+  (void)($1);               /* unused */
+  malloc_terminal_node($$, result->malloc_pool_, T_PARALLEL);
+  $$->value_ = 1;
+}
+| AUTO
+{
+  (void)($1);               /* unused */
+  malloc_terminal_node($$, result->malloc_pool_, T_PARALLEL);
+  $$->value_ = 2;
+}
+| '@' qb_name_string relation_factor_in_hint opt_comma INTNUM
+{
+  (void)$4;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_PARALLEL, 3, $2, $3, $5);
+}
+| relation_factor_in_hint opt_comma INTNUM
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_PARALLEL, 3, NULL, $1, $3);
 }
 ;
 

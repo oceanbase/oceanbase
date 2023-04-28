@@ -53,7 +53,6 @@ public:
         limit_count_expr_(NULL),
         limit_offset_expr_(NULL),
         sample_info_(),
-        parallel_(-1),
         est_cost_info_(NULL),
         table_row_count_(0),
         output_row_count_(0),
@@ -277,8 +276,7 @@ public:
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
 
 
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int re_est_cost(EstimateCostInfo &param, double &card, double &index_back_cost, double &cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx);
@@ -516,7 +514,6 @@ protected: // memeber variables
   ObRawExpr *limit_offset_expr_;
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
-  int64_t parallel_; // -1 means not set. used for showing table parallel hint
   ObCostTableScanInfo *est_cost_info_;
   /* only used to remember how index are selected */
   int64_t table_row_count_;

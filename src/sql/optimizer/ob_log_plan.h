@@ -223,6 +223,9 @@ public:
 
   int do_post_traverse_processing();
 
+  int add_explain_note();
+  int add_parallel_explain_note();
+
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
   int update_re_est_cost(ObLogicalOperator *op);
@@ -930,7 +933,7 @@ public:
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
 
-  int allocate_expr_values_as_top(ObLogicalOperator *&old_top,
+  int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);
 
   int allocate_values_as_top(ObLogicalOperator *&old_top);

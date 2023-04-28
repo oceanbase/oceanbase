@@ -194,119 +194,100 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
 int ObLogSubPlanFilter::est_cost()
 {
   int ret = OB_SUCCESS;
-  double first_child_card = 0.0;
-  const ObLogicalOperator *first_child = NULL;
-  if (OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get child", K(ret), K(first_child));
-  } else if (OB_FALSE_IT(first_child_card = first_child->get_card())) {
-  } else if (OB_FAIL(inner_est_cost(first_child_card, op_cost_))) {
-    LOG_WARN("failed to est cost", K(ret));
+  double card = 0.0;
+  double op_cost = 0.0;
+  double cost = 0.0;
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+    LOG_WARN("failed to get re est cost infos", K(ret));
   } else {
-    set_cost(op_cost_ + first_child->get_cost());
-    set_card(first_child_card);
+    set_card(card);
+    set_op_cost(op_cost);
+    set_cost(cost);
   }
   return ret;
 }
 
-int ObLogSubPlanFilter::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
+  card = 0.0;
+  op_cost = 0.0;
+  cost = 0.0;
   ObLogicalOperator *child = NULL;
-  double child_cost = 0.0;
-  double op_cost = op_cost_;
-  double first_child_card = 0.0;
   double sel = 1.0;
-  if (OB_ISNULL(get_plan())) {
+  ObSEArray<ObBasicCostInfo, 4> cost_infos;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))
+      || OB_UNLIKELY(param.need_parallel_ < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get child", K(ret));
+    LOG_WARN("unexpected params", K(ret), K(get_plan()), K(child), K(param.need_parallel_));
+  } else if (param.need_row_count_ < 0 || param.need_row_count_ >= child->get_card()) {
+    param.need_row_count_ = -1;
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child->get_card()))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
-                                                            get_plan()->get_selectivity_ctx(),
-                                                            get_filter_exprs(),
-                                                            sel,
-                                                            get_plan()->get_predicate_selectivities()))) {
+                                                             get_plan()->get_selectivity_ctx(),
+                                                             get_filter_exprs(),
+                                                             sel,
+                                                             get_plan()->get_predicate_selectivities()))) {
     LOG_WARN("failed to calc selectivity", K(ret));
-  } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (param.need_row_count_ >= 0 &&
-             param.need_row_count_ < get_card() &&
-             sel > OB_DOUBLE_EPSINON &&
-             OB_FALSE_IT(param.need_row_count_ /= sel)) {
-  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param,
-                                        first_child_card,
-                                        child_cost)))) {
-    LOG_WARN("failed to re-estimate cost", K(ret));
-  } else if (OB_FAIL(inner_est_cost(first_child_card, op_cost))) {
-    LOG_WARN("failed to est cost", K(ret));
+  } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel) {
+    param.need_row_count_ = -1;
   } else {
-    cost = op_cost + child_cost;
-    card = first_child_card;
-    if (param.override_) {
-      set_op_cost(op_cost);
-      set_cost(cost);
-      set_card(card);
-    }
+    param.need_row_count_ /= sel;
   }
-  return ret;
-}
 
-
-int ObLogSubPlanFilter::inner_est_cost(double &first_child_card, double &op_cost)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *first_child = NULL;
-  ObSEArray<ObBasicCostInfo, 4> children_cost_info;
-  if (OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child)) || OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get child", K(ret), K(first_child));
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
-      &first_child->get_output_equal_sets(), first_child->get_card()))) {
-  } else if (OB_FAIL(get_children_cost_info(first_child_card, children_cost_info))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_re_est_cost_infos(param, cost_infos))) {
     LOG_WARN("failed to get children cost info from subplan filter", K(ret));
+  } else if (OB_UNLIKELY(cost_infos.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected cost infos", K(ret), K(cost_infos.count()), K(get_num_of_child()));
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
+                              &child->get_output_equal_sets(), cost_infos.at(0).rows_))) {
+  } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
+                                                             get_plan()->get_selectivity_ctx(),
+                                                             get_filter_exprs(),
+                                                             sel,
+                                                             get_plan()->get_predicate_selectivities()))) {
+    LOG_WARN("failed to calc selectivity", K(ret));
   } else {
-    double sel = 1.0;
+    ObBasicCostInfo &cost_info = cost_infos.at(0);
+    card = cost_info.rows_ * sel;
+    cost_info.rows_ = ObJoinOrder::calc_single_parallel_rows(cost_info.rows_, param.need_parallel_);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    ObSubplanFilterCostInfo info(children_cost_info,
-                                 get_onetime_idxs(),
-                                 get_initplan_idxs());
-    if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost,
-                                                  opt_ctx.get_cost_model_type()))) {
+    ObSubplanFilterCostInfo info(cost_infos, get_onetime_idxs(), get_initplan_idxs());
+    if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, op_cost, opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to calculate  the cost of subplan filter", K(ret));
-    } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
-                                                               get_plan()->get_selectivity_ctx(),
-                                                               get_filter_exprs(),
-                                                               sel,
-                                                               get_plan()->get_predicate_selectivities()))) {
-      LOG_WARN("failed to calc selectivity", K(ret));
     } else {
-      first_child_card *= sel;
+      cost = op_cost + cost_info.cost_;
     }
   }
   return ret;
 }
 
-int ObLogSubPlanFilter::get_children_cost_info(double &first_child_refine_card, ObIArray<ObBasicCostInfo> &children_cost_info)
+int ObLogSubPlanFilter::get_re_est_cost_infos(const EstimateCostInfo &param,
+                                              ObIArray<ObBasicCostInfo> &cost_infos)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = 0.0;
-  if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      const ObLogicalOperator *child = get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(i));
-      } else {
-        double first_child_card = ObJoinOrder::calc_single_parallel_rows(first_child_refine_card, parallel);
-        double child_card = (i == 0) ? first_child_card : child->get_card();
-        ObBasicCostInfo info(child_card, child->get_cost(), child->get_width(), child->is_exchange_allocated());
-        if (OB_FAIL(children_cost_info.push_back(info))) {
-          LOG_WARN("push back child's cost info failed", K(ret));
-        }
-      }
+  EstimateCostInfo cur_param;
+  double cur_child_card = 0.0;
+  double cur_child_cost = 0.0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = get_child(i);
+    cur_param.reset();
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("set operator i-th child is null", K(ret), K(i));
+    } else if (cur_param.assign(param)) {
+      LOG_WARN("failed to assign param", K(ret));
+    } else if (0 != i && OB_FALSE_IT(cur_param.need_row_count_ = -1)) {
+    } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(cur_param, cur_child_card, cur_child_cost)))) {
+      LOG_WARN("failed to re-est child cost", K(ret), K(i));
+    } else if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(cur_child_card, cur_child_cost,
+                                                            child->get_width(),
+                                                            child->is_exchange_allocated())))) {
+      LOG_WARN("push back child's cost info failed", K(ret));
     }
   }
   return ret;
@@ -797,6 +778,16 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
                OB_FAIL(out_sharding->get_partition_func().assign(repart_func_exprs))) {
       LOG_WARN("failed to assign partition keys", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  bool is_partition_wise = DistAlgo::DIST_PARTITION_WISE == get_distributed_algo();
+  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info(is_partition_wise))) {
+    LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
   }
   return ret;
 }

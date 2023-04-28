@@ -311,7 +311,7 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
     LOG_WARN("faild to distribute hint to orig stmt", K(ret));
   } else {
-    LOG_DEBUG("finish init query hint", K(*this));
+    LOG_TRACE("finish init query hint", K(*this));
   }
   return ret;
 }
@@ -1111,7 +1111,7 @@ int ObStmtHint::init_stmt_hint(const ObDMLStmt &stmt,
         LOG_WARN("failed to merge hint", K(ret));
       }
     }
-    LOG_DEBUG("finish init stmt hint", K(stmt.get_stmt_id()), K(qb_name), K(*this));
+    LOG_TRACE("finish init stmt hint", K(stmt.get_stmt_id()), K(qb_name), K(*this));
   }
   return ret;
 }
@@ -1836,10 +1836,16 @@ const LogTableHint* ObLogPlanHint::get_index_hint(uint64_t table_id) const
   return NULL != log_table_hint && !log_table_hint->index_hints_.empty() ? log_table_hint : NULL;
 }
 
-const ObTableParallelHint *ObLogPlanHint::get_parallel_hint(uint64_t table_id) const
+int64_t ObLogPlanHint::get_parallel(uint64_t table_id) const
 {
+  int64_t table_parallel = ObGlobalHint::UNSET_PARALLEL;
   const LogTableHint *log_table_hint = get_log_table_hint(table_id);
-  return NULL == log_table_hint ? NULL : log_table_hint->parallel_hint_;
+  if (NULL == log_table_hint || NULL == log_table_hint->parallel_hint_) {
+    table_parallel = is_outline_data_ ? ObGlobalHint::DEFAULT_PARALLEL : ObGlobalHint::UNSET_PARALLEL;
+  } else {
+    table_parallel = log_table_hint->parallel_hint_->get_parallel();
+  }
+  return table_parallel;
 }
 
 int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const

@@ -50,8 +50,16 @@ int ObLogLink::compute_sharding_info()
 int ObLogLink::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
-  set_parallel(1);
-  set_server_cnt(1);
+  server_list_.reuse();
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(server_list_.push_back(get_plan()->get_optimizer_context().get_local_server_addr()))) {
+    LOG_WARN("failed to assign das path server list", K(ret));
+  } else {
+    set_parallel(1);
+    set_server_cnt(1);
+  }
   return ret;
 }
 

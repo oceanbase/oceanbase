@@ -2036,7 +2036,7 @@ int ObSelectLogPlan::generate_union_all_plans(const ObIArray<ObSelectLogPlan*> &
       // reset pos for next generation
       if (OB_SUCC(ret)) {
         has_next = false;
-        for (int64_t i = move_pos.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        for (int64_t i = move_pos.count() - 1; !has_next && OB_SUCC(ret) && i >= 0; i--) {
           if (move_pos.at(i) < best_plan_list.at(i).count() - 1) {
             ++move_pos.at(i);
             has_next = true;
@@ -2156,16 +2156,20 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_SET_RANDOM)) {
     OPT_TRACE("check match set random method");
     // has distributed child, use random distribution
-    int64_t largest_pos = -1;
-    if (OB_FAIL(get_largest_sharding_child(child_ops, random_none_idx, largest_pos))) {
+    ObLogicalOperator *largest_op = NULL;
+    ObExchangeInfo exch_info;
+    if (OB_FAIL(get_largest_sharding_child(child_ops, random_none_idx, largest_op))) {
       LOG_WARN("failed to get largest sharding children", K(ret));
-    } else if (-1 == largest_pos) {
+    } else if (NULL == largest_op) {
       set_dist_methods &= ~DistAlgo::DIST_SET_RANDOM;
       OPT_TRACE("all children`s sharding is distribute, no need shuffle");
       OPT_TRACE("will not use set random");
+    } else if (OB_FAIL(exch_info.server_list_.assign(largest_op->get_server_list()))) {
+      LOG_WARN("failed to assign server list", K(ret));
     } else {
       OPT_TRACE("will use set random, ignore other method");
-      ObExchangeInfo exch_info;
+      exch_info.parallel_ = largest_op->get_parallel();
+      exch_info.server_cnt_ = largest_op->get_server_cnt();
       exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
       set_dist_methods = DistAlgo::DIST_SET_RANDOM;
       for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
@@ -2174,8 +2178,8 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
             OB_ISNULL(child_op->get_plan())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (i != largest_pos &&
-                  OB_FAIL(child_op->get_plan()->allocate_exchange_as_top(child_op, exch_info))) {
+        } else if (child_op != largest_op &&
+                   OB_FAIL(child_op->get_plan()->allocate_exchange_as_top(child_op, exch_info))) {
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(set_child_ops.push_back(child_op))) {
           LOG_WARN("failed to push back child ops", K(ret));
@@ -2392,12 +2396,12 @@ int ObSelectLogPlan::check_if_union_all_match_extended_partition_wise(const ObIA
 
 int ObSelectLogPlan::get_largest_sharding_child(const ObIArray<ObLogicalOperator*> &child_ops,
                                                 const int64_t candi_pos,
-                                                int64_t &largest_pos)
+                                                ObLogicalOperator *&largest_op)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *child_op = NULL;
   ObShardingInfo *child_sharding = NULL;
-  largest_pos = -1;
+  largest_op = NULL;
   if (OB_INVALID_INDEX != candi_pos) {
     if (candi_pos < 0 || candi_pos >= child_ops.count()) {
       /*do nothing*/
@@ -2406,17 +2410,19 @@ int ObSelectLogPlan::get_largest_sharding_child(const ObIArray<ObLogicalOperator
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(child_op), K(child_sharding), K(ret));
     } else if (child_sharding->is_distributed()) {
-      largest_pos = candi_pos;
+      largest_op = child_op;
     }
-  } else if (optimizer_context_.get_parallel() > 1) {
+  } else {
     double largest_card = -1.0;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_ops.count(); i++) {
       if (OB_ISNULL(child_op = child_ops.at(i)) ||
           OB_ISNULL(child_sharding = child_op->get_sharding())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(child_op), K(child_sharding), K(ret));
+      } else if (child_op->get_parallel() <= ObGlobalHint::DEFAULT_PARALLEL) {
+        /* choose a parallel child */
       } else if (child_sharding->is_distributed() && child_op->get_card() > largest_card) {
-        largest_pos = i;
+        largest_op = child_op;
         largest_card = child_op->get_card();
       } else { /*do nothing*/ }
     }
@@ -2842,7 +2848,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       set_dist_methods |= DistAlgo::DIST_PARTITION_NONE;
       set_dist_methods |= DistAlgo::DIST_HASH_NONE;
       set_dist_methods |= DistAlgo::DIST_PULL_TO_LOCAL;
-      if (get_optimizer_context().get_parallel() > 1) {
+      if (left_child.get_parallel() > 1 || right_child.get_parallel() > 1) {
        set_dist_methods |= DistAlgo::DIST_HASH_HASH;
        OPT_TRACE("candi hash set dist method:basic,partition wise, none all, all none, none partition,partition none,pull to local,hash hash");
       } else {
@@ -3257,26 +3263,21 @@ int ObSelectLogPlan::inner_generate_merge_set_plans(const EqualSets &equal_sets,
         for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
              OB_SUCC(ret) && j <= DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
           if (set_methods & j) {
-            int64_t in_parallel = 0;
             DistAlgo dist_algo = get_dist_algo(j);
-            if (OB_FAIL(ObOptimizerUtil::get_join_style_parallel(
-                                                       get_optimizer_context(),
-                                                       left_child->get_parallel(),
-                                                       right_candidates.at(0).plan_tree_->get_parallel(),
-                                                       dist_algo,
-                                                       in_parallel))) {
-              LOG_WARN("failed to get join style parallel", K(ret));
-            } else if (OB_FAIL(get_minimal_cost_set_plan(in_parallel,
-                                                         *left_child,
-                                                         *merge_key,
-                                                         right_set_keys,
-                                                         right_candidates,
-                                                         dist_algo,
-                                                         best_order_items,
-                                                         right_child,
-                                                         best_need_sort,
-                                                         best_prefix_pos,
-                                                         can_ignore_merge_plan))) {
+            const int64_t in_parallel = ObOptimizerUtil::get_join_style_parallel(left_child->get_parallel(),
+                                                  right_candidates.at(0).plan_tree_->get_parallel(),
+                                                  dist_algo, true);
+            if (OB_FAIL(get_minimal_cost_set_plan(in_parallel,
+                                                  *left_child,
+                                                  *merge_key,
+                                                  right_set_keys,
+                                                  right_candidates,
+                                                  dist_algo,
+                                                  best_order_items,
+                                                  right_child,
+                                                  best_need_sort,
+                                                  best_prefix_pos,
+                                                  can_ignore_merge_plan))) {
               LOG_WARN("failed to get minimal cost set path", K(ret));
             } else if (NULL == right_child) {
               /*do nothing*/
@@ -3325,13 +3326,16 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
   double right_path_cost = 0.0;
   int64_t right_prefix_pos = 0;
   bool right_need_sort = false;
-  int64_t out_parallel = 1.0;
+  int64_t out_parallel = ObGlobalHint::UNSET_PARALLEL;
   ObSEArray<ObRawExpr*, 8> right_order_exprs;
   ObSEArray<OrderItem, 8> temp_order_items;
   ObSEArray<OrderItem, 8> right_order_items;
   best_plan = NULL;
   best_need_sort = false;
   best_prefix_pos = 0;
+  EstimateCostInfo info;
+  double right_output_rows = 0.0;
+  double right_orig_cost = 0.0;
   for (int64_t i = 0; OB_SUCC(ret) && i < right_candidates.count(); i++) {
     ObLogicalOperator *right_child = NULL;
     ObLogPlan *right_plan = NULL;
@@ -3347,9 +3351,10 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
       /*do nothing*/
     } else if (!is_set_repart_valid(left_child, *right_child, set_dist_algo)) {
       /*do nothing*/
-    } else if (OB_UNLIKELY(out_parallel = right_child->get_parallel()) < 1) {
+    } else if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > (out_parallel = right_child->get_parallel())
+                           || ObGlobalHint::DEFAULT_PARALLEL > in_parallel)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected parallel degree", K(ret));
+      LOG_WARN("get unexpected parallel degree", K(ret), K(out_parallel), K(in_parallel));
     } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_mapping(right_set_exprs,
                                                                 left_merge_key.map_array_,
                                                                 right_order_exprs))) {
@@ -3388,14 +3393,19 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
                                         (*right_child->get_sharding(), set_dist_algo);
       right_plan->get_selectivity_ctx().init_op_ctx(
           &right_child->get_output_equal_sets(), right_child->get_card());
-      if (OB_FAIL(ObOptEstCost::cost_sort_and_exchange(&right_plan->get_update_table_metas(),
+      info.reset();
+      // is single, may allocate exchange above, set need_parallel_ as 1 and compute exchange cost in cost_sort_and_exchange
+      info.need_parallel_ = right_child->is_single() ? ObGlobalHint::DEFAULT_PARALLEL : in_parallel;
+      if (OB_FAIL(right_child->re_est_cost(info, right_output_rows, right_orig_cost))) {
+        LOG_WARN("failed to re estimate cost", K(ret));
+      } else if (OB_FAIL(ObOptEstCost::cost_sort_and_exchange(&right_plan->get_update_table_metas(),
                                                        &right_plan->get_selectivity_ctx(),
                                                        dist_method,
                                                        right_child->is_distributed(),
                                                        is_local_order,
-                                                       right_child->get_card(),
+                                                       right_output_rows,
                                                        right_child->get_width(),
-                                                       right_child->get_cost(),
+                                                       right_orig_cost,
                                                        out_parallel,
                                                        left_child.get_server_cnt(),
                                                        in_parallel,
@@ -3922,6 +3932,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
                                                ObExchangeInfo &right_exch_info)
 {
   int ret = OB_SUCCESS;
+  const ObLogicalOperator *parallel_source = NULL;
   left_exch_info.dist_method_ = ObPQDistributeMethod::NONE;
   right_exch_info.dist_method_ = ObPQDistributeMethod::NONE;
   if (DistAlgo::DIST_BASIC_METHOD == set_method ||
@@ -3938,6 +3949,8 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       right_exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
     }
   } else if (DistAlgo::DIST_HASH_HASH == set_method) {
+    parallel_source = left_child.get_parallel() > right_child.get_parallel()
+                      ? &left_child : &right_child;
     ObShardingInfo *sharding_info = NULL;
     if (OB_FAIL(compute_set_hash_hash_sharding(equal_sets,
                                                left_set_keys,
@@ -3958,6 +3971,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
     }
   } else if (DistAlgo::DIST_HASH_NONE == set_method) {
+    parallel_source = &right_child;
     if (OB_FAIL(compute_single_side_hash_distribution_info(equal_sets,
                                                           left_set_keys,
                                                           right_set_keys,
@@ -3991,6 +4005,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       }
     }
   } else if (DistAlgo::DIST_NONE_HASH == set_method) {
+    parallel_source = &left_child;
     if (OB_FAIL(compute_single_side_hash_distribution_info(equal_sets,
                                                            right_set_keys,
                                                            left_set_keys,
@@ -4023,6 +4038,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       }
     }
   } else if (DistAlgo::DIST_PARTITION_NONE == set_method) {
+    parallel_source = &right_child;
     if (OB_FAIL(compute_repartition_distribution_info(equal_sets,
                                                       left_set_keys,
                                                       right_set_keys,
@@ -4059,6 +4075,7 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       }
     }
   } else if (DistAlgo::DIST_NONE_PARTITION == set_method) {
+    parallel_source = &left_child;
     if (OB_FAIL(compute_repartition_distribution_info(equal_sets,
                                                       right_set_keys,
                                                       left_set_keys,
@@ -4096,6 +4113,17 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  }
+
+  if (OB_FAIL(ret) || NULL == parallel_source) {
+  } else if (OB_FAIL(left_exch_info.server_list_.assign(parallel_source->get_server_list()))
+             || OB_FAIL(right_exch_info.server_list_.assign(parallel_source->get_server_list()))) {
+    LOG_WARN("failed to assign server list", K(ret));
+  } else {
+    left_exch_info.parallel_ = parallel_source->get_parallel();
+    left_exch_info.server_cnt_ = parallel_source->get_server_cnt();
+    right_exch_info.parallel_ = parallel_source->get_parallel();
+    right_exch_info.server_cnt_ = parallel_source->get_server_cnt();
   }
   return ret;
 }
@@ -5173,7 +5201,7 @@ int ObSelectLogPlan::check_winfunc_pushdown(
   } else {
     const int64_t WF_PBY_DOP_RADIO = 16;
     const int64_t WF_CARD_DOP_RADIO = 256;
-    const int64_t dop = get_optimizer_context().get_parallel();
+    const int64_t dop = top->get_parallel();
     int64_t prev_method = -1;
     bool prev_pushdown_supported = true;
     bool all_wf_exprs_reporting = true;
@@ -5301,7 +5329,7 @@ int ObSelectLogPlan::split_winfuncs_by_dist_method(
   if (OB_SUCC(ret)) {
     const int64_t WF_PBY_DOP_RADIO = 16;
     const int64_t WF_CARD_DOP_RADIO = 256;
-    const int64_t dop = get_optimizer_context().get_parallel();
+    const int64_t dop = top->get_parallel();
     int64_t prev_method = -1;
     for (int64_t idx = 0; OB_SUCC(ret) && !has_non_parallel_wf && idx < winfunc_exprs.count(); ) {
       const int64_t pby_cnt = pby_oby_prefixes.at(idx).first;
@@ -6580,8 +6608,6 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
                                                        get_optimizer_context().get_cost_model_type());
     if (OB_FAIL(join->set_op_ordering(left_child->get_op_ordering()))) {
       LOG_WARN("failed to set op ordering", K(ret));
-    } else if (OB_FAIL(join->est_cost())) {
-      LOG_WARN("failed to estimate cost", K(ret));
     } else {
       join->set_location_type(left_child->get_location_type());
       join->set_phy_plan_type(left_child->get_phy_plan_type());

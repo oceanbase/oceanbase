@@ -620,6 +620,7 @@ public:
   int get_enable_parallel_query(bool &v) const;
   int get_enable_parallel_ddl(bool &v) const;
   int get_force_parallel_query_dop(uint64_t &v) const;
+  int get_parallel_degree_policy_enable_auto_dop(bool &v) const;
   int get_force_parallel_dml_dop(uint64_t &v) const;
   int get_force_parallel_ddl_dop(uint64_t &v) const;
   int get_partial_rollup_pushdown(int64_t &partial_rollup) const;

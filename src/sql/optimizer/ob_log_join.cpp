@@ -282,7 +282,7 @@ int ObLogJoin::inner_replace_op_exprs(
   return ret;
 }
 
-int ObLogJoin::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   EstimateCostInfo left_param;
@@ -291,55 +291,66 @@ int ObLogJoin::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
   double right_output_rows = 0.0;
   double left_cost = 0.0;
   double right_cost = 0.0;
-  double op_cost = 0.0;
   ObLogicalOperator *left_child = get_child(ObLogicalOperator::first_child);
   ObLogicalOperator *right_child = get_child(ObLogicalOperator::second_child);
+  const int64_t parallel = param.need_parallel_;
   if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null join path", K(ret));
   } else if (OB_ISNULL(join_path_)) {
+    card = get_card();
     op_cost = get_op_cost();
-    left_cost = left_child->get_cost();
-    right_cost = right_child->get_cost();
+    cost = get_cost();
   } else if (OB_FAIL(join_path_->get_re_estimate_param(param, 
                                                        left_param, 
-                                                       right_param))) {
+                                                       right_param,
+                                                       true))) {
     LOG_WARN("failed to get re estimate param", K(ret));
   } else if (OB_FAIL(SMART_CALL(left_child->re_est_cost(left_param,
                                               left_output_rows,
                                               left_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
+  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(true))) {
+    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(SMART_CALL(right_child->re_est_cost(right_param,
                                               right_output_rows,
                                               right_cost)))) {
     LOG_WARN("failed to re estimate cost", K(ret));
+  } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(false))) {
+    LOG_WARN("failed to try set batch nlj for right access path", K(ret));
   } else if (OB_FAIL(join_path_->re_estimate_rows(left_output_rows, 
                                                  right_output_rows, 
                                                  card))) {
     LOG_WARN("failed to re estimate rows", K(ret));
   } else if (NESTED_LOOP_JOIN == join_algo_) {
-    if (OB_FAIL(join_path_->cost_nest_loop_join(left_output_rows, 
+    if (OB_FAIL(join_path_->cost_nest_loop_join(parallel,
+                                                left_output_rows,
                                                 left_cost, 
                                                 right_output_rows, 
-                                                right_cost, 
+                                                right_cost,
+                                                true,
                                                 op_cost, 
                                                 cost))) {
       LOG_WARN("failed to cost nest loop join", K(*this), K(ret));
     }
   } else if(MERGE_JOIN == join_algo_) {
-    if (OB_FAIL(join_path_->cost_merge_join(left_output_rows, 
+    if (OB_FAIL(join_path_->cost_merge_join(parallel,
+                                            left_output_rows,
                                             left_cost, 
                                             right_output_rows, 
                                             right_cost, 
+                                            true,
                                             op_cost, 
                                             cost))) {
       LOG_WARN("failed to cost merge join", K(*this), K(ret));
     }
   } else if(HASH_JOIN == join_algo_) {
-    if (OB_FAIL(join_path_->cost_hash_join(left_output_rows, 
+    if (OB_FAIL(join_path_->cost_hash_join(parallel,
+                                            left_output_rows,
                                             left_cost, 
                                             right_output_rows, 
                                             right_cost, 
+                                            true,
                                             op_cost, 
                                             cost))) {
       LOG_WARN("failed to cost hash join", K(*this), K(ret));
@@ -351,12 +362,6 @@ int ObLogJoin::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
   if (OB_SUCC(ret)) {
     if (param.need_row_count_ >=0 && param.need_row_count_ < get_card()) {
       card = param.need_row_count_;
-    }
-    cost = op_cost + left_cost + right_cost;
-    if (param.override_) {
-      set_card(card);
-      set_op_cost(op_cost);
-      set_cost(cost);
     }
   }
   return ret;

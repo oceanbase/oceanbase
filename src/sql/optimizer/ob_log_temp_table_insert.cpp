@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/optimizer/ob_join_order.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -75,24 +76,41 @@ int ObLogTempTableInsert::compute_op_ordering()
 int ObLogTempTableInsert::est_cost()
 {
   int ret = OB_SUCCESS;
+  double card = 0.0;
+  double op_cost = 0.0;
+  double cost = 0.0;
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+    LOG_WARN("failed to do re est cost", K(ret));
+  } else {
+    set_op_cost(op_cost);
+    set_cost(cost);
+    set_card(card);
+  }
+  return ret;
+}
+
+int ObLogTempTableInsert::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
+{
+  int ret = OB_SUCCESS;
   int64_t parallel = 0;
   ObLogicalOperator *child = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_UNLIKELY((parallel = child->get_parallel()) < 1)) {
+  } else if (OB_UNLIKELY(param.need_parallel_ < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
+    LOG_WARN("get unexpected parallel degree", K(param.need_parallel_), K(ret));
+  } else if (OB_FAIL(child->re_est_cost(param, card, cost))) {
+    LOG_WARN("failed to do re est cost", K(ret));
   } else {
-    double per_dop_card = child->get_card() / parallel;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    double op_cost = ObOptEstCost::cost_material(per_dop_card, 
-                                                 child->get_width(),
-                                                 opt_ctx.get_cost_model_type());
-    set_op_cost(op_cost);
-    set_cost(child->get_cost() + op_cost);
-    set_card(child->get_card());
+    op_cost = ObOptEstCost::cost_material(card / param.need_parallel_,
+                                          child->get_width(),
+                                          opt_ctx.get_cost_model_type());
+    cost += op_cost;
   }
   return ret;
 }

@@ -419,7 +419,7 @@ struct ObLogPlanHint
   int check_status() const;
   const LogTableHint* get_log_table_hint(uint64_t table_id) const;
   const LogTableHint* get_index_hint(uint64_t table_id) const;
-  const ObTableParallelHint* get_parallel_hint(uint64_t table_id) const;
+  int64_t get_parallel(uint64_t table_id) const;
   const ObTableDynamicSamplingHint* get_dynamic_sampling_hint(uint64_t table_id) const;
   int check_use_join_filter(uint64_t filter_table_id,
                             const ObRelIds &left_tables,

@@ -750,9 +750,9 @@ Query Plan
 |3 |│   └─PX BLOCK ITERATOR    |        |5       |5           |
 |4 |│     └─TABLE FULL SCAN    |t2      |5       |5           |
 |5 |└─SCALAR GROUP BY          |        |1       |6           |
-|6 |  └─PX COORDINATOR         |        |4       |6           |
-|7 |    └─EXCHANGE OUT DISTR   |:EX20000|4       |5           |
-|8 |      └─MERGE GROUP BY     |        |4       |5           |
+|6 |  └─PX COORDINATOR         |        |2       |5           |
+|7 |    └─EXCHANGE OUT DISTR   |:EX20000|2       |5           |
+|8 |      └─MERGE GROUP BY     |        |2       |5           |
 |9 |        └─PX BLOCK ITERATOR|        |5       |5           |
 |10|          └─TABLE FULL SCAN|t1      |5       |5           |
 ===============================================================
@@ -796,7 +796,7 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |5       |9           |
+|0 |SUBPLAN FILTER                |        |5       |10          |
 |1 |├─PX COORDINATOR              |        |5       |5           |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|5       |5           |
 |3 |│   └─PX BLOCK ITERATOR       |        |5       |5           |
@@ -1574,15 +1574,15 @@ Query Plan
 |ID|OPERATOR                                          |NAME    |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------------------
 |0 |SORT                                              |        |3       |2059        |
-|1 |└─SUBPLAN FILTER                                  |        |3       |2059        |
+|1 |└─SUBPLAN FILTER                                  |        |3       |2058        |
 |2 |  ├─PX COORDINATOR                                |        |5       |8           |
 |3 |  │ └─EXCHANGE OUT DISTR                          |:EX10000|5       |7           |
 |4 |  │   └─PX BLOCK ITERATOR                         |        |5       |5           |
 |5 |  │     └─TABLE FULL SCAN                         |t1      |5       |5           |
 |6 |  └─MERGE GROUP BY                                |        |1       |12          |
-|7 |    └─PX COORDINATOR                              |        |4       |12          |
-|8 |      └─EXCHANGE OUT DISTR                        |:EX20002|4       |12          |
-|9 |        └─MERGE GROUP BY                          |        |4       |12          |
+|7 |    └─PX COORDINATOR                              |        |2       |12          |
+|8 |      └─EXCHANGE OUT DISTR                        |:EX20002|2       |12          |
+|9 |        └─MERGE GROUP BY                          |        |2       |12          |
 |10|          └─NESTED-LOOP JOIN CARTESIAN            |        |25      |12          |
 |11|            ├─MATERIAL                            |        |5       |8           |
 |12|            │ └─NESTED-LOOP JOIN CARTESIAN        |        |5       |8           |
@@ -1773,6 +1773,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -1782,11 +1784,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:7
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) as x from t1;
 +----+---+
 | c1 | x |
@@ -1868,6 +1874,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -1877,11 +1885,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:2
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1, (select c1 from t2 where t2.c1 >= t1.c1 and t2.c2 > t1.c3 limit 1) as x from t1;
 +----+---+
 | c1 | x |
@@ -1963,6 +1975,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -1972,11 +1986,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 +----+----+
 | c1 | x  |
@@ -2068,6 +2086,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2077,6 +2097,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2086,11 +2108,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) and c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 +----+------+
 | c1 | x    |
@@ -2182,6 +2208,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2191,6 +2219,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2200,11 +2230,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 >= t1.c1) or c1 in  (select c2 from t2 where t2.c1 >= t1.c1) as x from t1;
 +----+------+
 | c1 | x    |
@@ -2297,6 +2331,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2306,6 +2342,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2315,11 +2353,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 +----+------+
 | c1 | x    |
@@ -2412,6 +2454,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2421,6 +2465,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2430,11 +2476,15 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as x from t1;
 +----+------+
 | c1 | x    |
@@ -2536,6 +2586,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2545,6 +2597,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2554,6 +2608,8 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2563,11 +2619,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1 <= t1.c1) and c1 in  (select c2 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x from t1;
 +----+------+
 | c1 | x    |
@@ -2711,6 +2771,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2720,6 +2782,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2729,6 +2793,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2738,6 +2804,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2747,6 +2815,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2756,6 +2826,8 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2765,6 +2837,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2774,11 +2848,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 +----+------+------+------+
 | c1 | x    | y    | z    |
@@ -2922,6 +3000,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -2931,6 +3011,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2940,6 +3022,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2949,6 +3033,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2958,6 +3044,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2967,6 +3055,8 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2976,6 +3066,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -2985,11 +3077,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 +----+------+------+------+
 | c1 | x    | y    | z    |
@@ -3133,6 +3229,8 @@ Optimization Info:
       logical_range_rows:18
       index_back_rows:0
       output_rows:18
+      table_dop:1
+      dop_method:Table DOP
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
@@ -3142,6 +3240,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -3151,6 +3251,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -3160,6 +3262,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -3169,6 +3273,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -3178,6 +3284,8 @@ Optimization Info:
       logical_range_rows:7
       index_back_rows:0
       output_rows:0
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -3187,6 +3295,8 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
@@ -3196,11 +3306,15 @@ Optimization Info:
       logical_range_rows:1
       index_back_rows:0
       output_rows:1
+      table_dop:1
+      dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
+  Note:
+      Degree of Parallelisim is 1 because of table property
 select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
 +----+------+------+------+
 | c1 | x    | y    | z    |

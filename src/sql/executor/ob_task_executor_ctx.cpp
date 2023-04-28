@@ -52,7 +52,8 @@ OB_SERIALIZE_MEMBER(ObTaskExecutorCtx,
                     expected_worker_cnt_,
                     admited_worker_cnt_,
                     query_tenant_begin_schema_version_,
-                    query_sys_begin_schema_version_);
+                    query_sys_begin_schema_version_,
+                    minimal_worker_cnt_);
 
 ObTaskExecutorCtx::ObTaskExecutorCtx(ObExecContext &exec_context)
     : task_resp_handler_(NULL),
@@ -62,6 +63,7 @@ ObTaskExecutorCtx::ObTaskExecutorCtx(ObExecContext &exec_context)
       need_renew_location_cache_(false),
       need_renew_tablet_keys_(exec_context.get_allocator()),
       expected_worker_cnt_(0),
+      minimal_worker_cnt_(0),
       admited_worker_cnt_(0),
       retry_times_(0),
       min_cluster_version_(ObExecutorRpcCtx::INVALID_CLUSTER_VERSION),

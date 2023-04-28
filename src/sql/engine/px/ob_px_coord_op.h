@@ -120,11 +120,6 @@ protected:
       bool &all_dfo_terminate,
       int64_t &cur_timestamp);
 
-  int calc_admited_worker_count(int64_t px_expected,
-                                  int64_t query_expected,
-                                  int64_t query_admited,
-                                  int64_t &admited_worker_count);
-
   int register_interrupt();
   void clear_interrupt();
 

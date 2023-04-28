@@ -35,7 +35,7 @@ public:
   inline void set_rownum_expr(ObRawExpr *rownum_expr) { rownum_expr_ = rownum_expr; }
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double &child_card, 
                      double &child_cost, 
                      bool need_re_est_child_cost, 

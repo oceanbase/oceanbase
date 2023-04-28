@@ -5048,6 +5048,23 @@ int ObBasicSessionInfo::get_force_parallel_query_dop(uint64_t &v) const
   return ret;
 }
 
+int ObBasicSessionInfo::get_parallel_degree_policy_enable_auto_dop(bool &v) const
+{
+  int ret = OB_SUCCESS;
+  v = false;
+  if (exec_min_cluster_version_ >= CLUSTER_VERSION_4_2_0_0) {
+    int64_t value = 0;
+    if (OB_FAIL(get_int64_sys_var(SYS_VAR_PARALLEL_DEGREE_POLICY, value))) {
+      LOG_WARN("failed to update session_timeout", K(ret));
+    } else {
+      v = 1 == value;
+    }
+  } else {
+    v = false;
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::get_force_parallel_dml_dop(uint64_t &v) const
 {
   int ret = OB_SUCCESS;

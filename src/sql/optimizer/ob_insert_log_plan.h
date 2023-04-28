@@ -27,7 +27,8 @@ class ObInsertLogPlan: public ObDelUpdLogPlan
 {
 public:
   ObInsertLogPlan(ObOptimizerContext &ctx, const ObInsertStmt *insert_stmt)
-      : ObDelUpdLogPlan(ctx, insert_stmt)
+      : ObDelUpdLogPlan(ctx, insert_stmt),
+        is_direct_insert_(false)
   { }
   virtual ~ObInsertLogPlan()
   { }
@@ -48,6 +49,7 @@ public:
   const common::ObIArray<IndexDMLInfo *> &get_insert_up_index_upd_infos() const
   { return insert_up_index_upd_infos_; }
 
+  bool is_direct_insert() const { return is_direct_insert_; }
 protected:
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
   int candi_allocate_insert();
@@ -124,11 +126,13 @@ protected:
 
 private:
   int check_need_online_stats_gather(bool &need_osg);
+  int set_is_direct_insert();
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);
 private:
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> replace_del_index_del_infos_;
   common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> insert_up_index_upd_infos_;
   common::ObSEArray<ObUniqueConstraintInfo, 8, common::ModulePageAllocator, true> uk_constraint_infos_;
+  bool is_direct_insert_;
 };
 }
 }

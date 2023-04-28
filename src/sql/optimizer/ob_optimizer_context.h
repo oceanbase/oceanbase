@@ -112,9 +112,12 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     expr_factory_(expr_factory),
     log_plan_factory_(allocator),
     force_serial_set_order_(false),
-    parallel_(1),
-    px_parallel_rule_(PXParallelRule::NOT_USE_PX),
-    use_pdml_(false),
+    parallel_(ObGlobalHint::UNSET_PARALLEL),
+    px_parallel_rule_(PXParallelRule::USE_PX_DEFAULT),
+    can_use_pdml_(false),
+    max_parallel_(ObGlobalHint::UNSET_PARALLEL),
+    parallel_degree_limit_(ObGlobalHint::UNSET_PARALLEL),
+    parallel_min_scan_time_threshold_(-1),
     is_online_ddl_(false),
     ddl_sample_column_count_(0),
     is_heap_table_ddl_(false),
@@ -219,37 +222,28 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline const ObGlobalHint &get_global_hint() { return global_hint_; }
   inline ObRawExprFactory &get_expr_factory() { return expr_factory_; }
   inline ObLogPlanFactory &get_log_plan_factory() { return log_plan_factory_; }
-  inline bool use_pdml() const { return use_pdml_; }
+  inline bool can_use_pdml() const { return can_use_pdml_; }
   inline bool is_online_ddl() const { return is_online_ddl_; }
   inline int64_t get_ddl_sample_column_count() const { return ddl_sample_column_count_; }
   inline bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
-  inline int64_t get_parallel() const { return parallel_; }
   inline bool force_serial_set_order() const { return force_serial_set_order_; }
-  inline bool is_use_parallel_rule() const
-  {
-    return px_parallel_rule_ == MANUAL_HINT ||
-        px_parallel_rule_ == MANUAL_TABLE_HINT ||
-        px_parallel_rule_ == SESSION_FORCE_PARALLEL ||
-        px_parallel_rule_ == MANUAL_TABLE_DOP ||
-        px_parallel_rule_ == PL_UDF_DAS_FORCE_SERIALIZE;
-  }
-  inline bool use_intra_parallel() const
-  {
-    return parallel_ > 1;
-  }
-  inline bool is_use_table_dop() const
-  {
-    return px_parallel_rule_ == PXParallelRule::MANUAL_TABLE_DOP;
-  }
-  inline bool is_use_table_parallel_hint() const
-  {
-    return px_parallel_rule_ == PXParallelRule::MANUAL_TABLE_HINT;
-  }
-  inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
+  inline int64_t get_parallel() const { return parallel_; }
+  inline int64_t get_max_parallel() const { return max_parallel_; }
+  inline int64_t get_parallel_degree_limit() const { return parallel_degree_limit_; }
+  inline int64_t get_parallel_min_scan_time_threshold() const { return parallel_min_scan_time_threshold_; }
+  inline bool force_disable_parallel() const  { return px_parallel_rule_ >= PL_UDF_DAS_FORCE_SERIALIZE
+                                                        && px_parallel_rule_ < MAX_OPTION; }
+  inline bool is_use_table_dop() const  { return MANUAL_TABLE_DOP == px_parallel_rule_; }
+  inline bool is_use_auto_dop() const { return AUTO_DOP == px_parallel_rule_; }
+  inline bool is_parallel_rule_valid() const { return MAX_OPTION != px_parallel_rule_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
-  void set_use_pdml(bool u) { use_pdml_ = u; }
+  void set_max_parallel(int64_t max_parallel) { max_parallel_ = max_parallel_ < max_parallel ? max_parallel : max_parallel_; }
+  void set_parallel_degree_limit(int64_t parallel_degree_limit) { parallel_degree_limit_ = parallel_degree_limit; }
+  void set_parallel_min_scan_time_threshold(int64_t threshold) { parallel_min_scan_time_threshold_ = threshold; }
+  void set_can_use_pdml(bool u) { can_use_pdml_ = u; }
+  inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
   void set_ddl_sample_column_count(const int64_t count) { ddl_sample_column_count_ = count; }
   void set_is_heap_table_ddl(bool flag) { is_heap_table_ddl_ = flag; }
@@ -503,7 +497,10 @@ private:
   int64_t parallel_;
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;
-  bool use_pdml_;
+  bool can_use_pdml_; // can use pdml after check parallel
+  int64_t max_parallel_;
+  int64_t parallel_degree_limit_; // parallel limit for auto dop
+  int64_t parallel_min_scan_time_threshold_; // auto dop threshold for table scan cost
   bool is_online_ddl_;
   int64_t ddl_sample_column_count_;
   bool is_heap_table_ddl_; // we need to treat heap table ddl seperately

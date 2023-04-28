@@ -60,12 +60,7 @@ namespace sql
       return is_top_limit_;
     }
     virtual int est_cost() override;
-    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-    virtual int inner_est_cost(double child_card, 
-                               double &child_cost, 
-                               bool need_re_est_child_cost, 
-                               double &re_estimate_card, 
-                               double &op_cost);
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
     int check_output_dep_specific(ObRawExprCheckDep &checker);
     void set_fetch_with_ties(bool is_fetch_with_ties)
     {

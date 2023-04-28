@@ -378,68 +378,14 @@ int ObLogSet::set_cycle_items(const common::ObIArray<ColumnItem> &cycle_items)
 int ObLogSet::est_cost()
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator *left_child = get_child(ObLogicalOperator::first_child);
-  ObLogicalOperator *right_child = get_child(ObLogicalOperator::second_child);
-  const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_stmt());
   double card = 0;
   double op_cost = 0;
   double cost = 0;
-  if (OB_ISNULL(left_child) || OB_ISNULL(right_child) || OB_ISNULL(stmt)
-      || OB_UNLIKELY(INVALID_SET_ALGO == set_algo_) || OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("set op is not inited", K(ret));
-  } else if (OB_FAIL(estimate_row_count(card))) {
-    LOG_WARN("estimate row count of SET operator failed", K(ret));
-  } else if (is_recursive_union() || !is_set_distinct()) {
-    ObSEArray<ObBasicCostInfo, 4> children_cost_info;
-    ObCostMergeSetInfo cost_info(children_cost_info, get_set_op(), stmt->get_select_item_size());
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    if (OB_FAIL(get_children_cost_info(children_cost_info))) {
-      LOG_WARN("failed to get children cost info", K(ret));
-    } else if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info, op_cost,
-                                                    opt_ctx.get_cost_model_type()))) {
-      LOG_WARN("estimate cost of SET operator failed", K(ret));
-    }
-  } else if (MERGE_SET == set_algo_) {
-    ObSEArray<ObBasicCostInfo, 4> children_cost_info;
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    ObCostMergeSetInfo cost_info(children_cost_info, get_set_op(), stmt->get_select_item_size());
-    if (OB_FAIL(get_children_cost_info(children_cost_info))) {
-      LOG_WARN("failed to get children cost info", K(ret));
-    } else if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, op_cost,
-                                                    opt_ctx.get_cost_model_type()))) {
-      LOG_WARN("estimate cost of SET operator failed", K(ret));
-    }
-  } else if (HASH_SET == set_algo_) {
-    ObArray<ObRawExpr *> select_exprs;
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    ObCostHashSetInfo hash_cost_info(left_child->get_card(),
-                                     left_child->get_width(),
-                                     right_child->get_card(),
-                                     right_child->get_width(),
-                                     get_set_op(),
-                                     select_exprs,
-                                     &get_plan()->get_update_table_metas(),
-                                     &get_plan()->get_selectivity_ctx());
-    if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
-      LOG_WARN("faield to get select exprs", K(ret));
-    } else if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info, op_cost,
-                                                  opt_ctx.get_cost_model_type()))) {
-      LOG_WARN("Fail to calcuate hash set cost", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    cost = op_cost;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
-      if (OB_ISNULL(get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else {
-        cost += get_child(i)->get_cost();
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
+  EstimateCostInfo param;
+  param.need_parallel_ = get_parallel();
+  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+    LOG_WARN("failed to get re est cost infos", K(ret));
+  } else {
     set_card(card);
     set_op_cost(op_cost);
     set_cost(cost);
@@ -463,101 +409,102 @@ int ObLogSet::est_width()
   return ret;
 }
 
-int ObLogSet::get_children_cost_info(ObIArray<ObBasicCostInfo> &children_cost_info)
+int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
+                                    ObIArray<ObBasicCostInfo> &cost_infos,
+                                    double &child_cost,
+                                    double &card)
 {
   int ret = OB_SUCCESS;
+  child_cost = 0.0;
+  card = 0.0;
+  EstimateCostInfo cur_param;
+  const double need_row_count = (is_recursive_union() || !is_set_distinct())
+                                && param.need_row_count_ >= 0 && param.need_row_count_ < card_
+                                ? param.need_row_count_ : -1;
+  double cur_child_card = 0.0;
+  double cur_child_cost = 0.0;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
     const ObLogicalOperator *child = get_child(i);
+    cur_param.reset();
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
-    } else {
-      ObBasicCostInfo info(child->get_card(), child->get_cost(), child->get_width());
-      if (OB_FAIL(children_cost_info.push_back(info))) {
-        LOG_WARN("push back child's cost info failed", K(ret));
-      }
+    } else if (cur_param.assign(param)) {
+      LOG_WARN("failed to assign param", K(ret));
+    } else if (OB_FALSE_IT(cur_param.need_row_count_ = need_row_count)) {
+    } else if (OB_FAIL(get_child(i)->re_est_cost(cur_param, cur_child_card, cur_child_cost))) {
+      LOG_WARN("failed to re-est child cost", K(ret), K(i));
+    } else if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(cur_child_card, cur_child_cost,
+                                                            child->get_width())))) {
+      LOG_WARN("push back child's cost info failed", K(ret));
+    } else if (ObSelectStmt::UNION == get_set_op()) {
+      card += cur_child_card;
+      child_cost += cur_child_cost;
+    } else if (ObSelectStmt::INTERSECT == get_set_op()) {
+      card = (0 == i || cur_child_card < card) ? cur_child_card : card;
+      child_cost += cur_child_cost;
+    } else if (ObSelectStmt::EXCEPT == get_set_op()) {
+      card = 0 == i ? cur_child_card : card;
+      child_cost += cur_child_cost;
     }
   }
   return ret;
 }
 
-int ObLogSet::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  double op_cost = op_cost_;
-  double need_row_count = card_;
-  cost = cost_;
-  card = card_;
-  if (param.need_row_count_ >= 0 && param.need_row_count_ < card_) {
-    need_row_count = param.need_row_count_;
-  }
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())) {
+  op_cost = 0.0;
+  cost = 0.0;
+  card = 0.0;
+  double tmp_card = 0.0;
+  double child_cost = 0.0;
+  ObSEArray<ObBasicCostInfo, 4> cost_infos;
+  ObOptEstCost::MODEL_TYPE model_type = ObOptEstCost::MODEL_TYPE::NORMAL_MODEL;
+  const ObSelectStmt *stmt = dynamic_cast<const ObSelectStmt*>(get_stmt());
+  if (OB_ISNULL(stmt) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (param.need_row_count_ >= get_card() || std::fabs(get_card()) < OB_DOUBLE_EPSINON) {
-    /*do nothing*/
-  } else if (HASH_SET == set_algo_) {
-    card = 0.0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
-      double child_cost = 0.0;
-      double child_card = 0.0;
-      param.need_row_count_ = -1;
-      if (OB_ISNULL(get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(get_child(i)->re_est_cost(param, child_card, child_cost))) {
-        LOG_WARN("failed to re-est cost", K(ret));
-      } else {
-        card += child_card;
-      }
+  } else if (OB_FALSE_IT(model_type = get_plan()->get_optimizer_context().get_cost_model_type())) {
+  } else if (OB_FAIL(get_re_est_cost_infos(param, cost_infos, child_cost, tmp_card))) {
+    LOG_WARN("failed to get re est cost infos", K(ret));
+  } else if (is_recursive_union() || !is_set_distinct()) {
+    ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
+    if (OB_FAIL(ObOptEstCost::cost_union_all(cost_info, op_cost, model_type))) {
+      LOG_WARN("estimate cost of SET operator failed", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      card = card > need_row_count ? need_row_count : card;
+  } else if (MERGE_SET == set_algo_) {
+    ObCostMergeSetInfo cost_info(cost_infos, get_set_op(), stmt->get_select_item_size());
+    if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, op_cost, model_type))) {
+      LOG_WARN("estimate cost of SET operator failed", K(ret));
+    }
+  } else if (HASH_SET == set_algo_) {
+    ObSEArray<ObRawExpr*, 8> select_exprs;
+    if (OB_UNLIKELY(2 != cost_infos.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected cost infos count", K(ret), K(cost_infos.count()));
+    } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+      LOG_WARN("faield to get select exprs", K(ret));
+    } else {
+      ObCostHashSetInfo hash_cost_info(cost_infos.at(0).rows_, cost_infos.at(0).width_,
+                                       cost_infos.at(1).rows_, cost_infos.at(1).width_,
+                                       get_set_op(), select_exprs,
+                                       NULL, NULL /* no need for hash set*/ );
+      if (OB_FAIL(ObOptEstCost::cost_hash_set(hash_cost_info, op_cost, model_type))) {
+        LOG_WARN("Fail to calcuate hash set cost", K(ret));
+      }
     }
   } else {
-    cost = 0.0;
-    card = 0.0;
-    ObSEArray<ObBasicCostInfo, 4> children_cost_info;
-    ObCostMergeSetInfo cost_info(children_cost_info,
-                                 get_set_op(),
-                                 static_cast<const ObSelectStmt*>(get_stmt())->get_select_item_size());
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); i++) {
-      double child_cost = 0.0;
-      double child_card = 0.0;
-      param.need_row_count_ = need_row_count;
-      if (OB_ISNULL(get_child(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(SMART_CALL(get_child(i)->re_est_cost(param, child_card, child_cost)))) {
-        LOG_WARN("failed to re-est cost", K(ret));
-      } else {
-        cost += child_cost;
-        card += child_card;
-        ObBasicCostInfo info(child_card,
-                             child_cost,
-                             get_child(i)->get_width());
-        if (OB_FAIL(children_cost_info.push_back(info))) {
-          LOG_WARN("failed to push back children cost info", K(ret));
-        } else { /*do nothing*/ }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-      if (OB_FAIL(ObOptEstCost::cost_merge_set(cost_info, op_cost,
-                                               opt_ctx.get_cost_model_type()))) {
-        LOG_WARN("failed to cost merge set", K(ret));
-      } else {
-        cost += op_cost;
-        card = card > need_row_count ? need_row_count : card;
-      }
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected else", K(ret));
   }
-  if (OB_SUCC(ret) && param.override_) {
-    set_card(card);
-    set_op_cost(op_cost);
-    set_cost(cost);
+
+  if (OB_SUCC(ret)) {
+    cost = child_cost + op_cost;
+    card = param.need_row_count_ >= 0 && param.need_row_count_ < tmp_card
+           ? param.need_row_count_ : tmp_card;
+    LOG_TRACE("succeed to re-estimate cost for set op", K(op_cost), K(cost));
   }
-  LOG_TRACE("succeed to re-estimate cost for set op", K(op_cost), K(cost));
   return ret;
 }
 
@@ -735,37 +682,6 @@ int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr *> &set_exprs)
   return ret;
 }
 
-
-int ObLogSet::estimate_row_count(double &rows)
-{
-  int ret = OB_SUCCESS;
-  double sum_rows = 0;
-  ObLogicalOperator *left_child = get_child(ObLogicalOperator::first_child);
-  ObLogicalOperator *right_child = get_child(ObLogicalOperator::second_child);
-  if (OB_ISNULL(left_child) || OB_ISNULL(right_child)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null child", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      const ObLogicalOperator *child = get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("set operator i-th child is null", K(ret), K(i));
-      } else {
-        sum_rows += child->get_card();
-      }
-    }
-    if (ObSelectStmt::UNION == get_set_op()) {
-      rows = sum_rows;
-    } else if (ObSelectStmt::INTERSECT == get_set_op()) {
-      rows = std::min(left_child->get_card(), right_child->get_card());
-    } else if (ObSelectStmt::EXCEPT == get_set_op()) {
-      rows = left_child->get_card();
-    }
-  }
-  return ret;
-}
-
 int ObLogSet::allocate_startup_expr_post()
 {
   int ret = OB_SUCCESS;
@@ -901,6 +817,18 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
     if (OB_SUCC(ret) && OB_FAIL(hint.set_pq_set_hint(set_dist_algo_, get_num_of_child(), random_none_idx))) {
       LOG_WARN("failed to get dist methods", K(ret), K(set_dist_algo_), K(random_none_idx));
     }
+  }
+  return ret;
+}
+
+int ObLogSet::compute_op_parallel_and_server_info()
+{
+  int ret = OB_SUCCESS;
+  bool is_partition_wise = DistAlgo::DIST_PARTITION_WISE == get_distributed_algo()
+                           || DistAlgo::DIST_EXT_PARTITION_WISE == get_distributed_algo()
+                           || DistAlgo::DIST_SET_PARTITION_WISE == get_distributed_algo();
+  if (OB_FAIL(compute_normal_multi_child_parallel_and_server_info(is_partition_wise))) {
+    LOG_WARN("failed to compute multi child parallel and server info", K(ret), K(get_distributed_algo()));
   }
   return ret;
 }

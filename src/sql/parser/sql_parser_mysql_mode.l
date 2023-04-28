@@ -939,6 +939,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>DEFAULT  { return DEFAULT; }
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
 <hint>PARALLEL { return PARALLEL; }
+<hint>MANUAL { return MANUAL; }
 <hint>NO_PARALLEL { return NO_PARALLEL; }
 <hint>MONITOR  { return MONITOR; }
 <hint>AUTO { return AUTO; }

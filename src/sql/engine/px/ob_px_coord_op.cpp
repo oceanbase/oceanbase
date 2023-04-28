@@ -404,84 +404,9 @@ int ObPxCoordOp::post_init_op_ctx()
 int ObPxCoordOp::init_dfo_mgr(const ObDfoInterruptIdGen &dfo_id_gen, ObDfoMgr &dfo_mgr)
 {
   int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *phy_plan_ctx = nullptr;
-  ObTaskExecutorCtx *task_exec_ctx = nullptr;
-  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan ctx NULL", K(ret));
-  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("task exec ctx NULL", K(ret));
-  } else {
-    //
-    // 传入当前 PX 可用 worker 数 px_admited_worker_count。
-    // 这个 worker 数的计算方法为：PX 中记录理想值 a ，
-    // ExecContext 中记录 query 理想值 b 和 query 实际分得的值 c。
-    // 公式：px_admited_worker_count = a * c / b;
-    // 这个公式意味着: 当分配线程数降级时，Query 下所有 PX 都一起平均降级
-
-    // px 级, 表示 optimizer 计算的数量，当前 px 理论上需要多少线程
-    int64_t px_expected = (static_cast<const ObPxCoordSpec*>(&get_spec()))->get_expected_worker_count();
-    // query 级, 表示 optimizer 计算的数量
-    int64_t query_expected = task_exec_ctx->get_expected_worker_cnt();
-    // query 级, 表示 admission 实际分配的数量
-    int64_t query_admited = task_exec_ctx->get_admited_worker_cnt();
-
-    int64_t px_admited_worker_count = 0;
-    if (OB_FAIL(calc_admited_worker_count(
-                px_expected,
-                query_expected,
-                query_admited,
-                px_admited_worker_count))) {
-      LOG_WARN("fail allocate worker count for px",
-               K(px_expected),
-               K(query_expected),
-               K(query_admited),
-               K(ret));
-    } else if (OB_FAIL(dfo_mgr.init(
-                ctx_,
-                get_spec(),
-                px_expected,
-                px_admited_worker_count,
-                dfo_id_gen,
-                coord_info_))) {
-      LOG_WARN("fail init dfo mgr",
-               K(px_expected),
-               K(query_expected),
-               K(query_admited),
-               K(px_admited_worker_count),
-               K(ret));
-    }
+  if (OB_FAIL(dfo_mgr.init(ctx_, get_spec(), dfo_id_gen, coord_info_))) {
+    LOG_WARN("fail init dfo mgr", K(ret));
   }
-  return ret;
-}
-
-int ObPxCoordOp::calc_admited_worker_count(int64_t px_expected,
-                                           int64_t query_expected,
-                                           int64_t query_admited,
-                                           int64_t &admited_worker_count)
-{
-  int ret = OB_SUCCESS;
-  if (query_expected > 0 && 0 >= query_admited) {
-    ret = OB_ERR_INSUFFICIENT_PX_WORKER;
-    LOG_WARN("not enough thread resource",
-             K(px_expected),
-             K(query_admited),
-             K(query_expected),
-             K(ret));
-  } else if (0 == query_expected) {
-    // note: 对于单表、dop=1的查询，会走 fast dfo，此时 query_expected = 0
-    admited_worker_count = 0;
-  } else {
-    admited_worker_count = static_cast<int64_t>(
-        (double) query_admited * (double)px_expected / (double) query_expected);
-  }
-  LOG_TRACE("calc px worker count",
-            K(px_expected),
-            K(query_expected),
-            K(query_admited),
-            K(admited_worker_count),
-            K(ret));
   return ret;
 }
 

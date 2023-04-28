@@ -176,6 +176,8 @@ int ObExchangeInfo::assign(ObExchangeInfo &other)
     LOG_WARN("failed to assign weak sharding", K(ret));
   } else if (OB_FAIL(repart_all_tablet_ids_.assign(other.repart_all_tablet_ids_))) {
     LOG_WARN("failed to assign partition ids", K(ret));
+  } else if (OB_FAIL(server_list_.assign(other.server_list_))) {
+    LOG_WARN("failed to assign server list", K(ret));
   } else {
     is_remote_ = other.is_remote_;
     is_task_order_ = other.is_task_order_;
@@ -192,6 +194,8 @@ int ObExchangeInfo::assign(ObExchangeInfo &other)
     null_row_dist_method_ = other.null_row_dist_method_;
     slave_mapping_type_ = other.slave_mapping_type_;
     strong_sharding_ = other.strong_sharding_;
+    parallel_ = other.parallel_;
+    server_cnt_ = other.server_cnt_;
   }
   return ret;
 }
@@ -362,7 +366,9 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     empty_fd_item_set_(plan.get_empty_fd_item_set()),
     empty_table_set_(plan.get_empty_table_set()),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
-    parallel_(1),
+    parallel_(ObGlobalHint::UNSET_PARALLEL),
+    op_parallel_rule_(OpParallelRule::OP_DOP_RULE_MAX),
+    available_parallel_(ObGlobalHint::DEFAULT_PARALLEL),
     server_cnt_(1),
     need_late_materialization_(false),
     op_exprs_(),
@@ -614,58 +620,87 @@ int ObLogicalOperator::compute_op_interesting_order_info()
 int ObLogicalOperator::compute_op_parallel_and_server_info()
 {
   int ret = OB_SUCCESS;
-  ObLogPlan *plan = NULL;
-  if (OB_ISNULL(plan = get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null plan", K(ret));
-  } else if (get_num_of_child() == 0) {
+  ObLogicalOperator* child = NULL;
+  if (get_num_of_child() == 0) {
     //do nothing
+  } else if (OB_UNLIKELY(1 < get_num_of_child())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multi child operator must override this function", K(ret), K(get_num_of_child()));
+  } else if (OB_ISNULL(child = get_child(first_child))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null child", K(ret), K(child));
+  } else if (OB_FAIL(get_server_list().assign(child->get_server_list()))) {
+    LOG_WARN("failed to assign server list", K(ret));
   } else {
-    ObOptimizerContext &opt_ctx = plan->get_optimizer_context();
-    ObLogicalOperator* child = NULL;
-    int64_t parallel = is_single() ? 1 : opt_ctx.get_parallel();
-    int64_t server_cnt = 1;
-    ObSEArray<common::ObAddr, 8> servers;
-    if (OB_NOT_NULL(child = get_child(first_child))) {
-      server_cnt = child->get_server_cnt();
-      if (OB_FAIL(servers.assign(child->get_server_list()))) {
-        LOG_WARN("failed to assign server list", K(ret));
-      }
+    set_parallel(child->get_parallel());
+    set_server_cnt(child->get_server_cnt());
+    if (is_single()) {
+      set_available_parallel(child->get_available_parallel());
     }
-    //选择非EXCHANGE算子继承并行度
-    //如果所有的孩子节点都需要shuff数据，那么选择第一个孩子的并行度
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      child = get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null child", K(ret));
-      } else if (log_op_def::LOG_EXCHANGE != child->get_type()) {
-        parallel = child->get_parallel();
-        server_cnt = child->get_server_cnt();
-        if (OB_FAIL(servers.assign(child->get_server_list()))) {
-          LOG_WARN("failed to assign server list", K(ret));
-        }
-      }
+  }
+  return ret;
+}
+
+
+int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise)
+{
+  int ret = OB_SUCCESS;
+  const ObLogicalOperator *max_parallel_child = NULL;
+  bool parallel_is_different = false;
+  int64_t op_parallel = ObGlobalHint::UNSET_PARALLEL;
+  int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  const ObLogicalOperator *child = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
+    if (OB_ISNULL(child = get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("set operator i-th child is null", K(ret), K(i));
+    } else if (child->is_match_all()) {
+      max_parallel_child = (NULL == max_parallel_child && (get_num_of_child() - 1) == i)
+                           ? child : max_parallel_child;
+    } else if (ObGlobalHint::UNSET_PARALLEL == op_parallel) {
+      op_parallel = child->get_parallel();
+      max_parallel_child = child;
+      max_available_parallel = child->get_available_parallel();
+    } else {
+      parallel_is_different |= child->get_parallel() != op_parallel;
+      max_available_parallel = std::max(max_available_parallel, child->get_available_parallel());
+      max_parallel_child = max_parallel_child->get_parallel() < child->get_parallel()
+                           ? child : max_parallel_child;
     }
-    //选择合适的并行度后需要refine所有的EXCHANGE-IN算子的并行度
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
-      child = get_child(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null child", K(ret));
-      } else {
-        child->set_parallel(parallel);
-        child->set_server_cnt(server_cnt);
-        if (OB_FAIL(child->server_list_.assign(servers))) {
-          LOG_WARN("failed to assign server list", K(ret));
-        }
-      }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(max_parallel_child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ", K(ret), K(max_parallel_child));
+  } else if (OB_UNLIKELY(parallel_is_different && !is_partition_wise)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child op has different parallel except partition wise", K(ret));
+  } else if (OB_FAIL(get_server_list().assign(max_parallel_child->get_server_list()))) {
+    LOG_WARN("failed to assign server list", K(ret));
+  } else {
+    set_parallel(max_parallel_child->get_parallel());
+    set_server_cnt(max_parallel_child->get_server_cnt());
+    if (is_single()) {
+      set_available_parallel(max_available_parallel);
     }
-    set_parallel(parallel);
-    set_server_cnt(server_cnt);
-    if (OB_FAIL(server_list_.assign(servers))) {
-      LOG_WARN("failed to assign server list", K(ret));
-    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::set_parallel_and_server_info_for_match_all()
+{
+  int ret = OB_SUCCESS;
+  get_server_list().reuse();
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()));
+  } else if (OB_FAIL(get_server_list().push_back(get_plan()->get_optimizer_context().get_local_server_addr()))) {
+    LOG_WARN("failed to push back server list", K(ret));
+  } else {
+    set_parallel(ObGlobalHint::DEFAULT_PARALLEL);
+    set_op_parallel_rule(OpParallelRule::OP_DAS_DOP);
+    set_server_cnt(1);
   }
   return ret;
 }
@@ -947,9 +982,13 @@ int ObLogicalOperator::compute_property(Path *path)
     set_is_local_order(path->is_local_order_);
     set_is_range_order(path->is_range_order_);
     set_parallel(path->parallel_);
+    set_op_parallel_rule(path->op_parallel_rule_);
+    set_available_parallel(path->available_parallel_),
     set_server_cnt(path->server_cnt_);
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
+    } else if (OB_FAIL(check_property_valid())) {
+      LOG_WARN("failed to check property valid", K(ret));
     } else {
       LOG_TRACE("compute property finished",
                 K(get_op_name(type_)),
@@ -970,18 +1009,66 @@ int ObLogicalOperator::compute_property(Path *path)
   return ret;
 }
 
+int ObLogicalOperator::check_need_parallel_valid(int64_t need_parallel) const {
+  int ret = OB_SUCCESS;
+  if (get_parallel() == need_parallel) {
+    /* do nothing */
+  } else if (ObGlobalHint::DEFAULT_PARALLEL < need_parallel && (is_local() || is_remote())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(ret), K(get_parallel()), K(need_parallel),
+                                              K(is_single()));
+  }
+  return ret;
+}
+
 int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+{
+  int ret = OB_SUCCESS;
+  const int64_t parallel = (ObGlobalHint::UNSET_PARALLEL == param.need_parallel_ || is_match_all())
+                           ? get_parallel() : param.need_parallel_;
+  param.need_parallel_ = parallel;
+  param.need_row_count_ = (get_card() <= param.need_row_count_ || 0 > param.need_row_count_)
+                          ? -1 : param.need_row_count_;
+  double op_cost = 0.0;
+  card = 0.0;
+  cost = 0.0;
+  if (!param.need_re_est(get_parallel(), get_card())) {  // no need to re est cost
+    card = get_card();
+    cost = get_cost();
+  } else if (OB_FAIL(check_need_parallel_valid(parallel))) {
+    LOG_WARN("failed to check need parallel valid", K(ret));
+  } else if (OB_FAIL(SMART_CALL(do_re_est_cost(param, card, op_cost, cost)))) {
+    LOG_WARN("failed to do re est operator", K(ret));
+  } else if (!param.override_) {
+    /* do nothing */
+  } else if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    set_op_cost(op_cost);
+    set_cost(cost);
+    set_card(card);
+    get_plan()->get_optimizer_context().set_max_parallel(parallel);
+    if (get_parallel() != parallel) {
+      set_parallel(parallel);
+      set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   //default by pass operator
   if (1 == get_num_of_child()) {
     ObLogicalOperator *child = NULL;
-    int parallel = 1.0;
+    const int64_t parallel = param.need_parallel_;
     if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child)) ||
         OB_ISNULL(get_plan())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(child), K(ret));
-    } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    } else if (OB_UNLIKELY(parallel < 1)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
     } else {
@@ -989,10 +1076,9 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       double child_card = child->get_card();
       double child_cost = child->get_cost();
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-      double op_cost = ObOptEstCost::cost_get_rows(child_card / parallel,
-                                                   opt_ctx.get_cost_model_type());
+      op_cost = ObOptEstCost::cost_get_rows(child_card / parallel, opt_ctx.get_cost_model_type());
       if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
-        LOG_WARN("failed to re est exchange cost", K(ret));
+        LOG_WARN("failed to re est cost", K(ret));
       } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                                 get_plan()->get_selectivity_ctx(),
                                                                 get_filter_exprs(),
@@ -1002,17 +1088,71 @@ int ObLogicalOperator::re_est_cost(EstimateCostInfo &param, double &card, double
       } else {
         cost = child_cost + op_cost;
         card = child_card * selectivity;
-        if (param.override_) {
-          set_op_cost(op_cost);
-          set_cost(cost);
-          set_card(card);
-        }
       }
     }
-  } else {
+  } else if (0 == get_num_of_child()) {
     card = get_card();
     cost = get_cost();
+    op_cost = get_op_cost();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multi child op called default do_re_est_cost function", K(ret), K(get_type()));
   }
+  return ret;
+}
+
+int ObLogicalOperator::get_limit_offset_value(ObRawExpr *percent_expr,
+                                              ObRawExpr *limit_expr,
+                                              ObRawExpr *offset_expr,
+                                              double &limit_percent,
+                                              int64_t &limit_count,
+                                              int64_t &offset_count)
+{
+  int ret = OB_SUCCESS;
+  limit_count = -1;
+  offset_count = 0;
+  limit_percent = -1.0;
+  ObOptimizerContext *opt_ctx = NULL;
+  bool is_null_value = false;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(opt_ctx));
+  } else if ((NULL != percent_expr && percent_expr->has_flag(CNT_DYNAMIC_PARAM))
+             || (NULL != limit_expr && limit_expr->has_flag(CNT_DYNAMIC_PARAM))
+             || (NULL != offset_expr && offset_expr->has_flag(CNT_DYNAMIC_PARAM))) {
+    //limit/offset/percent ? do nothing
+  } else if (NULL != percent_expr &&
+             OB_FAIL(ObTransformUtils::get_percentage_value(percent_expr,
+                                                            get_stmt(),
+                                                            opt_ctx->get_params(),
+                                                            opt_ctx->get_exec_ctx(),
+                                                            &opt_ctx->get_allocator(),
+                                                            limit_percent,
+                                                            is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && limit_expr != NULL &&
+             OB_FAIL(ObTransformUtils::get_limit_value(limit_expr,
+                                                       opt_ctx->get_params(),
+                                                       opt_ctx->get_exec_ctx(),
+                                                       &opt_ctx->get_allocator(),
+                                                       limit_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (!is_null_value && offset_expr != NULL &&
+             OB_FAIL(ObTransformUtils::get_limit_value(offset_expr,
+                                                       opt_ctx->get_params(),
+                                                       opt_ctx->get_exec_ctx(),
+                                                       &opt_ctx->get_allocator(),
+                                                       offset_count,
+                                                       is_null_value))) {
+    LOG_WARN("failed to get limit value", K(ret));
+  } else if (is_null_value) {
+    limit_count = 0;
+    offset_count = 0;
+    limit_percent = -1;
+  }
+
+  LOG_DEBUG("get limit offset value", K(limit_count), K(offset_count), K(limit_percent));
   return ret;
 }
 
@@ -1048,6 +1188,8 @@ int ObLogicalOperator::compute_property()
     LOG_WARN("failed to compute width", K(ret));
   } else if (OB_FAIL(est_cost())) {
     LOG_WARN("failed to estimate cost", K(ret));
+  } else if (OB_FAIL(check_property_valid())) {
+    LOG_WARN("failed to check property valid", K(ret));
   } else {
     LOG_TRACE("compute property finished",
               K(get_op_name(type_)),
@@ -1069,6 +1211,19 @@ int ObLogicalOperator::compute_property()
               K(width_));
   }
 
+  return ret;
+}
+
+int ObLogicalOperator::check_property_valid() const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObGlobalHint::DEFAULT_PARALLEL > get_parallel()
+                  || get_server_list().empty()
+                  || get_server_cnt() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("has invalid parallel or server info", K(ret), K(get_parallel()),
+                                                    K(get_server_list()), K(get_server_cnt()));
+  }
   return ret;
 }
 
@@ -1193,7 +1348,7 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
   } else {
     switch (op) {
     case PX_PIPE_BLOCKING: {
-      if (get_plan()->get_optimizer_context().get_parallel() > 1) {
+      if (get_plan()->get_optimizer_context().get_max_parallel() > 1) {
         ObPxPipeBlockingCtx *pipe_blocking_ctx = static_cast<ObPxPipeBlockingCtx *>(ctx);
         if (OB_ISNULL(pipe_blocking_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1315,7 +1470,7 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
   if (OB_SUCC(ret)) {
     switch (op) {
       case PX_PIPE_BLOCKING: {
-        if (get_plan()->get_optimizer_context().get_parallel() > 1) {
+        if (get_plan()->get_optimizer_context().get_max_parallel() > 1) {
           ObPxPipeBlockingCtx *pipe_blocking_ctx = static_cast<ObPxPipeBlockingCtx *>(ctx);
           CK(OB_NOT_NULL(pipe_blocking_ctx));
           OC( (px_pipe_blocking_post)(*pipe_blocking_ctx) );
@@ -2774,17 +2929,18 @@ int ObLogicalOperator::refine_dop_by_hint()
     LOG_WARN("stmt is NULL", K(ret));
   } else if (LOG_EXCHANGE == type_
              && static_cast<ObLogExchange*>(this)->is_producer()
-             && get_plan()->get_optimizer_context().get_parallel() > 1) {
+             && this->get_parallel() > 1) {
     // note: don't change single-step dfo sched. query's dop, which can't be parallized
     ObLogExchange *producer = static_cast<ObLogExchange*>(this);
     const ObIArray<ObDopHint>& dops = query_ctx->get_global_hint().dops_;
     ARRAY_FOREACH(dops, idx) {
       int64_t px_id = dops.at(idx).dfo_ / 10000;
       int64_t dfo_id = dops.at(idx).dfo_ % 10000;
-      if (px_id == producer->get_px_id() && dfo_id == producer->get_dfo_id()) {
-        producer->set_parallel(static_cast<int64_t>(dops.at(idx).dop_));
+      const int64_t hint_dop = static_cast<int64_t>(dops.at(idx).dop_);
+      if (px_id == producer->get_px_id() && dfo_id == producer->get_dfo_id() && 1 < hint_dop) {
+        producer->set_parallel(hint_dop);
         LOG_DEBUG("XXXX: set op dop to hint value",
-                 K(dops.at(idx).dop_), K(px_id), K(dfo_id), K(op_id_));
+                 K(hint_dop), K(px_id), K(dfo_id), K(op_id_));
       }
     }
   }
@@ -2973,7 +3129,7 @@ int ObLogicalOperator::px_rescan_pre()
   } else if (LOG_SUBPLAN_FILTER == type_) {
     if (OB_FAIL(check_subplan_filter_child_exchange_rescanable())) {
       LOG_WARN("mark child ex-receive as px op fail", K(ret));
-    } else if (get_plan()->get_optimizer_context().get_parallel() <= 1 &&
+    } else if (get_plan()->get_optimizer_context().get_max_parallel() <= 1 &&
         !static_cast<ObLogSubPlanFilter*>(this)->get_exec_params().empty() &&
         get_plan()->get_optimizer_context().enable_px_batch_rescan()) {
       common::ObIArray<bool>&enable_px_batch_rescans =
@@ -3014,7 +3170,7 @@ int ObLogicalOperator::px_rescan_pre()
     } else if (static_cast<ObLogJoin*>(this)->get_join_type() != CONNECT_BY_JOIN &&
                static_cast<ObLogJoin*>(this)->is_nlj_with_param_down() &&
                !IS_SEMI_ANTI_JOIN(static_cast<ObLogJoin*>(this)->get_join_type()) &&
-               get_plan()->get_optimizer_context().get_parallel() <= 1 &&
+               get_plan()->get_optimizer_context().get_max_parallel() <= 1 &&
                get_plan()->get_optimizer_context().enable_px_batch_rescan()) {
       bool find_px = false;
       bool nested_rescan = false;

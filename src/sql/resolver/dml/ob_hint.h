@@ -124,11 +124,13 @@ struct ObGlobalHint {
   static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
   static const int64_t UNSET_QUERY_TIMEOUT = -1;
   static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const int64_t UNSET_PARALLEL = -1;
   static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
   static const uint64_t MIN_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
   static const uint64_t CURRENT_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
   static const int64_t DEFAULT_PARALLEL = 1;
+  static const int64_t UNSET_PARALLEL = 0;
+  static const int64_t SET_ENABLE_AUTO_DOP = -1;
+  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
   static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
@@ -159,8 +161,11 @@ struct ObGlobalHint {
   ObParamOption get_param_option() const { return param_option_; }
   int64_t get_dblink_tx_id_hint() const { return tx_id_; }
   int64_t get_dblink_tm_sessid_hint() const { return tm_sessid_; }
-  int64_t get_parallel_hint() const { return parallel_; }
+  int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
+  bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
+  bool enable_auto_dop() const { return SET_ENABLE_AUTO_DOP == parallel_; }
+  bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
   bool has_valid_opt_features_version() const { return is_valid_opt_features_version(opt_features_version_); }
   static bool is_valid_opt_features_version(uint64_t version)

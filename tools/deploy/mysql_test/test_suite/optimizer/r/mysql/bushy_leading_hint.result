@@ -2430,38 +2430,26 @@ where exists (select /*+ qb_name(x2x) */  1
 from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
  and c.c2 = d.d1) order by x.c1 asc, x.c2 asc, x.c3 desc;
 Query Plan
-====================================================================
-|ID|OPERATOR                           |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                               |     |11      |5           |
-|1 |└─SUBPLAN FILTER                   |     |11      |3           |
-|2 |  ├─TABLE FULL SCAN                |x    |11      |3           |
-|3 |  └─LIMIT                          |     |1       |22          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN   |     |1       |22          |
-|5 |      ├─SUBPLAN SCAN               |VIEW5|1       |12          |
-|6 |      │ └─LIMIT                    |     |1       |12          |
-|7 |      │   └─UNION ALL              |     |1       |12          |
-|8 |      │     ├─LIMIT                |     |1       |6           |
-|9 |      │     │ └─HASH JOIN          |     |1       |6           |
-|10|      │     │   ├─TABLE FULL SCAN  |a    |11      |3           |
-|11|      │     │   └─TABLE FULL SCAN  |b    |1       |2           |
-|12|      │     └─LIMIT                |     |1       |6           |
-|13|      │       └─HASH JOIN          |     |1       |6           |
-|14|      │         ├─TABLE FULL SCAN  |a    |2       |3           |
-|15|      │         └─TABLE FULL SCAN  |b    |9       |2           |
-|16|      └─MATERIAL                   |     |1       |11          |
-|17|        └─SUBPLAN SCAN             |VIEW6|1       |11          |
-|18|          └─LIMIT                  |     |1       |11          |
-|19|            └─UNION ALL            |     |1       |11          |
-|20|              ├─LIMIT              |     |1       |5           |
-|21|              │ └─HASH JOIN        |     |1       |5           |
-|22|              │   ├─TABLE FULL SCAN|a    |2       |3           |
-|23|              │   └─TABLE FULL SCAN|b    |5       |2           |
-|24|              └─LIMIT              |     |1       |6           |
-|25|                └─HASH JOIN        |     |1       |6           |
-|26|                  ├─TABLE FULL SCAN|b    |11      |3           |
-|27|                  └─TABLE FULL SCAN|a    |2       |2           |
-====================================================================
+==================================================================
+|ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                             |     |11      |16          |
+|1 |└─SUBPLAN FILTER                 |     |11      |15          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |12          |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |12          |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |b    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |a    |4       |2           |
+|10|      └─MATERIAL                 |     |1       |6           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |6           |
+|12|          └─LIMIT                |     |1       |6           |
+|13|            └─HASH JOIN          |     |1       |6           |
+|14|              ├─TABLE FULL SCAN  |b    |11      |3           |
+|15|              └─TABLE FULL SCAN  |a    |3       |2           |
+==================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([x.c1], [x.c2], [x.c3]), filter(nil), rowset=256
@@ -2478,60 +2466,30 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
-  9 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds(nil)
- 10 - output([a.c1]), filter(nil), rowset=256
-      access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([b.d1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      equal_conds([a.c1 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+  8 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output(nil), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      access(nil)
  12 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 14 - output([a.c1]), filter([a.c1 = a.c2]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 15 - output([b.d1]), filter(nil), rowset=256
+      equal_conds([a.c2 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+ 14 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 16 - output(nil), filter(nil), rowset=256
- 17 - output(nil), filter(nil), rowset=256
-      access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 21 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds(nil)
- 22 - output([a.c2]), filter([a.c2 = a.c1]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 23 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 25 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 26 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 27 - output([a.c1], [a.c2]), filter(nil), rowset=256
+ 15 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -2562,38 +2520,26 @@ where exists (select /*+ qb_name(x2x)  LEADING(a c b d)*/  1
 from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
  and c.c2 = d.d1) order by x.c1 desc, x.c2 asc, x.c3 desc;
 Query Plan
-====================================================================
-|ID|OPERATOR                           |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                               |     |11      |5           |
-|1 |└─SUBPLAN FILTER                   |     |11      |3           |
-|2 |  ├─TABLE FULL SCAN                |x    |11      |3           |
-|3 |  └─LIMIT                          |     |1       |22          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN   |     |1       |22          |
-|5 |      ├─SUBPLAN SCAN               |VIEW5|1       |12          |
-|6 |      │ └─LIMIT                    |     |1       |12          |
-|7 |      │   └─UNION ALL              |     |1       |12          |
-|8 |      │     ├─LIMIT                |     |1       |6           |
-|9 |      │     │ └─HASH JOIN          |     |1       |6           |
-|10|      │     │   ├─TABLE FULL SCAN  |a    |11      |3           |
-|11|      │     │   └─TABLE FULL SCAN  |b    |1       |2           |
-|12|      │     └─LIMIT                |     |1       |6           |
-|13|      │       └─HASH JOIN          |     |1       |6           |
-|14|      │         ├─TABLE FULL SCAN  |a    |2       |3           |
-|15|      │         └─TABLE FULL SCAN  |b    |9       |2           |
-|16|      └─MATERIAL                   |     |1       |11          |
-|17|        └─SUBPLAN SCAN             |VIEW6|1       |11          |
-|18|          └─LIMIT                  |     |1       |11          |
-|19|            └─UNION ALL            |     |1       |11          |
-|20|              ├─LIMIT              |     |1       |5           |
-|21|              │ └─HASH JOIN        |     |1       |5           |
-|22|              │   ├─TABLE FULL SCAN|a    |2       |3           |
-|23|              │   └─TABLE FULL SCAN|b    |5       |2           |
-|24|              └─LIMIT              |     |1       |6           |
-|25|                └─HASH JOIN        |     |1       |6           |
-|26|                  ├─TABLE FULL SCAN|b    |11      |3           |
-|27|                  └─TABLE FULL SCAN|a    |2       |2           |
-====================================================================
+==================================================================
+|ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                             |     |11      |16          |
+|1 |└─SUBPLAN FILTER                 |     |11      |15          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |12          |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |12          |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |b    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |a    |4       |2           |
+|10|      └─MATERIAL                 |     |1       |6           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |6           |
+|12|          └─LIMIT                |     |1       |6           |
+|13|            └─HASH JOIN          |     |1       |6           |
+|14|              ├─TABLE FULL SCAN  |b    |11      |3           |
+|15|              └─TABLE FULL SCAN  |a    |3       |2           |
+==================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([x.c1], [x.c2], [x.c3]), filter(nil), rowset=256
@@ -2610,60 +2556,30 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
-  9 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds(nil)
- 10 - output([a.c1]), filter(nil), rowset=256
-      access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([b.d1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      equal_conds([a.c1 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+  8 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output(nil), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      access(nil)
  12 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 14 - output([a.c1]), filter([a.c1 = a.c2]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 15 - output([b.d1]), filter(nil), rowset=256
+      equal_conds([a.c2 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+ 14 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 16 - output(nil), filter(nil), rowset=256
- 17 - output(nil), filter(nil), rowset=256
-      access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 21 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds(nil)
- 22 - output([a.c2]), filter([a.c2 = a.c1]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 23 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 25 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 26 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 27 - output([a.c1], [a.c2]), filter(nil), rowset=256
+ 15 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -2694,38 +2610,26 @@ where exists (select /*+ qb_name(x3x) */  1
 from nn1 a, nn2 b, nn1 c, nn2 d   where a.c1 = b.d1
  and c.c2 = d.d1) order by x.c1 desc, x.c3 desc, x.c2 asc ;
 Query Plan
-====================================================================
-|ID|OPERATOR                           |NAME |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------
-|0 |SORT                               |     |11      |5           |
-|1 |└─SUBPLAN FILTER                   |     |11      |3           |
-|2 |  ├─TABLE FULL SCAN                |x    |11      |3           |
-|3 |  └─LIMIT                          |     |1       |22          |
-|4 |    └─NESTED-LOOP JOIN CARTESIAN   |     |1       |22          |
-|5 |      ├─SUBPLAN SCAN               |VIEW5|1       |12          |
-|6 |      │ └─LIMIT                    |     |1       |12          |
-|7 |      │   └─UNION ALL              |     |1       |12          |
-|8 |      │     ├─LIMIT                |     |1       |6           |
-|9 |      │     │ └─HASH JOIN          |     |1       |6           |
-|10|      │     │   ├─TABLE FULL SCAN  |a    |11      |3           |
-|11|      │     │   └─TABLE FULL SCAN  |b    |1       |2           |
-|12|      │     └─LIMIT                |     |1       |6           |
-|13|      │       └─HASH JOIN          |     |1       |6           |
-|14|      │         ├─TABLE FULL SCAN  |a    |2       |3           |
-|15|      │         └─TABLE FULL SCAN  |b    |9       |2           |
-|16|      └─MATERIAL                   |     |1       |11          |
-|17|        └─SUBPLAN SCAN             |VIEW6|1       |11          |
-|18|          └─LIMIT                  |     |1       |11          |
-|19|            └─UNION ALL            |     |1       |11          |
-|20|              ├─LIMIT              |     |1       |5           |
-|21|              │ └─HASH JOIN        |     |1       |5           |
-|22|              │   ├─TABLE FULL SCAN|a    |2       |3           |
-|23|              │   └─TABLE FULL SCAN|b    |5       |2           |
-|24|              └─LIMIT              |     |1       |6           |
-|25|                └─HASH JOIN        |     |1       |6           |
-|26|                  ├─TABLE FULL SCAN|b    |11      |3           |
-|27|                  └─TABLE FULL SCAN|a    |2       |2           |
-====================================================================
+==================================================================
+|ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |SORT                             |     |11      |17          |
+|1 |└─SUBPLAN FILTER                 |     |11      |15          |
+|2 |  ├─TABLE FULL SCAN              |x    |11      |3           |
+|3 |  └─LIMIT                        |     |1       |12          |
+|4 |    └─NESTED-LOOP JOIN CARTESIAN |     |1       |12          |
+|5 |      ├─SUBPLAN SCAN             |VIEW1|1       |7           |
+|6 |      │ └─LIMIT                  |     |1       |7           |
+|7 |      │   └─HASH JOIN            |     |1       |7           |
+|8 |      │     ├─TABLE FULL SCAN    |b    |11      |3           |
+|9 |      │     └─TABLE FULL SCAN    |a    |4       |2           |
+|10|      └─MATERIAL                 |     |1       |6           |
+|11|        └─SUBPLAN SCAN           |VIEW2|1       |6           |
+|12|          └─LIMIT                |     |1       |6           |
+|13|            └─HASH JOIN          |     |1       |6           |
+|14|              ├─TABLE FULL SCAN  |b    |11      |3           |
+|15|              └─TABLE FULL SCAN  |a    |3       |2           |
+==================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([x.c1], [x.c2], [x.c3]), filter(nil), rowset=256
@@ -2742,60 +2646,30 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   5 - output(nil), filter(nil), rowset=256
       access(nil)
-  6 - output([UNION([1])]), filter(nil), rowset=256
+  6 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
-  7 - output([UNION([1])]), filter(nil), rowset=256
-  8 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
-  9 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds(nil)
- 10 - output([a.c1]), filter(nil), rowset=256
-      access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([b.d1]), filter(nil), rowset=256
+  7 - output(nil), filter(nil), rowset=256
+      equal_conds([a.c1 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+  8 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+  9 - output([a.c1], [a.c2]), filter(nil), rowset=256
+      access([a.c1], [a.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
+ 10 - output(nil), filter(nil), rowset=256
+ 11 - output(nil), filter(nil), rowset=256
+      access(nil)
  12 - output([1]), filter(nil), rowset=256
       limit(1), offset(nil)
  13 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c1 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 14 - output([a.c1]), filter([a.c1 = a.c2]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 15 - output([b.d1]), filter(nil), rowset=256
+      equal_conds([a.c2 = b.d1]), other_conds([a.c1 = b.d1 OR a.c2 = b.d1])
+ 14 - output([b.d1]), filter(nil), rowset=256
       access([b.d1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 16 - output(nil), filter(nil), rowset=256
- 17 - output(nil), filter(nil), rowset=256
-      access(nil)
- 18 - output([UNION([1])]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 19 - output([UNION([1])]), filter(nil), rowset=256
- 20 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 21 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds(nil)
- 22 - output([a.c2]), filter([a.c2 = a.c1]), rowset=256
-      access([a.c1], [a.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false, filter_before_indexback[false],
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
- 23 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 24 - output([1]), filter(nil), rowset=256
-      limit(1), offset(nil)
- 25 - output(nil), filter(nil), rowset=256
-      equal_conds([a.c2 = b.d1]), other_conds([lnnvl(cast(a.c1 = b.d1, TINYINT(-1, 0)))])
- 26 - output([b.d1]), filter(nil), rowset=256
-      access([b.d1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([b.__pk_increment]), range(MIN ; MAX)always true
- 27 - output([a.c1], [a.c2]), filter(nil), rowset=256
+ 15 - output([a.c1], [a.c2]), filter(nil), rowset=256
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true

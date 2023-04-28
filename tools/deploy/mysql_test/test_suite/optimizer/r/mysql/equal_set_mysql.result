@@ -6192,8 +6192,8 @@ Query Plan
 |2 |  └─PX PARTITION ITERATOR      |        |1       |45          |
 |3 |    └─NESTED-LOOP SEMI JOIN    |        |1       |45          |
 |4 |      ├─TABLE FULL SCAN        |t1      |1       |42          |
-|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |437         |
-|6 |        └─NESTED-LOOP JOIN     |        |1       |437         |
+|5 |      └─SUBPLAN SCAN           |VIEW2   |1       |54          |
+|6 |        └─NESTED-LOOP JOIN     |        |1       |54          |
 |7 |          ├─SUBPLAN SCAN       |VIEW3   |1       |42          |
 |8 |          │ └─MERGE DISTINCT   |        |1       |42          |
 |9 |          │   └─TABLE FULL SCAN|t3      |1       |42          |
@@ -6969,7 +6969,7 @@ Query Plan
 |2 |  └─HASH JOIN                              |        |1       |36          |
 |3 |    ├─EXCHANGE IN DISTR                    |        |1       |27          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)          |:EX10001|1       |27          |
-|5 |    │   └─SUBPLAN SCAN                     |t4      |1       |26          |
+|5 |    │   └─SUBPLAN SCAN                     |t4      |1       |27          |
 |6 |    │     └─HASH DISTINCT                  |        |1       |26          |
 |7 |    │       └─EXCHANGE IN DISTR            |        |1       |26          |
 |8 |    │         └─EXCHANGE OUT DISTR (HASH)  |:EX10000|1       |26          |
@@ -9190,7 +9190,7 @@ Query Plan
 |0 |PX COORDINATOR                           |        |1       |30          |
 |1 |└─EXCHANGE OUT DISTR                     |:EX10003|1       |30          |
 |2 |  └─HASH JOIN                            |        |1       |28          |
-|3 |    ├─EXCHANGE IN DISTR                  |        |1       |19          |
+|3 |    ├─EXCHANGE IN DISTR                  |        |1       |20          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)        |:EX10002|1       |19          |
 |5 |    │   └─SUBPLAN SCAN                   |t4      |1       |19          |
 |6 |    │     └─HASH EXCEPT DISTINCT         |        |1       |19          |

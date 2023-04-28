@@ -38,7 +38,7 @@ public:
   inline common::ObString &get_subquery_name() { return subquery_name_; }
   inline const common::ObIArray<ObRawExpr *> &get_access_exprs() const { return access_exprs_; }
   inline common::ObIArray<ObRawExpr *> &get_access_exprs() { return access_exprs_; }
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   virtual int check_output_dependance(ObIArray<ObRawExpr *> &child_output, PPDeps &deps) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;

@@ -455,7 +455,10 @@ struct ObExchangeInfo
     wf_hybrid_aggr_status_expr_(NULL),
     wf_hybrid_pby_exprs_cnt_array_(),
     may_add_interval_part_(MayAddIntervalPart::NO),
-    sample_type_(NOT_INIT_SAMPLE_TYPE)
+    sample_type_(NOT_INIT_SAMPLE_TYPE),
+    parallel_(ObGlobalHint::UNSET_PARALLEL),
+    server_cnt_(0),
+    server_list_()
   {
     repartition_table_id_ = 0;
   }
@@ -515,6 +518,9 @@ struct ObExchangeInfo
   MayAddIntervalPart may_add_interval_part_;
   // sample type for range distribution or partition range distribution
   ObPxSampleType sample_type_;
+  int64_t parallel_;
+  int64_t server_cnt_;
+  common::ObSEArray<common::ObAddr, 4> server_list_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -538,7 +544,10 @@ struct ObExchangeInfo
                K_(is_wf_hybrid),
                K_(wf_hybrid_pby_exprs_cnt_array),
                K_(may_add_interval_part),
-               K_(sample_type));
+               K_(sample_type),
+               K_(parallel),
+               K_(server_cnt),
+               K_(server_list));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };
@@ -1276,7 +1285,8 @@ public:
   virtual int est_cost()
   { return OB_SUCCESS; }
 
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost);
+  int re_est_cost(EstimateCostInfo &param, double &card, double &cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost);
 
   /**
    * @brief compute_property
@@ -1292,6 +1302,16 @@ public:
    * 4. est_sel_info, 5. cost, card, width
    */
   virtual int compute_property();
+
+  int check_property_valid() const;
+  int compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise);
+  int set_parallel_and_server_info_for_match_all();
+  int get_limit_offset_value(ObRawExpr *percent_expr,
+                             ObRawExpr *limit_expr,
+                             ObRawExpr *offset_expr,
+                             double &limit_percent,
+                             int64_t &limit_count,
+                             int64_t &offset_count);
 
   /**
    *  Pre-traverse function for allocating granule iterator
@@ -1572,6 +1592,10 @@ public:
                             ObIArray<ObRawExpr *> &part_cols) const;
   inline void set_parallel(int64_t parallel) { parallel_ = parallel; }
   inline int64_t get_parallel() const { return parallel_; }
+  inline void set_op_parallel_rule(OpParallelRule op_parallel_rule) { op_parallel_rule_ = op_parallel_rule; }
+  inline OpParallelRule get_op_parallel_rule() const { return op_parallel_rule_; }
+  inline int64_t get_available_parallel() const { return available_parallel_; }
+  inline void set_available_parallel(int64_t available_parallel) { available_parallel_ = available_parallel; }
   inline void set_server_cnt(int64_t count) { server_cnt_ = count; }
   inline int64_t get_server_cnt() const { return server_cnt_; }
 
@@ -1768,6 +1792,7 @@ private:
   int need_alloc_material_for_shared_hj(ObLogicalOperator &curr_op, bool &need_alloc);
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
+  int check_need_parallel_valid(int64_t need_parallel) const;
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator
@@ -1815,6 +1840,8 @@ protected:
   const ObRelIds &empty_table_set_;
   int64_t interesting_order_info_;  // 记录算子的序在stmt中的哪些地方用到 e.g. join, group by, order by
   int64_t parallel_;
+  OpParallelRule op_parallel_rule_;
+  int64_t available_parallel_;  // parallel degree used by serial op to enable parallel again
   int64_t server_cnt_;
   ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
   bool need_late_materialization_;

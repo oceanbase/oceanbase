@@ -12325,8 +12325,14 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     }
     case T_PARALLEL: {
       // global parallel hint is processed here. table level hint is processed elsewhere
-      CHECK_HINT_PARAM(hint_node, 1) {
-        global_hint.merge_parallel_hint(child0->value_);
+      if (1 == hint_node.value_) {
+        global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_MANUAL_DOP);
+      } else if (2 == hint_node.value_) {
+        global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
+      } else {
+        CHECK_HINT_PARAM(hint_node, 1) {
+          global_hint.merge_parallel_hint(child0->value_);
+        }
       }
       break;
     }
