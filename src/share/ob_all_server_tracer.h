@@ -31,6 +31,8 @@ public:
   virtual ~ObServerTraceMap();
   int init();
   virtual int is_server_exist(const common::ObAddr &server, bool &exist) const;
+  virtual int get_server_rpc_port(const common::ObAddr &server, const int64_t sql_port,
+                                          int64_t &rpc_port, bool &exist) const;
   virtual int check_server_alive(const common::ObAddr &server, bool &is_alive) const;
   virtual int check_in_service(const common::ObAddr &addr, bool &service_started) const;
   virtual int check_migrate_in_blocked(const common::ObAddr &addr, bool &is_block) const;
@@ -66,6 +68,9 @@ public:
   int for_each_server_info(const ObFunction<int(const ObServerInfoInTable &server_info)> &functor);
 
 private:
+  int find_server_status(const ObAddr &addr, ObServerInfoInTable &status) const;
+  int get_rpc_port_status(const ObAddr &addr, const int64_t sql_port,
+                          int64_t &rpc_port, ObServerInfoInTable &status) const;
   int find_server_info(const ObAddr &addr, ObServerInfoInTable &server_info) const;
 
 private:
@@ -97,6 +102,8 @@ public:
   int init(int tg_id, ObServerTraceTask &trace_task);
   int for_each_server_info(const ObFunction<int(const ObServerInfoInTable &server_info)> &functor);
   virtual int is_server_exist(const common::ObAddr &server, bool &exist) const;
+  virtual int get_server_rpc_port(const common::ObAddr &server, const int64_t sql_port,
+                                          int64_t &rpc_port, bool &exist) const;
   virtual int check_server_alive(const common::ObAddr &server, bool &is_alive) const;
   virtual int check_in_service(const common::ObAddr &addr, bool &service_started) const;
   virtual int check_server_permanent_offline(const common::ObAddr &server, bool &is_offline) const;

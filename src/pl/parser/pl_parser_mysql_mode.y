@@ -130,7 +130,7 @@ int obpl_mysql_wrap_node_into_subquery(ObParseCtx *_parse_ctx, ParseNode *node) 
         *node = *parse_result.result_tree_->children_[0];
         node->str_value_ = subquery;
         node->str_len_ = len;
-        node->str_off_ = -1;
+        node->pl_str_off_ = -1;
       }
     }
   }
@@ -633,12 +633,12 @@ ident:
     IDENT
     {
       $$ = $1;
-      $$->str_off_ = @1.first_column;
+      $$->pl_str_off_ = @1.first_column;
     }
   | unreserved_keyword
     {
       get_non_reserved_node($$, parse_ctx->mem_pool_, @1.first_column, @1.last_column);
-      $$->str_off_ = @1.first_column;
+      $$->pl_str_off_ = @1.first_column;
     }
 ;
 
@@ -705,7 +705,7 @@ create_package_stmt:
       $3->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
       check_ptr($3->str_value_);
       $3->str_len_ = str_len;
-      $3->str_off_ = @3.first_column;
+      $3->pl_str_off_ = @3.first_column;
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_PACKAGE_CREATE, 1, $3);
       $$->int32_values_[0] = $2;
       $$->int32_values_[1] = 0;
@@ -724,7 +724,7 @@ package_block:
         $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
         check_ptr($$->str_value_);
         $$->str_len_ = str_len;
-        $$->str_off_ = @4.first_column;
+        $$->pl_str_off_ = @4.first_column;
       }
     }
 ;
@@ -833,7 +833,7 @@ create_package_body_stmt:
       $3->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
       check_ptr($3->str_value_);
       $3->str_len_ = str_len;
-      $3->str_off_ = @3.first_column;
+      $3->pl_str_off_ = @3.first_column;
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_PACKAGE_CREATE_BODY, 1, $3);
       $$->int32_values_[0] = $2;
       $$->int32_values_[1] = 0;
@@ -855,7 +855,7 @@ package_body_block:
         $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
         check_ptr($$->str_value_);
         $$->str_len_ = str_len;
-        $$->str_off_ = @4.first_column;
+        $$->pl_str_off_ = @4.first_column;
       }
     }
   | PACKAGE BODY sp_name sp_proc_stmts END_KEY opt_tail_package_name %prec PARENS
@@ -870,7 +870,7 @@ package_body_block:
         $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
         check_ptr($$->str_value_);
         $$->str_len_ = str_len;
-        $$->str_off_ = @4.first_column;
+        $$->pl_str_off_ = @4.first_column;
       }
     }
   | PACKAGE BODY sp_name decl_stmt_ext_list END_KEY opt_tail_package_name %prec PARENS
@@ -896,7 +896,7 @@ package_body_block:
         $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
         check_ptr($$->str_value_);
         $$->str_len_ = str_len;
-        $$->str_off_ = @4.first_column;
+        $$->pl_str_off_ = @4.first_column;
       }
     }
 ;
@@ -985,7 +985,7 @@ plsql_trigger_source:
       $3->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
       check_ptr($3->str_value_);
       $3->str_len_ = str_len;
-      $3->str_off_ = @1.first_column;
+      $3->pl_str_off_ = @1.first_column;
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_TG_SOURCE, 2, $2, $3);
     }
 ;
@@ -1037,7 +1037,7 @@ trigger_body:
     check_ptr(dup_body);
     $$->str_value_ = dup_body;
     $$->str_len_ = body_len;
-    $$->str_off_ = @1.first_column;
+    $$->pl_str_off_ = @1.first_column;
   }
 ;
 

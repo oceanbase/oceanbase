@@ -724,6 +724,7 @@ expr opt_as column_label
     dup_expr_string($$, result, @3.first_column, @3.last_column);
     dup_node_string($3, alias_node, result->malloc_pool_);
     alias_node->param_num_ = 0;
+    alias_node->sql_str_off_ = @2.first_column;
   }
 }
 | expr opt_as STRING_VALUE
@@ -743,8 +744,10 @@ expr opt_as column_label
     if (0 == $3->str_len_) {
       alias_name_node->str_value_ = NULL;
       alias_name_node->str_len_ = 0;
+      alias_name_node->sql_str_off_ = $3->sql_str_off_;
     } else {
       dup_node_string($3, alias_name_node, result->malloc_pool_);
+      alias_name_node->sql_str_off_ = $3->sql_str_off_;
     }
 
     malloc_non_terminal_node(alias_node, result->malloc_pool_, T_ALIAS, 2, $1, alias_name_node);
@@ -753,8 +756,10 @@ expr opt_as column_label
     if (0 == $3->str_len_) {
       alias_node->str_value_ = NULL;
       alias_node->str_len_ = 0;
+      alias_node->sql_str_off_ = @2.first_column;
     } else {
       dup_node_string($3, alias_node, result->malloc_pool_);
+      alias_node->sql_str_off_ = @2.first_column;
     }
     alias_node->param_num_ = 1;
   }
@@ -893,6 +898,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->str_len_ = $1->str_len_;
   $$->raw_text_ = $1->raw_text_;
   $$->text_len_ = $1->text_len_;
+  $$->sql_str_off_ = @1.first_column;
   @$.first_column = @1.first_column;
   @$.last_column = @1.last_column;
 }
@@ -903,6 +909,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->str_len_ = $2->str_len_;
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | charset_introducer HEX_STRING_VALUE
 {
@@ -912,6 +919,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->str_len_ = $2->str_len_;
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
@@ -1017,14 +1025,15 @@ complex_string_literal { $$ = $1; }
 ;
 
 number_literal:
-INTNUM { $$ = $1; $$->param_num_ = 1;}
-| DECIMAL_VAL { $$ = $1; $$->param_num_ = 1;}
+INTNUM { $$ = $1; $$->param_num_ = 1; $$->sql_str_off_=$1->sql_str_off_;}
+| DECIMAL_VAL { $$ = $1; $$->param_num_ = 1;$$->sql_str_off_=$1->sql_str_off_;}
 ;
 
 expr_const:
 literal
 {
   $$ = $1;
+  $$->sql_str_off_ = $1->sql_str_off_;
   CHECK_MYSQL_COMMENT(result, $$);
 }
 | SYSTEM_VARIABLE { $$ = $1; }
@@ -1243,6 +1252,7 @@ bit_expr IN in_expr
     malloc_terminal_node(node, result->malloc_pool_, T_VARCHAR);
     node->str_value_ = "\\";
     node->str_len_ = 1;
+    node->sql_str_off_ = @5.first_column;
     malloc_non_terminal_node($$, result->malloc_pool_, T_OP_LIKE, 3, $1, $3, node);
   } else {
     malloc_non_terminal_node($$, result->malloc_pool_, T_OP_LIKE, 3, $1, $3, $5);
@@ -1263,6 +1273,7 @@ bit_expr IN in_expr
     malloc_terminal_node(node, result->malloc_pool_, T_VARCHAR);
     node->str_value_ = "\\";
     node->str_len_ = 1;
+    node->sql_str_off_ = @6.first_column;
     malloc_non_terminal_node($$, result->malloc_pool_, T_OP_NOT_LIKE, 3, $1, $4, node);
   } else {
     malloc_non_terminal_node($$, result->malloc_pool_, T_OP_NOT_LIKE, 3, $1, $4, $6);
@@ -1434,7 +1445,10 @@ simple_expr collation %prec NEG
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
 }
 | column_ref { $$ = $1; }
-| expr_const { $$ = $1; }
+| expr_const {
+  $$ = $1;
+  $$->sql_str_off_ = $1->sql_str_off_;
+}
 | simple_expr CNNOP simple_expr
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_CNN, 2, $1, $3);
@@ -2928,6 +2942,7 @@ NOW '(' ')'
     malloc_terminal_node(params, result->malloc_pool_, T_INT);
     params->value_ = $2[0];
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CUR_TIMESTAMP, 1, params);
+    params->sql_str_off_ = @$.first_column;
   }
   else
   {
@@ -2959,6 +2974,7 @@ CURTIME  '(' ')'
     ParseNode *params = NULL;
     malloc_terminal_node(params, result->malloc_pool_, T_INT);
     params->value_ = $2[0];
+    params->sql_str_off_ = @1.first_column;
     malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_CUR_TIME, 1, params);
   }
   else
@@ -3137,6 +3153,7 @@ ws_level_list_item
   malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
   $$->value_ = $3->value_ | $1->value_;
   $$->param_num_ = $1->param_num_ + $3->param_num_;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 ;
 
@@ -3146,6 +3163,7 @@ ws_level_number ws_level_flags
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = (1 | $2->value_) << $1->value_ ;
   $$->param_num_ = 1;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 ;
 
@@ -3153,6 +3171,7 @@ ws_level_range:
 ws_level_number '-' ws_level_number
 {
   malloc_terminal_node($$, result->malloc_pool_, T_WEIGHT_STRING_LEVEL_PARAM);
+  $$->sql_str_off_ = $1->sql_str_off_;
   uint32_t res = 0;
   uint32_t start = $1->value_ ;
   uint32_t end = $3->value_ ;
@@ -3171,6 +3190,7 @@ ws_level_number:
 INTNUM
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->sql_str_off_ = $1->sql_str_off_;
   if ($1->value_ < 1) {
     $$->value_ = 1;
   } else if ($1->value_ > OB_STRXFRM_NLEVELS) {
@@ -3199,6 +3219,7 @@ ws_level_flags:
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
   $$->value_ = $1->value_ | $2->value_;
   $$->param_num_ = 1;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 | ws_level_flag_reverse
 {
@@ -3696,6 +3717,7 @@ LOGONLY_REPLICA_NUM opt_equal_mark INTNUM
   malloc_terminal_node($$, result->malloc_pool_, T_CHARSET);
   $$->str_value_ = $3->str_value_;
   $$->str_len_ = $3->str_len_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 | COLLATE opt_equal_mark collation_name
 {
@@ -3704,6 +3726,7 @@ LOGONLY_REPLICA_NUM opt_equal_mark INTNUM
   $$->str_value_ = $3->str_value_;
   $$->str_len_ = $3->str_len_;
   $$->param_num_ = $3->param_num_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 | read_only_or_write
 {
@@ -3929,6 +3952,7 @@ opt_default_mark charset_key opt_equal_mark charset_name
   malloc_terminal_node($$, result->malloc_pool_, T_CHARSET);
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 | opt_default_mark COLLATE opt_equal_mark collation_name
 {
@@ -3938,12 +3962,14 @@ opt_default_mark charset_key opt_equal_mark charset_name
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
   $$->param_num_ = $4->param_num_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 | REPLICA_NUM opt_equal_mark INTNUM
 {
   (void)($2);
   malloc_terminal_node($$, result->malloc_pool_, T_REPLICA_NUM);
   $$->value_ = $3->value_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 | read_only_or_write
 {
@@ -4687,11 +4713,13 @@ NOT NULLX
 {
   (void)($2) ; /* make bison mute */
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NOT_NULL);
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | NULLX
 {
   (void)($1) ; /* make bison mute */
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NULL);
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 | UNIQUE KEY
 {
@@ -4780,6 +4808,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_COLL_IDX] = BINARY_COLLATION; /* is binary */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
   $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | CHARACTER opt_string_length_i_v2 opt_binary
 {
@@ -4790,6 +4819,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;        /* is char */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
   $$->param_num_ = $2[1]; /* opt_binary的常数个数一定为0 */
+  $$->sql_str_off_ = @1.first_column;
 }
 | CHARACTER opt_string_length_i_v2 charset_key charset_name
 {
@@ -4801,6 +4831,7 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = $2[1];
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
+  $$->sql_str_off_ = @1.first_column;
 }
 | cast_datetime_type_i opt_datetime_fsp_i
 {
@@ -4809,6 +4840,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = $1[0];
   $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = $2[0];
   $$->param_num_ = $1[1] + $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | NUMBER opt_number_precision
 {
@@ -4819,6 +4851,7 @@ BINARY opt_string_length_i_v2
     $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2->int16_values_[0];    /* precision */
     $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = $2->int16_values_[1];    /* scale */
     $$->param_num_ = $2->param_num_;
+    $$->sql_str_off_ = $2->sql_str_off_;
   }
 }
 | DECIMAL opt_number_precision
@@ -4830,6 +4863,7 @@ BINARY opt_string_length_i_v2
     $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2->int16_values_[0];    /* precision */
     $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = $2->int16_values_[1];    /* scale */
     $$->param_num_ = $2->param_num_;
+    $$->sql_str_off_ = $2->sql_str_off_;
   }
 }
 | FIXED opt_number_precision
@@ -4841,6 +4875,7 @@ BINARY opt_string_length_i_v2
     $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2->int16_values_[0];    /* precision */
     $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = $2->int16_values_[1];    /* scale */
     $$->param_num_ = $2->param_num_;
+    $$->sql_str_off_ = $2->sql_str_off_;
   }
 }
 | NUMERIC opt_number_precision
@@ -4852,6 +4887,7 @@ BINARY opt_string_length_i_v2
     $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2->int16_values_[0];    /* precision */
     $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = $2->int16_values_[1];    /* scale */
     $$->param_num_ = $2->param_num_;
+    $$->sql_str_off_ = $2->sql_str_off_;
   }
 }
 | SIGNED opt_integer
@@ -4861,6 +4897,7 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_INT;
   $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | UNSIGNED opt_integer
 {
@@ -4868,6 +4905,7 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_UINT64;
   $$->param_num_ = $2[1];
+  $$->sql_str_off_ = @1.first_column;
 }
 | DOUBLE
 {
@@ -4877,6 +4915,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = -1;    /* precision */
   $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -1;    /* scale */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | FLOAT opt_cast_float_precision
 { /* If p is provided and 0 <= < p <= 24, the result is of type FLOAT. */
@@ -4887,6 +4926,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_N_PREC_IDX] = $2[0];  /* precision */
   $$->int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -1;    /* scale */
   $$->param_num_ = $2[1]; /* param only use to choose float or double convert */
+  $$->sql_str_off_ = @1.first_column;
 }
 | JSON
 {
@@ -4896,6 +4936,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;        /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | POINT
 {
@@ -4905,6 +4946,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 1;      /* point */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | LINESTRING
 {
@@ -4914,6 +4956,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 2;      /* linestring */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | POLYGON
 {
@@ -4923,6 +4966,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 3;      /* polygon */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | MULTIPOINT
 {
@@ -4932,6 +4976,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 4;      /* multipoint */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | MULTILINESTRING
 {
@@ -4941,6 +4986,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 5;      /* multilinestring */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | MULTIPOLYGON
 {
@@ -4950,6 +4996,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 6;       /* multipolygon */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;          /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 | GEOMETRYCOLLECTION
 {
@@ -4959,6 +5006,7 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 7;      /* geometrycollection */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
   $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
 }
 ;
 
@@ -5007,6 +5055,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_terminal_node($$, result->malloc_pool_, ($3[0] || $4[0]) ? $1[0] + (T_UTINYINT - T_TINYINT) : $1[0]);
   $$->int16_values_[0] = $2[0];
   $$->int16_values_[2] = $4[0];   /* 2 is the same index as float or number. */
+  $$->sql_str_off_ = @1.first_column;
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
 {
@@ -5021,6 +5070,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[2] = $4[0];
+  $$->sql_str_off_ = @$.first_column;
 }
 | NUMBER opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -5031,6 +5081,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[2] = $4[0];
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | DECIMAL opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -5041,6 +5092,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[2] = $4[0];
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | FIXED opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -5051,6 +5103,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[2] = $4[0];
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | NUMERIC opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -5061,6 +5114,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   /* malloc_terminal_node() has set memory to 0 filled, so there is no else. */
   $$->int16_values_[2] = $4[0];
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | BOOL
 {
@@ -5078,16 +5132,19 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
   $$->int16_values_[1] = $2[0];
+  $$->sql_str_off_ = @1.first_column;
 }
 | date_year_type_i
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
+  $$->sql_str_off_ = @1.first_column;
 }
 | CHARACTER opt_string_length_i opt_binary opt_charset opt_collation
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, $4, $5, $3);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
+  $$->sql_str_off_ = @1.first_column;
 }
 /*  | TEXT opt_binary opt_charset opt_collation
 //  {
@@ -5119,6 +5176,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
+  $$->sql_str_off_ = @1.first_column;
 }
 | text_type_i opt_string_length_i_v2 opt_binary opt_charset opt_collation
 {
@@ -5140,18 +5198,21 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
+  $$->sql_str_off_ = @1.first_column;
 }
 | VARBINARY string_length_i
 {
   malloc_terminal_node($$, result->malloc_pool_, T_VARCHAR);
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 1; /* is binary */
+  $$->sql_str_off_ = @1.first_column;
 }
 | STRING_VALUE /* wrong or unsupported data type */
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INVALID);
   $$->str_value_ = $1->str_value_;
   $$->str_len_ = $1->str_len_;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 | BIT opt_bit_length_i
 {
@@ -5162,6 +5223,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   } else {
     malloc_terminal_node($$, result->malloc_pool_, T_BIT);
     $$->int16_values_[0] = $2[0];
+    $$->sql_str_off_ = @1.first_column;
   }
 }
 | ENUM '(' string_list ')' opt_binary opt_charset opt_collation
@@ -5329,12 +5391,14 @@ opt_float_precision:
   malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
   $$->int16_values_[0] = $2->value_;
   $$->int16_values_[1] = $4->value_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | '(' INTNUM ')'
 {
   malloc_terminal_node($$, result->malloc_pool_, T_LINK_NODE);
   $$->int16_values_[0] = $2->value_;
   $$->int16_values_[1] = -1;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | '(' DECIMAL_VAL ')'
 {
@@ -5343,6 +5407,7 @@ opt_float_precision:
   $2->value_ = ob_strntoll($2->str_value_, $2->str_len_, 10, NULL, &err_no);
   $$->int16_values_[0] = $2->value_;
   $$->int16_values_[1] = -1;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | /*EMPTY*/
 {
@@ -5364,6 +5429,7 @@ opt_number_precision:
   } else {
     $$->int16_values_[1] = $4->value_;
   }
+  $$->sql_str_off_ = $2->sql_str_off_;
   $$->param_num_ = 2;
 }
 | '(' INTNUM ')'
@@ -5373,6 +5439,7 @@ opt_number_precision:
     $$->int16_values_[0] = OB_MAX_PARSER_INT16_VALUE;
   } else {
     $$->int16_values_[0] = $2->value_;
+    $$->sql_str_off_ = $2->sql_str_off_;
   }
   $$->int16_values_[1] = 0;
   $$->param_num_ = 1;
@@ -5561,6 +5628,7 @@ charset_key charset_name
   malloc_terminal_node($$, result->malloc_pool_, T_CHARSET);
   $$->str_value_ = $2->str_value_;
   $$->str_len_ = $2->str_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | /*EMPTY*/
 { $$ = NULL; }
@@ -5573,6 +5641,7 @@ COLLATE collation_name
   $$->str_value_ = $2->str_value_;
   $$->str_len_ = $2->str_len_;
   $$->param_num_ = $2->param_num_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 };
 
 opt_collation:
@@ -5597,11 +5666,13 @@ not NULLX
   (void)($1) ;
   (void)($2) ; /* make bison mute */
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NOT_NULL);
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | NULLX
 {
   (void)($1) ; /* make bison mute */
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NULL);
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 | DEFAULT now_or_signed_literal
 {
@@ -5843,6 +5914,7 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
   $$->param_num_ = $4->param_num_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 | COMMENT opt_equal_mark STRING_VALUE
 {
@@ -6842,6 +6914,7 @@ opt_default_mark TABLEGROUP opt_equal_mark relation_name
   malloc_terminal_node($$, result->malloc_pool_, T_DEFAULT_TABLEGROUP);
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 | opt_default_mark TABLEGROUP opt_equal_mark NULLX
 {
@@ -6849,6 +6922,7 @@ opt_default_mark TABLEGROUP opt_equal_mark relation_name
   (void)($3) ; /* make bison mute */
   (void)($4) ; /* make bison mute */
   malloc_terminal_node($$, result->malloc_pool_, T_DEFAULT_TABLEGROUP);
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 ;
 
@@ -7945,6 +8019,7 @@ select_with_parens order_by
   // from_list
   ParseNode *alias_node = NULL;
   make_name_node(alias_node, result->malloc_pool_, "");
+  alias_node->sql_str_off_ = @1.first_column;
   malloc_non_terminal_node(alias_node, result->malloc_pool_, T_ALIAS, 2, $1, alias_node);
 
   ParseNode *from_list = NULL;
@@ -7975,6 +8050,7 @@ select_with_parens order_by
   // from_list
   ParseNode *alias_node = NULL;
   make_name_node(alias_node, result->malloc_pool_, "");
+  alias_node->sql_str_off_ = @1.first_column;
   malloc_non_terminal_node(alias_node, result->malloc_pool_, T_ALIAS, 2, $1, alias_node);
 
   ParseNode *from_list = NULL;
@@ -9222,22 +9298,26 @@ opt_for_update_wait:
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_DECIMAL);
   $$->str_value_ = $2->str_value_;
   $$->str_len_ = $2->str_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | WAIT INTNUM
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = $2->value_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | NOWAIT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = 0;
+  $$->sql_str_off_ = @1.first_column;
   $$->is_hidden_const_ = 1;
 }
 | NO_WAIT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = 0;
+  $$->sql_str_off_ = @1.first_column;
   $$->is_hidden_const_ = 1;
 };
 
@@ -9510,6 +9590,7 @@ expr %prec LOWER_PARENS
     dup_expr_string($$, result, @1.first_column, @1.last_column);
     dup_node_string($2, alias_node, result->malloc_pool_);
     alias_node->param_num_ = 0;
+    alias_node->sql_str_off_ = @1.first_column;
   }
 }
 | expr AS column_label
@@ -9528,6 +9609,7 @@ expr %prec LOWER_PARENS
     dup_expr_string($$, result, @1.first_column, @1.last_column);
     dup_node_string($3, alias_node, result->malloc_pool_);
     alias_node->param_num_ = 0;
+    alias_node->sql_str_off_ = @1.first_column;
   }
 }
 | expr opt_as STRING_VALUE
@@ -9556,8 +9638,10 @@ expr %prec LOWER_PARENS
     if (NULL == $3->str_value_) {
       alias_node->str_value_ = NULL;
       alias_node->str_len_ = 0;
+      alias_node->sql_str_off_ = $3->sql_str_off_;
     } else {
       dup_node_string($3, alias_node, result->malloc_pool_);
+      alias_node->sql_str_off_ = $3->sql_str_off_;
     }
     alias_node->param_num_ = 1;
   }
@@ -9641,12 +9725,14 @@ tbl_name
   ParseNode *unname_node = NULL;
   make_name_node(unname_node, result->malloc_pool_, "");
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, unname_node);
+  unname_node->sql_str_off_ = @1.first_column;
 }
 | select_with_parens use_flashback %prec LOWER_PARENS
 {
   ParseNode *unname_node = NULL;
   make_name_node(unname_node, result->malloc_pool_, "");
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, unname_node, unname_node, unname_node, unname_node, $2);
+  unname_node->sql_str_off_ = @1.first_column;
 }
 | '(' table_references ')'
 {
@@ -9732,22 +9818,27 @@ relation_factor %prec LOWER_PARENS
 | relation_factor AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, NULL, NULL, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, NULL, $2, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_flashback AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition use_flashback AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $5, NULL, $2, NULL, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor sample_clause AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor sample_clause seed AS relation_name
 {
@@ -9755,10 +9846,12 @@ relation_factor %prec LOWER_PARENS
     $2->children_[2] = $3;
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, NULL, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause seed AS relation_name
 {
@@ -9766,22 +9859,26 @@ relation_factor %prec LOWER_PARENS
     $3->children_[2] = $4;
   }
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $6, NULL, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor AS relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, $$, NULL, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition AS relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 
 | relation_factor sample_clause AS relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor sample_clause seed AS relation_name index_hint_list
 {
@@ -9790,11 +9887,13 @@ relation_factor %prec LOWER_PARENS
   }
   merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, $$, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause AS relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, $$, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause seed AS relation_name index_hint_list
 {
@@ -9803,36 +9902,44 @@ relation_factor %prec LOWER_PARENS
   }
   merge_nodes($$, result, T_INDEX_HINT_LIST, $7);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $6, $$, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $2, NULL, NULL, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, NULL, $2, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_flashback relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $3, NULL, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition use_flashback relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, $2, NULL, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $2, $$, NULL, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, $$, $2, NULL);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor sample_clause seed relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
   if ($2 != NULL) {
     $2->children_[2] = $3;
   }
@@ -9840,6 +9947,7 @@ relation_factor %prec LOWER_PARENS
 | relation_factor use_partition sample_clause seed relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, NULL, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
   if ($3 != NULL) {
     $3->children_[2] = $4;
   }
@@ -9848,6 +9956,7 @@ relation_factor %prec LOWER_PARENS
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
   if ($2 != NULL) {
     $2->children_[2] = $3;
   }
@@ -9856,6 +9965,7 @@ relation_factor %prec LOWER_PARENS
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $5, $$, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
   if ($3 != NULL) {
     $3->children_[2] = $4;
   }
@@ -9863,20 +9973,24 @@ relation_factor %prec LOWER_PARENS
 | relation_factor sample_clause relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, NULL, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor sample_clause relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $3, $$, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | relation_factor use_partition sample_clause relation_name index_hint_list
 {
   merge_nodes($$, result, T_INDEX_HINT_LIST, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 5, $1, $4, $$, $2, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | TABLE '(' simple_expr ')' %prec LOWER_PARENS
 {
@@ -9906,6 +10020,7 @@ SEED '(' INTNUM ')'
   /* USE T_SFU_XXX to avoid being parsed by plan cache as template var */
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = $3->value_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 };
 
 sample_percent:
@@ -9914,6 +10029,7 @@ INTNUM
   /* USE T_SFU_XXX to avoid being parsed by plan cache as template var */
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
   $$->value_ = $1->value_;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 |
 DECIMAL_VAL
@@ -9922,6 +10038,7 @@ DECIMAL_VAL
   malloc_terminal_node($$, result->malloc_pool_, T_SFU_DECIMAL);
   $$->str_len_ = $1->str_len_;
   $$->str_value_ = $1->str_value_;
+  $$->sql_str_off_ = $1->sql_str_off_;
 };
 
 opt_sample_scope:
@@ -9966,18 +10083,22 @@ table_subquery:
 select_with_parens relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | select_with_parens AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, $3);
+  $$->sql_str_off_ = @1.first_column;
 }
 | select_with_parens use_flashback relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $3, NULL, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 | select_with_parens use_flashback AS relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, $4, NULL, NULL, NULL, $2);
+  $$->sql_str_off_ = @1.first_column;
 }
 ;
 
@@ -10404,6 +10525,7 @@ table_reference inner_join_type opt_full_table_factor %prec LOWER_ON
           $$->children_[i] = $1->children_[i - 1];
         }
       }
+      $$->sql_str_off_ = @1.first_column;
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
              strlen($1->children_[1]->str_value_) == 0) {
@@ -10451,6 +10573,7 @@ table_factor %prec LOWER_COMMA
           $$->children_[i] = $1->children_[i - 1];
         }
       }
+      $$->sql_str_off_ = @1.first_column;
     }
   } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
              strlen($1->children_[1]->str_value_) == 0) {
@@ -10988,6 +11111,7 @@ INTNUM
 | BOOL_VALUE
 {
   malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->sql_str_off_ = $1->sql_str_off_;
   $$->value_ = $1->value_;
 }
 | QUESTIONMARK
@@ -11824,11 +11948,13 @@ MAX_CONNECTIONS_PER_HOUR INTNUM
 {
   malloc_terminal_node($$, result->malloc_pool_, T_MAX_CONNECTIONS_PER_HOUR);
   $$->value_ = $2->value_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 | MAX_USER_CONNECTIONS INTNUM
 {
   malloc_terminal_node($$, result->malloc_pool_, T_MAX_USER_CONNECTIONS);
   $$->value_ = $2->value_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 /*
 | MAX_QUERIES_PER_HOUR INTNUM
@@ -14846,12 +14972,14 @@ relation_name_or_string
   malloc_terminal_node($$, result->malloc_pool_, T_TENANT_NAME);
   $$->str_value_ = $1->str_value_;
   $$->str_len_ = $1->str_len_;
+  $$->sql_str_off_ = $1->sql_str_off_;
 }
 | TENANT_ID opt_equal_mark INTNUM
 {
   (void)($2);
   malloc_terminal_node($$, result->malloc_pool_, T_TENANT_ID);
   $$->value_ = $3->value_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 ;
 
@@ -15451,6 +15579,7 @@ TENANT_ID opt_equal_mark INTNUM
   (void)($2);
   malloc_terminal_node($$, result->malloc_pool_, T_TENANT_ID);
   $$->value_ = $3->value_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 |
 TENANT opt_equal_mark relation_name_or_string
@@ -15459,6 +15588,7 @@ TENANT opt_equal_mark relation_name_or_string
   malloc_terminal_node($$, result->malloc_pool_, T_TENANT_NAME);
   $$->str_value_ = $3->str_value_;
   $$->str_len_ = $3->str_len_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 | /* EMPTY */
 {
@@ -16104,6 +16234,7 @@ SAVEPOINT var_name
   malloc_terminal_node($$, result->malloc_pool_, T_CREATE_SAVEPOINT);
   $$->str_value_ = $2->str_value_;
   $$->str_len_ = $2->str_len_;
+  $$->sql_str_off_ = $2->sql_str_off_;
 }
 ;
 rollback_savepoint_stmt:
@@ -16112,18 +16243,21 @@ ROLLBACK TO var_name
   malloc_terminal_node($$, result->malloc_pool_, T_ROLLBACK_SAVEPOINT);
   $$->str_value_ = $3->str_value_;
   $$->str_len_ = $3->str_len_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 | ROLLBACK WORK TO var_name
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ROLLBACK_SAVEPOINT);
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 | ROLLBACK TO SAVEPOINT var_name
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ROLLBACK_SAVEPOINT);
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
+  $$->sql_str_off_ = $4->sql_str_off_;
 }
 ;
 release_savepoint_stmt:
@@ -16132,6 +16266,7 @@ RELEASE SAVEPOINT var_name
   malloc_terminal_node($$, result->malloc_pool_, T_RELEASE_SAVEPOINT);
   $$->str_value_ = $3->str_value_;
   $$->str_len_ = $3->str_len_;
+  $$->sql_str_off_ = $3->sql_str_off_;
 }
 ;
 
@@ -16652,10 +16787,12 @@ ERROR_P
   malloc_terminal_node(type_node, result->malloc_pool_, T_NULLX_CLAUSE);
   type_node->value_ = 1;
   type_node->param_num_ = 1;
+  type_node->sql_str_off_ = $1->sql_str_off_;
 
   ParseNode *v_node = NULL;
   malloc_terminal_node(v_node, result->malloc_pool_, T_NULL);
   v_node->is_hidden_const_ = 1;
+  v_node->sql_str_off_ = $1->sql_str_off_;
 
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, type_node, v_node);
 }

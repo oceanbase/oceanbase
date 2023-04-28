@@ -74,10 +74,15 @@ namespace sql
     static int init_app_info(sql::ObSQLSessionInfo &sess, sql::FLTAppInfo &app_info);
     static int init_flt_log_framework(sql::ObSQLSessionInfo &session, bool is_client_support_flt);
     static int update_flush_policy_by_control_info(sql::ObSQLSessionInfo &sess);
-    static int init_flt_show_trace_env(sql::ObSQLSessionInfo &session);
     static int record_flt_last_trace_id(sql::ObSQLSessionInfo &session);
     static int clean_flt_show_trace_env(sql::ObSQLSessionInfo &session);
     static void clean_flt_env(sql::ObSQLSessionInfo &session);
+    static int process_flt_span_rec(const char *buf, const int64_t len);
+    static int resolve_flt_span_rec(ObIJsonBase *j_tree, ObArenaAllocator& alloc);
+    static int set_json_str_val(ObString key, ObIJsonBase *jobject_ptr, ObString& val);
+    static int set_json_num_val(ObString key, ObIJsonBase *jobject_ptr, int64_t& val);
+    static int set_json_bool_val(ObString key, ObIJsonBase *jobject_ptr, int64_t& val);
+    static int set_json_obj_val(ObString key, ObIJsonBase *jobject_ptr, ObString& val, ObArenaAllocator& alloc);
   };
 } // namespace sql
 } // namespace oceanbase

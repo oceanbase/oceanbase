@@ -100,6 +100,8 @@ int ObVirtualShowTrace::retrive_all_span_info()
     is_row_format_ = session_->is_row_traceformat();
     SMART_VAR(char[OB_MAX_SQL_LENGTH], sql) {
       const uint64_t exec_tenant_id = effective_tenant_id_;
+      //const char *table_name = lib::is_oracle_mode() ? OB_ALL_VIRTUAL_TRACE_SPAN_INFO_ORA_TNAME:
+      //                                                  OB_ALL_VIRTUAL_TRACE_SPAN_INFO_TNAME;
       const char *table_name = OB_ALL_VIRTUAL_TRACE_SPAN_INFO_TNAME;
       trace_id = session_->get_last_flt_trace_id();
       sql_len = snprintf(sql, OB_MAX_SQL_LENGTH,
@@ -769,8 +771,12 @@ int ObVirtualShowTrace::fill_cells(sql::ObFLTShowTraceRec &record)
       case REF_TYPE: {
         if (record.data_.ref_type_ == 0) {
           cells[cell_idx].set_varchar("CHILD");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                     ObCharset::get_default_charset()));
         } else if (record.data_.ref_type_ == 1) {
           cells[cell_idx].set_varchar("FOLLOW");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                     ObCharset::get_default_charset()));
         } else {
           // do nothing
         }

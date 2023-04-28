@@ -924,6 +924,15 @@ const ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx) const
   return var;
 }
 
+ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx)
+{
+  ObBasicSysVar *var = NULL;
+  if (idx >= 0 && idx < ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+    var = sys_vars_[idx];
+  }
+  return var;
+}
+
 int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;

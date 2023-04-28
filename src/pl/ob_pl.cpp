@@ -1290,6 +1290,7 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
                                                   ObWrapperAllocator(trans_ctx.allocator_));
   if (param_num > 0) {
     SqlInfo sql_info;
+    sql_info.need_check_fp_ = false;
     ObPCParam *pc_param = NULL;
     char *ptr = (char *)trans_ctx.allocator_->alloc(param_num * sizeof(ObPCParam));
     pc_ctx.fp_result_.raw_params_.set_allocator(trans_ctx.allocator_);
@@ -1379,7 +1380,7 @@ int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNo
       } else {
         /* 语法树分析时会修改node上部分属性, 这里提前记录 */
         int64_t raw_pos = expr_node->children_[0]->pos_ - trans_ctx.raw_anonymous_off_;
-        int64_t raw_str_off = expr_node->children_[0]->str_off_;
+        int64_t raw_str_off = expr_node->children_[0]->pl_str_off_;
         trans_ctx.raw_sql_or_expr_.assign_ptr(expr_node->children_[0]->raw_text_, expr_node->children_[0]->text_len_);
         trans_ctx.raw_param_num_ = no_param_root->children_[0]->param_num_;
         trans_ctx.no_param_sql_.assign_ptr(parse_result.no_param_sql_ + no_param_root->children_[0]->pos_, no_param_root->children_[0]->str_len_);
@@ -1396,7 +1397,7 @@ int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNo
       }
     } else if (T_SQL_STMT == no_param_root->type_) {
       int64_t raw_pos = root->children_[0]->pos_ - trans_ctx.raw_anonymous_off_;
-      int64_t raw_str_off = root->children_[0]->str_off_;
+      int64_t raw_str_off = root->children_[0]->pl_str_off_;
       trans_ctx.raw_sql_or_expr_.assign_ptr(root->children_[0]->raw_text_, root->children_[0]->text_len_);
       trans_ctx.raw_param_num_ = no_param_root->children_[0]->param_num_;
       trans_ctx.no_param_sql_.assign_ptr(parse_result.no_param_sql_ + no_param_root->children_[0]->pos_, no_param_root->children_[0]->str_len_);
@@ -1441,7 +1442,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
       memset(&trans_ctx, 0, sizeof(PlTransformTreeCtx));
       trans_ctx.allocator_ = &allocator;
       trans_ctx.raw_sql_ = sql;
-      trans_ctx.raw_anonymous_off_ = block->str_off_;
+      trans_ctx.raw_anonymous_off_ = block->pl_str_off_;
       trans_ctx.params_ = &params;
       trans_ctx.buf_ = (char *)trans_ctx.allocator_->alloc(sql.length());
       trans_ctx.buf_size_ = sql.length();

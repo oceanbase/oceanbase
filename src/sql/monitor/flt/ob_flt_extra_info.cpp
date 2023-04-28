@@ -93,6 +93,9 @@ int FLTControlInfo::serialize(char *buf, const int64_t len, int64_t &pos)
   } else if (OB_FAIL(ObProtoTransUtil::store_int8(buf, len, pos,
                                       slow_query_thres_, FLT_SLOW_QUERY_THRES))) {
     OB_LOG(WARN,"failed to store extra info id", K(FLT_RECORD_POLICY), K(buf));
+  } else if (support_show_trace_ && OB_FAIL(ObProtoTransUtil::store_int1(buf, len, pos,
+                                      show_trace_enable_, FLT_SHOW_TRACE_ENABLE))) {
+    OB_LOG(WARN,"failed to store extra info id", K(FLT_SHOW_TRACE_ENABLE), K(buf));
   } else {
     // fill type and len in the head
     int32_t total_len = pos - org_pos - FLT_HEADER_LEN;
@@ -157,10 +160,17 @@ int FLTControlInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const i
       }
       break;
     }
+    case FLT_SHOW_TRACE_ENABLE: {
+      int8_t v = 0;
+      if (OB_FAIL(ObProtoTransUtil::get_int1(buf, len, pos, v_len, v))) {
+        OB_LOG(WARN,"failed to resolve flt level", K(ret));
+      } else {
+        show_trace_enable_ = static_cast<bool>(v);
+      }
+      break;
+    }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -172,7 +182,8 @@ int FLTControlInfo::get_serialize_size()
          FLT_HEADER_LEN + sizeof(sample_pct_) +
          FLT_HEADER_LEN + sizeof(int8_t) +
          FLT_HEADER_LEN + sizeof(print_sample_pct_) +
-         FLT_HEADER_LEN + sizeof(slow_query_thres_);
+         FLT_HEADER_LEN + sizeof(slow_query_thres_) +
+         (support_show_trace_ ? (FLT_HEADER_LEN + sizeof(show_trace_enable_)) : 0);
 }
 int FLTSpanInfo::serialize(char *buf, const int64_t len, int64_t &pos)
 {
@@ -267,9 +278,7 @@ int FLTSpanInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int6
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -301,9 +310,7 @@ int FLTDrvSpan::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int64
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -362,9 +369,7 @@ int FLTAppInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int64
       break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -434,9 +439,7 @@ int FLTQueryInfo::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int
      break;
     }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "this extra info id");
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }
@@ -461,7 +464,7 @@ int FLTShowTrace::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int
   int ret = OB_SUCCESS;
 
   switch(extra_id) {
-    case FLT_SHOW_TRACE_SPAN: {
+    case FLT_PROXY_SHOW_TRACE_SPAN: {
       char* ptr = NULL;
       if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
         OB_LOG(WARN,"failed to resolve flt level", K(ret));
@@ -471,9 +474,18 @@ int FLTShowTrace::deserialize_field(FullLinkTraceExtraInfoId extra_id, const int
       }
       break;
     }
+    case FLT_DRV_SHOW_TRACE_SPAN: {
+      char* ptr = NULL;
+      if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
+        OB_LOG(WARN,"failed to resolve flt level", K(ret));
+      } else {
+        // do nothing
+        show_trace_drv_span_.assign(ptr, v_len);
+      }
+      break;
+    }
     default: {
-      ret = OB_NOT_SUPPORTED;
-      OB_LOG(WARN,"invalid extra info id", K(extra_id));
+      // skip
       break;
     }
   }

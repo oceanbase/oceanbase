@@ -1660,6 +1660,7 @@ public:
   int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);
   int create_all_sys_vars();
   int free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx);
+  static int create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var_ptr);
   static int calc_sys_var_store_idx(ObSysVarClassType sys_var_id, int64_t &store_idx);
   static int calc_sys_var_store_idx_by_name(const common::ObString &sys_var_name, int64_t &store_idx);
   static bool is_valid_sys_var_store_idx(int64_t store_idx);

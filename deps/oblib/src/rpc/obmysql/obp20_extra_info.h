@@ -23,7 +23,8 @@ OBP20_EXTRA_INFO_DEF(OBP20_PROXY_MAX_TYPE, 2000, EMySQLFieldType::MYSQL_TYPE_NOT
 OBP20_EXTRA_INFO_DEF(TRACE_INFO, 2001, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 OBP20_EXTRA_INFO_DEF(SESS_INFO, 2002, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 OBP20_EXTRA_INFO_DEF(FULL_TRC, 2003, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
-OBP20_EXTRA_INFO_DEF(OBP20_SVR_END, 2004, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
+OBP20_EXTRA_INFO_DEF(SESS_INFO_VERI, 2004, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
+OBP20_EXTRA_INFO_DEF(OBP20_SVR_END, 2005, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 OBP20_EXTRA_INFO_DEF(OBP20_SVR_MAX_TYPE, 65535, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 #endif /* OBP20_EXTRA_INFO_DEF */
 
@@ -63,6 +64,17 @@ class Obp20Decoder {
   ~Obp20Decoder() {}
   virtual int deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) = 0;
   TO_STRING_KV(K_(type));
+};
+
+
+// proxy -> server verify sess info required: addr, sess_id, proxy_sess_id.
+// no need encoder.
+class Obp20SessInfoVeriDecoder : public Obp20Decoder{
+  public:
+  ExtraInfoKeyType type_;
+  Obp20SessInfoVeriDecoder() : type_(SESS_INFO_VERI) {}
+  ~Obp20SessInfoVeriDecoder() {}
+  int deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info);
 };
 
 class Obp20TraceInfoEncoder : public Obp20Encoder {

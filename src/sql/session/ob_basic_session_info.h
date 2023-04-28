@@ -809,6 +809,7 @@ public:
                                      const common::ObString &var_name,
                                      common::ObObj &val);
   const share::ObBasicSysVar *get_sys_var(const int64_t idx) const;
+  share::ObBasicSysVar *get_sys_var(const int64_t idx);
   int64_t get_sys_var_count() const { return share::ObSysVarFactory::ALL_SYS_VARS_COUNT; }
   int load_default_sys_variable(const bool print_info_log, const bool is_sys_tenant);
   int load_default_configs_in_pc();
@@ -1447,7 +1448,7 @@ protected:
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
   };
 
-private:
+public:
   //为了性能做的系统变量缓存值
   class SysVarsCacheData
   {
@@ -1549,6 +1550,56 @@ private:
       ob_plsql_ccflags_.reset();
       log_row_value_option_.reset();
       ob_max_read_stale_time_ = 0;
+    }
+
+    inline bool operator==(const SysVarsCacheData &other) const {
+      bool equal1 =  auto_increment_increment_ == other.auto_increment_increment_ &&
+            sql_throttle_current_priority_ == other.sql_throttle_current_priority_ &&
+            ob_last_schema_version_ == other.ob_last_schema_version_ &&
+            sql_select_limit_ == other.sql_select_limit_ &&
+            auto_increment_offset_ == other.auto_increment_offset_ &&
+            last_insert_id_ == other.last_insert_id_ &&
+            binlog_row_image_ == other.binlog_row_image_ &&
+            foreign_key_checks_ == other.foreign_key_checks_ &&
+            default_password_lifetime_ == other.default_password_lifetime_ &&
+            tx_read_only_ == other.tx_read_only_ &&
+            ob_enable_plan_cache_ == other.ob_enable_plan_cache_ &&
+            optimizer_use_sql_plan_baselines_ == other.optimizer_use_sql_plan_baselines_ &&
+            optimizer_capture_sql_plan_baselines_ == other.optimizer_capture_sql_plan_baselines_ &&
+            is_result_accurate_ == other.is_result_accurate_ &&
+            ob_enable_transmission_checksum_ == other.ob_enable_transmission_checksum_ &&
+            character_set_results_ == other.character_set_results_ &&
+            character_set_connection_ == other.character_set_connection_ &&
+            ob_enable_jit_ == other.ob_enable_jit_ &&
+            cursor_sharing_mode_ == other.cursor_sharing_mode_ &&
+            timestamp_ == other.timestamp_ &&
+            tx_isolation_ == other.tx_isolation_ &&
+            ob_pl_block_timeout_ == other.ob_pl_block_timeout_ &&
+            ob_plsql_ccflags_ == other.ob_plsql_ccflags_ &&
+            autocommit_ == other.autocommit_ &&
+            ob_org_cluster_id_ == other.ob_org_cluster_id_ &&
+            ob_query_timeout_ == other.ob_query_timeout_ &&
+            ob_trx_timeout_ == other.ob_trx_timeout_ &&
+            collation_connection_ == other.collation_connection_ &&
+            ob_enable_sql_audit_ == other.ob_enable_sql_audit_ &&
+            nls_length_semantics_ == other.nls_length_semantics_ &&
+            sql_mode_ == other.sql_mode_ &&
+            ob_trx_idle_timeout_ == other.ob_trx_idle_timeout_ &&
+            ob_trx_lock_timeout_ == other.ob_trx_lock_timeout_ &&
+            nls_collation_ == other.nls_collation_ &&
+            nls_nation_collation_ == other.nls_nation_collation_ &&
+            ob_trace_info_ == other.ob_trace_info_ &&
+            iso_nls_currency_ == other.iso_nls_currency_ &&
+            ob_plsql_ccflags_ == other.ob_plsql_ccflags_ &&
+            log_row_value_option_ == other.log_row_value_option_ &&
+            ob_max_read_stale_time_ == other.ob_max_read_stale_time_;
+      bool equal2 = true;
+      for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
+        if (nls_formats_[i] != other.nls_formats_[i]) {
+          equal2 = false;
+        }
+      }
+      return equal1 && equal2;
     }
     void set_nls_date_format(const common::ObString &format)
     {
@@ -1708,7 +1759,7 @@ private:
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
-
+private:
 #define DEF_SYS_VAR_CACHE_FUNCS(SYS_VAR_TYPE, SYS_VAR_NAME)                           \
   void set_##SYS_VAR_NAME(SYS_VAR_TYPE value)                                         \
   {                                                                                   \
@@ -2021,8 +2072,16 @@ protected:
   // Configurations that will influence execution plan.
   ObConfigInfoInPC inf_pc_configs_;
   common::ObString client_identifier_;
-private:
+
   //为了性能做的系统变量本地缓存值
+public:
+  inline const SysVarsCacheData &get_sys_var_cache_inc_data() const {
+    return sys_vars_cache_.inc_data_;
+  }
+  inline SysVarsCacheData &get_sys_var_cache_inc_data() {
+    return sys_vars_cache_.inc_data_;
+  }
+private:
   SysVarsCache sys_vars_cache_;
   static int fill_sys_vars_cache_base_value(
       share::ObSysVarClassType var,

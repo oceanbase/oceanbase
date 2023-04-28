@@ -130,6 +130,12 @@ void ObEliminateTask::runTimerTask()
   int64_t evict_low_mem_level = 0;
   int64_t evict_high_size_level = 0;
   int64_t evict_low_size_level = 0;
+  flt_mgr_ = MTL(ObFLTSpanMgr*);
+  if (flt_mgr_->get_size() > (ObFLTSpanMgr::MAX_QUEUE_SIZE-ObFLTSpanMgr::RELEASE_QUEUE_SIZE)) {
+    for (int i = 0; i < ObFLTSpanMgr::RELEASE_QUEUE_SIZE/ObFLTSpanMgr::BATCH_RELEASE_COUNT; i++) {
+      flt_mgr_->release_old(ObFLTSpanMgr::BATCH_RELEASE_COUNT);
+    }
+  }
   if (OB_ISNULL(request_manager_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(request_manager_), K(ret));

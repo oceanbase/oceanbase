@@ -1167,6 +1167,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sql_session_mgr.cpp
   session/ob_sys_params_mgr.cpp
   session/ob_user_resource_mgr.cpp
+  session/ob_sess_info_verify.cpp
 )
 
 

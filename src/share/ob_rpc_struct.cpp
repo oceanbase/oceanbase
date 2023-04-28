@@ -8052,6 +8052,71 @@ int ObFetchLocationResult::set_servers(
 
 OB_SERIALIZE_MEMBER(ObSyncRewriteRuleArg, tenant_id_);
 
+OB_SERIALIZE_MEMBER(ObSessInfoVerifyArg, sess_id_, proxy_sess_id_);
+
+bool ObSessionInfoVeriRes::is_valid() const
+{
+  return true;
+}
+
+OB_DEF_SERIALIZE(ObSessionInfoVeriRes)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+          verify_info_buf_,
+          need_verify_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObSessionInfoVeriRes)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    ObString tmp_string;
+    char *tmp_ptr = NULL;
+
+    if (OB_FAIL(tmp_string.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize nls_formats_", K(ret));
+    } else if (OB_ISNULL(tmp_ptr = (char *)allocator_.alloc(tmp_string.length()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory!", K(ret));
+    } else {
+      MEMCPY(tmp_ptr, tmp_string.ptr(), tmp_string.length());
+      verify_info_buf_.assign_ptr(tmp_ptr, tmp_string.length());
+      tmp_string.reset();
+    }
+    if (OB_FAIL(ret)) {
+      allocator_.free(tmp_ptr);
+    }
+  }
+  LST_DO_CODE(OB_UNIS_DECODE,
+          need_verify_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSessionInfoVeriRes)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+          verify_info_buf_,
+          need_verify_);
+  }
+  if (OB_FAIL(ret)) {
+    len = -1;
+  }
+  return len;
+}
+
 OB_SERIALIZE_MEMBER(ObGetLeaderLocationsArg, addr_);
 OB_SERIALIZE_MEMBER(ObGetLeaderLocationsResult, addr_, leader_replicas_);
 

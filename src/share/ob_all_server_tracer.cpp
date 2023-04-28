@@ -74,6 +74,34 @@ int ObServerTraceMap::is_server_exist(const common::ObAddr &server, bool &exist)
   return ret;
 }
 
+int ObServerTraceMap::get_server_rpc_port(const common::ObAddr &server, const int64_t sql_port,
+                                                    int64_t &rpc_port, bool &exist) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", K(ret));
+  } else if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(server), K(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    ObServerInfoInTable status;
+    if (OB_FAIL(get_rpc_port_status(server, sql_port, rpc_port, status))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        exist = false;
+      } else {
+        LOG_WARN("fail to find server status", K(server), K_(server_info_arr), K(ret));
+      }
+    } else {
+      exist = true;
+      LOG_TRACE("success to get rpc port in loacl", K(ret), K(rpc_port), K(sql_port));
+    }
+  }
+  return ret;
+}
+
 int ObServerTraceMap::check_server_alive(const ObAddr &server, bool &is_alive) const
 {
   int ret = OB_SUCCESS;
@@ -180,6 +208,35 @@ int ObServerTraceMap::find_server_info(const ObAddr &addr, ObServerInfoInTable &
   }
   return ret;
 }
+
+// get rpc port by sql port, ip
+int ObServerTraceMap::get_rpc_port_status(const ObAddr &addr, const int64_t sql_port,
+                              int64_t &rpc_port, ObServerInfoInTable &status) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  for (int64_t i = 0; (i < server_info_arr_.count()) && !found; i++) {
+    const static int MAX_IP_BUFFER_LEN = 32;
+    char server_ip_buf[MAX_IP_BUFFER_LEN];
+    server_ip_buf[0] = '\0';
+    char addr_buf[MAX_IP_BUFFER_LEN];
+    addr_buf[0] = '\0';
+    server_info_arr_.at(i).get_server().ip_to_string(server_ip_buf, MAX_IP_BUFFER_LEN);
+    addr.ip_to_string(addr_buf, MAX_IP_BUFFER_LEN);
+    if (0 == strcmp(server_ip_buf, addr_buf) && server_info_arr_.at(i).get_sql_port() == sql_port) {
+      status = server_info_arr_.at(i);
+      rpc_port = server_info_arr_.at(i).get_server().get_port();
+      found = true;
+    }
+  }
+
+  if (!found) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+
+  return ret;
+}
+
 
 int ObServerTraceMap::is_server_stopped(const ObAddr &addr, bool &is_stopped) const
 {
@@ -594,6 +651,12 @@ int ObAllServerTracer::init(int tg_id, ObServerTraceTask &trace_task)
 int ObAllServerTracer::is_server_exist(const common::ObAddr &server, bool &exist) const
 {
   return trace_map_.is_server_exist(server, exist);
+}
+
+int ObAllServerTracer::get_server_rpc_port(const common::ObAddr &server, const int64_t sql_port,
+                                                  int64_t &rpc_port, bool &exist) const
+{
+  return trace_map_.get_server_rpc_port(server, sql_port, rpc_port, exist);
 }
 
 int ObAllServerTracer::check_server_alive(const ObAddr &server, bool &is_alive) const

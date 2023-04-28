@@ -46,6 +46,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "share/ob_lob_access_utils.h"
 #include "sql/monitor/flt/ob_flt_utils.h"
+#include "sql/session/ob_sess_info_verify.h"
 
 namespace oceanbase
 {
@@ -542,6 +543,33 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
         LOG_WARN("response packet fail", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObMPBase::process_extra_info(sql::ObSQLSessionInfo &session,
+              const obmysql::ObMySQLRawPacket &pkt, bool &need_response_error)
+{
+  int ret = OB_SUCCESS;
+  SessionInfoVerifacation sess_info_verification;
+  LOG_TRACE("process extra info", K(ret),K(pkt.get_extra_info().exist_sess_info_veri()));
+  if (FALSE_IT(session.set_has_query_executed(true))) {
+  } else if (pkt.get_extra_info().exist_sync_sess_info()
+              && OB_FAIL(ObMPUtils::sync_session_info(session,
+                          pkt.get_extra_info().get_sync_sess_info()))) {
+    // won't response error, disconnect will let proxy sens failure
+    need_response_error = false;
+    LOG_WARN("fail to update sess info", K(ret));
+  } else if (pkt.get_extra_info().exist_sess_info_veri()
+              && OB_FAIL(ObSessInfoVerify::sync_sess_info_veri(session,
+                        pkt.get_extra_info().get_sess_info_veri(),
+                        sess_info_verification))) {
+    LOG_WARN("fail to get verify info requied", K(ret));
+  } else if (pkt.get_extra_info().exist_sess_info_veri() &&
+              pkt.is_proxy_switch_route() &&
+              OB_FAIL(ObSessInfoVerify::verify_session_info(session,
+              sess_info_verification))) {
+    LOG_WARN("fail to verify sess info", K(ret));
   }
   return ret;
 }

@@ -15,6 +15,7 @@
 
 #include "lib/task/ob_timer.h"
 #include "lib/allocator/ob_fifo_allocator.h"
+#include "sql/monitor/flt/ob_flt_span_mgr.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ public:
 private:
   ObMySQLRequestManager *request_manager_;
   int64_t config_mem_limit_;
+  sql::ObFLTSpanMgr* flt_mgr_;
 };
 
 } // end of namespace obmysql

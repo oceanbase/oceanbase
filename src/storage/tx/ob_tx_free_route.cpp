@@ -135,29 +135,29 @@ int ObTransService::txn_free_route__sanity_check_fallback_(ObTxDesc *tx, ObTxnFr
   return ret;
 }
 
-inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRouteCtx &ctx, const int64_t version)
+inline int ObTxnFreeRouteCtx::state_update_verify_by_version(const int64_t version) const
 {
   int ret = OB_SUCCESS;
   // if ctx is switch to new txn in this request
   // water_mark was established by static state
   // the following state (dyn, parts, extra) should be >= water_mark
-  if (ctx.is_txn_switch_) {
-    if (ctx.global_version_water_mark_ > version) {
+  if (is_txn_switch_) {
+    if (global_version_water_mark_ > version) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "the state is stale", K(ret), K(version));
     }
   // otherwise, the new state's version should be > water_mark
-  } else if (ctx.global_version_water_mark_ == version) {
+  } else if (global_version_water_mark_ == version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "duplicated state sync", K(ret), K(version));
-  } else if (ctx.global_version_water_mark_ > version) {
+  } else if (global_version_water_mark_ > version) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "the state is stale", K(ret), K(version));
   }
   return ret;
 }
 
-#define DECODE_HEADER()                                                 \
+#define DECODE_HEADER_BASE()                                            \
   ObTxnFreeRouteFlag flag;                                              \
   ObTransID tx_id;                                                      \
   int64_t global_version;                                               \
@@ -172,15 +172,19 @@ inline int ObTransService::txn_state_update_verify_by_version_(const ObTxnFreeRo
       TRANS_LOG(ERROR, "decode global_version fail", K(ret));           \
     } else if (OB_FAIL(decode_i8(buf, len, pos, &flag.v_))) {           \
       TRANS_LOG(ERROR, "decode flag fail", K(ret));                     \
-    } else if (OB_FAIL(txn_state_update_verify_by_version_(ctx, global_version))) { \
-    } else if (!tx_id.is_valid()) {                                     \
-      ret = OB_ERR_UNEXPECTED;                                          \
-      TRANS_LOG(ERROR, "tx id is invalid", K(ret));                     \
-    } else if (ctx.global_version_ < global_version) {                  \
-      ctx.global_version_ = global_version;                             \
     }                                                                   \
   }
 
+#define DECODE_HEADER()                                                 \
+  DECODE_HEADER_BASE()                                                  \
+  if (OB_FAIL(ret)) {                                                   \
+  } else if (OB_FAIL(ctx.state_update_verify_by_version(global_version))) { \
+  } else if (!tx_id.is_valid()) {                                       \
+    ret = OB_ERR_UNEXPECTED;                                            \
+    TRANS_LOG(ERROR, "tx id is invalid", K(ret));                       \
+  } else if (ctx.global_version_ < global_version) {                    \
+    ctx.global_version_ = global_version;                               \
+  }                                                                     \
 
 #define ENCODE_HEADER()                                                 \
   auto tx_id = ctx.prev_tx_id_.is_valid() ? ctx.prev_tx_id_ : ctx.tx_id_; \
@@ -1124,5 +1128,85 @@ int ObTransService::tx_free_route_handle_check_alive(const ObTxFreeRouteCheckAli
   return ret;
 }
 
+#define SESSION_VERIFY_TXN_STATE_IMPL_(name)                            \
+int64_t ObTransService::txn_free_route__get_##name##_state_size(ObTxDesc *tx) \
+{                                                                       \
+  int64_t l = encoded_length_i64(100);                                  \
+  if (OB_NOT_NULL(tx)) {                                                \
+    l += encoded_length_bool(true);                                     \
+    l += encoded_length_i64(1024);                                      \
+    if (tx->tx_id_.is_valid()) {                                        \
+      l += tx->name##_state_encoded_length();                           \
+    }                                                                   \
+  }                                                                     \
+  return l;                                                             \
+}                                                                       \
+int ObTransService::txn_free_route__get_##name##_state(ObTxDesc *tx, const ObTxnFreeRouteCtx &ctx, char *buf, const int64_t len, int64_t &pos) \
+{                                                                       \
+  int ret = OB_SUCCESS;                                                 \
+  if (OB_FAIL(encode_i64(buf, len, pos, (tx ? tx->tx_id_.get_id() : 0)))) { \
+  } else if (OB_NOT_NULL(tx)) {                                         \
+    if (OB_FAIL(encoded_length_bool(tx->in_tx_for_free_route()))) {     \
+    } else if (OB_FAIL(encoded_length_i64(ctx.global_version_))) {      \
+    } else if (tx->tx_id_.is_valid() && OB_FAIL(tx->encode_##name##_state(buf, len, pos))) { \
+    }                                                                   \
+  }                                                                     \
+  return ret;                                                           \
+}                                                                       \
+int ObTransService::txn_free_route__cmp_##name##_state(const char* cur_buf, int64_t cur_len, const char* last_buf, int64_t last_len) \
+{                                                                       \
+  int ret = OB_SUCCESS;                                                 \
+  int64_t cur_pos = 0, last_pos = 0;                                    \
+  ObTransID cur_tx_id, last_tx_id;                                      \
+  {                                                                     \
+    int64_t tx_id = 0;                                                  \
+    if (OB_FAIL(decode_i64(cur_buf, cur_len, cur_pos, &tx_id))) {        \
+    } else { cur_tx_id = ObTransID(tx_id);  }                           \
+    if (OB_SUCC(ret) && OB_FAIL(decode_i64(last_buf, last_len, last_pos, &tx_id))) { \
+    } else { last_tx_id = ObTransID(tx_id); }                           \
+  }                                                                     \
+  if (OB_SUCC(ret) && cur_tx_id != last_tx_id) {                        \
+    ret = OB_ERR_UNEXPECTED;                                            \
+    TRANS_LOG(WARN, "tx_id not equals", K(cur_tx_id), K(last_tx_id));   \
+  }                                                                     \
+  if (OB_SUCC(ret) && cur_tx_id.is_valid()) {                           \
+    if (cur_len != last_len) {                                          \
+      ret = OB_ERR_UNEXPECTED;                                          \
+      TRANS_LOG(WARN, "state len not equals", K(cur_len), K(last_len)); \
+    } else if (0 != MEMCMP(cur_buf + cur_pos, last_buf + last_pos, cur_len - cur_pos)) { \
+      ret = OB_ERR_UNEXPECTED;                                          \
+      TRANS_LOG(WARN, "state content not equals");                      \
+    }                                                                   \
+  }                                                                     \
+  return ret;                                                           \
+}                                                                       \
+int ObTransService::txn_free_route__display_##name##_state(const char* sname, const char* buf, const int64_t len) \
+{                                                                       \
+  int ret = OB_SUCCESS;                                                 \
+  int64_t pos = 0;                                                      \
+  ObTransID tx_id;                                                      \
+  {                                                                     \
+    int64_t tx_id_raw = 0;                                              \
+    if (OB_FAIL(decode_i64(buf, len, pos, &tx_id_raw))) {               \
+    } else { tx_id = ObTransID(tx_id_raw);  }                           \
+  }                                                                     \
+  if (OB_SUCC(ret) && !tx_id.is_valid()) {                              \
+    _TRANS_LOG(INFO, "[dump %s state] @%s : no txn exist", #name, sname); \
+  }                                                                     \
+  int64_t global_version = 0;                                           \
+  bool in_txn_for_free_route = false;                                   \
+  if (OB_SUCC(ret) && OB_FAIL(decode_i64(buf, len, pos, &global_version))) { \
+  } else if (OB_FAIL(decode_bool(buf, len, pos, &in_txn_for_free_route))) { \
+  } else {                                                              \
+    _TRANS_LOG(INFO, "[dump %s state] @%s : tx_id=%ld in_txn_for_free_route=%d global_version=%ld", \
+                     #name, sname, tx_id.get_id(), in_txn_for_free_route, global_version); \
+    return ObTxDesc::display_##name##_state(buf, len, pos);             \
+  }                                                                     \
+  return ret;                                                           \
 }
-}
+
+#define SESSION_VERIFY_TXN_STATE_IMPL(name) SESSION_VERIFY_TXN_STATE_IMPL_(name)
+LST_DO(SESSION_VERIFY_TXN_STATE_IMPL, (), static, dynamic, parts, extra)
+
+} // namespace transaction
+} // namespace oceanbase

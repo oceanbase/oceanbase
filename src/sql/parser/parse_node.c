@@ -183,7 +183,7 @@ ParseNode *new_node(void *malloc_pool, ObItemType type, int num)
     node->type_ = type;
     node->num_child_ = num;
     node->value_ = INT64_MAX;
-    node->str_off_ = -1;
+    node->pl_str_off_ = -1;
 #ifdef SQL_PARSER_COMPILATION
     node->token_off_ = -1;
     node->token_len_ = -1;

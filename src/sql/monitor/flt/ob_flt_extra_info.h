@@ -34,6 +34,7 @@ FLT_EXTRA_INFO_DEF(FLT_SAMPLE_PERCENTAGE, 2021, EMySQLFieldType::MYSQL_TYPE_DOUB
 FLT_EXTRA_INFO_DEF(FLT_RECORD_POLICY, 2022, EMySQLFieldType::MYSQL_TYPE_TINY)
 FLT_EXTRA_INFO_DEF(FLT_PRINT_SAMPLE_PCT, 2023, EMySQLFieldType::MYSQL_TYPE_DOUBLE)
 FLT_EXTRA_INFO_DEF(FLT_SLOW_QUERY_THRES, 2024, EMySQLFieldType::MYSQL_TYPE_LONGLONG)
+FLT_EXTRA_INFO_DEF(FLT_SHOW_TRACE_ENABLE, 2025, EMySQLFieldType::MYSQL_TYPE_TINY)
 
 // SPAN_INFO
 FLT_EXTRA_INFO_DEF(FLT_TRACE_ENABLE, 2030, EMySQLFieldType::MYSQL_TYPE_TINY)
@@ -42,8 +43,9 @@ FLT_EXTRA_INFO_DEF(FLT_TRACE_ID, 2032, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 FLT_EXTRA_INFO_DEF(FLT_REF_TYPE, 2033, EMySQLFieldType::MYSQL_TYPE_TINY)
 FLT_EXTRA_INFO_DEF(FLT_SPAN_ID, 2034, EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 
-//FLT_SHOW_TRACE
-FLT_EXTRA_INFO_DEF(FLT_SHOW_TRACE_SPAN,2040,EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
+// SHOW_TRACE_SPAN
+FLT_EXTRA_INFO_DEF(FLT_DRV_SHOW_TRACE_SPAN,2050,EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
+FLT_EXTRA_INFO_DEF(FLT_PROXY_SHOW_TRACE_SPAN,2051,EMySQLFieldType::MYSQL_TYPE_VAR_STRING)
 
 FLT_EXTRA_INFO_DEF(FLT_EXTRA_INFO_END, 65535, EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED)
 #endif /* FLT_EXTRA_INFO_DEF */
@@ -79,7 +81,7 @@ enum FullLinkTraceExtraInfoType
   FLT_TYPE_QUERY_INFO = 2002,
   FLT_TYPE_CONTROL_INFO = 2003,
   FLT_TYPE_SPAN_INFO = 2004,
-  FLT_TYPE_SHOW_TRACE = 2005,
+  FLT_TYPE_SHOW_TRACE_SPAN = 2005,
   FLT_EXTRA_TYPE_END = 65535
 };
 
@@ -153,12 +155,16 @@ class FLTControlInfo : public FLTExtraInfo
   RecordPolicy rp_;
   double print_sample_pct_;
   int64_t slow_query_thres_;
+  bool show_trace_enable_;
+  bool support_show_trace_;
 
   FLTControlInfo() : level_(-1),
                      sample_pct_(-1),
                      rp_(MAX_RECORD_POLICY),
                      print_sample_pct_(-1),
-                     slow_query_thres_(-1) {
+                     slow_query_thres_(-1),
+                     show_trace_enable_(false),
+                     support_show_trace_(false) {
      type_ = FLT_TYPE_CONTROL_INFO;
   }
   ~FLTControlInfo() {}
@@ -172,12 +178,21 @@ class FLTControlInfo : public FLTExtraInfo
   bool is_valid_sys_config() {
     return print_sample_pct_ >= 0 && print_sample_pct_ <= 1 && slow_query_thres_ > 0;
   }
+  bool is_equal(const FLTControlInfo &other) {
+    return level_ == other.level_ &&
+           sample_pct_ == other.sample_pct_ &&
+           rp_ == other.rp_ &&
+           print_sample_pct_ == other.print_sample_pct_ &&
+           slow_query_thres_ == other.slow_query_thres_ &&
+           show_trace_enable_ == other.show_trace_enable_;
+  }
   void reset() {
     level_ = -1;
     sample_pct_ = -1;
     rp_ = MAX_RECORD_POLICY;
     print_sample_pct_ = -1;
     slow_query_thres_ = -1;
+    show_trace_enable_ = false;
   }
 
   inline bool operator==(const FLTControlInfo &other) const {
@@ -191,7 +206,7 @@ class FLTControlInfo : public FLTExtraInfo
                         const int64_t v_len, const char *buf,
                         const int64_t len, int64_t &pos);
   int get_serialize_size();
-  TO_STRING_KV(K_(level), K_(sample_pct), K_(rp), K_(print_sample_pct), K_(slow_query_thres));
+  TO_STRING_KV(K_(level), K_(sample_pct), K_(rp), K_(print_sample_pct), K_(slow_query_thres), K_(show_trace_enable), K_(support_show_trace));
 };
 
 class FLTSpanInfo : public FLTExtraInfo
@@ -297,9 +312,11 @@ class FLTShowTrace : public FLTExtraInfo
 {
   public:
   ObString show_trace_span_;
+  ObString show_trace_drv_span_;
 
-  FLTShowTrace() : show_trace_span_() {
-    type_ = FLT_TYPE_SHOW_TRACE;
+  FLTShowTrace() : show_trace_span_(),
+                   show_trace_drv_span_() {
+    type_ = FLT_TYPE_SHOW_TRACE_SPAN;
   }
   ~FLTShowTrace() {}
 
@@ -309,7 +326,7 @@ class FLTShowTrace : public FLTExtraInfo
                         const int64_t v_len, const char *buf,
                         const int64_t len, int64_t &pos);
   int get_serialize_size();
-  TO_STRING_KV(K_(show_trace_span));
+  TO_STRING_KV(K_(show_trace_span), K_(show_trace_drv_span));
 };
 }; // end of namespace lib
 }; // end of namespace oceanbase

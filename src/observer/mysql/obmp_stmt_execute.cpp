@@ -1802,12 +1802,8 @@ int ObMPStmtExecute::process()
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
     } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
-    } else if (pkt.get_extra_info().exist_sync_sess_info()
-                && OB_FAIL(ObMPUtils::sync_session_info(session,
-                              pkt.get_extra_info().get_sync_sess_info()))) {
-      // won't response error, disconnect will let proxy sens failure
-      need_response_error = false;
-      LOG_WARN("fail to update sess info", K(ret));
+    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
     } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
       //packet size check with session variable max_allowd_packet or net_buffer_length

@@ -7537,8 +7537,8 @@ int ObPLResolver::replace_source_string(
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(new_node)) {
-    if (new_node->str_len_ > 0 && new_node->str_off_ >= 0) {
-      new_node->str_value_ = parse_strndup(old_sql.ptr() + new_node->str_off_,
+    if (new_node->str_len_ > 0 && new_node->pl_str_off_ >= 0) {
+      new_node->str_value_ = parse_strndup(old_sql.ptr() + new_node->pl_str_off_,
                                            new_node->str_len_,
                                            &resolve_ctx_.allocator_);
     }

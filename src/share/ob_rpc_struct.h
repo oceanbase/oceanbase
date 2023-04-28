@@ -8995,6 +8995,61 @@ public:
   ObSArray<uint64_t> synonym_ids_;
 };
 
+// session info self-verification arg
+struct ObSessInfoVerifyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSessInfoVerifyArg() : sess_id_(0), proxy_sess_id_(0) {}
+  ~ObSessInfoVerifyArg() {}
+  bool is_valid() const;
+  void reset() { sess_id_ = 0;
+                 proxy_sess_id_ = 0; }
+  int assign(const ObSessInfoVerifyArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    sess_id_ = other.sess_id_;
+    proxy_sess_id_ = other.proxy_sess_id_;
+    return ret;
+  }
+  void set_sess_id(uint32_t sess_id) { sess_id_ = sess_id; }
+  uint32_t get_sess_id() { return sess_id_; }
+  void set_proxy_sess_id(uint64_t proxy_sess_id) { proxy_sess_id_ = proxy_sess_id; }
+  uint64_t get_proxy_sess_id() { return proxy_sess_id_; }
+  TO_STRING_KV(K_(sess_id), K_(proxy_sess_id));
+private:
+  uint32_t sess_id_;
+  uint64_t proxy_sess_id_;
+};
+
+// session info self-verification result
+struct ObSessionInfoVeriRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSessionInfoVeriRes() : verify_info_buf_(),
+    allocator_(common::ObModIds::OB_SQL_SESSION), need_verify_(false) {}
+  ~ObSessionInfoVeriRes() {}
+  bool is_valid() const;
+  void reset() {  verify_info_buf_.reset();
+                  need_verify_ = false;
+                  allocator_.reset(); }
+  int assign(const ObSessionInfoVeriRes &other)
+  {
+    int ret = common::OB_SUCCESS;
+    verify_info_buf_.assign_ptr(other.verify_info_buf_.ptr(),
+                            static_cast<int32_t>(other.verify_info_buf_.length()));
+    need_verify_ = other.need_verify_;
+    return ret;
+  }
+  void set_info_check_buf(common::ObString verify_info_buf) { verify_info_buf_ = verify_info_buf; }
+  common::ObString &get_info_check_buf() {return verify_info_buf_;}
+  TO_STRING_KV(K_(verify_info_buf), K_(need_verify));
+  common::ObString verify_info_buf_;
+  common::ObArenaAllocator allocator_;
+  bool need_verify_;
+};
+
 struct ObGetServerResourceInfoArg
 {
   OB_UNIS_VERSION(1);

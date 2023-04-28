@@ -1071,14 +1071,14 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
     buf_len = trg_def_node->str_len_ - base_object_node->str_len_ + base_object_name.length() + 3;
     buf = static_cast<char*>(alloc.alloc(buf_len));
     bool has_delimiter_already = false;
-    int trg_header_len = (int)base_object_node->str_off_;
-    const char *trg_tail_str = (trg_def_node->str_value_ + base_object_node->str_off_ + base_object_node->str_len_);
+    int trg_header_len = (int)base_object_node->pl_str_off_;
+    const char *trg_tail_str = (trg_def_node->str_value_ + base_object_node->pl_str_off_ + base_object_node->str_len_);
     if (is_oracle_mode) {
       // '\"' is included in base_object_node->str_value_ in oracle mode,
       // but is not included in base_object_node->str_len_
-      has_delimiter_already = ('\"' == trg_def_node->str_value_[base_object_node->str_off_]);
+      has_delimiter_already = ('\"' == trg_def_node->str_value_[base_object_node->pl_str_off_]);
     } else {
-      has_delimiter_already = ('`' == trg_def_node->str_value_[base_object_node->str_off_]);
+      has_delimiter_already = ('`' == trg_def_node->str_value_[base_object_node->pl_str_off_]);
     }
     if (has_delimiter_already) {
       // base object database
@@ -1093,7 +1093,7 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
                    trg_def_node->str_value_,
                    base_object_name.length(),
                    base_object_name.ptr(),
-                   int(trg_def_node->str_len_ - (base_object_node->str_off_ + base_object_node->str_len_)),
+                   int(trg_def_node->str_len_ - (base_object_node->pl_str_off_ + base_object_node->str_len_)),
                    trg_tail_str));
     OZ (trigger_info.set_trigger_body(ObString(buf)));
   }

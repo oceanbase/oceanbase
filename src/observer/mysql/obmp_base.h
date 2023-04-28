@@ -121,6 +121,8 @@ protected:
   int response_row(sql::ObSQLSessionInfo &session,
                    common::ObNewRow &row,
                    const ColumnsFieldIArray *fields);
+  int process_extra_info(sql::ObSQLSessionInfo &session, const obmysql::ObMySQLRawPacket &pkt,
+                                bool &need_response_error);
 protected:
   static const int64_t MAX_TRY_STEPS = 5;
   static int64_t TRY_EZ_BUF_SIZES[MAX_TRY_STEPS];

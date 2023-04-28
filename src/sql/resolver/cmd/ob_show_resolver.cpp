@@ -740,7 +740,6 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                   GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TRACE_JSON, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_SHOW_TRACE_TNAME, OB_ALL_VIRTUAL_SHOW_TRACE_ORA_TNAME));
               }
             }
-
           }
         }();
         break;
@@ -2741,7 +2740,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_INDEXES,
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE,
                        NULL,
                        "SELECT span_name as `Operation`, start_ts as `StartTime`, concat(cast(elapse/1000 as number(20, 3)), ' ms')  as `ElapseTime` from %s.%s",
-                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy/mm/dd hh24:mi:ss') as "START_TIME", concat(cast(elapse/1000 as number(20, 3)), ' ms') as "ELAPSE_TIME" FROM %s.%s)",
+                       R"(SELECT span_name as "OPERATION", to_char(start_ts,'yyyy-mm-dd hh24:mi:ss') as "START_TIME", concat(to_char(elapse/1000, 'FM99999999999999990.000'), ' ms') as "ELAPSE_TIME" FROM %s.%s)",
                        NULL);
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRACE_JSON,

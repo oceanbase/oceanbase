@@ -3966,7 +3966,17 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                                                                   parse_result.result_tree_,
                                                                   pctx->get_param_store_for_update(),
                                                                   session->get_local_collation_connection()))) {
-        if (is_transform_outline) {
+        bool need_retry_param = true;
+        int tmp_ret = OB_SUCCESS;
+        tmp_ret = OB_E(EventTable::EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR) OB_SUCCESS;
+        if (OB_SUCCESS != tmp_ret) {
+          if (OB_NOT_SUPPORTED == ret) {
+            need_retry_param = false;
+          }
+        }
+        if (!need_retry_param) {
+          // do nothing
+        } else if (is_transform_outline) {
           LOG_WARN("fail to parameterize syntax tree", K(ret));
         } else {
           //如果是因为参数化出错, 则需要重新进行parser, 生成新的parser tree, 之前的parser tree可能部分已参数化,

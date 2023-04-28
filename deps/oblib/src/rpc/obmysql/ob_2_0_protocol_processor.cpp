@@ -261,21 +261,15 @@ int Ob20ProtocolProcessor::decode_extra_info(const Ob20ProtocolHeader &hdr,
           LOG_WARN("fail to deserialize extra info", K(ret));
         } else {
           LOG_TRACE("extra info", K(key), K(value));
-          if (0 == key.get_string().case_compare(ObString("ob_trace_info"))) {
-            extra_info.exist_trace_info_ = true;
-            if (!value.is_varchar()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid extra info value type", K(ret), K(key), K(value));
-            } else {
-              extra_info.trace_info_ = value.get_string();
-            }
-          } else if (0 == key.get_string().case_compare(ObString("sess_inf"))) {
+
+          if (0 == key.get_string().case_compare(ObString("sess_inf"))) {
             if (!value.is_varchar()) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid extra info value type", K(ret), K(key), K(value));
             } else {
               extra_info.sync_sess_info_ = value.get_string();
-              LOG_DEBUG("receive extra_info", KPHEX(extra_info.sync_sess_info_.ptr(),extra_info.sync_sess_info_.length()));
+              LOG_DEBUG("receive extra_info", KPHEX(extra_info.sync_sess_info_.ptr(),
+                                              extra_info.sync_sess_info_.length()));
             }
           } else if (0 == key.get_string().case_compare(ObString("full_trc"))) {
             if (!value.is_varchar()) {
@@ -283,6 +277,21 @@ int Ob20ProtocolProcessor::decode_extra_info(const Ob20ProtocolHeader &hdr,
               LOG_WARN("invalid extra info value type", K(ret), K(key), K(value));
             } else {
               extra_info.full_link_trace_ = value.get_string();
+            }
+          } else if (0 == key.get_string().case_compare(ObString("ob_trace_info"))) {
+            extra_info.exist_trace_info_ = true;
+            if (!value.is_varchar()) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid extra info value type", K(ret), K(key), K(value));
+            } else {
+              extra_info.trace_info_ = value.get_string();
+            }
+          } else if (0 == key.get_string().case_compare(ObString("sess_ver"))) {
+            if (!value.is_varchar()) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid extra info value type", K(ret), K(key), K(value));
+            } else {
+              extra_info.sess_info_veri_ = value.get_string();
             }
           } else {
             // do nothing
@@ -427,7 +436,8 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         ObMySQLRawPacket *input_packet = reinterpret_cast<ObMySQLRawPacket *>(ipacket);
         input_packet->set_can_reroute_pkt(pkt20->get_flags().is_proxy_reroute());
         input_packet->set_is_weak_read(pkt20->get_flags().is_weak_read());
-
+        // need test proxy_switch_route flag.
+        input_packet->set_proxy_switch_route(pkt20->get_flags().proxy_switch_route());
         const int64_t t_len = context.extra_info_.get_total_len();
         char *t_buffer = NULL;
         if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {

@@ -825,7 +825,7 @@ inline void ObFastParserBase::reset_parser_node(ParseNode *node)
   node->value_ = INT64_MAX;
   node->str_value_ = nullptr;
   node->str_len_ = 0;
-  node->str_off_ = 0;
+  node->pl_str_off_ = 0;
   node->raw_text_ = nullptr;
   node->text_len_ = 0;
   node->pos_ = 0;

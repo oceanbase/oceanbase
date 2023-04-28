@@ -1223,7 +1223,16 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     }                                                                   \
     LOG_DEBUG("get-serialize-size-txn-state", K(session));              \
     return size;                                                        \
-  }
+  }                                                                     \
+  int64_t ObSqlTransControl::get_fetch_txn_##name##_state_size(ObSQLSessionInfo& sess) \
+  { return transaction::ObTransService::txn_free_route__get_##name##_state_size(sess.get_tx_desc()); } \
+  int ObSqlTransControl::fetch_txn_##name##_state(ObSQLSessionInfo &sess, char *buf, const int64_t len, int64_t &pos) \
+  { return transaction::ObTransService::txn_free_route__get_##name##_state(sess.get_tx_desc(), sess.get_txn_free_route_ctx(), buf, len, pos); } \
+  int ObSqlTransControl::cmp_txn_##name##_state(const char* cur_buf, int64_t cur_len, const char* last_buf, int64_t last_len) \
+  { return transaction::ObTransService::txn_free_route__cmp_##name##_state(cur_buf, cur_len, last_buf, last_len); } \
+  void ObSqlTransControl::display_txn_##name##_state(ObSQLSessionInfo &sess, const char* local_buf, const int64_t local_len, const char* remote_buf, const int64_t remote_len) \
+  { transaction::ObTransService::txn_free_route__display_##name##_state("LOAL", local_buf, local_len); \
+    transaction::ObTransService::txn_free_route__display_##name##_state("REMOTE", remote_buf, remote_len); }
 
 DELEGATE_TO_TXN(static);
 DELEGATE_TO_TXN(dynamic);

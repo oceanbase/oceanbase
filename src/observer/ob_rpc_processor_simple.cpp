@@ -57,6 +57,8 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_sess_info_verify.h"
 
 namespace oceanbase
 {
@@ -2359,6 +2361,62 @@ int ObRpcSendHeartbeatP::process()
   } else if (OB_FAIL(gctx_.ob_service_->handle_heartbeat(arg_, result_))) {
     LOG_WARN("fail to call handle_heartbeat in ob service", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObSessInfoVerificationP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObString str_result;
+  LOG_TRACE("veirfy process start", K(ret), K(arg_.get_sess_id()));
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_session(arg_.get_sess_id(), session))) {
+    COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+  } else {
+    // consider 3 scene that no need verify:
+    // 1. Broken link reuse session，need verify proxy sess id
+    // 2. Mixed running scene, need verify version
+    // 3. Routing without synchronizing session information, judge is_has_query_executed
+    if (arg_.get_proxy_sess_id() == session->get_proxy_sessid() &&
+        GET_MIN_CLUSTER_VERSION() == CLUSTER_CURRENT_VERSION &&
+        session->is_has_query_executed()
+        ) {
+      if (OB_FAIL(ObSessInfoVerify::fetch_verify_session_info(*session,
+          str_result, result_.allocator_))) {
+        COMMON_LOG(WARN, "fetch session check info failed", KR(ret), K(result_));
+      } else {
+        char *ptr = nullptr;
+        if (OB_ISNULL(ptr = static_cast<char *> (result_.allocator_.alloc(str_result.length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc mem for client identifier", K(ret));
+        } else {
+          result_.verify_info_buf_.assign_buffer(ptr, str_result.length());
+          result_.verify_info_buf_.write(str_result.ptr(), str_result.length());
+          result_.need_verify_ = true;
+          LOG_TRACE("need verify is true", K(ret), K(result_.need_verify_));
+        }
+      }
+    } else {
+      result_.need_verify_ = false;
+      LOG_TRACE("no need self verification", K(arg_.get_proxy_sess_id()),
+                K(session->get_proxy_sessid()), K(GET_MIN_CLUSTER_VERSION()),
+                K(CLUSTER_CURRENT_VERSION));
+    }
+    if (NULL != session) {
+      gctx_.session_mgr_->revert_session(session);
+    }
+  }
+  return ret;
+}
+
+int ObSessInfoVerificationP::after_process(int err_code)
+{
+  int ret = OB_SUCCESS;
+  result_.allocator_.reset();
+  ObRpcProcessorBase::after_process(err_code);
   return ret;
 }
 

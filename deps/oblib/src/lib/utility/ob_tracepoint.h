@@ -673,6 +673,18 @@ class EventTable
       EN_FETCH_TABLE_INFO_RPC = 1112,
       // END OF STORAGE HA - 1101 - 2000
 
+      // sql parameterization 1170-1180
+      EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR = 1170,
+      // END OF sql parameterization 1170-1180
+
+      // session info verification
+      // The types are used for error verification
+      EN_SESS_INFO_VERI_SYS_VAR_ERROR = 1180,
+      EN_SESS_INFO_VERI_APP_INFO_ERROR = 1181,
+      EN_SESS_INFO_VERI_APP_CTX_ERROR = 1182,
+      EN_SESS_INFO_VERI_CLIENT_ID_ERROR = 1183,
+      EN_SESS_INFO_VERI_CONTROL_INFO_ERROR = 1184,
+      EN_SESS_INFO_VERI_TXN_EXTRA_INFO_ERROR = 1185,
       EN_ENABLE_NEWSORT_FORCE = 1200,
 
       // Transaction // 2001 - 2100

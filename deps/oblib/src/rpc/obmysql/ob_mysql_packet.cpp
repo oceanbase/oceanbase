@@ -186,17 +186,26 @@ int Ob20ExtraInfo::assign(const Ob20ExtraInfo &other, char* buf, int64_t buf_len
     SERVER_LOG(ERROR, "invalid alloc size", K(total_len), K(ret));
   } else {
     uint64_t len = 0;
-    MEMCPY(buf+len, other.trace_info_.ptr(), other.trace_info_.length());
-    trace_info_.assign_ptr(buf+len, other.trace_info_.length());
-    len += other.trace_info_.length();
-
-    MEMCPY(buf+len, other.sync_sess_info_.ptr(), other.sync_sess_info_.length());
-    sync_sess_info_.assign_ptr(buf+len, other.sync_sess_info_.length());
-    len += other.sync_sess_info_.length();
-
-    MEMCPY(buf+len, other.full_link_trace_.ptr(), other.full_link_trace_.length());
-    full_link_trace_.assign_ptr(buf+len, other.full_link_trace_.length());
-    len += other.full_link_trace_.length();
+    if (other.trace_info_.length() > 0) {
+      MEMCPY(buf+len, other.trace_info_.ptr(), other.trace_info_.length());
+      trace_info_.assign_ptr(buf+len, other.trace_info_.length());
+      len += other.trace_info_.length();
+    }
+    if (other.sync_sess_info_.length() > 0) {
+      MEMCPY(buf+len, other.sync_sess_info_.ptr(), other.sync_sess_info_.length());
+      sync_sess_info_.assign_ptr(buf+len, other.sync_sess_info_.length());
+      len += other.sync_sess_info_.length();
+    }
+    if (other.full_link_trace_.length() > 0) {
+      MEMCPY(buf+len, other.full_link_trace_.ptr(), other.full_link_trace_.length());
+      full_link_trace_.assign_ptr(buf+len, other.full_link_trace_.length());
+      len += other.full_link_trace_.length();
+    }
+    if (other.sess_info_veri_.length() > 0) {
+      MEMCPY(buf+len, other.sess_info_veri_.ptr(), other.sess_info_veri_.length());
+      sess_info_veri_.assign_ptr(buf+len, other.sess_info_veri_.length());
+      len += other.sess_info_veri_.length();
+    }
   }
   return ret;
 }

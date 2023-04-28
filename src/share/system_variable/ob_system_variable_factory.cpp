@@ -3273,26 +3273,10 @@ int ObSysVarFactory::create_all_sys_vars()
   return ret;
 }
 
-int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id,
+                                        ObBasicSysVar *&sys_var_ptr)
 {
   int ret = OB_SUCCESS;
-  int64_t store_idx = -1;
-  ObBasicSysVar *sys_var_ptr = NULL;
-  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
-    LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
-  } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected store idx", K(ret), K(store_idx), K(sys_var_id));
-  } else if (OB_NOT_NULL(store_[store_idx])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("store ptr shoule be null", K(ret), K(store_idx), K(sys_var_id));
-  } else {
-    if (OB_NOT_NULL(store_buf_[store_idx])) {
-      sys_var_ptr = store_buf_[store_idx];
-      store_buf_[store_idx] = nullptr;
-    }
-  }
-  if (OB_ISNULL(sys_var_ptr)) {
   switch(sys_var_id) {
     case SYS_VAR_AUTO_INCREMENT_INCREMENT: {
       void *ptr = NULL;
@@ -5809,6 +5793,32 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       break;
     }
   }
+  return ret;
+}
+
+int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+{
+  int ret = OB_SUCCESS;
+  int64_t store_idx = -1;
+  ObBasicSysVar *sys_var_ptr = NULL;
+  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
+    LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
+  } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected store idx", K(ret), K(store_idx), K(sys_var_id));
+  } else if (OB_NOT_NULL(store_[store_idx])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store ptr shoule be null", K(ret), K(store_idx), K(sys_var_id));
+  } else {
+    if (OB_NOT_NULL(store_buf_[store_idx])) {
+      sys_var_ptr = store_buf_[store_idx];
+      store_buf_[store_idx] = nullptr;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(sys_var_ptr)) {
+    if (OB_FAIL(create_sys_var(allocator_, sys_var_id, sys_var_ptr))) {
+      LOG_WARN("fail to calc sys var", K(ret), K(sys_var_id));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(sys_var_ptr)) {

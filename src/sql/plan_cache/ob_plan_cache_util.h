@@ -268,6 +268,17 @@ struct ObPCParam
   TO_STRING_KV(KP_(node), K_(flag));
 };
 
+struct ObPCParseInfo
+{
+  int64_t raw_text_pos_;
+  int64_t param_idx_;
+  ParamProperty flag_;
+  ObPCParseInfo() : raw_text_pos_(-1), param_idx_(-1), flag_(INVALID_PARAM)
+  {
+  }
+  TO_STRING_KV(K_(raw_text_pos), K_(param_idx), K_(flag));
+};
+
 struct ObPCConstParamInfo
 {
   common::ObSEArray<int64_t, 4> const_idx_;

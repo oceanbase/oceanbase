@@ -56,6 +56,8 @@ struct SqlInfo: public ParameterizationHashValue
     no_check_type_offsets_ = that.no_check_type_offsets_;
     need_check_type_param_offsets_ = that.need_check_type_param_offsets_;
     ps_need_parameterized_ = that.ps_need_parameterized_;
+    parse_infos_ = that.parse_infos_;
+    need_check_fp_ = that.need_check_fp_;
     return *this;
   }
   void destroy() {}
@@ -85,6 +87,8 @@ struct SqlInfo: public ParameterizationHashValue
   // because this will cause the parameterized SQL to report a syntax error in the parser.
   // such as prepare stmt from 'select * from t1 where c1 = ? and c2 is null';
   bool ps_need_parameterized_;
+  common::ObSEArray<ObPCParseInfo, 4> parse_infos_;
+  bool need_check_fp_;
 
   SqlInfo();
 };

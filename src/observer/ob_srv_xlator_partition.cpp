@@ -279,4 +279,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObUpdateTenantInfoCacheP, gctx_);
 
   RPC_PROCESSOR(ObSyncRewriteRulesP, gctx_);
+
+  // session info verification
+  RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);
 }
