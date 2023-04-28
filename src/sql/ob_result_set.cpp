@@ -1180,11 +1180,9 @@ int ObResultSet::ExternalRetrieveInfo::build_into_exprs(
     }
     is_select_for_update_ = (static_cast<ObSelectStmt&>(stmt)).has_for_update();
     has_hidden_rowid_ = (static_cast<ObSelectStmt&>(stmt)).has_hidden_rowid();
-    is_bulk_ = (static_cast<ObDMLStmt&>(stmt)).is_bulk();
   } else if (stmt.is_insert_stmt() || stmt.is_update_stmt() || stmt.is_delete_stmt()) {
     ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(stmt);
     OZ (into_exprs_.assign(dml_stmt.get_returning_into_exprs()));
-    is_bulk_ = (static_cast<ObDMLStmt&>(stmt)).is_bulk();
   }
 
   return ret;
@@ -1293,6 +1291,10 @@ int ObResultSet::ExternalRetrieveInfo::build(
 {
   int ret = OB_SUCCESS;
   OZ (build_into_exprs(stmt, ns, is_dynamic_sql));
+  CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()));
+  CK (OB_NOT_NULL(session_info.get_cur_exec_ctx()->get_sql_ctx()));
+  OX (is_bulk_ = session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_);
+  OX (session_info.get_cur_exec_ctx()->get_sql_ctx()->is_bulk_ = false);
   if (OB_SUCC(ret)) {
     ObSchemaGetterGuard *schema_guard = NULL;
     if (OB_ISNULL(stmt.get_query_ctx()) ||

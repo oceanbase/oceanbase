@@ -239,6 +239,7 @@ ObSqlCtx::ObSqlCtx()
     res_map_rule_param_idx_(OB_INVALID_INDEX),
     res_map_rule_version_(0),
     is_text_ps_mode_(false),
+    is_bulk_(false),
     reroute_info_(nullptr)
 {
   sql_id_[0] = '\0';
@@ -291,6 +292,7 @@ void ObSqlCtx::reset()
   cur_plan_ = nullptr;
   is_execute_call_stmt_ = false;
   is_text_ps_mode_ = false;
+  is_bulk_ = false;
 }
 
 //release dynamic allocated memory

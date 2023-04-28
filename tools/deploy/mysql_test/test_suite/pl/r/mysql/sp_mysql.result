@@ -4592,8 +4592,8 @@ use test|
 select schema_name from information_schema.schemata where
 schema_name like 'bug18344%'|
 schema_name
-bug18344_0123456789012
 bug18344_012345678901
+bug18344_0123456789012
 select routine_name,routine_schema from information_schema.routines where
 routine_schema like 'bug18344%'|
 routine_name	routine_schema

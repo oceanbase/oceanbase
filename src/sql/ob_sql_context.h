@@ -523,6 +523,7 @@ public:
   int64_t res_map_rule_param_idx_;
   uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;
+  bool is_bulk_;
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
 };
