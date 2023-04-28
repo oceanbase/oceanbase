@@ -507,7 +507,7 @@ protected:
                            const uint16_t selector[],
                            const int64_t size);
   // partition sort for window function
-  bool is_equal_part(const ObChunkDatumStore::StoredRow *l, const ObChunkDatumStore::StoredRow *r);
+  int is_equal_part(const ObChunkDatumStore::StoredRow *l, const ObChunkDatumStore::StoredRow *r, bool &is_equal);
   int do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRow *> &rows,
                         const int64_t rows_begin, const int64_t rows_end);
   void set_iteration_age(ObChunkDatumStore::IterationAge *iter_age);
@@ -639,12 +639,14 @@ private:
   int fetch_rows(const common::ObIArray<ObExpr *> &all_exprs);
   int fetch_rows_batch(const common::ObIArray<ObExpr *> &all_exprs);
 
-  bool is_same_prefix(const ObChunkDatumStore::StoredRow *store_row,
+  int is_same_prefix(const ObChunkDatumStore::StoredRow *store_row,
                       const common::ObIArray<ObExpr *> &all_exprs,
-                      const int64_t datum_idx);
+                      const int64_t datum_idx,
+                      bool &same);
 
-  bool is_same_prefix(const common::ObIArray<ObExpr *> &all_exprs,
-                      const int64_t datum_idx1, const int64_t datum_idx2);
+  int is_same_prefix(const common::ObIArray<ObExpr *> &all_exprs,
+                      const int64_t datum_idx1, const int64_t datum_idx2,
+                      bool &same);
 
   int add_immediate_prefix(const common::ObIArray<ObExpr *> &all_exprs);
 

@@ -92,6 +92,7 @@ public:
   {
     return key;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const UnitTestKey &other) const
   {
     return key == other.key;
@@ -581,6 +582,7 @@ public:
   {
     return key;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const PerfTestKey &other) const
   {
     return key == other.key;

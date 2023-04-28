@@ -1362,10 +1362,14 @@ int ObSchemaRetrieveUtils::fill_column_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_flags, column, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, prev_column_id, column, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, UINT64_MAX);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, srs_id, column, uint64_t, true, true, OB_DEFAULT_COLUMN_SRS_ID);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, udt_set_id, column, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sub_data_type, column, int64_t, true, true, 0);
 
     common::ColumnType default_type = column.get_data_type();
     if (column.is_generated_column() || column.is_identity_column()) {
       default_type = ObVarcharType;
+    } else if (column.is_xmltype()) {
+      default_type = ObLongTextType;
     }
 
     if (OB_SUCC(ret)) {

@@ -56,9 +56,9 @@ bool ObPsSqlKey::operator==(const ObPsSqlKey &other) const
 
 int64_t ObPsSqlKey::hash() const
 {
-  int64_t hash_val = 0;
+  uint64_t hash_val = 0;
   hash_val = murmurhash(&db_id_, sizeof(uint64_t), hash_val);
-  hash_val = ps_sql_.hash(hash_val);
+  ps_sql_.hash(hash_val, hash_val);
   return hash_val;
 }
 

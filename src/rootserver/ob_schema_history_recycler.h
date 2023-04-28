@@ -48,6 +48,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(first_schema_id));
 public:
   union{
@@ -89,6 +90,7 @@ public:
   bool operator<(const ObSecondSchemaKey &other) const;
   ObSecondSchemaKey &operator=(const ObSecondSchemaKey &other);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(first_schema_id), K_(second_schema_id));
 public:
   union {
@@ -114,6 +116,7 @@ public:
   bool operator<(const ObThirdSchemaKey &other) const;
   ObThirdSchemaKey &operator=(const ObThirdSchemaKey &other);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(first_schema_id), K_(second_schema_id), K_(third_schema_id));
 public:
   union {
@@ -427,6 +430,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(zone), K_(name));
 public:
   common::ObString zone_;
@@ -508,6 +512,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(obj_id), K_(obj_type), K_(col_id), K_(grantor_id), K_(grantee_id), K_(priv_id));
 public:
   int64_t obj_id_;

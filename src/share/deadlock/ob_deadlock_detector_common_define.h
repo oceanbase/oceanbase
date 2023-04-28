@@ -239,6 +239,7 @@ public:
   const UserBinaryKey &get_user_key() const;
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(addr), K_(user_key));
 private:
   common::ObAddr addr_;

@@ -122,9 +122,9 @@ int ObExprFuncPartHash::calc_result_typeN(ObExprResType &type,
   return ret;
 }
 
-uint64_t ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t seed)
+int ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t seed, uint64_t &res)
 {
-  uint64 hval = 0;
+  int ret = OB_SUCCESS;
   ObObjType type = obj.get_type();
   //定长类型需要去除末尾空格, 见
   if (ObCharType == type || ObNCharType == type) {
@@ -145,11 +145,15 @@ uint64_t ObExprFuncPartHash::calc_hash_value_with_seed(const ObObj &obj, int64_t
     }
     obj_trimmed.set_collation_type(obj.get_collation_type());
     obj_trimmed.set_string(ObCharType, obj.get_string_ptr(), val_len);
-    hval = obj_trimmed.hash_murmur(seed);
+    if (OB_FAIL(obj_trimmed.hash_murmur(res, seed))) {
+      LOG_WARN("fail to do hash", K(ret));
+    }
   } else {
-    hval = obj.hash_murmur(seed);
+    if (OB_FAIL(obj.hash_murmur(res, seed))) {
+      LOG_WARN("fail to do hash", K(ret));
+    }
   }
-  return hval;
+  return ret;
 }
 int ObExprFuncPartHash::calc_value_for_oracle(const ObObj *objs_stack,
                                               int64_t param_num,
@@ -170,8 +174,8 @@ int ObExprFuncPartHash::calc_value_for_oracle(const ObObj *objs_stack,
     } else if (!is_oracle_supported_type(type1)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("type is wrong", K(ret), K(obj1), K(type1));
-    } else {
-      hash_code = calc_hash_value_with_seed(obj1, hash_code);
+    } else if (OB_FAIL(calc_hash_value_with_seed(obj1, hash_code, hash_code))) {
+      LOG_WARN("fail to do hash", K(ret));
     }
   }
   result_num = static_cast<int64_t>(hash_code);
@@ -338,9 +342,13 @@ int ObExprFuncPartHash::eval_oracle_part_hash(
           }
         }
         str.len_ = end - str.ptr_;
-        hash_val = arg.basic_funcs_->murmur_hash_(str, hash_val);
+        if (OB_FAIL(arg.basic_funcs_->murmur_hash_(str, hash_val, hash_val))) {
+          LOG_WARN("hash failed", K(ret));
+        }
       } else {
-        hash_val = arg.basic_funcs_->murmur_hash_(*d, hash_val);
+        if (OB_FAIL(arg.basic_funcs_->murmur_hash_(*d, hash_val, hash_val))) {
+          LOG_WARN("hash failed", K(ret));
+        }
       }
     }
   }

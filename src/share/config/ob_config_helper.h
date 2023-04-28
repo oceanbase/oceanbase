@@ -504,6 +504,7 @@ public:
   explicit ObConfigStringKey(const ObString &string);
   virtual ~ObConfigStringKey() {}
   uint64_t hash() const;
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   // case unsensitive
   bool operator == (const ObConfigStringKey &str) const

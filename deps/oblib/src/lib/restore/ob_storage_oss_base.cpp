@@ -692,9 +692,9 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, void* oss_account)
 
     if(OB_SUCCESS == ret) {
       //alloc memory from aos_pool_
-      if(OB_ISNULL(base_buf_ = static_cast<char *>(allocator_.alloc(BASE_BUFFER_SIZE)))) {
+      if(OB_ISNULL(base_buf_ = static_cast<char *>(allocator_.alloc(OSS_BASE_BUFFER_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(BASE_BUFFER_SIZE), K(ret));
+        OB_LOG(WARN, "fail to alloc memory", K(OSS_BASE_BUFFER_SIZE), K(ret));
       } else if(0 == MD5_Init(&whole_file_md5_)) {//init MD5_CTX,return 0 for failed
         ret = OB_INIT_MD5_ERROR;
         OB_LOG(WARN, "init MD5_CTX error,uri=%s, ret=%d", to_cstring(uri), ret);
@@ -774,11 +774,11 @@ int ObStorageOssMultiPartWriter::write(const char * buf,const int64_t size)
   }
 
   while (OB_SUCC(ret) && buf_pos != size) {
-    fill_size = std::min(BASE_BUFFER_SIZE - base_buf_pos_, size - buf_pos);
+    fill_size = std::min(OSS_BASE_BUFFER_SIZE - base_buf_pos_, size - buf_pos);
     memcpy(base_buf_ + base_buf_pos_, buf + buf_pos, fill_size);
     base_buf_pos_ += fill_size;
     buf_pos += fill_size;
-    if (base_buf_pos_ == BASE_BUFFER_SIZE) {
+    if (base_buf_pos_ == OSS_BASE_BUFFER_SIZE) {
       if (OB_FAIL(write_single_part())) {
         OB_LOG(WARN, "write file error", K(bucket_), K(object_), K(ret));
       } else {

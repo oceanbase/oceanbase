@@ -244,7 +244,8 @@ public:
       ObIArray<ObString> &gen_col_expr_arr,
       const ObSQLMode sql_mode,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker);
+      ObSchemaChecker *schema_checker,
+      share::schema::ObColumnSchemaV2 *hidden_col = NULL);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,

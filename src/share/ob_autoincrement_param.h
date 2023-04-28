@@ -66,6 +66,8 @@ public:
     return hash_val;
   }
 
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(column_id));
 
   uint64_t tenant_id_;

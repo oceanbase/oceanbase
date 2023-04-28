@@ -61,6 +61,8 @@ struct ObDTLIntermResultKey
     hash_val = common::murmurhash(&batch_id_, sizeof(uint64_t), hash_val);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
   inline bool operator==(const ObDTLIntermResultKey& key) const
   {
     return channel_id_ == key.channel_id_ && batch_id_ == key.batch_id_;

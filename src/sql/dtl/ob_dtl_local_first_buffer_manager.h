@@ -316,13 +316,17 @@ template <class key_type, class value_type, class hash_function>
 int ObDtlFirstBufferHashTable<key_type, value_type, hash_function>::set_refactored(const key_type &key, value_type *val)
 {
   int ret = OB_SUCCESS;
-  uint64_t hash_val = hash_func_(key);
-  int64_t nth_lock = get_nth_lock(hash_val);
-  int64_t nth_bucket = get_nth_bucket(hash_val);
-  ObLatchWGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
-  ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
-  if (OB_FAIL(bucket_cell.set_refactored(key, val))) {
-    SQL_DTL_LOG(WARN, "failed to set refactor");
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    SQL_DTL_LOG(WARN, "failed to hash");
+  } else {
+    int64_t nth_lock = get_nth_lock(hash_val);
+    int64_t nth_bucket = get_nth_bucket(hash_val);
+    ObLatchWGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
+    ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
+    if (OB_FAIL(bucket_cell.set_refactored(key, val))) {
+      SQL_DTL_LOG(WARN, "failed to set refactor");
+    }
   }
   return ret;
 }
@@ -331,13 +335,17 @@ template <class key_type, class value_type, class hash_function>
 int ObDtlFirstBufferHashTable<key_type, value_type, hash_function>::erase_refactored(const key_type &key, value_type *&val)
 {
   int ret = OB_SUCCESS;
-  uint64_t hash_val = hash_func_(key);
-  int64_t nth_lock = get_nth_lock(hash_val);
-  int64_t nth_bucket = get_nth_bucket(hash_val);
-  ObLatchWGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
-  ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
-  if (OB_FAIL(bucket_cell.erase_refactored(key, val))) {
-    //SQL_DTL_LOG(WARN, "failed to set refactor");
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    SQL_DTL_LOG(WARN, "failed to hash");
+  } else {
+    int64_t nth_lock = get_nth_lock(hash_val);
+    int64_t nth_bucket = get_nth_bucket(hash_val);
+    ObLatchWGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
+    ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
+    if (OB_FAIL(bucket_cell.erase_refactored(key, val))) {
+      //SQL_DTL_LOG(WARN, "failed to set refactor");
+    }
   }
   return ret;
 }
@@ -347,13 +355,17 @@ template<typename callback_function>
 int ObDtlFirstBufferHashTable<key_type, value_type, hash_function>::get_refactored(const key_type &key, value_type *&val, callback_function &callback)
 {
   int ret = OB_SUCCESS;
-  uint64_t hash_val = hash_func_(key);
-  int64_t nth_lock = get_nth_lock(hash_val);
-  int64_t nth_bucket = get_nth_bucket(hash_val);
-  ObLatchRGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
-  ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
-  if (OB_FAIL(bucket_cell.get_refactored(key, val, callback))) {
-    // SQL_DTL_LOG(WARN, "failed to set refactor");
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    SQL_DTL_LOG(WARN, "failed to hash");
+  } else {
+    int64_t nth_lock = get_nth_lock(hash_val);
+    int64_t nth_bucket = get_nth_bucket(hash_val);
+    ObLatchRGuard guard(concurrent_cell_.get_lock(nth_lock), ObLatchIds::CONFIG_LOCK);
+    ObDtlFirstBufferHashTableCell<key_type, value_type> &bucket_cell = bucket_cells_[nth_bucket];
+    if (OB_FAIL(bucket_cell.get_refactored(key, val, callback))) {
+      // SQL_DTL_LOG(WARN, "failed to set refactor");
+    }
   }
   return ret;
 }

@@ -268,11 +268,14 @@ int TabletHashMap::find_node(const ObTabletID key,
 int TabletHashMap::set(const ObTabletID key, ObDASTabletLoc *value)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (!created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("hash map was not created", KR(ret));
+  } else if (OB_FAIL(key.hash(hash_val))) {
+    LOG_WARN("hash failed", KR(ret));
   } else {
-    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *&bucket = buckets_[hash_val % bucket_num_];
     TabletHashNode *dst_node = NULL;
     if (OB_FAIL(find_node(key, bucket, dst_node))) {
       LOG_WARN("find node failed", KR(ret));
@@ -299,11 +302,14 @@ int TabletHashMap::set(const ObTabletID key, ObDASTabletLoc *value)
 int TabletHashMap::get(const ObTabletID key, ObDASTabletLoc *&value)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (!created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("hash map was not created", KR(ret));
+  } else if (OB_FAIL(key.hash(hash_val))) {
+    LOG_WARN("hash failed", KR(ret));
   } else {
-    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *&bucket = buckets_[hash_val % bucket_num_];
     TabletHashNode *dst_node = NULL;
     if (OB_FAIL(find_node(key, bucket, dst_node))) {
       LOG_WARN("find node failed", KR(ret));

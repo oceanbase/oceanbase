@@ -284,13 +284,24 @@ public:
   inline const char *ptr() const { return ptr_; }
   inline char *ptr() { return ptr_; }
 
-  inline uint64_t hash(uint64_t seed = 0) const
+  inline uint64_t hash() const
   {
-    if (OB_LIKELY(NULL != ptr_) && OB_LIKELY(data_length_ > 0)) {
-      seed = murmurhash(ptr_, data_length_, seed);
-    }
+    return hash(0);
+  }
 
-    return seed;
+  inline uint64_t hash(uint64_t seed) const
+  {
+    uint64_t hash_val = seed;
+    if (OB_LIKELY(NULL != ptr_) && OB_LIKELY(data_length_ > 0)) {
+      hash_val = murmurhash(ptr_, data_length_, hash_val);
+    }
+    return hash_val;
+  }
+
+  inline int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
   }
 
   inline int case_compare(const ObString &obstr) const

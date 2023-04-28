@@ -45,6 +45,7 @@ public:
   {}
   virtual ~ObIDDLTask() {}
   virtual int64_t hash() const = 0;
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual int process() = 0;
   virtual bool need_retry() const { return need_retry_; };
   virtual int64_t get_deep_copy_size() const = 0;

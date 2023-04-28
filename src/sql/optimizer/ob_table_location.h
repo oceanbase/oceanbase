@@ -276,7 +276,7 @@ public:
 struct ObListPartMapKey {
   common::ObNewRow row_;
 
-  int64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   bool operator==(const ObListPartMapKey &other) const;
   TO_STRING_KV(K_(row));
 };

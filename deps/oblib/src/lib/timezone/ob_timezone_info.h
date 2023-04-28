@@ -429,6 +429,7 @@ public:
   ObTZIDKey() : tz_id_(0) { }
   ObTZIDKey(const int64_t tz_id) : tz_id_(tz_id) {}
   uint64_t hash() const  { return common::murmurhash(&tz_id_, sizeof(tz_id_), 0); };
+  int hash(uint64_t &hash_val) const  { hash_val = hash(); return OB_SUCCESS; };
   int compare(const ObTZIDKey & r)
   {
     int cmp = 0;
@@ -466,7 +467,8 @@ public:
   }
   bool operator==(const ObTZNameKey &key) const { return 0 == compare(key); }
 
-  uint64_t hash(uint64_t seed = 0) const;
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_));
 private:
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];

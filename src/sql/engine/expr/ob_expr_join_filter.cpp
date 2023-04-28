@@ -120,8 +120,10 @@ int ObExprJoinFilter::eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx,
               LOG_WARN("expr.inner_functions_ is null", K(ret));
             } else {
               hash_func.hash_func_ = reinterpret_cast<ObDatumHashFuncType>(expr.inner_functions_[i * 2]);
+              if (OB_FAIL(hash_func.hash_func_(*datum, hash_val, hash_val))) {
+                LOG_WARN("failed to do hash", K(ret));
+              }
             }
-            hash_val = hash_func.hash_func_(*datum, hash_val);
           }
         }
         if (OB_SUCC(ret)) {

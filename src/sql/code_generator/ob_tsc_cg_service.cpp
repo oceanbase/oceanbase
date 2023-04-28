@@ -556,7 +556,8 @@ int ObTscCgService::extract_das_access_exprs(const ObLogTableScan &op,
     for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); ++i) {
       ObRawExpr *expr = access_exprs.at(i);
       if (expr->is_column_ref_expr() &&
-        static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+          static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
+          !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
         // do nothing.
       } else {
         if (OB_FAIL(add_var_to_array_no_dup(tmp_access_exprs, expr))) {

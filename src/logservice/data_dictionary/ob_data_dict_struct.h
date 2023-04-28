@@ -82,7 +82,8 @@ public:
 public:
   // NOTICE: update DEFAULT_VERSION if modify serialized fields in DictxxxMeta
   // update to 2 in 4.1 bp1: add column_ref_ids_ in ObDictColumnMeta
-  const static int64_t DEFAULT_VERSION = 2;
+  // update to 3 in 4.2: add udt_set_id_ and sub_type_ in ObDictColumnMeta
+  const static int64_t DEFAULT_VERSION = 3;
 public:
   OB_INLINE bool is_valid() const
   {
@@ -298,6 +299,14 @@ public:
   OB_INLINE bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   int get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) const;
 
+  OB_INLINE uint64_t get_udt_set_id() const { return udt_set_id_; }
+  OB_INLINE uint64_t get_sub_data_type() const { return sub_type_; }
+  OB_INLINE bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  OB_INLINE bool is_xmltype() const {
+    return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
+        || meta_type_.is_xml_sql_type();
+  }
+
   NEED_SERIALIZE_AND_DESERIALIZE_DICT;
   TO_STRING_KV(
       K_(column_id),
@@ -346,6 +355,8 @@ private:
   common::ObObj cur_default_value_; //collation must be same with the column
   common::ObSEArray<common::ObString, 8> extended_type_info_;//used for enum and set
   common::ObSEArray<uint64_t, 2> column_ref_ids_;
+  uint64_t udt_set_id_;
+  uint64_t sub_type_;
 };
 
 class ObDictTableMeta

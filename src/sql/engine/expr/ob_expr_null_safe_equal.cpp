@@ -141,6 +141,7 @@ int ObExprNullSafeEqual::ns_equal(const ObExpr &expr, ObDatum &res,
   ObDatum *l = NULL;
   ObDatum *r = NULL;
   bool equal = true;
+  int cmp_ret = 0;
   for (int64_t i = 0; OB_SUCC(ret) && equal && i < expr.inner_func_cnt_; i++) {
     if (NULL == expr.inner_functions_[i]) {
       ret = OB_INVALID_ARGUMENT;
@@ -152,7 +153,11 @@ int ObExprNullSafeEqual::ns_equal(const ObExpr &expr, ObDatum &res,
       if (l->is_null() && r->is_null()) {
         equal = true;
       } else if (!l->is_null() && !r->is_null()) {
-        equal = (0 == reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[i])(*l, *r));
+        if (OB_FAIL(reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[i])(*l, *r, cmp_ret))) {
+          LOG_WARN("cmp failed", K(ret));
+        } else {
+          equal = (0 == cmp_ret);
+        }
       } else {
         equal = false;
       }

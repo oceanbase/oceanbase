@@ -314,6 +314,11 @@ private:
       const ObITable *table = sstable_handle_.get_table();
       return common::murmurhash(&table, sizeof(table), 0);
     }
+    OB_INLINE int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
     TO_STRING_KV(K_(ls_id), K_(table_key), K_(sstable_handle));
   public:
     share::ObLSID ls_id_;

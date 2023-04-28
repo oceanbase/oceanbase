@@ -2466,6 +2466,38 @@ int ObTableSchema::get_orig_default_row(const common::ObIArray<ObColDesc> &colum
   return ret;
 }
 
+ObColumnSchemaV2* ObTableSchema::get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const
+{
+  ObColumnSchemaV2 *res = NULL;
+  for (int64_t i = 0; udt_set_id > 0 && OB_ISNULL(res) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (NULL != column && column_id != column->get_column_id()
+        && udt_set_id == column->get_udt_set_id()) {
+      res = column;
+    }
+  }
+  return res;
+}
+
+int ObTableSchema::get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
+                                                       common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; udt_set_id > 0 && OB_SUCC(ret) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (NULL == column) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column must not null", K(ret), K(i), K(column_cnt_));
+    } else if (column_id == column->get_column_id()) {
+      // do nothing
+    } else if (udt_set_id == column->get_udt_set_id()
+               && OB_FAIL(column_group.push_back(column))) {
+      LOG_WARN("column must not null", K(ret), K(i), K(column_cnt_), K(column_id), K(udt_set_id));
+    }
+  }
+  return ret;
+}
+
 ObColumnSchemaV2 *ObTableSchema::get_column_schema_by_id_internal(const uint64_t column_id) const
 {
   ObColumnSchemaV2 *column = NULL;
@@ -7270,7 +7302,8 @@ int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(ret));
-    } else if (ObObjType::ObExtendType == column_schema->get_data_type()) {
+    } else if (ObObjType::ObExtendType == column_schema->get_data_type()
+               && ObObjType::ObUserDefinedSQLType == column_schema->get_data_type()) {
       already_invalid = true;
       break;
     } else if (OB_FAIL(new_column_schema.assign(*column_schema))) {

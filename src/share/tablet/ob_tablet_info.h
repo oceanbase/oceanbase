@@ -223,6 +223,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   const ObTabletID &get_tablet_id() const { return tablet_id_; }
   const ObLSID &get_ls_id() const { return ls_id_; }
   bool operator==(const ObTabletLSPair &other) const;

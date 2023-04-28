@@ -89,6 +89,7 @@ struct ObTenantID {
     return tenant_id_ == other.tenant_id_;
   }
   uint64_t hash() const { return tenant_id_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   uint64_t tenant_id_;
 };
 using TenantConfigMap = common::__ObConfigContainer<ObTenantID, ObTenantConfig, common::OB_MAX_SERVER_TENANT_CNT>;

@@ -94,6 +94,11 @@ public:
     hash_value = common::murmurhash(&sessid_, sizeof(sessid_), hash_value);
     return hash_value;
   };
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  };
   int compare(const SessionInfoKey & r)
   {
     int cmp = 0;

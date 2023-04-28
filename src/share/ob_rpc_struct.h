@@ -2048,7 +2048,8 @@ public:
       is_hidden_(false)
   {}
   bool operator==(const ObTableItem &table_item) const;
-  inline uint64_t hash(uint64_t seed = 0) const;
+  inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   void reset() {
     mode_ = common::OB_NAME_CASE_INVALID;
     database_name_.reset();
@@ -2063,14 +2064,24 @@ public:
   bool is_hidden_;
 };
 
-inline uint64_t ObTableItem::hash(uint64_t seed) const
+inline uint64_t ObTableItem::hash() const
 {
-  uint64_t val = seed;
+  uint64_t val = 0;
   if (!database_name_.empty() && !table_name_.empty()) {
     val = common::murmurhash(database_name_.ptr(), database_name_.length(), val);
     val = common::murmurhash(table_name_.ptr(), table_name_.length(), val);
   }
   return val;
+}
+
+inline int ObTableItem::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  hash_val = seed;
+  if (!database_name_.empty() && !table_name_.empty()) {
+    hash_val = common::murmurhash(database_name_.ptr(), database_name_.length(), hash_val);
+    hash_val = common::murmurhash(table_name_.ptr(), table_name_.length(), hash_val);
+  }
+  return OB_SUCCESS;
 }
 
 struct ObDropTableArg : public ObDDLArg
@@ -4008,6 +4019,7 @@ struct ObLSTabletPair final
 public:
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid(); }
   uint64_t hash() const { return ls_id_.hash() + tablet_id_.hash(); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator == (const ObLSTabletPair &other) const { return ls_id_ == other.ls_id_ && tablet_id_ == other.tablet_id_; }
   bool operator < (const ObLSTabletPair &other) const { return ls_id_ != other.ls_id_ ? ls_id_ < other.ls_id_ : tablet_id_ < other.tablet_id_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id));

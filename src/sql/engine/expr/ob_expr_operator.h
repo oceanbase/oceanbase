@@ -552,6 +552,11 @@ public:
                                                  const ObExprResType *types,
                                                  int64_t param_num);
 
+  static int aggregate_user_defined_sql_type(
+      ObExprResType &type,
+      const ObExprResType *types,
+      int64_t param_num);
+
   int calc_cmp_type2(ObExprResType &type,
                     const ObExprResType &type1,
                     const ObExprResType &type2,

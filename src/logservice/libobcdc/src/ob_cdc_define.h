@@ -56,6 +56,7 @@ struct PartTransID
   ~PartTransID();
   bool operator==(const PartTransID &part_trans_id) const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   void reset();
 
   bool is_valid() const { return tls_id_.is_valid() && trans_id_ > 0; }

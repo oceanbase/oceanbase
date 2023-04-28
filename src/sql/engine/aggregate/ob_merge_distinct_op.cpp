@@ -77,9 +77,11 @@ int ObMergeDistinctOp::inner_get_next_row()
         }
       } else {
         // compare current_row and last_row
-        if (!cmp_.equal(&MY_SPEC.distinct_exprs_, last_row_.store_row_)) {
+        bool equal = false;
+        if (OB_FAIL(cmp_.equal(&MY_SPEC.distinct_exprs_, last_row_.store_row_, equal))) {
+          LOG_WARN("failed to cmp row", K(ret));
+        } else if (!equal) {
           got_distinct_row = true;
-          ret = cmp_.ret_code_;
           /* save this row to local buffer. last_row_buf_ reused */
           if (OB_SUCC(ret) &&
               OB_FAIL(last_row_.save_store_row(MY_SPEC.distinct_exprs_, eval_ctx_, 0))) {
@@ -171,6 +173,7 @@ int ObMergeDistinctOp::deduplicate_for_batch(bool has_last, const ObBatchRows *c
 {
   int ret = OB_SUCCESS;
   int64_t curr_idx = 0;
+  bool equal = false;
   if (OB_ISNULL(cmp_.eval_ctx_) || OB_ISNULL(cmp_.cmp_funcs_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_UNLIKELY(!has_last)) {
@@ -182,12 +185,14 @@ int ObMergeDistinctOp::deduplicate_for_batch(bool has_last, const ObBatchRows *c
     }
     //now we find at least 1 valid row, record its idx and locate next
     int64_t last_idx = curr_idx;
-    for (curr_idx = last_idx + 1; curr_idx < child_brs->size_; ++curr_idx) {
+    for (curr_idx = last_idx + 1; OB_SUCC(ret) && curr_idx < child_brs->size_; ++curr_idx) {
       if (child_brs->skip_->at(curr_idx)) {
         brs_.skip_->set(curr_idx);
         continue;
       }
-      if (cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_, last_idx, curr_idx)) {
+      if (OB_FAIL(cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_, last_idx, curr_idx, equal))) {
+        LOG_WARN("failed to cmp row", K(ret));
+      } else if (equal) {
         brs_.skip_->set(curr_idx);
       } else {
         last_idx = curr_idx;
@@ -202,22 +207,28 @@ int ObMergeDistinctOp::deduplicate_for_batch(bool has_last, const ObBatchRows *c
   } else {
     //we have a stored row may from last batch, first locate a valid row
     brs_.size_ = child_brs->size_;
-    while (curr_idx < child_brs->size_ && (child_brs->skip_->at(curr_idx)
-                                           || cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_,
-                                                                  last_row_.store_row_,
-                                                                  curr_idx))) {
-      brs_.skip_->set(curr_idx);
-      ++curr_idx;
+    equal = true;
+    while (curr_idx < child_brs->size_ && OB_SUCC(ret) && equal) {
+      equal = child_brs->skip_->at(curr_idx);
+      if (!equal && OB_FAIL(cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_, last_row_.store_row_, curr_idx, equal))) {
+        LOG_WARN("failed to cmp row", K(ret));
+      }
+      if (OB_SUCC(ret) && equal) {
+        brs_.skip_->set(curr_idx);
+        ++curr_idx;
+      }
     }
     //now we have got 1 row can be return or all rows are skiped
     if (curr_idx < child_brs->size_) {
       int64_t last_idx = curr_idx;
-      for (curr_idx = last_idx + 1; curr_idx < child_brs->size_; ++curr_idx) {
+      for (curr_idx = last_idx + 1; OB_SUCC(ret) && curr_idx < child_brs->size_; ++curr_idx) {
         if (child_brs->skip_->at(curr_idx)) {
           brs_.skip_->set(curr_idx);
           continue;
         }
-        if (cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_, last_idx, curr_idx)) {
+        if (OB_FAIL(cmp_.equal_in_batch(&MY_SPEC.distinct_exprs_, last_idx, curr_idx, equal))) {
+          LOG_WARN("failed to cmp row", K(ret));
+        } else if (equal) {
           brs_.skip_->set(curr_idx);
         } else {
           last_idx = curr_idx;
@@ -270,12 +281,13 @@ int ObMergeDistinctOp::Compare::init(ObEvalCtx *eval_ctx, const ObIArray<ObCmpFu
  * 这里需要注意一种特殊场景，就是distinct 1如何处理
  * 现在处理逻辑是：last_row为nullptr，即r为null，然后不比较，同时认为l的列为0
  **/
-bool ObMergeDistinctOp::Compare::equal(
+int ObMergeDistinctOp::Compare::equal(
   const ObIArray<ObExpr*> *l,
-  const ObChunkDatumStore::StoredRow *r)
+  const ObChunkDatumStore::StoredRow *r,
+  bool &equal)
 {
   int ret = OB_SUCCESS;
-  bool equal = false;
+  equal = false;
   if (OB_ISNULL(l) || OB_ISNULL(eval_ctx_) || OB_ISNULL(cmp_funcs_)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_ISNULL(r)) {
@@ -294,21 +306,22 @@ bool ObMergeDistinctOp::Compare::equal(
     for (int64_t i = 0; 0 == cmp && i < cmp_funcs_->count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(l->at(i)->eval(*eval_ctx_, other_datum))) {
         LOG_WARN("failed to get expr value", K(ret), K(i));
-      } else {
-        cmp = cmp_funcs_->at(i).cmp_func_(*other_datum, rcells[i]);
+      } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*other_datum, rcells[i], cmp))) {
+        LOG_WARN("do cmp failed", K(ret), K(i));
       }
     }
     equal = OB_SUCC(ret) ? (0 == cmp) : false;
   }
-  ret_code_ = ret;
-  return equal;
+  return ret;
 }
 
-bool ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
+int ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
                                                 const int64_t last_idx,
-                                                const int64_t curr_idx)
+                                                const int64_t curr_idx,
+                                                bool &equal)
 {
-  bool equal = false;
+  int ret = OB_SUCCESS;
+  equal = false;
   if (0 == set_exprs->count()) {
     // 表示是distinct 常量，所以没有distinct列，则永远相等
     // case: select distinct 1 from t1;
@@ -317,21 +330,25 @@ bool ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> 
     int cmp = 0;
     ObDatum *r_datum = nullptr;
     ObDatum *l_datum = nullptr;
-    for (int64_t i = 0; 0 == cmp && i < cmp_funcs_->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < cmp_funcs_->count(); i++) {
       l_datum = &set_exprs->at(i)->locate_expr_datum(*eval_ctx_, last_idx);
       r_datum = &set_exprs->at(i)->locate_expr_datum(*eval_ctx_, curr_idx);
-      cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum);
+      if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum, cmp))) {
+        LOG_WARN("do cmp failed", K(ret), K(i), KPC(l_datum), KPC(r_datum));
+      }
     }
     equal = (0 == cmp);
   }
-  return equal;
+  return ret;
 }
 
-bool ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
+int ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
                                                 const ObChunkDatumStore::StoredRow *r,
-                                                const int64_t curr_idx)
+                                                const int64_t curr_idx,
+                                                bool &equal)
 {
-  bool equal = false;
+  int ret = OB_SUCCESS;
+  equal = false;
   if (0 == set_exprs->count()) {
     // 表示是distinct 常量，所以没有distinct列，则永远相等
     // case: select distinct 1 from t1;
@@ -340,14 +357,16 @@ bool ObMergeDistinctOp::Compare::equal_in_batch(const common::ObIArray<ObExpr*> 
     int cmp = 0;
     const ObDatum *r_datum = nullptr;
     const ObDatum *l_datum = nullptr;
-    for (int64_t i = 0; 0 == cmp && i < cmp_funcs_->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < cmp_funcs_->count(); i++) {
       l_datum = &set_exprs->at(i)->locate_expr_datum(*eval_ctx_, curr_idx);
       r_datum = &r->cells()[i];
-      cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum);
+      if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum, cmp))) {
+        LOG_WARN("do cmp failed", K(ret), K(i), KPC(l_datum), KPC(r_datum));
+      }
     }
     equal = (0 == cmp);
   }
-  return equal;
+  return ret;
 }
 
 } // end namespace sql

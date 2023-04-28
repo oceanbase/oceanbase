@@ -37,6 +37,12 @@ uint64_t ClientLSKey::hash() const
   return hash_val;
 }
 
+int ClientLSKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 bool ClientLSKey::operator==(const ClientLSKey &that) const
 {
   return client_addr_ == that.client_addr_ &&

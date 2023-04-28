@@ -173,6 +173,7 @@ public:
       hash_ret = common::murmurhash(&node_id_, sizeof(uint64_t), 0);
       return hash_ret;
     }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     inline bool operator==(const ObMonitorNodeKey &other) const
     {
       return node_id_ == other.node_id_;

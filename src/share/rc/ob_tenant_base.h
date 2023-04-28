@@ -335,6 +335,7 @@ public:
     }
     return hash_value;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   DynamicType get_type() { return type_; }
   int64_t get_tg_id() { return tg_id_; }
   lib::Threads *get_user_thread() { return user_thread_; }

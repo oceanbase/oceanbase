@@ -588,6 +588,8 @@ void ObDictColumnMeta::reset()
   cur_default_value_.reset();
   extended_type_info_.reset();
   column_ref_ids_.reset();
+  udt_set_id_ = OB_INVALID_ID;
+  sub_type_ = OB_INVALID_ID;
 }
 
 DEFINE_EQUAL(ObDictColumnMeta)
@@ -605,7 +607,9 @@ DEFINE_EQUAL(ObDictColumnMeta)
       charset_type_,
       collation_type_,
       orig_default_value_,
-      cur_default_value_
+      cur_default_value_,
+      udt_set_id_,
+      sub_type_
       );
   IS_OBARRAY_EQUAL(extended_type_info_);
   IS_OBARRAY_EQUAL(column_ref_ids_);
@@ -632,7 +636,9 @@ DEFINE_SERIALIZE(ObDictColumnMeta)
       orig_default_value_,
       cur_default_value_,
       extended_type_info_,
-      column_ref_ids_);
+      column_ref_ids_,
+      udt_set_id_,
+      sub_type_);
   }
 
   return ret;
@@ -676,6 +682,14 @@ DEFINE_DESERIALIZE_DATA_DICT(ObDictColumnMeta)
           DDLOG(WARN, "deserialize column_ref_ids_ failed", KR(ret), K(data_len), K(pos));
         }
       }
+      if (OB_SUCC(ret) && header.get_version() > 2) {
+        //udt_set_id_ and sub_type_ is serialized when versin >= 3
+        if (OB_FAIL(NS_::decode(buf, data_len, pos, udt_set_id_))) {
+          DDLOG(WARN, "deserialize col_group_id failed", KR(ret));
+        } else if (OB_FAIL(NS_::decode(buf, data_len, pos, sub_type_))) {
+          DDLOG(WARN, "deserialize sub_type failed", KR(ret));
+        }
+      }
     }
   }
 
@@ -699,7 +713,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictColumnMeta)
       orig_default_value_,
       cur_default_value_,
       extended_type_info_,
-      column_ref_ids_);
+      column_ref_ids_,
+      udt_set_id_,
+      sub_type_);
   return len;
 }
 
@@ -748,6 +764,8 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
     column_flags_ = column_schema.get_column_flags();
     charset_type_ = column_schema.get_charset_type();
     collation_type_ = column_schema.get_collation_type();
+    udt_set_id_ = column_schema.get_udt_set_id();
+    sub_type_ = column_schema.get_sub_data_type();
   }
 
   return ret;

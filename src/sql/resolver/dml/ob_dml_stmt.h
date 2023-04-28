@@ -1117,7 +1117,6 @@ public:
   int collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_infos);
   int get_stmt_rowid_exprs(ObIArray<ObRawExpr *> &rowid_exprs);
   int check_and_get_same_rowid_expr(const ObRawExpr *expr, ObRawExpr *&same_rowid_expr);
-
   int add_cte_definition(TableItem * table_item) { return cte_definitions_.push_back(table_item); }
   int64_t get_cte_definition_size() const { return cte_definitions_.count(); }
   common::ObIArray<TableItem *>& get_cte_definitions() { return cte_definitions_; }

@@ -80,6 +80,7 @@ typedef enum ObItemType
   T_LOB         = 46,
   T_JSON        = 47,
   T_GEOMETRY    = 48,
+  T_UDT_SQL     = 49,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
@@ -796,6 +797,18 @@ typedef enum ObItemType
   T_WEIGHT_STRING_LEVEL_PARAM = 1689, // `level 1-2` and `level 1,2,3` clause on json expr
   T_FUN_SYS_NLS_INITCAP = 1690,
 
+  T_FUN_SYS_MAKEXML = 1691,
+  T_FUN_SYS_XML_ELEMENT = 1692,
+  T_FUN_SYS_XMLPARSE = 1693,
+  T_FUN_ORA_XMLAGG = 1694,
+  T_FUN_SYS_XML_ATTRIBUTES = 1695,
+  T_FUN_SYS_XML_EXTRACTVALUE = 1696,
+  T_FUN_SYS_XML_EXTRACT = 1697,
+  T_FUN_SYS_XML_SERIALIZE = 1698,
+  T_FUN_SYS_XMLCAST = 1699,
+  T_FUN_SYS_XML_ATTRIBUTES_VALUES = 1700,
+  T_FUN_SYS_UPDATE_XML = 1701,
+  T_FUN_SYS_PRIV_MAKE_XML_BINARY = 1702,  // add only for xml dml rewrite
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2354,6 +2367,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_JSON_ARRAYAGG || (op) == T_FUN_JSON_OBJECTAGG ||\
                          (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
+                         (op) == T_FUN_ORA_XMLAGG || \
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

@@ -14327,6 +14327,44 @@ int ObInnerTableSchema::all_virtual_core_column_table_schema(ObTableSchema &tabl
       srs_id_default,
       srs_id_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj udt_set_id_default;
+    udt_set_id_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("udt_set_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      udt_set_id_default,
+      udt_set_id_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj sub_data_type_default;
+    sub_data_type_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("sub_data_type", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      sub_data_type_default,
+      sub_data_type_default); //default_value
+  }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

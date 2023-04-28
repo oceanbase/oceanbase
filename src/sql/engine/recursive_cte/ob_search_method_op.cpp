@@ -40,7 +40,7 @@ uint64_t ObSearchMethodOp::ObCycleHash::inner_hash() const
           || OB_ISNULL(expr->basic_funcs_)) {
       } else {
         datum = &row_->cells()[idx];
-        result = expr->basic_funcs_->wy_hash_(*datum, result);
+        expr->basic_funcs_->wy_hash_(*datum, result, result);
       }
     }
   }
@@ -58,13 +58,15 @@ bool ObSearchMethodOp::ObCycleHash::operator ==(const ObCycleHash &other) const
 
     int64_t col_count = hash_col_idx_->count();
     ObExpr *expr = NULL;
+    int cmp_ret = 0;
     for (int64_t i = 0; result && i < col_count; i++) {
       int64_t idx = hash_col_idx_->at(i);
       if (OB_UNLIKELY(idx >= exprs_->count())
           || OB_ISNULL(expr = exprs_->at(idx))
           || OB_ISNULL(expr->basic_funcs_)) {
       } else {
-        result = (0 == expr->basic_funcs_->null_first_cmp_(lcell[idx], rcell[idx]));
+        (void)expr->basic_funcs_->null_first_cmp_(lcell[idx], rcell[idx], cmp_ret);
+        result = (0 == cmp_ret);
       }
     }
   }
@@ -126,6 +128,7 @@ int ObSearchMethodOp::is_same_row(ObChunkDatumStore::StoredRow &row_1st,
   int ret = OB_SUCCESS;
   const ObDatum *cells_1st = row_1st.cells();
   const ObDatum *cells_2nd = row_2nd.cells();
+  int cmp_ret = 0;
   if (OB_UNLIKELY(row_1st.cnt_ != row_2nd.cnt_ || 0 == row_1st.cnt_)
       || OB_ISNULL(cells_1st)
       || OB_ISNULL(cells_2nd)) {
@@ -134,8 +137,10 @@ int ObSearchMethodOp::is_same_row(ObChunkDatumStore::StoredRow &row_1st,
   } else if (cycle_by_columns_.empty()) {
     // detect whole row
     is_cycle = true;
-    for (int64_t i = 0; i < left_output_.count(); i++) {
-      if (0 != left_output_.at(i)->basic_funcs_->null_first_cmp_(cells_1st[i], cells_2nd[i])) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < left_output_.count(); i++) {
+      if (OB_FAIL(left_output_.at(i)->basic_funcs_->null_first_cmp_(cells_1st[i], cells_2nd[i], cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret), K(i));
+      } else if (0 != cmp_ret) {
         is_cycle = false;
         break;
       }
@@ -152,7 +157,9 @@ int ObSearchMethodOp::is_same_row(ObChunkDatumStore::StoredRow &row_1st,
       if (index >= row_1st.cnt_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Column index out of range", K(ret));
-      } else if (0 != left_output_.at(index)->basic_funcs_->null_first_cmp_(cells_1st[index], cells_2nd[index])) {
+      } else if (OB_FAIL(left_output_.at(index)->basic_funcs_->null_first_cmp_(cells_1st[index], cells_2nd[index], cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret), K(index), K(i));
+      } else if (0 != cmp_ret) {
         is_cycle = false;
         break;
       }

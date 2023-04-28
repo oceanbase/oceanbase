@@ -181,6 +181,9 @@ protected:
 
   int build_column_conv_function_with_default_expr(ObInsertTableInfo& table_info, const int64_t idx);
 
+  int build_column_conv_function_for_udt_column(ObInsertTableInfo& table_info,
+                                                const int64_t idx,
+                                                ObRawExpr *column_ref);
   int generate_autoinc_params(ObInsertTableInfo &table_info);
   int get_value_row_size(uint64_t &count);
 

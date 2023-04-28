@@ -813,6 +813,7 @@ int ObTableReplaceOp::check_values(bool &is_equal,
   is_equal = true;
   const ObIArray<ObExpr *> &new_row = get_primary_table_new_row();
   const ObIArray<ObExpr *> &old_row = get_primary_table_old_row();
+  int cmp_ret = 0;
   OZ(check_replace_ctdefs_valid());
   CK(OB_NOT_NULL(delete_row));
   CK(OB_NOT_NULL(replace_row));
@@ -826,7 +827,9 @@ int ObTableReplaceOp::check_values(bool &is_equal,
       } else {
         const ObDatum &insert_datum = replace_row->cells()[i];
         const ObDatum &del_datum = delete_row->cells()[i];
-        if (0 != new_row.at(i)->basic_funcs_->null_first_cmp_(insert_datum, del_datum)) {
+        if (OB_FAIL(new_row.at(i)->basic_funcs_->null_first_cmp_(insert_datum, del_datum, cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else if (0 != cmp_ret) {
           is_equal = false;
         }
       }

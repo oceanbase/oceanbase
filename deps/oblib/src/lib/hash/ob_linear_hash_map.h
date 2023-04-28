@@ -156,9 +156,9 @@ template <typename T> const T* __ptr__(const T *ptr) { return ptr; }
 template <typename T>
 struct Hash
 {
-  uint64_t operator()(const T &t)
+  int operator()(const T &t, uint64_t &hash_val)
   {
-    return __ptr__(t)->hash();
+    return __ptr__(t)->hash(hash_val);
   }
 };
 
@@ -1475,12 +1475,16 @@ void ObLinearHashMap<Key, Value, MemMgrTag>::split_expand_d_seg_bkts_(uint64_t L
     while (iter != NULL) {
       Node *cur = iter;
       iter = iter->next_;
-      uint64_t new_idx = hash_func_(cur->key_) % (L0_bkt_n_ << (L + 1));
+      uint64_t new_idx = 0;
+      (void)hash_func_(cur->key_, new_idx);
+      new_idx = new_idx % (L0_bkt_n_ << (L + 1));
       Node* &split_node = (new_idx == p) ? split_nodes[0] : split_nodes[1];
       cur->next_ = split_node;
       split_node = cur;
     }
-    uint64_t new_idx = hash_func_(src_bkt->key_) % (L0_bkt_n_ << (L + 1));
+    uint64_t new_idx = 0;
+    (void)hash_func_(src_bkt->key_, new_idx);
+    new_idx = new_idx % (L0_bkt_n_ << (L + 1));
     if (new_idx != p) {
       new (&dst_bkt->key_) Key(src_bkt->key_);
       new (&dst_bkt->value_) Value(src_bkt->value_);
@@ -1668,7 +1672,7 @@ template <typename Key, typename Value, typename MemMgrTag>
 typename ObLinearHashMap<Key, Value, MemMgrTag>::Bucket*
 ObLinearHashMap<Key, Value, MemMgrTag>::load_access_bkt_(const Key &key, uint64_t &hash_v, Bucket*& bkt_seg)
 {
-  hash_v = hash_func_(key); // Return hash value as seed of load factor ctrl.
+  (void)hash_func_(key, hash_v); // Return hash value as seed of load factor ctrl.
   uint64_t L = 0;
   uint64_t p = 0;
   uint64_t bkt_L = 0;

@@ -40,6 +40,7 @@ struct EqualSetKey
     }
     return result;
   }
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   const ObRawExpr *expr_;
   TO_STRING_KV(K_(expr));
 };

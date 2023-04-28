@@ -70,6 +70,8 @@ public:
   inline void set_schema_version(const int64_t schema_version) { schema_version_ = schema_version; }
   inline void set_rowkey_position(const int64_t rowkey_position) { rowkey_position_ = rowkey_position; }
   inline void set_order_in_rowkey(const common::ObOrderType order_in_rowkey) { order_in_rowkey_ = order_in_rowkey; }
+  inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
+  inline void set_sub_data_type(const uint64_t sub_type) { sub_type_ = sub_type; }
 
   int set_part_key_pos(const int64_t part_key_pos);
   inline int64_t get_part_key_pos() const
@@ -154,6 +156,8 @@ public:
   inline uint64_t get_table_id() const { return table_id_; }
   inline uint64_t get_column_id() const { return column_id_; }
   inline uint64_t& get_column_id() { return column_id_; }
+  inline uint64_t get_udt_set_id() const { return udt_set_id_; }
+  inline uint64_t get_sub_data_type() const { return sub_type_; }
   inline int64_t get_schema_version() const { return schema_version_; }
   inline int64_t get_rowkey_position() const { return rowkey_position_; }
   inline int64_t get_index_position() const { return index_position_; }
@@ -185,8 +189,15 @@ public:
   inline bool is_json() const { return meta_type_.is_json(); }
   inline bool is_geometry() const { return meta_type_.is_geometry(); }
   inline bool is_raw() const { return meta_type_.is_raw(); }
-  inline common::ObCharsetType get_charset_type() const { return charset_type_;}
-  inline common::ObCollationType get_collation_type() const { return meta_type_.get_collation_type();}
+
+  inline bool is_xmltype() const {
+    return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
+           || meta_type_.is_xml_sql_type();
+  }
+  inline bool is_extend() const { return meta_type_.is_ext(); }
+  inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  inline common::ObCharsetType get_charset_type() const { return charset_type_; }
+  inline common::ObCollationType get_collation_type() const { return meta_type_.get_collation_type(); }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
   inline const common::ObObj &get_cur_default_value()  const { return cur_default_value_; }
   inline common::ObObj &get_cur_default_value() { return cur_default_value_; }
@@ -225,7 +236,7 @@ public:
   inline bool is_default_on_null_identity_column() const { return column_flags_ & DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG; }
   inline bool is_cte_generated_column() const { return column_flags_ & CTE_GENERATED_COLUMN_FLAG; }
   inline bool is_default_expr_v2_column() const { return column_flags_ & DEFAULT_EXPR_V2_COLUMN_FLAG; }
-  inline bool is_generated_column() const { return is_virtual_generated_column() || is_stored_generated_column(); }
+  inline bool is_generated_column() const { return (is_virtual_generated_column() || is_stored_generated_column()); }
   inline bool is_identity_column() const { return is_always_identity_column() || is_default_identity_column() || is_default_on_null_identity_column(); }
   inline bool is_generated_column_using_udf() const { return /*is_generated_column() && global index table clean the virtual gen col flag*/ !!(column_flags_ & GENERATED_COLUMN_UDF_EXPR); }
   // to check whether storing column in index table is specified by user.
@@ -355,6 +366,8 @@ private:
     uint64_t geo_col_id_;
     uint64_t srs_id_;
   };
+  uint64_t udt_set_id_;
+  uint64_t sub_type_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

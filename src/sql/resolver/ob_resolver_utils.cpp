@@ -804,11 +804,28 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     }
   // Case3: 处理TypeClass不同的情形
   } else {
-    // 普通类型与复杂类型不能互转
-    if (ObExtendTC == ob_obj_type_class(src_type)
-        || ObExtendTC == ob_obj_type_class(dst_type)) {
+    // xmltype can not cast with varchar,
+    if ((ObExtendTC == ob_obj_type_class(src_type)
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+                || ObExtendTC == ob_obj_type_class(dst_type)))
+        || (ObUserDefinedSQLTC == ob_obj_type_class(src_type)
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+                || ObExtendTC == ob_obj_type_class(dst_type)))
+        || ((ObUserDefinedSQLTC == ob_obj_type_class(dst_type)
+            || ObExtendTC == ob_obj_type_class(dst_type))
+          && !(ObUserDefinedSQLTC == ob_obj_type_class(src_type)
+                || ObExtendTC == ob_obj_type_class(src_type)))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));
+    } else if (ObExtendTC == ob_obj_type_class(src_type) // 普通类型与复杂类型不能互转
+        || ObExtendTC == ob_obj_type_class(dst_type)) {
+      if (ObUserDefinedSQLTC == ob_obj_type_class(src_type)
+          || ObUserDefinedSQLTC == ob_obj_type_class(dst_type)) {
+      // check can cast
+      } else {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));
+      }
     } else { // 检查普通类型之间是否可以互转
       if (lib::is_oracle_mode()) {
         OZ (ObObjCaster::can_cast_in_oracle_mode(dst_type,
@@ -4164,7 +4181,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     } else if (FALSE_IT(col_schema = tbl_schema.get_column_schema(q_name.col_name_) == NULL ?
                                      get_column_schema_from_array(resolved_cols, q_name.col_name_) :
                                      tbl_schema.get_column_schema(q_name.col_name_))) {
-    } else if (NULL == col_schema || col_schema->is_hidden()) {
+    } else if (NULL == col_schema || (col_schema->is_hidden() && !col_schema->is_udt_hidden_column())) {
       ret = OB_ERR_BAD_FIELD_ERROR;
       ObString scope_name = "generated column function";
       LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
@@ -4173,7 +4190,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
       LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
                      "Defining a generated column on generated column(s)");
-    } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob()) {
+    } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob() &&
+               !col_schema->is_udt_hidden_column()) { // generated column depends on xml: gen_expr(sys_makexml(blob))
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "blob column in generated column definition");
@@ -4201,10 +4219,24 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                   expr_changed));
       OZ (expr->formalize(session_info));
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      if (OB_FAIL(ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(*session_info,
+                                                                                  tbl_schema,
+                                                                                  resolved_cols,
+                                                                                  *expr_factory,
+                                                                                  expr))) {
+        LOG_WARN("transform udt col expr for generated column failed", K(ret));
+      }
+    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
     const ObCollationType dst_cs_type = generated_column.get_collation_type();
+    if (OB_SUCC(ret) && ObUserDefinedSQLType == expr_datatype) {
+      ret = OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED;
+      LOG_WARN("Define a xmltype column in generated column def is not supported", K(ret));
+      LOG_USER_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED);
+    }
 
     /* implicit data conversion judgement */
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -4477,7 +4509,11 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     ObRawExpr *real_ref_expr = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && is_all_sys_func && i < columns.count(); i++) {
       ObQualifiedName &q_name = columns.at(i);
-      if (!q_name.is_sys_func()) {
+      if (q_name.is_pl_udf()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "using udf as default value");
+        LOG_WARN("using udf as default value is not supported", K(ret));
+      } else if (!q_name.is_sys_func()) {
         is_all_sys_func = false;
       } else if (OB_ISNULL(q_name.access_idents_.at(0).sys_func_expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -5212,7 +5248,8 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
                    && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length :
                                         OB_MAX_ORACLE_CHAR_LENGTH_BYTE < length))
                    || (ObNCharType == data_type.get_obj_type()
-                       && OB_MAX_ORACLE_CHAR_LENGTH_BYTE < length * nchar_mbminlen)) {
+                       && (is_for_pl_type ? OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE < length * nchar_mbminlen:
+                                            OB_MAX_ORACLE_CHAR_LENGTH_BYTE < length * nchar_mbminlen))) {
           ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
           LOG_WARN("column data length is invalid",
                    K(ret), K(length), K(data_type), K(nchar_mbminlen));
@@ -5375,7 +5412,23 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       }
       break;
     case ObExtendTC:
-      //do nothing
+      //to do: udt type compatibility
+      // maybe we should not use udt type, or should change column schema
+      // if (!is_for_pl_type) {
+      //  data_type.set_obj_type(ObUserDefinedSQLType);
+      //  data_type.set_subschema_id(ObXMLSqlType);
+      //} else {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (data_version < DATA_VERSION_4_2_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create extend column before cluster min version 4.2.");
+        } else if (is_oracle_mode) {
+          data_type.set_length(length);
+          data_type.set_charset_type(CHARSET_BINARY);
+          data_type.set_collation_type(CS_TYPE_INVALID);
+        }
+      //}
       break;
     default:
       ret = OB_ERR_ILLEGAL_TYPE;

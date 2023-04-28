@@ -701,6 +701,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
           LOG_WARN("fulltext index created on blob column is not supported", K(arg.index_type_), K(ret));
+        } else if (data_column->get_meta_type().is_ext() || data_column->get_meta_type().is_user_defined_sql_type()) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("index created on udt column is not supported", K(arg.index_type_), K(ret));
         } else if (ob_is_json_tc(data_column->get_data_type())) {
           if (!is_oracle_mode && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;

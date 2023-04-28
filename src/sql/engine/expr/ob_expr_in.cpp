@@ -65,7 +65,9 @@ bool Row<ObDatum>::equal_key(const Row<ObDatum> &other, void **cmp_funcs, const 
         } else if (elems_[i].is_null() || other.elems_[i].is_null()) {
           is_equal = false;
         } else {
-          int cmp_ret = ((DatumCmpFunc)cmp_funcs[i])(elems_[i], other.elems_[i]);
+          int cmp_ret = 0;
+          // lob type will not use in expr with hash, can ignore ret here
+          (void)((DatumCmpFunc)cmp_funcs[i])(elems_[i], other.elems_[i], cmp_ret);
           if (0 != cmp_ret) {
             is_equal = false;
           } else {
@@ -105,42 +107,44 @@ bool Row<ObObj>::equal_key(const Row<ObObj> &other, void **cmp_funcs, const int 
 }
 
 template <>
-uint64_t Row<ObDatum>::hash_key(void **hash_funcs, const int idx, uint64_t seed) const
+int Row<ObDatum>::hash_key(void **hash_funcs, const int idx, uint64_t seed, uint64_t &hash_val) const
 {
-  uint64_t hash_ret = 0;
+  int ret = OB_SUCCESS;
+  hash_val = 0;
   if (OB_ISNULL(elems_)) {
   } else {
     int curr_idx = idx;
-    for (int i = 0; 0 != curr_idx; ++i, curr_idx = curr_idx >> 1) {
+    for (int i = 0; 0 != curr_idx && OB_SUCC(ret); ++i, curr_idx = curr_idx >> 1) {
       if (1 == (curr_idx & 1)) {
-        seed = ((ObExprHashFuncType)hash_funcs[i])(elems_[i], seed);
+        ret = ((ObExprHashFuncType)hash_funcs[i])(elems_[i], seed, seed);
       } else {
         continue;
       }
     }
-    hash_ret = seed;
+    hash_val = seed;
   }
-  return hash_ret;
+  return ret;
 }
 
 template <>
-uint64_t Row<ObObj>::hash_key(void **hash_funcs, const int idx, uint64_t seed) const
+int Row<ObObj>::hash_key(void **hash_funcs, const int idx, uint64_t seed, uint64_t &hash_val) const
 {
   UNUSED(hash_funcs);/**nullptr**/
-  uint64_t hash_ret = 0;
+  int ret = OB_SUCCESS;
+  hash_val = 0;
   if (OB_ISNULL(elems_)) {
   } else {
     int curr_idx = idx;
-    for (int i = 0; 0 != curr_idx; ++i, curr_idx = curr_idx >> 1) {
+    for (int i = 0; 0 != curr_idx && OB_SUCC(ret); ++i, curr_idx = curr_idx >> 1) {
       if (1 == (curr_idx & 1)) {
-        seed = elems_[i].hash(seed);
+        ret = elems_[i].hash(seed, seed);
       } else {
         continue;
       }
     }
-    hash_ret = seed;
+    hash_val = seed;
   }
-  return hash_ret;
+  return ret;
 }
 
 template <>
@@ -156,12 +160,14 @@ int Row<ObDatum>::compare_with_null(const Row<ObDatum> &other,
   } else if (row_dimension > 0) {
     exist_ret = ObExprInHashMap<ObDatum>::HASH_CMP_TRUE;
     for (int i = 0;
-         ObExprInHashMap<ObDatum>::HASH_CMP_FALSE != exist_ret && i < row_dimension; ++i) {
+         ObExprInHashMap<ObDatum>::HASH_CMP_FALSE != exist_ret && i < row_dimension && OB_SUCC(ret); ++i) {
       if (elems_[i].is_null() || other.elems_[i].is_null()) {
         exist_ret = ObExprInHashMap<ObDatum>::HASH_CMP_UNKNOWN;
       } else {
-        int cmp_ret = ((DatumCmpFunc)cmp_funcs[i])(elems_[i], other.elems_[i]);
-        if (0 != cmp_ret) {
+        int cmp_ret = 0;
+        if (OB_FAIL(((DatumCmpFunc)cmp_funcs[i])(elems_[i], other.elems_[i], cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (0 != cmp_ret) {
           exist_ret = ObExprInHashMap<ObDatum>::HASH_CMP_FALSE;
         } else {
           //do nothing
@@ -222,9 +228,9 @@ bool RowKey<T>::operator==(const RowKey<T> &other) const
 }
 
 template <class T>
-uint64_t RowKey<T>::hash(uint64_t seed) const
+int RowKey<T>::hash(uint64_t &hash_val, uint64_t seed) const
 {
-  return row_.hash_key(meta_->hash_funcs_, meta_->idx_, seed);
+  return row_.hash_key(meta_->hash_funcs_, meta_->idx_, seed, hash_val);
 }
 
 template <class T>
@@ -1058,8 +1064,9 @@ int ObExprInOrNotIn::eval_in_without_row_fallback(const ObExpr &expr,
       } else if (right->is_null()) {
         cnt_null = true;
       } else {
-        cmp_ret = ((DatumCmpFunc)expr.inner_functions_[0])(*left, *right);
-        if (0 == cmp_ret) {
+        if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*left, *right, cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (0 == cmp_ret) {
           is_equal = true;
         } else {
           // do nothing
@@ -1146,21 +1153,28 @@ int ObExprInOrNotIn::eval_batch_in_without_row_fallback(const ObExpr &expr,
           }
         }
         if (!can_cmp_mem) {
-          for (int64_t i = 0; i < batch_size; ++i) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
             if (skip.at(i) || eval_flags.at(i)) {
               continue;
             }
             bool is_equal = false;
+            int cmp_ret = 0;
             left = &input_left[i];
-            for (int64_t j = 0; j < expr.inner_func_cnt_; ++j) {
+            for (int64_t j = 0; OB_SUCC(ret) && j < expr.inner_func_cnt_; ++j) {
               right = right_store[j];
               if (!left->is_null() && !right->is_null()) {
-                is_equal |= !(((DatumCmpFunc)expr.inner_functions_[0])(*left, *right));
+                if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[0])(*left, *right, cmp_ret))) {
+                  LOG_WARN("failed to compare", K(ret));
+                } else {
+                  is_equal |= !(cmp_ret);
+                }
               }
             }
-            set_datum_result(T_OP_IN == expr.type_,
+            if (OB_SUCC(ret)) {
+              set_datum_result(T_OP_IN == expr.type_,
                               is_equal, cnt_null | left->is_null(), results[i]);
-            eval_flags.set(i);
+              eval_flags.set(i);
+            }
           }
         }
       }
@@ -1632,8 +1646,10 @@ int ObExprInOrNotIn::calc_for_row_static_engine(const ObExpr &expr,
         } else if (right->is_null()) {
           row_cnt_null = true;
         } else {
-          int cmp_ret = ((DatumCmpFunc)expr.inner_functions_[j])(*left, *right);
-          if (0 != cmp_ret) {
+          int cmp_ret = 0;
+          if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[j])(*left, *right, cmp_ret))) {
+            LOG_WARN("failed to compare", K(ret));
+          } else if (0 != cmp_ret) {
             //如果在向量的比较中，有明确的false，表明这个向量不成立，所以应该将has_null置为false
             row_is_equal = false;
             row_cnt_null = false;

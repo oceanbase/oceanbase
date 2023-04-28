@@ -87,6 +87,7 @@ public:
 
   ~ObGroupRowItem() {}
   inline uint64_t hash() const { return hash_; }
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   ObGroupRowItem *&next() { return next_; }
 
   TO_STRING_KV(KP(next_), K(hash_), KP_(group_row),
@@ -125,7 +126,7 @@ public:
           const common::ObIArray<ObCmpFunc> *cmp_funcs,
           int64_t initial_size = INITIAL_SIZE);
 private:
-  bool likely_equal(const ObGroupRowItem &left, const ObGroupRowItem &right) const;
+  int likely_equal(const ObGroupRowItem &left, const ObGroupRowItem &right, bool &result) const;
 private:
   const common::ObIArray<ObExpr *> *gby_exprs_;
   ObEvalCtx *eval_ctx_;
@@ -136,13 +137,17 @@ private:
 OB_INLINE const ObGroupRowItem *ObGroupRowHashTable::get(const ObGroupRowItem &item) const
 {
   ObGroupRowItem *res = NULL;
+  int ret = OB_SUCCESS;
+  bool result = false;
   if (OB_UNLIKELY(NULL == buckets_)) {
     // do nothing
   } else {
     const uint64_t hash_val = item.hash();
     ObGroupRowItem *it = locate_bucket(*buckets_, hash_val).item_;
-    while (NULL != it) {
-      if (likely_equal(*it, item)) {
+    while (NULL != it && OB_SUCC(ret)) {
+      if (OB_FAIL(likely_equal(*it, item, result))) {
+        LOG_WARN("failed to cmp", K(ret));
+      } else if (result) {
         res = it;
         break;
       }

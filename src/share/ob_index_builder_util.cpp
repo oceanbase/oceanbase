@@ -250,6 +250,11 @@ int ObIndexBuilderUtil::add_shadow_partition_keys(
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_WARN("Unexpected lob column in shadow partition key", "table_id", data_schema.get_table_id(),
               K(column_id), K(ret));
+        } else if (ob_is_extend(const_data_column->get_data_type())
+                   || ob_is_user_defined_sql_type(const_data_column->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_WARN("Unexpected udt column in shadow partition key", "table_id", data_schema.get_table_id(),
+              K(column_id), K(ret));
         } else if (ob_is_json_tc(const_data_column->get_data_type())) {
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_WARN("Unexpected json column in shadow pk", "table_id", data_schema.get_table_id(),
@@ -351,6 +356,15 @@ int ObIndexBuilderUtil::set_index_table_columns(
                     "column name", sort_item.column_name_,
                     "column length", sort_item.prefix_len_, K(ret));
           }
+        } else if (ob_is_extend(data_column->get_data_type())
+                     || ob_is_user_defined_sql_type(data_column->get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("Index column should not be udt type", "tenant_id", data_schema.get_tenant_id(),
+                   "database_id", data_schema.get_database_id(),
+                   "table_name", data_schema.get_table_name(),
+                   "column name", sort_item.column_name_,
+                   "column length", sort_item.prefix_len_, K(ret));
         } else if (ob_is_json_tc(data_column->get_data_type())) {
           if (use_mysql_errno && data_column->is_func_idx_column()) {
             ret = OB_ERR_FUNCTIONAL_INDEX_ON_JSON_OR_GEOMETRY_FUNCTION;
@@ -408,6 +422,11 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("Lob column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
                 K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
                 K(row_desc), K(ret));
+          } else if (ob_is_extend(data_column->get_data_type()) || ob_is_user_defined_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_WARN("udt column should not appear in rowkey position", "data_column", *data_column, K(is_index_column),
+                K(is_rowkey), "order_in_rowkey", data_column->get_order_in_rowkey(),
+                K(row_desc), K(ret));
           } else if (ob_is_json_tc(data_column->get_data_type())) {
             ret = OB_ERR_JSON_USED_AS_KEY;
             LOG_WARN("JSON column cannot be used in key specification.", "data_column", *data_column, K(is_index_column),
@@ -452,6 +471,12 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_WARN("Index storing column should not be lob type", "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
+          } else if (ob_is_extend(data_column->get_data_type()) || ob_is_user_defined_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be udt type", "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.store_columns_.at(i), K(ret));
           } else if (ob_is_json_tc(data_column->get_data_type())) {
             ret = OB_ERR_JSON_USED_AS_KEY;
             LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, arg.store_columns_.at(i).length(), arg.store_columns_.at(i).ptr());
@@ -483,6 +508,15 @@ int ObIndexBuilderUtil::set_index_table_columns(
             LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
                                                     arg.hidden_store_columns_.at(i).ptr());
             LOG_WARN("Index storing column should not be lob type",
+                "tenant_id", data_schema.get_tenant_id(),
+                "database_id", data_schema.get_database_id(), "table_name",
+                data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));
+          } else if (ob_is_extend(data_column->get_data_type())
+                     || ob_is_user_defined_sql_type(data_column->get_data_type())) {
+            ret = OB_ERR_WRONG_KEY_COLUMN;
+            LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, arg.hidden_store_columns_.at(i).length(),
+                                                    arg.hidden_store_columns_.at(i).ptr());
+            LOG_WARN("Index storing column should not be udt type",
                 "tenant_id", data_schema.get_tenant_id(),
                 "database_id", data_schema.get_database_id(), "table_name",
                 data_schema.get_table_name(), "column name", arg.hidden_store_columns_.at(i), K(ret));

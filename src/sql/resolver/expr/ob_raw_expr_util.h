@@ -1000,6 +1000,18 @@ public:
                              ObRawExpr *&pack_expr);
 
   static int set_call_in_pl(ObRawExpr *&raw_expr);
+
+
+  static int transform_query_udt_column_expr(const ObSQLSessionInfo& session,
+                                              ObRawExprFactory &expr_factory,
+                                              ObRawExpr *hidden_blob_expr,
+                                              ObRawExpr *&new_expr);
+  static int try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLSessionInfo &session,
+                                                             const ObTableSchema &table_schema,
+                                                             ObIArray<ObColumnSchemaV2 *> &resolved_cols,
+                                                             ObRawExprFactory &expr_factory,
+                                                             ObRawExpr *&expr);
+
   static int try_modify_expr_for_gen_col_recursively(const ObSQLSessionInfo &session,
                                                  const obrpc::ObCreateIndexArg *arg,
                                                  ObRawExprFactory &expr_factory,
@@ -1078,6 +1090,7 @@ public:
                                   const share::schema::ObTableSchema &index_schema,
                                   ObColumnRefRawExpr *&spk_expr);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+  static int transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr);
 
   static int create_type_expr(ObRawExprFactory &expr_factory,
                               ObConstRawExpr *&type_expr,

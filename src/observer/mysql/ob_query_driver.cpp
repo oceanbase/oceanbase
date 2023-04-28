@@ -188,10 +188,12 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
                     && OB_FAIL(convert_text_value_charset(value, result))) {
           LOG_WARN("convert text value charset failed", K(ret));
         }
-        if (OB_SUCC(ret)
-            && (value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
-            && OB_FAIL(process_lob_locator_results(value, result))) {
+        if (OB_FAIL(ret)){
+        } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+                  && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
+        } else if (value.is_user_defined_sql_type() && OB_FAIL(process_sql_udt_results(value, result))) {
+          LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
         }
       }
     }
@@ -611,6 +613,57 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
       }
     }
   } else { /* do nothing */ }
+  return ret;
+}
+
+// not all udts sql types based on lobs, so not handle xml in process_lob_locator_results
+int ObQueryDriver::process_sql_udt_results(ObObj& value, sql::ObResultSet &result)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator *allocator = NULL;
+  sql::ObSQLSessionInfo *session_info = &result.get_session();
+  if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
+    LOG_WARN("fail to get convert charset allocator", K(ret));
+  } else if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lob fake allocator is null.", K(ret), K(value));
+  } else if (OB_FAIL(process_sql_udt_results(value, allocator, &result.get_session()))) {
+    LOG_WARN("convert udt to client format failed.", K(ret), K(value));
+  } else { /* do nothing */ }
+  return ret;
+}
+
+int ObQueryDriver::process_sql_udt_results(common::ObObj& value,
+                                           common::ObIAllocator *allocator,
+                                           sql::ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (!value.is_xml_sql_type()) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported udt type", K(ret),
+           K(value.get_type()), K(value.get_udt_subschema_id()));
+  } else {
+    bool is_client_support_binary_xml = false; // client receive xml as json, like json
+    if (value.is_null() || value.is_nop_value()) {
+      // do nothing
+    } else if (is_client_support_binary_xml) {
+      // convert to udt client format
+    } else {
+      ObString data;
+      ObLobLocatorV2 loc(value.get_string(), true);
+      if (loc.is_null()) {
+      } else {
+        ObTextStringIter instr_iter(ObLongTextType, CS_TYPE_BINARY, value.get_string(), true);
+        if (OB_FAIL(instr_iter.init(0, session_info, allocator))) {
+          LOG_WARN("init lob str inter failed", K(ret), K(value));
+        } else if (OB_FAIL(instr_iter.get_full_data(data))) {
+          LOG_WARN("get xml full data failed", K(value));
+        } else {
+          value.set_udt_value(data.ptr(), data.length());
+        }
+      }
+    }
+  }
   return ret;
 }
 

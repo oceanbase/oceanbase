@@ -417,9 +417,12 @@ int ObExprOracleDecode::eval_decode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     LOG_WARN("cmp_func is NULL", K(ret), K(expr));
   }
   for (int64_t i = 1; OB_SUCC(ret) && i < expr.arg_cnt_ - 1; i += 2) {
+    int cmp_ret = 0;
     if (OB_FAIL(expr.args_[i]->eval(ctx, search_i))) {
       LOG_WARN("eval search expr failed", K(ret), K(i));
-    } else if (0 == cmp_func(*e_0, *search_i)) {
+    } else if (OB_FAIL(cmp_func(*e_0, *search_i, cmp_ret))) {
+      LOG_WARN("do cmp failed", K(ret), K(i));
+    } else if (cmp_ret == 0) {
       has_res = true;
       res_idx = i + 1;
       break;

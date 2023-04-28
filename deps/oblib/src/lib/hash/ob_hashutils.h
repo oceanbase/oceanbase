@@ -664,82 +664,89 @@ struct equal_to <const _ParseNode *>
 template <class _key>
 struct hash_func
 {
-  int64_t operator()(const _key &key) const
+  int operator()(const _key &key, uint64_t &res) const
   {
-    return key.hash();
+    return key.hash(res);
   }
 };
 template <class _key>
 struct hash_func <_key *>
 {
-  int64_t operator()(_key *key) const
+  int operator()(_key *key, uint64_t &res) const
   {
-    return key->hash();
+    return key->hash(res);
   }
 };
 template <class _key>
 struct hash_func <const _key *>
 {
-  int64_t operator()(const _key *key) const
+  int operator()(const _key *key, uint64_t &res) const
   {
-    return key->hash();
+    return key->hash(res);
   }
 };
 template <>
 struct hash_func <ObString>
 {
-  uint64_t operator()(const ObString &key) const
+  int operator()(const ObString &key, uint64_t &res) const
   {
-    return murmurhash(key.ptr(), key.length(), 0);
+    res = murmurhash(key.ptr(), key.length(), 0);
+    return OB_SUCCESS;
   }
 };
 template <>
 struct hash_func <const char *>
 {
-  uint64_t operator()(const char *key) const
+  int operator()(const char *key, uint64_t &res) const
   {
-    return murmurhash(key, static_cast<int32_t>(strlen(key)), 0);
+    res = murmurhash(key, static_cast<int32_t>(strlen(key)), 0);
+    return OB_SUCCESS;
   }
 };
 template <>
 struct hash_func <char *>
 {
-  uint64_t operator()(const char *key) const
+  int operator()(const char *key, uint64_t &res) const
   {
-    return murmurhash(key, static_cast<int32_t>(strlen(key)), 0);
+    res = murmurhash(key, static_cast<int32_t>(strlen(key)), 0);
+    return OB_SUCCESS;
   }
 };
 template <>
 struct hash_func <std::pair<int, uint32_t> >
 {
-  int64_t operator()(std::pair<int, uint32_t> key) const
+  int operator()(std::pair<int, uint32_t> key, uint64_t &res) const
   {
-    return key.first + key.second;
+    res = key.first + key.second;
+    return OB_SUCCESS;
   }
 };
 template<>
 struct hash_func <std::pair<uint64_t, uint64_t> >
 {
-  int64_t operator()(std::pair<uint64_t, uint64_t> key) const
+  int operator()(std::pair<uint64_t, uint64_t> key, uint64_t &res) const
   {
-    return (int64_t)(key.first + key.second);
+    res = (uint64_t)(int64_t)(key.first + key.second);
+    return OB_SUCCESS;
   }
 };
 
 template <>
 struct hash_func <_ParseNode *>
 {
-  uint64_t operator() (const _ParseNode *key) const
+  int operator() (const _ParseNode *key, uint64_t &res) const
   {
-    return parsenode_hash(key, NULL);
+    res = parsenode_hash(key, NULL);
+    return OB_SUCCESS;
   }
 };
 template <>
 struct hash_func <const _ParseNode *>
 {
-  uint64_t operator() (const _ParseNode *key) const
+  int operator() (const _ParseNode *key, uint64_t &res) const
   {
-    return parsenode_hash(key, NULL);
+    res = parsenode_hash(key, NULL);
+    return OB_SUCCESS;
   }
 };
 
@@ -747,9 +754,10 @@ struct hash_func <const _ParseNode *>
   template <> \
   struct hash_func <type> \
   { \
-    int64_t operator() (const type &key) const \
+    int operator() (const type &key, uint64_t &res) const \
     { \
-      return (int64_t)key; \
+      res = (uint64_t)(int64_t)key; \
+      return OB_SUCCESS; \
     } \
   };
 _HASH_FUNC_SPEC(int8_t);

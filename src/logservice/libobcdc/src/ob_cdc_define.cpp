@@ -107,5 +107,11 @@ uint64_t PartTransID::hash() const
   return hash_val;
 }
 
+int PartTransID::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 } // end namespace libobcdc
 } // end namespace oceanbase

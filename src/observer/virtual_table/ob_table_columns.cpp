@@ -193,11 +193,12 @@ int ObTableColumns::get_type_str(
     acc.set_precision(38);
   }
   const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
-  const common::ObGeoType &geo_type = column_schema.get_geo_type();
+  const uint64_t sub_type = column_schema.is_xmltype() ?
+                            column_schema.get_sub_data_type() : static_cast<uint64_t>(column_schema.get_geo_type());
   int64_t pos = 0;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type))) {
+                              column_type_str_, column_type_str_len_, pos, sub_type))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       if (OB_UNLIKELY(NULL == (column_type_str_ = static_cast<char *>(allocator_->alloc(
                                OB_MAX_EXTENDED_TYPE_INFO_LENGTH))))) {
@@ -207,7 +208,7 @@ int ObTableColumns::get_type_str(
         pos = 0;
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type);
+                              column_type_str_, column_type_str_len_, pos, sub_type);
       }
     }
   }
@@ -732,7 +733,8 @@ int ObTableColumns::deduce_column_attributes(
     ObLength char_len = result_type.get_length();
     const ObLengthSemantics default_length_semantics = session->get_local_nls_length_semantics();
     int16_t precision_or_length_semantics = result_type.get_precision();
-    ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
+    uint64_t sub_type = static_cast<uint64_t>(ObGeoType::GEOTYPEMAX);
+
     if (is_oracle_mode
         && ((result_type.is_varchar_or_char()
              && precision_or_length_semantics == default_length_semantics)
@@ -745,18 +747,20 @@ int ObTableColumns::deduce_column_attributes(
     if (ob_is_geometry(result_type.get_type())) {
       if (select_item.expr_->is_column_ref_expr()) {
         const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(select_item.expr_);
-        geo_type = col_expr->get_geo_type();
+        sub_type = static_cast<uint64_t>(col_expr->get_geo_type());
       } else {
-        geo_type = select_item.expr_->get_geo_expr_result_type();
+        sub_type = static_cast<uint64_t>(select_item.expr_->get_geo_expr_result_type());
         if (T_FUN_SYS_CAST == expr->get_expr_type()) {
           nullable = true;
           has_default = false;
         }
-        if (ObGeoType::GEOTYPEMAX == geo_type) {
+        if (static_cast<uint64_t>(ObGeoType::GEOTYPEMAX) == sub_type) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected sub geo type in expr", K(ret), K(expr->get_expr_type()));
         }
       }
+    } else if (result_type.is_user_defined_sql_type()) {
+      sub_type = result_type.get_subschema_id();
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
@@ -768,7 +772,7 @@ int ObTableColumns::deduce_column_attributes(
                                   precision_or_length_semantics,
                                   result_type.get_scale(),
                                   result_type.get_collation_type(),
-                                  geo_type))) {
+                                  sub_type))) {
         LOG_WARN("fail to get data type str", K(ret));
       } else {
         LOG_DEBUG("succ to ob_sql_type_str", K(ret), K(result_type), K(select_stmt), KPC(select_item.expr_), K(precision_or_length_semantics));

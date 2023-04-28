@@ -152,6 +152,11 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
       str.assign_ptr(ptr, (int32_t)pos);
       OBLOG_LOG(DEBUG, "obj2str cast extend type", K(obj), "cast_str", str);
     }
+  } else if (obj.is_xml_sql_type()) {
+    if (OB_FAIL(convert_xmltype_to_text_(obj, str, allocator))) {
+      OBLOG_LOG(ERROR, "convert_xmltype_to_text_ fail", KR(ret), K(table_id), K(column_id),
+          K(obj), K(obj_type), K(str));
+    }
   } else if (ObGeometryType == obj_type) {
     if (OB_FAIL(convert_ob_geometry_to_ewkt_(obj, str, allocator))) {
       OBLOG_LOG(ERROR, "convert_ob_geometry_to_ewkt_ fail", KR(ret), K(table_id), K(column_id),
@@ -440,6 +445,14 @@ int ObObj2strHelper::convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
 {
   const ObString &wkb = obj.get_string();
   return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, 0);
+}
+
+int ObObj2strHelper::convert_xmltype_to_text_(
+    const common::ObObj &obj,
+    common::ObString &str,
+    common::ObIAllocator &allocator) const
+{
+  return OB_NOT_SUPPORTED;
 }
 
 bool ObObj2strHelper::need_padding_(const lib::Worker::CompatMode &compat_mode,

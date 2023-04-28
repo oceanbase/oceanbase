@@ -48,6 +48,7 @@ public:
   }
 
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
   // General GETTER/SETTER

@@ -78,7 +78,7 @@ template <ObObjType type>
 template <ObObjType type>
     inline void obj_batch_checksum(const ObObj &obj, ObBatchChecksum &bc);
 template <ObObjType type>
-    inline uint64_t obj_murmurhash(const ObObj &obj, const uint64_t hash);
+    inline int obj_murmurhash(const ObObj &obj, const uint64_t hash, uint64_t &res);
 template <ObObjType type>
     inline int obj_val_serialize(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos);
 template <ObObjType type>
@@ -158,19 +158,20 @@ template <>
   bc.fill(&type, sizeof(type));
 }
 template <>
-    inline uint64_t obj_murmurhash<ObNullType>(const ObObj &obj, const uint64_t hash)
+    inline int obj_murmurhash<ObNullType>(const ObObj &obj, const uint64_t hash, uint64_t &res)
 {
   int type = obj.get_type();
-  return murmurhash(&type, sizeof(type), hash);
+  res = murmurhash(&type, sizeof(type), hash);
+  return OB_SUCCESS;
 }
 template <typename T, typename P>
 struct ObjHashCalculator<ObNullType, T, P>
 {
-  static uint64_t calc_hash_value(const P &param, const uint64_t hash) {
+  static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {
     UNUSED(param);
     int type = ObNullType;
-    uint64_t ret = T::hash(&type, sizeof(type), hash);
-    return ret;
+    res = T::hash(&type, sizeof(type), hash);
+    return OB_SUCCESS;
   }
 };
 template <>
@@ -229,20 +230,22 @@ template <>
   }                                                                     \
                                                                         \
   template <>\
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
     int type = obj.get_type();                                          \
     uint64_t ret =  murmurhash(&type, sizeof(type), hash);            \
     VTYPE v = obj.get_##TYPE();                                         \
-    return murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
+    res = murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                             \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {      \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {      \
       VTYPE v = param.get_##TYPE();                                     \
       HTYPE v2 = v;                                                     \
-      return T::hash(&v2, sizeof(v2), hash);                            \
+      res = T::hash(&v2, sizeof(v2), hash);                             \
+      return OB_SUCCESS;                                                \
     }                                                                   \
   };                                                                    \
   template <>\
@@ -280,7 +283,7 @@ template <>
   }                                                                     \
                                                                         \
   template <>\
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
     int type = obj.get_type();                                          \
     uint64_t ret =  murmurhash(&type, sizeof(type), hash);            \
@@ -292,14 +295,16 @@ template <>
     } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {       \
       char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
       int64_t len = ob_fcvt(v, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
-      return murmurhash(buf, static_cast<int32_t>(len), ret);            \
+      res = murmurhash(buf, static_cast<int32_t>(len), ret);            \
+      return OB_SUCCESS;                                              \
     }                                                       \
-    return murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
+    res = murmurhash(&v, sizeof(obj.get_##TYPE()), ret);   \
+    return OB_SUCCESS;                                              \
   }                                                                     \
   template <typename T>                                     \
   struct ObjHashCalculator<OBJTYPE, T, ObObj>                               \
   {                                                                             \
-    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {      \
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {      \
       VTYPE v = obj.get_##TYPE();                                     \
       HTYPE v2 = v;                                                     \
       if (0.0 == v2) {                                                \
@@ -309,15 +314,17 @@ template <>
       } else if (obj.is_fixed_double() && lib::is_mysql_mode()) {     \
         char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};                   \
         int64_t len = ob_fcvt(v2, static_cast<int>(obj.get_scale()), sizeof(buf) - 1, buf, NULL); \
-        return T::hash(buf, static_cast<int32_t>(len), hash);            \
-      }                                                              \
-      return T::hash(&v2, sizeof(v2), hash);                            \
+        res = T::hash(buf, static_cast<int32_t>(len), hash);            \
+        return OB_SUCCESS;                                              \
+      }                                                                 \
+      res = T::hash(&v2, sizeof(v2), hash);                             \
+      return OB_SUCCESS;                                                \
     }                                                                   \
   };                                                                    \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                             \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {      \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {      \
       VTYPE v = param.get_##TYPE();                                     \
       HTYPE v2 = v;                                                     \
       if (0.0 == v2) {                                                \
@@ -325,7 +332,8 @@ template <>
       } else if (isnan(v2)) {                                         \
         v2 = NAN;                                                     \
       }                                                               \
-      return T::hash(&v2, sizeof(v2), hash);                            \
+      res = T::hash(&v2, sizeof(v2), hash);                            \
+      return OB_SUCCESS;                                                \
     }                                                                   \
   };                                                                    \
   template <>\
@@ -729,21 +737,23 @@ DEF_NUMERIC_FUNCS(ObSetType, set, uint64_t, "%lu", "'%lu'", uint64_t);
     bc.fill(obj.get_number_digits(), sizeof(uint32_t)*obj.get_number_desc().len_); \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
     int type = obj.get_type();                                          \
-    uint64_t ret =  murmurhash(&type, sizeof(type), hash);             \
-    ret = murmurhash(&obj.get_number_desc().se_, 1, ret);             \
-    return murmurhash(obj.get_number_digits(), static_cast<int32_t>(sizeof(uint32_t) \
-                                              * obj.get_number_desc().len_), ret); \
+    res =  murmurhash(&type, sizeof(type), hash);                       \
+    res = murmurhash(&obj.get_number_desc().se_, 1, res);               \
+    res = murmurhash(obj.get_number_digits(), static_cast<int32_t>(sizeof(uint32_t) \
+                                              * obj.get_number_desc().len_), res); \
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                               \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {        \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {        \
       uint64_t ret = T::hash(&param.get_number_desc().se_, 1, hash);              \
-      return T::hash(param.get_number_digits(), static_cast<uint64_t>(sizeof(uint32_t)  \
+      res = T::hash(param.get_number_digits(), static_cast<uint64_t>(sizeof(uint32_t)  \
                       * param.get_number_desc().len_), ret);            \
+      return OB_SUCCESS;                                                \
     }                                                                   \
   };                                                                    \
   template <>                                                           \
@@ -1202,16 +1212,18 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
     bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
-    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+    res = varchar_murmurhash(obj, obj.get_collation_type(), hash);      \
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T>                                                 \
   struct ObjHashCalculator<OBJTYPE, T, ObObj>                           \
   {                                                                             \
-    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {    \
-      return varchar_hash_with_collation(obj, obj.get_collation_type(), hash,   \
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {    \
+      res = varchar_hash_with_collation(obj, obj.get_collation_type(), hash,   \
                                          T::is_varchar_hash ? T::hash : NULL);  \
+      return OB_SUCCESS;                                                        \
     }                                                                           \
   };                                                                            \
   template <>                                                               \
@@ -1525,37 +1537,36 @@ DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
     bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
-    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+    res = varchar_murmurhash(obj, obj.get_collation_type(), hash);      \
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T, typename P>                                     \
   struct ObjHashCalculator<OBJTYPE, T, P>                               \
   {                                                                             \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {      \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {      \
       int ret = OB_SUCCESS;                                                          \
-      uint64_t hash_res = 0;                                                         \
+      res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString wkb;                                                          \
       ObLobLocatorV2 lob(str, false);                                                \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
-        right_to_die_or_duty_to_live();                                              \
       } else if (!lob.has_inrow_data()) {                                            \
         COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
-        hash_res = hash;                                                             \
+        res = hash;                                                                  \
       } else if (OB_FAIL(lob.get_inrow_data(wkb))) {                                 \
         COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(lob));                  \
-        right_to_die_or_duty_to_live();                                              \
       } else {                                                                       \
-        hash_res = hash;                                                             \
+        res = hash;                                                                  \
         if (wkb.length() > 0 && !param.is_null()) {                                  \
-          hash_res = ObCharset::hash(CS_TYPE_BINARY, wkb.ptr(),                      \
+          res = ObCharset::hash(CS_TYPE_BINARY, wkb.ptr(),                           \
                                      wkb.length(), hash,                             \
                                      false,  T::is_varchar_hash ? T::hash : NULL);   \
         }                                                                            \
       }                                                                              \
-      return hash_res;                                                               \
+      return ret;                                                                    \
     }                                                                                \
   };                                                                                 \
   template <>                                                               \
@@ -1600,42 +1611,39 @@ DEF_GEO_FUNCS(ObGeometryType, string, ObString);
     bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
-    return varchar_murmurhash(obj, obj.get_collation_type(), hash);     \
+    res = varchar_murmurhash(obj, obj.get_collation_type(), hash);      \
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T, typename P>                                                  \
   struct ObjHashCalculator<OBJTYPE, T, P>                                            \
   {                                                                                  \
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {           \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {           \
       int ret = OB_SUCCESS;                                                          \
-      uint64_t hash_res = 0;                                                         \
+      res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString j_bin_str;                                                    \
       ObLobLocatorV2 lob(str, false);                                                \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
-        right_to_die_or_duty_to_live();                                              \
       } else if (!lob.has_inrow_data()) {                                            \
         COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(lob));              \
-        hash_res = hash;                                                             \
+        res = hash;                                                                  \
       } else if (OB_FAIL(lob.get_inrow_data(j_bin_str))) {                           \
         COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(lob));                  \
-        right_to_die_or_duty_to_live();                                              \
       } else {                                                                       \
         ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
         ObIJsonBase *j_base = &j_bin;                                                \
         if (j_bin_str.length() == 0 || param.is_null()) {                            \
-          hash_res = hash;                                                           \
+          res = hash;                                                                \
         } else if (OB_FAIL(j_bin.reset_iter())) {                                    \
           COMMON_LOG(WARN, "fail to reset json bin iter", K(ret), K(j_bin_str));     \
-          right_to_die_or_duty_to_live();                                            \
-        } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, hash_res))) { \
+        } else if (OB_FAIL(j_base->calc_json_hash_value(hash, T::hash, res))) {      \
           COMMON_LOG(ERROR, "fail to calc hash", K(ret), K(*j_base));                \
-          right_to_die_or_duty_to_live();                                            \
         }                                                                            \
       }                                                                              \
-      return hash_res;                                                               \
+      return ret;                                                                    \
     }                                                                                \
   };                                                                                 \
   template <>                                                               \
@@ -1870,23 +1878,23 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
     bc.fill(&tmp_data.time_ctx_.desc_, sizeof(uint32_t)); \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
     int type = obj.get_type();                                          \
     ObOTimestampData tmp_data = obj.get_otimestamp_value();            \
-    uint64_t ret = murmurhash(&type, sizeof(type), hash);             \
-    ret = murmurhash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), ret); \
-    ret = murmurhash(&tmp_data.time_ctx_.desc_, static_cast<int32_t>(sizeof(uint32_t)), ret); \
-    return ret;                                                                     \
+    res = murmurhash(&type, sizeof(type), hash);             \
+    res = murmurhash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), res); \
+    res = murmurhash(&tmp_data.time_ctx_.desc_, static_cast<int32_t>(sizeof(uint32_t)), res); \
+    return OB_SUCCESS;                                                                     \
   }                                                                                 \
   template <typename T>                                               \
   struct ObjHashCalculator<OBJTYPE, T, ObObj>                         \
   {                                                                                 \
-    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {        \
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {        \
       ObOTimestampData tmp_data = obj.get_otimestamp_value();                       \
       uint64_t ret = T::hash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), hash);  \
-      ret = T::hash(&tmp_data.time_ctx_.desc_, static_cast<int32_t>(sizeof(uint32_t)), ret);    \
-      return ret;                                                       \
+      res = T::hash(&tmp_data.time_ctx_.desc_, static_cast<int32_t>(sizeof(uint32_t)), ret);    \
+      return OB_SUCCESS;                                                                        \
     }                                                                   \
   };                                                                    \
   template <>                                                           \
@@ -1956,24 +1964,23 @@ inline int obj_print_json<ObJsonType>(const ObObj &obj, char *buf, int64_t buf_l
     bc.fill(&tmp_data.time_ctx_.time_desc_, sizeof(uint16_t)); \
   }                                                                     \
   template <>                                                           \
-  inline uint64_t obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash) \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
   {                                                                     \
     int type = obj.get_type();                                          \
-    uint64_t ret = murmurhash(&type, sizeof(type), hash);             \
+    res = murmurhash(&type, sizeof(type), hash);             \
     ObOTimestampData tmp_data = obj.get_otimestamp_value();            \
-    ret = murmurhash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), ret); \
-    ret = murmurhash(&tmp_data.time_ctx_.time_desc_, static_cast<int32_t>(sizeof(uint16_t)), ret);\
-    return ret;                                                         \
+    res = murmurhash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), res); \
+    res = murmurhash(&tmp_data.time_ctx_.time_desc_, static_cast<int32_t>(sizeof(uint16_t)), res);\
+    return OB_SUCCESS;                                                  \
   }                                                                     \
   template <typename T>                                                 \
   struct ObjHashCalculator<OBJTYPE, T, ObObj>                           \
   {                                                                     \
-    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {    \
-      uint64_t ret = OB_SUCCESS;                                         \
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {    \
       ObOTimestampData tmp_data = obj.get_otimestamp_value();                   \
-      ret = T::hash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), hash); \
-      ret = T::hash(&tmp_data.time_ctx_.time_desc_, static_cast<int32_t>(sizeof(uint16_t)), ret);\
-      return ret;                                                         \
+      res = T::hash(&tmp_data.time_us_, static_cast<int32_t>(sizeof(int64_t)), hash); \
+      res = T::hash(&tmp_data.time_ctx_.time_desc_, static_cast<int32_t>(sizeof(uint16_t)), res);\
+      return OB_SUCCESS;                                                         \
     }                                                                     \
   };                                                                      \
   template <>                                                           \
@@ -2323,20 +2330,20 @@ template <>
   bc.fill(&obj.get_meta(), sizeof(obj.get_meta()));
 }
 template <>
-    inline uint64_t obj_murmurhash<ObUnknownType>(const ObObj &obj, const uint64_t hash)
+    inline int obj_murmurhash<ObUnknownType>(const ObObj &obj, const uint64_t hash, uint64_t &res)
 {
-  uint64_t ret = 0;
   int64_t value = obj.get_unknown();
-  ret = murmurhash(&obj.get_meta(), sizeof(obj.get_meta()), hash);
-  return murmurhash(&value, sizeof(obj.get_unknown()), ret);
+  res = murmurhash(&obj.get_meta(), sizeof(obj.get_meta()), hash);
+  res = murmurhash(&value, sizeof(obj.get_unknown()), res);
+  return OB_SUCCESS;
 }
 template <typename T, typename P>
 struct ObjHashCalculator<ObUnknownType, T, P>
 {
-  static uint64_t calc_hash_value(const P &param, const uint64_t hash) {
+  static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {
   int64_t value = param.get_unknown();
-  uint64_t ret = T::hash(&value, sizeof(value), hash);
-  return ret;
+  res = T::hash(&value, sizeof(value), hash);
+  return OB_SUCCESS;
   }
 };
 template <>
@@ -2477,22 +2484,23 @@ template <>
     bc.fill(&value.nmonth_, sizeof(value.nmonth_));
   }
 template <>
-  inline uint64_t obj_murmurhash<ObIntervalYMType>(const ObObj &obj, const uint64_t hash)
+  inline int obj_murmurhash<ObIntervalYMType>(const ObObj &obj, const uint64_t hash, uint64_t &res)
   {
     int type = obj.get_type();
     ObIntervalYMValue value = obj.get_interval_ym();
-    uint64_t result = hash;
+    res = hash;
 
-    result = murmurhash(&type, sizeof(type), result);
-    result = murmurhash(&value.nmonth_, sizeof(value.nmonth_), result);
-    return result;
+    res = murmurhash(&type, sizeof(type), res);
+    res = murmurhash(&value.nmonth_, sizeof(value.nmonth_), res);
+    return OB_SUCCESS;
   }
 template <typename T, typename P>
   struct ObjHashCalculator<ObIntervalYMType, T, P>
   {
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {
       ObIntervalYMValue value = param.get_interval_ym();
-      return T::hash(&value.nmonth_, sizeof(value.nmonth_), hash);
+      res = T::hash(&value.nmonth_, sizeof(value.nmonth_), hash);
+      return OB_SUCCESS;
     }
   };
   template <>
@@ -2534,26 +2542,26 @@ template <>
     bc.fill(&value.fractional_second_, sizeof(value.fractional_second_));
   }
 template <>
-  inline uint64_t obj_murmurhash<ObIntervalDSType>(const ObObj &obj, const uint64_t hash)
+  inline int obj_murmurhash<ObIntervalDSType>(const ObObj &obj, const uint64_t hash, uint64_t &res)
   {
     int type = obj.get_type();
     ObIntervalDSValue value = obj.get_interval_ds();
-    uint64_t result = hash;
+    res = hash;
 
-    result = murmurhash(&type, sizeof(type), result);
-    result = murmurhash(&value.nsecond_, sizeof(value.nsecond_), result);
-    result = murmurhash(&value.fractional_second_, sizeof(value.fractional_second_), result);
-    return result;
+    res = murmurhash(&type, sizeof(type), res);
+    res = murmurhash(&value.nsecond_, sizeof(value.nsecond_), res);
+    res = murmurhash(&value.fractional_second_, sizeof(value.fractional_second_), res);
+    return OB_SUCCESS;
   }
 template <typename T, typename P>
   struct ObjHashCalculator<ObIntervalDSType, T, P>
   {
-    static uint64_t calc_hash_value(const P &param, const uint64_t hash) {
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {
       ObIntervalDSValue value = param.get_interval_ds();
-      uint64_t result = hash;
-      result = T::hash(&value.nsecond_, sizeof(value.nsecond_), result);
-      result = T::hash(&value.fractional_second_, sizeof(value.fractional_second_), result);
-      return result;
+      res = hash;
+      res = T::hash(&value.nsecond_, sizeof(value.nsecond_), res);
+      res = T::hash(&value.fractional_second_, sizeof(value.fractional_second_), res);
+      return OB_SUCCESS;
     }
   };
 template <>
@@ -2747,8 +2755,9 @@ DEF_NVARCHAR_FUNCS(ObNCharType, nchar, ObString);
 template <typename T, typename P>
 struct ObjHashCalculator<ObURowIDType, T, P>
 {
-  static uint64_t calc_hash_value(const P &param, const uint64_t hash) {
-    return T::hash(param.get_string().ptr(), param.get_string().length(), hash);
+  static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) {
+    res = T::hash(param.get_string().ptr(), param.get_string().length(), hash);
+    return OB_SUCCESS;
   }
 };
 
@@ -2908,22 +2917,23 @@ template <>
     bc.fill(obj.get_lob_locator(), obj.get_val_len());
   }
 template <>
-  inline uint64_t obj_murmurhash<ObLobType>(const ObObj &obj, const uint64_t hash)
+  inline int obj_murmurhash<ObLobType>(const ObObj &obj, const uint64_t hash, uint64_t &res)
   {
     int type = obj.get_type();
     ObCollationType cs_type = obj.get_collation_type();
-    uint64_t result = hash;
-    result = murmurhash(&type, sizeof(type), result);
-    result = ObCharset::hash(cs_type, obj.get_lob_payload_ptr(), obj.get_lob_payload_size(), result,
+    res = hash;
+    res = murmurhash(&type, sizeof(type), res);
+    res = ObCharset::hash(cs_type, obj.get_lob_payload_ptr(), obj.get_lob_payload_size(), res,
                               false, NULL);
-    return result;
+    return OB_SUCCESS;
   }
 template <typename T>
   struct ObjHashCalculator<ObLobType, T, ObObj>
   {
-    static uint64_t calc_hash_value(const ObObj &obj, const uint64_t hash) {
-      return ObCharset::hash(obj.get_collation_type(), obj.get_string_ptr(), obj.get_string_len(), hash,
-           false,  T::is_varchar_hash ? T::hash : NULL);
+    static int calc_hash_value(const ObObj &obj, const uint64_t hash, uint64_t &res) {
+      res = ObCharset::hash(obj.get_collation_type(), obj.get_string_ptr(), obj.get_string_len(), hash,
+            false,  T::is_varchar_hash ? T::hash : NULL);
+      return OB_SUCCESS;
     }
   };
 // use for hash join, only calc payload
@@ -2933,6 +2943,196 @@ inline uint64_t obj_crc64_v3<ObLobType>(const ObObj &obj, const uint64_t current
   int cs = obj.get_collation_type();
   uint64_t ret =  ob_crc64_sse42(current, &cs, sizeof(cs));
   return ob_crc64_sse42(ret, obj.get_lob_payload_ptr(), obj.get_lob_payload_size());
+}
+
+// ObUserDefinedSQLType = 49
+// An UDT is stored as it's leaf type columns, the root type column will not appear in storage now,
+// and will be atmost a few bytes in the feature.
+// UDTs does not have hash functions
+// subschema id or flags are not used in checksum functions, because the same subschema id may has different meanings.
+// subschema id or flags are used in serialize functions, because serialization are used in a same physic plan.
+// about print functions, UDTs are printed as HexStrings, except system defined types like xmltype.
+
+#define DEF_UDT_CS_FUNCS(OBJTYPE)                                       \
+  template <>                                                           \
+  inline int64_t obj_crc64<OBJTYPE>(const ObObj &obj, const int64_t current)     \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    int64_t ret =  ob_crc64_sse42(current, &type, sizeof(type));        \
+    return ob_crc64_sse42(ret, obj.get_string_ptr(), obj.get_string_len());      \
+  }                                                                     \
+  template <>                                                           \
+  inline int64_t obj_crc64_v2<OBJTYPE>(const ObObj &obj, const int64_t current)  \
+  {                                                                     \
+    return ob_crc64_sse42(current, obj.get_string_ptr(), obj.get_string_len());  \
+  }                                                                     \
+  template <>                                                           \
+  inline void obj_batch_checksum<OBJTYPE>(const ObObj &obj, ObBatchChecksum &bc) \
+  {                                                                     \
+    int type = obj.get_type();                                          \
+    bc.fill(&type, sizeof(type));                                       \
+    bc.fill(obj.get_string_ptr(), obj.get_string_len());                \
+  }                                                                     \
+  template <>                                                           \
+  inline int obj_murmurhash<OBJTYPE>(const ObObj &obj, const uint64_t hash, uint64_t &res) \
+  {                                                                     \
+    res = varchar_murmurhash(obj, CS_TYPE_BINARY, hash);                \
+    return OB_SUCCESS;                                                  \
+  }                                                                     \
+  template <typename T, typename P>                                                  \
+  struct ObjHashCalculator<OBJTYPE, T, P>                                            \
+  {                                                                                  \
+    static int calc_hash_value(const P &param, const uint64_t hash, uint64_t &res) { \
+      int ret = OB_NOT_SUPPORTED;                                                    \
+      res = 0;                                                                       \
+      COMMON_LOG(WARN, "UDTS does not have hash function", K(ret), K(param));        \
+      return ret;                                                                    \
+    }                                                                                \
+  };                                                                                 \
+  template <>                                                                        \
+  inline uint64_t obj_crc64_v3<OBJTYPE>(const ObObj &obj, const uint64_t current)    \
+  {                                                                                  \
+    return ob_crc64_sse42(current, obj.get_string_ptr(), obj.get_string_len());      \
+  }                                                                                  \
+
+DEF_UDT_CS_FUNCS(ObUserDefinedSQLType);
+
+// DEF_TEXT_PRINT_FUNCS(ObUserDefinedSQLType);
+// use clob for test currently
+// ToDo: @gehao XML will be blob later, need to convert to xml text(utf-8);
+template <>
+inline int obj_print_sql<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                               int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_xml_sql_type()) {
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+    } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
+    } else {
+      ObHexEscapeSqlStr sql_str(udt_data);
+      pos += sql_str.to_string(buffer + pos, length - pos);
+      ret = databuff_printf(buffer, length, pos, "'");
+    }
+  } else { // should not come here currently!
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+  }
+  return ret;
+}
+
+template <>
+inline int obj_print_str<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                               int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_xml_sql_type()) {
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+    } else {
+      ret = databuff_printf(buffer, length, pos, "'%.*s'", udt_data.length(), udt_data.ptr());
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+  }
+  return ret;
+}
+
+template <>
+inline int obj_print_plain_str<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, int64_t length,
+                                           int64_t &pos, const ObObjPrintParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_xml_sql_type()) {
+    ObObj tmp_obj = obj;
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+    } else {
+      tmp_obj.set_string(obj.get_type(), udt_data); // ToDo: @gehao convert to xml text(utf-8);
+      tmp_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      ret = obj_print_plain_str<ObVarcharType>(tmp_obj, buffer, length, pos, params);
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+  }
+  return ret;
+}
+template <>
+inline int obj_print_json<ObUserDefinedSQLType>(const ObObj &obj, char *buf, int64_t buf_len,
+                                                int64_t &pos, const ObObjPrintParams &params)
+{
+  UNUSED(params);
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_xml_sql_type()) {
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buf, buf_len, pos, true))) {
+    } else {
+      J_OBJ_START();
+      PRINT_META();
+      BUF_PRINTO("XML");
+      J_COLON();
+      BUF_PRINTO(udt_data);
+      J_OBJ_END();
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+// DEF_TEXT_SERIALIZE_FUNCS(ObUserDefinedSQLType, TYPE, VTYPE)
+template <>
+inline int obj_val_serialize<ObUserDefinedSQLType>(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(obj.get_meta().get_subschema_id());
+  OB_UNIS_ENCODE(obj.get_meta().get_udt_flags());
+  if (OB_FAIL(ret)) {
+  } else if (obj.get_meta().is_xml_sql_type()) {
+    OB_UNIS_ENCODE(obj.get_string());
+  } else { // need callback for different types?
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+template <>
+inline int obj_val_deserialize<ObUserDefinedSQLType>(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = uint16_t();
+  uint8_t udt_flags = uint16_t();
+
+  OB_UNIS_DECODE(subschema_id);
+  OB_UNIS_DECODE(udt_flags);
+  if (OB_FAIL(ret)) {
+  } else if (ob_is_xml_sql_type(ObUserDefinedSQLType, subschema_id)) {
+    ObString blob;
+    OB_UNIS_DECODE(blob);
+    if (OB_SUCC(ret)) {
+      obj.set_sql_udt(blob.ptr(), blob.length(), subschema_id, udt_flags);
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(subschema_id), K(udt_flags));
+  }
+  return ret;
+}
+
+template <>
+inline int64_t obj_val_get_serialize_size<ObUserDefinedSQLType>(const ObObj &obj)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(obj.get_meta().get_subschema_id());
+  OB_UNIS_ADD_LEN(obj.get_meta().get_udt_flags());
+  OB_UNIS_ADD_LEN(obj.get_string());
+  return len;
 }
 
 }

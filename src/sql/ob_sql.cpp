@@ -648,6 +648,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if (OB_FAIL(ob_write_string(alloc, "SYS_REFCURSOR", field.type_name_))) {
             LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
           }
+        } else if (lib::is_oracle_mode() && expr->is_column_ref_expr() &&
+                   static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
+          // xmltype is supported, do nothing
         } else if (NULL == context->secondary_namespace_ // pl resolve
                     && NULL == context->session_info_->get_pl_context()) { // pl execute
           ret = OB_NOT_SUPPORTED;
@@ -660,7 +663,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         field.type_.set_type(expr->get_data_type());
         field.accuracy_ = expr->get_accuracy();
         field.flags_ = static_cast<uint16_t>(expr->get_result_flag());
-        // Setup Collation and Collation levl
+        // Setup Collation and Collation level
         if (ob_is_string_or_lob_type(static_cast<ObObjType>(expr->get_data_type()))
             || ob_is_raw(static_cast<ObObjType>(expr->get_data_type()))
             || ob_is_enum_or_set_type(static_cast<ObObjType>(expr->get_data_type()))) {
@@ -673,7 +676,18 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
+        if (expr->get_result_type().is_user_defined_sql_type()) {
+          if (expr->get_result_type().is_xml_sql_type()) {
+            // ToDo : @gehao， need record sub schemid on ObField？
+            field.type_.set_collation_type(CS_TYPE_BINARY);
+            field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+            field.charsetnr_ = CS_TYPE_BINARY;
+            field.length_ = OB_MAX_LONGTEXT_LENGTH; // set MAX_ACCURACY?
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("udt type not supported", K(ret), "subschema id",expr->get_result_type().get_subschema_id());
+          }
+        } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
       }

@@ -50,6 +50,11 @@ public:
     }
     return bool_ret;
   }
+  virtual int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   VIRTUAL_TO_STRING_KV(K_(namespace));
 
   ObLibCacheNameSpace namespace_;

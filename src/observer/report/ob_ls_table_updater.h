@@ -50,6 +50,7 @@ public:
   virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   virtual bool operator==(const ObLSTableUpdateTask &other) const;
   virtual bool operator!=(const ObLSTableUpdateTask &other) const;
   virtual bool compare_without_version(const ObLSTableUpdateTask &other) const;

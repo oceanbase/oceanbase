@@ -47,7 +47,7 @@ const static int64_t OSS_INVALID_OBJECT_LENGTH = 1;//only include '\0'
 const static int64_t MAX_OSS_ENDPOINT_LENGTH = 128;
 const static int64_t MAX_OSS_ID_LENGTH = 128;
 const static int64_t MAX_OSS_KEY_LENGTH = 128;
-const static int64_t BASE_BUFFER_SIZE = 8 * 1024 * 1024L;//the buf size of upload data
+const static int64_t OSS_BASE_BUFFER_SIZE = 8 * 1024 * 1024L;//the buf size of upload data
 const static int64_t MAX_ELEMENT_COUNT = 10000;//oss limit element count
 const static int64_t MULTI_BASE_BUFFER_SIZE = 16 * 1024 * 1024L;//the buf size of upload data
 

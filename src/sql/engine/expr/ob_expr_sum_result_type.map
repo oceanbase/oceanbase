@@ -48,5 +48,6 @@ static ObObjType SUM_RESULT_TYPE[ObMaxType] =
     ObMaxType,         /* ObURowIDType     */
     ObMaxType,         /* ObLobType     */
     ObDoubleType,      /* ObJsonType     */
-    ObMaxType,    /* ObGeometryType */
+    ObMaxType,         /* ObGeometryType */
+    ObMaxType,         /* ObUserDefinedSQLType */
 };

@@ -1344,6 +1344,11 @@ public:
                               const int32_t dst_col_byte_len,
                               const bool is_oracle_mode,
                               bool &is_offline) const;
+
+
+  int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
+                                          common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const;
+  ObColumnSchemaV2* get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const;
   bool is_same_type_category(const ObColumnSchemaV2 &src_column,
                              const ObColumnSchemaV2 &dst_column) const;
   int check_has_trigger_on_table(ObSchemaGetterGuard &schema_guard,

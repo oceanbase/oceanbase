@@ -56,7 +56,8 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       if_not_exist_(false),
       is_oracle_temp_table_(false),
       index_arg_(),
-      current_index_name_set_()
+      current_index_name_set_(),
+      cur_column_group_id_(0)
 {
 }
 
@@ -67,6 +68,11 @@ ObCreateTableResolver::~ObCreateTableResolver()
 uint64_t ObCreateTableResolver::gen_column_id()
 {
   return ++cur_column_id_;
+}
+
+uint64_t ObCreateTableResolver::gen_column_group_id()
+{
+  return ++cur_column_group_id_;
 }
 
 int64_t ObCreateTableResolver::get_primary_key_size() const
@@ -185,6 +191,74 @@ int ObCreateTableResolver::add_hidden_tablet_seq_col()
   } else {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "tablet seq expects to be the first primary key", K(stmt_), K(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                                               ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
+                                                               ObColumnSchemaV2 &udt_column)
+{
+  int ret = OB_SUCCESS;
+  if (udt_column.is_xmltype()) {
+    ObColumnSchemaV2 hidden_blob;
+    ObSEArray<ObString, 4> gen_col_expr_arr;
+    ObString tmp_str;
+    char col_name[128] = {0};
+    hidden_blob.reset();
+    hidden_blob.set_column_id(gen_column_id());
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(udt_column.is_nullable());
+    hidden_blob.set_udt_set_id(udt_column.get_udt_set_id());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    databuff_printf(col_name, 128, "SYS_NC%05lu$",cur_column_id_);
+    if (OB_FAIL(hidden_blob.set_column_name(col_name))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(check_default_value(udt_column.get_cur_default_value(),
+                                           session_info_->get_tz_info_wrap(),
+                                           &tmp_str,    // useless
+                                           *allocator_,
+                                           table_schema,
+                                           resolved_cols,
+                                           udt_column,
+                                           gen_col_expr_arr,  // useless
+                                           session_info_->get_sql_mode(),
+                                           session_info_,
+                                           true,
+                                           schema_checker_))) {
+      SQL_RESV_LOG(WARN, "check udt column default value failed", K(ret), K(hidden_blob));
+    } else if (OB_FAIL(resolved_cols.push_back(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                                               ObColumnSchemaV2 &udt_column)
+{
+  int ret = OB_SUCCESS;
+  if (udt_column.is_xmltype()) {
+    ObColumnSchemaV2 hidden_blob;
+    ObSEArray<ObString, 4> gen_col_expr_arr;
+    ObString tmp_str;
+    char col_name[128] = {0};
+    hidden_blob.reset();
+    hidden_blob.set_column_id(gen_column_id());
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(udt_column.is_nullable());
+    hidden_blob.set_udt_set_id(udt_column.get_udt_set_id());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    databuff_printf(col_name, 128, "SYS_NC%05lu$",cur_column_id_);
+    if (OB_FAIL(hidden_blob.set_column_name(col_name))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(table_schema.add_column(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
   }
   return ret;
 }
@@ -1109,6 +1183,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       }
     }
 
+    int64_t resolved_cols_count = resolved_cols.count();
     // 第二遍遍历，利用 resolved_cols 解析出全部 column schema 并保存到 table_schema 中
     // 并解析 index 等
     for (int32_t i = 0, ele_pos = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
@@ -1124,7 +1199,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         bool is_modify_column_visibility = false;
         const bool is_create_table_as = (RESOLVE_COL_ONLY == resolve_rule);
-        CK (ele_pos >= 0 && ele_pos < resolved_cols.count());
+        CK (ele_pos >= 0 && ele_pos < resolved_cols_count);
         if (OB_SUCC(ret)) {
           ObColumnSchemaV2 &column = resolved_cols.at(ele_pos);
           ObColumnResolveStat stat;
@@ -1141,7 +1216,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                                 is_oracle_temp_table_,
                                                 is_create_table_as))) {
             SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
-          } else if (OB_FAIL(check_default_value(column.get_cur_default_value(),
+          } else if (!column.is_xmltype() && // xmltype will check after hidden column generated
+                     OB_FAIL(check_default_value(column.get_cur_default_value(),
                                           session_info_->get_tz_info_wrap(),
                                           tmp_str,
                                           *allocator_,
@@ -1267,6 +1343,10 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
             }
           }
 
+          if (OB_SUCC(ret) && column.is_xmltype()) {
+            column.set_udt_set_id(gen_column_group_id());
+          }
+
           if (OB_SUCC(ret)) {
             ObColumnSchemaV2 *tmp_col = NULL;
             LOG_DEBUG("resolve table elements mid2", K(i), K(column));
@@ -1288,6 +1368,10 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
             if (!column.is_invisible_column()) {
               has_visible_col = true;
+            }
+            // column from resolved_cols may be invalid
+            if (OB_FAIL(add_generated_hidden_column_for_udt(table_schema, resolved_cols, column))) {
+              LOG_WARN("generate hidden column for udt failed");
             }
           }
 
@@ -1347,6 +1431,20 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
         // won't be here
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "unexpected branch", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      for (int32_t i = resolved_cols_count; i < resolved_cols.count() && OB_SUCC(ret); i++) {
+        ObColumnSchemaV2 &hidden_col = resolved_cols.at(i);
+        if (OB_FAIL(table_schema.add_column(hidden_col))) {
+          SQL_RESV_LOG(WARN, "add udt hidden column to table_schema failed", K(ret), K(hidden_col));
+        } else {
+          ObColumnNameHashWrapper name_key(hidden_col.get_column_name_str());
+          if (OB_FAIL(column_name_set_.set_refactored(name_key))) {
+            SQL_RESV_LOG(WARN, "add column name to map failed", K(ret));
+          }
+        }
       }
     }
 
@@ -1650,6 +1748,20 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             //can not create a column which meta type is tinyint in oracle mode
             ret = OB_ERR_INVALID_DATATYPE;
             LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
+          } else if (lib::is_oracle_mode() && expr->get_result_type().is_user_defined_sql_type()) {
+            if (expr->get_result_type().get_subschema_id() == ObXMLSqlType) {
+              ObObjMeta xml_meta;
+              xml_meta.set_type(ObUserDefinedSQLType);
+              xml_meta.set_collation_type(CS_TYPE_BINARY);
+              column.set_meta_type(xml_meta);
+              column.set_sub_data_type(T_OBJ_XML);
+              // udt column is varbinary used for null bitmap
+              column.set_udt_set_id(gen_column_group_id());
+            } else {
+              ret = OB_ERR_INVALID_DATATYPE;
+              LOG_WARN("invalid data type", K(ret), K(*expr));
+              LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
+            }
           } else {
             ObObjMeta column_meta = expr->get_result_type().get_obj_meta();
             if (column_meta.is_lob_locator()) {
@@ -1768,6 +1880,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 //do nothing ...
               } else if (OB_FAIL(table_schema.add_column(column))) {
                 LOG_WARN("add column to table_schema failed", K(ret), K(column));
+              } else if (is_oracle_mode() && column.is_xmltype() &&
+                         OB_FAIL(add_generated_hidden_column_for_udt(table_schema, column))) {
+                LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
               }
             }
             LOG_DEBUG("ctas mysql mode, create_table_column_count = 0,end", K(column));

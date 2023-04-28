@@ -760,6 +760,9 @@ int ObSelectResolver::check_group_by()
         if (OB_ISNULL(group_by_expr = select_stmt->get_group_exprs().at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("group by expr is null", K(ret));
+        } else if (ObUserDefinedSQLType == group_by_expr->get_data_type()) {
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         } else if (ObLongTextType == group_by_expr->get_data_type()
                   || ObLobType == group_by_expr->get_data_type()
                   || ObJsonType == group_by_expr->get_data_type()
@@ -777,7 +780,8 @@ int ObSelectResolver::check_group_by()
           LOG_WARN("rollup expr is null", K(ret));
         } else if (ObLongTextType == rollup_expr->get_data_type()
                   || ObLobType == rollup_expr->get_data_type()
-                  || ObExtendType == rollup_expr->get_data_type()) {
+                  || ObExtendType == rollup_expr->get_data_type()
+                  || ObUserDefinedSQLType == rollup_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob or udt expr is not allowed", K(ret));
         }
@@ -800,7 +804,8 @@ int ObSelectResolver::check_group_by()
                         || ObLobType == groupby_expr->get_data_type()
                         || ObJsonType == groupby_expr->get_data_type()
                         || ObGeometryType == groupby_expr->get_data_type()
-                        || ObExtendType == groupby_expr->get_data_type()) {
+                        || ObExtendType == groupby_expr->get_data_type()
+                        || ObUserDefinedSQLType == groupby_expr->get_data_type()) {
                 ret = OB_ERR_INVALID_TYPE_FOR_OP;
                 LOG_WARN("group by lob or udt expr is not allowed", K(ret));
               }
@@ -870,8 +875,15 @@ int ObSelectResolver::check_order_by()
             || ob_is_json_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_geometry_tc(order_items.at(i).expr_->get_data_type())
             || ob_is_extend(order_items.at(i).expr_->get_data_type())) {
-          ret = (lib::is_oracle_mode() && ob_is_json_tc(order_items.at(i).expr_->get_data_type()))
-            ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
+          if (ob_is_xml_sql_type(order_items.at(i).expr_->get_data_type(), order_items.at(i).expr_->get_subschema_id())
+              || ob_is_xml_pl_type(order_items.at(i).expr_->get_data_type(), order_items.at(i).expr_->get_udt_id())) {
+            ret = OB_ERR_NO_ORDER_MAP_SQL;
+            LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+          } else {
+            ret = (lib::is_oracle_mode() && ob_is_json_tc(order_items.at(i).expr_->get_data_type()))
+              ? OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("lob or json expr can't order", K(ret), K(*order_items.at(i).expr_));
+          }
           LOG_WARN("lob or json expr can't order", K(ret), K(*order_items.at(i).expr_));
         } else if (has_distinct) {
           if (OB_FAIL(order_item_exprs.push_back(order_items.at(i).expr_))) {
@@ -6333,7 +6345,8 @@ int ObSelectResolver::check_multi_rollup_items_valid(
                   || ObLobType == groupby_expr->get_data_type()
                   || ObJsonType == groupby_expr->get_data_type()
                   || ObGeometryType == groupby_expr->get_data_type()
-                  || ObExtendType == groupby_expr->get_data_type()) {
+                  || ObExtendType == groupby_expr->get_data_type()
+                  || ObUserDefinedSQLType == groupby_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob or udt expr is not allowed", K(ret));
         }

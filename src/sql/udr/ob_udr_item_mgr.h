@@ -71,6 +71,7 @@ public:
       hash_ret = normalized_pattern_.hash(hash_ret);
       return hash_ret;
     }
+    inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     inline bool operator==(const UDRKey& key) const
     {
       return tenant_id_ == key.tenant_id_

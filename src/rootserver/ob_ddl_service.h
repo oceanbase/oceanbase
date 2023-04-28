@@ -578,6 +578,12 @@ public:
                                      const common::ObString &constraint_name,
                                      const bool is_foreign_key, // this param is only effective in mysql mode
                                      bool &is_constraint_name_exist);
+int check_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                          const share::schema::ObColumnSchemaV2 &col_schema,
+                          const uint64_t tenant_id);
+int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                                const share::schema::ObTableSchema &table_schema,
+                                const uint64_t tenant_id);
   int check_cst_name_dup_for_rename_table_mysql(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema *from_table_schema,
@@ -1726,11 +1732,19 @@ private:
                                common::ObIArray<uint64_t> &drop_ug_id_array,
                                ObIArray<share::ObResourcePoolName> &pool_names);
   // private funcs for drop column
+  int get_all_dropped_udt_hidden_column_ids(const ObTableSchema &orig_table_schema,
+                                            const ObColumnSchemaV2 &orig_column_schema,
+                                            common::ObIArray<int64_t> &drop_cols_id_arr,
+                                            int64_t &columns_cnt_in_new_table);
   int get_all_dropped_column_ids(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
       common::ObIArray<int64_t> &drop_cols_id_arr,
       int64_t *new_table_cols_cnt = nullptr);
+  int drop_udt_hidden_columns(const ObTableSchema &origin_table_schema,
+                              ObTableSchema &new_table_schema,
+                              const ObColumnSchemaV2 &new_origin_col,
+                              int64_t new_schema_version);
   int check_can_drop_columns(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,

@@ -1311,6 +1311,7 @@ int ObDelUpdResolver::check_err_log_support_type(ObObjType column_type)
   case ObOUnknownType:
   case ObOURowIDType:
   case ObOLobLocatorType:
+  case ObOUDTSqlType:
   case ObOMaxType:
     ret = OB_NOT_SUPPORTED;
     break;
@@ -2527,6 +2528,12 @@ int ObDelUpdResolver::generate_column_conv_function(ObInsertTableInfo &table_inf
         LOG_WARN("fail to find column item", K(ret), K(column_id), K(column_item), K(*tbl_col));
       } else if (OB_FAIL(find_value_desc(table_info, column_id, column_ref))) {
         LOG_WARN("fail to check column is exists", K(ret), K(column_id));
+      } else if (tbl_col->is_xml_column() || (tbl_col->is_udt_hidden_column())) {
+        if (!tbl_col->is_xml_column()) {
+          // do nothing, hidden column with build with xml column together
+        } else if (OB_FAIL(build_column_conv_function_for_udt_column(table_info, i, column_ref))) {
+          LOG_WARN("failed to build column conv for udt_columns", K(ret));
+        }
       } else if (OB_ISNULL(column_ref)) {
         if (OB_FAIL(build_column_conv_function_with_default_expr(table_info, i))) {
           LOG_WARN("build column convert function with default expr failed", K(ret));
@@ -2753,6 +2760,129 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
     if (OB_SUCC(ret)) {
       table_info.column_conv_exprs_.at(idx) = function_expr;
       LOG_DEBUG("add column conv expr", K(*function_expr));
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::build_column_conv_function_for_udt_column(ObInsertTableInfo& table_info,
+                                                                const int64_t idx,
+                                                                ObRawExpr *column_ref)
+{
+  int ret = OB_SUCCESS;
+  ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
+  const ObColumnRefRawExpr *tbl_col = table_info.column_exprs_.at(idx);
+  uint64_t table_id = table_info.table_id_;
+  if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(tbl_col) ||
+      OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret));
+  } else {
+    ObSchemaGetterGuard *schema_guard = NULL;
+    const ObTableSchema* table_schema = NULL;
+    bool trigger_exist = false;
+    ColumnItem *column_item = del_upd_stmt->get_column_item_by_id(table_id, tbl_col->get_column_id());
+    uint64_t udt_set_id = tbl_col->get_udt_set_id();
+    ColumnItem *hidden_column_item = NULL;
+    int64_t hidd_idx = 0;
+    for (int64_t i = 0; OB_ISNULL(hidden_column_item) && i < table_info.column_exprs_.count(); i++) {
+      if (table_info.column_exprs_.at(i)->get_column_id() != tbl_col->get_column_id() &&
+          table_info.column_exprs_.at(i)->get_udt_set_id() == tbl_col->get_udt_set_id()) {
+        hidden_column_item = del_upd_stmt->get_column_item_by_id(table_id, table_info.column_exprs_.at(i)->get_column_id());
+        hidd_idx = i;
+      }
+    }
+    if (OB_ISNULL(hidden_column_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("find hidden column failed", K(schema_checker_));
+    } else {
+      ObRawExpr *function_expr = NULL;
+      ObRawExpr *expr = NULL;
+      ObDefaultValueUtils utils(del_upd_stmt, &params_, this);
+      if (OB_ISNULL(schema_checker_) ||
+          OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid schema checker", K(schema_checker_));
+      } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                          table_info.ref_table_id_,
+                                                          table_schema,
+                                                          table_info.is_link_table_))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get table schema", K(table_info), K(table_schema));
+      } else if (OB_FAIL(table_schema->has_before_insert_row_trigger(*schema_guard, trigger_exist))) {
+        LOG_WARN("fail to call has_before_update_row_trigger", K(*table_schema));
+      } else if (OB_ISNULL(column_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column item", K(ret), K(column_item));
+      } else if (OB_NOT_NULL(column_ref)) {
+        if (OB_FAIL(add_additional_function_according_to_type(hidden_column_item, column_ref,
+                                                              T_INSERT_SCOPE,
+                                                              ObObjMeta::is_binary(tbl_col->get_data_type(),
+                                                              tbl_col->get_collation_type())))) {
+          LOG_WARN("failed to build column conv expr", K(ret));
+        } else {
+          function_expr = column_ref;
+        }
+      } else {
+        // use default value from default_value_expr_
+        if (OB_NOT_NULL(column_item->default_value_expr_)) {
+          if (T_FUN_COLUMN_CONV == column_item->default_value_expr_->get_expr_type()) {
+            if (column_item->default_value_expr_->get_param_expr(4)->is_const_raw_expr()) {
+              expr = column_item->default_value_expr_->get_param_expr(4);
+            } else if (column_item->default_value_expr_->get_param_expr(4)->get_expr_type() == T_FUN_SYS_CAST) {
+              expr = column_item->default_value_expr_->get_param_expr(4)->get_param_expr(0);
+            } else if (column_item->default_value_expr_->get_param_expr(4)->is_sys_func_expr()) {
+              expr = column_item->default_value_expr_->get_param_expr(4);
+            }
+          }
+        } else if (!column_item->default_value_.is_null()) {
+          ObObj tmp = hidden_column_item->default_value_;
+          hidden_column_item->set_default_value(column_item->default_value_);
+          hidden_column_item->default_value_.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+          hidden_column_item->default_value_.set_collation_level(tmp.get_collation_level());
+          hidden_column_item->default_value_.set_type(ObVarcharType);
+        }
+
+        if (OB_SUCC(ret) && OB_ISNULL(expr)) {
+          if (OB_FAIL(utils.generate_insert_value(hidden_column_item, expr,
+                                                  del_upd_stmt->has_instead_of_trigger()))) {
+            LOG_WARN("failed to generate insert value", K(ret));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr should not be null", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::transform_udt_column_value_expr(*params_.expr_factory_, expr, expr))) {
+          LOG_WARN("transform udt value expr failed", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                                  *params_.allocator_,
+                                                                  *hidden_column_item->get_expr(), // build col conv for hidden column
+                                                                  expr, session_info_))) {
+          LOG_WARN("fail to build column conv expr", K(ret));
+        } else if (trigger_exist &&
+                  OB_FAIL(ObRawExprUtils::build_wrapper_inner_expr(*params_.expr_factory_, *session_info_, expr, expr))) {
+          LOG_WARN("failed to build wrapper inner expr", K(ret));
+        } else {
+          function_expr = expr;
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+       ObConstRawExpr *c_expr = NULL;
+       if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_NULL,
+                                                          c_expr))) {
+          LOG_WARN("create raw expr failed", K(ret));
+        } else {
+          // udt column convert expr is useless, make T_NULL for it;
+          table_info.column_conv_exprs_.at(idx) = c_expr;
+          table_info.column_conv_exprs_.at(hidd_idx) = function_expr;
+          LOG_DEBUG("add column conv expr", K(*function_expr));
+        }
+      }
     }
   }
   return ret;

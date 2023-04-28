@@ -262,7 +262,8 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       // init obj_meta_
       rt_expr->obj_meta_ = result_meta;
       // pl extend type has its own explanation for scale
-      if (ObExtendType != rt_expr->obj_meta_.get_type()) {
+      if (ObExtendType != rt_expr->obj_meta_.get_type()
+          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
       }
       if (is_lob_storage(rt_expr->obj_meta_.get_type())) {

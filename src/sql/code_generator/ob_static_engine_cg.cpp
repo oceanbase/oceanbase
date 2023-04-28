@@ -1114,6 +1114,10 @@ int ObStaticEngineCG::generate_spec(
         } else if (OB_ISNULL(expr->basic_funcs_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+        } else if (expr->obj_meta_.is_ext() || expr->obj_meta_.is_user_defined_sql_type()) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         } else {
           ObOrderDirection order_direction = default_asc_direction();
           bool is_ascending = is_ascending_direction(order_direction);
@@ -1308,6 +1312,10 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
       } else if (OB_ISNULL(expr->basic_funcs_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
         LOG_WARN("failed to push back sort collation", K(ret));
       } else {
@@ -1480,6 +1488,10 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
             (is_null_first(order_direction) ^ is_ascending) ? NULL_LAST : NULL_FIRST);
         if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
           LOG_WARN("failed to push back sort collation", K(ret));
+        } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         } else {
           ObSortCmpFunc cmp_func;
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -1654,6 +1666,10 @@ int ObStaticEngineCG::fill_sort_funcs(
       ObExpr* expr = nullptr;
       if (OB_FAIL(sort_exprs.at(sort_collation.field_idx_, expr))) {
         LOG_WARN("failed to get sort exprs", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else {
         ObSortCmpFunc cmp_func;
         cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -3000,10 +3016,13 @@ int ObStaticEngineCG::generate_popular_values_hash(
   ObDatum datum;
   char buf[OBJ_DATUM_MAX_RES_SIZE];
   datum.ptr_ = buf;
+  uint64_t hash_val = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < popular_values_expr.count(); ++i) {
     if (OB_FAIL(datum.from_obj(popular_values_expr.at(i)))) {
       LOG_WARN("fail convert obj to datum", K(ret));
-    } else if (OB_FAIL(popular_values_hash.push_back(hash_func.hash_func_(datum, 0)))) {
+    } else if (OB_FAIL(hash_func.hash_func_(datum, 0, hash_val))) {
+      LOG_WARN("fail to do hash", K(ret));
+    } else if (OB_FAIL(popular_values_hash.push_back(hash_val))) {
       LOG_WARN("fail push back values", K(ret));
     }
   }
@@ -3982,19 +4001,25 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
       for (int64_t i = 0; i < spec.connect_by_prior_exprs_.count() && OB_SUCC(ret); ++i) {
         ObExpr *expr = spec.connect_by_prior_exprs_.at(i);
         ObCmpFunc cmp_func;
-        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
-                              expr->datum_meta_.type_,
-                              expr->datum_meta_.type_,
-                              NULL_LAST,//这里null last还是first无所谓
-                              expr->datum_meta_.cs_type_,
-                              expr->datum_meta_.scale_,
-                              lib::is_oracle_mode(),
-                              expr->obj_meta_.has_lob_header());
-        if (OB_ISNULL(cmp_func.cmp_func_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
-        } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
-          LOG_WARN("failed to push back sort function", K(ret));
+        if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else {
+          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+                                expr->datum_meta_.type_,
+                                expr->datum_meta_.type_,
+                                NULL_LAST,//这里null last还是first无所谓
+                                expr->datum_meta_.cs_type_,
+                                expr->datum_meta_.scale_,
+                                lib::is_oracle_mode(),
+                                expr->obj_meta_.has_lob_header());
+          if (OB_ISNULL(cmp_func.cmp_func_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+          } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
+            LOG_WARN("failed to push back sort function", K(ret));
+          }
         }
       }
     }
@@ -5363,24 +5388,30 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                                   const_cast<ObExprResType &>(param_raw_expr.get_result_type())))) {
           LOG_WARN("failed to push_back expr type", K(ret));
         } else if (aggr_info.has_distinct_) {
-          ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
-          ObSortCmpFunc cmp_func;
-          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
-                                                                   expr->datum_meta_.type_,
-                                                                   field_collation.null_pos_,
-                                                                   field_collation.cs_type_,
-                                                                   expr->datum_meta_.scale_,
-                                                                   lib::is_oracle_mode(),
-                                                                   expr->obj_meta_.has_lob_header());
-          if (OB_ISNULL(cmp_func.cmp_func_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
-          } else if (OB_FAIL(aggr_info.distinct_collations_.push_back(field_collation))) {
-            LOG_WARN("failed to push back field collation", K(ret));
-          } else if (OB_FAIL(aggr_info.distinct_cmp_funcs_.push_back(cmp_func))) {
-            LOG_WARN("failed to push back cmp function", K(ret));
+          if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+            // other udt types not supported, xmltype does not have order or map member function
+            ret = OB_ERR_NO_ORDER_MAP_SQL;
+            LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
           } else {
-            LOG_DEBUG("succ to push back field collation", K(field_collation), K(i));
+            ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
+            ObSortCmpFunc cmp_func;
+            cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
+                                                                    expr->datum_meta_.type_,
+                                                                    field_collation.null_pos_,
+                                                                    field_collation.cs_type_,
+                                                                    expr->datum_meta_.scale_,
+                                                                    lib::is_oracle_mode(),
+                                                                    expr->obj_meta_.has_lob_header());
+            if (OB_ISNULL(cmp_func.cmp_func_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+            } else if (OB_FAIL(aggr_info.distinct_collations_.push_back(field_collation))) {
+              LOG_WARN("failed to push back field collation", K(ret));
+            } else if (OB_FAIL(aggr_info.distinct_cmp_funcs_.push_back(cmp_func))) {
+              LOG_WARN("failed to push back cmp function", K(ret));
+            } else {
+              LOG_DEBUG("succ to push back field collation", K(field_collation), K(i));
+            }
           }
         }
       }
@@ -5400,7 +5431,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                          T_FUN_KEEP_COUNT == raw_expr.get_expr_type() ||
                          T_FUN_KEEP_WM_CONCAT == raw_expr.get_expr_type() ||
                          T_FUN_HYBRID_HIST == raw_expr.get_expr_type() ||
-                         T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type())) {
+                         T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type() ||
+                         T_FUN_ORA_XMLAGG == raw_expr.get_expr_type())) {
       const ObRawExpr *param_raw_expr = (is_oracle_mode()
           && T_FUN_GROUP_CONCAT == raw_expr.get_expr_type()
           && raw_expr.get_real_param_count() > 1)
@@ -5900,6 +5932,10 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
       int64_t idx = OB_INVALID_INDEX;
       if (OB_FAIL(generate_rt_expr(*order_item.expr_, expr))) {
         LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (sort_exprs != NULL && OB_FAIL(sort_exprs->push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (has_exist_in_array(all_exprs, expr, &idx)) {
@@ -5915,6 +5951,7 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
           idx = all_exprs.count() - 1;
         }
       }
+
       if (OB_SUCC(ret)) {
         ObSortFieldCollation field_collation(idx,
             expr->datum_meta_.cs_type_,

@@ -42,6 +42,7 @@
 #include "sql/executor/ob_task_executor_ctx.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "sql/rewrite/ob_transform_rule.h"
+#include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/schema/ob_schema_printer.h"
@@ -2305,6 +2306,21 @@ int AllExprPointerCollector::add_expr(ObRawExpr *&expr)
   return ret;
 }
 
+
+FastUdtExprChecker::FastUdtExprChecker(common::ObIArray<ObRawExpr *> &rel_array)
+  : RelExprCheckerBase(), rel_array_(rel_array), init_size_(rel_array.count())
+{
+
+}
+
+int FastUdtExprChecker::add_expr(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransformUtils::extract_udt_exprs(expr, rel_array_))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  }
+  return ret;
+}
 
 //used for C module
 bool check_stack_overflow_c()

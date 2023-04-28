@@ -191,6 +191,8 @@ public:
       return uval;
     }
 
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
     bool operator== (const ObRangeWrapper &other) const
     {
       bool is_equal = false;

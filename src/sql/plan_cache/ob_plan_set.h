@@ -78,9 +78,14 @@ struct HashKey
   {
     uint64_t hash_ret = 0;
     for (int64_t i = 0; i < rowkey_.count(); ++i) {
-      hash_ret = rowkey_.at(i).hash(hash_ret);
+      rowkey_.at(i).hash(hash_ret, hash_ret);
     }
     return hash_ret;
+  }
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
   }
   void reuse() { rowkey_.reuse(); }
   common::ObSEArray<ObObj, 4> rowkey_;

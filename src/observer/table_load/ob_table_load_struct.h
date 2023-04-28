@@ -83,6 +83,11 @@ public:
   {
     return common::murmurhash(this, sizeof(*this), 0);
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const ObTableLoadUniqueKey &other) const
   {
     return (table_id_ != other.table_id_ ? table_id_ - other.table_id_ : task_id_ - other.task_id_);

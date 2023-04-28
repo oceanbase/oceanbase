@@ -432,12 +432,12 @@ int ObInfoSchemaColumnsTable::get_type_str(
     const ObAccuracy &accuracy,
     const common::ObIArray<ObString> &type_info,
     const int16_t default_length_semantics, int64_t &pos,
-    const common::ObGeoType geo_type)
+    const uint64_t sub_type)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type))) {
+                              column_type_str_, column_type_str_len_, pos, sub_type))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
       void *tmp_ptr = NULL;
       if (OB_UNLIKELY(NULL == (tmp_ptr = static_cast<char *>(allocator_->realloc(
@@ -458,7 +458,7 @@ int ObInfoSchemaColumnsTable::get_type_str(
         column_type_str_ = static_cast<char *>(tmp_ptr);
         column_type_str_len_ = OB_MAX_EXTENDED_TYPE_INFO_LENGTH;
         ret = ob_sql_type_str(obj_meta, accuracy, type_info, default_length_semantics,
-                              column_type_str_, column_type_str_len_, pos, geo_type);
+                              column_type_str_, column_type_str_len_, pos, sub_type);
       }
     }
   }
@@ -687,12 +687,13 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
         case COLUMN_TYPE: {
             int64_t pos = 0;
             const ObLengthSemantics default_length_semantics = session_->get_local_nls_length_semantics();
+            const uint64_t sub_type = column_schema->is_xmltype() ?
+                                      column_schema->get_sub_data_type() : static_cast<uint64_t>(column_schema->get_geo_type());
             if (OB_FAIL(get_type_str(column_schema->get_meta_type(),
                                      column_schema->get_accuracy(),
                                      column_schema->get_extended_type_info(),
                                      default_length_semantics,
-                                     pos,
-                                     column_schema->get_geo_type()))) {
+                                     pos, sub_type))) {
               SERVER_LOG(WARN,"fail to get column type str",K(ret), K(column_schema->get_data_type()));
             } else if (column_schema->is_zero_fill()) {
              // zerofill, only for int, float, decimal

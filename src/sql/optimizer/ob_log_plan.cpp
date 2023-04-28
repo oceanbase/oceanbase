@@ -11341,7 +11341,8 @@ int ObLogPlan::generate_tsc_replace_exprs_pair(ObLogTableScan *op)
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_access_exprs().count(); ++i) {
       ObRawExpr *expr = op->get_access_exprs().at(i);
       if (expr->is_column_ref_expr() &&
-          static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
+          static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column() &&
+          !static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
         ObRawExpr *&dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                     expr)->get_dependant_expr();
         if (dependant_expr->is_const_expr()) {

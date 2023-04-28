@@ -31,6 +31,7 @@ struct PlanKey
     value =  murmurhash(&addr_, sizeof(addr_), value);
     return value;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const PlanKey &other) const { return (plan_id_ == other.plan_id_) && (addr_ == other.addr_); }
   int64_t plan_id_;
   common::ObAddr addr_;

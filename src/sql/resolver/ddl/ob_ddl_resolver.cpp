@@ -140,6 +140,10 @@ int ObDDLResolver::check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column
     ret = OB_ERR_WRONG_KEY_COLUMN;
     LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
     SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(ret), K(column_schema));
+  } else if (ob_is_extend(column_schema.get_data_type()) || ob_is_user_defined_sql_type(column_schema.get_data_type())) {
+    ret = OB_ERR_WRONG_KEY_COLUMN;
+    LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
+    SQL_RESV_LOG(WARN, "udt column can't be primary key", K(ret), K(column_schema));
   } else if (ob_is_json_tc(column_schema.get_data_type())) {
     ret = OB_ERR_JSON_USED_AS_KEY;
     LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column_schema.get_column_name_str().length(), column_schema.get_column_name_str().ptr());
@@ -732,6 +736,10 @@ int ObDDLResolver::add_storing_column(const ObString &column_name,
         ret = OB_ERR_BAD_FIELD_ERROR;
         LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(), table_name_.length(), table_name_.ptr());
       } else if (ob_is_text_tc(column_schema->get_data_type())) {
+        ret = OB_ERR_WRONG_KEY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+      } else if (ob_is_extend(column_schema->get_data_type())
+                 || ob_is_user_defined_sql_type(column_schema->get_data_type())) {
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
       } else if (ob_is_json_tc(column_schema->get_data_type())) {
@@ -2220,12 +2228,34 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
                                             db_id));
         }
         OZ (schema_checker_->get_udt_id(session_info_->get_effective_tenant_id(), db_id, OB_INVALID_ID,
-                       ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_), udt_id));
+                      ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_), udt_id));
+          if (OB_SUCC(ret) && udt_id == OB_INVALID_ID) {
+            if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("tenant version is less than 4.2, udt type not supported", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.2, udt type");
+            } else if (OB_FAIL(schema_checker_->get_sys_udt_id(ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_),
+                                                              udt_id))) {
+              LOG_WARN("failed to get sys udt id", K(ret));
+            } else if (udt_id == OB_INVALID_ID) {
+              ret = OB_ERR_INVALID_DATATYPE;
+              SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
+            }
+        }
+
         if (OB_SUCC(ret)) {
           data_type.set_udt_id(udt_id);
+          column.set_sub_data_type(udt_id);
+          if (udt_id == T_OBJ_XML) {
+            data_type.set_obj_type(ObUserDefinedSQLType);
+            data_type.set_collation_type(CS_TYPE_BINARY);
+            // udt column is varbinary used for null bitmap
+          }
         }
       }
-    } else {
+    }
+
+    if (OB_SUCC(ret)) {
       column.set_meta_type(data_type.get_meta_type());
       column.set_accuracy(data_type.get_accuracy());
       column.set_charset_type(data_type.get_charset_type());
@@ -2675,6 +2705,10 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(column), K(ret));
+        } else if (ob_is_extend(column.get_data_type()) || ob_is_user_defined_sql_type(column.get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "udt column can't be primary key", K(column), K(ret));
         } else if (ob_is_json_tc(column.get_data_type())) {
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -2705,6 +2739,10 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ret = OB_ERR_WRONG_KEY_COLUMN;
           LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
           SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
+        } else if (ob_is_extend(column.get_data_type()) || ob_is_user_defined_sql_type(column.get_data_type())) {
+          ret = OB_ERR_WRONG_KEY_COLUMN;
+          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "UDT column can't be unique key", K(column), K(ret));
         } else if (ob_is_json_tc(column.get_data_type())) {
           ret = OB_ERR_JSON_USED_AS_KEY;
           LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -3306,6 +3344,10 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
         SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be primary key", K(column), K(ret));
+      } else if (ob_is_extend(column.get_data_type()) || ob_is_user_defined_sql_type(column.get_data_type())) {
+        ret = OB_ERR_WRONG_KEY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+        SQL_RESV_LOG(WARN, "UDT column can't be primary key", K(column), K(ret));
       } else if (ob_is_json_tc(column.get_data_type())) {
         ret = OB_ERR_JSON_USED_AS_KEY;
         LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -3332,6 +3374,10 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
         ret = OB_ERR_WRONG_KEY_COLUMN;
         LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
         SQL_RESV_LOG(WARN, "BLOB, TEXT column can't be unique key", K(column), K(ret));
+      } else if (ob_is_extend(column.get_data_type()) || ob_is_user_defined_sql_type(column.get_data_type())) {
+        ret = OB_ERR_WRONG_KEY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column.get_column_name_str().length(), column.get_column_name_str().ptr());
+        SQL_RESV_LOG(WARN, "UDT column can't be unique key", K(column), K(ret));
       } else if (ob_is_json_tc(column.get_data_type())) {
         ret = OB_ERR_JSON_USED_AS_KEY;
         LOG_USER_ERROR(OB_ERR_JSON_USED_AS_KEY, column.get_column_name_str().length(), column.get_column_name_str().ptr());
@@ -4778,7 +4824,8 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
                                        ObIArray<ObString> &gen_col_expr_arr,
                                        const ObSQLMode sql_mode,
                                        bool allow_sequence,
-                                       ObSchemaChecker *schema_checker)
+                                       ObSchemaChecker *schema_checker,
+                                       share::schema::ObColumnSchemaV2 *hidden_col)
 {
   int ret = OB_SUCCESS;
   ObArray<ObColumnSchemaV2 *> dummy_array;
@@ -4864,11 +4911,17 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     const ObObj *tmp_res_obj = NULL;
     common::ObObj tmp_dest_obj_null;
     const bool is_strict = true;//oracle mode
-    const ObObjType data_type = column.get_data_type();
+
+    ObObjType data_type = column.get_data_type();
     const ObAccuracy &accuracy = column.get_accuracy();
-    const ObCollationType collation_type = column.get_collation_type();
+    ObCollationType collation_type = column.get_collation_type();
+    if (lib::is_oracle_mode() && column.is_xmltype()) {
+      // use hidden column type, treat as clob, wil transform to blob in _makexmlbinary
+      data_type = ObLongTextType;
+      collation_type = CS_TYPE_UTF8MB4_BIN;
+    }
     const ObDataTypeCastParams dtc_params = session_info->get_dtc_params();
-    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, column.get_collation_type());
+    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
     } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator,
@@ -4879,6 +4932,12 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
         params.session_info_, expr, tmp_default_value, params.param_list_, allocator))) {
       LOG_WARN("Failed to get simple expr value", K(ret));
+    } else if (lib::is_oracle_mode() && column.is_xmltype() &&
+               expr->get_result_type().is_xml_sql_type()) {
+      data_type = ObUserDefinedSQLType;
+    }
+
+    if (OB_FAIL(ret)) {
     } else if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
       LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
     } else if (OB_ISNULL(tmp_res_obj)) {
@@ -5012,11 +5071,18 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
           params.session_info_, expr, default_value, params.param_list_, allocator))) {
         LOG_WARN("Failed to get simple expr value", K(ret));
       } else {
+        ObObjType data_type = column.get_data_type();
+        ObCollationType collation_type = column.get_collation_type();
+        if (lib::is_oracle_mode() && column.is_xmltype()) {
+          // use hidden column type, treat as clob, wil transform to blob in _makexmlbinary
+          data_type = ObLongTextType;
+          collation_type = CS_TYPE_UTF8MB4_BIN;
+        }
         ObObj dest_obj;
         const ObDataTypeCastParams dtc_params(tz_info_wrap.get_time_zone_info(), nls_formats, CS_TYPE_INVALID, CS_TYPE_INVALID, CS_TYPE_UTF8MB4_GENERAL_CI);
-        ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, column.get_collation_type());
-        if(OB_FAIL(ObObjCaster::to_type(column.get_data_type(), cast_ctx, default_value, dest_obj))) {
-          LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", column.get_data_type(), K(default_value), K(ret));
+        ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+        if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
+          LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", data_type, K(default_value), K(ret));
         } else {
           // remove lob header for lob
           if (dest_obj.has_lob_header()) {

@@ -1494,7 +1494,7 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
         // 但是在mysql模式下，字符串开头的某些转义字符不会显示，ObResultSet::make_final_field_name会处理
         // oracle模式下，需要在加上单引号
         // 比如MySQL模式：select '\'hello' from dual,列名显示'hello
-        //                seleet '\thello' from dual,列名显示hello (去掉了左边的转义字符)
+        //                select '\thello' from dual,列名显示hello (去掉了左边的转义字符)
         // Oracle模式：select 'hello' from dual, 列名显示 'hello', (带引号)
         //             select '''hello' from dual, 列名显示 ''hello'
         // 3.

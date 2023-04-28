@@ -4454,7 +4454,9 @@ int ObHashJoinOp::calc_hash_value(
       LOG_WARN("failed to eval datum", K(ret));
     } else {
       need_null_random |= (datum->is_null() && !MY_SPEC.is_ns_equal_cond_.at(idx));
-      hash_value = hash_funcs.at(idx).hash_func_(*datum, hash_value);
+      if (OB_FAIL(hash_funcs.at(idx).hash_func_(*datum, hash_value, hash_value))) {
+        LOG_WARN("failed to do hash", K(ret));
+      }
     }
   }
   need_null_random &= (MY_SPEC.join_type_ != LEFT_ANTI_JOIN && MY_SPEC.join_type_ != RIGHT_ANTI_JOIN);
@@ -4855,18 +4857,27 @@ int ObHashJoinOp::read_hashrow_batch()
       int64_t batch_idx = right_selector_[i];
       batch_info_guard.set_batch_idx(batch_idx);
       bool matched = false;
+      int cmp_ret = 0;
       ObHashJoinStoredJoinRow *tuple = cur_tuples_[i];
       while (!matched && NULL != tuple && OB_SUCC(ret)) {
         ++hash_link_cnt_;
         ++hash_equal_cnt_;
         convert_exprs_batch_one(tuple, left_->get_spec().output_);
         matched = true;
-        FOREACH_CNT_X(e, MY_SPEC.equal_join_conds_, matched) {
+        FOREACH_CNT_X(e, MY_SPEC.equal_join_conds_, (matched && (OB_SUCCESS == ret))) {
           // we check children's output_ are consistant with join key in cg,
           // so we can locate datums without eval again
           ObDatum &l = (*e)->args_[0]->locate_batch_datums(eval_ctx_)[batch_idx];
           ObDatum &r = (*e)->args_[1]->locate_batch_datums(eval_ctx_)[batch_idx];
-          matched = !l.is_null() && 0 == (*e)->args_[0]->basic_funcs_->null_first_cmp_(l, r);
+          if (!l.is_null()) {
+            if (OB_FAIL((*e)->args_[0]->basic_funcs_->null_first_cmp_(l, r, cmp_ret))) {
+              LOG_WARN("failed to compare", K(ret));
+            } else {
+              matched = (cmp_ret == 0);
+            }
+          } else {
+            matched = false;
+          }
         }
         if (!matched) {
           tuple = tuple->get_next();

@@ -561,6 +561,39 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   return ret;
 }
 
+int ObExprOutputPack::process_sql_udt_results(common::ObObj& value,
+                                              common::ObIAllocator &alloc,
+                                              const ObSQLSessionInfo &my_session)
+{
+  int ret = OB_SUCCESS;
+  if (!value.is_xml_sql_type()) {
+    ret = OB_NOT_SUPPORTED;
+    OB_LOG(WARN, "not support udt type", K(ret), K(value.get_type()), K(value.get_udt_subschema_id()));
+  } else {
+    bool is_client_support_binary_xml = false; // client receive xml as json, like json
+    if (value.is_null() || value.is_nop_value()) {
+      // do nothing
+    } else if (is_client_support_binary_xml) {
+      // convert to udt client format
+    } else {
+      ObString data;
+      ObLobLocatorV2 loc(value.get_string(), true);
+      if (loc.is_null()) {
+      } else {
+        ObTextStringIter instr_iter(ObLongTextType, CS_TYPE_BINARY, value.get_string(), true);
+        if (OB_FAIL(instr_iter.init(0, &my_session, &alloc))) {
+          LOG_WARN("init lob str inter failed", K(ret), K(value));
+        } else if (OB_FAIL(instr_iter.get_full_data(data))) {
+          LOG_WARN("get xml full data failed", K(value));
+        } else {
+          value.set_udt_value(data.ptr(), data.length());
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExprOutputPack::convert_string_charset(const common::ObString &in_str,
                                              const ObCollationType in_cs_type,
                                              const ObCollationType out_cs_type,
@@ -641,10 +674,12 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
                   && OB_FAIL(convert_text_value_charset(obj, expr.obj_meta_.has_lob_header(), alloc, *session))) {
           LOG_WARN("convert text obj charset failed", K(ret));
         }
-        if (OB_SUCC(ret)
-            && (obj.is_lob() || obj.is_lob_locator() || obj.is_json())
-            && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
+        if (OB_FAIL(ret)) {
+        } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json())
+                   && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
+        } else if (obj.is_user_defined_sql_type() && OB_FAIL(process_sql_udt_results(obj, alloc, *session))) {
+          LOG_WARN("convert udt to client format failed", K(ret), K(obj.get_udt_subschema_id()));
         }
       }
     }

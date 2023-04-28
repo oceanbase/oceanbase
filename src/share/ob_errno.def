@@ -1109,7 +1109,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED, -5486, -1, "42000", "
 DEFINE_ORACLE_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL, -5487, -1, "42000", "path expression not a literal", 40454, "path expression not a literal");
 DEFINE_PLS_ERROR_EXT(OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL, -5488, -1, "HY000", "invalid argument for JSON call", "invalid argument for %s call", 185, "invalid argument for JSON call", "invalid argument for %s call");
 DEFINE_ERROR(OB_ERR_SCHEMA_HISTORY_EMPTY, -5489, -1, "HY000", "Schema history is empty");
-DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list"));
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list");
 DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART, -5491, -1, "42000", "DEFAULT partition must be last partition specified", 14318, "DEFAULT partition must be last partition specified");
 DEFINE_ERROR_EXT(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, -5492, ER_CHARACTER_SET_MISMATCH, "HY000", "Character set cannot be used in conjunction with binary collations in function call", "Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call.");
 
@@ -1873,6 +1873,18 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_EMPTY, -7285, ER_SRS_NOT_FOUND, "SR001", 
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY, -7286, ER_INVALID_OPTION_KEY, "22023", "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.", 600, "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_VALUE, -7287, ER_INVALID_OPTION_VALUE, "22023", "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.", 600, "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_GEOMETRY_TYPE, -7288, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).", 600, "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_INVALID_XML_DATATYPE, -7402, -1, "22000", "Invalid data type for the operation", "inconsistent datatypes: expected %s got %s", 932, "inconsistent datatypes", "inconsistent datatypes: expected %s got %s");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_MISSING_COMMA, -7403, -1, "42000", "missing comma", 917, "missing comma");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, -1, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
+DEFINE_ORACLE_ERROR(OB_ERR_EXTRACTVALUE_MULTI_NODES, -7405, -1, "42000", "EXTRACTVALUE cannot extract values of multiple nodes", 19025, "EXTRACTVALUE cannot extract values of multiple nodes");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_FRAMENT_CONVERT, -7406, -1, "42000", "Cannot convert XML fragment to the required datatype", 19012, "Cannot convert XML fragment to the required datatype");
+DEFINE_ORACLE_ERROR(OB_INVALID_PRINT_OPTION, -7407, -1, "42000", "The specified printing option is invalid", 31188, "The specified printing option is invalid");
+DEFINE_ORACLE_ERROR(OB_XML_CHAR_LEN_TOO_SMALL, -7408, -1, "42000", "character length specified for XMLSerialize is too small.", 19044, "character length specified for XMLSerialize is too small.");
+DEFINE_ORACLE_ERROR(OB_XPATH_EXPRESSION_UNSUPPORTED, -7409, -1, "42000", "Given XPATH expression not supported", 31012, "Given XPATH expression not supported");
+DEFINE_ORACLE_ERROR(OB_EXTRACTVALUE_NOT_LEAF_NODE, -7410, -1, "42000", "EXTRACTVALUE can only retrieve value of leaf node", 19026, "EXTRACTVALUE can only retrieve value of leaf node");
+DEFINE_ORACLE_ERROR(OB_XML_INSERT_FRAGMENT, -7411, -1, "42000", "Cannot insert XML fragments", 19010, "Cannot insert XML fragments");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_ORDER_MAP_SQL, -7412, -1, "42000", "cannot ORDER objects without MAP or ORDER method", 22950, "cannot ORDER objects without MAP or ORDER method");
+
 
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999

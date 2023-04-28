@@ -1391,6 +1391,17 @@ constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
 constexpr int OB_LS_TRANSFER_SCN_TOO_SMALL = -7112;
 constexpr int OB_TABLET_TRANSFER_SEQ_NOT_MATCH = -7113;
 constexpr int OB_TRANSFER_DETECT_ACTIVE_TRANS = -7114;
+constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
+constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
+constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
+constexpr int OB_ERR_EXTRACTVALUE_MULTI_NODES = -7405;
+constexpr int OB_ERR_XML_FRAMENT_CONVERT = -7406;
+constexpr int OB_INVALID_PRINT_OPTION = -7407;
+constexpr int OB_XML_CHAR_LEN_TOO_SMALL = -7408;
+constexpr int OB_XPATH_EXPRESSION_UNSUPPORTED = -7409;
+constexpr int OB_EXTRACTVALUE_NOT_LEAF_NODE = -7410;
+constexpr int OB_XML_INSERT_FRAGMENT = -7411;
+constexpr int OB_ERR_NO_ORDER_MAP_SQL = -7412;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -3427,6 +3438,17 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_KEY__USER_ERROR_MSG "Invalid option key \'%.192s\' in function %.192s."
 #define OB_ERR_INVALID_OPTION_VALUE__USER_ERROR_MSG "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__USER_ERROR_MSG "Unknown WKB type(%d)! Full WKB type number was (%d)."
+#define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
+#define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
+#define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "invalid xpath expression"
+#define OB_ERR_EXTRACTVALUE_MULTI_NODES__USER_ERROR_MSG "EXTRACTVALUE cannot extract values of multiple nodes"
+#define OB_ERR_XML_FRAMENT_CONVERT__USER_ERROR_MSG "Cannot convert XML fragment to the required datatype"
+#define OB_INVALID_PRINT_OPTION__USER_ERROR_MSG "The specified printing option is invalid"
+#define OB_XML_CHAR_LEN_TOO_SMALL__USER_ERROR_MSG "character length specified for XMLSerialize is too small."
+#define OB_XPATH_EXPRESSION_UNSUPPORTED__USER_ERROR_MSG "Given XPATH expression not supported"
+#define OB_EXTRACTVALUE_NOT_LEAF_NODE__USER_ERROR_MSG "EXTRACTVALUE can only retrieve value of leaf node"
+#define OB_XML_INSERT_FRAGMENT__USER_ERROR_MSG "Cannot insert XML fragments"
+#define OB_ERR_NO_ORDER_MAP_SQL__USER_ERROR_MSG "cannot ORDER objects without MAP or ORDER method"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -5485,6 +5507,17 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_KEY__ORA_USER_ERROR_MSG "ORA-00600: Invalid option key \'%.192s\' in function %.192s."
 #define OB_ERR_INVALID_OPTION_VALUE__ORA_USER_ERROR_MSG "ORA-00600: Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__ORA_USER_ERROR_MSG "ORA-00600: Unknown WKB type(%d)! Full WKB type number was (%d)."
+#define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
+#define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
+#define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
+#define OB_ERR_EXTRACTVALUE_MULTI_NODES__ORA_USER_ERROR_MSG "ORA-19025: EXTRACTVALUE cannot extract values of multiple nodes"
+#define OB_ERR_XML_FRAMENT_CONVERT__ORA_USER_ERROR_MSG "ORA-19012: Cannot convert XML fragment to the required datatype"
+#define OB_INVALID_PRINT_OPTION__ORA_USER_ERROR_MSG "ORA-31188: The specified printing option is invalid"
+#define OB_XML_CHAR_LEN_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-19044: character length specified for XMLSerialize is too small."
+#define OB_XPATH_EXPRESSION_UNSUPPORTED__ORA_USER_ERROR_MSG "ORA-31012: Given XPATH expression not supported"
+#define OB_EXTRACTVALUE_NOT_LEAF_NODE__ORA_USER_ERROR_MSG "ORA-19026: EXTRACTVALUE can only retrieve value of leaf node"
+#define OB_XML_INSERT_FRAGMENT__ORA_USER_ERROR_MSG "ORA-19010: Cannot insert XML fragments"
+#define OB_ERR_NO_ORDER_MAP_SQL__ORA_USER_ERROR_MSG "ORA-22950: cannot ORDER objects without MAP or ORDER method"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -5841,7 +5874,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2054];
+extern int g_all_ob_errnos[2065];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

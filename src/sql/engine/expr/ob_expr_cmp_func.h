@@ -26,7 +26,7 @@ struct ObDatum;
 }
 namespace sql
 {
-typedef int (*DatumCmpFunc)(const common::ObDatum &datum1, const common::ObDatum &datum2);
+typedef int (*DatumCmpFunc)(const common::ObDatum &datum1, const common::ObDatum &datum2, int &cmp_ret);
 class ObExprCmpFuncsHelper
 {
 public:

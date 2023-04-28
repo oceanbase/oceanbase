@@ -524,12 +524,18 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                     && OB_FAIL(ObQueryDriver::convert_text_value_charset(value, charset_type, allocator, &session))) {
           LOG_WARN("convert text value charset failed", K(ret));
         }
-        if (OB_SUCC(ret) && OB_FAIL(ObQueryDriver::process_lob_locator_results(value,
+        if (OB_FAIL(ret)) {
+        } else if(OB_FAIL(ObQueryDriver::process_lob_locator_results(value,
                                     session.is_client_use_lob_locator(),
                                     session.is_client_support_lob_locatorv2(),
                                     &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
+        } else if (value.is_user_defined_sql_type()
+                   && OB_FAIL(ObQueryDriver::process_sql_udt_results(value,
+                                    &allocator,
+                                    &session))) {
+          LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
         }
       }
     }

@@ -237,6 +237,7 @@ public:
     hash_value_(0) {}
   uint64_t hash() const
   { return hash_value_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   uint64_t inner_hash() const
   {
     uint64_t hash_val = 0;

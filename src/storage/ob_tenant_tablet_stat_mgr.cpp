@@ -69,6 +69,12 @@ uint64_t ObTabletStatKey::hash() const
   return hash_val;
 }
 
+int ObTabletStatKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 bool ObTabletStatKey::is_valid() const
 {
   return ls_id_.is_valid() && tablet_id_.is_valid();

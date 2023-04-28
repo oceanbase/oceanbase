@@ -350,6 +350,8 @@ public:
                  const ObString &database_name,
                  const ObString &udt_name,
                  uint64_t &udt_id);
+  int get_sys_udt_id(const ObString &udt_name,
+                     uint64_t &udt_id);
   int get_routine_id(const uint64_t tenant_id,
                      const ObString &database_name,
                      const ObString &routine_name,

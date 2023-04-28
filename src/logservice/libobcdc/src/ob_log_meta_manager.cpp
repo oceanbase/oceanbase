@@ -913,6 +913,8 @@ int ObLogMetaManager::check_column_(
   // won't filter by default
   is_user_column = true;
   const uint64_t column_id = column_schema.get_column_id();
+  const uint64_t udt_set_id = column_schema.get_udt_set_id();
+  const uint64_t sub_data_type = column_schema.get_sub_data_type();
   const bool is_heap_table = table_schema.is_heap_table();
   const bool is_invisible_column = column_schema.is_invisible_column();
   const bool is_hidden_column = column_schema.is_hidden();
@@ -935,6 +937,8 @@ int ObLogMetaManager::check_column_(
       "table_id", table_schema.get_table_id(),
       K(is_heap_table),
       K(column_id),
+      K(udt_set_id),
+      K(sub_data_type),
       "column_name", column_schema.get_column_name(),
       K(is_user_column),
       K(is_heap_table_pk_increment_column),
@@ -983,6 +987,11 @@ int ObLogMetaManager::set_column_meta_(
         } else if (ObSetType == col_type) {
           mysql_type = obmysql::MYSQL_TYPE_SET;
         }
+      } else if (ObNumberType == col_type || ObUNumberType == col_type) {
+        col_meta->setScale(column_schema.get_data_scale());
+        col_meta->setPrecision(column_schema.get_data_precision());
+      } else if (column_schema.is_xmltype()) {
+        mysql_type = obmysql::MYSQL_TYPE_ORA_XML;
       }
 
       col_meta->setScale(column_schema.get_data_scale());
@@ -1006,6 +1015,10 @@ int ObLogMetaManager::set_column_meta_(
       col_meta->setIsPK(column_schema.is_original_rowkey_column());
       col_meta->setNotNull(! column_schema.is_nullable());
       SET_ENCODING(col_meta, column_schema.get_charset_type());
+
+      if (column_schema.is_xmltype()) {
+        SET_ENCODING(col_meta, CS_TYPE_UTF8MB4_GENERAL_CI);
+      }
 
       // mark if is generate column
       // default value of IColMeta::isGenerated is false

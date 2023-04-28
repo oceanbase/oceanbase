@@ -42,6 +42,7 @@ public:
     val = common::murmurhash(&dfo_id_, sizeof(dfo_id_), val);
     return val;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   bool operator== (const ObDtlDfoKey other) const
   {

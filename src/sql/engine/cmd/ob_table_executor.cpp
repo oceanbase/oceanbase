@@ -155,7 +155,8 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column schema", K(ret));
-      } else if (column_schema->get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM) {
+      } else if (column_schema->get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM ||
+                 column_schema->is_udt_hidden_column()) {
         // do nothing
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1, (0 == used_column_count)? "(": ", "))) {
         LOG_WARN("failed to print insert into string", K(ret), K(i));

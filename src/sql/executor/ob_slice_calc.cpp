@@ -707,8 +707,8 @@ int ObHashSliceIdCalc::calc_slice_idx(ObEvalCtx &eval_ctx, int64_t slice_size, i
       round_robin_idx_++;
       found_null = true;
       break;
-    } else {
-      hash_val = hash_funcs_->at(i).hash_func_(*datum, hash_val);
+    } else if (OB_FAIL(hash_funcs_->at(i).hash_func_(*datum, hash_val, hash_val))) {
+      LOG_WARN("failed to do hash", K(ret));
     }
   }
   if (OB_SUCC(ret) && !found_null) {
@@ -733,8 +733,8 @@ int ObHashSliceIdCalc::calc_hash_value(ObEvalCtx &eval_ctx, uint64_t &hash_val)
     const ObExpr* dist_expr = hash_dist_exprs_->at(i);
     if (OB_FAIL(dist_expr->eval(eval_ctx, datum))) {
       LOG_WARN("failed to eval datum", K(ret));
-    } else {
-      hash_val = hash_funcs_->at(i).hash_func_(*datum, hash_val);
+    } else if (OB_FAIL(hash_funcs_->at(i).hash_func_(*datum, hash_val, hash_val))) {
+      LOG_WARN("failed to do hash", K(ret));
     }
   }
   return ret;
@@ -950,9 +950,10 @@ bool ObSlaveMapPkeyRangeIdxCalc::Compare::operator()(
   } else {
     int cmp = 0;
     const int64_t cnt = sort_cmp_funs_->count();
-    for (int64_t i = 0; 0 == cmp && i < cnt; i++) {
-      cmp = sort_cmp_funs_->at(i).cmp_func_(l[i], r[i]);
-      if (cmp < 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < cnt; i++) {
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(l[i], r[i], cmp))) {
+        LOG_WARN("do cmp failed", K(ret), K(i), K(l), K(r));
+      } else if (cmp < 0) {
         less = sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
         less = !sort_collations_->at(i).is_ascending_;
@@ -1264,9 +1265,10 @@ bool ObRangeSliceIdCalc::Compare::operator()(
   } else {
     int cmp = 0;
     const int64_t cnt = sort_cmp_funs_->count();
-    for (int64_t i = 0; 0 == cmp && i < cnt; i++) {
-      cmp = sort_cmp_funs_->at(i).cmp_func_(l[i], r[i]);
-      if (cmp < 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < cnt; i++) {
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(l[i], r[i], cmp))) {
+        LOG_WARN("do cmp failed", K(ret), K(i), K(l), K(r));
+      } else if (cmp < 0) {
         less = sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
         less = !sort_collations_->at(i).is_ascending_;

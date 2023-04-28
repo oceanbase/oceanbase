@@ -134,6 +134,7 @@ public:
   common::ObCollationType get_collation_type() const;
   const common::ObAccuracy &get_accuracy() const;
   uint64_t get_udt_id() const;
+  uint16_t get_subschema_id() const;
   uint32_t get_result_flag() const;
   inline ExprClass get_expr_class() {return expr_class_;}
   int get_length_for_meta_in_bytes(common::ObLength &length) const;
@@ -147,6 +148,7 @@ public:
   void set_precision(const int16_t precision);
   void set_length_semantics(const int16_t length_semantics);
   void set_udt_id(uint64_t id);
+  void set_subschema_id(const uint16_t subschema_id);
   void set_param(const common::ObObj &param);
   void set_length(common::ObLength length);
 
@@ -196,6 +198,12 @@ inline uint64_t ObIRawExpr::get_udt_id() const
 {
   return result_type_.get_udt_id();
 }
+
+inline uint16_t ObIRawExpr::get_subschema_id() const
+{
+  return result_type_.get_subschema_id();
+}
+
 inline uint32_t ObIRawExpr::get_result_flag() const
 {
   return   (result_type_.get_collation_type() == common::CS_TYPE_UTF8MB4_BIN ||
@@ -251,6 +259,12 @@ inline void ObIRawExpr::set_udt_id(uint64_t id)
 {
   result_type_.set_udt_id(id);
 }
+
+inline void ObIRawExpr::set_subschema_id(const uint16_t subschema_id)
+{
+  result_type_.set_subschema_id(subschema_id);
+}
+
 inline void ObIRawExpr::set_param(const common::ObObj &param)
 {
   result_type_.set_param(param);

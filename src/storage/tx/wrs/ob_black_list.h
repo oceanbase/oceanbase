@@ -84,6 +84,10 @@ public:
     hash_val = murmurhash(&ls_hash, sizeof(uint64_t), hash_val);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const ObBLKey &other) const
   {
     int ret = 0;

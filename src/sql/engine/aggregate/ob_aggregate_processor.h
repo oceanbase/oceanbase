@@ -874,6 +874,11 @@ private:
   int get_ora_json_objectagg_result(const ObAggrInfo &aggr_info,
                                    GroupConcatExtraResult *&extra,
                                    ObDatum &concat_result);
+
+  int get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
+                            GroupConcatExtraResult *&extra,
+                            ObDatum &concat_result);
+
   int check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString& key);
 
   OB_INLINE void clear_op_evaluated_flag()
@@ -897,9 +902,10 @@ private:
    * @param[out] has_null_cell 为true如果该行某列为NULL值
    * @return 计算出的hash值，如果传出的has_null_cell为true那么这个值无效
    */
-  static uint64_t llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
-                                      const ObIArray<ObExpr *> &param_exprs,
-                                      bool &has_null_cell);
+  static int llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
+                                 const ObIArray<ObExpr *> &param_exprs,
+                                 bool &has_null_cell,
+                                 uint64_t &hash_value);
   static int llc_add(ObDatum &result, const ObDatum &new_value);
   void set_expr_datum_null(ObExpr *expr);
 
@@ -1002,6 +1008,7 @@ OB_INLINE bool ObAggregateProcessor::need_extra_info(const ObExprOperatorType ex
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
     case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
     {
       need_extra = true;
       break;

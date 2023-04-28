@@ -151,6 +151,10 @@ extern ObRawExpr *USELESS_POINTER;
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
 
+#define IS_XML_OP(op) \
+  (((op) == T_FUN_SYS_XML_ELEMENT) \
+    || ((op) == T_FUN_SYS_XMLPARSE)) \
+
 #define IS_SPATIAL_EXPR(op) \
   ((op) >= T_FUN_SYS_ST_LONGITUDE && (op) <= T_FUN_SYS_ST_LATITUDE)
 
@@ -274,6 +278,8 @@ public:
     }
     return hash_val;
   }
+
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   void reuse()
   {
@@ -1295,6 +1301,12 @@ public:
     return seed;
   }
 
+  int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
+  }
+
   bool is_null_first() const {
     return NULLS_FIRST_ASC == order_type_ || NULLS_FIRST_DESC == order_type_;
   }
@@ -1757,6 +1769,11 @@ public:
     seed = hash_internal(seed);
     return seed;
   }
+  inline int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
+  }
   inline bool is_type_to_str_expr() const
   {
     return (T_FUN_ENUM_TO_STR == type_ || T_FUN_SET_TO_STR == type_
@@ -1825,6 +1842,7 @@ public:
   bool is_geo_expr() const;
   bool is_mysql_geo_expr() const;
   bool is_priv_geo_expr() const;
+  bool is_xml_expr() const;
   ObGeoType get_geo_expr_result_type() const;
   void set_is_deterministic(bool is_deterministic) { is_deterministic_ = is_deterministic; }
   int get_geo_cast_result_type(ObGeoType& geo_type) const;
@@ -2407,7 +2425,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2434,7 +2453,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2461,7 +2481,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2549,6 +2570,15 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   inline uint64_t get_srs_id() const { return srs_id_; };
   inline void set_srs_id(uint64_t srs_id) { srs_id_ = srs_id; };
+
+  inline uint64_t get_udt_set_id() const { return udt_set_id_; };
+  inline void set_udt_set_id(uint64_t udt_set_id) { udt_set_id_ = udt_set_id; };
+
+  bool is_xml_column() const { return ob_is_xml_pl_type(get_data_type(), get_udt_id())
+                                      || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
+
+  bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
+
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
@@ -2573,7 +2603,8 @@ public:
                        K_(is_unique_key_column),
                        K_(is_mul_key_column),
                        K_(is_strict_json_column),
-                       K_(srs_id));
+                       K_(srs_id),
+                       K_(udt_set_id));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
   uint64_t table_id_;
@@ -2602,6 +2633,7 @@ private:
     } srs_info_;
     uint64_t srs_id_;
   };
+  uint64_t udt_set_id_;
 };
 
 inline void ObColumnRefRawExpr::set_ref_id(uint64_t table_id, uint64_t column_id)

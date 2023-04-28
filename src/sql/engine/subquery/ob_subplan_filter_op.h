@@ -28,7 +28,7 @@ public:
   DatumRow() : elems_(NULL), cnt_(0) {}
   ~DatumRow() {}
   bool operator==(const DatumRow &other) const;
-  uint64_t hash(uint64_t seed=0) const;
+  int hash(uint64_t &hash_val, uint64_t seed=0) const;
   TO_STRING_KV(KP(elems_));
   ObDatum *elems_;
   int64_t cnt_;

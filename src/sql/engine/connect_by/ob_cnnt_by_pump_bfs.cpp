@@ -48,10 +48,12 @@ bool ObConnectByOpBFSPump::RowComparer::operator()(const PumpNode &pump_node1, c
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();
     int cmp = 0;
-    for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+    for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count() && ret_ == OB_SUCCESS; i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
-      cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
-      if (cmp < 0) {
+      ret_ = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp);
+      if (OB_SUCCESS != ret_) {
+        LOG_WARN_RET(ret_, "failed to compare", KPC(l), KPC(r), K(idx), K(ret_));
+      } else if (cmp < 0) {
         bret = sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
         bret = !sort_collations_->at(i).is_ascending_;
@@ -513,8 +515,8 @@ int ObConnectByOpBFSPump::check_cycle_path()
           LOG_WARN("failed to get prior expr", K(ret), K(i));
         } else if (OB_FAIL(expr->eval(*eval_ctx_, l_datum))) {
           LOG_WARN("failed to eval expr", K(ret), K(i));
-        } else {
-          cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, r_datums[i]);
+        } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, r_datums[i], cmp))) {
+          LOG_WARN("failed to compare", K(ret), K(i));
         }
 #ifndef NDEBUG
         ObObj obj;

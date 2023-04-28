@@ -45,8 +45,9 @@ public:
                         const common::ObObj *objs_stack,
                         int64_t param_num,
                         common::ObObj &result);
-  static uint64_t calc_hash_value_with_seed(const common::ObObj &obj,
-                                            int64_t seed);
+  static int calc_hash_value_with_seed(const common::ObObj &obj,
+                                        int64_t seed,
+                                        uint64_t &res);
   static int calc_value_for_oracle(const common::ObObj *objs_stack,
                                    int64_t param_num,
                                    common::ObObj &result);

@@ -56,17 +56,21 @@ class ObMicroBlockAggInfo {
 public:
   ObMicroBlockAggInfo(bool is_min, const ObDatumCmpFuncType cmp_fun, T &result_datum) :
       is_min_(is_min), cmp_fun_(cmp_fun), result_datum_(result_datum) {}
-  void update_min_or_max(const T& datum)
+  int update_min_or_max(const T& datum)
   {
+    int ret = OB_SUCCESS;
     if (datum.is_null()) {
     } else if (result_datum_.is_null()) {
       result_datum_ = datum;
     } else {
-      int cmp_ret = cmp_fun_(result_datum_, datum);
-      if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
+      int cmp_ret = 0;
+      if (OB_FAIL(cmp_fun_(result_datum_, datum, cmp_ret))) {
+        STORAGE_LOG(WARN, "failed to compare", K(ret));
+      } else if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
         result_datum_ = datum;
       }
     }
+    return ret;
   }
   TO_STRING_KV(K_(is_min), K_(cmp_fun), K_(result_datum));
 private:

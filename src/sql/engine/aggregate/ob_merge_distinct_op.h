@@ -48,14 +48,17 @@ public:
     {}
 
     int init(ObEvalCtx *eval_ctx, const common::ObIArray<ObCmpFunc> *cmp_funcs);
-    bool equal(const common::ObIArray<ObExpr*> *l,
-      const ObChunkDatumStore::StoredRow *r);
-    bool equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
+    int equal(const common::ObIArray<ObExpr*> *l,
+      const ObChunkDatumStore::StoredRow *r,
+      bool &equal);
+    int equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
                         const int64_t last_idx,
-                        const int64_t curr_idx);
-    bool equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
+                        const int64_t curr_idx,
+                        bool &equal);
+    int equal_in_batch(const common::ObIArray<ObExpr*> *set_exprs,
                         const ObChunkDatumStore::StoredRow *r,
-                        const int64_t curr_idx);
+                        const int64_t curr_idx,
+                        bool &equal);
     ObEvalCtx *eval_ctx_;
     const common::ObIArray<ObCmpFunc> *cmp_funcs_;
     int ret_code_;

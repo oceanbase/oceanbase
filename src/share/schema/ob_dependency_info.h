@@ -240,6 +240,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
     DEFINE_SETTER(dep_obj_type, ObObjectType)
 
     int64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     ObDependencyObjKey &operator=(const ObDependencyObjKey &other);
     int assign(const ObDependencyObjKey &other);
     bool operator==(const ObDependencyObjKey &other) const;

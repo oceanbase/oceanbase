@@ -71,6 +71,12 @@ uint64_t ObLSRouterKey::hash() const
   return hash_val;
 }
 
+int ObLSRouterKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 int ObLSRouterKey::deep_copy(char *buf,
     const int64_t buf_len,
     ObLSRouterKey *&key) const

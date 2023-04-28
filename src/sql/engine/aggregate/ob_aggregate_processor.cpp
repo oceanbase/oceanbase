@@ -28,7 +28,6 @@
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
-
 namespace oceanbase
 {
 using namespace common;
@@ -609,7 +608,8 @@ int ObAggregateProcessor::init()
                             T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
                             T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
                             T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
-                            T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type());
+                            T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
+                            T_FUN_ORA_XMLAGG == aggr_info.get_expr_type());
       has_order_by_ |= aggr_info.has_order_by_;
       if (!has_extra_) {
         has_extra_ |= aggr_info.has_distinct_;
@@ -1582,7 +1582,9 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_JSON_ARRAYAGG:
         case T_FUN_ORA_JSON_ARRAYAGG:
         case T_FUN_JSON_OBJECTAGG:
-        case T_FUN_ORA_JSON_OBJECTAGG: {
+        case T_FUN_ORA_JSON_OBJECTAGG:
+        case T_FUN_ORA_XMLAGG:
+        {
           void *tmp_buf = NULL;
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1973,7 +1975,9 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_JSON_ARRAYAGG: 
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
       if (OB_ISNULL(aggr_extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))
@@ -2131,10 +2135,13 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         LOG_WARN("llc_init failed");
       } else {
         bool has_null_cell = false;
-        uint64_t hash_value = llc_calc_hash_value(stored_row,
-                                                  aggr_info.param_exprs_,
-                                                  has_null_cell);
-        if (has_null_cell) {
+        uint64_t hash_value = 0;
+        if (OB_FAIL(llc_calc_hash_value(stored_row,
+                                        aggr_info.param_exprs_,
+                                        has_null_cell,
+                                        hash_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (has_null_cell) {
           /*do nothing*/
         } else {
           ret = llc_add_value(hash_value, llc_bitmap.get_string());
@@ -2161,7 +2168,9 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2381,7 +2390,9 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2502,6 +2513,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("curr_row_results count is not 1", K(stored_row));
+      } else if (ob_is_user_defined_sql_type(aggr_info.expr_->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (!stored_row.cells()[0].is_null()) {
         ret = max_calc(aggr_cell, aggr_cell.get_iter_result(),
                        stored_row.cells()[0],
@@ -2514,6 +2529,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("curr_row_results count is not 1", K(stored_row));
+      } else if (ob_is_user_defined_sql_type(aggr_info.expr_->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (!stored_row.cells()[0].is_null()) {
         ret = min_calc(aggr_cell, aggr_cell.get_iter_result(),
                        stored_row.cells()[0],
@@ -2559,10 +2578,13 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: {
       bool has_null_cell = false;
       ObDatum *llc_bitmap = &aggr_cell.get_iter_result();
-      uint64_t hash_value = llc_calc_hash_value(stored_row,
-                                                aggr_info.param_exprs_,
-                                                has_null_cell);
-      if (has_null_cell) {
+      uint64_t hash_value = 0;
+      if (OB_FAIL(llc_calc_hash_value(stored_row,
+                                      aggr_info.param_exprs_,
+                                      has_null_cell,
+                                      hash_value))) {
+        LOG_WARN("fail to do hash", K(ret));
+      } else if (has_null_cell) {
        /*do nothing*/
       } else {
         ret = llc_add_value(hash_value, llc_bitmap->get_string());
@@ -2597,7 +2619,9 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2886,7 +2910,14 @@ int ObAggregateProcessor::collect_aggr_result(
       }
       break;
     }
-
+    case T_FUN_ORA_XMLAGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_ora_xmlagg_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get xmlagg result", K(ret));
+      } else {
+      }
+      break;
+    }
     case T_FUN_JSON_ARRAYAGG: {
       GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(get_json_arrayagg_result(aggr_info, extra, result))) {
@@ -3727,7 +3758,10 @@ int ObAggregateProcessor::max_calc(AggrCell &aggr_cell, ObDatum &base, const ObD
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cmp_func is NULL", K(ret));
   } else if (!base.is_null() && !other.is_null()) {
-    if (cmp_func(base, other) < 0) {
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_func(base, other, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (cmp_ret < 0) {
       ret = clone_aggr_cell(aggr_cell, other, is_number);
       removal_info_.is_index_change_ = true;
     }
@@ -3750,7 +3784,10 @@ int ObAggregateProcessor::min_calc(AggrCell &aggr_cell, ObDatum &base, const ObD
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cmp_func is NULL", K(ret));
   } else if (!base.is_null() && !other.is_null()) {
-    if (cmp_func(base, other) > 0) {
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_func(base, other, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (cmp_ret > 0) {
       ret = clone_aggr_cell(aggr_cell, other, is_number);
       removal_info_.is_index_change_ = true;
     }
@@ -3781,19 +3818,26 @@ int ObAggregateProcessor::max_calc_batch(
   } else {
     ObDatum *max = nullptr;
     uint16_t i = 0; // row num in a batch
-    for (auto it = selector.begin(); it < selector.end(); selector.next(it)) {
+    int cmp_ret = 0;
+    for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
       if (max && !src.at(i)->is_null()) {
-        if (cmp_func(*max, *src.at(i)) < 0) {
+        if (OB_FAIL(cmp_func(*max, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret < 0) {
           max = src.at(i);
         }
       } else if (!src.at(i)->is_null()) {
-        if (dst.is_null() || cmp_func(dst, *src.at(i)) < 0) {
+        if (dst.is_null()) {
+          max = src.at(i);
+        } else if (OB_FAIL(cmp_func(dst, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret < 0) {
           max = src.at(i);
         }
       }
     }
-    if (max) {
+    if (OB_SUCC(ret) && max) {
       ret = clone_aggr_cell(aggr_cell, *(max), is_number);
     }
   }
@@ -3816,19 +3860,26 @@ int ObAggregateProcessor::min_calc_batch(
   } else {
     ObDatum *min = nullptr;
     uint16_t i = 0; // row num in a batch
-    for (auto it = selector.begin(); it < selector.end(); selector.next(it)) {
+    int cmp_ret = 0;
+    for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
       if (min && !src.at(i)->is_null()) {
-        if (cmp_func(*min, *src.at(i)) > 0) {
+        if (OB_FAIL(cmp_func(*min, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret > 0) {
           min = src.at(i);
         }
       } else if (!src.at(i)->is_null()) {
-        if (dst.is_null() || cmp_func(dst, *src.at(i)) > 0) {
+        if (dst.is_null()) {
+          min = src.at(i);
+        } else if (OB_FAIL(cmp_func(dst, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret > 0) {
           min = src.at(i);
         }
       }
     }
-    if (min) {
+    if (OB_SUCC(ret) && min) {
       ret = clone_aggr_cell(aggr_cell, *(min), is_number);
     }
   }
@@ -4501,7 +4552,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     uint64_t hash_value = 0;
     bool has_null_cell = false;
-    for (int64_t nth_arg = 0; !has_null_cell && nth_arg < param_exprs->count(); ++nth_arg) {
+    for (int64_t nth_arg = 0; OB_SUCC(ret) && !has_null_cell && nth_arg < param_exprs->count(); ++nth_arg) {
       ObExpr *expr = param_exprs->at(nth_arg);
       ObDatumVector arg_datums = expr->locate_expr_datumvector(eval_ctx_);
       nth_row = selector.get_batch_index(it);
@@ -4510,11 +4561,15 @@ int ObAggregateProcessor::approx_count_calc_batch(
       }
       OB_ASSERT(NULL != expr->basic_funcs_);
       ObExprHashFuncType hash_func = expr->basic_funcs_->default_hash_;
-      hash_value = hash_func(*arg_datums.at(nth_row), hash_value);
+      if (OB_FAIL(hash_func(*arg_datums.at(nth_row), hash_value, hash_value))) {
+        LOG_WARN("fail to do hash", K(ret));
+      }
     }
-    LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
-    if (!has_null_cell) {
-      ret = llc_add_value(hash_value, dst.get_string());
+    if (OB_SUCC(ret)) {
+      LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
+      if (!has_null_cell) {
+        ret = llc_add_value(hash_value, dst.get_string());
+      }
     }
   }
   return ret;
@@ -4999,12 +5054,13 @@ int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
   return ret;
 }
 
-uint64_t ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
-    const ObIArray<ObExpr *> &param_exprs, bool &has_null_cell)
+int ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
+    const ObIArray<ObExpr *> &param_exprs, bool &has_null_cell, uint64_t &hash_value)
 {
+  int ret = OB_SUCCESS;
   has_null_cell = false;
-  uint64_t hash_value = 0;
-  for (int64_t i = 0; !has_null_cell && i < stored_row.cnt_; ++i) {
+  hash_value = 0;
+  for (int64_t i = 0; !has_null_cell && i < stored_row.cnt_ && OB_SUCC(ret); ++i) {
     const ObExpr &expr = *param_exprs.at(i);
     const ObDatum &datum = stored_row.cells()[i];
     if (datum.is_null()) {
@@ -5012,10 +5068,12 @@ uint64_t ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::Stor
     } else {
       OB_ASSERT(NULL != expr.basic_funcs_);
       ObExprHashFuncType hash_func = expr.basic_funcs_->default_hash_;
-      hash_value = hash_func(datum, hash_value);
+      if (OB_FAIL(hash_func(datum, hash_value, hash_value))) {
+        LOG_WARN("failed to do hash", K(ret));
+      }
     }
   }
-  return hash_value;
+  return ret;
 }
 
 int ObAggregateProcessor::compare_calc(const ObDatum &left_value,
@@ -5032,9 +5090,10 @@ int ObAggregateProcessor::compare_calc(const ObDatum &left_value,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(index), K(aggr_info.sort_collations_.count()),
                                      K(aggr_info.sort_cmp_funcs_.count()), K(ret));
+  } else if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(index).cmp_func_(left_value, right_value, compare_result))) {
+    LOG_WARN("failed to cmp", K(ret), K(index), K(left_value), K(right_value));
   } else {
-    compare_result = aggr_info.sort_cmp_funcs_.at(index).cmp_func_(left_value, right_value);
-    is_asc  = aggr_info.sort_collations_.at(index).is_ascending_;
+    is_asc = aggr_info.sort_collations_.at(index).is_ascending_;
   }
   return ret;
 }
@@ -5061,10 +5120,15 @@ int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRo
       if (OB_UNLIKELY(index >= prev_row.store_row_->cnt_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid argument", K(ret), K(index), K(prev_row.store_row_->cnt_));
-      } else{
-        is_equal = 0 == aggr_info.sort_cmp_funcs_.at(i).cmp_func_(
-                                                                prev_row.store_row_->cells()[index],
-                                                                cur_row.cells()[index]);
+      } else {
+        int cmp_ret = 0;
+        if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(i).cmp_func_(prev_row.store_row_->cells()[index],
+                                                              cur_row.cells()[index],
+                                                              cmp_ret))) {
+          LOG_WARN("failed to cmp", K(ret), K(index));
+        } else {
+          is_equal = 0 == cmp_ret;
+        }
       }
     }
   }
@@ -6009,7 +6073,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
 {
   int ret = OB_SUCCESS;
   const int col_num = 2;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6157,6 +6221,16 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
   return ret;
 }
 
+int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
+                                                GroupConcatExtraResult *&extra,
+                                                ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+
 int ObAggregateProcessor::check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString &key_name)
 {
   INIT_SUCC(ret);
@@ -6175,7 +6249,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
                                                         ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const int64_t MAX_BUCKET_NUM = 1024;
   common::hash::ObHashSet<ObString> view_key_names;
   if (OB_FAIL(view_key_names.create(MAX_BUCKET_NUM))) {

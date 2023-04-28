@@ -264,7 +264,9 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
   type.set_length(type1.get_length());
   type.set_length_semantics(type1.is_varchar_or_char() ? type1.get_length_semantics() : default_length_semantics);
   //set calc type
-  if (OB_SUCC(ret) && type1.is_string_type()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (type1.is_string_type()) {
     ObCollationType collation_type = type2.get_collation_type();
     ObCharsetType cs_type = type1.get_charset_type();
     if (!ObCharset::is_valid_collation(cs_type, collation_type)) {
@@ -275,6 +277,10 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
       ObString collation = ObString::make_string(coll_name);
       LOG_USER_ERROR(OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(), charset.length(), charset.ptr());
     }
+  } else if (type1.is_xml_sql_type()) {
+    ret = OB_ERR_INVALID_XML_DATATYPE;
+    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "CHAR", "ANYDATA");
+    LOG_WARN("invalid type, expect char", K(ret), K(type1), K(type));
   }
   if (OB_SUCC(ret)) {
     type1.set_calc_type(ObVarcharType);

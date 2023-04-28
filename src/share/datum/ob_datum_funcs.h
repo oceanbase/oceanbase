@@ -23,8 +23,8 @@ namespace common {
 class ObExprCtx;
 struct ObDatum;
 
-typedef int (*ObDatumCmpFuncType)(const ObDatum &datum1, const ObDatum &datum2);
-typedef uint64_t (*ObDatumHashFuncType)(const ObDatum &datum, const uint64_t seed);
+typedef int (*ObDatumCmpFuncType)(const ObDatum &datum1, const ObDatum &datum2, int &cmp_ret);
+typedef int (*ObDatumHashFuncType)(const ObDatum &datum, const uint64_t seed, uint64_t &res);
 
 class ObDatumFuncs {
 public:

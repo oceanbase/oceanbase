@@ -541,6 +541,11 @@ bool ObRawExpr::is_geo_expr() const
   return IS_GEO_OP(get_expr_type());
 }
 
+bool ObRawExpr::is_xml_expr() const
+{
+  return IS_XML_OP(get_expr_type());
+}
+
 bool ObRawExpr::is_mysql_geo_expr() const
 {
   return IS_MYSQL_GEO_OP(get_expr_type());
@@ -945,7 +950,9 @@ void ObConstRawExpr::reset_is_date_unit()
 
 uint64_t ObConstRawExpr::hash_internal(uint64_t seed) const
 {
-  return value_.hash(seed);
+  uint64_t hash_val = seed;
+  value_.hash(hash_val, seed);
+  return hash_val;
 }
 
 bool ObConstRawExpr::inner_same_as(
@@ -1166,7 +1173,7 @@ void ObUserVarIdentRawExpr::reset()
 
 uint64_t ObUserVarIdentRawExpr::hash_internal(uint64_t seed) const
 {
-  seed = value_.hash(seed);
+  value_.hash(seed, seed);
   seed = common::do_hash(is_contain_assign_, seed);
   return seed;
 }

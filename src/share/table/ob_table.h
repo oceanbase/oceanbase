@@ -844,7 +844,7 @@ public:
   int64_t expire_ts_;
   uint64_t hash_val_;
 public:
-  uint64_t hash(uint64_t seed = 0) const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   TO_STRING_KV(K_(cluster_id),
                K_(tenant_id),
                K_(user_id),

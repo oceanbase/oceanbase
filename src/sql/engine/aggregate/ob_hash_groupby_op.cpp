@@ -80,12 +80,14 @@ int ObGroupRowHashTable::init(ObIAllocator *allocator,
   return ret;
 }
 
-bool ObGroupRowHashTable::likely_equal(
-  const ObGroupRowItem &left, const ObGroupRowItem &right) const
+int ObGroupRowHashTable::likely_equal(
+  const ObGroupRowItem &left, const ObGroupRowItem &right,
+  bool &result) const
 {
   // All rows is in one group, when no group by columns (group by const expr),
   // so the default %result is true
-  bool result = true;
+  int ret = OB_SUCCESS;
+  result = true;
   ObDatum *l_cells = nullptr;
   if (!left.is_expr_row_) {
     l_cells = left.groupby_store_row_->cells();
@@ -119,11 +121,16 @@ bool ObGroupRowHashTable::likely_equal(
           && (0 == memcmp(l->ptr_, r->ptr_, l->len_))) {
         result = true;
       } else {
-        result = (0 == cmp_funcs_->at(i).cmp_func_(*l, *r));
+        int cmp_res = 0;
+        if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l, *r, cmp_res))) {
+          LOG_WARN("failed to do cmp", K(ret), KPC(l), KPC(r));
+        } else {
+          result = (0 == cmp_res);
+        }
       }
     }
   }
-  return result;
+  return ret;
 }
 
 void ObHashGroupByOp::reset()
@@ -1243,7 +1250,9 @@ int ObHashGroupByOp::calc_groupby_exprs_hash(ObIArray<ObExpr*> &groupby_exprs,
         LOG_WARN("eval failed", K(ret));
       } else {
         ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_v2_;
-        hash_value = hash_func(*result, hash_value);
+        if (OB_FAIL(hash_func(*result, hash_value, hash_value))) {
+          LOG_WARN("hash failed", K(ret));
+        }
       }
     }
   } else {

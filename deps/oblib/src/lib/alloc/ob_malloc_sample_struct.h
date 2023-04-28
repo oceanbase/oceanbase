@@ -49,6 +49,7 @@ struct ObMallocSampleKey
   ObMallocSampleKey()
   {}
   int64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   bool operator==(const ObMallocSampleKey &other) const;
   int64_t tenant_id_;
   int64_t ctx_id_;
@@ -142,6 +143,12 @@ inline int64_t ObMallocSampleKey::hash() const
   hash_val = murmurhash(label_, sizeof(label_), hash_val);
   hash_val = murmurhash(bt_, sizeof(bt_), hash_val);
   return hash_val;
+}
+
+inline int ObMallocSampleKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
 }
 
 inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const

@@ -317,8 +317,13 @@ bool ObDictEncoder::DictCmp::operator()(
     ret_ = OB_INVALID_ARGUMENT;
     LOG_WARN_RET(ret_, "invalid argument", K_(ret), KP(lhs.header_), KP(rhs.header_));
   } else {
-    int cmp_ret = cmp_func_.cmp_func_(*lhs.header_->datum_, *rhs.header_->datum_);
-    res = cmp_ret < 0;
+    int cmp_ret = 0;
+    ret_ = cmp_func_.cmp_func_(*lhs.header_->datum_, *rhs.header_->datum_, cmp_ret);
+    if (ret_ != OB_SUCCESS) {
+      LOG_WARN_RET(ret_, "failed to compare", K_(ret), KP(lhs.header_), KP(rhs.header_));
+    } else {
+      res = cmp_ret < 0;
+    }
   }
   return res;
 }

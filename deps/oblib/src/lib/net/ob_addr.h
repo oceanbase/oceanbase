@@ -99,6 +99,7 @@ public:
   ObAddr &as_subnet(const ObAddr &mask);
 
   int64_t hash() const;
+  int hash(uint64_t &code) const;
   ObAddr &operator=(const ObAddr &rv);
   bool operator !=(const ObAddr &rv) const;
   bool operator ==(const ObAddr &rv) const;
@@ -190,6 +191,12 @@ inline int64_t ObAddr::hash() const
   return code;
 }
 
+inline int ObAddr::hash(uint64_t &code) const
+{
+  code = hash();
+  return OB_SUCCESS;
+}
+
 inline ObAddr &ObAddr::operator=(const ObAddr &rv) {
   this->version_ = rv.version_;
   this->port_ = rv.port_;
@@ -249,6 +256,10 @@ public:
 
   int64_t hash() const {
     return murmurhash(&server_addr_, sizeof(server_addr_), server_seq_);
+  }
+  int hash(uint64_t &hash_val) const {
+    hash_val = hash();
+    return OB_SUCCESS;
   }
 
   bool is_valid() const {

@@ -451,7 +451,9 @@ int ObExprConcat::eval_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
     if (OB_FAIL(ret)) {
     } else if (res_len > max_len) {
       expr_datum.set_null();
-      ret = OB_SIZE_OVERFLOW;
+      // BUGFIX: issue id 49051626
+      if (lib::is_oracle_mode()) ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
+      else ret = OB_SIZE_OVERFLOW;
       LOG_WARN("size overflow", K(ret), K(res_len), K(max_len));
     } else if (expr.arg_cnt_ == null_cnt
                || (!lib::is_oracle_mode() && null_cnt > 0)) {

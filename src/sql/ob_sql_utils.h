@@ -675,6 +675,18 @@ private:
   common::ObIArray<ObRawExpr**> &rel_array_;
 };
 
+class FastUdtExprChecker : public RelExprCheckerBase
+{
+public:
+  FastUdtExprChecker(common::ObIArray<ObRawExpr *> &rel_array);
+  virtual ~FastUdtExprChecker() {}
+  int add_expr(ObRawExpr *&expr);
+  int dedup();
+private:
+  common::ObIArray<ObRawExpr *> &rel_array_;
+  int64_t init_size_;
+};
+
 struct ObSqlTraits
 {
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];// sql id //最后一个字节存放'\0'

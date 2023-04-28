@@ -232,6 +232,11 @@ private:
       hash_val = common::murmurhash(&id_, sizeof(id_), hash_val);
       return hash_val;
     }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
     bool operator==(const MetaKey &other) const
     { return (tenant_id_ == other.tenant_id_) && (id_ == other.id_); }
 
@@ -261,6 +266,11 @@ private:
       hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
 
       return hash_val;
+    }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
     }
     bool operator==(const MulVerTableKey &other) const
     { return (version_ == other.version_) && (tenant_id_ == other.tenant_id_) && (table_id_ == other.table_id_); }

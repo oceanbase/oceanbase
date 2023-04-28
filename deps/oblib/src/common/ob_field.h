@@ -75,7 +75,7 @@ public:
   ObString cname_;     // column name for display
   ObString org_cname_; // original column name
   ObObj type_; // value type
-  ObString type_owner_; // udt relation name, only valid when tyoe is ObExtended
+  ObString type_owner_; // udt relation name, only valid when type is ObExtended
   ObString type_name_; // udt relation name, only valid when type is ObExtended
   ObObj default_value_; //default value, only effective when command was COM_FIELD_LIST
   ObAccuracy accuracy_;

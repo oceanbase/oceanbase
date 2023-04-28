@@ -1204,6 +1204,21 @@ int ObSchemaChecker::get_udt_id(uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaChecker::get_sys_udt_id(const ObString &udt_name,
+                                    uint64_t &udt_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("schema checker is not inited", K_(is_inited));
+  } else if (lib::is_oracle_mode() && udt_name.case_compare("xmltype") == 0) {
+    if (OB_FAIL(schema_mgr_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, -1, udt_name, udt_id))) {
+      LOG_WARN("get udt info failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSchemaChecker::check_udt_exist(uint64_t tenant_id, uint64_t database_id,
                                      uint64_t package_id, ObUDTTypeCode type_code,
                                      const ObString &udt_name, bool &exist)

@@ -194,8 +194,8 @@ private:
   const ObSSTable *sstable_;
   const ObSSTableMeta *meta_;
   ObDatumRange datum_range_;
-  ObSSTableSecMetaIterator second_meta_iterator_;
   common::ObArenaAllocator allocator_;
+  ObSSTableSecMetaIterator second_meta_iterator_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockObProducer);
 };
 
@@ -593,8 +593,8 @@ private:
   ObTableHandleV2 table_handle_;
   ObTabletHandle tablet_handle_;
   ObDatumRange datum_range_;
-  ObSSTableSecMetaIterator second_meta_iterator_;
   common::ObArenaAllocator allocator_;
+  ObSSTableSecMetaIterator second_meta_iterator_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeObProducer);
 };
 

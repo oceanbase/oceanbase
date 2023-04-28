@@ -232,11 +232,15 @@ template <typename Key, typename Value, typename HashFunc>
 int ObFixedHashMap<Key, Value, HashFunc>::get(Key key, Value &value)
 {
   int ret = common::OB_ENTRY_NOT_EXIST;
+  uint64_t hash_val = 0;
   if (!inited_) {
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
+  } else if (OB_FAIL(hash_func_(key, hash_val))) {
+    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
-    const int64_t pos = hash_func_(key) % bucket_num_;
+    ret = common::OB_ENTRY_NOT_EXIST;
+    const int64_t pos = hash_val % bucket_num_;
     Node *node = buckets_[pos];
     while (NULL != node) {
       if (node->pair_.first == key) {
@@ -279,14 +283,17 @@ template <typename Key, typename Value, typename HashFunc>
 int ObFixedHashMap<Key, Value, HashFunc>::set(const Key &key, const Value &value)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (!inited_) {
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
   } else if (size_ >= node_num_) {
     ret = common::OB_SIZE_OVERFLOW;
     SHARE_LOG(WARN, "hashmap is full", K(ret), K_(size), K_(node_num));
+  } else if (OB_FAIL(hash_func_(key, hash_val))) {
+    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
-    const int64_t pos = hash_func_(key) % bucket_num_;
+    const int64_t pos = hash_val % bucket_num_;
     Node *node = buckets_[pos];
     while (NULL != node && OB_SUCC(ret)) {
       if (node->pair_.first == key) {
@@ -318,11 +325,15 @@ template <typename Key, typename Value, typename HashFunc>
 int ObFixedHashMap<Key, Value, HashFunc>::erase(const Key &key)
 {
   int ret = common::OB_ENTRY_NOT_EXIST;
+  uint64_t hash_val = 0;
   if (!inited_) {
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", K(ret));
+  } else if (OB_FAIL(hash_func_(key, hash_val))) {
+    SHARE_LOG(WARN, "hash failed", K(ret));
   } else {
-    const int64_t pos = hash_func_(key) % bucket_num_;
+    ret = common::OB_ENTRY_NOT_EXIST;
+    const int64_t pos = hash_val % bucket_num_;
     Node *node = buckets_[pos];
     Node *prev = NULL;
     while (NULL != node && OB_ENTRY_NOT_EXIST == ret) {

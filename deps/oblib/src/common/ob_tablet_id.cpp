@@ -22,6 +22,12 @@ namespace oceanbase
 {
 namespace common
 {
+int ObTabletID::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 uint64_t ObTabletID::hash() const
 {
   uint64_t hash_val = 0;

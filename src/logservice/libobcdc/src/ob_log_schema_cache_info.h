@@ -31,6 +31,7 @@ namespace libobcdc
 {
 class ObObj2strHelper;
 class ObLogSchemaGuard;
+class ObCDCUdtSchemaInfo;
 
 // The primary keyless table has one hidden columns.
 // column_id=OB_HIDDEN_PK_INCREMENT_COLUMN_ID[1], column_name="__pk_increment"
@@ -109,6 +110,19 @@ public:
   }
   void get_extended_type_info(common::ObArrayHelper<common::ObString> &str_array) const;
 
+  inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
+  inline uint64_t get_udt_set_id() const { return udt_set_id_; }
+  inline bool is_udt_column() const { return udt_set_id_ > 0; }
+
+  inline void set_sub_data_type(const uint64_t sub_data_type) { sub_type_ = sub_data_type; }
+  inline uint64_t get_sub_data_type() const { return sub_type_; }
+
+  inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  inline bool is_xmltype() const {
+    return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
+           || meta_type_.is_xml_sql_type();
+  }
+
 public:
   TO_STRING_KV(
       K_(column_id),
@@ -122,7 +136,9 @@ public:
       K_(orig_default_value_str),
       K_(extended_type_info_size),
       K_(extended_type_info),
-      K_(is_rowkey));
+      K_(is_rowkey),
+      K_(udt_set_id),
+      K_(sub_type));
 
 private:
   template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
@@ -159,6 +175,9 @@ private:
   // The rowkey_info in TableSchema is not accurate because the new no primary key table will change the partition key to the primary key.
   // need to mark if this column was the primary key when the user created it
   bool               is_rowkey_;
+
+  uint64_t           udt_set_id_;
+  uint64_t           sub_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ColumnSchemaInfo);
@@ -230,6 +249,7 @@ struct GetColumnKey<share::schema::ObColumnIdKey, ColumnSchemaInfo *>
 };
 
 typedef common::hash::ObPointerHashArray<share::schema::ObColumnIdKey, ColumnSchemaInfo *, GetColumnKey> ColumnIdxHashArray;
+typedef common::hash::ObHashMap<uint64_t, ObCDCUdtSchemaInfo*> ObCDCUdtSchemaInfoMap;
 class TableSchemaInfo
 {
 public:
@@ -297,6 +317,14 @@ public:
       const int16_t rowkey_idx,
       ColumnSchemaInfo *&column_schema_info) const;
 
+  int get_main_column_of_udt(
+      const uint64_t udt_set_id,
+      ColumnSchemaInfo *&column_schema_info) const;
+
+  int get_udt_schema_info(
+      const uint64_t udt_set_id,
+      ObCDCUdtSchemaInfo *&schema_info) const;
+
 public:
   TO_STRING_KV(K_(rowkey_info),
       K_(is_heap_table),
@@ -339,6 +367,10 @@ private:
         column_cnt * 2) * sizeof(void*) + sizeof(ColumnIdxHashArray);
   }
 
+  int add_udt_column_(ColumnSchemaInfo *column_info);
+  int init_udt_schema_info_map_();
+  int destroy_udt_schema_info_map_();
+
 private:
   bool                 is_inited_;
   common::ObIAllocator &allocator_;
@@ -359,6 +391,8 @@ private:
   ColumnSchemaInfo   *column_schema_array_;
   int64_t            column_schema_array_cnt_;
   ColumnIdxHashArray *column_id_hash_arr_; // column_id -> column_stored_idx
+
+  ObCDCUdtSchemaInfoMap *udt_schema_info_map_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(TableSchemaInfo);

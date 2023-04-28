@@ -460,10 +460,15 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
     if (OB_SUCC(ret)) {
       // calc llc.
       uint64_t hash_value = 0;
-      hash_value = obj.is_string_type() ?
-                   obj.varchar_hash(obj.get_collation_type(), hash_value) :
-                   obj.hash(hash_value);
-      if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap_, llc_bitmap_size_))) {
+      if (obj.is_string_type()) {
+        hash_value = obj.varchar_hash(obj.get_collation_type(), hash_value);
+      } else {
+        if (OB_FAIL(obj.hash(hash_value, hash_value))) {
+          LOG_WARN("fail to do hash", K(ret), K(obj));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap_, llc_bitmap_size_))) {
         LOG_WARN("fail to calc llc", K(ret));
       }
       //don't need to get call ObGlobalNdvEval::get_ndv_from_llc here, call it later.

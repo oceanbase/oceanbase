@@ -79,6 +79,8 @@ public:
     return static_cast<int64_t>(hash_val);
   }
 
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
   uint64_t get_group_id() const { return group_id_; }
   bool is_barrier() const { return false; }
   bool need_process_alone() const { return true; }

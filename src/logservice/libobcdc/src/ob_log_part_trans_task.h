@@ -57,6 +57,7 @@ class PartTransTask;
 class ObLogBR;
 class ObLogEntryTask;
 class TableSchemaInfo;
+class ObCDCUdtValueMap;
 
 class IStmtTask : public ObLink   // Inheritance of ObLink is only used for Sequencer
 {
@@ -157,6 +158,10 @@ struct ColValue
   ColValue      *next_;
   uint8_t       is_out_row_ : 1;  // Column data is stored out row
 
+  // if this ColValue is group value
+  // then children_ store group hidden ColValue
+  LightyList<ColValue> children_;
+
   void reset()
   {
     value_.reset();
@@ -164,6 +169,7 @@ struct ColValue
     string_value_.reset();
     next_ = NULL;
     is_out_row_ = 0;
+    children_.reset();
   }
 
   bool is_valid()
@@ -177,6 +183,8 @@ struct ColValue
   bool is_json() const { return value_.is_json(); }
   bool is_geometry() const { return value_.is_geometry(); }
   common::ObObjType get_obj_type() const { return value_.get_type(); }
+
+  int add_child(ColValue *child) {return children_.add(child);}
 
   TO_STRING_KV(
       "type", common::ob_obj_type_str(get_obj_type()),
@@ -294,7 +302,8 @@ private:
       const ColumnSchemaInfo *column_schema,
       const ObObj2strHelper *obj2str_helper,
       const ObTimeZoneInfoWrap *tz_info_wrap,
-      ColValueList &cols);
+      ColValueList &cols,
+      ObCDCUdtValueMap *udt_value_map);
   int set_obj_propertie_(
       const uint64_t column_id,
       const int64_t column_idx_for_datum_row,

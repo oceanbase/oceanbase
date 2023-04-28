@@ -458,6 +458,11 @@ public:
                                     const JsonPathIterator &end,
                                     bool auto_wrap);
 
+  static bool is_letter(unsigned codepoint, const char* ori, uint64_t start, uint64_t end);
+  static bool is_connector_punctuation(unsigned codepoint);
+  static bool unicode_combining_mark(unsigned codepoint);
+  static bool is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t len);
+
   static const uint32_t MAX_LENGTH = 4294967295;
   static const uint16_t MAX_PATH_NODE_CNT = 100;
 };

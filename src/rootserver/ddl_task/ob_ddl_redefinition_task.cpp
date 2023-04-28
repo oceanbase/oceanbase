@@ -1635,6 +1635,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         LOG_WARN("col is NULL", K(ret));
       } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
         // bypass hidden column
+      } else if (col->is_udt_hidden_column()) {
+        // bypass udt hidden column
       } else if (OB_FAIL(col_name_map.get(col->get_column_name_str(), new_col_name))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // the column is not in column name map, meaning it is dropped in this ddl

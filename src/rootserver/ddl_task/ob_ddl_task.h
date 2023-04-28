@@ -37,6 +37,7 @@ public:
   ObDDLTaskKey(const int64_t object_id, const int64_t schema_version);
   ~ObDDLTaskKey() = default;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskKey &other) const;
   bool is_valid() const { return OB_INVALID_ID != object_id_ && schema_version_ > 0; }
   int assign(const ObDDLTaskKey &other);
@@ -53,6 +54,7 @@ public:
   ObDDLTaskID(const uint64_t tenant_id, const int64_t task_id);
   ~ObDDLTaskID() = default;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskID &other) const;
   bool operator!=(const ObDDLTaskID &other) const;
   bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && task_id_ > 0; }

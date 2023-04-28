@@ -75,6 +75,10 @@ public:
   uint64_t hash() const {
     return first_;
   }
+  int hash(uint64_t &hash_val) const {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
 
   // The 128-bit split into upper and lower int64 is to facilitate the construction of RPC messages and provide effective to_string messages
   uint64_t first_;

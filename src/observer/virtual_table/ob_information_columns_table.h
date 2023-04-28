@@ -106,7 +106,7 @@ private:
   int get_type_str(const ObObjMeta &obj_meta, const ObAccuracy &accuracy,
       const common::ObIArray<ObString> &type_info,
       const int16_t default_length_semantics, int64_t &pos,
-      const common::ObGeoType geo_type = common::ObGeoType::GEOMETRY);
+      const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOMETRY));
   int fill_col_privs(
       ObSessionPrivInfo &session_priv,
       ObNeedPriv &need_priv, 

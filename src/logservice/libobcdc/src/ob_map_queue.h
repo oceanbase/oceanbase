@@ -57,6 +57,7 @@ private:
     int64_t idx_;
     void reset(const int64_t idx) { idx_ = idx; }
     uint64_t hash() const { return static_cast<uint64_t >(idx_); }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator==(const Key &other) const { return idx_ == other.idx_; }
   };
   // Pop contidion.

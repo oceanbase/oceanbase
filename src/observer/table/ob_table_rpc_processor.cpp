@@ -199,7 +199,7 @@ int ObTableLoginP::generate_credential(uint64_t tenant_id,
   } else {
     credential_.expire_ts_ = 0;
   }
-  credential_.hash_val_ = credential_.hash(user_token);
+  credential_.hash(credential_.hash_val_, user_token);
   int64_t pos = 0;
   if (OB_FAIL(serialization::encode(credential_buf_, CREDENTIAL_BUF_SIZE, pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));

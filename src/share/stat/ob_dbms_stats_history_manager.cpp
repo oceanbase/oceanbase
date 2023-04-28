@@ -773,7 +773,7 @@ int ObDbmsStatsHistoryManager::set_col_stat_cs_type(
         cs_type = column_params.at(i).cs_type_;
       }
     }
-    if (!find_it || cs_type == CS_TYPE_INVALID) {
+    if (!find_it) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(find_it), K(cs_type));
     } else {

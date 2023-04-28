@@ -8338,9 +8338,14 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   // Step 4: check complex cast legal
   // 原来是step2，移动这里是因为result type需要deduce一把才能出来结果。
   // 放在step是有问题，因为类似T_SP_CPARAM是没有对应的expr执行实体，需要展开. 没展开deduce就会出问题。
+  bool pl_sql_format_convert = false;
   if (OB_SUCC(ret) && OB_NOT_NULL(expected_type)) {
     if (ObNullType == expr->get_result_type().get_obj_meta().get_type()) {
       // do nothing
+    } else if (expected_type->is_opaque_type()
+               && expected_type->get_user_type_id() == static_cast<uint64_t>(T_OBJ_XML)
+               && expr->get_result_type().is_xml_sql_type()) {
+      pl_sql_format_convert = true;
     } else if ((!expected_type->is_obj_type()
                  && expr->get_result_type().get_obj_meta().get_type() != ObExtendType)
                || (expected_type->is_obj_type()
@@ -8404,7 +8409,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   bool need_cast = false;
   const ObDataType *data_type =
     OB_NOT_NULL(expected_type) ? expected_type->get_data_type() : NULL;
-  if (OB_SUCC(ret) && !simple_pls_integer && OB_NOT_NULL(data_type)) {
+  if (OB_SUCC(ret) && !simple_pls_integer && OB_NOT_NULL(data_type) && !pl_sql_format_convert) {
     need_cast = (ob_is_enum_or_set_type(data_type->get_obj_type())
                 || expr->get_result_type().get_obj_meta() != data_type->get_meta_type()
                 || expr->get_result_type().get_accuracy() != data_type->get_accuracy());
@@ -9856,7 +9861,15 @@ int ObPLResolver::replace_udf_param_expr(
     ObObjAccessIdent &access_ident = q_name.access_idents_.at(i);
     if (access_ident.is_pl_udf()) {
       OZ (replace_udf_param_expr(access_ident, columns, real_exprs));
-    }
+    } else if (access_ident.is_sys_func()) {
+      // cases like : xmlparse(document expr).getclobval()
+      ObRawExpr *expr = static_cast<ObRawExpr *>(access_ident.sys_func_expr_);
+      for (int64_t i = 0; OB_SUCC(ret) && i < real_exprs.count(); ++i) {
+        if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, columns.at(i).ref_expr_, real_exprs.at(i)))) {
+          LOG_WARN("replace column ref expr failed", K(ret));
+        }
+      }
+    } else { /*do nothing*/ }
   }
   return ret;
 }
@@ -11620,6 +11633,12 @@ int ObPLMockSelfArg::mock()
       expr_params_.at(0)->add_flag(IS_UDT_UDF_SELF_PARAM);
       mocked_ = true;
       mark_only_ = true;
+    } else if (expr_params_.at(0)->get_result_type().is_xml_sql_type()
+               && (T_OBJ_XML == access_idxs_.at(access_idxs_.count() - 1).var_index_)) {
+      //select xmltype.getclobval(xmlparse()) from dual;
+      expr_params_.at(0)->add_flag(IS_UDT_UDF_SELF_PARAM);
+      mocked_ = true;
+      mark_only_ = true;
     } else if (access_idxs_.at(access_idxs_.count() - 1).elem_type_.is_composite_type()
                && expr_params_.at(0)->get_result_type().get_udt_id()
                     == access_idxs_.at(access_idxs_.count() - 1).elem_type_.get_user_type_id()) {
@@ -12120,6 +12139,43 @@ int ObPLResolver::resolve_composite_access(ObObjAccessIdent &access_ident,
   return ret;
 }
 
+int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
+                                          ObIArray<ObObjAccessIdx> &access_idxs,
+                                          const ObSQLSessionInfo *session_info,
+                                          const ObPLBlockNS &ns)
+{
+  int ret = OB_SUCCESS;
+  ObObjAccessIdx access_idx;
+  const ObUserDefinedType *user_type = NULL;
+  CK (OB_NOT_NULL(access_ident.sys_func_expr_));
+  if (OB_SUCC(ret)) {
+    if (access_ident.sys_func_expr_->get_result_type().get_type() == ObMaxType) {
+      if (OB_FAIL(access_ident.sys_func_expr_->formalize(session_info))) {
+        LOG_WARN("deduce type failed for sys func ident", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!access_ident.sys_func_expr_->get_result_type().is_xml_sql_type()
+                && !(access_ident.sys_func_expr_->get_result_type().is_ext()
+                     && access_ident.sys_func_expr_->get_result_type().get_udt_id() == T_OBJ_XML)) {
+      ret = OB_ERR_NOT_OBJ_REF;
+      LOG_WARN("unsupported sys func ident",
+        K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()),
+        K(access_ident.sys_func_expr_->get_result_type().get_udt_id()));
+    } else { // only xmltype is supported
+      OZ (ns.get_pl_data_type_by_id(T_OBJ_XML, user_type));
+    }
+  }
+  CK (OB_NOT_NULL(user_type));
+  OX (new (&access_idx) ObObjAccessIdx(*user_type,
+                                        ObObjAccessIdx::AccessType::IS_UDF_NS,
+                                        access_ident.access_name_,
+                                        *user_type,
+                                        reinterpret_cast<int64_t>(access_ident.sys_func_expr_)));
+  OZ (access_idxs.push_back(access_idx));
+  return ret;
+}
+
 
 int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前正在resolve的ident
                                        const ObPLBlockNS &ns,
@@ -12144,7 +12200,10 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
   if (!is_routine) {
     OZ (check_is_udt_routine(access_ident, ns, access_idxs, is_routine));
   }
-  if (0 == cnt
+
+  if (0 == cnt && access_ident.is_sys_func()) {
+    OZ (resolve_sys_func_access(access_ident, access_idxs, session_info, ns));
+  } else if (0 == cnt
       || ObObjAccessIdx::IS_DB_NS == access_idxs.at(cnt - 1).access_type_
       || ObObjAccessIdx::IS_PKG_NS == access_idxs.at(cnt - 1).access_type_
       || ObObjAccessIdx::IS_TABLE_NS == access_idxs.at(cnt - 1).access_type_

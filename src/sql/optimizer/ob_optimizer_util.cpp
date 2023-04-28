@@ -6171,7 +6171,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                     && (ob_is_oracle_temporal_type(right_type.get_type())))
                 || (left_type.is_urowid() && right_type.is_urowid())
                 || (is_oracle_mode() && left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
-                || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type()))) {
+                || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
+                || (is_oracle_mode() && (ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
+                                     && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
                 // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
                 // Originally, cases like "select clob from t union all select blob from t" return error
             if (session_info->is_ps_prepare_stage()) {

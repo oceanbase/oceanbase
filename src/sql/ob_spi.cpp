@@ -2046,6 +2046,19 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
         CK (OB_NOT_NULL(user_type));
         OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
         OX (pl_type.set_type_from(user_type->get_type_from()));
+      } else if (columns->at(i).type_.is_user_defined_sql_type()) {
+        if (columns->at(i).type_.is_xml_sql_type()) {
+          // dynamic cast from sql type to pl type in store_result
+          uint64_t udt_id = T_OBJ_XML;
+          const ObUserDefinedType *user_type = NULL;
+          OZ (secondary_namespace->get_pl_data_type_by_id(udt_id, user_type));
+          CK (OB_NOT_NULL(user_type));
+          OX (pl_type.set_user_type_id(user_type->get_type(), udt_id));
+          OX (pl_type.set_type_from(user_type->get_type_from()));
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unsupported sql udt type", K(ret), K(columns->at(i).cname_), K(columns->at(i).type_));
+        }
       } else {
         ObDataType data_type;
         data_type.set_meta_type(columns->at(i).type_.get_meta());
@@ -6242,13 +6255,14 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
   for (int i = 0; OB_SUCC(ret) && i < obj_array.count(); ++i) {
     ObObj &obj = obj_array.at(i);
     tmp_obj.reset();
-    if (obj.is_clob()) {
+    if (obj.is_clob() && !(ob_is_nstring(result_types[i].get_obj_type()))) {
       obj.set_collation_type(result_types[i].get_collation_type());
     }
     obj.set_collation_level(result_types[i].get_collation_level());
     LOG_DEBUG("column convert", K(obj.get_meta()), K(result_types[i].get_meta_type()),
               K(current_type.at(i)), K(result_types[i].get_accuracy()));
-    if (obj.is_pl_extend()/* && pl::PL_RECORD_TYPE == obj.get_meta().get_extend_type()*/) {
+    if (obj.is_pl_extend()/* && pl::PL_RECORD_TYPE == obj.get_meta().get_extend_type()*/
+        && result_types[i].get_meta_type().is_ext()) {
       //record嵌object场景，object属性在resolver阶段要求强一致，无需强转
       OZ (calc_array.push_back(obj));
     } else if (obj.get_meta() == result_types[i].get_meta_type()
@@ -6274,7 +6288,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!obj.is_pl_extend() && result_types[i].get_meta_type().is_ext()) {
+    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type())  // sql udt can cast to pl extend
+               && result_types[i].get_meta_type().is_ext()) {
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
     } else {
@@ -6310,7 +6325,22 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       } else if (result_type.is_null() || result_type.is_unknown()) {
         tmp_obj = obj;
       } else {
-        OZ (ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info));
+        if (((obj.get_meta().is_ext())  // xmltype can not convert with other type in pl
+              && !(result_type.get_type() == ObExtendType
+                    || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))
+            || (obj.get_meta().get_type() == ObUserDefinedSQLType
+                && !(result_type.get_type() == ObExtendType
+                    || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())
+                    || ob_is_string_tc(result_type.get_type())))
+            || (!((obj.get_meta().is_ext())
+                    || obj.get_meta().get_type() == ObUserDefinedSQLType)
+               && (result_type.get_type() == ObExtendType
+                    || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("xml type can not convert other type in pl", K(ret));
+        } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
+          LOG_WARN("fail to convert with null check", K(ret));
+        }
         if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()) {
           LOG_WARN("change error code to value error", K(ret));
           ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
@@ -6364,7 +6394,8 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
   bool is_schema_object = (!is_type_record &&
                            1 == type_count &&
                            1 == obj_array.count() &&
-                           obj_array.at(0).is_pl_extend());
+                           obj_array.at(0).is_pl_extend() &&
+                           obj_array.at(0).get_meta().get_extend_type() != PL_OPAQUE_TYPE); // xmltypes may need to do cast
   if (!is_schema_object) {
     if (OB_SUCC(ret) && type_count != obj_array.count()) {
       ret = OB_ERR_SP_INVALID_FETCH_ARG;
@@ -6722,6 +6753,7 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
     OZ (check_and_deep_copy_result(*alloc, src, dest_addr));
   } else {
     int64_t current_datum = 0;
+    bool is_opaque = false;
     if (dest_addr.is_pl_extend()) {
       if (PL_OPAQUE_TYPE == dest_addr.get_meta().get_extend_type()) {
         CK (1 == obj_array.count());
@@ -6752,7 +6784,7 @@ int ObSPIService::store_datums(ObObj &dest_addr, const ObIArray<ObObj> &obj_arra
       OX (current_datum = reinterpret_cast<int64_t>(dest_addr.get_ext()));
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < obj_array.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_opaque && i < obj_array.count(); ++i) {
       if (OB_FAIL(store_datum(current_datum, obj_array.at(i)))) {
         LOG_WARN("failed to arrange store", K(dest_addr), K(i), K(obj_array.at(i)), K(obj_array), K(ret));
       }

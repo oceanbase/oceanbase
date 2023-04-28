@@ -287,6 +287,11 @@ public:
     hash_val = common::murmurhash(&trans_gid_, sizeof(trans_gid_), hash_val);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const ObTableLoadTransId &other) const
   {
     return (segment_id_ != other.segment_id_ ? segment_id_.compare(other.segment_id_)

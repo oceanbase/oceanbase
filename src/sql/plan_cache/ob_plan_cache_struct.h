@@ -108,7 +108,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
   }
   virtual inline uint64_t hash() const
   {
-    uint64_t hash_ret = name_.hash(0);
+    uint64_t hash_ret = name_.hash();
     hash_ret = common::murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);

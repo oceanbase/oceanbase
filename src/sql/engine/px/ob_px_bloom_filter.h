@@ -173,6 +173,7 @@ public:
             task_id_ == other.task_id_);
   }
   inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_ret) const;
   int64_t tenant_id_;
   int64_t filter_id_;
   int64_t server_id_;
@@ -192,6 +193,11 @@ inline uint64_t ObPXBloomFilterHashWrapper::hash() const
   hash_ret = common::murmurhash(&px_sequence_id_, sizeof(uint64_t), hash_ret);
   hash_ret = common::murmurhash(&task_id_, sizeof(uint64_t), hash_ret);
   return hash_ret;
+}
+inline int ObPXBloomFilterHashWrapper::hash(uint64_t &hash_ret) const
+{
+  hash_ret = hash();
+  return OB_SUCCESS;
 }
 
 class ObPxReadAtomicGetBFCall

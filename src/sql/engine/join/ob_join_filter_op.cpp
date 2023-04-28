@@ -594,15 +594,15 @@ int ObJoinFilterOp::calc_hash_value(uint64_t &hash_value, bool &ignore)
       LOG_WARN("failed to eval datum", K(ret));
     } else if (ObExprCalcPartitionId::NONE_PARTITION_ID == (partition_id = datum->get_int())) {
       ignore = true;
-    } else {
-      hash_value = MY_SPEC.hash_funcs_.at(0).hash_func_(*datum, hash_value);
+    } else if (OB_FAIL(MY_SPEC.hash_funcs_.at(0).hash_func_(*datum, hash_value, hash_value))) {
+      LOG_WARN("failed to do hash", K(ret));
     }
   } else {
     for (int64_t idx = 0; OB_SUCC(ret) && idx < MY_SPEC.join_keys_.count() ; ++idx) {
       if (OB_FAIL(MY_SPEC.join_keys_.at(idx)->eval(eval_ctx_, datum))) {
         LOG_WARN("failed to eval datum", K(ret));
-      } else {
-        hash_value = MY_SPEC.hash_funcs_.at(idx).hash_func_(*datum, hash_value);
+      } else if (OB_FAIL(MY_SPEC.hash_funcs_.at(idx).hash_func_(*datum, hash_value, hash_value))) {
+        LOG_WARN("failed to do hash", K(ret));
       }
     }
   }

@@ -207,12 +207,13 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
 
         if (OB_SUCC(ret)) {
           int64_t start = pos;
+          const uint64_t sub_type = col->is_xmltype() ?
+                                    col->get_sub_data_type() : static_cast<uint64_t>(col->get_geo_type());
           if (OB_FAIL(ob_sql_type_str(col->get_meta_type(),
                                       col->get_accuracy(),
                                       col->get_extended_type_info(),
                                       default_length_semantics,
-                                      buf, buf_len, pos,
-                                      col->get_geo_type()))) {
+                                      buf, buf_len, pos, sub_type))) {
             SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(col->get_data_type()), K(*col), K(ret));
           } else if (is_oracle_mode) {
             int64_t end = pos;

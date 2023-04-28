@@ -1016,6 +1016,13 @@ int ObDDLService::generate_schema(
     }
   }
 
+  // check udt id invalid
+  if (OB_SUCC(ret) && is_oracle_mode) {
+    if (OB_FAIL(check_table_udt_id_is_exist(guard, schema, tenant_id))) {
+      LOG_WARN("check udt id failed", K(ret));
+    }
+  }
+
   // fill table schema for interval part
   if (OB_SUCC(ret) && schema.has_partition()
       && schema.is_interval_part()) {
@@ -1080,6 +1087,52 @@ int ObDDLService::get_uk_cst_id_for_self_ref(const ObIArray<ObTableSchema> &tabl
         }
       }
     }
+  }
+
+  return ret;
+}
+
+int ObDDLService::check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const share::schema::ObTableSchema &table_schema,
+                                              const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema::const_column_iterator tmp_begin = table_schema.column_begin();
+  ObTableSchema::const_column_iterator tmp_end = table_schema.column_end();
+  for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+    ObColumnSchemaV2 *col = (*tmp_begin);
+    if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get column schema failed", K(ret));
+    } else if (col->is_extend()) {
+      // delete hidden primary key
+      if (OB_FAIL(check_udt_id_is_exist(schema_guard, *col, tenant_id))) {
+        LOG_WARN("fail to check column udt id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                                        const share::schema::ObColumnSchemaV2 &col_schema,
+                                        const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t udt_id = col_schema.get_sub_data_type();
+  const ObUDTTypeInfo *udt_info = NULL;
+
+  if (OB_FAIL(schema_guard.get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(tenant_id), K(udt_id));
+  } else if (OB_NOT_NULL(udt_info)) {
+    // do nothing
+  } else if (OB_FAIL(schema_guard.get_udt_info(OB_SYS_TENANT_ID, udt_id, udt_info))) {
+    LOG_WARN("get udt info failed", K(ret), K(OB_SYS_TENANT_ID), K(udt_id));
+  } else if (OB_NOT_NULL(udt_info)) {
+    // do nothing
+  } else {
+    ret = OB_ERR_INVALID_DATATYPE;
+    LOG_WARN("invalid column udt id", K(ret), K(udt_id));
   }
 
   return ret;
@@ -3971,6 +4024,32 @@ int ObDDLService::drop_constraint_caused_by_drop_column(
   return ret;
 }
 
+int ObDDLService::get_all_dropped_udt_hidden_column_ids(const ObTableSchema &orig_table_schema, const ObColumnSchemaV2 &orig_column_schema,
+                                                        common::ObIArray<int64_t> &drop_cols_id_arr, int64_t &columns_cnt_in_new_table)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check if oracle compat mode", K(ret));
+  } else if (is_oracle_mode && orig_column_schema.is_xmltype()) {
+    ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+    if (OB_FAIL(orig_table_schema.get_column_schema_in_same_col_group(orig_column_schema.get_column_id(),
+                                                                      orig_column_schema.get_udt_set_id(),
+                                                                      hidden_cols))) {
+      LOG_WARN("failed to get column schema", K(ret));
+    } else {
+      for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(drop_cols_id_arr.push_back(hidden_cols.at(i)->get_column_id()))) {
+          LOG_WARN("fail to push back column id", K(ret), KPC(hidden_cols.at(i)));
+        } else {
+          columns_cnt_in_new_table--;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::get_all_dropped_column_ids(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const ObTableSchema &orig_table_schema,
@@ -3999,6 +4078,10 @@ int ObDDLService::get_all_dropped_column_ids(
         LOG_WARN("fail to push back column id", K(ret), KPC(orig_column_schema));
       } else {
         columns_cnt_in_new_table--;
+        if (OB_FAIL(get_all_dropped_udt_hidden_column_ids(orig_table_schema, *orig_column_schema,
+                                                          drop_cols_id_arr, columns_cnt_in_new_table))) {
+           LOG_WARN("fail to push back udt hidden column id", K(ret), KPC(orig_column_schema));
+        }
       }
     } else {/* do nothing. */}
   }
@@ -7357,6 +7440,37 @@ int ObDDLService::update_new_table_rls_flag(
   return ret;
 }
 
+int ObDDLService::drop_udt_hidden_columns(const ObTableSchema &origin_table_schema, ObTableSchema &new_table_schema,
+                                          const ObColumnSchemaV2 &new_origin_col, int64_t new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to get oracle mode", K(ret));
+  } else if (is_oracle_mode && new_origin_col.is_xmltype()) {
+    ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+    if (OB_FAIL(new_table_schema.get_column_schema_in_same_col_group(new_origin_col.get_column_id(),
+                                                                     new_origin_col.get_udt_set_id(),
+                                                                     hidden_cols))) {
+      LOG_WARN("failed to get column schema", K(ret));
+    } else {
+      for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
+        ObColumnSchemaV2 *next_col = new_table_schema.get_column_schema_by_prev_next_id(hidden_cols.at(i)->get_next_column_id());
+        if (OB_ISNULL(next_col)) {
+          // do nothing since local_column is tail column
+        } else {
+          next_col->set_prev_column_id(hidden_cols.at(i)->get_prev_column_id());
+          next_col->set_schema_version(new_schema_version);
+        }
+        if (OB_FAIL(new_table_schema.delete_column(hidden_cols.at(i)->get_column_name_str()))) {
+          LOG_WARN("fail to delete column", K(ret), K(hidden_cols.at(i)->get_column_name_str()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::drop_column_update_new_table(
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
@@ -7386,6 +7500,8 @@ int ObDDLService::drop_column_update_new_table(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(new_table_schema.delete_column(new_origin_col->get_column_name_str()))) {
       LOG_WARN("fail to delete column", K(ret), K(new_origin_col->get_column_name_str()));
+    } else if (OB_FAIL(drop_udt_hidden_columns(origin_table_schema, new_table_schema, *new_origin_col, new_schema_version))) {
+      LOG_WARN("fail to delete udt hidden column", K(ret), K(new_origin_col->get_column_name_str()));
     }
   }
   return ret;
@@ -7454,17 +7570,31 @@ int ObDDLService::add_new_column_to_table_schema(
                K(ret), K(alter_column_schema), K(max_used_column_id));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table add column without column_id");
     } else {
-      alter_column_schema.set_column_id(++max_used_column_id);
-      alter_column_schema.set_rowkey_position(0);
-      alter_column_schema.set_index_position(0);
-      alter_column_schema.set_not_part_key();
-      alter_column_schema.set_table_id(new_table_schema.get_table_id());
-      alter_column_schema.set_tenant_id(new_table_schema.get_tenant_id());
-      if (new_table_schema.is_primary_vp_table()) {
-        // The last column add in the primary VP
-        alter_column_schema.add_column_flag(PRIMARY_VP_COLUMN_FLAG);
+      if (alter_column_schema.is_udt_hidden_column()) {
+        // udt hidden column
+        char col_name[128] = {0};
+        alter_column_schema.set_udt_set_id(max_used_column_id);
+        databuff_printf(col_name, 128, "SYS_NC%05lu$",max_used_column_id + 1);
+        if (OB_FAIL(alter_column_schema.set_column_name(col_name))) {
+          SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+        }
       }
-      new_table_schema.set_max_used_column_id(max_used_column_id);
+      if (OB_SUCC(ret)) {
+        alter_column_schema.set_column_id(++max_used_column_id);
+        alter_column_schema.set_rowkey_position(0);
+        alter_column_schema.set_index_position(0);
+        alter_column_schema.set_not_part_key();
+        alter_column_schema.set_table_id(new_table_schema.get_table_id());
+        alter_column_schema.set_tenant_id(new_table_schema.get_tenant_id());
+        if (new_table_schema.is_primary_vp_table()) {
+          // The last column add in the primary VP
+          alter_column_schema.add_column_flag(PRIMARY_VP_COLUMN_FLAG);
+        }
+        if (alter_column_schema.is_xmltype()) {
+          alter_column_schema.set_udt_set_id(alter_column_schema.get_column_id());
+        }
+        new_table_schema.set_max_used_column_id(max_used_column_id);
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -9996,6 +10126,15 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                     need_update_index_table, alter_locality_op))) {
           LOG_WARN("failed to set new table options", K(ret), K(new_table_schema),
           K(*orig_table_schema), K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        bool is_oracle_mode = false;
+        if (OB_FAIL(orig_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+          LOG_WARN("check if oracle compat mode failed", K(ret));
+        } else if (is_oracle_mode && OB_FAIL(check_table_udt_id_is_exist(schema_guard, alter_table_schema, tenant_id))) {
+           LOG_WARN("check udt id failed", KR(ret), K(alter_table_schema));
         }
       }
 

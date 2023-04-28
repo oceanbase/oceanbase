@@ -33,6 +33,7 @@ public:
   virtual bool operator !=(const ObLSRouterKey &other) const;
   virtual bool is_valid() const;
   virtual uint64_t hash() const;
+  virtual int hash(uint64_t &hash_val) const;
   virtual int64_t size() const { return sizeof(*this); }
   virtual int deep_copy(char *buf, const int64_t buf_len, ObLSRouterKey *&key) const;
   inline int64_t get_cluster_id() const { return cluster_id_; }

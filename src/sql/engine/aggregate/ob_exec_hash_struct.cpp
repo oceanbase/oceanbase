@@ -32,9 +32,11 @@ uint64_t ObHashCols::inner_hash() const
       for (int32_t i = 0; i < group_col_count; ++i) {
         if (hash_col_idx_->at(i).index_ < stored_row_->reserved_cells_count_) {
           const ObObj &cell = cells[hash_col_idx_->at(i).index_];
-          result = cell.is_string_type() ?
-                   cell.varchar_murmur_hash(hash_col_idx_->at(i).cs_type_, result) :
-                   cell.hash(result);
+          if (cell.is_string_type()) {
+            result = cell.varchar_murmur_hash(hash_col_idx_->at(i).cs_type_, result);
+          } else {
+            cell.hash(result, result);
+          }
         }
       }
     } else if (row_ != NULL && row_->is_valid()) {
@@ -44,9 +46,11 @@ uint64_t ObHashCols::inner_hash() const
         int64_t real_index = row_->projector_size_ > 0 ?
             projector[hash_col_idx_->at(i).index_] : hash_col_idx_->at(i).index_;
         const ObObj &cell = cells[real_index];
-        result = cell.is_string_type() ?
-            cell.varchar_murmur_hash(hash_col_idx_->at(i).cs_type_, result) :
-            cell.hash(result);
+        if (cell.is_string_type()) {
+          result = cell.varchar_murmur_hash(hash_col_idx_->at(i).cs_type_, result);
+        } else {
+          cell.hash(result, result);
+        }
       }
     }
   }

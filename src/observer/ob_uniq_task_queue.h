@@ -69,6 +69,7 @@ public:
   // The hash() and compare_without_version(...) are used to remove duplication when
   // adding tasks into queue.
   virtual int64_t hash() const = 0;
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   virtual bool compare_without_version(const Task &other) const = 0;
   // The following two interfaces are used to update the waiting tasks with same key.
   virtual bool need_assign_when_equal() const = 0;

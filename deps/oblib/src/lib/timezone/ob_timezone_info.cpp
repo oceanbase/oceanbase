@@ -39053,16 +39053,30 @@ ObTZNameKey::ObTZNameKey(const ObTZNameKey &key)
   }
 }
 
-uint64_t ObTZNameKey::hash(uint64_t seed) const
+uint64_t ObTZNameKey::hash() const
 {
   uint64_t seed_ret = 0;
   int32_t str_len = static_cast<int32_t>(strlen(tz_name_));
   if (OB_ISNULL(tz_name_) || OB_UNLIKELY(str_len > OB_MAX_TZ_NAME_LEN)) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid tz_name", K(str_len));
   } else {
-    seed_ret = murmurhash(tz_name_, str_len, seed);
+    seed_ret = murmurhash(tz_name_, str_len, 0);
   }
   return seed_ret;
+}
+
+int ObTZNameKey::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  int ret = OB_SUCCESS;
+  hash_val = 0;
+  int32_t str_len = static_cast<int32_t>(strlen(tz_name_));
+  if (OB_ISNULL(tz_name_) || OB_UNLIKELY(str_len > OB_MAX_TZ_NAME_LEN)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tz_name", K(ret), K(str_len));
+  } else {
+    hash_val = murmurhash(tz_name_, str_len, seed);
+  }
+  return ret;
 }
 
 void ObTZMapWrap::set_tz_map(const common::ObTZInfoMap *timezone_info_map)

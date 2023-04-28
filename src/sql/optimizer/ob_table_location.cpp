@@ -77,13 +77,16 @@ bool ObListPartMapKey::operator==(const ObListPartMapKey &other) const {
   return row_ == other.row_;
 }
 
-int64_t ObListPartMapKey::hash() const
+int ObListPartMapKey::hash(uint64_t &hash_val) const
 {
-  int64_t hash_value = 0;
-  for (int64_t i = 0; i < row_.get_count(); i ++) {
-    hash_value = row_.get_cell(i).hash(hash_value);
+  int ret = OB_SUCCESS;
+  hash_val = 0;
+  for (int64_t i = 0; i < row_.get_count() && OB_SUCC(ret); i ++) {
+    if (OB_FAIL(row_.get_cell(i).hash(hash_val, hash_val))) {
+      LOG_WARN("hash failed", K(ret), K(row_.get_cell(i)));
+    }
   }
-  return hash_value;
+  return ret;
 }
 
 bool ObHashPartMapKey::operator==(const ObHashPartMapKey &other) const {
@@ -92,9 +95,9 @@ bool ObHashPartMapKey::operator==(const ObHashPartMapKey &other) const {
 
 int64_t ObHashPartMapKey::hash() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObObj idx_obj(part_idx_);
-  hash_value = idx_obj.hash(hash_value);
+  idx_obj.hash(hash_value, hash_value);
   return hash_value;
 }
 

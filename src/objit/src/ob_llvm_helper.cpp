@@ -109,7 +109,8 @@ static ObGetIRType OB_IR_TYPE[common::ObMaxType + 1] =
   NULL,                                                    //46.ObLobType
   NULL,                                                    //47.ObJsonType
   NULL,                                                    //48.ObGeometryType
-  NULL,                                                    //49.ObMaxType
+  NULL,                                                    //49.ObUserDefinedSQLType
+  NULL,                                                    //50.ObMaxType
 };
 
 template<typename T, int64_t N>

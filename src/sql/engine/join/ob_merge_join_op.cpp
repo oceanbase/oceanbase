@@ -820,10 +820,16 @@ int ObMergeJoinOp::calc_equal_conds(int64_t &cmp_res)
     } else {
       if (l_datum->is_null() && r_datum->is_null()) {
         cmp_res = (T_OP_NSEQ == equal_cond.expr_->type_) ? 0 : -1;
-      } else if (0 != (cmp_res = equal_cond.ns_cmp_func_(*l_datum, *r_datum))) {
-        cmp_res *= MY_SPEC.merge_directions_.at(i);
-        if (equal_cond.is_opposite_) {
-          cmp_res *= -1;
+      } else {
+        int cmp_ret = 0;
+        if (OB_FAIL(equal_cond.ns_cmp_func_(*l_datum, *r_datum, cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret != 0) {
+          cmp_res = cmp_ret;
+          cmp_res *= MY_SPEC.merge_directions_.at(i);
+          if (equal_cond.is_opposite_) {
+            cmp_res *= -1;
+          }
         }
       }
     }
@@ -1203,8 +1209,14 @@ int ObMergeJoinOp::calc_equal_conds_with_batch_idx(int64_t &cmp_res)
     ObDatum *r_datum = &r_child_expr->locate_expr_datum(eval_ctx_, r_table_batch_idx);
     if (l_datum->is_null() && r_datum->is_null()) {
       cmp_res = (T_OP_NSEQ == equal_cond.expr_->type_) ? 0 : -1;
-    } else if (0 != (cmp_res = equal_cond.ns_cmp_func_(*l_datum, *r_datum))) {
-      cmp_res *= MY_SPEC.merge_directions_.at(i);
+    } else {
+      int cmp_ret = 0;
+      if (OB_FAIL(equal_cond.ns_cmp_func_(*l_datum, *r_datum, cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp_ret != 0) {
+        cmp_res = cmp_ret;
+        cmp_res *= MY_SPEC.merge_directions_.at(i);
+      }
     }
     LOG_DEBUG("calc equal cond with batch idx", KPC(l_datum), KPC(r_datum));
 
@@ -1247,7 +1259,11 @@ int ObMergeJoinOp::calc_equal_conds_with_stored_row(const ObRADatumStore::Stored
     if (l_table_datum->is_null() && r_table_datum->is_null()) {
       cmp_res = (T_OP_NSEQ == equal_cond.expr_->type_) ? 0 : -1;
     } else {
-      if (0 != (cmp_res = equal_cond.ns_cmp_func_(*l_table_datum, *r_table_datum))) {
+      int cmp_ret = 0;
+      if (OB_FAIL(equal_cond.ns_cmp_func_(*l_table_datum, *r_table_datum, cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp_ret != 0) {
+        cmp_res = cmp_ret;
         cmp_res *= MY_SPEC.merge_directions_.at(i);
       }
     }

@@ -967,7 +967,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
       if (OB_ISNULL(item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column item", K(i), K(item));
-      } else if (item->is_virtual_generated_column()) {
+      } else if (item->is_virtual_generated_column() && !item->is_xml_column()) {
         // do nothing.
       } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
         LOG_WARN("get base column id failed", K(ret), K(item));

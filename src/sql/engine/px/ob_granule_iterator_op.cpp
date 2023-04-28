@@ -695,8 +695,9 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
     if (OB_SUCC(ret) && !is_match) {
       datum.int_ = &tablet_id;
       datum.len_ = sizeof(tablet_id);
-      hash_val = MY_SPEC.hash_func_.hash_func_(datum, hash_val);
-      if (OB_FAIL(bloom_filter_ptr_->might_contain(hash_val, is_match))) {
+      if (OB_FAIL(MY_SPEC.hash_func_.hash_func_(datum, hash_val, hash_val))) {
+        LOG_WARN("fail to calc hash value", K(ret));
+      } else if (OB_FAIL(bloom_filter_ptr_->might_contain(hash_val, is_match))) {
         LOG_WARN("fail to check filter might contain value", K(ret), K(hash_val));
       } else {
         partition_pruning = !is_match;

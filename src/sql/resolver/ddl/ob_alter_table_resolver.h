@@ -79,6 +79,8 @@ public:
   int resolve_modify_all_trigger(const ParseNode &node);
   int resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node);
 
+  int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, const AlterColumnSchema &column_schema);
+
 private:
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard *schema_guard,

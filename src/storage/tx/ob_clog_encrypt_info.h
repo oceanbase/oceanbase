@@ -160,11 +160,14 @@ public:
   int insert_(const Key &key, const Value &value, Value **old_value)
   {
     int ret = OB_SUCCESS;
+    uint64_t hash_val = 0;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "ObSimpleHashMap not init", K(ret));
+    } else if (OB_FAIL(hashfunc_(key, hash_val))) {
+      TRANS_LOG(WARN, "do hash failed", K(ret));
     } else {
-      uint64_t pos = hashfunc_(key) % BUCKETS_CNT;
+      uint64_t pos = hash_val % BUCKETS_CNT;
       Value *curr = buckets_[pos].next_;
       while (OB_NOT_NULL(curr)) {
         if (curr->contain(key)) {
@@ -200,12 +203,14 @@ public:
   int del(const Key &key)
   {
     int ret = OB_SUCCESS;
-
+    uint64_t hash_val = 0;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "ObTransHashMap not init", K(ret));
+    } else if (OB_FAIL(hashfunc_(key, hash_val))) {
+      TRANS_LOG(WARN, "do hash failed", K(ret));
     } else {
-      int64_t pos = hashfunc_(key) % BUCKETS_CNT;
+      int64_t pos = hash_val % BUCKETS_CNT;
       Value *curr = buckets_[pos].next_;
       while (OB_NOT_NULL(curr)) {
         if (curr->contain(key)) {
@@ -226,13 +231,15 @@ public:
   int get(const Key &key, Value *&value)
   {
     int ret = OB_SUCCESS;
-
+    uint64_t hash_val = 0;
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "ObTransHashMap not init", K(ret), K(key));
+    } else if (OB_FAIL(hashfunc_(key, hash_val))) {
+      TRANS_LOG(WARN, "do hash failed", K(ret));
     } else {
       Value *tmp_value = NULL;
-      int64_t pos = hashfunc_(key) % BUCKETS_CNT;
+      int64_t pos = hash_val % BUCKETS_CNT;
 
       tmp_value = buckets_[pos].next_;
       while (OB_NOT_NULL(tmp_value)) {

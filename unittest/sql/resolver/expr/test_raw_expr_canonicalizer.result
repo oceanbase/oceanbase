@@ -280,7 +280,8 @@ not not a > b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -327,7 +328,8 @@ not not a > b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     }
   ]
 }
@@ -403,7 +405,8 @@ not a > b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -450,7 +453,8 @@ not a > b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     }
   ]
 }
@@ -526,7 +530,8 @@ not a = b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -573,7 +578,8 @@ not a = b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     }
   ]
 }
@@ -649,7 +655,8 @@ not a < b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     },
      {
       "item_type":"T_REF_COLUMN",
@@ -696,7 +703,8 @@ not a < b
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     }
   ]
 }
@@ -773,7 +781,8 @@ not a is true
       "is_unique_key_column":false,
       "is_mul_key_column":false,
       "is_strict_json_column":0,
-      "srs_id":-1
+      "srs_id":-1,
+      "udt_set_id":0
     },
      {
       "item_type":"T_BOOL",
@@ -910,7 +919,8 @@ not a between 1 and 100
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         },
          {
           "item_type":"T_INT",
@@ -1017,7 +1027,8 @@ not a between 1 and 100
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         },
          {
           "item_type":"T_INT",
@@ -2084,7 +2095,8 @@ not(not(a))
               "is_unique_key_column":false,
               "is_mul_key_column":false,
               "is_strict_json_column":0,
-              "srs_id":-1
+              "srs_id":-1,
+              "udt_set_id":0
             }
           ]
         }
@@ -2224,7 +2236,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     }
@@ -2329,7 +2342,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     },
@@ -2405,7 +2419,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     }
@@ -2510,7 +2525,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     },
@@ -2586,7 +2602,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     }
@@ -2691,7 +2708,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     },
@@ -2767,7 +2785,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     },
@@ -2843,7 +2862,8 @@ A or (A And B) or (A And C)
           "is_unique_key_column":false,
           "is_mul_key_column":false,
           "is_strict_json_column":0,
-          "srs_id":-1
+          "srs_id":-1,
+          "udt_set_id":0
         }
       ]
     }

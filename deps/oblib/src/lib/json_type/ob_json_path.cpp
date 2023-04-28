@@ -2586,11 +2586,11 @@ static constexpr unsigned UNICODE_COMBINING_MARK_MAX = 0x36F;
 static constexpr unsigned UNICODE_EXTEND_MARK_MIN = 0x2E80;
 static constexpr unsigned UNICODE_EXTEND_MARK_MAX = 0x9fff;
 
-static inline bool unicode_combining_mark(unsigned codepoint) {
+bool ObJsonPathUtil::unicode_combining_mark(unsigned codepoint) {
   return ((UNICODE_COMBINING_MARK_MIN <= codepoint) && (codepoint <= UNICODE_COMBINING_MARK_MAX));
 }
 
-static bool is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t len)
+bool ObJsonPathUtil::is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t len)
 {
   bool ret_bool = false;
   int ret = OB_SUCCESS;
@@ -2605,20 +2605,20 @@ static bool is_utf8_unicode_charator(const char* ori, uint64_t& start, int64_t l
   return ret_bool;
 }
 
-static bool is_letter(unsigned codepoint, const char* ori, uint64_t start, uint64_t end) {
+bool ObJsonPathUtil::is_letter(unsigned codepoint, const char* ori, uint64_t start, uint64_t end) {
   bool ret_bool = true;
 
   ret_bool = isalpha(codepoint);
   if (ret_bool) {
   } else if (!ret_bool && (codepoint >= UNICODE_EXTEND_MARK_MIN
              && codepoint <= UNICODE_EXTEND_MARK_MAX
-             && is_utf8_unicode_charator(ori, start, end - start))) {
+             && ObJsonPathUtil::is_utf8_unicode_charator(ori, start, end - start))) {
     ret_bool = true;
   }
   return ret_bool;
 }
 
-static bool is_connector_punctuation(unsigned codepoint) {
+bool ObJsonPathUtil::is_connector_punctuation(unsigned codepoint) {
   bool ret_bool = true;
   switch (codepoint) {
     case 0x5F:    // low line

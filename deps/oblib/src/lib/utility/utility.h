@@ -1171,6 +1171,7 @@ public:
   ~ObIntWarp() { reset(); }
   void reset() { v_ = 0; }
   uint64_t hash() const { return v_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   uint64_t get_value() const { return v_; }
   int compare(const ObIntWarp &other) const
   {

@@ -129,15 +129,19 @@ private:
     ~ObHashColumn()
     {}
 
-    uint64_t hash() const
+    int hash(uint64_t &hash_val) const
     {
+      int ret = OB_SUCCESS;
       if (hash_val_ == 0) {
-        hash_val_ = inner_hash();
+        if (OB_FAIL(inner_hash(hash_val_))) {
+          LOG_WARN("fail to do hash", K(ret));
+        }
       }
-      return hash_val_;
+      hash_val = hash_val_;
+      return ret;
     }
 
-    uint64_t inner_hash() const;
+    int inner_hash(uint64_t &result) const;
 
     bool operator ==(const ObHashColumn &other) const;
 

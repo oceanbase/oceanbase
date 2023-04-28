@@ -167,6 +167,11 @@ struct LSKey {
     hash_val = common::murmurhash(&hash_val, sizeof(id_), id_);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const LSKey &palf_id) const
   {
     if (palf_id.id_ < id_) {

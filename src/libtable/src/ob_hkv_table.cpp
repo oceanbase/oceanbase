@@ -152,11 +152,11 @@ ObRowkey ObHKVTable::Entity::get_rowkey() const
 
 int64_t ObHKVTable::Entity::hash_rowkey() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   ObObj value;
   for (int64_t i = 0; i < 3; ++i) {
     (void)get_rowkey_value(i, value);
-    hash_value = value.hash(hash_value);
+    (void)value.hash(hash_value, hash_value);
   }
   return hash_value;
 }

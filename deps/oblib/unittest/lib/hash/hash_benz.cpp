@@ -94,9 +94,10 @@ private:
 class hashfunc_t
 {
 public:
-  uint64_t operator () (uint64_t key)
+  int operator () (uint64_t key, uint64_t &hash_val)
   {
-    return key;
+    hash_val = key;
+    return OB_SUCCESS;
   };
 };
 

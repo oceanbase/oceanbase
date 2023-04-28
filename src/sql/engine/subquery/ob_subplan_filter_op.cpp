@@ -35,13 +35,13 @@ bool DatumRow::operator==(const DatumRow &other) const
   return cmp;
 }
 
-uint64_t DatumRow::hash(uint64_t seed) const
+int DatumRow::hash(uint64_t &hash_val, uint64_t seed) const
 {
-  uint64_t hash_val = seed;
+  hash_val = seed;
   for (int64_t i = 0; i < cnt_; ++i) {
     hash_val = murmurhash(elems_[i].ptr_, elems_[i].len_, hash_val);
   }
-  return hash_val;
+  return OB_SUCCESS;
 }
 
 ObSubQueryIterator::ObSubQueryIterator(ObOperator &op)

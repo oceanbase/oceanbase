@@ -299,7 +299,11 @@ public:
                             ObRawExprFactory &expr_factory,
                             const ObDMLStmt *stmt,
                             ObDMLStmt *&new_stmt);
-
+  static int create_udt_hidden_columns(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       const ObColumnRefRawExpr &udt_expr,
+                                       ObColumnRefRawExpr *&col_expr,
+                                       bool &need_transform);
   /**
    * @brief joined_table需要维护一个基表的table id列表
    * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；
@@ -877,6 +881,7 @@ public:
                                       ObIArray<ObRawExpr*> &set_exprs,
                                       ObIArray<ObRawExpr*> &equal_conds);
 
+  static int extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udt_exprs);
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,
@@ -1754,7 +1759,6 @@ private:
                                 ObIArray<ObRawExpr *> &new_column_exprs);
 
   static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
-
 };
 
 

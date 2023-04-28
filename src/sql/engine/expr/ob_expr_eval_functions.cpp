@@ -312,6 +312,17 @@
 #include "ob_expr_cast.h"
 #include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
+#include "ob_expr_priv_xml_binary.h"
+#include "ob_expr_sys_makexml.h"
+#include "ob_expr_priv_xml_binary.h"
+#include "ob_expr_xmlparse.h"
+#include "ob_expr_xml_element.h"
+#include "ob_expr_xml_attributes.h"
+#include "ob_expr_extract_value.h"
+#include "ob_expr_extract_xml.h"
+#include "ob_expr_xml_serialize.h"
+#include "ob_expr_xmlcast.h"
+#include "ob_expr_update_xml.h"
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
@@ -1005,6 +1016,16 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprRandstr::calc_random_str,                                     /* 591 */
   NULL, //ObExprNlsInitCap::calc_nls_initcap_expr                     /* 592 */
   ObExprPrefixPattern::eval_prefix_pattern,                           /* 593 */
+  ObExprSysMakeXML::eval_sys_makexml,                                 /* 594 */
+  ObExprPrivXmlBinary::eval_priv_xml_binary,                          /* 595 */
+  ObExprXmlparse::eval_xmlparse,                                      /* 596 */
+  ObExprXmlElement::eval_xml_element,                                 /* 597 */
+  ObExprXmlAttributes::eval_xml_attributes,                           /* 598 */
+  ObExprExtractValue::eval_extract_value,                             /* 599 */
+  ObExprExtractXml::eval_extract_xml,                                 /* 600 */
+  ObExprXmlSerialize::eval_xml_serialize,                             /* 601 */
+  ObExprXmlcast::eval_xmlcast,                                        /* 602 */
+  ObExprUpdateXml::eval_update_xml,                                   /* 603 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

@@ -28,6 +28,7 @@ public:
     : key_(k)
   {}
   uint64_t hash() const { return murmurhash(&key_, sizeof(key_), 0); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const Key &other) const { return key_ == other.key_; }
   TO_STRING_KV(K_(key));
   int64_t key_;
@@ -44,6 +45,7 @@ public:
     : key_(k)
   {}
   uint64_t hash() const { return key_ * HASH_MAGIC_NUM; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const MacroKey &other) const { return key_ == other.key_; }
   TO_STRING_KV(K_(key));
   int64_t key_;
@@ -59,6 +61,7 @@ public:
     : key_(k)
   {}
   uint64_t hash() const { return 1; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const BadKey &other) const { return key_ == other.key_; }
   TO_STRING_KV(K_(key));
   int64_t key_;
@@ -74,6 +77,7 @@ public:
     : key_(k)
   {}
   uint64_t hash() const { return key_ % 7; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ModKey &other) const { return key_ == other.key_; }
   TO_STRING_KV(K_(key));
   int64_t key_;

@@ -62,7 +62,7 @@ enum ObObjTypeStoreClass
   ObIntSC, // signed integers, time types
   ObUIntSC, // unsigned integers, year, float, double
   ObNumberSC, // number
-  ObStringSC, // varchar, char, binary, raw, nvarchar2, nchar
+  ObStringSC, // varchar, char, binary, raw, nvarchar2, nchar, udt_bitmap
   ObTextSC, // text
   ObOTimestampSC, // timestamptz, timestamp ltz, timestamp nano
   ObIntervalSC, //oracle interval year to month interval day to second
@@ -115,6 +115,7 @@ OB_INLINE ObObjTypeStoreClass *get_store_class_map()
     ObLobSC,    //ObLobTC
     ObJsonSC,   //ObJsonTC
     ObGeometrySC, //ObGeometryTC
+    ObStringSC, // ObUserDefinedSQLTC， UDT null_bitmaps
     ObMaxSC // ObMaxTC
   };
   STATIC_ASSERT(ARRAYSIZEOF(store_class_map) == common::ObMaxTC + 1,
@@ -174,6 +175,7 @@ OB_INLINE int64_t *get_type_size_map()
     -1, //Lob
     -1, //Json
     -1, //Geometry
+    -1, //ObUserDefinedSQLType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(type_size_map) == common::ObMaxType + 1,
@@ -234,6 +236,7 @@ OB_INLINE int64_t *get_estimate_base_store_size_map()
     8, //Lob
     9, // ObJsonType
     9, // ObGeometryType
+    8, // ObUserDefinedSQLType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(estimate_base_store_size_map) == common::ObMaxType + 1,

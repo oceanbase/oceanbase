@@ -36,13 +36,19 @@ namespace sql
 {
 uint64_t ObAggregateDistinctItem::hash() const
 {
+  int ret = OB_SUCCESS;
   uint64_t hash_id = 0;
   if (OB_ISNULL(cells_) || OB_ISNULL(cs_type_list_)) {
-    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "cells or cs type list is null");
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("cells or cs type list is null", K(ret));
   } else {
     hash_id = group_id_ + col_idx_;
-    for (int64_t i = 0; i < cs_type_list_->count(); ++i) {
-      hash_id = (cells_[i].is_string_type() ? cells_[i].varchar_hash(cs_type_list_->at(i), hash_id) : cells_[i].hash(hash_id));
+    for (int64_t i = 0; i < cs_type_list_->count() && OB_SUCC(ret); ++i) {
+      if (cells_[i].is_string_type()) {
+        hash_id = cells_[i].varchar_hash(cs_type_list_->at(i), hash_id);
+      } else {
+        ret = cells_[i].hash(hash_id, hash_id);
+      }
     }
   }
   return hash_id;
@@ -392,7 +398,8 @@ int ObAggregateFunction::init(const int64_t input_column_count,
         case T_FUN_HYBRID_HIST:
         case T_FUN_TOP_FRE_HIST:
         case T_FUN_JSON_ARRAYAGG:
-        case T_FUN_JSON_OBJECTAGG: {
+        case T_FUN_JSON_OBJECTAGG:
+        case T_FUN_ORA_XMLAGG: {
           aggr_fun_need_cell_ctx_ = true;
           break;
         }
@@ -1044,7 +1051,8 @@ int ObAggregateFunction::init_one_group(const int64_t group_id)
           case T_FUN_PL_AGG_UDF:
           case T_FUN_HYBRID_HIST:
           case T_FUN_JSON_ARRAYAGG:
-          case T_FUN_JSON_OBJECTAGG: {
+          case T_FUN_JSON_OBJECTAGG:
+          case T_FUN_ORA_XMLAGG: {
             void *mem1 = NULL;
             void *mem2 = NULL;
             ObGroupConcatCtx *gc_ctx = NULL;
@@ -1224,7 +1232,8 @@ int ObAggregateFunction::rollup_process(const ObTimeZoneInfo *tz_info,
           case T_FUN_PL_AGG_UDF:
           case T_FUN_HYBRID_HIST:
           case T_FUN_JSON_ARRAYAGG:
-          case T_FUN_JSON_OBJECTAGG: {
+          case T_FUN_JSON_OBJECTAGG:
+          case T_FUN_ORA_XMLAGG: {
             if (NULL == cell_ctx1 || NULL == cell_ctx2
               || NULL == cell_ctx1->gc_rs_ || NULL == cell_ctx2->gc_rs_) {
               ret = OB_ERR_UNEXPECTED;
@@ -1394,7 +1403,8 @@ int ObAggregateFunction::rollup_aggregation(const ObItemType aggr_fun,
   case T_FUN_PL_AGG_UDF:
   case T_FUN_HYBRID_HIST:
   case T_FUN_JSON_ARRAYAGG:
-  case T_FUN_JSON_OBJECTAGG: {
+  case T_FUN_JSON_OBJECTAGG:
+  case T_FUN_ORA_XMLAGG: {
     if (OB_ISNULL(group_concat_row_store1) || OB_ISNULL(group_concat_row_store2)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("group concat row store is null", K(ret));
@@ -1510,8 +1520,10 @@ int ObAggregateFunction::init_aggr_cell(const ObItemType aggr_fun, const ObNewRo
       if (OB_FAIL(llc_init(llc_bitmap))) {
         SQL_ENG_LOG(WARN, "llc_init failed in approx_count_distinct(_synopsis) function");
       } else {
-        uint64_t hash_value = llc_calc_hash_value(oprands, cs_type, has_null_cell);
-        if (has_null_cell) {
+        uint64_t hash_value = 0;
+        if (OB_FAIL(llc_calc_hash_value(oprands, cs_type, has_null_cell, hash_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (has_null_cell) {
           /*do nothing*/
         } else {
           if (OB_FAIL(llc_add_value(hash_value, llc_bitmap))) {
@@ -1561,7 +1573,8 @@ int ObAggregateFunction::init_aggr_cell(const ObItemType aggr_fun, const ObNewRo
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
     case T_FUN_JSON_ARRAYAGG:
-    case T_FUN_JSON_OBJECTAGG: {
+    case T_FUN_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG: {
       if (OB_ISNULL(cell_ctx)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("group concat row store is null", K(ret));
@@ -1677,7 +1690,8 @@ int ObAggregateFunction::calc_aggr_cell(const ObItemType aggr_fun,
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
     case T_FUN_JSON_ARRAYAGG: 
-    case T_FUN_JSON_OBJECTAGG: {
+    case T_FUN_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG: {
       if (OB_UNLIKELY(oprands.is_invalid())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("oprands is invalid", K(oprands));
@@ -1763,7 +1777,8 @@ int ObAggregateFunction::calc_aggr_cell(const ObItemType aggr_fun,
     case T_FUN_PL_AGG_UDF:
     case T_FUN_HYBRID_HIST:
     case T_FUN_JSON_ARRAYAGG:
-    case T_FUN_JSON_OBJECTAGG: {
+    case T_FUN_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG: {
       if (OB_ISNULL(cell_ctx)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("group concat row store is null", K(ret));
@@ -1786,8 +1801,10 @@ int ObAggregateFunction::calc_aggr_cell(const ObItemType aggr_fun,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("llc_bitmap is NULL");
       } else {
-        uint64_t hash_value = llc_calc_hash_value(oprands, cs_type, has_null_cell);
-        if (has_null_cell) {
+        uint64_t hash_value = 0;
+        if (OB_FAIL(llc_calc_hash_value(oprands, cs_type, has_null_cell, hash_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (has_null_cell) {
          /*do nothing*/
         } else {
           if (OB_FAIL(llc_add_value(hash_value, llc_bitmap))) {
@@ -2338,6 +2355,21 @@ int ObAggregateFunction::get_result(ObNewRow &row, const common::ObTimeZoneInfo 
                                            cell_ctx,
                                            T_FUN_KEEP_WM_CONCAT == aggr_fun,
                                            concat_obj))) {
+            LOG_WARN("failed to get wm_concat result", K(ret));
+          } else if (OB_FAIL(clone_cell(concat_obj, stored_row->reserved_cells_[aggr_idx]))) {
+            LOG_WARN("fail to clone cell", K(ret), K(concat_obj));
+          } else {
+            LOG_TRACE("concat_obj", K(stored_row->reserved_cells_[aggr_idx]));
+            *aggr_cell = stored_row->reserved_cells_[aggr_idx];
+          }
+          break;
+        }
+        case T_FUN_ORA_XMLAGG: {
+          ObGroupConcatCtx *cell_ctx = static_cast<ObGroupConcatCtx *>(get_agg_cell_ctx(group_id, node->ctx_idx_));
+          ObObj concat_obj;
+          if (OB_FAIL(get_ora_xmlagg_result(cexpr,
+                                            cell_ctx,
+                                            concat_obj))) {
             LOG_WARN("failed to get wm_concat result", K(ret));
           } else if (OB_FAIL(clone_cell(concat_obj, stored_row->reserved_cells_[aggr_idx]))) {
             LOG_WARN("fail to clone cell", K(ret), K(concat_obj));
@@ -3228,20 +3260,28 @@ int ObAggregateFunction::llc_init(ObObj *llc_bitmap)
   return ret;
 }
 
-uint64_t ObAggregateFunction::llc_calc_hash_value(const ObNewRow &oprands, ObCollationType cs_type, bool &has_null_cell)
+int ObAggregateFunction::llc_calc_hash_value(const ObNewRow &oprands,
+                                             ObCollationType cs_type,
+                                             bool &has_null_cell,
+                                             uint64_t &hash_value)
 {
+  int ret = OB_SUCCESS;
   has_null_cell = false;
-  uint64_t hash_value = 0;
-  for (int64_t i = 0; !has_null_cell && i < oprands.count_; ++i) {
+  hash_value = 0;
+  for (int64_t i = 0; !has_null_cell && i < oprands.count_ && OB_SUCC(ret); ++i) {
     if (oprands.cells_[i].is_null()) {
       has_null_cell = true;
     } else {
-      hash_value = oprands.cells_[i].is_string_type() ?
-                   oprands.cells_[i].varchar_hash(cs_type, hash_value) :
-                   oprands.cells_[i].hash(hash_value);
+      if (oprands.cells_[i].is_string_type()) {
+        hash_value = oprands.cells_[i].varchar_hash(cs_type, hash_value);
+      } else {
+        if (OB_FAIL(oprands.cells_[i].hash(hash_value, hash_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        }
+      }
     }
   }
-  return hash_value;
+  return ret;
 }
 
 
@@ -3290,6 +3330,15 @@ int ObAggregateFunction::compare_calc(ObObj &obj1,
       LOG_WARN("failed to get int", K(ret));
     }
   }
+  return ret;
+}
+
+int ObAggregateFunction::get_ora_xmlagg_result(const ObAggregateExpression *&cexpr,
+                                               ObGroupConcatCtx *&cell_ctx,
+                                               ObObj &concat_obj)
+{
+  UNUSEDx(cexpr, cell_ctx, concat_obj);
+  int ret = OB_NOT_IMPLEMENT; // ToDo: @gehao, implement soom later
   return ret;
 }
 

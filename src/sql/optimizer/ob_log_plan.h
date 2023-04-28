@@ -1765,6 +1765,7 @@ private:
     {
       return left_ids_.hash() + right_ids_.hash();;
     }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator ==(const JoinPathPairInfo &src_info) const
     {
       return (left_ids_ == src_info.left_ids_) && (right_ids_ == src_info.right_ids_);

@@ -473,7 +473,13 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
             && !ALLOW_BOOL_INPUT(expr.get_expr_type())) {
           ret = OB_ERR_CALL_WRONG_ARG;
           LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+        } else if (ObExtendType == from && ob_is_character_type(to, to_cs_type) && !op->is_called_in_sql()) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, static_cast<int>(strlen(op->get_name())), op->get_name());
+          LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+                   K(ret), K(from), K(to), K(op->get_name()), K(op->is_called_in_sql()));
         }
+
         if (OB_FAIL(ret)) {
         } else if (from != to && !cast_supported(from, from_cs_type, to, to_cs_type)
           && !my_session_->is_ps_prepare_stage()) {
@@ -1326,6 +1332,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
+      case T_FUN_ORA_XMLAGG: {
+        if (OB_FAIL(set_xmlagg_result_type(expr, result_type))) {
+          LOG_WARN("set xmlagg result type failed", K(ret));
+        }
+        break;
+      }
       case T_FUN_WM_CONCAT:
       case T_FUN_KEEP_WM_CONCAT: {
         need_add_cast = true;
@@ -1949,9 +1961,12 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 is_oracle_mode()
                 && ((ObLongTextType == param_expr->get_data_type()
                         || ob_is_lob_locator(param_expr->get_data_type())
-                        || ob_is_json(param_expr->get_data_type()))
+                        || ob_is_json(param_expr->get_data_type())
+                        || ob_is_xml_pl_type(param_expr->get_data_type(), param_expr->get_udt_id())
+                        || ob_is_user_defined_sql_type(param_expr->get_data_type()))
                     && (T_FUN_ORA_JSON_OBJECTAGG != expr.get_expr_type()
-                        && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()))
+                        && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
+                        && T_FUN_ORA_XMLAGG != expr.get_expr_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && ob_is_json(param_expr->get_data_type()))
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
@@ -1959,9 +1974,23 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && !expr.is_need_deserialize_row()
                 && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
-      ret = (ob_is_json(param_expr->get_data_type()) && !(expr.get_expr_type() == T_FUN_SUM || expr.get_expr_type() == T_FUN_AVG)) ?
-              OB_ERR_INVALID_CMP_OP : OB_ERR_INVALID_TYPE_FOR_OP;
-      LOG_WARN("lob or json type parameter not expected", K(ret));
+      if (ob_is_json(param_expr->get_data_type())
+          && !(expr.get_expr_type() == T_FUN_SUM
+               || expr.get_expr_type() == T_FUN_AVG)) {
+          ret = OB_ERR_INVALID_CMP_OP;
+          LOG_WARN("lob or json type parameter not expected", K(ret));
+      } else if ((ob_is_user_defined_sql_type(param_expr->get_data_type())
+                    || ob_is_user_defined_pl_type(param_expr->get_data_type()))
+                 && (expr.get_expr_type() == T_FUN_MAX
+                     || expr.get_expr_type() == T_FUN_MIN)) {
+        // other udt types not run here, xmltype does not have order or map member function for compare
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("does not have order or map member function for compare",
+          K(ret), K(param_expr->get_subschema_id()));
+      } else {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("lob or json type parameter not expected", K(ret));
+      }
     }
   }
   return ret;
@@ -2944,6 +2973,67 @@ int ObRawExprDeduceType::set_agg_json_array_result_type(ObAggFunRawExpr &expr,
   return ret;
 }
 
+int ObRawExprDeduceType::set_xmlagg_result_type(ObAggFunRawExpr &expr,
+                                                ObExprResType& result_type)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *col_expr = NULL;
+  if (OB_UNLIKELY(expr.get_real_param_count() < 1) ||
+      OB_ISNULL(col_expr = expr.get_param_expr(0))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else if (ObUserDefinedSQLType != col_expr->get_data_type() &&
+              ObNullType != col_expr->get_data_type() &&
+              ObExtendType != col_expr->get_data_type()) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid expr", K(col_expr->get_data_type()));
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 11, "SYS_IXMLAGG");
+  } else {
+    ObExprResType& col_type = const_cast<ObExprResType&>(col_expr->get_result_type());
+    const common::ObIArray<OrderItem>& order_item = expr.get_order_items();
+    for (int64_t i = 0; OB_SUCC(ret) && i < order_item.count(); ++i) {
+      ObRawExpr* order_expr = order_item.at(i).expr_;
+      if (OB_ISNULL(order_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("internal order expr is null", K(ret));
+      } else if (order_expr->get_expr_type() == T_REF_COLUMN) {
+        const ObColumnRefRawExpr *order_column = static_cast<const ObColumnRefRawExpr *>(order_expr);
+        if (order_column->is_lob_column()) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("Column of LOB type cannot be used for sorting", K(ret));
+        } else if (order_column->is_xml_column()) {
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        }
+      } else if (order_expr->get_result_type().get_type() == ObUserDefinedSQLType
+                  || order_expr->get_result_type().get_type() == ObExtendType) {
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_agg_xmlagg_result_type(expr, result_type))) {
+      LOG_WARN("set xmlagg result type failed", K(ret));
+    } else {
+      expr.set_result_type(result_type);
+    }
+  }
+  return ret;
+}
+int ObRawExprDeduceType::set_agg_xmlagg_result_type(ObAggFunRawExpr &expr,
+                                                    ObExprResType &result_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(expr.get_real_param_count() < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else {
+    result_type.set_sql_udt(ObXMLSqlType);
+  }
+  return ret;
+}
+
 bool ObRawExprDeduceType::skip_cast_expr(const ObRawExpr &parent,
                                          const int64_t child_idx)
 {
@@ -3130,12 +3220,14 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                (parent.get_expr_type() == T_FUN_REGR_SYY && i == 1) ||
                (parent.get_expr_type() == T_FUN_REGR_SXY && i == 1) ||
                (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 1) ||
-               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i > 0)) {
+               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i > 0) ||
+               (parent.get_expr_type() == T_FUN_ORA_XMLAGG && i > 0)) {
       //do nothing
     } else if (parent.get_expr_type() == T_FUN_WM_CONCAT ||
                parent.get_expr_type() == T_FUN_KEEP_WM_CONCAT ||
                (parent.get_expr_type() == T_FUN_JSON_OBJECTAGG && i == 0) ||
-               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i == 0)) {
+               (parent.get_expr_type() == T_FUN_ORA_JSON_OBJECTAGG && i == 0) ||
+               (parent.get_expr_type() == T_FUN_ORA_XMLAGG && i == 0)) {
       if (ob_is_string_type(child_ptr->get_result_type().get_type())
           && !ob_is_blob(child_ptr->get_result_type().get_type(), child_ptr->get_collation_type())) {
         /*do nothing*/

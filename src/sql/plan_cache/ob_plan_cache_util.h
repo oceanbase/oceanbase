@@ -177,11 +177,11 @@ struct ObSysVarInPC
 
   int64_t hash(int64_t seed) const
   {
-    int64_t hash_val = seed;
+    uint64_t hash_val = seed;
     for (int64_t i = 0; i < system_variables_.count(); ++i) {
-      hash_val = system_variables_.at(i).hash(hash_val);
+      system_variables_.at(i).hash(hash_val, hash_val);
     }
-    return hash_val;
+    return static_cast<int64_t>(hash_val);
   }
 
   void reset()

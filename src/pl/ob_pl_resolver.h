@@ -1074,6 +1074,11 @@ private:
 
   int init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &access_ident);
 
+  int resolve_sys_func_access(ObObjAccessIdent &access_ident,
+                              ObIArray<ObObjAccessIdx> &access_idxs,
+                              const ObSQLSessionInfo *session_info,
+                              const ObPLBlockNS &ns);
+
 private:
   ObPLResolveCtx resolve_ctx_;
   ObPLExternalNS external_ns_;

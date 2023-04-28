@@ -1435,7 +1435,9 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < index_dml_info.column_exprs_.count(); ++i) {
       const ObColumnRefRawExpr *col_expr = index_dml_info.column_exprs_.at(i);
-      if (lib::is_oracle_mode() && col_expr->is_virtual_generated_column() && !optimizer_context_.has_trigger()) {
+      if (lib::is_oracle_mode() &&
+          (col_expr->is_virtual_generated_column() || col_expr->is_xml_column()) && // udt/xml column need remove
+          !optimizer_context_.has_trigger()) {
         //why need to exclude trigger here?
         //see the issue:
         //key column means it is the rowkey column or part key column or index column
@@ -1455,8 +1457,9 @@ int ObDelUpdLogPlan::prune_virtual_column(IndexDMLInfo &index_dml_info)
           LOG_WARN("check column whether is key failed", K(ret));
         } else if (is_key_column) {
           need_remove = false;
-        } else if (col_expr->is_not_null_for_write()) {
+        } else if (col_expr->is_not_null_for_write() && !col_expr->is_xml_column()) {
           //has not null constraint on this column, need to check
+          // xmltype column has not null constraint on this column, still need remove
           need_remove = false;
         }
         for (int64_t j = 0; OB_SUCC(ret) && need_remove && j < index_dml_info.ck_cst_exprs_.count(); ++j) {

@@ -25,7 +25,6 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/geo/ob_geo_bin.h"
-
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -1040,6 +1039,13 @@ int ObMySQLUtil::urowid_cell_str(char *buf, const int64_t len, const ObURowIDDat
       ret = OB_SIZE_OVERFLOW;
     }
   }
+  return ret;
+}
+
+int ObMySQLUtil::sql_utd_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos)
+{
+  INIT_SUCC(ret);
+  ret = OB_NOT_SUPPORTED;
   return ret;
 }
 

@@ -62,6 +62,7 @@ public:
   bool operator ==(const ObBackupPath &path) const;
   ObBackupPath &operator=(const ObBackupPath &path);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(cur_pos), K_(path));
 private:
   int64_t cur_pos_;

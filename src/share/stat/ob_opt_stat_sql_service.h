@@ -40,6 +40,7 @@ struct ObOptKeyInfo
   {
     return common::murmurhash(this, sizeof(ObOptKeyInfo), 0);
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObOptKeyInfo &other) const
   {
     return table_id_ == other.table_id_ &&

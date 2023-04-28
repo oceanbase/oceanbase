@@ -4177,6 +4177,28 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
+int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, const AlterColumnSchema &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (column_schema.is_xmltype()) {
+    AlterColumnSchema hidden_blob;
+    hidden_blob.reset();
+    hidden_blob.alter_type_ = OB_DDL_ADD_COLUMN;
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(column_schema.is_nullable());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    hidden_blob.set_udt_set_id(1);
+    if (OB_FAIL(hidden_blob.set_column_name("SYS_NC"))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(alter_table_stmt->add_column(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -4252,6 +4274,8 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
         if (OB_SUCC(ret)) {
           if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
+          } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
+            SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));
           }
         }
       }

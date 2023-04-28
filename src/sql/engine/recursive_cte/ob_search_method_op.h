@@ -107,8 +107,10 @@ public:
             bool null_first = (NULL_FIRST == sort_collations_.at(i).null_pos_);
             ObExprCmpFuncType cmp_func = null_first ? exprs_.at(idx)->basic_funcs_->null_first_cmp_
                                           : exprs_.at(idx)->basic_funcs_->null_last_cmp_;
-            cmp = cmp_func(lcells[idx], rcells[idx]);
-            if (cmp < 0) {
+            *err_ = cmp_func(lcells[idx], rcells[idx], cmp);
+            if (OB_SUCCESS != *err_) {
+              SQL_LOG_RET(WARN, *err_, "cmp failed", K(idx), KPC(l), KPC(r), K(*err_));
+            } else if (cmp < 0) {
               bret = sort_collations_.at(i).is_ascending_;
             } else if (cmp > 0) {
               bret = !sort_collations_.at(i).is_ascending_;
@@ -154,6 +156,11 @@ public:
         hash_val_ = inner_hash();
       }
       return hash_val_;
+    }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
     }
     
     uint64_t inner_hash() const;

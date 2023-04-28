@@ -41,7 +41,7 @@ public:
   virtual void reset();
   virtual bool is_valid() const;
   virtual int64_t hash() const;
-
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   friend bool operator==(const ObCascadMember &lhs, const ObCascadMember &rhs);
   friend bool operator<(const ObCascadMember &lhs, const ObCascadMember &rhs);
   ObCascadMember &operator=(const ObCascadMember &rhs);

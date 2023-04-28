@@ -52,6 +52,7 @@ public:
   virtual uint64_t get_tenant_id() const;
   virtual bool operator ==(const ObIKVCacheKey &other) const;
   virtual uint64_t hash() const;
+  virtual int hash(uint64_t &hash_value) const  { hash_value = hash(); return OB_SUCCESS; }
   virtual int64_t size() const;
   virtual int deep_copy(char *buf,
                         const int64_t buf_len,

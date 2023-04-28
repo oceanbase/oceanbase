@@ -259,6 +259,11 @@ public:
   {
     return murmurhash(&tx_id_, sizeof(tx_id_), 0);
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   bool is_valid() const { return tx_id_ > 0; }
   void reset() { tx_id_ = 0; }
   int compare(const ObTransID& other) const;

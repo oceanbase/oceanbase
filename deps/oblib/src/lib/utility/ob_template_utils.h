@@ -12,7 +12,7 @@
 
 #ifndef LIB_UTILITY_OB_TEMPLATE_UTILS_
 #define LIB_UTILITY_OB_TEMPLATE_UTILS_
-
+#include <functional>
 namespace oceanbase
 {
 namespace common
@@ -56,14 +56,17 @@ struct Conditional<false, T, F>
   { \
   namespace common \
   { \
-  template <typename T> \
+  template <typename T, typename F = void> \
   struct __has_##member##__ \
   { \
     typedef char yes[1]; \
     typedef char no [2]; \
     \
     template <typename _1> \
-    static yes &chk(__typeof__(&_1::member)); \
+    static yes &chk(typename std::enable_if<std::is_void<F>::value, __typeof__(&_1::member) >::type); \
+    \
+    template <typename _1> \
+    static yes &chk(decltype(std::mem_fn<F>(&_1::member))*); \
     \
     template <typename> \
     static no  &chk(...); \
@@ -73,8 +76,14 @@ struct Conditional<false, T, F>
   } \
   }
 
-#define HAS_MEMBER(type, member) \
-  oceanbase::common::__has_##member##__<type>::value
+#define HAS_MEMBER(type, member, ...) \
+  oceanbase::common::__has_##member##__<type, ##__VA_ARGS__>::value
+
+#define HAS_HASH(type) \
+  HAS_MEMBER(type, hash) ||\
+  HAS_MEMBER(type, hash, uint64_t() const) ||\
+  HAS_MEMBER(type, hash, int(uint64_t&) const) ||\
+  HAS_MEMBER(type, hash, int(uint64_t&, uint64_t) const)
 
 DEFINE_HAS_MEMBER(MAX_PRINTABLE_SIZE)
 DEFINE_HAS_MEMBER(to_cstring)

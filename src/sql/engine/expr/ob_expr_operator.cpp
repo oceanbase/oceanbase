@@ -1017,6 +1017,8 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType &type1, const
       match = (type1.get_accuracy() == type2.get_accuracy());
     } else if (ob_is_json(type1.get_type())) {
       match = ob_is_json(type2.get_type());
+    } else if (type1.is_xml_sql_type()) {
+      match = type2.is_xml_sql_type();
     }
   }
   return ret;
@@ -1138,6 +1140,10 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_geometry(res_type)) {
         type.set_geometry();
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
+      } else if (ob_is_user_defined_sql_type(res_type)) {
+        if (OB_FAIL(aggregate_user_defined_sql_type(type, types, param_num))) {
+          LOG_WARN("aggregate_user_defined_sql_type fail", K(ret));
+        }
       }
     }
     LOG_DEBUG("merged type is", K(type), K(is_oracle_mode));
@@ -1448,6 +1454,27 @@ int ObExprOperator::aggregate_extend_accuracy_for_merge(ObExprResType &type,
       if (ob_is_extend(types[i].get_type())) {
         find_extend = true;
         type.set_accuracy(types[i].get_accuracy().get_accuracy());
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprOperator::aggregate_user_defined_sql_type(
+    ObExprResType &type,
+    const ObExprResType *types,
+    int64_t param_num)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("types is null or param_num is wrong", K(types), K(param_num), K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; ! found && i < param_num && OB_SUCC(ret); ++i) {
+      if (ob_is_user_defined_sql_type(types[i].get_type())) {
+        found = true;
+        type.set_subschema_id(types[i].get_subschema_id());
       }
     }
   }
@@ -2149,10 +2176,12 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
       support = false;
     }
     if (support && type1.is_ext()) {
-      support = type1.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE;
+      support = (type1.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
+                 ob_is_xml_pl_type(type1.get_type(), type1.get_udt_id()));
     }
     if (support && type2.is_ext()) {
-      support = type2.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE;
+      support = (type2.get_obj_meta().get_extend_type() == pl::PL_NESTED_TABLE_TYPE ||
+                 ob_is_xml_pl_type(type2.get_type(), type2.get_udt_id()));
     }
     if (!support) {
       ret = OB_ERR_CALL_WRONG_ARG;
@@ -2164,6 +2193,11 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
       type.set_calc_type(type1.get_calc_type());
     }
+  } else if (lib::is_oracle_mode()
+            && (type1.is_user_defined_sql_type() && type2.is_user_defined_sql_type())) {
+    // other udt types not supported, xmltype does not have order or map member function
+    ret = OB_ERR_NO_ORDER_MAP_SQL;
+    LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
   } else {
     OZ(deduce_cmp_type(*this, type, type1, type2, type_ctx));
   }
@@ -6037,7 +6071,9 @@ int ObRelationalExprOperator::row_cmp(
       LOG_WARN("failed to eval right in row cmp", K(ret));
     } else if (right->is_null()) {
       cnt_row_null = true;
-    } else if (0 != (first_nonequal_cmp_ret = ((DatumCmpFunc)expr.inner_functions_[i])(*left, *right))) {
+    } else if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[i])(*left, *right, first_nonequal_cmp_ret))) {
+      LOG_WARN("failed to cmp", K(ret));
+    } else if (0 != first_nonequal_cmp_ret) {
       break;
     }
   }  // for end

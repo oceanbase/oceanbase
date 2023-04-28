@@ -62,6 +62,7 @@ public:
   ClientLSKey(const common::ObAddr &client_addr, const uint64_t client_pid, const share::ObLSID &ls_id);
   ~ClientLSKey() { reset(); }
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   bool operator==(const ClientLSKey &that) const;
   bool operator!=(const ClientLSKey &that) const;
   ClientLSKey &operator=(const ClientLSKey &that);

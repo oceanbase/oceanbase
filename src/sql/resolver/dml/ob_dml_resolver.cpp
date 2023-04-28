@@ -1052,9 +1052,13 @@ int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bo
         cur_node = NULL;
       }
     } else if (cur_node->children_[0]->type_ == T_FUN_SYS) {
-      if ((depth == 3 && is_exist_array == true) || depth <= 2) {
+      if ((depth == 3 && is_exist_array == true) || depth < 2) {
         ret = OB_ERR_NOT_OBJ_REF;
         LOG_WARN("not an object or REF", K(ret));
+      } else if (depth == 2 && OB_FAIL(check_column_udt_type(node))) {
+        // cases like: a.b.fun(), a must be table alias, b must be col name, and b must be udt type
+        LOG_WARN("not an object or REF", K(ret));
+        ret = OB_ERR_NOT_OBJ_REF; // error code compatible
       } else {
         exist_fun = true;
         is_fun_sys = true;
@@ -1286,6 +1290,174 @@ int ObDMLResolver::pre_process_dot_notation(ParseNode &node)
       LOG_WARN("pre process dot notation failed", K(ret), K(i));
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
+{
+  int ret = OB_SUCCESS;
+  ObQualifiedName udt_col_func_q_name;
+  // Only support table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
+  // must have table alias name;
+  if (q_name.access_idents_.count() == 3
+        && q_name.access_idents_.at(0).type_ == UNKNOWN
+        && q_name.access_idents_.at(1).type_ == UNKNOWN
+        && q_name.access_idents_.at(2).type_ == PL_UDF) {
+    ObQualifiedName udt_col_candidate;
+    ObRawExpr* udt_col_ref_expr = NULL;
+    if (OB_FAIL(udt_col_candidate.access_idents_.push_back(q_name.access_idents_.at(0)))) {
+      LOG_WARN("push back table alias ident failed", K(ret), K(q_name.access_idents_.at(0)));
+    } else if (OB_FAIL(udt_col_candidate.access_idents_.push_back(q_name.access_idents_.at(1)))) {
+      LOG_WARN("push back column ident failed", K(ret), K(q_name.access_idents_.at(0)));
+    } else {
+      udt_col_candidate.tbl_name_ = q_name.access_idents_.at(0).access_name_;
+      udt_col_candidate.col_name_ = q_name.access_idents_.at(1).access_name_;
+      udt_col_candidate.ref_expr_= q_name.ref_expr_;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_column_ref_expr(udt_col_candidate, udt_col_ref_expr))) {
+      LOG_WARN("try get udt col ref failed", K(ret), K(udt_col_candidate));
+      // should not return error if not found
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(implict_cast_sql_udt_to_pl_udt(udt_col_ref_expr))) {
+      LOG_WARN("try add implict cast above sql udt col ref failed",
+        K(ret), K(udt_col_candidate), K(udt_col_ref_expr));
+    } else {
+      // mock new q_name with ref_expr and access_idents_.data_[0].type_ = oceanbase::sql::SYS_FUNC
+      udt_col_func_q_name.ref_expr_= q_name.ref_expr_;
+      if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
+        LOG_WARN("push back col ref ident failed", K(ret));
+      } else if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(q_name.access_idents_.at(2)))) {
+        LOG_WARN("push back udt member function failed", K(ret), K(q_name.access_idents_.at(2)));
+      } else {
+        udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
+        udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
+        q_name = udt_col_func_q_name;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDMLResolver::implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (real_ref_expr->get_result_type().is_ext()) {
+    if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
+      // add implicit cast to sql xmltype
+      ObRawExpr *new_expr = NULL;
+      ObCastMode cast_mode = CM_NONE;
+      ObExprResType sql_udt_type;
+      sql_udt_type.set_sql_udt(ObXMLSqlType); // set subschema id
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(params_.session_info_, cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+                                            params_.expr_factory_, params_.session_info_,
+                                            *real_ref_expr,  sql_udt_type, cast_mode, new_expr))) {
+        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        real_ref_expr = new_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::implict_cast_sql_udt_to_pl_udt(ObRawExpr* &real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (real_ref_expr->get_result_type().is_user_defined_sql_type()) {
+    if (real_ref_expr->get_result_type().is_xml_sql_type()) {
+      // add implicit cast to sql xmltype
+      ObRawExpr *new_expr = NULL;
+      ObCastMode cast_mode = CM_NONE;
+      ObExprResType pl_udt_type;
+      pl_udt_type.set_ext();
+      pl_udt_type.set_extend_type(PL_OPAQUE_TYPE);
+      pl_udt_type.set_udt_id(T_OBJ_XML);
+      if (OB_FAIL(ObSQLUtils::get_default_cast_mode(params_.session_info_, cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(
+                                            params_.expr_factory_, params_.session_info_,
+                                            *real_ref_expr,  pl_udt_type, cast_mode, new_expr))) {
+        LOG_WARN("try add cast expr above failed", K(ret));
+      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        real_ref_expr = new_expr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
+{
+  INIT_SUCC(ret);
+  ObSEArray<ColumnItem, 4> columns_list;
+  TableItem *table_item = NULL;
+
+  int16_t pos_col = -1;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  bool tab_has_alias = false;
+  ObString tab_str;
+  ObString col_str;
+
+  if (OB_ISNULL(root_node)
+      || root_node->type_ != T_OBJ_ACCESS_REF
+      || root_node->num_child_ != 2
+      || OB_ISNULL(root_node->children_[1])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not obj access ref node for check", K(ret));
+  } else {
+    const ParseNode *node_ptr = root_node->children_[0];
+    if (OB_NOT_NULL(node_ptr)) {
+      tab_str.assign_ptr(node_ptr->str_value_, node_ptr->str_len_);
+    }
+    node_ptr = root_node->children_[1]->children_[0];
+    if (OB_NOT_NULL(node_ptr)) {
+      col_str.assign_ptr(node_ptr->str_value_, node_ptr->str_len_);
+    }
+    if (OB_FAIL(get_target_column_list(columns_list, tab_str, false, tab_has_alias, table_item, false))) {
+      LOG_WARN("parse table fail");
+    } else if (OB_ISNULL(table_item) || !tab_has_alias) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
+    } else {
+      ColumnItem the_col_item;
+      for (int64_t i = 0; i < columns_list.count() && pos_col < 0; i++) {
+        if (0 == col_str.case_compare(columns_list.at(i).column_name_)) {
+          pos_col = columns_list.at(i).column_id_;
+          the_col_item = columns_list.at(i);
+        }
+      }
+      if (pos_col < 0) { // not found
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
+      } else {
+        ObColumnRefRawExpr* col_expr = the_col_item.get_expr();
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
+        } else if (!col_expr->get_result_type().is_user_defined_sql_type()) {
+          ret = OB_ERR_NOT_OBJ_REF;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -2173,6 +2345,11 @@ int ObDMLResolver::resolve_into_variables(const ParseNode *node,
                                                   value_expr->get_collation_type(),
                                                   into_pl_type.get_data_type()->get_obj_type(),
                                                   into_pl_type.get_data_type()->get_collation_type()));
+              } else if (value_expr->get_data_type() == ObUserDefinedSQLType && into_pl_type.is_opaque_type()) {
+                // sql udt to pl extend, only support xmltype currently, dest collation type is not used
+                OX (is_compatible = cast_supported(value_expr->get_data_type(),
+                                                   value_expr->get_collation_type(),
+                                                   ObExtendType, CS_TYPE_BINARY));
               } else if (value_expr->get_data_type() == ObExtendType &&
                         (!into_pl_type.is_obj_type() ||
                          (into_pl_type.get_data_type() != NULL && into_pl_type.get_data_type()->get_meta_type().is_ext()))) {
@@ -2457,11 +2634,16 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     ObQualifiedName& q_name = columns.at(i);
     ObRawExpr* real_ref_expr = NULL;
     params_.is_column_ref_ = expr->is_column_ref_expr();
-    if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
+
+    if (OB_FAIL(replace_col_udt_qname(q_name))) {
+      LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
+    } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
       report_user_error_msg(ret, expr, q_name);
     } else if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
       LOG_WARN("push back failed", K(ret));
+    } else if (OB_FAIL(implict_cast_pl_udt_to_sql_udt(real_ref_expr))) {
+      LOG_WARN("add implict cast to pl udt expr failed", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr))) {
       LOG_WARN("replace column ref expr failed", K(ret));
     } else { /*do nothing*/ }
@@ -2550,7 +2732,8 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
           } else if ((ObExtendType == real_ref_expr->get_result_type().get_type()
                    || ObMaxType == real_ref_expr->get_result_type().get_type())
-                   && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())) {
+                   && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())
+                   && (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id()))) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
@@ -2655,8 +2838,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
           ObRawExpr *self = real_ref_expr->get_param_expr(0);
           if (self->is_const_raw_expr()
               || self->is_obj_access_expr()
-              || T_OP_GET_PACKAGE_VAR == self->get_expr_type()
-              || self->is_sys_func_expr()) {
+              || T_OP_GET_PACKAGE_VAR == self->get_expr_type()) {
             OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
                                                             *params_.expr_factory_,
                                                              params_.prepare_param_count_,
@@ -6501,8 +6683,9 @@ int ObDMLResolver::build_padding_expr(const ObSQLSessionInfo *session,
       // create index will trim virtual generated column in engine layer.
       // Since we expanded the generated column into a dependent expression,
       // we need to add trim on its dependent expression in this layer.
-      if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl() &&
-          stmt::T_INSERT == session->get_stmt_type() && column_schema->is_virtual_generated_column()) {
+      if (const_cast<ObSQLSessionInfo *>(session)->get_ddl_info().is_ddl()
+          && stmt::T_INSERT == session->get_stmt_type()
+          && column_schema->is_virtual_generated_column()) {
         if (OB_FAIL(ObRawExprUtils::build_trim_expr(column_schema,
                                                     *params_.expr_factory_,
                                                     session_info_,
@@ -9053,6 +9236,10 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
                 col_expr->set_joined_dup_column(col_ref->is_joined_dup_column());
                 col_expr->set_lob_column(col_ref->is_lob_column());
                 col_expr->set_srs_id(col_ref->get_srs_id());
+                col_expr->set_udt_set_id(col_ref->get_udt_set_id());
+                if (stmt->get_stmt_type() == stmt::T_INSERT || stmt->get_stmt_type() == stmt::T_UPDATE) {
+                  col_expr->set_hidden_column(col_ref->is_hidden_column());
+                }
                 ColumnItem *item = ref_stmt->get_column_item_by_id(col_ref->get_table_id(), col_ref->get_column_id());
                 if (OB_ISNULL(item)) {
                   ret = OB_ERR_UNEXPECTED;

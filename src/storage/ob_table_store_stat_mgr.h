@@ -167,6 +167,11 @@ public:
     hash_ret = common::murmurhash(&tablet_id_, sizeof(ObTabletID), hash_ret);
     return hash_ret;
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   OB_INLINE bool operator ==(const ObTableStoreStatKey &other) const
   {
     return (table_id_ == other.table_id_) && (tablet_id_ == other.tablet_id_);

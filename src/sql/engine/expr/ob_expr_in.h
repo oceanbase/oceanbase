@@ -49,7 +49,7 @@ public:
   ~Row() {}
   bool equal_key(const Row &other, void **cmp_funcs, const int idx) const;
   //hash 函数和cmp函数，为datum和obj特化
-  uint64_t hash_key(void **hash_funcs, const int idx, uint64_t seed) const;
+  int hash_key(void **hash_funcs, const int idx, uint64_t seed, uint64_t &hash_val) const;
   int compare_with_null(const Row &other, void **cmp_funcs, const int64_t row_dimension, int &exist_ret) const;
   int set_elem(T *elems);
   T &get_elem(int idx) const { return elems_[idx]; }
@@ -68,7 +68,7 @@ public:
   RowKey() : row_(), meta_(NULL) {}
   ~RowKey() {}
   bool operator==(const RowKey<T> &other) const;
-  uint64_t hash(uint64_t seed=0) const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   Row<T> row_;//指向in_ctx中存储的数据
   HashMapMeta *meta_;//进入hash表达时候被设置为此hash表的meta
 };

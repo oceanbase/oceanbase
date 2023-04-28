@@ -81,6 +81,7 @@ public:
   virtual ~IObDedupTask() {}
 public:
   virtual int64_t hash() const = 0;
+  virtual int hash(uint64_t &hash_val) const{ hash_val = hash(); return OB_SUCCESS; }
   virtual bool operator ==(const IObDedupTask &other) const = 0;
   virtual int64_t get_deep_copy_size() const = 0;
   virtual IObDedupTask *deep_copy(char *buffer, const int64_t buf_size) const = 0;

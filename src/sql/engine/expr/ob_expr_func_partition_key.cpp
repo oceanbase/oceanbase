@@ -57,14 +57,18 @@ int ObExprFuncPartKey::calc_partition_key(const ObExpr &expr,
     LOG_WARN("eval param value failed", K(ret));
   } else {
     uint64_t hash_value = 0;
-    for (int i = 0; i < expr.arg_cnt_; i++) {
+    for (int i = 0; i < expr.arg_cnt_ && OB_SUCC(ret); i++) {
       ObDatum &param_datum = expr.locate_param_datum(ctx, i);
       ObExprHashFuncType hash_func = expr.args_[i]->basic_funcs_->murmur_hash_;
-      hash_value = hash_func(param_datum, hash_value);
+      if (OB_FAIL(hash_func(param_datum, hash_value, hash_value))) {
+        LOG_WARN("hash value failed", K(ret));
+      }
     }
-    int64_t result_num = static_cast<int64_t>(hash_value);
-    result_num = result_num < 0 ? -result_num : result_num;
-    expr_datum.set_int(result_num);
+    if (OB_SUCC(ret)) {
+      int64_t result_num = static_cast<int64_t>(hash_value);
+      result_num = result_num < 0 ? -result_num : result_num;
+      expr_datum.set_int(result_num);
+    }
   }
   return ret;
 }

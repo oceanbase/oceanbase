@@ -466,8 +466,10 @@ int ObExprLeastGreatest::calc_mysql(const ObExpr &expr, ObEvalCtx &ctx,
                               tmp_alloc_guard.get_allocator(), cur_datum))) {
           LOG_WARN("cast param failed", K(ret));
         } else {
-          int cmp_res = cmp_func(minmax_datum, cur_datum);
-          if((!least && cmp_res < 0) || (least && cmp_res > 0)) {
+          int cmp_res = 0;
+          if (OB_FAIL(cmp_func(minmax_datum, cur_datum, cmp_res))) {
+            LOG_WARN("compare failed", K(ret));
+          } else if((!least && cmp_res < 0) || (least && cmp_res > 0)) {
             res_idx = i;
             minmax_datum = cur_datum;
           }
@@ -509,8 +511,10 @@ int ObExprLeastGreatest::calc_oracle(const ObExpr &expr, ObEvalCtx &ctx,
     for (int i = 1; OB_SUCC(ret) && i < param_num; ++i) {
       ObDatumCmpFuncType cmp_func = expr.args_[res_idx]->basic_funcs_->null_first_cmp_;
       ObDatum *cur_param = &expr.locate_param_datum(ctx, i);
-      int cmp_res = cmp_func(*minmax_param, *cur_param);
-      if((!least && cmp_res < 0) || (least && cmp_res > 0)) {
+      int cmp_res = 0;
+      if (OB_FAIL(cmp_func(*minmax_param, *cur_param,cmp_res))) {
+        LOG_WARN("compare failed", K(ret));
+      } else if((!least && cmp_res < 0) || (least && cmp_res > 0)) {
         res_idx = i;
         minmax_param = static_cast<ObDatum *>(&expr.locate_param_datum(ctx, res_idx));
       }

@@ -55,6 +55,7 @@ public:
   bool operator!=(const ObBackupServerStatKey &that) const { return !(*this == that); }
   ObBackupServerStatKey &operator=(const ObBackupServerStatKey &that);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   int init(const common::ObAddr &addr, const BackupJobType type);
   int init(const ObBackupServerStatKey &that);
   TO_STRING_KV(K_(type), K_(addr), K_(hash_value));
@@ -151,6 +152,7 @@ public:
   bool operator!=(const ObBackupScheduleTaskKey &that) const { return !(*this == that); }
   ObBackupScheduleTaskKey &operator=(const ObBackupScheduleTaskKey &that);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   int init(const uint64_t tenant_id,
            const uint64_t job_id,
            const uint64_t task_id_,

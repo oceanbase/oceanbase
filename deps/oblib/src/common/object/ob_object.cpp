@@ -1246,6 +1246,16 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
       this->set_lob_locator(*res);
       pos += src.get_val_len();
     }
+  } else if (ob_is_user_defined_sql_type(src.get_type())) {
+    ObString src_str = src.get_string();
+    if (OB_UNLIKELY(size < (pos + src_str.length()))) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else {
+      MEMCPY(buf + pos, src_str.ptr(), src_str.length());
+      *this = src; // meta copied
+      this->set_udt_value(buf + pos, src_str.length());
+      pos += src_str.length();
+    }
   } else {
     *this = src;
   }
@@ -1256,7 +1266,7 @@ void* ObObj::get_deep_copy_obj_ptr()
 {
   void * ptr = NULL;
   if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())
-      || ob_is_geometry(this->get_type())) {
+      || ob_is_geometry(this->get_type()) || ob_is_user_defined_sql_type(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
     // Therefore, reset it to NULL
     if (val_len_ != 0) {
@@ -1680,7 +1690,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObURowIDType),        // 45, urowid
   DEF_FUNC_ENTRY(ObLobType),           // 46, lob
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
-  DEF_FUNC_ENTRY(ObGeometryType)       // 48, geometry TODO!!!!!
+  DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
+  DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -1881,34 +1892,39 @@ bool ObObj::check_collation_integrity() const
   return is_ok;
 }
 
-uint64_t ObObj::hash_v1(uint64_t seed) const
+int ObObj::hash_v1(uint64_t &res, uint64_t seed) const
 {
   check_collation_integrity();
-  return OBJ_FUNCS[meta_.get_type()].murmurhash(*this, seed);
+  return OBJ_FUNCS[meta_.get_type()].murmurhash(*this, seed, res);
 }
 
-uint64_t ObObj::hash(uint64_t seed) const
+int ObObj::hash(uint64_t &res) const
 {
-  check_collation_integrity();
-  return OBJ_FUNCS[meta_.get_type()].murmurhash_v2(*this, seed);
+  return hash(res, 0);
 }
 
-uint64_t ObObj::hash_murmur(uint64_t seed) const
+int ObObj::hash(uint64_t &res, uint64_t seed) const
 {
   check_collation_integrity();
-  return OBJ_FUNCS[meta_.get_type()].murmurhash_v3(*this, seed);
+  return OBJ_FUNCS[meta_.get_type()].murmurhash_v2(*this, seed, res);
 }
 
-uint64_t ObObj::hash_wy(uint64_t seed) const
+int ObObj::hash_murmur(uint64_t &res, uint64_t seed) const
 {
   check_collation_integrity();
-  return OBJ_FUNCS[meta_.get_type()].wyhash(*this, seed);
+  return OBJ_FUNCS[meta_.get_type()].murmurhash_v3(*this, seed, res);
 }
 
-uint64_t ObObj::hash_xx(uint64_t seed) const
+int ObObj::hash_wy(uint64_t &res, uint64_t seed) const
 {
   check_collation_integrity();
-  return OBJ_FUNCS[meta_.get_type()].xxhash64(*this, seed);
+  return OBJ_FUNCS[meta_.get_type()].wyhash(*this, seed, res);
+}
+
+int ObObj::hash_xx(uint64_t &res, uint64_t seed) const
+{
+  check_collation_integrity();
+  return OBJ_FUNCS[meta_.get_type()].xxhash64(*this, seed, res);
 }
 
 int64_t ObObj::checksum(const int64_t current) const
