@@ -182,6 +182,19 @@ void TestLSTabletService::construct_and_get_tablet_list(
   tablet_handle_head.get_obj()->set_next_tablet_guard(tablet_handle_tail);
 }
 
+TEST_F(TestLSTabletService, test_bucket_cnt)
+{
+  const int64_t unify_bucket_num = common::hash::cal_next_prime(ObTabletCommon::BUCKET_LOCK_BUCKET_CNT);
+  const int64_t lock_bkt_cnt = ls_tablet_service_->bucket_lock_.bucket_cnt_;
+  const int64_t id_set_lock_bkt_cnt = ls_tablet_service_->tablet_id_set_.bucket_lock_.bucket_cnt_;
+  const int64_t id_set_bkt_cnt = ls_tablet_service_->tablet_id_set_.id_set_.ht_.get_bucket_count();
+
+  ASSERT_NE(unify_bucket_num, 0);
+  // ASSERT_EQ(unify_bucket_num, lock_bkt_cnt);
+  ASSERT_EQ(unify_bucket_num, id_set_lock_bkt_cnt);
+  ASSERT_EQ(unify_bucket_num, id_set_bkt_cnt);
+}
+
 TEST_F(TestLSTabletService, test_create_tablet_without_index)
 {
   int ret = OB_SUCCESS;

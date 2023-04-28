@@ -136,6 +136,7 @@ int ObTenantMetaMemMgr::init()
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
   const int64_t bucket_num = cal_adaptive_bucket_num();
+  const int64_t pin_set_bucket_num = common::hash::cal_next_prime(DEFAULT_BUCKET_NUM);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantMetaMemMgr has been initialized", K(ret));
@@ -150,10 +151,10 @@ int ObTenantMetaMemMgr::init()
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
   } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
     LOG_WARN("fail to create last min minor sstable set", K(ret));
-  } else if (OB_FAIL(pin_set_lock_.init(DEFAULT_BUCKET_NUM, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MPinLock",
+  } else if (OB_FAIL(pin_set_lock_.init(pin_set_bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MPinLock",
       tenant_id_))) {
     LOG_WARN("fail to init pin set lock", K(ret));
-  } else if (OB_FAIL(pinned_tablet_set_.create(DEFAULT_BUCKET_NUM))) {
+  } else if (OB_FAIL(pinned_tablet_set_.create(pin_set_bucket_num))) {
     LOG_WARN("fail to create pinned tablet set", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
