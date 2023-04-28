@@ -270,7 +270,6 @@ class ObReplayServiceSubmitTask : public ObReplayServiceTask
 public:
   ObReplayServiceSubmitTask(): ObReplayServiceTask(),
     next_to_submit_lsn_(),
-    committed_end_lsn_(),
     next_to_submit_scn_(),
     base_lsn_(),
     base_scn_(),
@@ -296,9 +295,6 @@ public:
   // 不允许回退
   int update_submit_log_meta_info(const palf::LSN &lsn, const share::SCN &scn);
   int update_next_to_submit_lsn(const palf::LSN &lsn);
-  int update_committed_end_lsn(const palf::LSN &lsn);
-  // only for flashback, should not complicated with update_committed_end_lsn
-  int set_committed_end_lsn(const palf::LSN &lsn);
   int get_next_to_submit_log_info(palf::LSN &lsn, share::SCN &scn) const;
   int get_committed_end_lsn(palf::LSN &lsn) const;
   int get_base_lsn(palf::LSN &lsn) const;
@@ -313,7 +309,6 @@ public:
 
   INHERIT_TO_STRING_KV("ObReplayServiceSubmitTask", ObReplayServiceTask,
                        K(next_to_submit_lsn_),
-                       K(committed_end_lsn_),
                        K(next_to_submit_scn_),
                        K(base_lsn_),
                        K(base_scn_),
@@ -321,7 +316,6 @@ public:
 private:
   int update_next_to_submit_lsn_(const palf::LSN &lsn);
   int update_next_to_submit_scn_(const share::SCN &scn);
-  int update_committed_end_lsn_(const palf::LSN &lsn);
   void set_next_to_submit_log_info_(const palf::LSN &lsn, const share::SCN &scn);
   int get_next_to_submit_log_info_(palf::LSN &lsn, share::SCN &scn) const;
   int get_base_lsn_(palf::LSN &lsn) const;
@@ -330,8 +324,6 @@ private:
 private:
   // location of next log after the last log that has already been submit to replay, consider as left side of iterator
   palf::LSN next_to_submit_lsn_;
-  //location of the last log that need submit to replay, consider as right side of iterator
-  palf::LSN committed_end_lsn_;
   share::SCN next_to_submit_scn_;
   //initial log lsn when enable replay, for stat replay process
   palf::LSN base_lsn_;
@@ -502,7 +494,6 @@ public:
   bool has_remained_replay_task() const;
   // update right margin of logs that need to replay
   int update_end_offset(const palf::LSN &lsn);
-  int flashback();
 
   int push_log_replay_task(ObLogReplayTask &task);
   int batch_push_all_task_queue();
@@ -591,7 +582,6 @@ private:
   // 注销回调并清空任务
   int disable_();
   bool is_replay_enabled_() const;
-  int flashback_();
 private:
   static const int64_t PENDING_COUNT_THRESHOLD = 100;
   static const int64_t EAGAIN_COUNT_THRESHOLD = 50000;

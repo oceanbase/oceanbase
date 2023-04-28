@@ -47,6 +47,8 @@ public:
            const char *data,
            const int64_t data_len);
   int fill_padding_body(const LSN &lsn,
+                        const char *data,
+                        const int64_t data_len,
                         const int64_t log_body_size);
   int get_log_buf(const LSN &lsn, const int64_t total_len, LogWriteBuf &log_buf);
   bool can_handle_new_log(const LSN &lsn,
@@ -70,6 +72,9 @@ private:
   int get_buffer_pos_(const LSN &lsn, int64_t &start_pos) const;
   void get_buffer_start_lsn_(LSN &start_lsn) const;
   void get_reuse_lsn_(LSN &reuse_lsn) const;
+  int fill_(const LSN &lsn,
+           const char *data,
+           const int64_t data_len);
 private:
   // buffer起始位置对应的lsn
   LSN start_lsn_;

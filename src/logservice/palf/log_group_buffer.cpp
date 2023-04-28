@@ -201,7 +201,6 @@ int LogGroupBuffer::fill(const LSN &lsn,
   LSN start_lsn, reuse_lsn;
   get_buffer_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
-  const int64_t reserved_buf_size = get_reserved_buffer_size();
   const int64_t available_buf_size = get_available_buffer_size();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -219,33 +218,27 @@ int LogGroupBuffer::fill(const LSN &lsn,
     // double check: 要填充的终点超过了buffer可复用的范围
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "end_lsn is greater than reuse end pos", K(ret), K(lsn), K(end_lsn), K(reuse_lsn), K(available_buf_size));
-  } else if (OB_FAIL(get_buffer_pos_(lsn, start_pos))) {
-    PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(lsn));
+  } else if (OB_FAIL(fill_(lsn, data, data_len))) {
+    PALF_LOG(WARN, "fill data failed", K(lsn), K(data_len), KP(data_buf_));
   } else {
-    const int64_t group_buf_tail_len = reserved_buf_size - start_pos;
-    int64_t first_part_len = min(group_buf_tail_len, data_len);
-    memcpy(data_buf_ + start_pos, data, first_part_len);
-    if (data_len > first_part_len) {
-      // seeking to buffer's beginning
-      memcpy(data_buf_, data + first_part_len, data_len - first_part_len);
-    }
-    PALF_LOG(TRACE, "fill group buffer success", K(ret), K(lsn), K(data_len), K(start_pos), K(group_buf_tail_len),
-        K(first_part_len), "second_part_len", data_len - first_part_len, KP(data_buf_));
+    PALF_LOG(TRACE, "fill group buffer success", K(ret), K(lsn), K(data_len), KP(data_buf_));
   }
   return ret;
 }
 
 int LogGroupBuffer::fill_padding_body(const LSN &lsn,
+                                      const char *data,
+                                      const int64_t data_len,
                                       const int64_t log_body_size)
 {
   int ret = OB_SUCCESS;
-  int64_t start_pos = 0;
   const LSN end_lsn = lsn + log_body_size;
   LSN start_lsn, reuse_lsn;
   get_buffer_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
-  const int64_t reserved_buf_size = get_reserved_buffer_size();
   const int64_t available_buf_size = get_available_buffer_size();
+  const int64_t reserved_buf_size = get_reserved_buffer_size();
+  int64_t start_pos = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!lsn.is_valid() || log_body_size <= 0) {
@@ -266,6 +259,7 @@ int LogGroupBuffer::fill_padding_body(const LSN &lsn,
   } else if (OB_FAIL(get_buffer_pos_(lsn, start_pos))) {
     PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(lsn));
   } else {
+    // reset data to zero firstly.
     const int64_t group_buf_tail_len = reserved_buf_size - start_pos;
     int64_t first_part_len = min(group_buf_tail_len, log_body_size);
     memset(data_buf_ + start_pos, PADDING_LOG_CONTENT_CHAR, first_part_len);
@@ -273,8 +267,15 @@ int LogGroupBuffer::fill_padding_body(const LSN &lsn,
       // seeking to buffer's beginning
       memset(data_buf_, PADDING_LOG_CONTENT_CHAR, log_body_size - first_part_len);
     }
-    PALF_LOG(INFO, "fill padding body success", K(ret), K(lsn), K(log_body_size), K(start_pos), K(group_buf_tail_len),
-        K(first_part_len), "second_part_len", log_body_size - first_part_len);
+    // fill valid padding data.
+    if (OB_FAIL(fill_(lsn, data, data_len))) {
+      PALF_LOG(WARN, "fill padding data filled", K(ret), K(lsn), K(log_body_size), K(start_pos), K(data_len),
+          K(group_buf_tail_len), K(first_part_len), "second_part_len", data_len - first_part_len);
+    } else {
+      PALF_LOG(INFO, "fill padding log success", K(ret), K(lsn), K(log_body_size), K(start_pos), K(data_len),
+          K(group_buf_tail_len), K(first_part_len), "second_part_len", data_len - first_part_len);
+    }
+
   }
   return ret;
 }
@@ -392,6 +393,29 @@ int LogGroupBuffer::set_reuse_lsn(const LSN &new_reuse_lsn)
     get_reuse_lsn_(old_reuse_lsn);
     ATOMIC_STORE(&reuse_lsn_.val_, new_reuse_lsn.val_);
     PALF_LOG(INFO, "set_reuse_lsn success", K(old_reuse_lsn), K(new_reuse_lsn));
+  }
+  return ret;
+}
+
+int LogGroupBuffer::fill_(const LSN &lsn,
+                          const char *data,
+                          const int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_pos = 0;
+  const int64_t reserved_buf_size = get_reserved_buffer_size();
+  if (OB_FAIL(get_buffer_pos_(lsn, start_pos))) {
+    PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(lsn));
+  } else {
+    const int64_t group_buf_tail_len = reserved_buf_size - start_pos;
+    int64_t first_part_len = min(group_buf_tail_len, data_len);
+    memcpy(data_buf_ + start_pos, data, first_part_len);
+    if (data_len > first_part_len) {
+      // seeking to buffer's beginning
+      memcpy(data_buf_, data+first_part_len, data_len - first_part_len);
+    }
+    PALF_LOG(TRACE, "fill data success", K(ret), K(lsn), K(data_len), K(start_pos), K(group_buf_tail_len),
+        K(first_part_len), "second_part_len", data_len - first_part_len);
   }
   return ret;
 }

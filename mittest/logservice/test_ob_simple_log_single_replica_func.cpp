@@ -66,6 +66,35 @@ std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
 
+void read_padding_entry(PalfHandleImplGuard &leader, SCN padding_scn, LSN padding_log_lsn)
+{
+  // 从padding group entry开始读取
+  {
+    PalfBufferIterator iterator;
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->alloc_palf_buffer_iterator(padding_log_lsn, iterator));
+    EXPECT_EQ(OB_SUCCESS, iterator.next());
+    LogEntry padding_log_entry;
+    LSN check_lsn;
+    EXPECT_EQ(OB_SUCCESS, iterator.get_entry(padding_log_entry, check_lsn));
+    EXPECT_EQ(true, padding_log_entry.header_.is_padding_log_());
+    EXPECT_EQ(true, padding_log_entry.check_integrity());
+    EXPECT_EQ(padding_scn, padding_log_entry.get_scn());
+  }
+  // 从padding log entry开始读取
+  {
+    PalfBufferIterator iterator;
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->alloc_palf_buffer_iterator(padding_log_lsn+LogGroupEntryHeader::HEADER_SER_SIZE, iterator));
+    EXPECT_EQ(OB_SUCCESS, iterator.next());
+    LogEntry padding_log_entry;
+    LSN check_lsn;
+    EXPECT_EQ(OB_SUCCESS, iterator.get_entry(padding_log_entry, check_lsn));
+    EXPECT_EQ(true, padding_log_entry.header_.is_padding_log_());
+    EXPECT_EQ(true, padding_log_entry.check_integrity());
+    EXPECT_EQ(padding_scn, padding_log_entry.get_scn());
+  }
+
+}
+
 TEST_F(TestObSimpleLogClusterSingleReplica, update_disk_options)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "update_disk_options");
@@ -242,11 +271,21 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback)
     remained_log_size = LSN(PALF_BLOCK_SIZE) - leader.palf_handle_impl_->sw_.get_max_lsn();
     EXPECT_LT(remained_log_size, 5*1024);
     EXPECT_GT(remained_log_size, 0);
-    // 写一条大小为2KB的日志
+    // 写一条大小为5KB的日志
+    LSN padding_log_lsn = leader.get_palf_handle_impl()->get_max_lsn();
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, 5*1024));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.get_palf_handle_impl()->get_max_lsn()));
+    // 验证读取padding是否成功
+    {
+       share::SCN padding_scn = leader.get_palf_handle_impl()->get_max_scn();
+       padding_scn = padding_scn.minus(padding_scn, 1);
+       read_padding_entry(leader, padding_scn, padding_log_lsn);
+    }
     PALF_LOG(INFO, "runlin trace print sw3", K(leader.palf_handle_impl_->sw_));
-    // Padding日志预期不占用日志条数，因此存在33条日志
+    // Padding日志占用日志条数，因此存在34条日志
     EXPECT_EQ(OB_SUCCESS, get_middle_scn(33, leader, mid_scn, header));
+    EXPECT_EQ(OB_SUCCESS, get_middle_scn(34, leader, mid_scn, header));
+    EXPECT_EQ(OB_ITER_END, get_middle_scn(35, leader, mid_scn, header));
     EXPECT_LT(LSN(PALF_BLOCK_SIZE), leader.palf_handle_impl_->sw_.get_max_lsn());
     max_scn = leader.palf_handle_impl_->sw_.get_max_scn();
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
@@ -257,16 +296,25 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback)
     PALF_LOG(INFO, "flashback to padding tail");
     EXPECT_EQ(leader.palf_handle_impl_->get_max_lsn(), LSN(PALF_BLOCK_SIZE));
     EXPECT_EQ(OB_ITER_END, read_log(leader));
-    // flashback后存在32条日志
-    EXPECT_EQ(OB_SUCCESS, get_middle_scn(32, leader, mid_scn, header));
-    EXPECT_EQ(OB_ITER_END, get_middle_scn(33, leader, mid_scn, header));
+    // flashback后存在33条日志(包含padding日志)
+    EXPECT_EQ(OB_SUCCESS, get_middle_scn(33, leader, mid_scn, header));
+    EXPECT_EQ(OB_ITER_END, get_middle_scn(34, leader, mid_scn, header));
 
-    // flashback到padding日志头部
+    // 验证读取padding是否成功
+    {
+       share::SCN padding_scn = leader.get_palf_handle_impl()->get_max_scn();
+       padding_scn.minus(padding_scn, 1);
+       PALF_LOG(INFO, "begin read_padding_entry", K(padding_scn), K(padding_log_lsn));
+       read_padding_entry(leader, padding_scn, padding_log_lsn);
+    }
+
+    // flashback到padding日志头部，磁盘上还有32条日志
     tmp_scn = leader.palf_handle_impl_->get_max_scn();
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->flashback(mode_version, SCN::minus(tmp_scn, 1), timeout_ts_us));
     EXPECT_LT(leader.palf_handle_impl_->get_max_lsn(), LSN(PALF_BLOCK_SIZE));
     EXPECT_EQ(OB_SUCCESS, get_middle_scn(32, leader, mid_scn, header));
     EXPECT_EQ(OB_ITER_END, get_middle_scn(33, leader, mid_scn, header));
+    EXPECT_EQ(padding_log_lsn, leader.palf_handle_impl_->get_max_lsn());
     switch_flashback_to_append(leader, mode_version);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx, 1000));
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(LSN(PALF_BLOCK_SIZE), leader));
@@ -414,11 +462,11 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
   {
     unittest::PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1000, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1000, leader_idx, 1000));
     LogEntryHeader header_origin;
 		EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
 		EXPECT_EQ(OB_SUCCESS, get_middle_scn(323, leader, max_scn, header_origin));
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, 1000));
 		wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn());
     EXPECT_EQ(OB_ITER_END, read_log(leader));
     switch_append_to_flashback(leader, mode_version);
@@ -430,7 +478,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
     EXPECT_EQ(header_origin.data_checksum_, header_new.data_checksum_);
 		EXPECT_EQ(OB_ITER_END, get_middle_scn(324, leader, new_scn, header_new));
     switch_flashback_to_append(leader, mode_version);
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1000, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1000, leader_idx, 1000));
 		EXPECT_EQ(OB_SUCCESS, get_middle_scn(1323, leader, new_scn, header_new));
 		EXPECT_EQ(OB_ITER_END, get_middle_scn(1324, leader, new_scn, header_new));
     EXPECT_EQ(OB_ITER_END, read_log(leader));
@@ -444,7 +492,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
   EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
   EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_access_mode(curr_mode_version, curr_access_mode));
   EXPECT_EQ(curr_mode_version, mode_version);
-  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1000, leader_idx));
+  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1000, leader_idx, 1000));
 	wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
   EXPECT_EQ(OB_ITER_END, read_log(new_leader));
     ref_scn.convert_for_tx(1000);
@@ -496,13 +544,56 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 
   // 重启后继续提交日志
-  PalfHandleImplGuard new_leader;
-  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
-  switch_flashback_to_append(new_leader, mode_version);
-  EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, leader_idx));
-	wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
-  EXPECT_EQ(OB_ITER_END, read_log(new_leader));
-  new_leader.reset();
+  {
+    PalfHandleImplGuard new_leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
+    switch_flashback_to_append(new_leader, mode_version);
+    EXPECT_EQ(true, 0 == lsn_2_offset(new_leader.get_palf_handle_impl()->get_max_lsn(), PALF_BLOCK_SIZE));
+    share::SCN padding_scn = new_leader.get_palf_handle_impl()->get_max_scn();
+    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, leader_idx));
+	  wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->sw_.get_max_lsn());
+    EXPECT_EQ(OB_ITER_END, read_log(new_leader));
+    switch_append_to_flashback(new_leader, mode_version);
+    // flashback到padding日志头后重启
+    EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->flashback(mode_version, padding_scn.minus(padding_scn, 1), timeout_ts_us));
+    EXPECT_EQ(true, 0 != lsn_2_offset(new_leader.get_palf_handle_impl()->get_max_lsn(), PALF_BLOCK_SIZE));
+    new_leader.reset();
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  // 重启提交日志，不产生padding日志
+  {
+    PalfHandleImplGuard new_leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
+    LSN padding_start_lsn = new_leader.get_palf_handle_impl()->get_max_lsn();
+    EXPECT_EQ(true, 0 != lsn_2_offset(new_leader.get_palf_handle_impl()->get_max_lsn(), PALF_BLOCK_SIZE));
+    const int64_t remained_size = PALF_BLOCK_SIZE - lsn_2_offset(new_leader.get_palf_handle_impl()->get_max_lsn(), PALF_BLOCK_SIZE);
+    EXPECT_GE(remained_size, 0);
+    const int64_t group_entry_body_size = remained_size - LogGroupEntryHeader::HEADER_SER_SIZE - LogEntryHeader::HEADER_SER_SIZE;
+    PALF_LOG(INFO, "runlin trace print remained_size", K(remained_size), K(group_entry_body_size));
+    switch_flashback_to_append(new_leader, mode_version);
+    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 1, leader_idx, group_entry_body_size));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.get_palf_handle_impl()->get_max_lsn()));
+    PalfBufferIterator iterator;
+    EXPECT_EQ(OB_SUCCESS, new_leader.get_palf_handle_impl()->alloc_palf_buffer_iterator(padding_start_lsn, iterator));
+    EXPECT_EQ(OB_SUCCESS, iterator.next());
+    LogEntry log_entry;
+    LSN check_lsn;
+    EXPECT_EQ(OB_SUCCESS, iterator.get_entry(log_entry, check_lsn));
+    EXPECT_EQ(check_lsn, padding_start_lsn + LogGroupEntryHeader::HEADER_SER_SIZE);
+    EXPECT_EQ(false, log_entry.header_.is_padding_log_());
+    EXPECT_EQ(true, log_entry.check_integrity());
+    new_leader.reset();
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  // 重启后继续提交日志
+  {
+    PalfHandleImplGuard new_leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, leader_idx));
+    EXPECT_EQ(true, 0 == lsn_2_offset(new_leader.get_palf_handle_impl()->get_max_lsn(), PALF_BLOCK_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, leader_idx, 1000));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.get_palf_handle_impl()->get_max_lsn()));
+    EXPECT_EQ(OB_ITER_END, read_log(new_leader));
+  }
   delete_paxos_group(id);
 }
 
@@ -1751,9 +1842,101 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
     // 迭代新写入的日志成功
     EXPECT_EQ(OB_SUCCESS, iterator.next(SCN::min_scn(), next_min_scn, iterate_end_by_replayable_point));
     EXPECT_EQ(OB_ITER_END, iterator.next(SCN::min_scn()));
-
   }
 
+  // 验证一条padding LogGroupEntry需要受控回放
+  {
+    const int64_t append_id = ATOMIC_AAF(&palf_id_, 1);
+    PalfHandleImplGuard append_leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(append_id, leader_idx, append_leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 31, leader_idx, MAX_LOG_BODY_SIZE));
+    const LSN padding_start_lsn = append_leader.get_palf_handle_impl()->get_max_lsn();
+    EXPECT_EQ(OB_SUCCESS, submit_log(append_leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(append_leader, append_leader.get_palf_handle_impl()->get_max_lsn()));
+    SCN padding_scn = append_leader.get_palf_handle_impl()->get_max_scn();
+    padding_scn = padding_scn.minus(padding_scn, 1);
+
+    const int64_t raw_write_id = ATOMIC_AAF(&palf_id_, 1);
+    PalfHandleImplGuard raw_write_leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(raw_write_id, leader_idx, raw_write_leader));
+    EXPECT_EQ(OB_SUCCESS, change_access_mode_to_raw_write(raw_write_leader));
+    EXPECT_EQ(OB_ITER_END, read_and_submit_group_log(append_leader, raw_write_leader));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(raw_write_leader, raw_write_leader.get_palf_handle_impl()->get_max_lsn()));
+    switch_append_to_flashback(raw_write_leader, mode_version);
+
+    PalfBufferIterator buff_iterator;
+    PalfGroupBufferIterator group_buff_iterator;
+    PalfBufferIterator buff_iterator_padding_start;
+    PalfGroupBufferIterator group_buff_iterator_padding_start;
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->alloc_palf_buffer_iterator(LSN(0), buff_iterator));
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->alloc_palf_group_buffer_iterator(LSN(0), group_buff_iterator));
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->alloc_palf_buffer_iterator(LSN(0), buff_iterator_padding_start));
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->alloc_palf_group_buffer_iterator(LSN(0), group_buff_iterator_padding_start));
+    SCN next_min_scn;
+    bool iterate_end_by_replayable_point = false;
+    EXPECT_EQ(OB_ITER_END, buff_iterator.next(share::SCN::min_scn(), next_min_scn, iterate_end_by_replayable_point));
+    EXPECT_EQ(true, iterate_end_by_replayable_point);
+    EXPECT_EQ(OB_ITER_END, group_buff_iterator.next(share::SCN::min_scn(), next_min_scn, iterate_end_by_replayable_point));
+    EXPECT_EQ(true, iterate_end_by_replayable_point);
+
+    // 一共有33条日志，包括padding
+    SCN replayable_point_scn = padding_scn.minus(padding_scn, 1);
+    // 直到padding日志受控回放
+    int ret = OB_SUCCESS;
+    while (OB_SUCC(buff_iterator.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))) {
+    }
+    ret = OB_SUCCESS;
+    while (OB_SUCC(buff_iterator_padding_start.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))) {
+    }
+    EXPECT_EQ(OB_ITER_END, ret);
+    EXPECT_EQ(true, iterate_end_by_replayable_point);
+    EXPECT_EQ(next_min_scn, padding_scn);
+    ret = OB_SUCCESS;
+    while (OB_SUCC(group_buff_iterator.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))) {
+    }
+    ret = OB_SUCCESS;
+    while (OB_SUCC(group_buff_iterator_padding_start.next(replayable_point_scn, next_min_scn, iterate_end_by_replayable_point))) {
+    }
+    EXPECT_EQ(OB_ITER_END, ret);
+    EXPECT_EQ(true, iterate_end_by_replayable_point);
+    EXPECT_EQ(next_min_scn, padding_scn);
+
+    EXPECT_EQ(false, buff_iterator.iterator_impl_.curr_entry_is_padding_);
+    EXPECT_EQ(false, group_buff_iterator.iterator_impl_.curr_entry_is_padding_);
+    // flashback到padding日志尾
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->flashback(mode_version, padding_scn, timeout_ts_us));
+    EXPECT_EQ(OB_SUCCESS, buff_iterator.next(padding_scn, next_min_scn, iterate_end_by_replayable_point));
+    LogEntry padding_log_entry;
+    LSN padding_log_lsn;
+    EXPECT_EQ(OB_SUCCESS, buff_iterator.get_entry(padding_log_entry, padding_log_lsn));
+    EXPECT_EQ(true, padding_log_entry.check_integrity());
+    EXPECT_EQ(true, padding_log_entry.header_.is_padding_log_());
+    EXPECT_EQ(padding_scn, padding_log_entry.header_.scn_);
+    EXPECT_EQ(false, buff_iterator.iterator_impl_.padding_entry_scn_.is_valid());
+
+    EXPECT_EQ(OB_SUCCESS, group_buff_iterator.next(padding_scn, next_min_scn, iterate_end_by_replayable_point));
+    LogGroupEntry padding_group_entry;
+    LSN padding_group_lsn;
+    EXPECT_EQ(OB_SUCCESS, group_buff_iterator.get_entry(padding_group_entry, padding_group_lsn));
+    EXPECT_EQ(true, padding_group_entry.check_integrity());
+    EXPECT_EQ(true, padding_group_entry.header_.is_padding_log());
+    // 对于LogGruopEntry的iterator，在construct_padding_log_entry_后，不会重置padding状态
+    EXPECT_EQ(true, group_buff_iterator.iterator_impl_.padding_entry_scn_.is_valid());
+    EXPECT_EQ(padding_log_entry.header_.scn_, padding_group_entry.header_.max_scn_);
+    // flashback到padding日志头
+    EXPECT_EQ(OB_SUCCESS, raw_write_leader.get_palf_handle_impl()->flashback(mode_version, padding_scn.minus(padding_scn, 1), timeout_ts_us));
+    // 预期是由于文件长度导致的OB_ITER_END
+    EXPECT_EQ(OB_ITER_END, buff_iterator_padding_start.next(padding_scn, next_min_scn, iterate_end_by_replayable_point));
+    EXPECT_EQ(false, iterate_end_by_replayable_point);
+    EXPECT_GE(next_min_scn, buff_iterator_padding_start.iterator_impl_.prev_entry_scn_);
+    EXPECT_EQ(OB_ITER_END, group_buff_iterator_padding_start.next(padding_scn, next_min_scn, iterate_end_by_replayable_point));
+    EXPECT_EQ(false, iterate_end_by_replayable_point);
+    EXPECT_GE(next_min_scn, group_buff_iterator_padding_start.iterator_impl_.prev_entry_scn_);
+    switch_flashback_to_append(raw_write_leader, mode_version);
+    EXPECT_EQ(OB_SUCCESS, submit_log(raw_write_leader, 100, leader_idx, 1000));
+    EXPECT_EQ(OB_SUCCESS, buff_iterator_padding_start.next());
+    EXPECT_EQ(OB_SUCCESS, group_buff_iterator_padding_start.next());
+  }
 }
 
 TEST_F(TestObSimpleLogClusterSingleReplica, read_block_in_flashback)

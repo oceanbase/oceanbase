@@ -720,8 +720,22 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
       if (OB_FAIL(wait_group_buffer_ready_(lsn, log_body_size + LogGroupEntryHeader::HEADER_SER_SIZE))) {
         PALF_LOG(ERROR, "group_buffer wait failed", K(ret), K_(palf_id), K_(self));
       } else if (is_padding_log) {
-        // padding log, fill log body with '\0'.
-        if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, log_body_size))) {
+        const int64_t padding_log_body_size = log_body_size - LogEntryHeader::HEADER_SER_SIZE;
+        const int64_t padding_valid_data_len = LogEntryHeader::PADDING_LOG_ENTRY_SIZE;
+        // padding_valid_data only include LogEntryHeader and ObLogBaseHeader
+        // The format like follow:
+        // | LogEntryHeader | ObLogBaseHeader|
+        // and the format of padding log entry like follow:
+        // | LogEntryHeader | ObLogBaseHeader| PADDING_LOG_CONTENT_CHAR |
+        // |   32 BYTE      |   16 BYTE      | padding_log_body_size - 48 BYTE |
+        char padding_valid_data[padding_valid_data_len];
+        memset(padding_valid_data, 0, padding_valid_data_len);
+        if (OB_FAIL(LogEntryHeader::generate_padding_log_buf(padding_log_body_size, scn, padding_valid_data, padding_valid_data_len))) {
+          PALF_LOG(ERROR, "generate_padding_log_buf failed", K_(palf_id), K_(self), K(padding_valid_data_len),
+            K(scn), K(padding_log_body_size));
+        }
+        // padding log, fill log body with PADDING_LOG_CONTENT_CHAR.
+        else if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, padding_valid_data, padding_valid_data_len, log_body_size))) {
           PALF_LOG(WARN, "group_buffer fill_padding_body failed", K(ret), K_(palf_id), K_(self), K(log_body_size));
         } else {
           // inc ref

@@ -106,13 +106,6 @@ int LogRequestHandler::get_self_addr_(common::ObAddr &self) const
   return ret;
 }
 
-// could not enable replay service in mittest for now, just skip it
-int ObLogReplayService::flashback(const share::ObLSID &id)
-{
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
 }
 
 namespace unittest

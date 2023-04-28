@@ -76,7 +76,6 @@ TEST(TestLogChecksum, test_log_checksum)
   EXPECT_TRUE(parity_check(v1));
   EXPECT_FALSE(parity_check(v2));
 }
-
 }
 }
 

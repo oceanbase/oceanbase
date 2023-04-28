@@ -575,25 +575,6 @@ int ObLogReplayService::is_replay_done(const share::ObLSID &id,
   return ret;
 }
 
-int ObLogReplayService::flashback(const share::ObLSID &id)
-{
-  int ret = OB_SUCCESS;
-  ObReplayStatus *replay_status = NULL;
-  ObReplayStatusGuard guard;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "replay service not init", K(ret));
-  } else if (OB_FAIL(get_replay_status_(id, guard))) {
-    CLOG_LOG(WARN, "guard get replay status failed", K(ret), K(id));
-  } else if (NULL == (replay_status = guard.get_replay_status())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
-  } else if (OB_FAIL(replay_status->flashback())) {
-    CLOG_LOG(WARN, "replay status flashback failed", K(ret), K(id));
-  }
-  return ret;
-}
-
 //通用接口, 受控回放时最终返回值为受控回放点前的最后一条日志的log_ts
 int ObLogReplayService::get_max_replayed_scn(const share::ObLSID &id, SCN &scn)
 {
@@ -1005,6 +986,10 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
     CLOG_LOG(TRACE, "skip current log", K(replay_status), K(cur_lsn), K(log_size), K(cur_log_submit_scn));
   } else if (OB_FAIL(header.deserialize(log_buf, log_size, header_pos))) {
     CLOG_LOG(WARN, "basic header deserialize failed", K(ret), K(header_pos), K(id));
+  } else if (ObLogBaseType::PADDING_LOG_BASE_TYPE == header.get_log_type()) {
+    // For padding log entry, iterate next log directly.
+    need_iterate_next_log = true;
+    CLOG_LOG(INFO, "no need to replay padding log entry", KPC(submit_task), K(header));
   } else if (header.need_pre_replay_barrier()) {
     // 前向barrier日志的replay task和log buf需要分别分配内存
     if (OB_FAIL(fetch_pre_barrier_log_(replay_status,
@@ -1077,7 +1062,6 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  LSN committed_end_lsn;
   ObReplayStatus *replay_status = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1090,11 +1074,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
     ret = OB_ERR_UNEXPECTED;
     on_replay_error_();
     CLOG_LOG(ERROR, "replay status is NULL", KPC(submit_task), KPC(replay_status), KR(ret));
-  } else if (OB_FAIL(submit_task->get_committed_end_lsn(committed_end_lsn))) {
-    // getting committed_end_lsn first ensures palf has all logs until committed_end_lsn.
-    CLOG_LOG(ERROR, "failed to get_committed_end_lsn", KR(ret), K(committed_end_lsn), KPC(replay_status));
   } else if (replay_status->try_rdlock()) {
-    (void)submit_task->get_committed_end_lsn(committed_end_lsn);
     const int64_t start_ts = ObClockGenerator::getClock();
     bool need_submit_log = true;
     int64_t count = 0;
@@ -1110,41 +1090,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
         const SCN &replayable_point = replayable_point_.atomic_load();
         need_submit_log = submit_task->has_remained_submit_log(replayable_point,
                                                                iterate_end_by_replayable_point);
-        // consider 3 cases
-        // 1. has_remained_submit_log return true:
-        //    just fetch this log.
-        // 2. has_remained_submit_log return false and is iterate_end_by_replayable_point:
-        //    do nothing, if replayable_point changed, thread lease ensures this task retry.
-        // 3. has_remained_submit_log return true and not iterate_end_by_replayable_point:
-        //    check whether has padding log.
         if (!need_submit_log) {
-          if (OB_FAIL(submit_task->get_next_to_submit_log_info(to_submit_lsn, to_submit_scn))) {
-            CLOG_LOG(ERROR, "failed to get_next_to_submit_log_info", KR(ret), K(to_submit_lsn),
-                      K(to_submit_scn));
-          } else if (!iterate_end_by_replayable_point
-                     && committed_end_lsn.is_valid()
-                     && to_submit_lsn < committed_end_lsn) {
-            //TODO: @runlin 移除padding日志时此处特殊处理需要一并移除
-            //当前palf最后一条日志为padding,直接推大to_submit_lsn
-            if (lsn_2_offset(committed_end_lsn, PALF_BLOCK_SIZE) != 0) {
-              CLOG_LOG(WARN, "no log to fetch but committed_end_lsn is not new file header",
-                        KR(ret), K(to_submit_lsn), K(committed_end_lsn), KPC(replay_status));
-            } else if (1 != lsn_2_block(committed_end_lsn, PALF_BLOCK_SIZE) -
-                            lsn_2_block(to_submit_lsn, PALF_BLOCK_SIZE)) {
-              CLOG_LOG(ERROR, "padding log committed_end_lsn is not continuous with to_submit_lsn",
-                        KR(ret), K(to_submit_lsn), K(committed_end_lsn), KPC(replay_status));
-            //padding日志scn和尾部日志重复,只更新lsn
-            } else if (OB_FAIL(submit_task->update_next_to_submit_lsn(committed_end_lsn))) {
-              // log info回退
-              CLOG_LOG(ERROR, "failed to update_next_submit_log_info", KR(ret), K(committed_end_lsn), KPC(replay_status));
-              replay_status->set_err_info(committed_end_lsn, to_submit_scn, ObLogBaseType::INVALID_LOG_BASE_TYPE,
-                                          0, true, ObClockGenerator::getClock(), ret);
-            } else {
-              CLOG_LOG(INFO, "no log to fetch but committed_end_lsn not reached, last log may be padding",
-                        KR(ret), K(to_submit_lsn), K(committed_end_lsn), K(to_submit_scn), KPC(replay_status));
-            }
-          }
-          //end loop, return OB_SUCCESS for drop current task
         } else if (OB_SUCC(fetch_and_submit_single_log_(*replay_status, submit_task, to_submit_lsn,
                                                         to_submit_scn, log_size))) {
           count++;
