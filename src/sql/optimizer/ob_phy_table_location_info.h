@@ -35,8 +35,8 @@ public:
 
   void reset();
   int assign(const ObOptTabletLoc &partition_location);
-  int assign_with_only_readable_replica(
-                                        const ObObjectID &partition_id,
+  int assign_with_only_readable_replica(const ObObjectID &partition_id,
+                                        const ObObjectID &first_level_part_id,
                                         const common::ObTabletID &tablet_id,
                                         const share::ObLSLocation &partition_location,
                                         const common::ObIArray<common::ObAddr> &invalid_servers);
@@ -49,12 +49,16 @@ public:
   int get_strong_leader(share::ObLSReplicaLocation &replica_location) const;
 
   void set_tablet_info(common::ObTabletID tablet_id,
-                       common::ObPartID part_id)
+                       common::ObPartID part_id,
+                       common::ObPartID first_level_part_id)
   {
     tablet_id_ = tablet_id;
     partition_id_ = part_id;
+    first_level_part_id_ = first_level_part_id;
   }
   inline int64_t get_partition_id() const { return partition_id_; }
+
+  inline int64_t get_first_level_part_id() const { return first_level_part_id_; }
 
   inline common::ObTabletID get_tablet_id() const { return tablet_id_; }
 
@@ -70,6 +74,8 @@ public:
 
 private:
   int64_t partition_id_;
+  // first level part id, only valid for subpartitioned table
+  int64_t first_level_part_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   ObSmartReplicaLocationArray replica_locations_;
@@ -99,6 +105,7 @@ public:
   int get_priority_replica_base(int64_t selected_replica_idx, T &replica_loc) const;
   int set_part_loc_with_only_readable_replica(
       const ObObjectID &partition_id,
+      const ObObjectID &first_level_part_id,
       const common::ObTabletID &tablet_id,
       const share::ObLSLocation &partition_location,
       const common::ObIArray<common::ObAddr> &invalid_servers);

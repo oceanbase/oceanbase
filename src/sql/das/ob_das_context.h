@@ -71,7 +71,9 @@ public:
   DASDelCtxList& get_das_del_ctx_list() {return  del_ctx_list_;}
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const common::ObTabletID &tablet_id,
-                          ObDASTabletLoc *&tablet_loc);
+                          ObDASTabletLoc *&tablet_loc,
+                          const common::ObObjectID &partition_id = OB_INVALID_ID,
+                          const common::ObObjectID &first_level_part_id = OB_INVALID_ID);
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const ObCandiTabletLoc &candi_tablet_loc,
                           ObDASTabletLoc *&talet_loc);

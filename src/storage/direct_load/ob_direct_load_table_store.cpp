@@ -101,6 +101,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       fast_heap_table_build_param.tablet_id_ = tablet_id;
       fast_heap_table_build_param.snapshot_version_ = param.snapshot_version_;
       fast_heap_table_build_param.table_data_desc_ = param.table_data_desc_;
+      fast_heap_table_build_param.datum_utils_ = param.datum_utils_;
       fast_heap_table_build_param.col_descs_ = param.col_descs_;
       fast_heap_table_build_param.insert_table_ctx_ = param.insert_table_ctx_;
       fast_heap_table_build_param.fast_heap_table_ctx_ = param.fast_heap_table_ctx_;

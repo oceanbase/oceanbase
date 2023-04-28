@@ -23,12 +23,6 @@ class ObOptStatsGatherPieceMsgListener;
 class ObOptStatsGatherPieceMsgCtx;
 class ObPxCoordInfo;
 
-struct OSGInfo {
-  OSGInfo() = default;
-  ~OSGInfo() = default;
-  ObOperatorKit *op_kit_;
-};
-
 class ObOptStatsGatherPieceMsg
   : public ObDatahubPieceMsg<dtl::ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG>
 {
@@ -46,7 +40,6 @@ public:
   void reset() {
     for (int64_t i = 0; i < column_stats_.count(); i++) {
       if (OB_NOT_NULL(column_stats_.at(i))) {
-        // to clear memory allocate by inner_alloc in ObOptColumnStat
         column_stats_.at(i)->reset();
         column_stats_.at(i) = NULL;
       }
@@ -105,7 +98,7 @@ class ObOptStatsGatherPieceMsgCtx : public ObPieceMsgCtx
 {
 public:
   ObOptStatsGatherPieceMsgCtx(uint64_t op_id, int64_t task_cnt, int64_t timeout_ts)
-    : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0), osg_info_() {}
+    : ObPieceMsgCtx(op_id, task_cnt, timeout_ts), received_(0) {}
   ~ObOptStatsGatherPieceMsgCtx() = default;
   virtual void reset_resource() {};
   static int alloc_piece_msg_ctx(const ObOptStatsGatherPieceMsg &pkt,
@@ -115,7 +108,7 @@ public:
                                  ObPieceMsgCtx *&msg_ctx);
   INHERIT_TO_STRING_KV("meta", ObPieceMsgCtx, K_(received));
   int received_;
-  OSGInfo osg_info_; // store the op_kit for OSG_MERGE. So that we can call API in OSG.
+  ObOperatorKit *op_kit_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptStatsGatherPieceMsgCtx);
 };

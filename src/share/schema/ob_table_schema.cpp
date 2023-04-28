@@ -1073,10 +1073,12 @@ int ObSimpleTableSchemaV2::get_part_id_by_tablet(const ObTabletID &tablet_id, in
 int ObSimpleTableSchemaV2::get_part_id_and_tablet_id_by_idx(const int64_t part_idx,
                                                             const int64_t subpart_idx,
                                                             ObObjectID &object_id,
+                                                            ObObjectID &first_level_part_id,
                                                             ObTabletID &tablet_id) const
 {
   int ret = OB_SUCCESS;
   ObBasePartition *base_part = NULL;
+  first_level_part_id = OB_INVALID_ID;
   if (PARTITION_LEVEL_ZERO == part_level_) {
     object_id = get_object_id();
     tablet_id = get_tablet_id();
@@ -1085,6 +1087,9 @@ int ObSimpleTableSchemaV2::get_part_id_and_tablet_id_by_idx(const int64_t part_i
   } else {
     object_id = base_part->get_object_id();
     tablet_id = base_part->get_tablet_id();
+    if (PARTITION_LEVEL_TWO == part_level_) {
+      first_level_part_id = static_cast<ObObjectID>(base_part->get_part_id());
+    }
   }
   return ret;
 }
@@ -2915,12 +2920,14 @@ void ObTableSchema::reset()
 }
 
 int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_ids,
-                                                 ObIArray<ObObjectID> &partition_ids) const
+                                                 ObIArray<ObObjectID> &partition_ids,
+                                                 ObIArray<ObObjectID> *first_level_part_ids) const
 {
   int ret = OB_SUCCESS;
   if (PARTITION_LEVEL_ZERO == get_part_level()) {
     OZ(tablet_ids.push_back(get_tablet_id()));
     OZ(partition_ids.push_back(get_object_id()));
+    OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(OB_INVALID_ID));
   } else if (OB_ISNULL(partition_array_) || partition_num_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part_array is null or is empty", K(ret), KP_(partition_array), K_(partition_num));
@@ -2932,6 +2939,7 @@ int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_id
       } else {
         OZ(tablet_ids.push_back(partition_array_[i]->get_tablet_id()));
         OZ(partition_ids.push_back(partition_array_[i]->get_part_id()));
+        OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(OB_INVALID_ID));
       }
     }
   } else if (PARTITION_LEVEL_TWO == get_part_level()) {
@@ -2956,6 +2964,7 @@ int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_id
               partition_id = sub_part_array[j]->get_sub_part_id();
               OZ(partition_ids.push_back(partition_id));
               OZ(tablet_ids.push_back(sub_part_array[j]->get_tablet_id()));
+              OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(partition_array_[i]->get_part_id()));
             }
           }
         }

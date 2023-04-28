@@ -43,8 +43,8 @@ ObDirectLoadFastHeapTable::ObDirectLoadFastHeapTable()
 ObDirectLoadFastHeapTable::~ObDirectLoadFastHeapTable()
 {
   for (int64_t i = 0; i < column_stat_array_.count(); ++i) {
-    ObOptColumnStat *col_stat = column_stat_array_.at(i);
-    col_stat->~ObOptColumnStat();
+    ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
+    col_stat->~ObOptOSGColumnStat();
     col_stat = nullptr;
   }
 }
@@ -53,29 +53,22 @@ int ObDirectLoadFastHeapTable::copy_col_stat(const ObDirectLoadFastHeapTableCrea
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret)&& i < param.column_stat_array_->count(); ++i) {
-    ObOptColumnStat *col_stat = param.column_stat_array_->at(i);
-    if (col_stat != nullptr) {
-      ObOptColumnStat *copied_col_stat = nullptr;
-      int64_t size = col_stat->size();
-      char *new_buf = nullptr;
-      if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate buffer", KR(ret), K(size));
-      } else if (OB_FAIL(col_stat->deep_copy(new_buf, size, copied_col_stat))) {
-        LOG_WARN("fail to copy colstat", KR(ret));
-      } else if (OB_FAIL(column_stat_array_.push_back(copied_col_stat))) {
-        LOG_WARN("fail to add table", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (copied_col_stat != nullptr) {
-          copied_col_stat->~ObOptColumnStat();
-          copied_col_stat = nullptr;
-        }
-        if(new_buf != nullptr) {
-          allocator_.free(new_buf);
-          new_buf = nullptr;
-        }
-      }
+    ObOptOSGColumnStat *col_stat = param.column_stat_array_->at(i);
+    ObOptOSGColumnStat *copied_col_stat = NULL;
+    if (OB_ISNULL(col_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null");
+    } else if (OB_ISNULL(copied_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory");
+    } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
+      LOG_WARN("fail to copy colstat", KR(ret));
+    } else if (OB_FAIL(column_stat_array_.push_back(copied_col_stat))) {
+      LOG_WARN("fail to add table", KR(ret));
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(copied_col_stat)) {
+      copied_col_stat->~ObOptOSGColumnStat();
+      copied_col_stat = nullptr;
     }
   }
   return ret;

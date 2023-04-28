@@ -421,7 +421,6 @@ ob_set_subtarget(ob_share schema
 
 ob_set_subtarget(ob_share stat
   stat/ob_basic_stats_estimator.cpp
-  stat/ob_column_stat.cpp
   stat/ob_opt_stat_monitor_manager.cpp
   stat/ob_dbms_stats_executor.cpp
   stat/ob_dbms_stats_export_import.cpp
@@ -432,6 +431,7 @@ ob_set_subtarget(ob_share stat
   stat/ob_hybrid_hist_estimator.cpp
   stat/ob_incremental_stat_estimator.cpp
   stat/ob_opt_column_stat.cpp
+  stat/ob_opt_osg_column_stat.cpp
   stat/ob_opt_column_stat_cache.cpp
   stat/ob_opt_stat_manager.cpp
   stat/ob_opt_stat_service.cpp
@@ -444,6 +444,7 @@ ob_set_subtarget(ob_share stat
   stat/ob_topk_hist_estimator.cpp
   stat/ob_index_stats_estimator.cpp
   stat/ob_dbms_stats_maintenance_window.cpp
+  stat/ob_opt_stat_gather_stat.cpp
   stat/ob_opt_ds_stat.cpp
   stat/ob_opt_ds_stat_cache.cpp
 )

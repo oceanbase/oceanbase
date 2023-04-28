@@ -71,14 +71,7 @@ public:
   inline share::schema::ObPartitionLevel get_part_level() { return part_level_; };
   inline void set_part_level(share::schema::ObPartitionLevel level) { part_level_ = level; };
   inline ObRawExpr *&get_calc_part_id_expr() { return calc_part_id_expr_; };
-  int init_calc_part_id_expr();
   int get_target_osg_id(uint64_t &target_id);
-  int add_col_conv_expr(ObRawExpr *expr) {
-    return col_conv_exprs_.push_back(expr);
-  }
-  int add_generated_column_expr(ObRawExpr *expr) {
-    return generated_column_exprs_.push_back(expr);
-  }
   int add_column_id(uint64_t column_id) {
     return column_ids_.push_back(column_id);
   }

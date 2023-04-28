@@ -8524,74 +8524,6 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_set(const ObSelectStmt &pare
   return ret;
 }
 
-
-int ObOptimizerUtil::init_calc_part_id_expr(ObLogPlan * log_plan,
-                                            const uint64_t table_id,
-                                            const uint64_t ref_table_id,
-                                            ObRawExpr *&calc_part_id_expr)
-{
-  int ret = OB_SUCCESS;
-  calc_part_id_expr = NULL;
-  share::schema::ObPartitionLevel part_level = share::schema::PARTITION_LEVEL_MAX;
-  ObSQLSessionInfo *session = NULL;
-  ObRawExpr *part_expr = NULL;
-  ObRawExpr *subpart_expr = NULL;
-  ObRawExpr *new_part_expr = NULL;
-  ObRawExpr *new_subpart_expr = NULL;
-  if (OB_ISNULL(log_plan) || OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid argument", K(ret), K(ref_table_id));
-  } else if (OB_ISNULL(session = log_plan->get_optimizer_context().get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else {
-    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
-    const share::schema::ObTableSchema *table_schema = NULL;
-    if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL ptr", K(ret));
-    } else if (OB_FAIL(schema_guard->get_table_schema(
-               session->get_effective_tenant_id(),
-               ref_table_id, table_schema))) {
-      LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is null", K(ret), K(table_schema));
-    } else if (OB_FAIL(log_plan->gen_calc_part_id_expr(table_id,
-                                                       ref_table_id,
-                                                       CALC_PARTITION_TABLET_ID,
-                                                       calc_part_id_expr))) {
-      LOG_WARN("failed to build calc part id expr", K(ret));
-    } else if (!table_schema->is_heap_table() &&
-               OB_NOT_NULL(calc_part_id_expr) &&
-               OB_FAIL(replace_gen_column(log_plan, calc_part_id_expr, calc_part_id_expr))) {
-      LOG_WARN("failed to replace gen column", K(ret));
-    } else {
-      // For no-pk table partitioned by generated column, it is no need to replace generated
-      // column as dependent exprs, because index table scan will add dependant columns
-      // into access_exprs_
-      // eg:
-      // create table t1(c1 int, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
-      // create index idx on t1(c2) global;
-      // select /*+ index(t1 idx) */ * from t1\G
-      // TLU
-      //  TSC // output([pk_inc],[calc_part_id_expr(c3)], [c1]), access([pk_inc], [c1])
-
-      // For pk table partitioned by generated column, we can replace generated column by
-      // dependant exprs, because pk must be a superset of partition columns
-      // eg:
-      // create table t1(c1 int primary key, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
-      // create index idx on t1(c2) global;
-      // select /*+ index(t1 idx) */ * from t1\G
-      // TLU
-      //  TSC // output([c1],[calc_part_id_expr(c1 + 1)]), access([c1])
-      LOG_TRACE("log table scan init calc part id expr", KPC(calc_part_id_expr));
-    }
-  }
-
-  return ret;
-}
-
 int ObOptimizerUtil::replace_column_with_select_for_partid(const ObInsertStmt *stmt,
                                                            ObOptimizerContext &opt_ctx,
                                                            ObRawExpr *&calc_part_id_expr)
@@ -8664,11 +8596,14 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
 
 int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
                                                    ObIAllocator &alloc,
-                                                   const ObObj *&new_obj)
+                                                   ObObj *&new_obj)
 {
   int ret = OB_SUCCESS;
   bool is_truncated = false;
-  if (old_obj->is_string_type()) {
+  if (OB_ISNULL(old_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (old_obj->is_string_type()) {
     ObString str;
     if (OB_FAIL(old_obj->get_string(str))) {
       LOG_WARN("failed to get string", K(ret), K(str));
@@ -8698,7 +8633,8 @@ int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
     }
   }
   if (OB_SUCC(ret) && !is_truncated) {
-    new_obj = old_obj;
+    new_obj = const_cast<ObObj *>(old_obj);
   }
+  LOG_TRACE("Succeed to truncate string obj for opt stats", KPC(old_obj), KPC(new_obj), K(is_truncated));
   return ret;
 }

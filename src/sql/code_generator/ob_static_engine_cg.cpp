@@ -1209,8 +1209,8 @@ int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimize
         spec.set_target_osg_id(target_id);
       }
     }
-    if (OB_SUCC(ret) && (spec.part_level_ == share::schema::PARTITION_LEVEL_ONE
-                         || spec.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {
+    // only osg gather need calc_part_id_expr
+    if (OB_SUCC(ret) && spec.is_part_table() && !op.is_merge_osg()) {
       if (OB_ISNULL(op.get_calc_part_id_expr())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("calc_part_id_expr is null", K(ret));
@@ -3840,6 +3840,7 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         LOG_WARN("generate rt expr failed", K(ret));
       } else {
         spec.pdml_partition_id_ = rt_expr;
+        spec.partition_id_calc_type_ = op.get_tablet_id_type();
         found = true;
       }
     }

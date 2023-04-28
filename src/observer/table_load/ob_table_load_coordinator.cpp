@@ -742,11 +742,13 @@ int ObTableLoadCoordinator::drive_sql_stat(ObExecContext &ctx, ObTableLoadSqlSta
     ctx.get_sql_ctx()->schema_guard_ = &schema_guard;
     ctx.get_das_ctx().get_schema_guard() = &schema_guard;
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObIncrementalStatEstimator::drive_global_stat_by_direct_load(
-                 ctx, sql_statistics.table_stat_array_, sql_statistics.col_stat_array_))) {
-      LOG_WARN("fail to drive global stat by direct load", KR(ret));
-    }
+  ObSEArray<ObOptColumnStat *, 64> part_column_stats;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql_statistics.get_col_stat_array(part_column_stats))) {
+    LOG_WARN("failed to get column stat array");
+  } else if (OB_FAIL(ObIncrementalStatEstimator::derive_global_stat_by_direct_load(
+                 ctx, sql_statistics.table_stat_array_, part_column_stats))) {
+    LOG_WARN("fail to drive global stat by direct load", KR(ret));
   }
   ctx.get_sql_ctx()->schema_guard_ = tmp_schema_guard;
   ctx.get_das_ctx().get_schema_guard() = tmp_schema_guard2;

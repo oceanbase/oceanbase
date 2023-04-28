@@ -3751,6 +3751,11 @@ int ObSql::get_outline_data(ObSqlCtx &context,
     LOG_WARN("get null session info", K(ret));
   } else if (0 != context.first_plan_hash_) {
     outline_content = context.first_outline_data_;
+  } else if (OB_INVALID_ID == context.spm_ctx_.bl_key_.db_id_
+             || context.multi_stmt_item_.is_batched_multi_stmt()) {
+    //no outline is available when database name of session is not specified, just keep the stmt
+  } else if (pc_ctx.is_begin_commit_stmt()) {
+    /* do nothing */
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }

@@ -395,11 +395,6 @@ int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
   if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(server_uuid), K(uuid_len));
-  } else if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(uuid_node->init())) {
-    LOG_WARN("failed to init", K(ret));
   } else if (OB_FAIL(calc(scratch))) {
     LOG_WARN("failed to calc", K(ret));
   } else if (OB_FAIL(UuidCommon::bin2uuid(server_uuid, scratch))) {

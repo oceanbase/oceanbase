@@ -59,6 +59,7 @@ public:
                        const ObIArray<ObTabletID> &all_tablet_ids,
                        const ObIArray<share::ObLSID> &all_ls_ids,
                        int64_t &table_rowcnt);
+
 private:
   /**
     * 接口load_and_put_cache(key, handle)的实现，外部不应该直接调用这个函数

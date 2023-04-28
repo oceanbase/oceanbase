@@ -411,6 +411,7 @@ public:
   bool enable_res_map_;
   bool need_check_col_dup_;
   bool is_specified_col_name_;//mark if specify the column name in create view or create table as..
+  bool is_in_sys_view_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -101,6 +101,7 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     candidates_(),
     group_replaced_exprs_(),
     window_function_replaced_exprs_(),
+    stat_partition_id_expr_(nullptr),
     query_ref_(NULL),
     root_(NULL),
     sql_text_(),
@@ -11531,6 +11532,10 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to perform window function push down", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
         LOG_WARN("failed to perform adjust onetime expr", K(ret));
+      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
+                 get_optimizer_context().get_query_ctx()->get_global_hint().has_dbms_stats_hint() &&
+                 OB_FAIL(op->get_plan()->perform_gather_stat_replace(op))) {
+        LOG_WARN("failed to perform gather stat replace");
       } else if (OB_FAIL(update_re_est_cost(op))) {
         LOG_WARN("failed to re est cost", K(ret));
       } else if (OB_FAIL(op->reorder_filter_exprs())) {
@@ -12769,6 +12774,8 @@ int ObLogPlan::get_cache_calc_part_id_expr(int64_t table_id, int64_t ref_table_i
         calc_type == part_id_expr.calc_type_) {
       expr = part_id_expr.calc_part_id_expr_;
       find = true;
+      LOG_TRACE("succeed to get chache calc_part_id_expr",
+                K(table_id), K(ref_table_id), K(calc_type), K(*expr));
     }
   }
   return ret;
@@ -13527,6 +13534,47 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
     join_filter_info.pushdown_filter_table_.table_name_ = table_item->get_object_name();
     if (table_item->is_basic_table()) {
       join_filter_info.pushdown_filter_table_.db_name_ = table_item->database_name_;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  ObLogTableScan *table_scan = NULL;
+  ObLogGroupBy *group_by = NULL;
+  if (NULL != (table_scan = dynamic_cast<ObLogTableScan *>(op))) {
+    ObOpPseudoColumnRawExpr *partition_id_expr = nullptr;
+    if (OB_FAIL(table_scan->generate_pseudo_partition_id_expr(partition_id_expr))) {
+      LOG_WARN("fail allocate part id expr", K(table_id), K(ret));
+    } else {
+      stat_partition_id_expr_ = partition_id_expr;
+      stat_table_scan_ = table_scan;
+      table_scan->set_tablet_id_expr(partition_id_expr);
+    }
+  } else {
+    if (NULL != (group_by = dynamic_cast<ObLogGroupBy *>(op))) {
+      if (group_by->get_rollup_exprs().empty() && group_by->get_group_by_exprs().count() == 1) {
+        ObRawExpr* group_by_expr = group_by->get_group_by_exprs().at(0);
+        if (OB_ISNULL(group_by_expr) || OB_ISNULL(stat_partition_id_expr_) || OB_ISNULL(stat_table_scan_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(group_by_expr), K(stat_partition_id_expr_), K(stat_table_scan_));
+        } else if (T_FUN_SYS_CALC_PARTITION_ID != group_by_expr->get_expr_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected group by expr", KPC(group_by_expr));
+        } else if (OB_FAIL(stat_gather_replaced_exprs_.push_back(
+            std::pair<ObRawExpr *, ObRawExpr *>(group_by_expr, stat_partition_id_expr_)))) {
+          LOG_WARN("failed to push back replaced expr", K(ret));
+        } else if (group_by_expr->get_partition_id_calc_type() == CALC_IGNORE_SUB_PART) {
+          stat_table_scan_->set_tablet_id_type(1);
+        } else {
+          stat_table_scan_->set_tablet_id_type(2);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(stat_gather_replaced_exprs_))) {
+      LOG_WARN("failed to replace generated aggr expr", K(ret));
     }
   }
   return ret;

@@ -152,6 +152,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_hash_partitioning_infrastructure_op.cpp
   engine/basic/ob_json_table_op.cpp
   engine/basic/ob_limit_op.cpp
+  engine/basic/ob_material_op_impl.cpp
   engine/basic/ob_material_op.cpp
   engine/basic/ob_monitoring_dump_op.cpp
   engine/basic/ob_pushdown_filter.cpp

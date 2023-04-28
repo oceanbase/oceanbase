@@ -4034,7 +4034,8 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
     const int64_t part_idx,
     const int64_t subpart_idx,
     ObTabletID &tablet_id,
-    ObObjectID &object_id) const
+    ObObjectID &object_id,
+    ObObjectID &first_level_part_id) const
 {
   int ret = OB_SUCCESS;
   const ObPartition *partition = NULL;
@@ -4055,6 +4056,7 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
   } else {
     tablet_id = partition->get_tablet_id();
     object_id = partition->get_part_id();
+    first_level_part_id = OB_INVALID_ID;
     ObSubPartition **subpartition_array = partition->get_subpart_array();
     int64_t subpartition_num = partition->get_subpartition_num();
     if (PARTITION_LEVEL_TWO != part_level || subpart_idx < 0) {
@@ -4069,6 +4071,7 @@ int ObPartitionSchema::get_tablet_and_object_id_by_index(
     } else {
       const ObSubPartition *subpartition = subpartition_array[subpart_idx];
       tablet_id = subpartition->get_tablet_id();
+      first_level_part_id = object_id;
       object_id = subpartition->get_sub_part_id();
     }
   }
@@ -6205,12 +6208,13 @@ int ObPartitionUtils::fill_tablet_and_object_ids_(
     const uint64_t src_table_id = table_schema.get_table_id();
     ObTabletID src_tablet_id;
     ObObjectID src_object_id;
+    ObObjectID src_first_level_part_id;
     // part_idx is valid when dealing with composited-partitioned table
     int64_t actual_part_idx = part_idx >= 0 ? part_idx : index.get_part_idx();
     int64_t actual_subpart_idx = index.get_subpart_idx();
     if (OB_FAIL(table_schema.get_tablet_and_object_id_by_index(
         actual_part_idx, actual_subpart_idx,
-        src_tablet_id, src_object_id))) {
+        src_tablet_id, src_object_id, src_first_level_part_id))) {
       LOG_WARN("fail to get tablet and object id", KR(ret), K(part_idx), K(index));
     } else if (fill_tablet_id && OB_FAIL(tablet_ids.push_back(src_tablet_id))) {
       LOG_WARN("fail to push back tablet_id", KR(ret), K(src_tablet_id));
@@ -6223,6 +6227,7 @@ int ObPartitionUtils::fill_tablet_and_object_ids_(
         const uint64_t related_table_id = related_table->related_tids_->at(j);
         ObTabletID related_tablet_id;
         ObObjectID related_object_id;
+        ObObjectID related_first_level_part_id;
         const ObSimpleTableSchemaV2 *related_schema = NULL;
         if (OB_FAIL(guard->get_simple_table_schema(tenant_id, related_table_id, related_schema))) {
           LOG_WARN("fail to get simple table schema", KR(ret), K(tenant_id), K(related_table_id));
@@ -6231,10 +6236,10 @@ int ObPartitionUtils::fill_tablet_and_object_ids_(
           LOG_WARN("table not exist", KR(ret), K(tenant_id), K(related_table_id));
         } else if (OB_FAIL(related_schema->get_tablet_and_object_id_by_index(
                    actual_part_idx, actual_subpart_idx,
-                   related_tablet_id, related_object_id))) {
+                   related_tablet_id, related_object_id, related_first_level_part_id))) {
           LOG_WARN("fail to get tablet and object id", KR(ret), K(part_idx), K(index));
         } else if (OB_FAIL(related_table->related_map_->add_related_tablet_id(
-                   src_tablet_id, related_table_id, related_tablet_id, related_object_id))) {
+                   src_tablet_id, related_table_id, related_tablet_id, related_object_id, related_first_level_part_id))) {
           LOG_WARN("fail to add related tablet info", KR(ret),
                    K(src_table_id), K(src_tablet_id), K(src_object_id),
                    K(related_table_id), K(related_tablet_id), K(related_object_id));
@@ -6277,7 +6282,7 @@ int ObPartitionUtils::get_tablet_and_object_id(
                  related_tablet_id, related_object_id))) {
         LOG_WARN("fail to get tablet id and object id", KR(ret), K(related_table_id));
       } else if (OB_FAIL(related_table->related_map_->add_related_tablet_id(
-                 tablet_id, related_table_id, related_tablet_id, related_object_id))) {
+                 tablet_id, related_table_id, related_tablet_id, related_object_id, OB_INVALID_ID))) {
         LOG_WARN("fail to add related tablet info", KR(ret),
                  "src_table_id", table_schema.get_table_id(),
                  "src_tablet_id", tablet_id, "src_object_id", object_id,

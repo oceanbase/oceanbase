@@ -22,6 +22,7 @@
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
 #include "share/stat/ob_index_stats_estimator.h"
 #include "pl/sys_package/ob_dbms_stats.h"
+#include "share/stat/ob_opt_stat_gather_stat.h"
 namespace oceanbase {
 using namespace pl;
 namespace common {
@@ -41,10 +42,13 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
   ObSEArray<ObOptStat, 4> approx_opt_part_stats;
   ObExtraParam extra;
   extra.start_time_ = ObTimeUtility::current_time();
-  if (OB_FAIL(extra.partition_id_block_map_.create(10000,
-                                                   ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
-                                                   ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
-                                                   param.tenant_id_))) {
+  if (OB_ISNULL(param.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
+  } else if (OB_FAIL(extra.partition_id_block_map_.create(10000,
+                                                          ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
+                                                          ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
+                                                          param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (param.need_estimate_block_ &&
              OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
@@ -150,14 +154,15 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
       LOG_WARN("failed to estimate hybrid histogram", K(ret));
     } else {/*do nothing*/}
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObIncrementalStatEstimator::try_drive_global_stat(ctx, param,
-                                                                      extra, approx_part_opt_stats,
-                                                                      opt_stats))) {
-    LOG_WARN("failed to try drive global stat", K(ret));
-  } else if (OB_FAIL(check_all_cols_range_skew(param, opt_stats))) {
-    LOG_WARN("failed to check all cols range skew", K(ret));
-  } else {/*do nothing*/}
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObIncrementalStatEstimator::try_derive_global_stat(ctx, param,
+                                                                   extra, approx_part_opt_stats,
+                                                                   opt_stats))) {
+      LOG_WARN("failed to try derive global stat", K(ret));
+    } else if (OB_FAIL(check_all_cols_range_skew(param, opt_stats))) {
+      LOG_WARN("failed to check all cols range skew", K(ret));
+    } else {/*do nothing*/}
+  }
   return ret;
 }
 
@@ -286,9 +291,9 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
   ObOptStatManager &mgr = ObOptStatManager::get_instance();
   ObOptColumnStat::Key key;
   ObSEArray<ObOptColumnStat *, 4> column_stats;
-  char *buf = NULL;
+  ObIAllocator *alloc = NULL;
   if (OB_UNLIKELY(param.table_param_.column_params_.count() != 1) ||
-      OB_ISNULL(param.table_param_.allocator_)) {
+      OB_ISNULL(alloc = param.table_param_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param.table_param_.column_params_.count()),
                                      K(param.table_param_.allocator_));
@@ -306,36 +311,24 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
       key.partition_id_ = param.table_param_.part_infos_.at(0).part_id_;
       stat_level = PARTITION_LEVEL;
     }
+    ObOptColumnStat *col_stat = NULL;
     if (OB_FAIL(mgr.get_column_stat(param.table_param_.tenant_id_, key, col_stat_handle))) {
       LOG_WARN("failed to get column stat", K(ret), K(key));
     } else if (OB_ISNULL(col_stat_handle.stat_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(col_stat_handle.stat_), K(ret));
-    } else if (OB_ISNULL(buf = static_cast<char*>(param.table_param_.allocator_->alloc(col_stat_handle.stat_->size())))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(buf));
-    } else {
-      ObOptColumnStat *col_stat = new (buf) ObOptColumnStat();
-      int64_t buf_len = col_stat_handle.stat_->size();
-      int64_t pos = sizeof(ObOptColumnStat);
-      if (OB_ISNULL(col_stat)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(col_stat), K(ret));
-      } else if (OB_FAIL(col_stat->deep_copy(*col_stat_handle.stat_, buf, buf_len, pos))) {
-        LOG_WARN("failed to deep copy", K(ret));
-      } else if (OB_ISNULL(col_stat)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(col_stat), K(ret));
-      } else {//reset base infos
-        col_stat->set_table_id(key.table_id_);
-        col_stat->set_partition_id(key.partition_id_);
-        col_stat->set_stat_level(stat_level);
-        col_stat->set_column_id(key.column_id_);
-        col_stat->set_collation_type(param.table_param_.column_params_.at(0).cs_type_);
-        col_stat->set_last_analyzed(0);
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(do_set_column_stats(param, col_stat))) {
+    } else if (OB_ISNULL(col_stat = OB_NEWx(ObOptColumnStat, alloc, (*alloc)))) {
+      LOG_WARN("failed to create column stat");
+    } else if (OB_FAIL(col_stat->deep_copy(*col_stat_handle.stat_))) {
+      LOG_WARN("failed to deep copy", K(ret));
+    } else {//reset base infos
+      col_stat->set_table_id(key.table_id_);
+      col_stat->set_partition_id(key.partition_id_);
+      col_stat->set_stat_level(stat_level);
+      col_stat->set_column_id(key.column_id_);
+      col_stat->set_collation_type(param.table_param_.column_params_.at(0).cs_type_);
+      col_stat->set_last_analyzed(0);
+      if (OB_FAIL(do_set_column_stats(param, col_stat))) {
         LOG_WARN("failed to do set table stats", K(ret));
       } else if (OB_FAIL(column_stats.push_back(col_stat))) {
         LOG_WARN("failed to push back column stat", K(ret));
@@ -791,11 +784,11 @@ int ObDbmsStatsExecutor::do_gather_index_stats(ObExecContext &ctx,
   return ret;
 }
 
-int ObDbmsStatsExecutor::update_stat_online(ObExecContext &ctx,
+int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                             ObTableStatParam &param,
                                             share::schema::ObSchemaGetterGuard *schema_guard,
-                                            TabStatIndMap &online_table_stats,
-                                            ColStatIndMap &online_column_stats)
+                                            const TabStatIndMap &online_table_stats,
+                                            const ColStatIndMap &online_column_stats)
 {
   int ret = OB_SUCCESS;
 

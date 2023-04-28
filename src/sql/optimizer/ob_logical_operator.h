@@ -1480,7 +1480,7 @@ public:
     inherit_sharding_index_ = inherit_sharding_index;
   }
 
-  inline bool get_allocated_osg() const { return allocated_osg_; }
+  inline bool has_allocated_osg() const { return allocated_osg_; }
   inline void set_allocated_osg(bool allocated_osg)
   {
     allocated_osg_ = allocated_osg;
@@ -1635,6 +1635,8 @@ public:
                                const ObIArray<ObExecParamRawExpr*> &exec_params,
                                ObIArray<ObExecParamRawExpr *> &left_above_params,
                                ObIArray<ObExecParamRawExpr *> &right_above_params);
+  // 生成 partition id 表达式
+  int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1675,8 +1677,6 @@ protected:
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 protected:
-  // 生成 partition id 表达式
-  int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
     flags |= method;

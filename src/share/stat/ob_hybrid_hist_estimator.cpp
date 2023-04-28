@@ -15,9 +15,11 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "sql/engine/aggregate/ob_aggregate_processor.h"
 
 namespace oceanbase
 {
+using namespace sql;
 namespace common
 {
 
@@ -631,6 +633,114 @@ int ObHybridHistograms::build_hybrid_hist(ObIArray<BucketNode> &bucket_pairs,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    total_count_ = total_count;
+    num_distinct_ = num_distinct;
+    pop_count_ = pop_count;
+    pop_freq_ = pop_freq;
+    LOG_TRACE("succeed to build hybrid histogram", K(bucket_num), K(bucket_size), K(total_count),
+                            K(pop_count), K(pop_freq), K(num_distinct), K(hybrid_buckets_.count()));
+  }
+  return ret;
+}
+int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraResult *extra,
+                                          ObIAllocator *alloc,
+                                          int64_t bucket_num,
+                                          int64_t total_count,
+                                          int64_t num_distinct,
+                                          int64_t pop_count,
+                                          int64_t pop_freq,
+                                          const ObObjMeta &obj_meta)
+{
+  int ret = OB_SUCCESS;
+  int64_t bucket_size = -1;
+  bool dynamic_size = false;
+  int64_t dynamic_step = 0;
+  const ObChunkDatumStore::StoredRow *row = nullptr;
+  if (OB_ISNULL(extra) || OB_ISNULL(alloc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(extra), K(alloc));
+  } else if (num_distinct == 0) {
+    // do nothing
+  } else {
+    // determine bucket size
+    if (OB_FAIL(extra->get_next_row_from_material(row))) {
+      LOG_WARN("failed to get next row from material");
+    } else if (OB_ISNULL(row) || OB_UNLIKELY(row->cnt_ != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null stored row", K(row));
+    } else if (num_distinct <= bucket_num + 2) {
+      bucket_size = 1;
+    } else if (bucket_num <= pop_count) {
+      bucket_size = total_count / bucket_num;
+    } else {
+      dynamic_size = true;
+      // first bucket always contain only one values. following code will handle first value is
+      // popular value or not.
+      BucketDesc *desc = reinterpret_cast<BucketDesc*>(row->get_extra_payload());
+      if (desc->is_pop_) {
+        bucket_size = (total_count - pop_freq) / (bucket_num - pop_count);
+      } else {
+        bucket_size = (total_count - pop_freq - desc->ep_count_) / (bucket_num - pop_count - 1);
+      }
+    }
+
+    int64_t bucket_rows = 0;
+    int64_t ep_num = 0;
+    int64_t un_pop_count = 0;
+    int64_t un_pop_bucket = 0;
+    int64_t i = 0;
+    if (OB_SUCC(ret)) {
+      do {
+        if (OB_ISNULL(row) || OB_UNLIKELY(row->cnt_ != 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null stored row", K(row));
+        } else {
+          BucketDesc *desc = reinterpret_cast<BucketDesc*>(row->get_extra_payload());
+          int64_t ep_count = desc->ep_count_;
+          bool is_pop = desc->is_pop_;
+          bucket_rows += ep_count;
+          ep_num += ep_count;
+          if (!is_pop) {
+            un_pop_count += ep_count;
+          }
+          if (bucket_rows > bucket_size || 0 == i || extra->get_material_row_count() - 1 == i) {
+            bucket_rows = 0;
+            ObObj ep_val;
+            if (OB_FAIL(row->cells()[0].to_obj(ep_val, obj_meta))) {
+              LOG_WARN("failed to obj", K(ret));
+            } else if (OB_FAIL(ob_write_obj(*alloc, ep_val, ep_val))) {
+              LOG_WARN("failed to write obj", K(ret), K(ep_val));
+            } else {
+              ObHistBucket bkt(ep_val, ep_count, ep_num);
+              if (!is_pop) {
+                ++un_pop_bucket;
+              }
+              if (OB_FAIL(add_hist_bucket(bkt))) {
+                LOG_WARN("failed add hist bucket", K(ret));
+              }
+            }
+
+            if (dynamic_size && bucket_num > pop_count + un_pop_bucket) {
+              bucket_size = (total_count - pop_freq - un_pop_count)
+                            / (bucket_num - pop_count - un_pop_bucket);
+            }
+          }
+          ++i;
+        }
+        if (OB_SUCC(ret)) {
+          ret = extra->get_next_row_from_material(row);
+        }
+      } while (OB_SUCC(ret));
+    }
+
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to build hybrid histogram");
+    }
+  }
+
   if (OB_SUCC(ret)) {
     total_count_ = total_count;
     num_distinct_ = num_distinct;

@@ -65,12 +65,12 @@ protected:
                              ObShardingInfo *insert_sharding,
                              bool is_multi_part);
   int candi_allocate_pdml_insert();
-  int candi_allocate_optimizer_stats_gathering();
-  int candi_allocate_root_optimizer_stats_gathering();
+  int candi_allocate_optimizer_stats_gathering(const OSGShareInfo &osg_info);
+  int candi_allocate_root_optimizer_stats_gathering(const OSGShareInfo &osg_info);
 
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                 OSG_TYPE type,
-                                                OSGShareInfo &info);
+                                                const OSGShareInfo &osg_info);
   int generate_osg_share_info(OSGShareInfo &info);
 
   virtual int check_insert_need_multi_partition_dml(ObLogicalOperator &top,

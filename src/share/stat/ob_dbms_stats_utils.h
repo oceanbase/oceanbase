@@ -107,7 +107,7 @@ public:
     common::ObIArray<ObOptColumnStatHandle> &history_col_handles,
     common::ObIArray<ObOptColumnStat*> &dst_column_stat);
 
-  static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
+  static bool is_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id);
 
   static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
 

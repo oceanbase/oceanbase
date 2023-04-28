@@ -2165,7 +2165,7 @@ int ObExpandAggregateUtils::expand_approx_count_distinct_expr(ObTransformerCtx *
   } else if (OB_FAIL(synopsis->get_real_param_exprs_for_update().assign(
                        aggr_expr->get_real_param_exprs()))) {
     LOG_WARN("failed to assign real param expr for synopsis", K(ret));
-  } else if (OB_FAIL(new_aggr_items.push_back(synopsis))) {
+  } else if (OB_FAIL(add_aggr_item(new_aggr_items, synopsis))) {
     LOG_WARN("failed to push back synopsis", K(ret));
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_FUN_SYS_ESTIMATE_NDV,
                                                          sys_func_expr))) {

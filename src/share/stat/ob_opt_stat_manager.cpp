@@ -805,5 +805,15 @@ int ObOptStatManager::erase_ds_stat(const ObOptDSStat::Key &key)
   return ret;
 }
 
+int ObOptStatManager::update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat)
+{
+  return stat_service_.get_sql_service().update_opt_stat_gather_stat(gather_stat);
+}
+
+int ObOptStatManager::update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info)
+{
+  return stat_service_.get_sql_service().update_opt_stat_task_stat(task_info);
+}
+
 }
 }

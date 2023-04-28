@@ -437,6 +437,7 @@ public:
   ObStorageDatumCmpFunc() = default;
   ~ObStorageDatumCmpFunc() = default;
   int compare(const ObStorageDatum &left, const ObStorageDatum &right, int &cmp_ret) const;
+  OB_INLINE const common::ObCmpFunc &get_cmp_func() const { return cmp_func_; }
   TO_STRING_KV(K_(cmp_func));
 private:
   common::ObCmpFunc cmp_func_;

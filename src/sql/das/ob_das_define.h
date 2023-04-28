@@ -154,14 +154,18 @@ public:
       server_(),
       loc_meta_(nullptr),
       next_(this),
-      flags_(0)
+      flags_(0),
+      partition_id_(OB_INVALID_ID),
+      first_level_part_id_(OB_INVALID_ID)
   { }
   ~ObDASTabletLoc() = default;
 
   TO_STRING_KV(K_(tablet_id),
                K_(ls_id),
                K_(server),
-               K_(need_refresh));
+               K_(need_refresh),
+               K_(partition_id),
+               K_(first_level_part_id));
   /**
    * BE CAREFUL!!! can't declare implicit allocator or
    * data structure holding implicit allocator here,
@@ -183,6 +187,10 @@ public:
       uint64_t reserved_                        : 63;
     };
   };
+  // partition id of this tablet
+  uint64_t partition_id_;
+  // first level part id of this tablet, only valid for subpartitioned table.
+  uint64_t first_level_part_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASTabletLoc);
   int assign(const ObDASTabletLoc &other);

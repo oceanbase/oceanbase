@@ -48,7 +48,6 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;
@@ -69,8 +68,8 @@ int ObBasicStatsEstimator::estimate(const ObTableStatParam &param,
                                                       column_params.count(),
                                                       src_col_stats))) {
     LOG_WARN("failed init col stats", K(ret));
-  } else if (OB_FAIL(add_hint(hint_str, allocator))) {
-    LOG_WARN("failed to add hint", K(ret));
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_))) {
+    LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
@@ -367,6 +366,7 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
           LOG_WARN("failed to get location", K(ret), K(loc_meta), K(tablet_ids.at(i)));
         } else if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(
                                                 partition_ids.at(i),
+                                                OB_INVALID_INDEX,
                                                 tablet_ids.at(i), location,
                                                 session->get_retry_info().get_invalid_servers()))) {
           LOG_WARN("fail to set partition location with only readable replica",
@@ -438,6 +438,137 @@ int ObBasicStatsEstimator::estimate_modified_count(ObExecContext &ctx,
         result = result_obj.get_int();
         LOG_TRACE("succeed to get estimate modified count", K(table_id), K(result),
                                                             K(need_inc_modified_count));
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::estimate_row_count(ObExecContext &ctx,
+                                              const uint64_t tenant_id,
+                                              const uint64_t table_id,
+                                              int64_t &row_cnt)
+{
+  int ret = OB_SUCCESS;
+  row_cnt = 0;
+  ObSqlString select_sql;
+  bool is_valid = true;
+  if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
+    LOG_WARN("failed to check table read write valid", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(select_sql.append_fmt(
+        "select cast(sum(inserts) - sum(deletes) as signed) as row_cnt " \
+        "from %s where tenant_id = %lu and table_id = %lu;",
+        share::OB_ALL_MONITOR_MODIFIED_TNAME,
+        share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+        share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      ObObj row_cnt_obj;
+      const int64_t obj_pos = 0;
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else if (OB_FAIL(client_result->next())) {
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+          row_cnt = 0;
+        } else {
+          LOG_WARN("failed to get next result", K(ret));
+        }
+      } else if (OB_FAIL(client_result->get_obj(obj_pos, row_cnt_obj))) {
+        LOG_WARN("failed to get object", K(ret));
+      } else if (row_cnt_obj.is_null()) {
+        row_cnt = 0;
+      } else if (OB_UNLIKELY(!row_cnt_obj.is_integer_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected obj type", K(ret), K(row_cnt_obj.get_type()));
+      } else {
+        row_cnt = row_cnt_obj.get_int();
+      }
+      LOG_TRACE("succeed to get table row count", K(table_id), K(row_cnt));
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::get_gather_table_duration(ObExecContext &ctx,
+                                                     const uint64_t tenant_id,
+                                                     const uint64_t table_id,
+                                                     int64_t &last_gather_duration)
+{
+  int ret = OB_SUCCESS;
+  last_gather_duration = 0;
+  ObSqlString select_sql;
+  bool is_valid = true;
+  if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
+    LOG_WARN("failed to check table read write valid", K(ret));
+  } else if (!is_valid) {
+    // do nothing
+  } else if (OB_FAIL(select_sql.append_fmt(
+        "select cast((time_to_usec(end_time) - time_to_usec(start_time)) as signed) as last_gather_duration" \
+        " from %s where tenant_id = %lu and table_id = %lu and ret_code = 0 order by start_time desc limit 1;",
+        share::OB_ALL_TABLE_OPT_STAT_GATHER_HISTORY_TNAME,
+        share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+        share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      ObObj obj;
+      const int64_t obj_pos = 0;
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, gen_meta_tenant_id(tenant_id), select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else if (OB_FAIL(client_result->next())) {
+        if (ret == OB_ITER_END) {
+          ret = OB_SUCCESS;
+          last_gather_duration = 0;
+        } else {
+          LOG_WARN("failed to get result");
+        }
+      } else if (OB_FAIL(client_result->get_obj(obj_pos, obj))) {
+        LOG_WARN("failed to get object", K(ret));
+      } else if (obj.is_null()) {
+        last_gather_duration = 0;
+      } else if (OB_UNLIKELY(!obj.is_integer_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected obj type", K(ret), K(obj.get_type()));
+      } else {
+        last_gather_duration = obj.get_int();
+      }
+      LOG_TRACE("succeed to get last gather table duration", K(table_id), K(last_gather_duration));
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
       }
     }
   }
@@ -922,9 +1053,42 @@ int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObTableStatParam &o
           opt_stat.column_stats_.at(i)->set_num_null(0);
           opt_stat.column_stats_.at(i)->set_num_distinct(0);
           opt_stat.column_stats_.at(i)->set_avg_len(0);
-          opt_stat.column_stats_.at(i)->set_llc_bitmap_size(ObColumnStat::NUM_LLC_BUCKET);
-          MEMSET(opt_stat.column_stats_.at(i)->get_llc_bitmap(), 0, ObColumnStat::NUM_LLC_BUCKET);
+          opt_stat.column_stats_.at(i)->set_llc_bitmap_size(ObOptColumnStat::NUM_LLC_BUCKET);
+          MEMSET(opt_stat.column_stats_.at(i)->get_llc_bitmap(), 0, ObOptColumnStat::NUM_LLC_BUCKET);
           opt_stat.column_stats_.at(i)->get_histogram().reset();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicStatsEstimator::fill_hints(common::ObIAllocator &alloc,
+                                      const ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table_name.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_name));
+  } else {
+    const char *fmt_str = "NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS FULL(%.*s)";
+    int64_t buf_len = table_name.length() + strlen(fmt_str);
+    char *buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(buf), K(buf_len));
+    } else {
+      int64_t real_len = sprintf(buf, fmt_str, table_name.length(), table_name.ptr());
+      if (OB_UNLIKELY(real_len < 0 || real_len > buf_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(real_len));
+      } else {
+        ObString hint_str;
+        hint_str.assign_ptr(buf, real_len);
+        if (OB_FAIL(add_hint(hint_str, alloc))) {
+          LOG_WARN("failed to add hint", K(ret));
+        } else {
+          LOG_TRACE("succeed to fill index info", K(hint_str));
         }
       }
     }

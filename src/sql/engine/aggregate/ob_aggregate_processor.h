@@ -28,12 +28,17 @@
 #include "sql/engine/user_defined_function/ob_pl_user_defined_agg_function.h"
 #include "sql/engine/expr/ob_expr_dll_udf.h"
 #include "sql/engine/expr/ob_rt_datum_arith.h"
-#include "share/stat/ob_hybrid_hist_estimator.h"
 
 namespace oceanbase
 {
+namespace common
+{
+  class ObHybridHistograms;
+}
 namespace sql
 {
+
+class ObMaterialOpImpl;
 
 struct RemovalInfo
 {
@@ -375,6 +380,49 @@ public:
     common::ObFixedArray<bool, common::ObIAllocator> bool_mark_;
   };
 
+  class HybridHistExtraResult : public ExtraResult
+  {
+  public:
+    explicit HybridHistExtraResult(common::ObIAllocator &alloc)
+      : ExtraResult(alloc),
+        sort_row_count_(0),
+        material_row_count_(0),
+        sort_op_(nullptr),
+        mat_op_(nullptr)
+    {}
+    virtual ~HybridHistExtraResult();
+    void reuse_self();
+    virtual void reuse() override;
+
+    int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
+             ObEvalCtx &eval_ctx, const bool need_rewind,
+             ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+             ObMonitorNode &op_monitor_info);
+
+    int add_sort_row(const ObIArray<ObExpr *> &expr, ObEvalCtx &eval_ctx);
+    int add_sort_row(const ObChunkDatumStore::StoredRow &sr);
+    int get_next_row_from_sort(const ObChunkDatumStore::StoredRow *&sr);
+    int finish_add_sort_row();
+    int add_material_row(const ObDatum *src_datums,
+                         const int64_t datum_cnt,
+                         const int64_t extra_size,
+                         const ObChunkDatumStore::StoredRow *&store_row);
+    int get_next_row_from_material(const ObChunkDatumStore::StoredRow *&sr);
+    int finish_add_material_row();
+
+    // bool empty() const { return 0 == row_count_; }
+    int64_t get_sort_row_count() const { return sort_row_count_; }
+    int64_t get_material_row_count() const { return material_row_count_; }
+    DECLARE_VIRTUAL_TO_STRING;
+
+  public:
+    int64_t sort_row_count_;
+    int64_t material_row_count_;
+
+    ObSortOpImpl *sort_op_;
+    ObMaterialOpImpl *mat_op_;
+  };
+
   struct DllUdfExtra : public ExtraResult
   {
     explicit DllUdfExtra(common::ObIAllocator &alloc)
@@ -476,6 +524,9 @@ public:
     uint16_t get_batch_index(uint16_t i) const { return selector_array_[i]; }
     int add_batch(const ObIArray<ObExpr *> *param_exprs, ObSortOpImpl *unique_sort_op,
                   GroupConcatExtraResult *extra_info, ObEvalCtx &eval_ctx) const;
+    int add_batch(const ObIArray<ObExpr *> *param_exprs,
+                  HybridHistExtraResult *extra_info,
+                  ObEvalCtx &eval_ctx) const;
     TO_STRING_KV(K_(count));
     const ObBatchRows *brs_;
     const uint16_t *selector_array_;
@@ -509,6 +560,9 @@ public:
     uint16_t get_batch_index(uint16_t i) const { return i; }
     int add_batch(const ObIArray<ObExpr *> *param_exprs, ObSortOpImpl *unique_sort_op,
                   GroupConcatExtraResult *extra_info, ObEvalCtx &eval_ctx) const;
+    int add_batch(const ObIArray<ObExpr *> *param_exprs,
+                  HybridHistExtraResult *extra_info,
+                  ObEvalCtx &eval_ctx) const;
     TO_STRING_KV(K_(begin_pos), K_(end_pos));
     const ObBatchRows *brs_;
     uint16_t begin_pos_;
@@ -548,7 +602,8 @@ public:
 public:
   ObAggregateProcessor(ObEvalCtx &eval_ctx,
                        ObIArray<ObAggrInfo> &aggr_infos,
-                       const lib::ObLabel &label);
+                       const lib::ObLabel &label,
+                       ObMonitorNode &op_monitor_info);
   ~ObAggregateProcessor() { destroy(); };
 
   int init();
@@ -855,10 +910,10 @@ private:
                                 ObDatum &result_datum);
 
   int compute_hybrid_hist_result(const ObAggrInfo &aggr_info,
-                                 GroupConcatExtraResult *&extra,
+                                 HybridHistExtraResult *&extra,
                                  ObDatum &result);
 
-  int get_hybrid_hist_result(ObHybridHistograms &hybrid_hist,
+  int get_hybrid_hist_result(ObHybridHistograms *hybrid_hist,
                              bool has_lob_header,
                              ObDatum &result_datum);
 
@@ -971,6 +1026,8 @@ private:
   RemovalInfo removal_info_;
   bool support_fast_single_row_agg_;
   ObIArray<ObEvalInfo *> *op_eval_infos_;
+  ObSqlWorkAreaProfile profile_;
+  ObMonitorNode &op_monitor_info_;
 };
 
 struct ObAggregateCalcFunc

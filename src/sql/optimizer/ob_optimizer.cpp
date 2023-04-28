@@ -655,7 +655,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   } else if (OB_FAIL(session->is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
       LOG_WARN("fail to get force_serial_set_order", K(ret));
   } else if (OB_FAIL(check_force_default_stat())) {
-    LOG_WARN("failed to check force default stat", K(ret));
+    LOG_WARN("failed to check force default stat");
   } else if (OB_FAIL(calc_link_stmt_count(*target_stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
   } else {
@@ -1066,6 +1066,10 @@ int ObOptimizer::check_force_default_stat()
                                                            is_restore))) {
     LOG_WARN("fail to check if tenant is restore", K(session->get_effective_tenant_id()));
   } else if (is_restore) {
+    // 为避免物理恢复阶段系统表恢复过程中，SQL依赖需要恢复的统计信息表，
+    // 对恢复中租户，仅需获取缺省统计信息即可
+    ctx_.set_use_default_stat();
+  } else if (query_ctx->get_global_hint().has_dbms_stats_hint()) {
     ctx_.set_use_default_stat();
   } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::USE_DEFAULT_OPT_STAT,
                                                                                  use_default_opt_stat,

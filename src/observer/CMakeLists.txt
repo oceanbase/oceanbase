@@ -363,6 +363,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_span_info.cpp
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp
+  virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
 )
 

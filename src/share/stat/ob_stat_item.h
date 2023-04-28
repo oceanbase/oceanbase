@@ -14,7 +14,6 @@
 #define OB_STAT_ITEM_H
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_column_stat.h"
 #include "share/stat/ob_topk_hist_estimator.h"
 namespace oceanbase {
 
@@ -351,10 +350,10 @@ private:
 
 class ObGlobalNdvEval
 {
-  const int64_t NUM_LLC_BUCKET =  ObColumnStat::NUM_LLC_BUCKET;
+  const int64_t NUM_LLC_BUCKET =  ObOptColumnStat::NUM_LLC_BUCKET;
 public:
   ObGlobalNdvEval() : global_ndv_(-1), part_cnt_(0) {
-    MEMSET(global_llc_bitmap_, 0, ObColumnStat::NUM_LLC_BUCKET); }
+    MEMSET(global_llc_bitmap_, 0, ObOptColumnStat::NUM_LLC_BUCKET); }
 
   void add(int64_t ndv, const char *llc_bitmap);
 
@@ -369,7 +368,7 @@ public:
 private:
   int64_t global_ndv_;
   int64_t part_cnt_;
-  char global_llc_bitmap_[ObColumnStat::NUM_LLC_BUCKET];
+  char global_llc_bitmap_[ObOptColumnStat::NUM_LLC_BUCKET];
 };
 
 class ObGlobalMaxEval

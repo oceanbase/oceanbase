@@ -200,10 +200,13 @@ public:
   int check_stat_tables_ready(share::schema::ObSchemaGetterGuard &schema_guard,
                               const uint64_t tenant_id,
                               bool &are_stat_tables_ready);
+
   int get_ds_stat(const ObOptDSStat::Key &key, ObOptDSStatHandle &ds_stat_handle);
   int add_ds_stat_cache(const ObOptDSStat::Key &key,
                         const ObOptDSStat &value,
                         ObOptDSStatHandle &ds_stat_handle);
+  int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
+  int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

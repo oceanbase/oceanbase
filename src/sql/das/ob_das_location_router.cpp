@@ -34,7 +34,8 @@ OB_SERIALIZE_MEMBER(DASRelatedTabletMap::MapEntry,
                     src_tablet_id_,
                     related_table_id_,
                     related_tablet_id_,
-                    related_part_id_);
+                    related_part_id_,
+                    related_first_level_part_id_);
 
 int VirtualSvrPair::init(ObIAllocator &allocator,
                          ObTableID vt_id,
@@ -115,13 +116,15 @@ void VirtualSvrPair::get_default_tablet_and_part_id(ObTabletID &tablet_id, ObObj
 int DASRelatedTabletMap::add_related_tablet_id(ObTabletID src_tablet_id,
                                                ObTableID related_table_id,
                                                ObTabletID related_tablet_id,
-                                               ObObjectID related_part_id)
+                                               ObObjectID related_part_id,
+                                               ObObjectID related_first_level_part_id)
 {
   MapEntry map_entry;
   map_entry.src_tablet_id_ = src_tablet_id;
   map_entry.related_table_id_ = related_table_id;
   map_entry.related_tablet_id_ = related_tablet_id;
   map_entry.related_part_id_ = related_part_id;
+  map_entry.related_first_level_part_id_ = related_first_level_part_id;
   return list_.push_back(map_entry);
 }
 
@@ -138,8 +141,9 @@ int DASRelatedTabletMap::get_related_tablet_id(ObTabletID src_tablet_id,
     }
   }
   if (OB_LIKELY(final_entry != nullptr)) {
-    val.first = final_entry->related_tablet_id_;
-    val.second = final_entry->related_part_id_;
+    val.tablet_id_ = final_entry->related_tablet_id_;
+    val.part_id_ = final_entry->related_part_id_;
+    val.first_level_part_id_ = final_entry->related_first_level_part_id_;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get related tablet id failed", K(ret), K(src_tablet_id), K(related_table_id), K(list_));
@@ -183,6 +187,8 @@ int ObDASTabletMapper::get_tablet_and_object_id(
       if (OB_FAIL(ObPartitionUtils::get_tablet_and_subpart_id(
           *table_schema_, part_id, range, tmp_tablet_ids, tmp_part_ids, related_info_ptr))) {
         LOG_WARN("fail to get tablet_id and part_id", KR(ret), K(part_id), K(range), KPC_(table_schema));
+      } else if (OB_FAIL(set_partition_id_map(part_id, tmp_part_ids))) {
+        LOG_WARN("failed to set partition id map");
       }
     } else {
       ret = OB_INVALID_ARGUMENT;
@@ -236,6 +242,8 @@ int ObDASTabletMapper::get_tablet_and_object_id(const ObPartitionLevel part_leve
       if (OB_FAIL(ObPartitionUtils::get_tablet_and_subpart_id(
           *table_schema_, part_id, row, tablet_id, object_id, related_info_ptr))) {
         LOG_WARN("fail to get tablet_id and part_id", KR(ret), K(part_id), K(row), KPC_(table_schema));
+      } else if (OB_FAIL(set_partition_id_map(part_id, object_id))) {
+        LOG_WARN("failed to set partition id map");
       }
     } else {
       ret = OB_INVALID_ARGUMENT;
@@ -302,7 +310,8 @@ int ObDASTabletMapper::mock_vtable_related_tablet_id_map(
       if (OB_FAIL(related_info_.related_map_->add_related_tablet_id(tablet_id,
                                                                     related_table_id,
                                                                     related_tablet_id,
-                                                                    related_object_id))) {
+                                                                    related_object_id,
+                                                                    OB_INVALID_ID))) {
         LOG_WARN("add related tablet id to map failed", KR(ret), K(tablet_id),
                  K(related_table_id), K(related_tablet_id), K(related_object_id));
       } else {
@@ -442,7 +451,8 @@ int ObDASTabletMapper::get_all_tablet_and_object_id(ObIArray<ObTabletID> &tablet
 //If the part_id calculated by the partition filter in the where clause is empty,
 //we will use the default part id in this query as the final part_id,
 //because optimizer needs at least one part_id to generate a plan
-int ObDASTabletMapper::get_default_tablet_and_object_id(const ObIArray<ObObjectID> &part_hint_ids,
+int ObDASTabletMapper::get_default_tablet_and_object_id(const ObPartitionLevel part_level,
+                                                        const ObIArray<ObObjectID> &part_hint_ids,
                                                         ObTabletID &tablet_id,
                                                         ObObjectID &object_id)
 {
@@ -476,10 +486,16 @@ int ObDASTabletMapper::get_default_tablet_and_object_id(const ObIArray<ObObjectI
         object_id = info.object_id_;
         tablet_id = info.tablet_id_;
       }
-      //calculate related partition id and tablet id
-      if (OB_SUCC(ret) && tablet_id.is_valid() &&
-          related_info_.related_tids_ != nullptr &&
-          !related_info_.related_tids_->empty()) {
+      if (OB_FAIL(ret)) {
+      } else if (!tablet_id.is_valid()) {
+        // no nothing
+      } else if (PARTITION_LEVEL_TWO == part_level &&
+                OB_NOT_NULL(info.part_) &&
+                OB_FAIL(set_partition_id_map(info.part_->get_part_id(), object_id))) {
+        LOG_WARN("failed to set partition id map");
+      } else if (related_info_.related_tids_ != nullptr &&
+                 !related_info_.related_tids_->empty()) {
+        //calculate related partition id and tablet id
         ObSchemaGetterGuard guard;
         const uint64_t tenant_id=  table_schema_->get_tenant_id();
         if (OB_ISNULL(GCTX.schema_service_)) {
@@ -492,6 +508,7 @@ int ObDASTabletMapper::get_default_tablet_and_object_id(const ObIArray<ObObjectI
           ObTableID related_table_id = related_info_.related_tids_->at(i);
           const ObSimpleTableSchemaV2 *table_schema = nullptr;
           ObObjectID related_part_id = OB_INVALID_ID;
+          ObObjectID related_first_level_part_id = OB_INVALID_ID;
           ObTabletID related_tablet_id;
           if (OB_FAIL(guard.get_simple_table_schema(tenant_id, related_table_id, table_schema))) {
             LOG_WARN("get_table_schema fail", K(ret), K(tenant_id), K(related_table_id));
@@ -501,12 +518,14 @@ int ObDASTabletMapper::get_default_tablet_and_object_id(const ObIArray<ObObjectI
           } else if (OB_FAIL(table_schema->get_part_id_and_tablet_id_by_idx(info.part_idx_,
                                                                             info.subpart_idx_,
                                                                             related_part_id,
+                                                                            related_first_level_part_id,
                                                                             related_tablet_id))) {
             LOG_WARN("get part by idx failed", K(ret), K(info), K(related_table_id));
           } else if (OB_FAIL(related_info_.related_map_->add_related_tablet_id(tablet_id,
                                                                                related_table_id,
                                                                                related_tablet_id,
-                                                                               related_part_id))) {
+                                                                               related_part_id,
+                                                                               related_first_level_part_id))) {
             LOG_WARN("add related tablet id failed", K(ret),
                      K(tablet_id), K(related_table_id), K(related_part_id), K(related_tablet_id));
           } else {
@@ -530,7 +549,8 @@ int ObDASTabletMapper::get_default_tablet_and_object_id(const ObIArray<ObObjectI
       for (int64_t i = 0; OB_SUCC(ret) && i < related_info_.related_tids_->count(); ++i) {
         ObTableID related_table_id = related_info_.related_tids_->at(i);
         //all related tables have the same part_id and tablet_id
-        if (OB_FAIL(related_info_.related_map_->add_related_tablet_id(tablet_id, related_table_id, tablet_id, object_id))) {
+        if (OB_FAIL(related_info_.related_map_->add_related_tablet_id(tablet_id, related_table_id, tablet_id,
+                                                                      object_id, OB_INVALID_ID))) {
           LOG_WARN("add related tablet id failed", K(ret), K(related_table_id), K(object_id));
         }
       }
@@ -576,6 +596,7 @@ int ObDASTabletMapper::get_related_partition_id(const ObTableID &src_table_id,
       ObSchemaGetterGuard guard;
       const ObSimpleTableSchemaV2 *dst_table_schema = nullptr;
       ObObjectID related_part_id = OB_INVALID_ID;
+      ObObjectID related_first_level_part_id = OB_INVALID_ID;
       ObTabletID related_tablet_id;
       if (OB_ISNULL(GCTX.schema_service_)) {
         ret = OB_INVALID_ARGUMENT;
@@ -590,6 +611,7 @@ int ObDASTabletMapper::get_related_partition_id(const ObTableID &src_table_id,
       } else if (OB_FAIL(dst_table_schema->get_part_id_and_tablet_id_by_idx(info.part_idx_,
                                                                             info.subpart_idx_,
                                                                             related_part_id,
+                                                                            related_first_level_part_id,
                                                                             related_tablet_id))) {
         LOG_WARN("get part by idx failed", K(ret), K(info), K(dst_table_id));
       } else {
@@ -599,6 +621,57 @@ int ObDASTabletMapper::get_related_partition_id(const ObTableID &src_table_id,
   }
   return ret;
 }
+
+int ObDASTabletMapper::set_partition_id_map(ObObjectID first_level_part_id,
+                                            ObIArray<ObObjectID> &partition_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(partition_id_map_)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); ++i) {
+      if (OB_FAIL(partition_id_map_->set_refactored(partition_ids.at(i), first_level_part_id))) {
+        if (OB_LIKELY(OB_HASH_EXIST == ret)) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to set partition map", K(first_level_part_id), K(partition_ids.at(i)));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASTabletMapper::set_partition_id_map(ObObjectID first_level_part_id,
+                                            ObObjectID partition_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(partition_id_map_)) {
+    if (OB_FAIL(partition_id_map_->set_refactored(partition_id, first_level_part_id))) {
+      if (OB_LIKELY(OB_HASH_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to set partition map", K(first_level_part_id), K(partition_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASTabletMapper::get_partition_id_map(ObObjectID partition_id,
+                                            ObObjectID &first_level_part_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(partition_id_map_)) {
+    if (OB_FAIL(partition_id_map_->get_refactored(partition_id, first_level_part_id))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        // do nothing
+      } else {
+        LOG_WARN("failed to set partition map", K(partition_id), K(first_level_part_id));
+      }
+    }
+  }
+  return ret;
+}
+
 
 ObDASLocationRouter::ObDASLocationRouter(ObIAllocator &allocator)
   : virtual_server_list_(allocator),

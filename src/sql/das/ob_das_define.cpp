@@ -72,7 +72,9 @@ OB_SERIALIZE_MEMBER(ObDASTabletLoc,
                     tablet_id_,
                     ls_id_,
                     server_,
-                    flags_);
+                    flags_,
+                    partition_id_,
+                    first_level_part_id_);
 
 OB_DEF_SERIALIZE(ObDASTableLoc)
 {
@@ -157,6 +159,8 @@ int ObDASTableLoc::assign(const ObCandiTableLoc &candi_table_loc)
       tablet_loc->tablet_id_ = opt_tablet_loc.get_tablet_id();
       tablet_loc->ls_id_ = opt_tablet_loc.get_ls_id();
       tablet_loc->loc_meta_ = loc_meta_;
+      tablet_loc->partition_id_ = opt_tablet_loc.get_partition_id();
+      tablet_loc->first_level_part_id_ = opt_tablet_loc.get_first_level_part_id();
       if (OB_FAIL(tablet_locs_.push_back(tablet_loc))) {
         LOG_WARN("store tablet loc failed", K(ret), K(tablet_loc));
       }

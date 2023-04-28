@@ -74,6 +74,75 @@ int StatTable::assign(const StatTable &other)
   return no_regather_partition_ids_.assign(other.no_regather_partition_ids_);
 }
 
+int ObGatherTableStatsHelper::get_duration_time(sql::ParamStore &params)
+{
+  int ret = OB_SUCCESS;
+  duration_time_ = -1;
+  number::ObNumber num_duration;
+  if (OB_UNLIKELY(params.empty() || params.at(0).is_null())) {
+    // do nothing
+  } else if (lib::is_oracle_mode()) {
+    if (OB_FAIL(params.at(0).get_number(num_duration))) {
+      LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
+    } else if (OB_FAIL(num_duration.extract_valid_int64_with_trunc(duration_time_))) {
+      LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_duration));
+    }
+  } else if (OB_FAIL(params.at(0).get_int(duration_time_))) {
+    LOG_WARN("failed to get duration", K(ret), K(params.at(0)));
+  }
+  return ret;
+}
+
+/**
+ * @brief
+ *  The order to gather tables
+ *  1. gather user tables
+ *     if table is a 'big table', make it at last
+ *     if table is first time to gather, then gather it at first
+ *     else, gather them according to the last gather duration
+ *  2. gather sys tables
+ *     so as to user tables
+ * @param other
+ * @return true
+ * @return false
+ */
+bool ObStatTableWrapper::operator<(const ObStatTableWrapper &other) const
+{
+  bool bret = true;
+  if (this == &other) {
+    bret = false;
+  } else if (table_type_ == ObStatTableType::ObSysTable && other.table_type_ == ObStatTableType::ObUserTable) {
+    bret = false;
+  } else if ((table_type_ == ObStatTableType::ObUserTable && other.table_type_ == ObStatTableType::ObUserTable) ||
+             (table_type_ == ObStatTableType::ObSysTable && other.table_type_ == ObStatTableType::ObSysTable)) {
+    if (is_big_table_ && !other.is_big_table_) {
+      bret = false;
+    } else if ((is_big_table_ && other.is_big_table_) ||
+               (!is_big_table_ && !other.is_big_table_)) {
+      if (stat_type_ == other.stat_type_) {
+        bret = last_gather_duration_ < other.last_gather_duration_;
+      } else if (stat_type_ == ObStatType::ObStale && other.stat_type_ == ObStatType::ObFirstTimeToGather) {
+        bret = false;
+      }
+    }
+  }
+  return bret;
+}
+
+int ObStatTableWrapper::assign(const ObStatTableWrapper &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(stat_table_.assign(other.stat_table_))) {
+    LOG_WARN("failed to assign stat table");
+  } else {
+    table_type_ = other.table_type_;
+    stat_type_ = other.stat_type_;
+    is_big_table_ = other.is_big_table_;
+    last_gather_duration_ = other.last_gather_duration_;
+  }
+  return ret;
+}
+
 int ObTableStatParam::assign(const ObTableStatParam &other)
 {
   int ret = OB_SUCCESS;

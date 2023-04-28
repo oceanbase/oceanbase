@@ -20,6 +20,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 
 namespace oceanbase
 {
@@ -31,6 +32,7 @@ class ObOptColumnStat;
 typedef std::pair<int64_t, int64_t> BolckNumPair;
 typedef hash::ObHashMap<int64_t, BolckNumPair, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
 typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
+typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, common::hash::NoPthreadDefendMode> OSGColStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
 
 enum StatOptionFlags
@@ -54,6 +56,7 @@ enum StatOptionFlags
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
 const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
+const static int64_t OPT_STATS_BIG_TABLE_ROWS = 10000000;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
@@ -187,6 +190,63 @@ struct PartInfo
   ObSEArray<int64_t, 4> no_regather_partition_ids_;
 };
 
+enum ObStatTableType {
+  ObUserTable = 0,
+  ObSysTable
+};
+
+enum ObStatType {
+  ObFirstTimeToGather = 0,
+  ObStale,
+  ObNotStale
+};
+
+struct ObStatTableWrapper {
+  ObStatTableWrapper() :
+    stat_table_(),
+    table_type_(ObUserTable),
+    stat_type_(ObFirstTimeToGather),
+    is_big_table_(false),
+    last_gather_duration_(0)
+    {}
+  bool operator<(const ObStatTableWrapper &other) const;
+  int assign(const ObStatTableWrapper &other);
+  StatTable stat_table_;
+  ObStatTableType table_type_;
+  ObStatType stat_type_;
+  bool is_big_table_;
+  int64_t last_gather_duration_;
+  TO_STRING_KV(K_(stat_table),
+               K_(table_type),
+               K_(stat_type),
+               K_(is_big_table),
+               K_(last_gather_duration));
+};
+
+struct ObGatherTableStatsHelper {
+  ObGatherTableStatsHelper():
+    stat_tables_(),
+    duration_time_(-1),
+    succeed_count_(0),
+    failed_count_(0)
+    {}
+  inline bool need_gather_table_stats() const
+  {
+    return !stat_tables_.empty();
+  }
+  int get_duration_time(sql::ParamStore &params);
+  ObArray<ObStatTableWrapper> stat_tables_;
+
+  //duration_time to is used to mark the gather database stats job can use max time. default value
+  //is -1, it's meaning gather until all table have been gathered.
+  int64_t duration_time_;
+  int64_t succeed_count_;
+  int64_t failed_count_;
+  TO_STRING_KV(K_(stat_tables),
+               K_(duration_time),
+               K_(succeed_count),
+               K_(failed_count));
+};
 struct ObGlobalStatParam
 {
   ObGlobalStatParam()
@@ -641,6 +701,7 @@ enum OSG_TYPE
   GATHER_OSG = 1,
   MERGE_OSG = 2
 };
+
 struct OSGPartInfo {
   OB_UNIS_VERSION(1);
 public:
@@ -649,7 +710,6 @@ public:
   ObTabletID tablet_id_;
   TO_STRING_KV(K_(part_id), K_(tablet_id));
 };
-
 typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
 
 }

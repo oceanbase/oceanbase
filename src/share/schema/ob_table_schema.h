@@ -606,10 +606,25 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  /**
+   * first_level_part_id represent the first level part id of subpartition,
+   * otherwise its value is OB_INVALID_ID
+   * e.g.
+   *  PARTITION_LEVEL_ZERO
+   *    - object_id = table_id
+   *    - first_level_part_id = OB_INVALID_ID
+   *  PARTITION_LEVEL_ONE
+   *    - object_id = part_id
+   *    - first_level_part_id = OB_INVALID_ID
+   * PARTITION_LEVEL_TWO
+   *    - object_id = sub_part_id
+   *    - first_level_part_id = part_id
+  */
   int get_part_id_and_tablet_id_by_idx(
       const int64_t part_idx,
       const int64_t subpart_idx,
       common::ObObjectID &object_id,
+      common::ObObjectID &first_level_part_id,
       common::ObTabletID &tablet_id) const;
   int get_part_by_idx(
       const int64_t part_id,
@@ -1220,10 +1235,26 @@ public:
   virtual int deserialize_columns(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize_constraints(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_constraints(const char *buf, const int64_t data_len, int64_t &pos);
-  // FIXME: move to ObPartitionSchema
-  // this function won't reset tablet_ids/partition_ids first, should be careful
+  /**
+   * FIXME: move to ObPartitionSchema
+   * this function won't reset tablet_ids/partition_ids first, should be careful!!!
+   *
+   * first_level_part_ids represent the first level part id of subpartition,
+   * otherwise its value is OB_INVALID_ID
+   * e.g.
+   *  PARTITION_LEVEL_ZERO
+   *    - partition_id = table_id
+   *    - first_level_part_id = OB_INVALID_ID
+   *  PARTITION_LEVEL_ONE
+   *    - partition_id = part_id
+   *    - first_level_part_id = OB_INVALID_ID
+   * PARTITION_LEVEL_TWO
+   *    - partition_id = sub_part_id
+   *    - first_level_part_id = part_id
+  */
   int get_all_tablet_and_object_ids(common::ObIArray<ObTabletID> &tablet_ids,
-                                    common::ObIArray<ObObjectID> &partition_ids) const;
+                                    common::ObIArray<ObObjectID> &partition_ids,
+                                    ObIArray<ObObjectID> *first_level_part_ids = NULL) const;
 
   virtual int alloc_partition(const ObPartition *&partition);
   virtual int alloc_partition(const ObSubPartition *&subpartition);

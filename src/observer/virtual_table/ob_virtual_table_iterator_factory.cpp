@@ -196,6 +196,7 @@
 #include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
+#include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
 
 namespace oceanbase
@@ -2321,6 +2322,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualThread *all_virtual_thread = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualThread, all_virtual_thread))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_thread);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TID: {
+            ObAllVirtualOptStatGatherMonitor *opt_stats_gather_stat = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualOptStatGatherMonitor, opt_stats_gather_stat))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualOptStatGatherMonitor", K(ret));
+            } else {
+              opt_stats_gather_stat->set_allocator(&allocator);
+              opt_stats_gather_stat->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(opt_stats_gather_stat);
             }
             break;
           }

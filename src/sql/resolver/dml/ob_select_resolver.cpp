@@ -5653,7 +5653,7 @@ int ObSelectResolver::check_need_use_sys_tenant(bool &use_sys_tenant) const
 int ObSelectResolver::check_in_sysview(bool &in_sysview) const
 {
   int ret = OB_SUCCESS;
-  in_sysview = params_.is_from_show_resolver_;
+  in_sysview = params_.is_from_show_resolver_ || params_.is_in_sys_view_;
   return ret;
 }
 

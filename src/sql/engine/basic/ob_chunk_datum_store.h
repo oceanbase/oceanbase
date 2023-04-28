@@ -443,6 +443,10 @@ public:
     int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
       const int64_t row_size, uint32_t row_extend_size, StoredRow **stored_row = nullptr);
     int copy_stored_row(const StoredRow &stored_row, StoredRow **dst_sr);
+    int copy_datums(const ObDatum *datums,
+                    const int64_t cnt,
+                    const int64_t extra_size,
+                    StoredRow **dst_sr);
     //the memory of shadow stored row is not continuous,
     //so you cannot directly copy the memory of the entire stored row,
     //and you should make a deep copy of each datum in turn
@@ -853,6 +857,8 @@ public:
   int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
               StoredRow **stored_row = nullptr);
   int add_row(const StoredRow &sr, StoredRow **stored_row = nullptr);
+  int add_row(const ObDatum *datums, const int64_t cnt,
+              const int64_t extra_size, StoredRow **stored_row);
   int add_row(const StoredRow &sr, ObEvalCtx *ctx, StoredRow **stored_row = nullptr);
   int add_row(const ShadowStoredRow &sr, StoredRow **stored_row = nullptr);
 

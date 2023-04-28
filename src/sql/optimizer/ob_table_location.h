@@ -631,6 +631,7 @@ public:
                            const ParamStore &params,
                            ObIArray<ObTabletID> &tablet_ids,
                            ObIArray<ObObjectID> &partition_ids,
+                           ObIArray<ObObjectID> &first_level_part_ids,
                            const ObDataTypeCastParams &dtc_params) const;
 
   int init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
@@ -664,6 +665,7 @@ public:
                            const uint64_t ref_table_id,
                            const ObIArray<ObTabletID> &tablet_ids,
                            const ObIArray<ObObjectID> &partition_ids,
+                           const ObIArray<ObObjectID> &first_level_part_ids,
                            ObCandiTabletLocIArray &candi_tablet_locs,
                            bool nonblock = false) const;
 

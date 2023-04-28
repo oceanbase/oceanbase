@@ -364,12 +364,14 @@ int ObPhyLocationGetter::build_related_tablet_info(const ObTableLocation &table_
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(exec_ctx.get_my_session());
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObArray<ObObjectID> partition_ids;
+  ObArray<ObObjectID> first_level_part_ids;
   ObArray<ObTabletID> tablet_ids;
 
   if (OB_FAIL(table_location.calculate_tablet_ids(exec_ctx,
                                                   plan_ctx->get_param_store(),
                                                   tablet_ids,
                                                   partition_ids,
+                                                  first_level_part_ids,
                                                   dtc_params))) {
     LOG_WARN("calculate tablet ids failed", K(ret));
   } else {

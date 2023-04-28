@@ -54,7 +54,7 @@ public:
                 char *buf,
                 const int64_t buf_len,
                 int64_t &pos);
-
+  int deep_copy(ObIAllocator &alloc, const ObHistBucket &src);
   int64_t deep_copy_size() const { return endpoint_value_.get_deep_copy_size(); }
 
   TO_STRING_KV(K_(endpoint_value),
@@ -94,6 +94,7 @@ public:
   void reset();
 
   int deep_copy(const ObHistogram &src, char *buf, const int64_t buf_len, int64_t &pos);
+  int deep_copy(ObIAllocator &alloc, const ObHistogram &src);
   int assign(const ObHistogram &other);
   int64_t deep_copy_size() const;
 
@@ -157,6 +158,9 @@ class ObOptColumnStat : public common::ObIKVCacheValue
   OB_UNIS_VERSION_V(1);
 public:
   static const int64_t MAX_OBJECT_SERIALIZE_SIZE = 512;
+  static const int64_t LARGE_NDV_NUMBER = 2LL << 61; // 2 << 64 is too large for int64_t, and 2 << 61 is enough for ndv
+  static const int64_t BUCKET_BITS = 10; // ln2(1024) = 10;
+  static const int64_t NUM_LLC_BUCKET =  (1 << BUCKET_BITS);
 
   struct Key : public common::ObIKVCacheKey
   {
@@ -228,12 +232,9 @@ public:
   };
   ObOptColumnStat();
 
-  int merge_column_stat(const ObOptColumnStat &other);
-
   explicit ObOptColumnStat(common::ObIAllocator &allocator);
 
   ~ObOptColumnStat() { reset(); }
-
   void reset();
 
   uint64_t get_table_id() const { return table_id_; }
@@ -246,9 +247,11 @@ public:
   void set_column_id(uint64_t cid) { column_id_ = cid; }
 
   const common::ObObj &get_max_value() const { return max_value_; }
+  common::ObObj &get_max_value() { return max_value_; }
   void set_max_value(const common::ObObj &max) { max_value_ = max; }
 
   const common::ObObj &get_min_value() const { return min_value_; }
+  common::ObObj &get_min_value() { return min_value_; }
   void set_min_value(const common::ObObj &min) { min_value_ = min; }
 
   int64_t get_num_distinct() const { return num_distinct_; }
@@ -261,8 +264,7 @@ public:
   int64_t get_num_not_null() const { return num_not_null_; }
 
   void set_avg_len(int64_t avg_len) { avg_length_ = avg_len; }
-  int64_t get_avg_len() const { return (int64_t)avg_length_; }
-  void  get_avg_len(double &avg_len) const { avg_len = avg_length_; }
+  int64_t get_avg_len() const { return avg_length_; }
 
   int64_t get_stat_level() const { return object_type_; }
   void set_stat_level(int64_t object_type) { object_type_ = object_type; }
@@ -274,7 +276,7 @@ public:
   virtual int64_t size() const override;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
   int deep_copy(const ObOptColumnStat &src, char *buf, const int64_t size, int64_t &pos);
-  virtual int deep_copy(char *buf, const int64_t buf_len, ObOptColumnStat *&value) const;
+  int deep_copy(const ObOptColumnStat &value);
 
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last) { last_analyzed_ = last; }
@@ -299,53 +301,18 @@ public:
         && num_null_ >= 0;
   }
 
-  void add_num_null(int64_t num_null) { num_null += num_null; }
+  void add_num_null(int64_t num_null) { num_null_ += num_null; }
 
   void add_num_not_null(int64_t num_not_null) { num_not_null_ += num_not_null; }
 
-  // deep copy
-  //int merge_min_val(const common::ObObj &min_val, common::ObIAllocator &alloc);
-
-  //int merge_max_val(const common::ObObj &max_val, common::ObIAllocator &alloc);
-
-  int merge_obj(common::ObObj &obj,
-                ObIAllocator &max_alloc,
-                ObIAllocator &min_alloc);
-  int merge_obj(const ObObj &obj);
-  // normal copy
-  //shallow copy
-  void merge_max_val(const common::ObObj &max_val) {
-    if (max_value_.is_null() || max_val > max_value_) {
-      max_value_ = max_val;
-    }
-  }
-
-  //shallow copy
-  void merge_min_val(const common::ObObj &min_val) {
-    if (min_value_.is_null() || min_val > min_value_) {
-      min_value_ = min_val;
-    }
-  }
-
-  void merge_avg_len(int64_t avg_len) {
-    merge_avg_len(avg_len, 1);
-  }
-
-  void merge_avg_len(int64_t avg_len, int64_t num_rows) {
+  void merge_avg_len(int64_t avg_len, int64_t num_rows)
+  {
     SQL_LOG(DEBUG, "MERGE avg len", K(column_id_), K(partition_id_), K(avg_len), K(avg_length_), K(num_not_null_), K(num_null_), K(num_rows));
     if (num_not_null_ + num_null_ + num_rows != 0) {
       avg_length_ = (avg_length_ * (num_not_null_ + num_null_) + avg_len * num_rows) / (num_not_null_ + num_null_+ num_rows);
     }
   }
-
-  void merge_avg_len(double avg_len, int64_t num_rows) {
-    SQL_LOG(DEBUG, "MERGE avg len", K(column_id_), K(partition_id_), K(avg_len), K(avg_length_), K(num_not_null_), K(num_null_), K(num_rows));
-    if (num_not_null_ + num_null_ + num_rows != 0) {
-      avg_length_ = (avg_length_ * (num_not_null_ + num_null_) + avg_len * num_rows) / (num_not_null_ + num_null_+ num_rows);
-    }
-  }
-
-  int deep_copy_max_min_obj();
+  int merge_column_stat(const ObOptColumnStat &other);
 
   common::ObCollationType get_collation_type() const { return cs_type_; }
   void set_collation_type(common::ObCollationType cs_type) { cs_type_ = cs_type; }
@@ -376,7 +343,7 @@ protected:
   int64_t num_null_;
   int64_t num_not_null_;
   int64_t num_distinct_;
-  double avg_length_;
+  int64_t avg_length_;
   common::ObObj min_value_;
   common::ObObj max_value_;
   int64_t llc_bitmap_size_;
@@ -386,9 +353,8 @@ protected:
   /** last analyzed time */
   int64_t last_analyzed_;
   common::ObCollationType cs_type_;
-
-  ObArenaAllocator inner_max_allocator_;
-  ObArenaAllocator inner_min_allocator_;
+  common::ObArenaAllocator inner_allocator_;
+  common::ObIAllocator &allocator_;
 };
 
 }

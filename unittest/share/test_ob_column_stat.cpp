@@ -16,7 +16,6 @@
 
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
-#include "share/stat/ob_column_stat.h"
 
 using namespace oceanbase;
 using namespace common;

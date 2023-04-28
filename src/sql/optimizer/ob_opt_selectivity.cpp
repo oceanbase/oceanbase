@@ -2343,11 +2343,11 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     ObObj maxscalar;
     ObObj startscalar;
     ObObj endscalar;
-    const ObObj *new_start_obj = NULL;
-    const ObObj *new_end_obj = NULL;
+    ObObj *new_start_obj = NULL;
+    ObObj *new_end_obj = NULL;
     ObArenaAllocator tmp_alloc("ObOptSel");
-    if (OB_FAIL(convert_valid_obj_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
-        OB_FAIL(convert_valid_obj_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
+    if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
+        OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
       LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(start_obj), K(end_obj),
                                                             KPC(new_start_obj), KPC(new_end_obj));
     } else if (OB_ISNULL(new_start_obj) || OB_ISNULL(new_end_obj)) {
@@ -3586,9 +3586,9 @@ int ObOptSelectivity::get_equal_pred_sel(const ObHistogram &histogram,
   int ret = OB_SUCCESS;
   int64_t idx = -1;
   bool is_equal = false;
-  const ObObj *new_value = NULL;
+  ObObj *new_value = NULL;
   ObArenaAllocator tmp_alloc("ObOptSel");
-  if (OB_FAIL(convert_valid_obj_for_opt_stats(&value, tmp_alloc, new_value))) {
+  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&value, tmp_alloc, new_value))) {
     LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(value), KPC(new_value));
   } else if (OB_ISNULL(new_value)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3632,11 +3632,11 @@ int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
           1 == startkey.get_obj_cnt()) {
         const ObObj *startobj = &startkey.get_obj_ptr()[0];
         const ObObj *endobj = &endkey.get_obj_ptr()[0];
-        const ObObj *new_startobj = NULL;
-        const ObObj *new_endobj = NULL;
+        ObObj *new_startobj = NULL;
+        ObObj *new_endobj = NULL;
         ObArenaAllocator tmp_alloc("ObOptSel");
-        if (OB_FAIL(convert_valid_obj_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
-            OB_FAIL(convert_valid_obj_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
+        if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
+            OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
           LOG_WARN("failed to convert valid obj for opt stats", K(ret), KPC(startobj), KPC(endobj),
                                                                 KPC(new_startobj), KPC(new_endobj));
         } else if (OB_ISNULL(new_startobj) || OB_ISNULL(new_endobj)) {
@@ -4364,20 +4364,6 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
       ++lidx;
     }
   }
-  return ret;
-}
-
-int ObOptSelectivity::convert_valid_obj_for_opt_stats(const ObObj *old_obj,
-                                                      ObIAllocator &alloc,
-                                                      const ObObj *&new_obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(old_obj,
-                                                             alloc,
-                                                             new_obj))) {
-    LOG_WARN("fail to truncated string", K(ret));
-  }
-  LOG_TRACE("Succeed to convert valid obj for opt stats", KPC(old_obj), KPC(new_obj));
   return ret;
 }
 

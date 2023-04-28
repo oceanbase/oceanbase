@@ -1426,11 +1426,6 @@ public:
                                                 ObIArray<ObRawExpr*> &candi_left_quals,
                                                 ObIArray<ObRawExpr*> &candi_right_quals);
 
-  static int init_calc_part_id_expr(ObLogPlan * log_plan,
-                                    const uint64_t table_id,
-                                    const uint64_t ref_table_id,
-                                    ObRawExpr *&calc_part_id_expr);
-
   static int replace_gen_column(ObLogPlan *log_plan,
                                 ObRawExpr *part_expr,
                                 ObRawExpr *&new_part_expr);
@@ -1443,7 +1438,7 @@ public:
 
   static int truncate_string_for_opt_stats(const ObObj *old_obj,
                                            ObIAllocator &alloc,
-                                           const ObObj *&new_obj);
+                                           ObObj *&new_obj);
 
 private:
   //disallow construct

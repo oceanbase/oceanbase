@@ -31,6 +31,7 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   ObSEArray<ObObjectID, 2> partition_ids;
+  ObSEArray<ObObjectID, 2> first_level_part_ids;
   ObSEArray<ObTabletID, 2> tablet_ids;
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
   const ObIArray<ObTableLocation> &normal_locations = plan.get_table_locations();
@@ -40,10 +41,12 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
     ObDASTableLoc *table_loc = nullptr;
     tablet_ids.reuse();
     partition_ids.reuse();
+    first_level_part_ids.reuse();
     if (OB_FAIL(das_location.calculate_tablet_ids(ctx,
                                                   plan_ctx->get_param_store(),
                                                   tablet_ids,
                                                   partition_ids,
+                                                  first_level_part_ids,
                                                   dtc_params))) {
       LOG_WARN("calculate partition ids failed", K(ret));
     } else if (OB_FAIL(extended_table_loc(das_location.get_loc_meta(), table_loc))) {
@@ -51,7 +54,8 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < tablet_ids.count(); ++j) {
       ObDASTabletLoc *tablet_loc = nullptr;
-      if (OB_FAIL(extended_tablet_loc(*table_loc, tablet_ids.at(j), tablet_loc))) {
+      if (OB_FAIL(extended_tablet_loc(*table_loc, tablet_ids.at(j), tablet_loc, partition_ids.at(j),
+                                      first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(j)))) {
         LOG_WARN("extended tablet location failed", K(ret));
       }
     }
@@ -136,7 +140,9 @@ ObDASTableLoc *ObDASCtx::get_table_loc_by_id(uint64_t table_loc_id, uint64_t ref
 
 int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
                                   const ObTabletID &tablet_id,
-                                  ObDASTabletLoc *&tablet_loc)
+                                  ObDASTabletLoc *&tablet_loc,
+                                  const common::ObObjectID &partition_id,
+                                  const common::ObObjectID &first_level_part_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(table_loc.get_tablet_loc_by_id(tablet_id, tablet_loc))) {
@@ -158,6 +164,8 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
       LOG_WARN("store tablet location info failed", K(ret));
     } else {
       tablet_loc->loc_meta_ = table_loc.loc_meta_;
+      tablet_loc->partition_id_ = partition_id;
+      tablet_loc->first_level_part_id_ = first_level_part_id;
     }
     //build related tablet location
     if (OB_SUCC(ret) && OB_FAIL(build_related_tablet_loc(*tablet_loc))) {
@@ -218,6 +226,8 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
       tablet_loc->server_ = replica_loc.get_server();
       tablet_loc->tablet_id_ = opt_tablet_loc.get_tablet_id();
       tablet_loc->ls_id_ = opt_tablet_loc.get_ls_id();
+      tablet_loc->partition_id_ = opt_tablet_loc.get_partition_id();
+      tablet_loc->first_level_part_id_ = opt_tablet_loc.get_first_level_part_id();
       tablet_loc->loc_meta_ = table_loc.loc_meta_;
       if (OB_FAIL(table_loc.add_tablet_loc(tablet_loc))) {
         LOG_WARN("store tablet loc failed", K(ret), K(tablet_loc));
@@ -256,11 +266,13 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
       LOG_WARN("get related tablet id failed", K(ret));
     } else {
       related_tablet_loc = new(related_loc_buf) ObDASTabletLoc();
-      related_tablet_loc->tablet_id_ = rv.first;
+      related_tablet_loc->tablet_id_ = rv.tablet_id_;
       related_tablet_loc->ls_id_ = tablet_loc.ls_id_;
       related_tablet_loc->server_ = tablet_loc.server_;
       related_tablet_loc->loc_meta_ = related_table_loc->loc_meta_;
       related_tablet_loc->next_ = tablet_loc.next_;
+      related_tablet_loc->partition_id_ = rv.part_id_;
+      related_tablet_loc->first_level_part_id_ = rv.first_level_part_id_;
       tablet_loc.next_ = related_tablet_loc;
       if (OB_FAIL(related_table_loc->add_tablet_loc(related_tablet_loc))) {
         LOG_WARN("add related tablet location failed", K(ret));

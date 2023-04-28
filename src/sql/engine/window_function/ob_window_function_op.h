@@ -560,7 +560,7 @@ public:
     AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos)
       : WinFuncCell(wf_info, op),
         finish_prepared_(false),
-        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc"),
+        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc", op.get_monitor_info()),
         result_(),
         got_result_(false),
         remove_type_(wf_info.remove_type_)

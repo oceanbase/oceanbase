@@ -8,6 +8,7 @@
 #include "storage/direct_load/ob_direct_load_fast_heap_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
+#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 
 namespace oceanbase
 {
@@ -17,7 +18,7 @@ class ObTableLoadResultInfo;
 } // namespace table
 namespace common
 {
-class ObOptColumnStat;
+class ObOptOSGColumnStat;
 } // namespace common
 namespace storage
 {
@@ -36,6 +37,7 @@ public:
   common::ObTabletID tablet_id_;
   int64_t snapshot_version_;
   ObDirectLoadTableDataDesc table_data_desc_;
+  const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
@@ -68,7 +70,7 @@ private:
   ObSSTableInsertSliceWriter *slice_writer_;
   ObDirectLoadFastHeapTableTabletWriteCtx write_ctx_;
   blocksstable::ObDatumRow datum_row_;
-  common::ObArray<ObOptColumnStat*> column_stat_array_;
+  common::ObArray<ObOptOSGColumnStat *> column_stat_array_;
   int64_t row_count_;
   bool is_closed_;
   bool is_inited_;

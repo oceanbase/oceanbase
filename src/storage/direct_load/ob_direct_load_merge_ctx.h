@@ -9,6 +9,7 @@
 #include "share/schema/ob_table_param.h"
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
@@ -23,7 +24,7 @@ class ObTableLoadErrorRowHandler;
 class ObTableLoadSchema;
 } // namespace observer
 namespace common {
-class ObOptColumnStat;
+class ObOptOSGColumnStat;
 class ObOptTableStat;
 } // namespace common
 namespace storage

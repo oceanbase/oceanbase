@@ -1324,6 +1324,8 @@ public:
 
   int fill_join_filter_info(JoinFilterInfo &join_filter_info);
 
+  int perform_gather_stat_replace(ObLogicalOperator *op);
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
@@ -1733,6 +1735,11 @@ protected: // member variable
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true >
       window_function_replaced_exprs_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > gen_col_replaced_exprs_;
+  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 1, common::ModulePageAllocator, true > stat_gather_replaced_exprs_;
+  // used for gather statistic begin
+  ObRawExpr* stat_partition_id_expr_;
+  ObLogTableScan* stat_table_scan_;
+  // used for gather statistics end
   //上层stmt条件下推下来的谓词，已经抽出？
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_filters_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> startup_filters_;

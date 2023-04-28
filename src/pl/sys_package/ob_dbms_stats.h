@@ -18,6 +18,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/ob_pl_type.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
+#include "share/stat/ob_opt_stat_gather_stat.h"
 
 namespace oceanbase
 {
@@ -371,7 +372,8 @@ public:
                                       common::ObIArray<ObObjectID> &target_part_ids);
 
   static int update_stat_cache(const uint64_t rpc_tenant_id,
-                               const ObTableStatParam &param);
+                               const ObTableStatParam &param,
+                               ObOptStatRunningMonitor *running_monitor = NULL);
 
   static int parse_set_table_stat_options(ObExecContext &ctx,
                                           const ObObjParam &stattab,
@@ -434,29 +436,23 @@ public:
                                             common::ObObj &result);
 
   static int get_need_statistics_tables(sql::ObExecContext &ctx,
-                                        ObIArray<StatTable> &user_missing_tables,
-                                        ObIArray<StatTable> &user_stale_tables,
-                                        ObIArray<StatTable> &sys_missing_tables,
-                                        ObIArray<StatTable> &sys_stale_tables);
+                                        ObGatherTableStatsHelper &helper);
 
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
                                      const double stale_percent_threshold,
-                                     StatTable &stat_table);
+                                     StatTable &stat_table,
+                                     bool &is_big_table);
 
   static int gather_tables_stats_with_default_param(ObExecContext &ctx,
-                                                    const bool need_sort,
-                                                    const int64_t start_time,
-                                                    const int64_t duration_time,
-                                                    ObIArray<StatTable> &stat_tables,
-                                                    int64_t &succeed_count,
-                                                    int64_t &failed_count);
+                                                    ObGatherTableStatsHelper &helper,
+                                                    ObOptStatTaskInfo &task_info);
 
   static int gather_table_stats_with_default_param(ObExecContext &ctx,
-                                                   const int64_t start_time,
                                                    const int64_t duration_time,
-                                                   const StatTable &stat_table);
+                                                   const StatTable &stat_table,
+                                                   ObOptStatTaskInfo &task_info);
 
   static int set_param_global_part_id(ObExecContext &ctx,
                                       ObTableStatParam &param,
@@ -467,6 +463,12 @@ public:
 
   static int get_table_partition_map(const ObTableSchema &table_schema,
                                      OSGPartMap &part_map);
+
+  static int init_gather_task_info(ObExecContext &ctx,
+                                   ObOptStatGatherType type,
+                                   int64_t start_time,
+                                   int64_t task_table_count,
+                                   ObOptStatTaskInfo &task_info);
 
   static int get_table_stale_percent_threshold(sql::ObExecContext &ctx,
                                                const uint64_t tenant_id,
@@ -506,14 +508,16 @@ private:
                                             const uint64_t tenant_id,
                                             const share::schema::ObTableSchema &table_schema,
                                             const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                            StatTable &stat_table);
+                                            StatTable &stat_table,
+                                            bool &is_big_table);
 
   static int get_user_partition_table_stale_percent(sql::ObExecContext &ctx,
                                                     const uint64_t tenant_id,
                                                     const share::schema::ObTableSchema &table_schema,
                                                     const double stale_percent_threshold,
                                                     const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                                    StatTable &stat_table);
+                                                    StatTable &stat_table,
+                                                    bool &is_big_table);
 
   static bool is_table_gather_global_stats(const int64_t global_id,
                                            const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
@@ -533,15 +537,15 @@ private:
                                    const int64_t table_id,
                                    ObIArray<ObAuxTableMetaInfo> &index_infos);
 
+  static int get_table_partition_infos(const ObTableSchema &table_schema,
+                                       ObIArray<PartInfo> &partition_infos);
+
   static int get_index_schema(sql::ObExecContext &ctx,
                               common::ObIAllocator &allocator,
                               const int64_t data_table_id,
                               const bool is_sensitive_compare,
                               ObString &index_name,
                               const share::schema::ObTableSchema *&index_schema);
-
-  static int get_table_partition_infos(const ObTableSchema &table_schema,
-                                       ObIArray<PartInfo> &partition_infos);
 
   static bool is_func_index(const ObTableStatParam &index_param);
 

@@ -882,7 +882,7 @@ int ObLogicalOperator::compute_op_other_info()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else {
-        allocated_osg_ |= get_child(i)->get_allocated_osg();
+        allocated_osg_ |= get_child(i)->has_allocated_osg();
       }
     }
   }

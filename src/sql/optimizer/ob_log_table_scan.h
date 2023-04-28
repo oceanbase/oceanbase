@@ -75,6 +75,7 @@ public:
         use_batch_(false),
         access_path_(NULL),
         tablet_id_expr_(NULL),
+        tablet_id_type_(0),
         calc_part_id_expr_(NULL),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
@@ -414,6 +415,8 @@ public:
   inline const AccessPath* get_access_path() const { return access_path_; }
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *expr) { tablet_id_expr_ = expr; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() const { return tablet_id_expr_; }
+  void set_tablet_id_type(int64_t type) { tablet_id_type_ = type; }
+  int64_t get_tablet_id_type() const { return tablet_id_type_; }
   const common::ObIArray<ObRawExpr*> &get_rowkey_exprs() const { return rowkey_exprs_; }
   const common::ObIArray<ObRawExpr*> &get_part_exprs() const { return part_exprs_; }
   inline const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
@@ -547,6 +550,9 @@ protected: // memeber variables
   bool use_batch_;
   AccessPath *access_path_;
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
+  // decide tablet_id_expr should reture which id
+  // 0 for tablet id, 1 for logical part id, 2 for logical subpart id
+  int64_t tablet_id_type_;
   ObRawExpr *calc_part_id_expr_;
 
   // begin for global index lookup

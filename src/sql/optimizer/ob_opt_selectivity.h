@@ -883,10 +883,6 @@ private:
                                 const bool is_semi,
                                 double &rows);
 
-  static int convert_valid_obj_for_opt_stats(const ObObj *old_obj,
-                                             ObIAllocator &alloc,
-                                             const ObObj *&new_obj);
-
   static int calc_complex_predicates_selectivity_by_ds(const OptTableMetas &table_metas,
                                                        const OptSelectivityCtx &ctx,
                                                        const ObIArray<ObRawExpr*> &predicates,

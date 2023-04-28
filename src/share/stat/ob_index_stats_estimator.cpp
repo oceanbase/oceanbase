@@ -31,7 +31,7 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString no_rewrite("NO_REWRITE");
+  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;

@@ -354,6 +354,7 @@ public:
     };
   };
   int64_t tenant_id_col_idx_;
+  int64_t partition_id_calc_type_;
 };
 
 class ObTableScanOp : public ObOperator

@@ -28,16 +28,25 @@ public:
       materialized_(false),
       auto_name_id_(1),
       view_db_name_(view_db_name),
-      view_name_(view_name)
+      view_name_(view_name),
+      ori_is_in_sys_view_(false)
       {
         is_resolving_view_ = true;
         params_.is_from_create_view_ = params.is_from_create_view_;
         params_.is_from_create_table_ = params.is_from_create_table_;
         params_.is_specified_col_name_ = params.is_specified_col_name_;
       }
-  virtual ~ObViewTableResolver() {}
+  virtual ~ObViewTableResolver()
+  {
+    params_.is_in_sys_view_ = ori_is_in_sys_view_;
+  }
 
-  void set_current_view_item(const TableItem &view_item) { current_view_item = view_item; }
+  void set_current_view_item(const TableItem &view_item)
+  {
+    current_view_item = view_item;
+    ori_is_in_sys_view_ = params_.is_in_sys_view_;
+    params_.is_in_sys_view_ = params_.is_in_sys_view_ || is_sys_view(current_view_item.ref_id_);
+  }
   void set_parent_view_resolver(ObViewTableResolver *parent_view_resolver)
   { parent_view_resolver_ = parent_view_resolver; }
   int check_need_use_sys_tenant(bool &use_sys_tenant) const;
@@ -72,6 +81,7 @@ protected:
   uint64_t auto_name_id_;
   const ObString view_db_name_;
   const ObString view_name_;
+  bool ori_is_in_sys_view_;
 };
 }  // namespace sql
 }  // namespace oceanbase

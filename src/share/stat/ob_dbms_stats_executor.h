@@ -46,11 +46,11 @@ public:
                                  const ObTableStatParam &param,
                                  const bool only_histogram);
 
-  static int update_stat_online(ObExecContext &ctx,
+  static int update_online_stat(ObExecContext &ctx,
                                 ObTableStatParam &param,
                                 share::schema::ObSchemaGetterGuard *schema_guard,
-                                TabStatIndMap &online_table_stats,
-                                ColStatIndMap &online_column_stats);
+                                const TabStatIndMap &online_table_stats,
+                                const ColStatIndMap &online_column_stats);
 private:
 
   static int do_gather_stats(ObExecContext &ctx,
