@@ -415,6 +415,9 @@ extern int eval_batch_ceil_floor(const ObExpr &, ObEvalCtx &, const ObBitVector 
 extern int eval_assign_question_mark_func(EVAL_FUNC_ARG_DECL);
 extern int calc_timestamp_to_scn_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
 extern int calc_scn_to_timestamp_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sqrt_expr_mysql_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
+extern int calc_sqrt_expr_oracle_double_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
+extern int calc_sqrt_expr_oracle_number_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
 
 // append only, can not delete, set to NULL for mark delete
 static ObExpr::EvalFunc g_expr_eval_functions[] = {
@@ -1140,7 +1143,10 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprDecode::eval_decode_batch,                                    /* 108 */
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
   ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
-  NULL //ObExprNlsInitCap::calc_nls_initcap_batch                     /* 111 */
+  NULL, //ObExprNlsInitCap::calc_nls_initcap_batch                    /* 111 */
+  calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
+  calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
+  calc_sqrt_expr_oracle_number_in_batch                               /* 116 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

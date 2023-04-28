@@ -2005,18 +2005,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |18      |670         |
+|0 |SUBPLAN FILTER                |        |18      |665         |
 |1 |├─PX COORDINATOR              |        |18      |13          |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |4           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |4           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |19          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |├─TABLE GET                   |t2      |1       |18          |
+|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [(T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [cast(t1.c1, DECIMAL(11, 0))(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1]), filter(nil), rowset=256
   2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
@@ -2026,14 +2026,14 @@ Outputs & filters:
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 >= :0])
-  6 - output([t2.c2]), filter(nil), rowset=256
+      range_cond([t2.c1 >= :0], [t2.c1 = :0])
+  6 - output([1]), filter([t2.c2 = :2]), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :1])
 Used Hint:
@@ -2044,17 +2044,19 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
   stmt_id:2, SEL$2
   stmt_id:3, SEL$3
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2071,19 +2073,19 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2117,18 +2119,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |18      |670         |
+|0 |SUBPLAN FILTER                |        |18      |665         |
 |1 |├─PX COORDINATOR              |        |18      |13          |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |4           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |4           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |19          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |├─TABLE GET                   |t2      |1       |18          |
+|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [(T_OP_EXISTS, subquery(1)) OR (T_OP_EXISTS, subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [cast(t1.c1, DECIMAL(11, 0))(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1]), filter(nil), rowset=256
   2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
@@ -2138,14 +2140,14 @@ Outputs & filters:
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 >= :0])
-  6 - output([t2.c2]), filter(nil), rowset=256
+      range_cond([t2.c1 >= :0], [t2.c1 = :0])
+  6 - output([1]), filter([t2.c2 = :2]), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 >= :1])
 Used Hint:
@@ -2156,17 +2158,19 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
   stmt_id:2, SEL$2
   stmt_id:3, SEL$3
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2183,19 +2187,19 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2229,18 +2233,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |18      |670         |
+|0 |SUBPLAN FILTER                |        |18      |665         |
 |1 |├─PX COORDINATOR              |        |18      |13          |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |4           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |4           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |19          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |├─TABLE GET                   |t2      |1       |18          |
+|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [(T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [cast(t1.c1, DECIMAL(11, 0))(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1]), filter(nil), rowset=256
   2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
@@ -2250,14 +2254,14 @@ Outputs & filters:
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :0])
-  6 - output([t2.c2]), filter(nil), rowset=256
+      range_cond([t2.c1 = :0], [t2.c1 >= :0])
+  6 - output([1]), filter([t2.c2 = :2]), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
 Used Hint:
@@ -2268,17 +2272,20 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
-  stmt_id:2, SEL$2
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
+  stmt_id:2, SEL$2 > SEL$69480C90
   stmt_id:3, SEL$3
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
-      FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$2")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2295,19 +2302,19 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2341,18 +2348,18 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |18      |670         |
+|0 |SUBPLAN FILTER                |        |18      |665         |
 |1 |├─PX COORDINATOR              |        |18      |13          |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |4           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |4           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |19          |
-|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |├─TABLE GET                   |t2      |1       |18          |
+|6 |└─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) OR cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2))]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [(T_OP_EXISTS, subquery(1)) OR (T_OP_EXISTS, subquery(2))]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [cast(t1.c1, DECIMAL(11, 0))(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1]), filter(nil), rowset=256
   2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
@@ -2362,14 +2369,14 @@ Outputs & filters:
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :0])
-  6 - output([t2.c2]), filter(nil), rowset=256
+      range_cond([t2.c1 = :0], [t2.c1 >= :0])
+  6 - output([1]), filter([t2.c2 = :2]), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
 Used Hint:
@@ -2380,17 +2387,20 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
-  stmt_id:2, SEL$2
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
+  stmt_id:2, SEL$2 > SEL$69480C90
   stmt_id:3, SEL$3
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
-      FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$2")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2407,19 +2417,19 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2453,19 +2463,19 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                      |NAME    |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SUBPLAN FILTER                |        |18      |994         |
+|0 |SUBPLAN FILTER                |        |18      |988         |
 |1 |├─PX COORDINATOR              |        |18      |13          |
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|18      |11          |
 |3 |│   └─PX PARTITION ITERATOR   |        |18      |4           |
 |4 |│     └─TABLE FULL SCAN       |t1      |18      |4           |
-|5 |├─TABLE RANGE SCAN            |t2      |8       |19          |
-|6 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |├─TABLE GET                   |t2      |1       |18          |
+|6 |├─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 |7 |└─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 ==================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c1 = ANY(subquery(1)) AND cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3))]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
+  0 - output([t1.c1], [(T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3))]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [cast(t1.c1, DECIMAL(11, 0))(:2)], [t1.c1(:3)]), onetime_exprs_(nil), init_plan_idxs_(nil), use_batch=false
   1 - output([t1.c1]), filter(nil), rowset=256
   2 - output([t1.c1]), filter(nil), rowset=256
       dop=1
@@ -2475,21 +2485,21 @@ Outputs & filters:
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :0])
-  6 - output([t2.c2]), filter(nil), rowset=256
+      range_cond([t2.c1 = :0], [t2.c1 >= :0])
+  6 - output([1]), filter([t2.c2 = :2]), rowset=256
       access([t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :1])
   7 - output([t2.c1]), filter(nil), rowset=256
       access([t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 = :2])
+      range_cond([t2.c1 = :3])
 Used Hint:
 -------------------------------------
   /*+
@@ -2498,20 +2508,23 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
-  stmt_id:2, SEL$2
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
+  stmt_id:2, SEL$2 > SEL$69480C90
   stmt_id:3, SEL$3
   stmt_id:4, SEL$4
 Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
-      FULL(@"SEL$2" "test"."t2"@"SEL$2")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "test"."t2"@"SEL$3")
       USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$2")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2528,19 +2541,19 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2584,46 +2597,46 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2291        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2288        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2282        |
+|0 |PX COORDINATOR                    |        |18      |2281        |
+|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2279        |
+|2 |  └─SUBPLAN FILTER                |        |18      |2272        |
 |3 |    ├─PX PARTITION ITERATOR       |        |18      |4           |
 |4 |    │ └─TABLE FULL SCAN           |t1      |18      |4           |
 |5 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|6 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 |10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|11|    └─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 ======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR
-      cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4)) OR
-      cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4))
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), BOOL(t1.c1 + subquery(4))
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
-       use_batch=true
+  2 - output([t1.c1], [(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))], [(T_OP_EXISTS, subquery(5))], [(T_OP_EXISTS, subquery(7))], [subquery(3)],
+       [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [cast(t1.c1, DECIMAL(11, 0))(:5)], [t1.c1(:6)], [t1.c1(:7)]), onetime_exprs_(nil),
+       init_plan_idxs_(nil), use_batch=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 = :0])
-  6 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  6 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :1])
+      range_cond([t2.c1 = :1], [t2.c1 >= :1])
   7 - output([t2.c1]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -2634,21 +2647,21 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 = :3])
-  9 - output([t2.c2]), filter(nil), rowset=256
+  9 - output([1]), filter([t2.c2 = :5]), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :4])
  10 - output([t2.c2]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:5 = t2.c1])
- 11 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      range_cond([:6 = t2.c1])
+ 11 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:6 >= t2.c1])
+      range_cond([:7 >= t2.c1], [t2.c1 = :7])
 Used Hint:
 -------------------------------------
   /*+
@@ -2657,9 +2670,9 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
   stmt_id:2, SEL$2
-  stmt_id:3, SEL$3
+  stmt_id:3, SEL$3 > SEL$69480C90
   stmt_id:4, SEL$4
   stmt_id:5, SEL$5
   stmt_id:6, SEL$6
@@ -2669,11 +2682,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$3")
+      USE_DAS(@"SEL$69480C90" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
@@ -2684,6 +2697,9 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2709,10 +2725,37 @@ Optimization Info:
       dynamic sampling level:0
   t2:
       table_rows:22
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      avaiable_index_name:[t2]
+      stats version:0
+      dynamic sampling level:0
+  t2:
+      table_rows:22
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      avaiable_index_name:[t2]
+      stats version:0
+      dynamic sampling level:0
+  t2:
+      table_rows:22
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      avaiable_index_name:[t2]
+      stats version:0
+      dynamic sampling level:0
+  t2:
+      table_rows:22
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2734,33 +2777,6 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
-  t2:
-      table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
-      avaiable_index_name:[t2]
-      stats version:0
-      dynamic sampling level:1
-  t2:
-      table_rows:22
-      physical_range_rows:1
-      logical_range_rows:1
-      index_back_rows:0
-      output_rows:1
-      avaiable_index_name:[t2]
-      stats version:0
-      dynamic sampling level:0
-  t2:
-      table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
-      index_back_rows:0
-      output_rows:7
-      avaiable_index_name:[t2]
-      stats version:0
-      dynamic sampling level:1
   Plan Type:
       DISTRIBUTED
 select c1,c1 in (select c1 from t2 where t2.c1=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
@@ -2792,46 +2808,46 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2295        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2292        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2286        |
+|0 |PX COORDINATOR                    |        |18      |2281        |
+|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2279        |
+|2 |  └─SUBPLAN FILTER                |        |18      |2272        |
 |3 |    ├─PX PARTITION ITERATOR       |        |18      |4           |
 |4 |    │ └─TABLE FULL SCAN           |t1      |18      |4           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
+|6 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 |10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|11|    └─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 ======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
-       use_batch=true
+  2 - output([t1.c1], [(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))], [(T_OP_EXISTS, subquery(5))], [(T_OP_EXISTS, subquery(7))], [subquery(3)],
+       [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [cast(t1.c1, DECIMAL(11, 0))(:5)], [t1.c1(:6)], [t1.c1(:7)]), onetime_exprs_(nil),
+       init_plan_idxs_(nil), use_batch=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 >= :0])
-  6 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      range_cond([t2.c1 >= :0], [t2.c1 = :0])
+  6 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :1])
+      range_cond([t2.c1 = :1], [t2.c1 >= :1])
   7 - output([t2.c1]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -2842,21 +2858,21 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 = :3])
-  9 - output([t2.c2]), filter(nil), rowset=256
+  9 - output([1]), filter([t2.c2 = :5]), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :4])
  10 - output([t2.c2]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:5 = t2.c1])
- 11 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      range_cond([:6 = t2.c1])
+ 11 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:6 >= t2.c1])
+      range_cond([:7 >= t2.c1], [t2.c1 = :7])
 Used Hint:
 -------------------------------------
   /*+
@@ -2865,9 +2881,9 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
   stmt_id:2, SEL$2
-  stmt_id:3, SEL$3
+  stmt_id:3, SEL$3 > SEL$69480C90
   stmt_id:4, SEL$4
   stmt_id:5, SEL$5
   stmt_id:6, SEL$6
@@ -2877,11 +2893,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$3")
+      USE_DAS(@"SEL$69480C90" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
@@ -2892,6 +2908,9 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -2908,22 +2927,22 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2947,7 +2966,7 @@ Optimization Info:
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -2962,13 +2981,13 @@ Optimization Info:
       dynamic sampling level:0
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
 select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;
@@ -3000,46 +3019,46 @@ Query Plan
 ======================================================================
 |ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------
-|0 |PX COORDINATOR                    |        |18      |2295        |
-|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2292        |
-|2 |  └─SUBPLAN FILTER                |        |18      |2286        |
+|0 |PX COORDINATOR                    |        |18      |2281        |
+|1 |└─EXCHANGE OUT DISTR              |:EX10000|18      |2279        |
+|2 |  └─SUBPLAN FILTER                |        |18      |2272        |
 |3 |    ├─PX PARTITION ITERATOR       |        |18      |4           |
 |4 |    │ └─TABLE FULL SCAN           |t1      |18      |4           |
-|5 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
-|6 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|5 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
+|6 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |7 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 |8 |    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|9 |    ├─DISTRIBUTED TABLE RANGE SCAN|t2      |1       |19          |
 |10|    ├─DISTRIBUTED TABLE GET       |t2      |1       |18          |
-|11|    └─DISTRIBUTED TABLE RANGE SCAN|t2      |8       |19          |
+|11|    └─DISTRIBUTED TABLE GET       |t2      |1       |18          |
 ======================================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
-  1 - output([INTERNAL_FUNCTION(t1.c1, t1.c1 = ANY(subquery(1)) AND t1.c1 = ANY(subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30 OR cast(t1.c1,
-       DECIMAL(11, 0)) = ANY(subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND t1.c1 = ANY(subquery(7)))]), filter(nil), rowset=256
+  0 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
+  1 - output([INTERNAL_FUNCTION(t1.c1, (T_OP_EXISTS, subquery(1)) AND (T_OP_EXISTS, subquery(2)) OR BOOL(t1.c1 + subquery(3)), t1.c1 + subquery(4) > 30
+      OR (T_OP_EXISTS, subquery(5)), cast(t1.c1, DECIMAL(11, 0)) + subquery(6) > cast(10, DECIMAL(2, 0)) AND (T_OP_EXISTS, subquery(7)))]), filter(nil), rowset=256
       dop=1
-  2 - output([t1.c1], [t1.c1 = ANY(subquery(1))], [t1.c1 = ANY(subquery(2))], [cast(t1.c1, DECIMAL(11, 0)) = ANY(subquery(5))], [t1.c1 = ANY(subquery(7))],
-       [subquery(3)], [subquery(4)], [subquery(6)]), filter(nil), rowset=256
-      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [t1.c1(:5)], [t1.c1(:6)]), onetime_exprs_(nil), init_plan_idxs_(nil),
-       use_batch=true
+  2 - output([t1.c1], [(T_OP_EXISTS, subquery(1))], [(T_OP_EXISTS, subquery(2))], [(T_OP_EXISTS, subquery(5))], [(T_OP_EXISTS, subquery(7))], [subquery(3)],
+       [subquery(4)], [subquery(6)]), filter(nil), rowset=256
+      exec_params_([t1.c1(:0)], [t1.c1(:1)], [t1.c1(:2)], [t1.c1(:3)], [t1.c1(:4)], [cast(t1.c1, DECIMAL(11, 0))(:5)], [t1.c1(:6)], [t1.c1(:7)]), onetime_exprs_(nil),
+       init_plan_idxs_(nil), use_batch=true
   3 - output([t1.c1]), filter(nil), rowset=256
       force partition granule
   4 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-1])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+  5 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 >= :0])
-  6 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      range_cond([t2.c1 >= :0], [t2.c1 = :0])
+  6 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([t2.c1 <= :1])
+      range_cond([t2.c1 = :1], [t2.c1 >= :1])
   7 - output([t2.c1]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
@@ -3050,21 +3069,21 @@ Outputs & filters:
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 = :3])
-  9 - output([t2.c2]), filter(nil), rowset=256
+  9 - output([1]), filter([t2.c2 = :5]), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t2.c1]), range(MIN ; MAX)always true,
       range_cond([t2.c1 <= :4])
  10 - output([t2.c2]), filter(nil), rowset=256
       access([GROUP_ID], [t2.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:5 = t2.c1])
- 11 - output([t2.c1]), filter(nil), rowset=256
-      access([GROUP_ID], [t2.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false,
+      range_cond([:6 = t2.c1])
+ 11 - output([1]), filter(nil), rowset=256
+      access([GROUP_ID]), partitions(p0)
+      limit(1), offset(nil), is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true,
-      range_cond([:6 >= t2.c1])
+      range_cond([:7 >= t2.c1], [t2.c1 = :7])
 Used Hint:
 -------------------------------------
   /*+
@@ -3073,9 +3092,9 @@ Used Hint:
 Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
-  stmt_id:1, SEL$1
+  stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
   stmt_id:2, SEL$2
-  stmt_id:3, SEL$3
+  stmt_id:3, SEL$3 > SEL$69480C90
   stmt_id:4, SEL$4
   stmt_id:5, SEL$5
   stmt_id:6, SEL$6
@@ -3085,11 +3104,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      FULL(@"SEL$1" "test"."t1"@"SEL$1")
+      FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      FULL(@"SEL$3" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$3" "test"."t2"@"SEL$3")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$3")
+      USE_DAS(@"SEL$69480C90" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
@@ -3100,6 +3119,9 @@ Outline Data:
       USE_DAS(@"SEL$7" "test"."t2"@"SEL$7")
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
+      SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$3")
+      SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
@@ -3116,22 +3138,22 @@ Optimization Info:
       dynamic sampling level:1
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3155,7 +3177,7 @@ Optimization Info:
       physical_range_rows:7
       logical_range_rows:7
       index_back_rows:0
-      output_rows:7
+      output_rows:0
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:1
@@ -3170,13 +3192,13 @@ Optimization Info:
       dynamic sampling level:0
   t2:
       table_rows:22
-      physical_range_rows:7
-      logical_range_rows:7
+      physical_range_rows:1
+      logical_range_rows:1
       index_back_rows:0
-      output_rows:7
+      output_rows:1
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
   Plan Type:
       DISTRIBUTED
 select c1,c1 in (select c1 from t2 where t2.c1>=t1.c1) and  c1 in (select c1 from t2 where t2.c1 <= t1.c1) or c1 + (select c1 from t2 where t2.c1 = t1.c1) as x, c1+(select c1 from t2 where t2.c1 = t1.c1) > 30 or c1 in  (select c2 from t2 where t2.c1 <= t1.c1) as y,c1+(select c2 from t2 where t1.c1=t2.c1) > 10 and c1 in  (select c1 from t2 where t1.c1>= t2.c1) as z from t1;

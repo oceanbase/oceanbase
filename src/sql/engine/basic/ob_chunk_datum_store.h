@@ -600,21 +600,19 @@ public:
     uint32_t rows_;
   };
 
-  class ChunkIterator;
   class RowIterator
   {
   public:
     friend class ObChunkDatumStore;
     RowIterator();
     virtual ~RowIterator() { reset(); }
-    int init(ChunkIterator *chunk_it);
+    int init(ObChunkDatumStore *store);
 
     /* from StoredRow to NewRow */
     int get_next_row(const StoredRow *&sr);
     int get_next_batch(const StoredRow **rows, const int64_t max_rows, int64_t &read_rows);
     int get_next_batch(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
                        const int64_t max_rows, int64_t &read_rows, const StoredRow **rows);
-    int get_next_block_row(const StoredRow *&sr);
     int convert_to_row(const StoredRow *sr, const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx);
 
     void reset() { reset_cursor(); }
@@ -677,7 +675,7 @@ public:
     int64_t age_;
   };
 
-  class ChunkIterator
+  class Iterator
   {
   public:
     enum IterEndState
@@ -686,91 +684,26 @@ public:
       MEM_ITER_END = 0x01,
       DISK_ITER_END = 0x02
     };
-  public:
-     friend class ObChunkDatumStore;
-     ChunkIterator();
-     virtual ~ChunkIterator();
-     int init(ObChunkDatumStore *row_store, int64_t chunk_read_size = 0, const IterationAge *age = NULL);
-     void set_iteration_age(const IterationAge *age) { age_ = age; }
-     int load_next_chunk(RowIterator& it);
-     inline bool has_next_chunk()
-     { return store_->n_blocks_ > 0 && (cur_nth_blk_ < store_->n_blocks_ - 1); }
-     void set_chunk_read_size(int64_t chunk_read_size) { chunk_read_size_ = chunk_read_size; }
-     inline int64_t get_chunk_read_size() { return chunk_read_size_; }
-     inline int64_t get_row_cnt() const { return store_->get_row_cnt(); }
-     inline int64_t get_cur_chunk_row_cnt() const { return chunk_n_rows_; }
-     inline int64_t get_chunk_read_size() const { return chunk_read_size_; }
-     void reset();
-     inline bool is_valid() { return store_ != NULL; }
-     inline bool read_file_iter_end() { return iter_end_flag_ & DISK_ITER_END; }
-     inline void set_read_file_iter_end() { iter_end_flag_ |= DISK_ITER_END; }
-     inline bool read_mem_iter_end() { return iter_end_flag_ & MEM_ITER_END; }
-     inline void set_read_mem_iter_end() { iter_end_flag_ |= MEM_ITER_END; }
-
-     bool in_chunk_iterate() const { return NULL != chunk_mem_; }
-
-     void begin_new_batch()
-     {
-       if (NULL == age_) {
-         age_ = &inner_age_;
-       }
-       inner_age_.inc();
-     }
-     ObChunkDatumStore *get_store() const { return store_; }
-
-     TO_STRING_KV(KP_(store), KP_(cur_iter_blk),
-         K_(cur_chunk_n_blocks), K_(cur_iter_pos), K_(file_size), K_(chunk_read_size),
-         KP_(chunk_mem), KP_(read_blk), KP_(read_blk_buf), KP_(aio_blk), KP_(aio_blk_buf));
-  private:
-     void reset_cursor(const int64_t file_size);
-     int load_next_block();
-     int prefetch_next_blk();
-     int read_next_blk();
-     int aio_read(char *buf, const int64_t size);
-     int aio_wait();
-     int alloc_block(Block *&blk, const int64_t size);
-     void free_block(Block *blk, const int64_t size, bool force_free = false);
-     void try_free_cached_blocks();
-  protected:
-    ObChunkDatumStore* store_;
-    Block* cur_iter_blk_;
-    blocksstable::ObTmpFileIOHandle aio_read_handle_;
-    int64_t cur_nth_blk_;     //reading nth blk start from 1
-    int64_t cur_chunk_n_blocks_; //the number of blocks of current chunk
-    int64_t cur_iter_pos_;    //pos in file
-    int64_t file_size_;
-    int64_t chunk_read_size_;
-    char* chunk_mem_;
-    int64_t chunk_n_rows_;
-    int32_t iter_end_flag_;
-
-    Block *read_blk_;
-    // Block::get_buffer() depends on blk_size_ which is overwrite by read data.
-    // We need %read_blk_buf_ to the memory size of read block.
-    BlockBuffer *read_blk_buf_;
-    Block *aio_blk_; // not null means aio is reading.
-    BlockBuffer *aio_blk_buf_;
-
-    BlockList free_list_;
-    // cached blocks for batch iterate
-    BlockList cached_;
-
-    // inner iteration age is used for batch iteration with no outside age control.
-    IterationAge inner_age_;
-    const IterationAge *age_;
-    int64_t default_block_size_;
-  };
-
-  class Iterator
-  {
-  public:
     friend class ObChunkDatumStore;
-    Iterator() : start_iter_(false) {}
-    virtual ~Iterator() {}
-    int init(ObChunkDatumStore *row_store, int64_t chunk_read_size = 0, const IterationAge *age = NULL);
-    void set_chunk_read_size(int64_t chunk_read_size)
-    { chunk_it_.set_chunk_read_size(chunk_read_size); }
-    void set_iteration_age(const IterationAge *age) { chunk_it_.set_iteration_age(age); }
+    Iterator() : start_iter_(false),
+                 store_(NULL),
+                 cur_iter_blk_(NULL),
+                 aio_read_handle_(),
+                 cur_nth_blk_(-1),
+                 cur_chunk_n_blocks_(0),
+                 cur_iter_pos_(0),
+                 file_size_(0),
+                 chunk_mem_(NULL),
+                 chunk_n_rows_(0),
+                 iter_end_flag_(IterEndState::PROCESSING),
+                 read_blk_(NULL),
+                 read_blk_buf_(NULL),
+                 aio_blk_(NULL),
+                 aio_blk_buf_(NULL),
+                 age_(NULL) {}
+    virtual ~Iterator() { reset_cursor(0); }
+    int init(ObChunkDatumStore *row_store, const IterationAge *age = NULL);
+    void set_iteration_age(const IterationAge *age) { age_ = age; }
     int get_next_row(const common::ObIArray<ObExpr*> &exprs,
                      ObEvalCtx &ctx,
                      const StoredRow **sr = nullptr);
@@ -797,17 +730,71 @@ public:
     // 暂未使用
     int convert_to_row(const StoredRow *sr, common::ObDatum **datums);
 
-    void reset() { row_it_.reset(); chunk_it_.reset(); start_iter_ = false; }
+    void reset() { row_it_.reset(); reset_cursor(0); chunk_n_rows_ = 0; start_iter_ = false; }
     inline bool has_next()
-    { return chunk_it_.has_next_chunk() || (row_it_.is_valid() && row_it_.has_next()); }
-    bool is_valid() { return chunk_it_.is_valid(); }
-    inline int64_t get_chunk_read_size() { return chunk_it_.get_chunk_read_size(); }
+    { return has_next_block() || (row_it_.is_valid() && row_it_.has_next()); }
+    inline bool has_next_block()
+    {
+      return store_->n_blocks_ > 0 && (cur_nth_blk_ < store_->n_blocks_ - 1);
+    }
+    bool is_valid() { return nullptr != store_; }
+    int load_next_block(RowIterator& it);
+    void reset_cursor(const int64_t file_size);
+    void begin_new_batch()
+    {
+      if (NULL == age_) {
+        age_ = &inner_age_;
+      }
+      inner_age_.inc();
+    }
+    inline bool read_file_iter_end() { return iter_end_flag_ & DISK_ITER_END; }
+    inline void set_read_file_iter_end() { iter_end_flag_ |= DISK_ITER_END; }
+    inline bool read_mem_iter_end() { return iter_end_flag_ & MEM_ITER_END; }
+    inline void set_read_mem_iter_end() { iter_end_flag_ |= MEM_ITER_END; }
+    int prefetch_next_blk();
+    int read_next_blk();
+    int aio_read(char *buf, const int64_t size);
+    int aio_wait();
+    int alloc_block(Block *&blk, const int64_t size);
+    void free_block(Block *blk, const int64_t size, bool force_free = false);
+    void try_free_cached_blocks();
+    int64_t get_cur_chunk_row_cnt() const { return chunk_n_rows_;}
+    TO_STRING_KV(KP_(store), KP_(cur_iter_blk),
+         K_(cur_chunk_n_blocks), K_(cur_iter_pos), K_(file_size),
+         KP_(chunk_mem), KP_(read_blk), KP_(read_blk_buf), KP_(aio_blk),
+         KP_(aio_blk_buf), K_(default_block_size));
   private:
      explicit Iterator(ObChunkDatumStore *row_store);
   protected:
      bool start_iter_;
-     ChunkIterator chunk_it_;
      RowIterator row_it_;
+     // cp from chunk iter
+     ObChunkDatumStore* store_;
+     Block* cur_iter_blk_;
+     blocksstable::ObTmpFileIOHandle aio_read_handle_;
+     int64_t cur_nth_blk_;     //reading nth blk start from 1
+     int64_t cur_chunk_n_blocks_; //the number of blocks of current chunk
+     int64_t cur_iter_pos_;    //pos in file
+     int64_t file_size_;
+     char* chunk_mem_;
+     int64_t chunk_n_rows_;
+     int32_t iter_end_flag_;
+
+     Block *read_blk_;
+     // Block::get_buffer() depends on blk_size_ which is overwrite by read data.
+     // We need %read_blk_buf_ to the memory size of read block.
+     BlockBuffer *read_blk_buf_;
+     Block *aio_blk_; // not null means aio is reading.
+     BlockBuffer *aio_blk_buf_;
+
+     BlockList free_list_;
+     // cached blocks for batch iterate
+     BlockList cached_;
+
+     // inner iteration age is used for batch iteration with no outside age control.
+     IterationAge inner_age_;
+     const IterationAge *age_;
+     int64_t default_block_size_;
   };
 
   struct BatchCtx
@@ -858,14 +845,9 @@ public:
   void reset();
 
   /// begin iterator
-  int begin(ChunkIterator &it, int64_t chunk_read_size = 0, const IterationAge *age = NULL)
+  int begin(Iterator &it, const IterationAge *age = NULL)
   {
-    return it.init(this, chunk_read_size, age);
-  }
-
-  int begin(Iterator &it, int64_t chunk_read_size = 0, const IterationAge *age = NULL)
-  {
-    return it.init(this, chunk_read_size, age);
+    return it.init(this, age);
   }
 
   int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
@@ -962,8 +944,6 @@ public:
   {
     return nullptr == cur_blk_ ? 0 : cur_blk_->get_buffer()->mem_size();
   }
-  int update_iterator(Iterator &org_it);
-  int clean_block(Block *clean_block);
   uint64_t get_tenant_id() { return tenant_id_; }
   const char* get_label() { return label_; }
   void free_tmp_dump_blk();
@@ -975,6 +955,7 @@ public:
   {
     return io_event_observer_;
   }
+  inline int64_t get_max_blk_size() const { return max_blk_size_; }
 private:
   OB_INLINE int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
                         const int64_t row_size, StoredRow **stored_row);
@@ -1022,7 +1003,6 @@ private:
   void set_io(int64_t size, char *buf) { io_.size_ = size; io_.buf_ = buf; }
   bool find_block_can_hold(const int64_t size, bool &need_shrink);
   int get_store_row(RowIterator &it, const StoredRow *&sr);
-  int load_next_chunk_blocks(ChunkIterator &it);
   inline void callback_alloc(int64_t size) { if (callback_ != nullptr) callback_->alloc(size); }
   inline void callback_free(int64_t size) { if (callback_ != nullptr) callback_->free(size); }
 
@@ -1238,13 +1218,13 @@ int ObChunkDatumStore::Iterator::get_next_batch(
   int64_t max_batch_size = ctx.max_batch_size_;
   const StoredRow **srows = rows;
   if (NULL == rows) {
-    if (!chunk_it_.is_valid()) {
+    if (!is_valid()) {
       ret = OB_NOT_INIT;
       SQL_ENG_LOG(WARN, "not init", K(ret));
-    } else if (OB_FAIL(chunk_it_.get_store()->init_batch_ctx(exprs.count(), max_batch_size))) {
+    } else if (OB_FAIL(store_->init_batch_ctx(exprs.count(), max_batch_size))) {
       SQL_ENG_LOG(WARN, "init batch ctx failed", K(ret), K(max_batch_size));
     } else {
-      srows = const_cast<const StoredRow **>(chunk_it_.get_store()->batch_ctx_->stored_rows_);
+      srows = const_cast<const StoredRow **>(store_->batch_ctx_->stored_rows_);
     }
   }
   if (OB_SUCC(ret) && max_rows > max_batch_size) {

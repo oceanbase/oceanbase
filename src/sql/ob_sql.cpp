@@ -3005,6 +3005,12 @@ int ObSql::generate_plan(ParseResult &parse_result,
                                       result.get_exec_context(),
                                       stmt))) { //rewrite stmt
       LOG_WARN("Failed to transform stmt", K(ret));
+    } else if (OB_FAIL(generate_stmt_with_reconstruct_sql(stmt,
+                                                          pc_ctx,
+                                                          sql_ctx,
+                                                          result,
+                                                          phy_plan))) {
+      LOG_WARN("failed to reconstruct sql", K(ret));
     } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
     } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
                                       *stmt, logical_plan))) { //gen logical plan
@@ -3058,6 +3064,81 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else {
       result.get_exec_context().reference_my_plan(phy_plan);
     }
+  }
+  return ret;
+}
+
+int ObSql::generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
+                                              ObPlanCacheCtx *pc_ctx,
+                                              ObSqlCtx &sql_ctx,
+                                              ObResultSet &result,
+                                              ObPhysicalPlan *phy_plan)
+{
+  int ret = OB_SUCCESS;
+  ObString sql;
+  bool has_dblink = false;
+  ObObjPrintParams print_param;
+  print_param.for_dblink_ = 1;
+  ObSQLSessionInfo *session = sql_ctx.session_info_;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(session) || OB_ISNULL(pc_ctx) ||
+      OB_ISNULL(stmt) || (OB_ISNULL(stmt->get_query_ctx())) ||
+      OB_ISNULL(phy_plan_ctx=pc_ctx->exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) == OB_SUCCESS) {
+    //do nothing
+  } else if (!session->is_user_session()) {
+    //do nothing
+  } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_dblink, true))) {
+    LOG_WARN("failed to check has dblink", K(ret));
+  } else if (has_dblink) {
+    //do nothing
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(pc_ctx->allocator_,
+                                                stmt,
+                                                sql,
+                                                sql_ctx.schema_guard_,
+                                                print_param,
+                                                &phy_plan_ctx->get_param_store()))) {
+    LOG_WARN("failed to reconstruct sql", K(ret));
+  } else {
+    LOG_TRACE("origin sql:", K(sql_ctx.cur_sql_));
+    LOG_TRACE("stmt:", KPC(stmt));
+    ObStmt *basic_stmt = NULL;
+    ParseResult parse_result;
+    ObParser parser(pc_ctx->allocator_,
+                    session->get_sql_mode(),
+                    session->get_local_collation_connection(),
+                    pc_ctx->def_name_ctx_);
+    stmt->get_query_ctx()->global_dependency_tables_.reuse();
+    if (OB_FAIL(parser.parse(sql, parse_result))) {
+      LOG_WARN("failed to parser sql", K(ret));
+    } else if (OB_FAIL(generate_stmt(parse_result,
+                                    pc_ctx,
+                                    sql_ctx,
+                                    result.get_mem_pool(),
+                                    result,
+                                    basic_stmt,
+                                    NULL))) {
+      LOG_WARN("Failed to generate stmt", K(ret));
+    } else if (OB_ISNULL(basic_stmt) || !basic_stmt->is_dml_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Generate stmt success, but stmt is NULL", K(ret));
+    } else if (OB_FALSE_IT(stmt = static_cast<ObDMLStmt*>(basic_stmt))) {
+    } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
+                                      opt_stat_mgr_,
+                                      &self_addr_,
+                                      phy_plan,
+                                      result.get_exec_context(),
+                                      stmt,
+                                      true))) { //rewrite stmt
+      LOG_WARN("Failed to transform stmt", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_USER_ERROR(OB_SYNC_DDL_ERROR, sql.length(), sql.ptr());
+      ret = OB_SYNC_DDL_ERROR;
+    }
+    LOG_TRACE("reconstruct sql:", K(sql));
   }
   return ret;
 }
@@ -3162,7 +3243,8 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
                           common::ObAddr *self_addr,
                           ObPhysicalPlan *phy_plan,
                           ObExecContext &exec_ctx,
-                          ObDMLStmt *&stmt)
+                          ObDMLStmt *&stmt,
+                          bool ignore_trace_event)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(rewrite);
@@ -3209,7 +3291,15 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
 
   NG_TRACE(transform_begin);
   OPT_TRACE_TITLE("START TRANSFORM");
-  if (OB_SUCC(ret) && transform_stmt->is_valid_transform_stmt()) {
+  bool need_transform = transform_stmt->is_valid_transform_stmt();
+  if (ignore_trace_event) {
+    //do nothing
+  } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL)OB_SUCCESS) != OB_SUCCESS) {
+    if (transform_stmt->is_dml_write_stmt()) {
+      need_transform = false;
+    }
+  }
+  if (OB_SUCC(ret) && need_transform) {
     ObTransformerImpl transformer(&trans_ctx);
     if (OB_FAIL(transformer.transform(transform_stmt))) {
       LOG_WARN("failed to transform statement", K(ret));
@@ -3659,6 +3749,8 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null session info", K(ret));
+  } else if (0 != context.first_plan_hash_) {
+    outline_content = context.first_outline_data_;
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }

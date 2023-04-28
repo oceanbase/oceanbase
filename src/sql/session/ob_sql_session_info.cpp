@@ -1627,13 +1627,17 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   return audit_record_;
 }
 
-void ObSQLSessionInfo::update_stat_from_audit_record()
+void ObSQLSessionInfo::update_stat_from_exec_record()
 {
   session_stat_.total_logical_read_ += (audit_record_.exec_record_.memstore_read_row_count_
                                         + audit_record_.exec_record_.ssstore_read_row_count_);
 //  session_stat_.total_logical_write_ += 0;
 //  session_stat_.total_physical_read_ += 0;
-  session_stat_.total_lock_count_ += 0;
+//  session_stat_.total_lock_count_ += 0;
+}
+
+void ObSQLSessionInfo::update_stat_from_exec_timestamp()
+{
   session_stat_.total_cpu_time_us_ += audit_record_.exec_timestamp_.executor_t_;
   session_stat_.total_exec_time_us_ += audit_record_.exec_timestamp_.elapsed_t_;
 }

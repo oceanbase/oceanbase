@@ -689,7 +689,7 @@ Outputs & filters:
       access([t4.d1], [t4.d2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([t5.c1], [t5.c2], [t6.d2]), filter(nil), rowset=256
+ 11 - output([t5.c1], [t6.d2], [t5.c2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
  12 - output([t5.c1], [t5.c2]), filter(nil), rowset=256
       access([t5.c1], [t5.c2]), partitions(p0)
@@ -1065,7 +1065,7 @@ Outputs & filters:
       equal_conds([t4.d2 % 5 = t5.c1 % 6], [t4.d1 % 3 = t6.d2 % 2], [t4.d1 % 4 = t6.d1 % 4], [t4.d1 % 7 = t6.d1 % 7]), other_conds(nil)
   6 - output([t5.c1], [t5.c1 % 6], [t6.d1 % 4], [t6.d1 % 7], [t8.d2], [t6.d2]), filter(nil), rowset=256
       equal_conds([t5.c1 % 4 = t7.c1 % 1], [t5.c1 % 6 = t7.c2 % 5], [t5.c1 % 7 = t8.d1 % 6], [t6.d1 % 4 = t7.c1 % 3], [t6.d1 % 7 = t7.c1 % 7]), other_conds(nil)
-  7 - output([t7.c1 % 7], [t7.c1], [t8.d1], [t8.d2], [t7.c2]), filter(nil), rowset=256
+  7 - output([t7.c1], [t7.c1 % 7], [t8.d1], [t8.d2], [t7.c2]), filter(nil), rowset=256
       equal_conds([t7.c1 % 7 = t8.d1 % 3]), other_conds(nil)
   8 - output([t8.d1], [t8.d2]), filter(nil), rowset=256
       access([t8.d1], [t8.d2]), partitions(p0)
@@ -1075,7 +1075,7 @@ Outputs & filters:
       access([t7.c1], [t7.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t7.__pk_increment]), range(MIN ; MAX)always true
- 10 - output([t5.c1], [t5.c1 % 6], [t6.d1], [t6.d2]), filter(nil), rowset=256
+ 10 - output([t5.c1], [t6.d1], [t5.c1 % 6], [t6.d2]), filter(nil), rowset=256
       equal_conds([t5.c1 % 2 = t6.d2 % 5]), other_conds(nil)
  11 - output([t6.d2], [t6.d1]), filter(nil), rowset=256
       access([t6.d2], [t6.d1]), partitions(p0)
@@ -1274,13 +1274,13 @@ Outputs & filters:
       access([a.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([c.c2], [d.d2], [b.d1]), filter(nil), rowset=256
+  5 - output([b.d1], [c.c2], [d.d2]), filter(nil), rowset=256
       equal_conds([b.d2 = c.c1], [c.c2 = d.d2]), other_conds(nil)
   6 - output([c.c1], [c.c2]), filter(nil), rowset=256
       access([c.c1], [c.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
-  7 - output([d.d2], [b.d1], [b.d2]), filter(nil), rowset=256
+  7 - output([b.d1], [d.d2], [b.d2]), filter(nil), rowset=256
       conds(nil), nl_params_(nil), use_batch=false
   8 - output([b.d1], [b.d2]), filter(nil), rowset=256
       access([b.d1], [b.d2]), partitions(p0)

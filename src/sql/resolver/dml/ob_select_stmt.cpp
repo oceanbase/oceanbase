@@ -166,9 +166,11 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
   } else if (OB_FAIL(rollup_exprs_.assign(other.rollup_exprs_))) {
     LOG_WARN("assign other rollup exprs failed", K(ret));
   } else if (OB_FAIL(grouping_sets_items_.assign(other.grouping_sets_items_))) {
-    LOG_WARN("assgin other grouping sets expr failed", K(ret));
-  } else if (OB_FAIL(multi_rollup_items_.assign(other.multi_rollup_items_))) {
-    LOG_WARN("assgin other grouping sets expr failed", K(ret));
+    LOG_WARN("assgin other grouping sets items failed", K(ret));
+  } else if (OB_FAIL(rollup_items_.assign(other.rollup_items_))) {
+    LOG_WARN("assgin other rollup items failed", K(ret));
+  } else if (OB_FAIL(cube_items_.assign(other.cube_items_))) {
+    LOG_WARN("assgin other cube items failed", K(ret));
   } else if (OB_FAIL(having_exprs_.assign(other.having_exprs_))) {
     LOG_WARN("assign other having exprs failed", K(ret));
   } else if (OB_FAIL(agg_items_.assign(other.agg_items_))) {
@@ -274,10 +276,14 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                                 other.grouping_sets_items_,
                                                                 grouping_sets_items_))) {
     LOG_WARN("deep copy grouping sets items failed", K(ret));
-  } else if (OB_FAIL(deep_copy_stmt_objects<ObMultiRollupItem>(expr_copier,
-                                                               other.multi_rollup_items_,
-                                                               multi_rollup_items_))) {
-    LOG_WARN("deep copy grouping sets items failed", K(ret));
+  } else if (OB_FAIL(deep_copy_stmt_objects<ObRollupItem>(expr_copier,
+                                                          other.rollup_items_,
+                                                          rollup_items_))) {
+    LOG_WARN("deep copy rollup items failed", K(ret));
+  } else if (OB_FAIL(deep_copy_stmt_objects<ObCubeItem>(expr_copier,
+                                                        other.cube_items_,
+                                                        cube_items_))) {
+    LOG_WARN("deep copy cube items failed", K(ret));
   } else {
     set_op_ = other.set_op_;
     is_recursive_cte_ = other.is_recursive_cte_;
@@ -401,17 +407,19 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       LOG_WARN("failed to visit having exprs", K(ret));
     } else if (OB_FAIL(visitor.visit(agg_items_, SCOPE_DICT_FIELDS))) {
       LOG_WARN("failed to visit aggr items", K(ret));
-    } else if (OB_FAIL(iterate_rollup_items(multi_rollup_items_, visitor))) {
+    } else if (OB_FAIL(iterate_rollup_items(rollup_items_, visitor))) {
       LOG_WARN("failed to iterate multi rollup items", K(ret));
-    }
+    } else if (OB_FAIL(iterate_cube_items(cube_items_, visitor))) {
+      LOG_WARN("failed to iterate multi cube items", K(ret));
+    } else {/* do nothing */}
     for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_items_.count(); i++) {
-      if (OB_FAIL(iterate_group_items(grouping_sets_items_.at(i).grouping_sets_exprs_,
-                                      visitor))) {
+      if (OB_FAIL(iterate_group_items(grouping_sets_items_.at(i).grouping_sets_exprs_, visitor))) {
         LOG_WARN("failed to iterate grouping sets exprs", K(ret));
-      } else if (OB_FAIL(iterate_rollup_items(grouping_sets_items_.at(i).multi_rollup_items_,
-                                              visitor))) {
-        LOG_WARN("failed to iterate multi rollup items", K(ret));
-      }
+      } else if (OB_FAIL(iterate_rollup_items(grouping_sets_items_.at(i).rollup_items_, visitor))) {
+        LOG_WARN("failed to iterate rollup items", K(ret));
+      } else if (OB_FAIL(iterate_cube_items(grouping_sets_items_.at(i).cube_items_, visitor))) {
+        LOG_WARN("failed to iterate cube items", K(ret));
+      } else {/* do nothing */}
     }
   }
   if (OB_SUCC(ret)) {
@@ -442,13 +450,24 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
   return ret;
 }
 
-int ObSelectStmt::iterate_rollup_items(ObIArray<ObMultiRollupItem> &multi_rollup_items,
-                                             ObStmtExprVisitor &visitor)
+int ObSelectStmt::iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items,
+                                       ObStmtExprVisitor &visitor)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < multi_rollup_items.count(); ++i) {
-    if (OB_FAIL(iterate_group_items(multi_rollup_items.at(i).rollup_list_exprs_, visitor))) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items.count(); ++i) {
+    if (OB_FAIL(iterate_group_items(rollup_items.at(i).rollup_list_exprs_, visitor))) {
       LOG_WARN("failed to visitor rollup list exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectStmt::iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cube_items.count(); ++i) {
+    if (OB_FAIL(iterate_group_items(cube_items.at(i).cube_list_exprs_, visitor))) {
+      LOG_WARN("failed to visitor cube list exprs", K(ret));
     }
   }
   return ret;
@@ -986,7 +1005,9 @@ int ObGroupingSetsItem::assign(const ObGroupingSetsItem& other)
   int ret = OB_SUCCESS;
   if (OB_FAIL(grouping_sets_exprs_.assign(other.grouping_sets_exprs_))) {
     LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(multi_rollup_items_.assign(other.multi_rollup_items_))) {
+  } else if (OB_FAIL(rollup_items_.assign(other.rollup_items_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(cube_items_.assign(other.cube_items_))) {
     LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -1005,20 +1026,26 @@ int ObGroupingSetsItem::deep_copy(ObIRawExprCopier &expr_copier,
       LOG_WARN("failed to push back group by expr", K(ret));
     }
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < other.multi_rollup_items_.count(); ++i) {
-    ObMultiRollupItem multi_rollup_item;
-    if (OB_FAIL(multi_rollup_item.deep_copy(expr_copier,
-                                            other.multi_rollup_items_.at(i)))) {
-      LOG_WARN("failed to deep copy multi rollup item", K(ret));
-    } else if (OB_FAIL(multi_rollup_items_.push_back(multi_rollup_item))) {
-      LOG_WARN("failed to push back group by expr", K(ret));
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.rollup_items_.count(); ++i) {
+    ObRollupItem rollup_item;
+    if (OB_FAIL(rollup_item.deep_copy(expr_copier, other.rollup_items_.at(i)))) {
+      LOG_WARN("failed to deep copy rollup item", K(ret));
+    } else if (OB_FAIL(rollup_items_.push_back(rollup_item))) {
+      LOG_WARN("failed to push back rollup item", K(ret));
     }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.cube_items_.count(); ++i) {
+    ObCubeItem cube_item;
+    if (OB_FAIL(cube_item.deep_copy(expr_copier, other.cube_items_.at(i)))) {
+      LOG_WARN("failed to deep copy cube item", K(ret));
+    } else if (OB_FAIL(cube_items_.push_back(cube_item))) {
+      LOG_WARN("failed to push back cube item", K(ret));
+    } else {/* do nothing */}
   }
   return ret;
 }
 
-int ObMultiRollupItem::deep_copy(ObIRawExprCopier &expr_copier,
-                                 const ObMultiRollupItem &other)
+int ObRollupItem::deep_copy(ObIRawExprCopier &expr_copier, const ObRollupItem &other)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < other.rollup_list_exprs_.count(); ++i) {
@@ -1027,6 +1054,21 @@ int ObMultiRollupItem::deep_copy(ObIRawExprCopier &expr_copier,
                                  groupby_expr.groupby_exprs_))) {
       LOG_WARN("failed to copy exprs", K(ret));
     } else if (OB_FAIL(rollup_list_exprs_.push_back(groupby_expr))) {
+      LOG_WARN("failed to push back group by expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCubeItem::deep_copy(ObIRawExprCopier &expr_copier, const ObCubeItem &other)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.cube_list_exprs_.count(); ++i) {
+    ObGroupbyExpr groupby_expr;
+    if (OB_FAIL(expr_copier.copy(other.cube_list_exprs_.at(i).groupby_exprs_,
+                                 groupby_expr.groupby_exprs_))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if (OB_FAIL(cube_list_exprs_.push_back(groupby_expr))) {
       LOG_WARN("failed to push back group by expr", K(ret));
     }
   }
@@ -1043,13 +1085,20 @@ bool ObSelectStmt::is_expr_in_groupings_sets_item(const ObRawExpr *expr) const
       is_true = ObOptimizerUtil::find_item(grouping_sets_exprs.at(j).groupby_exprs_, expr);
     }
     if (!is_true) {
-      const ObIArray<ObMultiRollupItem> &multi_rollup_items =
-                                                     grouping_sets_items_.at(i).multi_rollup_items_;
-      for (int64_t j = 0; !is_true && j < multi_rollup_items.count(); ++j) {
-        const ObIArray<ObGroupbyExpr> &rollup_list_exprs =
-                                                       multi_rollup_items.at(j).rollup_list_exprs_;
+      const ObIArray<ObRollupItem> &rollup_items = grouping_sets_items_.at(i).rollup_items_;
+      for (int64_t j = 0; !is_true && j < rollup_items.count(); ++j) {
+        const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items.at(j).rollup_list_exprs_;
         for (int64_t k = 0; !is_true && k < rollup_list_exprs.count(); ++k) {
           is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(k).groupby_exprs_, expr);
+        }
+      }
+    }
+    if (!is_true) {
+      const ObIArray<ObCubeItem> &cube_items = grouping_sets_items_.at(i).cube_items_;
+      for (int64_t j = 0; !is_true && j < cube_items.count(); ++j) {
+        const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items.at(j).cube_list_exprs_;
+        for (int64_t k = 0; !is_true && k < cube_list_exprs.count(); ++k) {
+          is_true = ObOptimizerUtil::find_equal_expr(cube_list_exprs.at(k).groupby_exprs_, expr);
         }
       }
     }
@@ -1153,13 +1202,25 @@ int ObSelectStmt::get_connect_by_pseudo_exprs(ObIArray<ObRawExpr*> &pseudo_exprs
   return ret;
 }
 
-bool ObSelectStmt::is_expr_in_multi_rollup_items(const ObRawExpr *expr) const
+bool ObSelectStmt::is_expr_in_rollup_items(const ObRawExpr *expr) const
 {
   bool is_true = false;
-  for (int64_t i = 0; !is_true && i < multi_rollup_items_.count(); ++i) {
-    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items_.at(i).rollup_list_exprs_;
+  for (int64_t i = 0; !is_true && i < rollup_items_.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items_.at(i).rollup_list_exprs_;
     for (int64_t j = 0; !is_true && j < rollup_list_exprs.count(); ++j) {
       is_true = ObOptimizerUtil::find_item(rollup_list_exprs.at(j).groupby_exprs_, expr);
+    }
+  }
+  return is_true;
+}
+
+bool ObSelectStmt::is_expr_in_cube_items(const ObRawExpr *expr) const
+{
+  bool is_true = false;
+  for (int64_t i = 0; !is_true && i < cube_items_.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items_.at(i).cube_list_exprs_;
+    for (int64_t j = 0; !is_true && j < cube_list_exprs.count(); ++j) {
+      is_true = ObOptimizerUtil::find_equal_expr(cube_list_exprs.at(j).groupby_exprs_, expr);
     }
   }
   return is_true;

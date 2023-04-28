@@ -34,6 +34,7 @@ public:
   const ObDelUpdStmt *get_del_upd_stmt() const { return del_upd_stmt_; }
   int get_err_log_type(stmt::StmtType &type);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   virtual int inner_replace_op_exprs(

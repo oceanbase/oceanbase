@@ -1843,7 +1843,6 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("create stmt failed");
         } else {
-          bool has_perf_audit = false;
           HEAP_VAR(ObCreateTableResolver, ddl_resolver, params_) {
             for (int64_t i = 0; OB_SUCC(ret) && i < list_node->num_child_; ++i) {
               if (OB_UNLIKELY(NULL == list_node->children_)) {
@@ -1998,35 +1997,6 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   if (OB_FAIL(ret)) {
                   } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
                     LOG_WARN("add config item failed", K(ret), K(item));
-                  } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT)
-                      || 0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT)) {
-                    if (has_perf_audit) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
-                      LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
-                    } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT)
-                              && (0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_BOOL)
-                                 || 0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_STRING))) {
-                      if (GCONF.enable_sql_audit) {
-                        ret = OB_NOT_SUPPORTED;
-                        LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
-                        LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
-                      } else if (OB_FAIL(item.name_.assign(ENABLE_SQL_AUDIT))) {
-                        LOG_WARN("assign config name to enable_sql_audit failed", K(item), K(ret));
-                      } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
-                        LOG_WARN("add config item failed", K(ret), K(item));
-                      }
-                    } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT)
-                              && (0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_BOOL)
-                                 || 0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_STRING))
-                              && !GCONF.enable_perf_event) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
-                      LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
-                    }
-                    if (OB_SUCC(ret)) {
-                      has_perf_audit = true;
-                    }
                   } else if (0 == STRCMP(item.name_.ptr(), Ob_STR_BACKUP_REGION)) {
                     if (OB_FAIL(check_backup_region(item.value_.str()))) {
                       LOG_WARN("failed to check backup dest", K(ret));

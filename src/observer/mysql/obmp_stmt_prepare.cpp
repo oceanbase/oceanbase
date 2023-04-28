@@ -412,7 +412,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-      if (enable_sql_audit) {
+      if (enable_perf_event) {
         audit_record.exec_record_.record_start(di);
       }
       result.set_has_more_result(has_more_result);
@@ -451,9 +451,8 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
           LOG_WARN("ps : get inner stmt id fail.", K(ret), K(result.get_statement_id()));
         } else {
           //监控项统计开始
-          if (enable_perf_event) {
-            exec_start_timestamp_ = ObTimeUtility::current_time();
-          }
+          exec_start_timestamp_ = ObTimeUtility::current_time();
+
           // 本分支内如果出错，全部会在response_result内部处理妥当
           // 无需再额外处理回复错误包
           need_response_error = false;
@@ -474,20 +473,24 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
                       plan_ctx->get_timeout_timestamp());
             }
           }
+          //监控项统计结束
+          exec_end_timestamp_ = ObTimeUtility::current_time();
+
+          // some statistics must be recorded for plan stat, even though sql audit disabled
+          bool first_record = (1 == audit_record.try_cnt_);
+          ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+          audit_record.exec_timestamp_.update_stage_time();
+
           if (enable_perf_event) {
-            exec_end_timestamp_ = ObTimeUtility::current_time();
-            if (lib::is_diagnose_info_enabled() && !THIS_THWORKER.need_retry()) {
+            audit_record.exec_record_.record_end(di);
+            audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+            audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+            audit_record.update_event_stage_state();
+            if (!THIS_THWORKER.need_retry()) {
               const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
               EVENT_INC(SQL_PS_PREPARE_COUNT);
               EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
             }
-          }
-          if (enable_sql_audit) {
-            audit_record.exec_record_.record_end(di);
-            bool first_record = (1 == audit_record.try_cnt_);
-            ObExecStatUtils::record_exec_timestamp(*this,
-                first_record,
-                audit_record.exec_timestamp_);
           }
         }
       }
@@ -537,15 +540,13 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
       audit_record.client_addr_ = session.get_peer_addr();
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
-      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
       audit_record.ps_stmt_id_ = result.get_statement_id();
       audit_record.ps_inner_stmt_id_ = inner_stmt_id;
-      audit_record.update_stage_stat();
-      bool need_retry = (THIS_THWORKER.need_retry()
-                         || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
-      ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, ctx_.is_sensitive_);
+      audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
     }
+    bool need_retry = (THIS_THWORKER.need_retry()
+                       || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
+    ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, ctx_.is_sensitive_);
   }
 
   // reset thread waring buffer in sync mode

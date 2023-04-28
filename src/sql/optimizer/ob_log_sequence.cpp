@@ -117,3 +117,19 @@ int ObLogSequence::re_est_cost(EstimateCostInfo &param, double &card, double &co
   }
   return ret;
 }
+
+int ObLogSequence::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  ObSEArray<ObRawExpr*, 8> sequence_exprs;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(get_stmt()->get_sequence_exprs(sequence_exprs))) {
+    LOG_WARN("fail get sequence exprs", K(ret));
+  } else {
+    is_fixed = ObOptimizerUtil::find_item(sequence_exprs, expr);
+  }
+  return ret;
+}

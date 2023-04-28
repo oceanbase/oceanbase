@@ -2002,7 +2002,8 @@ char ObSQLUtils::find_first_empty_char(const ObString &sql)
 
 int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                                 ObSchemaGetterGuard *schema_guard,
-                                ObObjPrintParams print_params)
+                                ObObjPrintParams print_params,
+                                const ParamStore *param_store)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -2018,14 +2019,28 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
     //First try 64K buf on the stack, if it fails, then try 128K.
     //If it still fails, allocate 256K from the heap. If it continues to fail, expand twice each time.
     SMART_VAR(char[OB_MAX_SQL_LENGTH], buf) {
-      if (OB_FAIL(print_sql(allocator, buf, sizeof(buf), stmt, sql, schema_guard, print_params))) {
+      if (OB_FAIL(print_sql(allocator,
+                            buf,
+                            sizeof(buf),
+                            stmt,
+                            sql,
+                            schema_guard,
+                            print_params,
+                            param_store))) {
           LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
       }
     }
     if (OB_SIZE_OVERFLOW == ret) {
       ret = OB_SUCCESS;
       SMART_VAR(char[OB_MAX_SQL_LENGTH * 2], buf) {
-        if (OB_FAIL(print_sql(allocator, buf, sizeof(buf), stmt, sql, schema_guard, print_params))) {
+        if (OB_FAIL(print_sql(allocator,
+                              buf,
+                              sizeof(buf),
+                              stmt,
+                              sql,
+                              schema_guard,
+                              print_params,
+                              param_store))) {
           LOG_WARN("failed to print sql", K(sizeof(buf)), K(ret));
         }
       }
@@ -2040,7 +2055,14 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
         if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(length)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to alloc memory for set sql", K(ret), K(length));
-        } else if (OB_FAIL(print_sql(allocator, buf, length, stmt, sql, schema_guard, print_params))) {
+        } else if (OB_FAIL(print_sql(allocator,
+                                     buf,
+                                     length,
+                                     stmt,
+                                     sql,
+                                     schema_guard,
+                                     print_params,
+                                     param_store))) {
           LOG_WARN("failed to print sql", K(length), K(i), K(ret));
         }
         if (OB_SUCC(ret)) {
@@ -2060,91 +2082,135 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                           const ObStmt *stmt,
                           ObString &sql,
                           ObSchemaGetterGuard *schema_guard,
-                          ObObjPrintParams print_params)
+                          ObObjPrintParams print_params,
+                          const ParamStore *param_store)
 {
   int ret = OB_SUCCESS;
   MEMSET(buf, 0, buf_len);
   int64_t pos = 0;
-  switch (stmt->get_stmt_type()) {
-  case stmt::T_SELECT: {
-    ObSelectStmtPrinter printer(buf,
-                                buf_len,
-                                &pos,
-                                static_cast<const ObSelectStmt*>(stmt),
-                                schema_guard,
-                                print_params);
-    printer.set_is_root(true);
-    printer.enable_print_temp_table_as_cte();
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print select stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy select stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_INSERT_ALL: {
-    ObInsertAllStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertAllStmt*>(stmt),
-                                   schema_guard, print_params);
-    printer.set_is_root(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print insert stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy insert stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_REPLACE:
-  case stmt::T_INSERT: {
-    ObInsertStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObInsertStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print insert stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy insert stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_DELETE: {
-    ObDeleteStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObDeleteStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print delete stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy delete stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_UPDATE: {
-    ObUpdateStmtPrinter printer(buf, buf_len, &pos, static_cast<const ObUpdateStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("fail to print update stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("fail to deep copy update stmt string", K(ret));
-    } else { /*do nothing*/ }
-  }
-    break;
-  case stmt::T_MERGE: {
-    ObMergeStmtPrinter printer(buf, buf_len, &pos,
-                                static_cast<const ObMergeStmt*>(stmt),
-                                schema_guard, print_params);
-    printer.set_is_root(true);
-    if (OB_FAIL(printer.do_print())) {
-      LOG_WARN("failed to print merge stmt", K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
-      LOG_WARN("failed to deep copy merge stmt string", K(ret));
+  const ObDMLStmt *reconstruct_stmt = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (stmt->is_explain_stmt()) {
+    if (OB_ISNULL(reconstruct_stmt = static_cast<const ObExplainStmt*>(stmt)->get_explain_query_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("Explain query stmt is NULL", K(ret));
+    } else {
+      BUF_PRINTF("EXPLAIN ");
     }
-  }
-    break;
-  default: {
+  } else if (stmt->is_dml_stmt()) {
+    reconstruct_stmt = static_cast<const ObDMLStmt*>(stmt);
+  } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Invalid stmt type", K(stmt->get_stmt_type()), K(stmt->get_query_ctx()->get_sql_stmt()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "stmt type");
   }
-    break;
+  if (OB_SUCC(ret)) {
+    switch (reconstruct_stmt->get_stmt_type()) {
+    case stmt::T_SELECT: {
+      ObSelectStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObSelectStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params,
+                                  param_store);
+      printer.set_is_root(true);
+      printer.enable_print_temp_table_as_cte();
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print select stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("fail to deep copy select stmt string", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_INSERT_ALL: {
+      ObInsertAllStmtPrinter printer(buf,
+                                    buf_len,
+                                    &pos,
+                                    static_cast<const ObInsertAllStmt*>(reconstruct_stmt),
+                                    schema_guard,
+                                    print_params,
+                                    param_store);
+      printer.set_is_root(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print insert stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("fail to deep copy insert stmt string", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_REPLACE:
+    case stmt::T_INSERT: {
+      ObInsertStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObInsertStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params,
+                                  param_store);
+      printer.set_is_root(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print insert stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("fail to deep copy insert stmt string", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_DELETE: {
+      ObDeleteStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObDeleteStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params,
+                                  param_store);
+      printer.set_is_root(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print delete stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("fail to deep copy delete stmt string", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_UPDATE: {
+      ObUpdateStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObUpdateStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params,
+                                  param_store);
+      printer.set_is_root(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("fail to print update stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("fail to deep copy update stmt string", K(ret));
+      } else { /*do nothing*/ }
+    }
+      break;
+    case stmt::T_MERGE: {
+      ObMergeStmtPrinter printer(buf,
+                                  buf_len,
+                                  &pos,
+                                  static_cast<const ObMergeStmt*>(reconstruct_stmt),
+                                  schema_guard,
+                                  print_params,
+                                  param_store);
+      printer.set_is_root(true);
+      if (OB_FAIL(printer.do_print())) {
+        LOG_WARN("failed to print merge stmt", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
+        LOG_WARN("failed to deep copy merge stmt string", K(ret));
+      }
+    }
+      break;
+    default: {
+
+    }
+      break;
+    }
   }
   return ret;
 }
@@ -3175,6 +3241,7 @@ int ObVirtualTableResultConverter::reset_and_init(
   const share::schema::ObTableSchema *table_schema,
   const common::ObIArray<uint64_t> *output_column_ids,
   const bool has_tenant_id_col,
+  const int64_t tenant_id_col_idx,
   const int64_t max_col_cnt /* INT64_MAX */)
 {
   int ret = OB_SUCCESS;
@@ -3207,6 +3274,7 @@ int ObVirtualTableResultConverter::reset_and_init(
     key_types_ = key_types;
     max_col_cnt_ = max_col_cnt;
     has_tenant_id_col_ = has_tenant_id_col;
+    tenant_id_col_idx_ = tenant_id_col_idx;
     table_schema_ = table_schema;
     output_column_ids_ = output_column_ids;
     base_table_id_ = table_schema->get_table_id();
@@ -3358,11 +3426,13 @@ int ObVirtualTableResultConverter::convert_key_ranges(ObIArray<ObNewRange> &key_
       int64_t pos = INT64_MAX;
       if (OB_FAIL(get_need_convert_key_ranges_pos(key_ranges.at(i), pos))) {
         LOG_WARN("failed to get convert key range pos", K(ret));
-      } else if (OB_FAIL(convert_key(key_ranges.at(i).start_key_, new_range.start_key_, true, pos))) {
+      } else if (OB_FAIL(convert_key(key_ranges.at(i).start_key_, new_range.start_key_, true,
+                                     pos))) {
         LOG_WARN("fail to convert start key", K(ret));
-      } else if (OB_FAIL(convert_key(key_ranges.at(i).end_key_, new_range.end_key_, false, pos))) {
+      } else if (OB_FAIL(convert_key(key_ranges.at(i).end_key_, new_range.end_key_, false,
+                                     pos))) {
         LOG_WARN("fail to convert end key", K(ret));
-      } else if (OB_FAIL(tmp_range.push_back(new_range))) {
+      } else if (!has_exist_in_array(tmp_range, new_range) && OB_FAIL(tmp_range.push_back(new_range))) {
         LOG_WARN("fail to push back new range", K(ret));
       }
     }//end for
@@ -3577,7 +3647,8 @@ int ObVirtualTableResultConverter::convert_output_row(
   return ret;
 }
 
-int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &dst, bool is_start_key, int64_t pos)
+int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &dst,
+                                               bool is_start_key, int64_t pos)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_start_key);
@@ -3630,14 +3701,8 @@ int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &ds
                 } else {
                   new_key_obj[nth_obj].set_max_value();
                 }
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected status: start key range is invalid", K(ret), K(src));
               }
             }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected status: start key range is invalid", K(ret), K(src));
           }
         } else {
           if (src_obj.is_null()) {
@@ -3651,14 +3716,8 @@ int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &ds
                 }
               } else if (src_key_objs[null_pos].is_min_value()) {
                 new_key_obj[nth_obj].set_max_value();
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected status: end key range is invalid", K(ret), K(src));
               }
             }
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected status: end key range is invalid", K(ret), K(src));
           }
         }
         break;
@@ -3678,12 +3737,11 @@ int ObVirtualTableResultConverter::convert_key(const ObRowkey &src, ObRowkey &ds
                                         new_key_obj[nth_obj]))) {
           LOG_WARN("fail to cast obj", K(ret), K(key_types_->at(nth_obj)),
             K(src_key_objs[nth_obj]));
-        } else if (has_tenant_id_col_ && 0 == nth_obj) {
-          if (new_key_obj[nth_obj].get_type() == ObIntType) {
-            new_key_obj[nth_obj].set_int(new_key_obj[nth_obj].get_int() - cur_tenant_id_);
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected tenant id type", K(new_key_obj[nth_obj].get_type()), K(ret));
+        } else {
+          if (has_tenant_id_col_ && tenant_id_col_idx_ == nth_obj) {
+            if (new_key_obj[nth_obj].get_type() == ObIntType) {
+              new_key_obj[nth_obj].set_int(new_key_obj[nth_obj].get_int() - cur_tenant_id_);
+            }
           }
         }
       }
@@ -3702,7 +3760,8 @@ int ObVirtualTableResultConverter::init_convert_key_ranges_info(
   sql::ObSQLSessionInfo *session,
   const share::schema::ObTableSchema *table_schema,
   const common::ObIArray<ObObjMeta> *key_types,
-  const bool has_tenant_id_col)
+  const bool has_tenant_id_col,
+  const int64_t tenant_id_col_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(key_alloc) || OB_ISNULL(session) || OB_ISNULL(table_schema) || OB_ISNULL(key_types)) {
@@ -3712,6 +3771,7 @@ int ObVirtualTableResultConverter::init_convert_key_ranges_info(
     key_alloc_ = key_alloc;
     key_types_ = key_types;
     has_tenant_id_col_ = has_tenant_id_col;
+    tenant_id_col_idx_ = tenant_id_col_idx;
     cur_tenant_id_ = table_schema->get_tenant_id();
     ObCollationType key_cs_type = ObCharset::get_system_collation();
     for (int64_t i = 0; i < key_types->count() && OB_SUCC(ret); ++i) {
@@ -4006,7 +4066,10 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
       }
     }
   }
-  session.update_stat_from_audit_record();
+  if (lib::is_diagnose_info_enabled()) {
+    session.update_stat_from_exec_record();
+  }
+  session.update_stat_from_exec_timestamp();
   session.reset_audit_record(need_retry);
   return ret;
 }

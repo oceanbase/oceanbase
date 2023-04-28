@@ -1703,85 +1703,104 @@ int ObLogicalOperator::add_exprs_to_ctx(ObAllocExprContext &ctx,
                                         uint64_t producer_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t consumer_id = id_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < input_exprs.count(); i++) {
+    if (OB_FAIL(add_expr_to_ctx(ctx, input_exprs.at(i), producer_id))) {
+      LOG_WARN("failed to add expr to ctx", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
+                                       ObRawExpr* expr,
+                                       uint64_t producer_id)
+{
+  int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 16> shared_exprs;
-  if (OB_ISNULL(get_plan())) {
+  ObRawExpr *raw_expr = NULL;
+  ExprProducer *raw_producer = NULL;
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(extract_shared_exprs(input_exprs,
-                                           ctx,
-                                           shared_exprs))) {
+  } else if (OB_FAIL(extract_shared_exprs(expr,
+                                          ctx,
+                                          0,
+                                          shared_exprs))) {
     LOG_WARN("failed to extract column input_exprs", K(ret));
-  } else {
-    ObRawExpr *raw_expr = NULL;
-    ExprProducer *raw_producer = NULL;
-    // add shared exprs, should set both producer id and consumer id
-    for (int64_t i = 0; OB_SUCC(ret) && i < shared_exprs.count(); i++) {
-      uint64_t consumer_id = OB_INVALID_ID;
-      if (OB_ISNULL(raw_expr = shared_exprs.at(i))) {
+  }
+  // add shared exprs, should set both producer id and consumer id
+  for (int64_t i = 0; OB_SUCC(ret) && i < shared_exprs.count(); i++) {
+    uint64_t consumer_id = OB_INVALID_ID;
+    uint64_t real_producer_id = producer_id;
+    if (OB_ISNULL(raw_expr = shared_exprs.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(ctx.find(raw_expr, raw_producer))) {
+      LOG_WARN("failed to find raw expr producer", K(ret));
+    } else if (NULL != raw_producer) {
+      // update the raw_producer id
+      real_producer_id = std::min(raw_producer->producer_id_, producer_id);
+      if (OB_INVALID_ID == raw_producer->producer_id_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(ctx.find(raw_expr, raw_producer))) {
-        LOG_WARN("failed to find raw expr producer", K(ret));
-      } else if (NULL != raw_producer) {
-        // update the raw_producer id
-        raw_producer->is_shared_ = true;
-        if (OB_INVALID_ID == raw_producer->producer_id_) {
-          raw_producer->producer_id_ = producer_id;
-        } else if (can_update_producer_id_for_shared_expr(raw_expr)) {
-          raw_producer->producer_id_ = std::min(raw_producer->producer_id_, producer_id);
-        } else { /*do nothing*/ }
-        LOG_TRACE("succeed to update shared expr producer id", K(raw_expr),
-                  K(*raw_expr), K(producer_id), K(consumer_id), KPC(raw_producer), K(get_name()));
-      } else if (OB_FAIL(find_consumer_id_for_shared_expr(&ctx.expr_producers_, raw_expr, consumer_id))) {
-        LOG_WARN("failed to find sharable expr consumer id", K(ret));
-      } else if (OB_INVALID_ID == consumer_id) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected conusmer id", K(*raw_expr), K(ret));
+        LOG_WARN("unexpected invalid id", KPC(raw_producer), K(producer_id), K(ret));
+      } else if (!can_update_producer_id_for_shared_expr(raw_expr)) {
+        // do nothing
+      } else if (OB_FAIL(find_producer_id_for_shared_expr(raw_expr, real_producer_id))) {
+        LOG_WARN("failed to find sharable expr producer id", K(ret));
       } else {
-        ExprProducer expr_producer(raw_expr, consumer_id, producer_id);
-        expr_producer.is_shared_ = true;
-        if (OB_FAIL(ctx.add(expr_producer))) {
-          LOG_WARN("failed to push balck raw_expr", K(ret));
-        } else {
-          LOG_TRACE("succeed to add shared exprs", K(raw_expr), K(*raw_expr),
-              K(producer_id), K(expr_producer.consumer_id_), K(consumer_id), K(expr_producer),
-              K(get_name()));
-        }
+        raw_producer->producer_id_ = real_producer_id;
+      }
+      LOG_TRACE("succeed to update shared expr producer id", KP(raw_expr),
+                K(producer_id), K(consumer_id), KPC(raw_producer), K(get_name()));
+    } else if (OB_FAIL(find_consumer_id_for_shared_expr(&ctx.expr_producers_, raw_expr,
+                                                        consumer_id))) {
+      LOG_WARN("failed to find sharable expr consumer id", K(ret));
+    } else if (OB_FAIL(find_producer_id_for_shared_expr(raw_expr, real_producer_id))) {
+      LOG_WARN("failed to find sharable expr producer id", K(ret));
+    } else if (OB_UNLIKELY(OB_INVALID_ID == consumer_id || OB_INVALID_ID == real_producer_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected conusmer id or producer id", K(*raw_expr), K(ret));
+    } else {
+      ExprProducer expr_producer(raw_expr, consumer_id, real_producer_id);
+      if (OB_FAIL(ctx.add(expr_producer))) {
+        LOG_WARN("failed to push balck raw_expr", K(ret));
+      } else {
+        LOG_TRACE("succeed to add shared exprs", KP(raw_expr), K(producer_id), K(consumer_id),
+                                                 K(expr_producer), K(get_name()));
       }
     }
-    // add input expressions, should set both producer and consumer id
-    for (int64_t i = 0; OB_SUCC(ret) && i < input_exprs.count(); i++) {
-      if (OB_ISNULL(raw_expr = input_exprs.at(i))) {
+  }
+  // add input expression, should set both producer and consumer id
+  if (OB_SUCC(ret)) {
+    uint64_t consumer_id = id_;
+    if (ObOptimizerUtil::find_item(shared_exprs, expr)) {
+      /*do nothing*/
+    } else if (OB_FAIL(ctx.find(expr, raw_producer))) {
+      LOG_WARN("failed to raw expr producer", K(ret));
+    } else if (NULL != raw_producer) {
+      // update the raw_producer id, this branch seems to be unreachable
+      if (OB_ISNULL(raw_producer)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (ObOptimizerUtil::find_item(shared_exprs, raw_expr)) {
-        /*do nothing*/
-      } else if (OB_FAIL(ctx.find(raw_expr, raw_producer))) {
-        LOG_WARN("failed to raw expr producer", K(ret));
-      } else if (NULL != raw_producer) {
-        // update the raw_producer id
-        if (OB_ISNULL(raw_producer)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else {
-          if (OB_INVALID_ID == raw_producer->producer_id_) {
-            raw_producer->producer_id_ = producer_id;
-          } else {
-            raw_producer->producer_id_ = std::min(raw_producer->producer_id_, producer_id);
-          }
-          LOG_TRACE("succeed to update input expr producer id", K(raw_expr),
-              K(*raw_expr), K(producer_id), K(consumer_id), KPC(raw_producer), K(get_name()));
-        }
+      } else if (OB_UNLIKELY(!expr->is_dynamic_const_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr type", K(ret), KPC(expr));
       } else {
-        ExprProducer expr_producer(raw_expr, consumer_id, producer_id);
-        if (OB_FAIL(ctx.add(expr_producer))) {
-          LOG_WARN("failed to push balck raw_expr", K(ret));
+        if (OB_INVALID_ID == raw_producer->producer_id_) {
+          raw_producer->producer_id_ = producer_id;
         } else {
-          LOG_TRACE("succeed to add input exprs", K(raw_expr), K(*raw_expr),
-              K(producer_id), K(expr_producer.consumer_id_), K(consumer_id), K(expr_producer),
-              K(get_name()));
+          raw_producer->producer_id_ = std::min(raw_producer->producer_id_, producer_id);
         }
+        LOG_TRACE("succeed to update input expr producer id", KP(expr),
+            KPC(expr), K(producer_id), K(consumer_id), KPC(raw_producer), K(get_name()));
+      }
+    } else {
+      ExprProducer expr_producer(expr, consumer_id, producer_id);
+      if (OB_FAIL(ctx.add(expr_producer))) {
+        LOG_WARN("failed to push balck expr", K(ret));
+      } else {
+        LOG_TRACE("succeed to add input expr", KP(expr), K(producer_id), K(consumer_id),
+                                               K(expr_producer), K(get_name()));
       }
     }
   }
@@ -1814,10 +1833,10 @@ int ObLogicalOperator::extract_non_const_exprs(const ObIArray<ObRawExpr*> &input
     if (OB_ISNULL(expr = input_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(expr));
-    } else if (expr->is_const_raw_expr() ||
+    } else if (expr->is_static_const_expr() ||
                expr->has_flag(IS_USER_VARIABLE)) {
       /*do nothing*/
-    } else if (OB_FAIL(non_const_exprs.push_back(expr))) {
+    } else if (OB_FAIL(add_var_to_array_no_dup(non_const_exprs, expr))) {
       LOG_WARN("failed to push back expr", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1853,7 +1872,7 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
   if (OB_ISNULL(raw_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(raw_expr), K(ret));
-  } else if (raw_expr->is_const_raw_expr()) {
+  } else if (raw_expr->is_static_const_expr()) {
     /*do nothing*/
   } else if (T_OP_ROW == raw_expr->get_expr_type()) {
     /*do nothing*/
@@ -1900,6 +1919,93 @@ int ObLogicalOperator::find_consumer_id_for_shared_expr(const ObIArray<ExprProdu
   return ret;
 }
 
+int ObLogicalOperator::find_producer_id_for_shared_expr(const ObRawExpr *expr,
+                                                        uint64_t &producer_id)
+{
+  int ret = OB_SUCCESS;
+  bool need_pushdown = false;
+  bool can_pushdown = false;
+  uint64_t pushdown_producer_id = OB_INVALID_ID;
+  if (OB_FAIL(check_need_pushdown_expr(producer_id, need_pushdown))) {
+    LOG_WARN("failed to check need pushdown expr");
+  } else if (!need_pushdown) {
+    // do nothing
+  } else if (OB_FAIL(check_can_pushdown_expr(expr, can_pushdown))) {
+    LOG_WARN("failed to check can push down expr", K(ret));
+  } else if (!can_pushdown) {
+    // do nothing
+  } else if (OB_FAIL(get_pushdown_producer_id(expr, pushdown_producer_id))) {
+    LOG_WARN("failed to get pushdown producer id", K(ret));
+  } else if (OB_INVALID_ID != pushdown_producer_id) {
+    producer_id = pushdown_producer_id;
+  }
+  return ret;
+}
+
+// check whether need pushdown expr according to the plan tree structure
+int ObLogicalOperator::check_need_pushdown_expr(const bool producer_id,
+                                                bool &need_pushdown)
+{
+  int ret = OB_SUCCESS;
+  need_pushdown = true;
+  if (producer_id < id_ ) {
+    need_pushdown = false;
+  } else if (child_.empty()) {
+    need_pushdown = false;
+  } else if (OB_ISNULL(child_.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (log_op_def::LOG_EXPR_VALUES == child_.at(0)->get_type()) {
+    need_pushdown = false;
+  }
+  return ret;
+}
+
+// check whether need pushdown expr according to the expr type
+int ObLogicalOperator::check_can_pushdown_expr(const ObRawExpr *expr,
+                                               bool &can_pushdown)
+{
+  int ret = OB_SUCCESS;
+  bool is_contain = false;
+  can_pushdown = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (expr->is_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(contain_my_fixed_expr(expr, is_contain))) {
+    LOG_WARN("failed to check contain my fixed expr", K(ret));
+  } else if (!is_contain) {
+    can_pushdown = true;
+  }
+  return ret;
+}
+
+int ObLogicalOperator::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  UNUSED(expr);
+  is_fixed = false;
+  return OB_SUCCESS;
+}
+
+int ObLogicalOperator::contain_my_fixed_expr(const ObRawExpr *expr,
+                                             bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(is_my_fixed_expr(expr, is_contain))) {
+    LOG_WARN("failed to check is my fixed expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(contain_my_fixed_expr(expr->get_param_expr(i), is_contain)))) {
+      LOG_WARN("failed to check contain my fixed expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::force_pushdown_exprs(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1917,6 +2023,31 @@ int ObLogicalOperator::force_pushdown_exprs(ObAllocExprContext &ctx)
       LOG_WARN("unable to get pushdown producer id", K(producer_id), K(ret));
     } else if (OB_FAIL(add_exprs_to_ctx(ctx, exprs, producer_id))) {
       LOG_WARN("failed to add exprs to ctx");
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  producer_id = OB_INVALID_ID;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !found && i < child_.count(); ++i) {
+    ObLogicalOperator *node = child_.at(i);
+    if (OB_ISNULL(node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null child op", K(ret));
+    } else if (!expr->get_relation_ids().is_subset(node->get_table_set())) {
+      // do nothing
+    } else if (OB_FAIL(get_next_producer_id(node, producer_id))) {
+      LOG_WARN("failed to get next producer id", K(ret));
+    } else {
+      found = true;
     }
   }
   return ret;
@@ -1975,7 +2106,7 @@ int ObLogicalOperator::allocate_expr_post(ObAllocExprContext &ctx)
             LOG_WARN("expr_can_be_produced fails", K(ret));
           } else if (can_be_produced) {
             producers.at(i).producer_branch_ = branch_id_;
-            producers.at(i).producer_id_ = id_;
+            producers.at(i).producer_id_ = id_; // dummy assign
             LOG_TRACE("expr can be produced now", K(*expr), K(get_name()), K(id_));
           } else {
             ret = OB_ERR_UNEXPECTED;
@@ -3026,7 +3157,9 @@ void ObLogicalOperator::do_project_pruning(ObIArray<ObRawExpr *> &exprs,
 int ObLogicalOperator::try_add_remove_const_exprs()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_session_info())) {
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
+    // do nothing
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(ret));
   } else {

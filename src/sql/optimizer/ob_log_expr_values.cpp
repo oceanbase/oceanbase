@@ -481,5 +481,11 @@ int ObLogExprValues::inner_replace_op_exprs(
   return ret;
 }
 
+int ObLogExprValues::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(value_desc_, expr);
+  return OB_SUCCESS;
+}
+
 } // namespace sql
 }// namespace oceanbase

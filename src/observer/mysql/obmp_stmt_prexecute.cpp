@@ -443,9 +443,8 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     OZ (cursor->init_params(params.count()));
     OZ (cursor->get_exec_params().assign(params));
     OZ (gctx_.sql_engine_->init_result_set(ctx, result));
-    if (OB_SUCCESS != ret || enable_perf_event) {
-      set_exec_start_timestamp(ObTimeUtility::current_time());
-    }
+    //监控项统计开始
+    set_exec_start_timestamp(ObTimeUtility::current_time());
     if (OB_SUCC(ret)) {
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
@@ -637,10 +636,8 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
     }
     int8_t has_result = 0;
     if (OB_SUCC(ret)) {
-      if (enable_perf_event) {
-        //监控项统计开始
-        set_exec_start_timestamp(ObTimeUtility::current_time());
-      }
+      //监控项统计开始
+      set_exec_start_timestamp(ObTimeUtility::current_time());
       // 本分支内如果出错, 全部会在response_result内部处理妥当, 无需再额外处理回复错误包
       need_response_error = false;
       is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());

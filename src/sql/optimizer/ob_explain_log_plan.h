@@ -28,6 +28,8 @@ namespace sql
   protected:
     virtual int generate_normal_raw_plan() override;
   private:
+    int check_explain_generate_plan_with_outline(ObLogPlan *real_plan);
+    int check_has_win_func(const ObDMLStmt *stmt, bool &has_win_func);
     DISALLOW_COPY_AND_ASSIGN(ObExplainLogPlan);
   };
 }

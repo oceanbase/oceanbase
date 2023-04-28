@@ -72,6 +72,8 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("get_stmt_trans_info failed", K(ret));
   } else if (OB_FAIL(do_transform_pre_precessing(stmt))) {
     LOG_WARN("failed to do transform pre_precessing", K(ret));
+  } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+    LOG_WARN("failed to formalize query ref exprs");
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
@@ -300,6 +302,8 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         LOG_WARN("failed to do transformation one iteration", K(i), K(ret));
       } else if (!trans_happened_in_iteration) {
         need_next_iteration = false;
+      } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+        LOG_WARN("failed to formalize subquery exprs", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
         LOG_WARN("failed to formalize stmt expr", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
@@ -443,6 +447,11 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, PREDICATE_MOVE_AROUND);
       ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
       ObTransformRule::add_trans_type(disable_list, SIMPLIFY_EXPR);
+      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
+    }
+    //dblink trace point
+    if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {
+      ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
     }
     need_types = ObTransformRule::ALL_TRANSFORM_RULES & (~disable_list);
   }

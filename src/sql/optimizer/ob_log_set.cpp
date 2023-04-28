@@ -904,3 +904,16 @@ int ObLogSet::construct_pq_set_hint(ObPQSetHint &hint)
   }
   return ret;
 }
+
+int ObLogSet::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  ObSEArray<ObRawExpr*, 8> set_exprs;
+  if (OB_FAIL(get_set_exprs(set_exprs))) {
+    LOG_WARN("failed to get set exprs", K(ret));
+  } else {
+    is_fixed = ObOptimizerUtil::find_item(set_exprs, expr);
+  }
+  return ret;
+}

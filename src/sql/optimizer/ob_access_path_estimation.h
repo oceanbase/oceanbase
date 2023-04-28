@@ -153,9 +153,9 @@ private:
 
   static int gen_agent_vt_table_convert_info(const uint64_t vt_table_id,
                                              const ObTableSchema *vt_table_schema,
-                                             const ObTableSchema *real_table_schema,
+                                             const ObTableSchema *real_index_schema,
                                              const ObIArray<ColumnItem> &range_columns,
-                                             bool &has_tenant_id_col,
+                                             int64_t &tenant_id_col_idx,
                                              ObIArray<ObObjMeta> &key_types);
 
   static int convert_physical_rowid_ranges(ObOptimizerContext &ctx,

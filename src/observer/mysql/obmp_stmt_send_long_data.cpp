@@ -26,6 +26,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/mysql/obsm_utils.h"
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
+#include "sql/plan_cache/ob_ps_cache.h"
 
 namespace oceanbase
 {
@@ -238,7 +239,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     ObMaxWaitGuard max_wait_guard(enable_perf_event
                                     ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-    if (enable_sql_audit) {
+    if (enable_perf_event) {
       audit_record.exec_record_.record_start(di);
     }
     int64_t execution_id = 0;
@@ -252,24 +253,26 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
       exec_start_timestamp_ = ObTimeUtility::current_time();
     } else {
       //监控项统计开始
-      if (enable_perf_event) {
-        exec_start_timestamp_ = ObTimeUtility::current_time();
-      }
+      exec_start_timestamp_ = ObTimeUtility::current_time();
+
       session.set_current_execution_id(execution_id);
+
+      //监控项统计结束
+      exec_end_timestamp_ = ObTimeUtility::current_time();
+
+      // some statistics must be recorded for plan stat, even though sql audit disabled
+      bool first_record = (1 == audit_record.try_cnt_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      audit_record.exec_timestamp_.update_stage_time();
+
       if (enable_perf_event) {
-        exec_end_timestamp_ = ObTimeUtility::current_time();
-        if (lib::is_diagnose_info_enabled()) {
-          const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-          EVENT_INC(SQL_PS_PREPARE_COUNT);
-          EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-        }
-      }
-      if (enable_sql_audit) {
         audit_record.exec_record_.record_end(di);
-        bool first_record = (1 == audit_record.try_cnt_);
-        ObExecStatUtils::record_exec_timestamp(*this,
-            first_record,
-            audit_record.exec_timestamp_);
+        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+        audit_record.update_event_stage_state();
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        EVENT_INC(SQL_PS_PREPARE_COUNT);
+        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
       }
     }
   } // diagnose end
@@ -287,14 +290,24 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
     audit_record.client_addr_ = session.get_peer_addr();
     audit_record.user_client_addr_ = session.get_user_client_addr();
     audit_record.user_group_ = THIS_WORKER.get_group_id();
-    audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-    audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+    audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
     audit_record.ps_stmt_id_ = stmt_id_;
-    audit_record.update_stage_stat();
-    // TODO: 可以这么做么？
-    // ObSQLUtils::handle_audit_record(false, EXECUTE_PS_EXECUTE,
-    //     session, ctx_);
+    if (OB_NOT_NULL(session.get_ps_cache())) {
+      ObPsStmtInfoGuard guard;
+      ObPsStmtInfo *ps_info = NULL;
+      ObPsStmtId inner_stmt_id = OB_INVALID_ID;
+      if (OB_SUCC(session.get_inner_ps_stmt_id(stmt_id_, inner_stmt_id))
+            && OB_SUCC(session.get_ps_cache()->get_stmt_info_guard(inner_stmt_id, guard))
+            && OB_NOT_NULL(ps_info = guard.get_stmt_info())) {
+        audit_record.ps_inner_stmt_id_ = inner_stmt_id;
+        audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
+        audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
+      } else {
+        LOG_WARN("get sql fail in send long data", K(stmt_id_));
+      }
+    }
   }
+  ObSQLUtils::handle_audit_record(false, EXECUTE_PS_SEND_LONG_DATA, session, ctx_.is_sensitive_);
 
   clear_wb_content(session);
   return ret;

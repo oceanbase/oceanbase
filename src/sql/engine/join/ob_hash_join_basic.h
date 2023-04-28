@@ -29,7 +29,7 @@ class ObHashJoinBufMgr : public ObSqlMemoryCallback
 public:
   ObHashJoinBufMgr() :
     reserve_memory_size_(0), data_ratio_(1.0), pre_total_alloc_size_(0), total_alloc_size_(0),
-    page_size_(-1), dumped_size_(0)
+    page_size_(0), dumped_size_(0)
   {}
   virtual ~ObHashJoinBufMgr() {}
 
@@ -167,7 +167,6 @@ public:
     part_level_(part_level),
     part_shift_(part_shift),
     batchno_(batchno),
-    is_chunk_iter_(false),
     buf_mgr_(buf_mgr),
     tenant_id_(tenant_id),
     n_get_rows_(0),
@@ -191,7 +190,6 @@ public:
     ObEvalCtx &eval_ctx,
     const ObHashJoinStoredJoinRow *&stored_row);
   int get_next_row(const ObHashJoinStoredJoinRow *&stored_row);
-  int get_next_block_row(const ObHashJoinStoredJoinRow *&stored_row);
   int convert_row(
     const ObHashJoinStoredJoinRow *stored_row,
     const common::ObIArray<ObExpr*> &exprs,
@@ -212,8 +210,8 @@ public:
   int finish_dump(bool memory_need_dump);
   int dump(bool all_dump, int64_t dumped_size);
 
-  bool has_next() { return chunk_iter_.has_next_chunk(); }
-  int set_iterator(bool is_chunk_iter);
+  bool has_next() { return store_iter_.has_next_block(); }
+  int set_iterator();
   int init_progressive_iterator();
 
   void set_part_level(int32_t part_level) { part_level_ = part_level; }
@@ -236,8 +234,8 @@ public:
   int64_t get_last_buffer_mem_size() { return chunk_row_store_.get_last_buffer_mem_size(); }
   int64_t get_size_in_memory() { return chunk_row_store_.get_mem_used(); }
   int64_t get_size_on_disk() { return chunk_row_store_.get_file_size(); }
-  int64_t get_cur_chunk_row_cnt() { return chunk_iter_.get_cur_chunk_row_cnt(); }
-  int64_t get_cur_chunk_size() { return chunk_iter_.get_chunk_read_size();}
+  int64_t get_cur_chunk_row_cnt() { return store_iter_.get_cur_chunk_row_cnt(); }
+  void set_iteration_age(sql::ObChunkDatumStore::IterationAge &age) { store_iter_.set_iteration_age(&age); }
 
   bool has_switch_block() { return chunk_row_store_.get_block_list_cnt() > 1; }
 
@@ -257,13 +255,11 @@ public:
   }
 private:
   sql::ObChunkDatumStore chunk_row_store_;
-  sql::ObChunkDatumStore::RowIterator row_store_iter_;
-  sql::ObChunkDatumStore::ChunkIterator chunk_iter_;
+  sql::ObChunkDatumStore::Iterator store_iter_;
   sql::ObSqlMemoryCallback *inner_callback_;
   int32_t part_level_;
   int64_t part_shift_;
   int64_t batchno_; // high: batch_round low: part_id
-  bool is_chunk_iter_;
   ObHashJoinBufMgr *buf_mgr_;
   uint64_t tenant_id_;
   int64_t n_get_rows_;
@@ -383,7 +379,6 @@ public:
   inline int get_next_batch(const ObHashJoinStoredJoinRow **stored_row,
                             const int64_t max_rows,
                             int64_t &read_rows);
-  int get_next_block_row(const ObHashJoinStoredJoinRow *&stored_row);
 
   // payload of ObRowStore::StoredRow will be set after added.
   int add_row(
@@ -396,7 +391,7 @@ public:
   int finish_dump(bool memory_need_dump);
   int dump(bool all_dump, int64_t dumped_size);
 
-  int init_iterator(bool is_chunk_iter);
+  int init_iterator();
   int init_progressive_iterator();
 
   void set_part_level(int32_t part_level) { part_level_ = part_level; }

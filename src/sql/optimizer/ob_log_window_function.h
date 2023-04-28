@@ -51,6 +51,7 @@ namespace sql
     virtual int est_width() override;
     virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     virtual int compute_op_ordering() override;
     virtual int compute_sharding_info() override;
     virtual bool is_block_op() const override;

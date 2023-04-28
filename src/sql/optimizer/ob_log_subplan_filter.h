@@ -76,6 +76,8 @@ public:
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
+
   bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
   bool is_my_exec_expr(const ObRawExpr *expr);
   bool is_my_onetime_expr(const ObRawExpr *expr);

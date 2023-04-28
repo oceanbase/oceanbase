@@ -845,7 +845,7 @@ private:
   int get_next_left_row();
   int get_next_left_row_na();
   int reuse_for_next_chunk();
-  int load_next_chunk();
+  int load_next();
   int build_hash_table_for_nest_loop(int64_t &num_left_rows);
   int nest_loop_process(bool &need_not_read_right);
   int64_t calc_partition_count(
@@ -1138,6 +1138,7 @@ private:
   // make PART_COUNT and MAX_PAGE_COUNT configurable by unittest
   static int64_t PART_COUNT;
   static int64_t MAX_PAGE_COUNT;
+  static const int64_t MIN_BATCH_ROW_CNT_NESTLOOP = 256;
   // 之前hash join ctx变量
   state_operation_func_type state_operation_func_[JS_STATE_COUNT];
   state_function_func_type state_function_func_[JS_STATE_COUNT][FT_TYPE_COUNT];

@@ -925,6 +925,7 @@ public:
   // 以下helper函数是为了方便查看某系统变量的值
   int if_aggr_pushdown_allowed(bool &aggr_pushdown_allowed) const;
   int is_transformation_enabled(bool &transformation_enabled) const;
+  int is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const;
   bool is_use_trace_log() const
   {
     return sys_vars_cache_.get_ob_enable_trace_log();

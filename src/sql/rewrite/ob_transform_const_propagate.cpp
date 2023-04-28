@@ -1178,6 +1178,8 @@ int ObTransformConstPropagate::remove_const_exec_param(ObDMLStmt *stmt)
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
+  } else if (OB_FAIL(stmt->do_formalize_query_ref_exprs_pre())) {
+    LOG_WARN("failed to do formalize query ref exprs", K(ret));
   } else if (OB_FAIL(remove_const_exec_param_exprs(stmt,
                                                    trans_happened))) {
     LOG_WARN("replace reference column failed", K(ret));
@@ -1193,6 +1195,9 @@ int ObTransformConstPropagate::remove_const_exec_param(ObDMLStmt *stmt)
         LOG_WARN("replace reference column failed", K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(stmt->do_formalize_query_ref_exprs_post())) {
+    LOG_WARN("failed to do formalize query ref exprs post", K(ret));
   }
   return ret;
 }
@@ -1261,6 +1266,20 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
       } else {
         expr = cast_expr;
       }
+    } else if (OB_FAIL(parent_exprs.push_back(exec_param))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(SMART_CALL(do_remove_const_exec_param(ref_expr,
+                                                             parent_exprs,
+                                                             trans_happened)))) {
+      LOG_WARN("failed to do remove const exec param", K(ret));
+    } else if (OB_FALSE_IT(parent_exprs.pop_back())) {
+    } else if (ref_expr->is_const_expr() &&
+               !ref_expr->has_flag(CNT_ONETIME)) {
+      expr = ref_expr;
+      trans_happened = true;
+    } else {
+      exec_param->set_explicited_reference();
+      exec_param->set_ref_expr(ref_expr);
     }
   } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
@@ -1269,6 +1288,8 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
       } else if (OB_FAIL(do_remove_const_exec_param(expr->get_param_expr(i), parent_exprs,
                                                     trans_happened))) {
         LOG_WARN("failed to remove const exec param", K(ret));
+      } else {
+        parent_exprs.pop_back();
       }
     }
   }

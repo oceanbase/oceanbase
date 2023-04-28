@@ -358,3 +358,9 @@ int ObLogUnpivot::compute_one_row_info()
   set_is_at_most_one_row(false);
   return ret;
 }
+
+int ObLogUnpivot::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(access_exprs_, expr);
+  return OB_SUCCESS;
+}

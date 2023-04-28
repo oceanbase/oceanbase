@@ -174,7 +174,8 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
     if (NULL == (buf = (char*)alloc(total_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       if (REACH_TIME_INTERVAL(100 * 1000)) {
-        SERVER_LOG(WARN, "record concurrent fifoallocator alloc mem failed", K(total_size), K(ret));
+        SERVER_LOG(WARN, "record concurrent fifoallocator alloc mem failed",
+            K(audit_record.tenant_id_), K(total_size), K(ret));
       }
     } else {
       record = new(buf)ObMySQLRequestRecord();

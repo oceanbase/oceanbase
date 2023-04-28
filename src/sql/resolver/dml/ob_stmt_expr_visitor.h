@@ -178,11 +178,15 @@ public:
   }
 
   virtual int do_visit(ObRawExpr *&expr) override;
-
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
-                        const ObIArray<ObRawExpr *> &to_exprs);
+                        const ObIArray<ObRawExpr *> &to_exprs,
+                        const ObIArray<ObRawExpr *> *skip_exprs = NULL);
 private:
-  ObRawExprReplacer replacer;
+  int add_skip_expr(const ObRawExpr *skip_expr);
+  int check_expr_need_skip(const ObRawExpr *skip_expr, bool &need_skip);
+private:
+  ObRawExprReplacer replacer_;
+  hash::ObHashSet<uint64_t> skip_exprs_;
 };
 
 class ObStmtExprCopier : public ObStmtExprVisitor
@@ -213,6 +217,17 @@ private:
   hash::ObHashSet<uint64_t> *stmt_expr_set_;
   hash::ObHashSet<uint64_t> shared_expr_set_;
   bool ignore_column_;
+};
+
+class ObStmtExecParamFormatter : public ObStmtExprVisitor
+{
+public:
+  ObStmtExecParamFormatter() {}
+
+  virtual int do_visit(ObRawExpr *&expr) override;
+
+  int do_formalize_exec_param(ObRawExpr *&expr, bool &is_happened);
+
 };
 
 }

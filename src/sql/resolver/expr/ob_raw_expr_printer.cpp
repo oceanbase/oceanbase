@@ -27,7 +27,7 @@ using namespace common;
 namespace sql
 {
 ObRawExprPrinter::ObRawExprPrinter()
-    : buf_(NULL),
+  : buf_(NULL),
       buf_len_(0),
       pos_(NULL),
       scope_(T_NONE_SCOPE),
@@ -88,7 +88,6 @@ int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_col
 int ObRawExprPrinter::print(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
@@ -119,6 +118,11 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
       if (print_params_.for_dblink_) {
         bool print_ref = exec_expr->is_ref_same_dblink();
+        if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) == OB_SUCCESS) {
+          //do nothing
+        } else {
+          print_ref = true;
+        }
         if (OB_ISNULL(exec_expr->get_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
@@ -341,7 +345,8 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            pos_,
                                            static_cast<ObSelectStmt*>(stmt),
                                            schema_guard_,
-                                           print_params_);
+                                           print_params_,
+                                           param_store_);
           if (print_cte_) {
             stmt_printer.enable_print_temp_table_as_cte();
           }
@@ -386,14 +391,22 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
     } else if (print_params_.for_dblink_) {
       if (!expr->is_cte_generated_column() &&
           !expr->get_database_name().empty()) {
-        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(expr->get_database_name()));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
+        PRINT_QUOT;
+        DATA_PRINTF(".");
       }
       if (!expr->get_table_name().empty()) {
         ObString table_name = expr->get_table_name();
         CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(table_name));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
+        PRINT_QUOT;
+        DATA_PRINTF(".");
       }
-      DATA_PRINTF("\"%.*s\"", LEN_AND_PTR(col_name));
+      PRINT_QUOT;
+      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
+      PRINT_QUOT;
     } else if (expr->is_cte_generated_column()) {
       ObString table_name = expr->get_synonym_name().empty() ?
                                                   expr->get_table_name() : expr->get_synonym_name();
@@ -4252,8 +4265,9 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
           LOG_WARN("failed to get udt info", K(ret));
         } else {
-          DATA_PRINTF(lib::is_oracle_mode() ? "\"%.*s\"" : "`%.*s`",
-                LEN_AND_PTR(dest_info->get_type_name()));
+          PRINT_QUOT;
+          DATA_PRINTF("%.*s", LEN_AND_PTR(dest_info->get_type_name()));
+          PRINT_QUOT;
         }
         break;
       }

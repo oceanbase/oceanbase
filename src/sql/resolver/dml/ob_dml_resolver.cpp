@@ -6046,19 +6046,21 @@ int ObDMLResolver::check_column_with_res_mapping_rule(const ObColumnRefRawExpr *
   return ret;
 }
 
-int ObDMLResolver::resolve_order_clause(const ParseNode *order_by_node)
+int ObDMLResolver::resolve_order_clause(const ParseNode *order_by_node, bool is_for_set_query  /*default false*/)
 {
   int ret = OB_SUCCESS;
-  if (order_by_node) {
-    ObDMLStmt *stmt = get_stmt();
+  ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", KPC(stmt), K(ret));
+  } else if (order_by_node) {
     current_scope_ = T_ORDER_SCOPE;
     const ParseNode *sort_list = NULL;
     const ParseNode *siblings_node = NULL;
     if (OB_UNLIKELY(order_by_node->type_ != T_ORDER_BY)
         || OB_UNLIKELY(order_by_node->num_child_ != 2)
         || OB_ISNULL(order_by_node->children_)
-        || OB_ISNULL(sort_list = order_by_node->children_[0])
-        || OB_ISNULL(stmt)) {
+        || OB_ISNULL(sort_list = order_by_node->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parameter", K(order_by_node), K(sort_list), KPC(stmt), K(ret));
     } else if (FALSE_IT(siblings_node = order_by_node->children_[1])) {
@@ -6100,7 +6102,37 @@ int ObDMLResolver::resolve_order_clause(const ParseNode *order_by_node)
         }
       }
     } // end of for
-  } // end of if
+  } else if (!params_.is_from_create_view_ && stmt->is_select_stmt() &&is_for_set_query)  {
+    //is_for_set_query = true when _force_order_preserve_set is enable
+    //union/minus/intersect add select exprs as order by expers if stmt has no order items
+    //not for union-all/recursive
+      ObSEArray<ObRawExpr *, 4> select_exprs;
+      ObSEArray<ObRawExpr *, 4> order_exprs;
+      ObSEArray<ObOrderDirection, 8> default_directions;
+      if (OB_FAIL(static_cast<ObSelectStmt *>(stmt)->get_select_exprs(select_exprs))) {
+        LOG_WARN("failed to get select exprs", K(ret));
+      }
+      for(int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
+        bool is_comparable = true;
+        if (OB_ISNULL(select_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null pointer", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::is_expr_comparable(select_exprs.at(i), is_comparable))) {
+          LOG_WARN("fail to judge whether expr can be order item", K(ret));
+        } else if (!is_comparable) {
+          //do nothing
+        } else if (OB_FAIL(order_exprs.push_back(select_exprs.at(i)))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (OB_FAIL(ObOptimizerUtil::get_default_directions(order_exprs.count(), default_directions))) {
+        LOG_WARN("failed to get default directions", K(ret));
+      } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(order_exprs, default_directions, stmt->get_order_items()))) {
+        LOG_WARN("failed to make sort keys", K(ret));
+      }
+  }
   return ret;
 }
 

@@ -1428,6 +1428,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
     ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
     LOG_TRACE("cannot batch execute", K(ret), K(sql), K(type));
   }
+
   HEAP_VAR(ObSPIResultSet, spi_result) {
     stmt::StmtType stmt_type = stmt::T_NONE;
     bool is_diagnostics_stmt = false;
@@ -1456,10 +1457,11 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           {
             ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
             ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-            if (enable_sql_audit) {
-              time_record.set_send_timestamp(ObTimeUtility::current_time());
+            if (enable_perf_event) {
               exec_record.record_start();
             }
+            //监控项统计开始
+            time_record.set_send_timestamp(ObTimeUtility::current_time());
             ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()->set_sqlcode(OB_SUCCESS);
             if (!ObStmt::is_diagnostic_stmt(static_cast<stmt::StmtType>(type))
                 && lib::is_mysql_mode()
@@ -1542,47 +1544,46 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             //} else {
             //  session->get_pl_sqlcode_info()->set_sqlcode(ret);
             //}
-            if (enable_sql_audit) {
-              time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+            //监控项统计结束
+            time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+            if (enable_perf_event) {
               exec_record.record_end();
             }
           }
           LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
           // 处理监控统计项
-          if (enable_sql_audit) {
-            if (OB_NOT_NULL(spi_result.get_result_set())) {
-              if (spi_result.get_result_set()->is_inited()) {
-                ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
-                int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
-                ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
-                session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
-                ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
-                                                      spi_result.get_sql_ctx(),
-                                                      *(ctx->exec_ctx_->get_my_session()),
-                                                      time_record,
-                                                      ret,
-                                                      ctx->exec_ctx_->get_my_session()->get_current_execution_id(), // sql execute id
-                                                      OB_INVALID_ID,
-                                                      max_wait_desc,
-                                                      total_wait_desc,
-                                                      exec_record,
-                                                      exec_timestamp,
-                                                      true,
-                                                      sql != NULL ? sql : ps_sql,
-                                                      true);
-                session_info->get_raw_audit_record().exec_record_ = record_bk;
-                session_info->get_raw_audit_record().try_cnt_ = try_cnt;
-              } else {
-                LOG_DEBUG("result set is not inited, do not process record",
-                          K(ret), K(ps_sql), K(sql), K(type));
-              }
+          if (OB_NOT_NULL(spi_result.get_result_set())) {
+            if (spi_result.get_result_set()->is_inited()) {
+              ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+              int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+              ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+              session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+              ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
+                                                    spi_result.get_sql_ctx(),
+                                                    *session_info,
+                                                    time_record,
+                                                    ret,
+                                                    session_info->get_current_execution_id(), // sql execute id
+                                                    OB_INVALID_ID,
+                                                    max_wait_desc,
+                                                    total_wait_desc,
+                                                    exec_record,
+                                                    exec_timestamp,
+                                                    true,
+                                                    sql != NULL ? sql : ps_sql,
+                                                    true);
+              session_info->get_raw_audit_record().exec_record_ = record_bk;
+              session_info->get_raw_audit_record().try_cnt_ = try_cnt;
             } else {
-              if (OB_SUCC(ret)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error, result_set is null", K(ret), K(ps_sql), K(sql), K(type));
-              } else {
-                LOG_WARN("result_set is null", K(ret), K(ps_sql), K(sql), K(type));
-              }
+              LOG_DEBUG("result set is not inited, do not process record",
+                        K(ret), K(ps_sql), K(sql), K(type));
+            }
+          } else {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error, result_set is null", K(ret), K(ps_sql), K(sql), K(type));
+            } else {
+              LOG_WARN("result_set is null", K(ret), K(ps_sql), K(sql), K(type));
             }
           }
           is_retry = true;
@@ -1667,7 +1668,7 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
       session->set_query_start_time(ObTimeUtility::current_time());
       bool is_retry = false;
       do {
-        // SQL_AUDIT_START
+        // SQL_AUDIT_START]
         ObWaitEventDesc max_wait_desc;
         ObWaitEventStat total_wait_desc;
         const bool enable_perf_event = lib::is_diagnose_info_enabled();
@@ -1676,10 +1677,11 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
         {
           ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
           ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-          if (enable_sql_audit) {
-            time_record.set_send_timestamp(ObTimeUtility::current_time());
+          if (enable_perf_event) {
             exec_record.record_start();
           }
+          // 监控项统计开始
+          time_record.set_send_timestamp(ObTimeUtility::current_time());
           saved_sqlcode_info = *(session->get_pl_sqlcode_info());
           session->get_pl_sqlcode_info()->set_sqlcode(OB_SUCCESS);
           row_count = 0;
@@ -1767,44 +1769,43 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
           } else {
             session->get_pl_sqlcode_info()->set_sqlcode(ret);
           }
-          if (enable_sql_audit) {
-            time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+          //监控项统计结束
+          time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+          if (enable_perf_event) {
             exec_record.record_end();
           }
         }
         LOG_DEBUG("start process record",
                   K(ret), K(sql_stmt), K(stmt_type), K(enable_sql_audit));
         // 处理监控统计项
-        if (enable_sql_audit) {
-          if (OB_NOT_NULL(spi_result.get_result_set())) {
-            if (spi_result.get_result_set()->is_inited()) {
-              ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
-                                                    spi_result.get_sql_ctx(),
-                                                    *session,
-                                                    time_record,
-                                                    ret,
-                                                    session->get_current_execution_id(),
-                                                    OB_INVALID_ID, //FIXME@hr351303
-                                                    max_wait_desc,
-                                                    total_wait_desc,
-                                                    exec_record,
-                                                    exec_timestamp,
-                                                    true,
-                                                    ps_sql,
-                                                    true);
-            } else {
-              LOG_DEBUG("result set is not inited, do not process record",
-                        K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
-            }
+        if (OB_NOT_NULL(spi_result.get_result_set())) {
+          if (spi_result.get_result_set()->is_inited()) {
+            ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
+                                                  spi_result.get_sql_ctx(),
+                                                  *session,
+                                                  time_record,
+                                                  ret,
+                                                  session->get_current_execution_id(),
+                                                  OB_INVALID_ID, //FIXME@hr351303
+                                                  max_wait_desc,
+                                                  total_wait_desc,
+                                                  exec_record,
+                                                  exec_timestamp,
+                                                  true,
+                                                  ps_sql,
+                                                  true);
           } else {
-            if (OB_SUCC(ret)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error, result_set is null",
-                       K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
-            } else {
-              LOG_WARN("result_set is null",
-                       K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
-            }
+            LOG_DEBUG("result set is not inited, do not process record",
+                      K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
+          }
+        } else {
+          if (OB_SUCC(ret)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error, result_set is null",
+                      K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
+          } else {
+            LOG_WARN("result_set is null",
+                      K(ret), K(ps_sql), K(sql_stmt), K(stmt_type));
           }
         }
         is_retry = true;
@@ -2623,10 +2624,11 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
           {
             ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
             ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-            if (enable_sql_audit) {
-              time_record.set_send_timestamp(ObTimeUtility::current_time());
+            if (enable_perf_event) {
               exec_record.record_start();
             }
+            //监控项统计开始
+            time_record.set_send_timestamp(ObTimeUtility::current_time());
 
             ret = OB_SUCCESS;
             if (is_retry) {
@@ -2714,47 +2716,46 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             if (OB_SUCC(ret) && !is_bulk) {
               OZ (dynamic_out_params(*(ctx->allocator_), spi_result.get_result_set(), params, exec_param_cnt));
             }
-            if (enable_sql_audit) {
-              time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+            //监控项统计结束
+            time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+            if (enable_perf_event) {
               exec_record.record_end();
             }
           }
           // 处理监控统计项
-          if (enable_sql_audit) {
-            if (OB_NOT_NULL(spi_result.get_result_set())) {
-              if (spi_result.get_result_set()->is_inited()) {
-                int64_t try_cnt = session->get_raw_audit_record().try_cnt_;
-                ObExecRecord record_bk = session->get_raw_audit_record().exec_record_;
-                session->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
-                ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
-                                                      spi_result.get_sql_ctx(),
-                                                      *session,
-                                                      time_record,
-                                                      ret,
-                                                      session->get_current_execution_id(), // sql execute id
-                                                      OB_INVALID_ID, // ps stmt id FIXME@hr351303
-                                                      max_wait_desc,
-                                                      total_wait_desc,
-                                                      exec_record,
-                                                      exec_timestamp,
-                                                      true,
-                                                      0 == param_count ? sql_str.string() : ps_sql,
-                                                      true);
-                session->get_raw_audit_record().exec_record_ = record_bk;
-                session->get_raw_audit_record().try_cnt_ = try_cnt;
-              } else {
-                LOG_DEBUG("result set is not inited, do not process record",
-                         K(ret), K(ps_sql), K(sql_str), K(stmt_type));
-              }
+          if (OB_NOT_NULL(spi_result.get_result_set())) {
+            if (spi_result.get_result_set()->is_inited()) {
+              int64_t try_cnt = session->get_raw_audit_record().try_cnt_;
+              ObExecRecord record_bk = session->get_raw_audit_record().exec_record_;
+              session->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+              ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
+                                                    spi_result.get_sql_ctx(),
+                                                    *session,
+                                                    time_record,
+                                                    ret,
+                                                    session->get_current_execution_id(), // sql execute id
+                                                    OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                                    max_wait_desc,
+                                                    total_wait_desc,
+                                                    exec_record,
+                                                    exec_timestamp,
+                                                    true,
+                                                    0 == param_count ? sql_str.string() : ps_sql,
+                                                    true);
+              session->get_raw_audit_record().exec_record_ = record_bk;
+              session->get_raw_audit_record().try_cnt_ = try_cnt;
             } else {
-              if (OB_SUCC(ret)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("unexpected error, result_set is null",
-                         K(ret), K(ps_sql), K(sql_str), K(stmt_type));
-              } else {
-                LOG_WARN("result_set is null",
-                         K(ret), K(ps_sql), K(sql_str), K(stmt_type));
-              }
+              LOG_DEBUG("result set is not inited, do not process record",
+                        K(ret), K(ps_sql), K(sql_str), K(stmt_type));
+            }
+          } else {
+            if (OB_SUCC(ret)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error, result_set is null",
+                        K(ret), K(ps_sql), K(sql_str), K(stmt_type));
+            } else {
+              LOG_WARN("result_set is null",
+                        K(ret), K(ps_sql), K(sql_str), K(stmt_type));
             }
           }
           // 无论成功或者失败都在这里close result set
@@ -3587,10 +3588,12 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
       OB_INVALID_ARGUMENT, ctx, ps_sql, stmt_type);
 
   OZ (session->ps_use_stream_result_set(use_stream));
-  if (enable_sql_audit) {
-	  time_record.set_send_timestamp(ObTimeUtility::current_time());
+
+  if (enable_perf_event) {
     exec_record.record_start();
   }
+  //监控项统计开始
+	time_record.set_send_timestamp(ObTimeUtility::current_time());
   if (OB_SUCC(ret) && cursor.isopen()) {
     if(OB_FAIL(dbms_cursor_close(*ctx->exec_ctx_, cursor))) {
       LOG_WARN("close cursor fail.", K(ret), K(cursor.get_id()));
@@ -3691,34 +3694,34 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         OZ (cursor.set_and_register_snapshot(snapshot));
       }
       LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql_str), K(enable_sql_audit));
-      if (enable_sql_audit) {
-        time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+      //监控项统计结束
+      time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+      if (enable_perf_event) {
         exec_record.record_end();
-        if (OB_NOT_NULL(spi_result->get_result_set()) && spi_result->get_result_set()->is_inited()) {
-          ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
-          int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
-          ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
-          session_info->get_raw_audit_record().try_cnt_ = try_cnt;
-          // 会在inner_open的时候被改成了 inner ，所以这个地方需要重新设置一下
-          exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
-          ObInnerSQLConnection::process_record(*spi_result->get_result_set(),
-                                                spi_result->get_sql_ctx(),
-                                                *(ctx->exec_ctx_->get_my_session()),
-                                                time_record,
-                                                ret,
-                                                ctx->exec_ctx_->get_my_session()
-                                                              ->get_current_execution_id(),
-                                                OB_INVALID_ID, // ps stmt id FIXME@hr351303
-                                                max_wait_desc,
-                                                total_wait_desc,
-                                                exec_record,
-                                                exec_timestamp,
-                                                true,
-                                                exec_params.count() > 0 ? ps_sql : sql_str,
-                                                true);
-          session_info->get_raw_audit_record().exec_record_ = record_bk;
-          session_info->get_raw_audit_record().try_cnt_ = try_cnt;
-        }
+      }
+
+      if (OB_NOT_NULL(spi_result->get_result_set()) && spi_result->get_result_set()->is_inited()) {
+        ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+        int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+        ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+        // 会在inner_open的时候被改成了 inner ，所以这个地方需要重新设置一下
+        exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
+        ObInnerSQLConnection::process_record(*spi_result->get_result_set(),
+                                              spi_result->get_sql_ctx(),
+                                              *session_info,
+                                              time_record,
+                                              ret,
+                                              session_info->get_current_execution_id(),
+                                              OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                              max_wait_desc,
+                                              total_wait_desc,
+                                              exec_record,
+                                              exec_timestamp,
+                                              true,
+                                              exec_params.count() > 0 ? ps_sql : sql_str,
+                                              true);
+        session_info->get_raw_audit_record().exec_record_ = record_bk;
+        session_info->get_raw_audit_record().try_cnt_ = try_cnt;
       }
     } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
   } else {
@@ -3787,35 +3790,35 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             OZ (cursor.set_and_register_snapshot(snapshot));
           }
           LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql_str), K(enable_sql_audit));
-          if (enable_sql_audit) {
-            ObResultSet* result_set = spi_result.get_result_set();
-            time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+          //监控项统计结束
+          time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+          if (enable_perf_event) {
             exec_record.record_end();
-            if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
-              ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
-              int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
-              ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
-              session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
-              // 会在inner_open的时候被改成了 inner ，所以这个地方需要重新设置一下
-              exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
-              ObInnerSQLConnection::process_record(*result_set,
-                                                    spi_result.get_sql_ctx(),
-                                                    *(ctx->exec_ctx_->get_my_session()),
-                                                    time_record,
-                                                    ret,
-                                                    ctx->exec_ctx_->get_my_session()
-                                                                  ->get_current_execution_id(),
-                                                    OB_INVALID_ID, // ps stmt id FIXME@hr351303
-                                                    max_wait_desc,
-                                                    total_wait_desc,
-                                                    exec_record,
-                                                    exec_timestamp,
-                                                    true,
-                                                    exec_params.count() > 0 ? ps_sql : sql_str,
-                                                    true);
-              session_info->get_raw_audit_record().exec_record_ = record_bk;
-              session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
-            }
+          }
+          ObResultSet* result_set = spi_result.get_result_set();
+          if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
+            ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+            int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+            ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+            session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+            // 会在inner_open的时候被改成了 inner ，所以这个地方需要重新设置一下
+            exec_timestamp.exec_type_ = cursor.is_ps_cursor() ? sql::PSCursor : sql::DbmsCursor;
+            ObInnerSQLConnection::process_record(*result_set,
+                                                  spi_result.get_sql_ctx(),
+                                                  *session_info,
+                                                  time_record,
+                                                  ret,
+                                                  session_info->get_current_execution_id(),
+                                                  OB_INVALID_ID, // ps stmt id FIXME@hr351303
+                                                  max_wait_desc,
+                                                  total_wait_desc,
+                                                  exec_record,
+                                                  exec_timestamp,
+                                                  true,
+                                                  exec_params.count() > 0 ? ps_sql : sql_str,
+                                                  true);
+            session_info->get_raw_audit_record().exec_record_ = record_bk;
+            session_info->get_raw_audit_record().try_cnt_ = retry_cnt;
           }
           if (OB_SUCCESS != ret && OB_NOT_NULL(spi_cursor)) {
             spi_cursor->~ObSPICursor();
@@ -3879,6 +3882,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(cursor));
+
   if (OB_FAIL(ret)) {
   } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
     if (lib::is_oracle_mode()) {
@@ -3900,10 +3904,11 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
       }
     }
   }
-  if (enable_sql_audit) {
-    time_record.set_send_timestamp(ObTimeUtility::current_time());
+  if (enable_perf_event) {
     exec_record.record_start();
   }
+  //监控项统计开始
+  time_record.set_send_timestamp(ObTimeUtility::current_time());
   if (OB_FAIL(ret)) {
   } else if (!is_bulk && INT64_MAX != limit) { //limit子句必须和Bulk Collect合用
     ret = OB_INVALID_ARGUMENT;
@@ -4014,33 +4019,32 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
         LOG_WARN("spi result must be not null in oracle mode", K(ret), K(spi_result));
       } else {
         LOG_DEBUG("start process record", K(ret), K(cursor->get_id()), K(enable_sql_audit));
-        if (enable_sql_audit) {
-          ObResultSet* result_set = spi_result->get_result_set();
-          time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+        //监控项统计结束
+        time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+        if (enable_perf_event) {
           exec_record.record_end();
-          if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
-            ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
-            int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
-            ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
-            session_info->get_raw_audit_record().try_cnt_ = try_cnt;
-            ObInnerSQLConnection::process_record(*(result_set),
-                                                  spi_result->get_sql_ctx(),
-                                                  *(ctx->exec_ctx_->get_my_session()),
-                                                  time_record,
-                                                  ret,
-                                                  ctx->exec_ctx_->get_my_session()
-                                                                ->get_current_execution_id(),
-                                                  cursor->get_id(), // ps stmt id
-                                                  max_wait_desc,
-                                                  total_wait_desc,
-                                                  exec_record,
-                                                  exec_timestamp,
-                                                  true,
-                                                  ObString(),
-                                                  true);
-            session_info->get_raw_audit_record().exec_record_ = record_bk;
-            session_info->get_raw_audit_record().try_cnt_ = try_cnt;
-          }
+        }
+        ObResultSet* result_set = spi_result->get_result_set();
+        if (OB_NOT_NULL(result_set) && result_set->is_inited()) {
+          ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+          int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+          ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+          ObInnerSQLConnection::process_record(*(result_set),
+                                                spi_result->get_sql_ctx(),
+                                                *session_info,
+                                                time_record,
+                                                ret,
+                                                session_info->get_current_execution_id(),
+                                                cursor->get_id(), // ps stmt id
+                                                max_wait_desc,
+                                                total_wait_desc,
+                                                exec_record,
+                                                exec_timestamp,
+                                                true,
+                                                ObString(),
+                                                true);
+          session_info->get_raw_audit_record().exec_record_ = record_bk;
+          session_info->get_raw_audit_record().try_cnt_ = try_cnt;
         }
         spi_result->end_cursor_stmt(ctx, ret);
         cursor->set_last_execute_time(ObTimeUtility::current_time());

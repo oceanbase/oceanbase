@@ -494,7 +494,6 @@ int ObHashJoinOp::inner_open()
     } else {
       //at least one page for each l/r part
       buf_mgr_ = new (buf) ObHashJoinBufMgr();
-      buf_mgr_->set_page_size(ObChunkDatumStore::BLOCK_SIZE);
     }
   }
   if (OB_SUCC(ret)) {
@@ -1243,15 +1242,13 @@ int ObHashJoinOp::reuse_for_next_chunk()
   return ret;
 }
 
-int ObHashJoinOp::load_next_chunk()
+int ObHashJoinOp::load_next()
 {
   int ret = OB_SUCCESS;
   ++nth_nest_loop_;
   // 目前通过设置一定读固定大小方式来读取内容，后续会改掉
-  if (1 == nth_nest_loop_ && OB_FAIL(left_batch_->set_iterator(true))) {
+  if (1 == nth_nest_loop_ && OB_FAIL(left_batch_->set_iterator())) {
     LOG_WARN("failed to set iterator", K(ret), K(nth_nest_loop_));
-  } else if (OB_FAIL(left_batch_->load_next_chunk())) {
-    LOG_WARN("failed to load next chunk", K(ret), K(nth_nest_loop_));
   } else if (1 == nth_nest_loop_ && OB_FAIL(prepare_hash_table())) {
     LOG_WARN("failed to prepare hash table", K(ret), K(nth_nest_loop_));
   } else if (1 < nth_nest_loop_ && OB_FAIL(reuse_for_next_chunk())) {
@@ -1272,21 +1269,29 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
   ObHashJoinBatch *hj_batch = left_batch_;
   const int64_t PREFETCH_BATCH_SIZE = 64;
   const ObHashJoinStoredJoinRow *left_stored_rows[PREFETCH_BATCH_SIZE];
-  if (OB_FAIL(load_next_chunk())) {
+  if (OB_FAIL(load_next())) {
     LOG_WARN("failed to reset info for block", K(ret));
   } else {
+    int64_t curr_ht_row_cnt = 0;
+    int64_t curr_ht_memory_size = 0;
+    // at least hold 1 block in memory
+    int64_t memory_bound = std::max(remain_data_memory_size_,
+                                    hj_batch->get_chunk_row_store().get_max_blk_size());
+    const int64_t row_bound = hash_table.nbuckets_ / 2;
+    ObChunkDatumStore::IterationAge iter_age;
+    hj_batch->set_iteration_age(iter_age);
     while (OB_SUCC(ret)) {
       int64_t read_size = 0;
-      if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows, PREFETCH_BATCH_SIZE, read_size))) {
+      if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows,
+                                           std::min(PREFETCH_BATCH_SIZE,
+                                                    row_bound - curr_ht_row_cnt),
+                                           read_size))) {
         if (OB_ITER_END != ret) {
-          LOG_WARN("get next batch failed", K(ret));
+          LOG_WARN("get next batch failed", K(ret), K(row_bound), K(curr_ht_row_cnt), K(hash_table.nbuckets_));
         }
       } else if (OB_ISNULL(left_stored_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("returned left_stored_rows is NULL", K(ret));
-      } else if (num_left_rows + read_size > hash_table.row_count_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row count exceed total row count", K(ret), K(num_left_rows + read_size));
       } else {
         if (enable_bloom_filter_) {
           for (int64_t i = 0; OB_SUCC(ret) && i < read_size; ++i) {
@@ -1304,13 +1309,19 @@ int ObHashJoinOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
               __builtin_prefetch((&hash_table.buckets_->at(left_stored_rows[i]->get_hash_value() & mask)), 1 /* write */, 3 /* high temporal locality*/);
             }
             for (int64_t i = 0; OB_SUCC(ret) && i < read_size; ++i) {
+              curr_ht_memory_size += left_stored_rows[i]->row_size_;
               hash_table.set(left_stored_rows[i]->get_hash_value(), const_cast<ObHashJoinStoredJoinRow *>(left_stored_rows[i]));
             }
           }
         }
         if (OB_SUCC(ret)) {
+          curr_ht_row_cnt += read_size;
           num_left_rows += read_size;
           cur_nth_row_ += read_size;
+          if (curr_ht_row_cnt >= row_bound
+              || curr_ht_memory_size >= memory_bound) {
+            ret = OB_ITER_END;
+          }
         }
       }
     }
@@ -1566,16 +1577,31 @@ int ObHashJoinOp::calc_basic_info(bool global_info)
           K(hj_input->get_total_memory_size()));
       }
     } else if (nullptr != left_batch_) {
-      row_count = left_batch_->get_cur_chunk_row_cnt();
-      input_size = left_batch_->get_cur_chunk_size();
+      row_count = left_batch_->get_chunk_row_store().get_row_cnt();
+      // INMEMORY processor, read entire partition into memory
+      input_size = left_batch_->get_chunk_row_store().get_file_size();
       LOG_DEBUG("debug left_batch row_count and input_size",
-        K(left_batch_->get_cur_chunk_row_cnt()),
-        K(left_batch_->get_cur_chunk_size()));
+                 K(left_batch_->get_chunk_row_store().get_row_cnt()),
+                 K(left_batch_->get_chunk_row_store().get_file_size()));
     }
-    LOG_DEBUG("debug row_count and input_size", K(row_count), K(row_count), K(global_info), K(is_shared_));
+    LOG_DEBUG("debug row_count and input_size", K(row_count), K(global_info), K(is_shared_));
   } else if (nullptr != left_batch_) {
-    row_count = left_batch_->get_cur_chunk_row_cnt();
-    input_size = left_batch_->get_cur_chunk_size();
+    // NESTLOOP processor, our memory is not enough to hold entire left partition,
+    // try to estimate max row count we can hold
+    row_count = 0;
+    if (left_batch_->get_chunk_row_store().get_row_cnt() > 0) {
+      double avg_len = static_cast<double> (left_batch_->get_chunk_row_store().get_file_size())
+                        / left_batch_->get_chunk_row_store().get_row_cnt();
+      row_count = std::max(static_cast<int64_t> (MIN_BATCH_ROW_CNT_NESTLOOP),
+                                    static_cast<int64_t> (remain_data_memory_size_ / avg_len));
+
+    } else {
+      row_count = MIN_BATCH_ROW_CNT_NESTLOOP;
+    }
+    LOG_TRACE("calc row count", K(left_batch_->get_chunk_row_store().get_file_size()),
+                                K(left_batch_->get_chunk_row_store().get_row_cnt()),
+                                K(remain_data_memory_size_));
+    input_size = remain_data_memory_size_;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect path for calculate bucket number");
@@ -1728,15 +1754,8 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
   const ObHashJoinStoredJoinRow *left_stored_rows[PREFETCH_BATCH_SIZE];
   int64_t used_buckets = 0;
   int64_t collisions = 0;
-  if (OB_FAIL(left_batch_->set_iterator(true))) {
+  if (OB_FAIL(left_batch_->set_iterator())) {
     LOG_WARN("failed to set iterator", K(ret));
-  } else if (OB_FAIL(hj_batch->load_next_chunk())) {
-    LOG_WARN("failed to load next chunk", K(ret));
-  } else if (hj_batch->has_next()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected batch", K(ret), K(hj_batch->get_size_on_disk()),
-      K(hj_batch->get_row_count_in_memory()), K(hj_batch->get_row_count_on_disk()),
-      K(buf_mgr_->get_reserve_memory_size()));
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(prepare_hash_table())) {
@@ -1755,18 +1774,19 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
     // do nothing
   } else {
     PartHashJoinTable &hash_table = *cur_hash_table_;
+    ObChunkDatumStore::IterationAge iter_age;
+    hj_batch->set_iteration_age(iter_age);
     while (OB_SUCC(ret)) {
       int64_t read_size = 0;
-      if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows, PREFETCH_BATCH_SIZE, read_size))) {
+      if (OB_FAIL(hj_batch->get_next_batch(left_stored_rows,
+                                           PREFETCH_BATCH_SIZE,
+                                           read_size))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next batch failed", K(ret));
         }
       } else if (OB_ISNULL(left_stored_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("returned left_stored_rows is NULL", K(ret));
-      } else if (num_left_rows + read_size > hash_table.row_count_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("row count exceed total row count", K(ret), K(num_left_rows + read_size), K(hash_table.row_count_));
       } else {
         if (enable_bloom_filter_) {
           for (int64_t i = 0; OB_SUCC(ret) && i < read_size; ++i) {
@@ -1815,11 +1835,6 @@ int ObHashJoinOp::build_hash_table_in_memory(int64_t &num_left_rows)
   }
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
-    if (hj_batch->get_row_count_on_disk() != num_left_rows) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expect row count is match", K(hj_batch->get_row_count_on_disk()),
-        K(num_left_rows));
-    }
   }
   is_last_chunk_ = true;
   LOG_TRACE("trace to finish build hash table in memory", K(ret), K(num_left_rows),
@@ -2589,7 +2604,7 @@ int ObHashJoinOp::split_partition(int64_t &num_left_rows)
   num_left_rows = 0;
   if (nullptr != left_batch_) {
     // read all data， use default iterator
-    if (OB_FAIL(left_batch_->set_iterator(false))) {
+    if (OB_FAIL(left_batch_->set_iterator())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to init iterator", K(ret));
       }
@@ -2937,7 +2952,7 @@ int ObHashJoinOp::build_hash_table_for_recursive()
       if (0 < hj_part.get_row_count_on_disk()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect it has row on disk", K(ret), K(row_count_in_memory), K(hj_part.get_row_count_on_disk()));
-      } else if (OB_FAIL(hj_part.init_iterator(false))) {
+      } else if (OB_FAIL(hj_part.init_iterator())) {
         // 这里假设partition一定是要么全部dump，要么全部在内存里，所以直接用row iter即可
         // 没有必要用chunk row store，如果部分在内存，部分在disk，可以使用chunk先load 内存的数据
         LOG_WARN("failed to init iterator", K(ret));
@@ -3231,7 +3246,7 @@ int ObHashJoinOp::PartitionSplitter::repartition_by_part_array(const int64_t par
       if (0 < hj_part.get_row_count_on_disk()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect it has row on disk", K(ret));
-      } else if (OB_FAIL(hj_part.init_iterator(false))) {
+      } else if (OB_FAIL(hj_part.init_iterator())) {
         // 这里假设partition一定是要么全部dump，要么全部在内存里，所以直接用row iter即可
         // 没有必要用chunk row store，如果部分在内存，部分在disk，可以使用chunk先load 内存的数据
         LOG_WARN("failed to init iterator", K(ret));
@@ -3402,7 +3417,7 @@ int ObHashJoinOp::PartitionSplitter::build_hash_table_by_part_array(
       } else if (0 < hj_part.get_row_count_on_disk()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect it has row on disk", K(ret));
-      } else if (OB_FAIL(hj_part.init_iterator(false))) {
+      } else if (OB_FAIL(hj_part.init_iterator())) {
         // 这里假设partition一定是要么全部dump，要么全部在内存里，所以直接用row iter即可
         // 没有必要用chunk row store，如果部分在内存，部分在disk，可以使用chunk先load 内存的数据
         LOG_WARN("failed to init iterator", K(ret));
@@ -3537,14 +3552,7 @@ int ObHashJoinOp::repartition(
 int ObHashJoinOp::partition_and_build_histograms()
 {
   int ret = OB_SUCCESS;
-  enable_batch_ = 0 == level2_part_count_ && level1_part_count_ == part_count_;
-  ret = OB_E(EventTable::EN_SET_DISABLE_HASH_JOIN_BATCH) ret;
-  if (OB_FAIL(ret)) {
-    ret = -ret;
-    enable_batch_ = (0 == ret % 2) ? true : false;
-    LOG_INFO("trace enable batch cache aware", K(level2_part_count_), K(level1_part_count_),
-      K(part_count_), K(MY_SPEC.id_));
-  }
+  enable_batch_ = false; // enable_batch is not supported now
   ret = OB_SUCCESS;
   if (enable_batch_) {
     PartitionSplitter part_splitter;
@@ -4376,7 +4384,7 @@ int ObHashJoinOp::read_right_operate()
         }
       } else {
         if (nullptr != right_batch_) {
-          if (OB_FAIL(right_batch_->set_iterator(false))) {
+          if (OB_FAIL(right_batch_->set_iterator())) {
             if (OB_ITER_END == ret) {
               int tmp_ret = OB_SUCCESS;
               if (!postprocessed_left_ && OB_SUCCESS != (tmp_ret = recursive_postprocess())) {
@@ -4732,7 +4740,7 @@ int ObHashJoinOp::read_hashrow()
       auto next_func = [&](const ObHashJoinStoredJoinRow *&right_read_row) {
         int ret = OB_SUCCESS;
         ObHashJoinPartition *hj_part = &right_hj_part_array_[cur_full_right_partition_];
-        if (OB_FAIL(hj_part->get_next_block_row(right_read_row))) {
+        if (OB_FAIL(hj_part->get_next_row(right_read_row))) {
         } else {
           cur_right_hash_value_ = right_read_row->get_hash_value();
         }

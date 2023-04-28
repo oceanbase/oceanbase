@@ -156,3 +156,9 @@ int ObLogErrLog::inner_replace_op_exprs(
   }
   return ret;
 }
+
+int ObLogErrLog::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(get_err_log_define().err_log_value_exprs_, expr);
+  return OB_SUCCESS;
+}

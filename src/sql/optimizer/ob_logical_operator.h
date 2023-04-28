@@ -259,6 +259,10 @@ struct partition_location
 #define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
                                    || log_op_def::LOG_MONITORING_DUMP == (type)) \
 
+/**
+ * these operator never generate expr except for its fixed expr
+ */
+#define IS_OUTPUT_EXPR_PASSBY_OPER(type) (log_op_def::LOG_SORT == (type))
 
 struct FilterCompare
 {
@@ -549,16 +553,14 @@ public:
       : expr_(NULL),
       producer_branch_(common::OB_INVALID_ID),
       consumer_id_(common::OB_INVALID_ID),
-      producer_id_(common::OB_INVALID_ID),
-      is_shared_(false)
+      producer_id_(common::OB_INVALID_ID)
   {
   }
   ExprProducer(ObRawExpr* expr, int64_t consumer_id)
       : expr_(expr),
       producer_branch_(common::OB_INVALID_ID),
       consumer_id_(consumer_id),
-      producer_id_(common::OB_INVALID_ID),
-      is_shared_(false)
+      producer_id_(common::OB_INVALID_ID)
   {
   }
 
@@ -568,8 +570,7 @@ public:
       : expr_(expr),
         producer_branch_(common::OB_INVALID_ID),
         consumer_id_(consumer_id),
-        producer_id_(producer_id),
-        is_shared_(false)
+        producer_id_(producer_id)
   {
   }
 
@@ -577,8 +578,7 @@ public:
       : expr_(other.expr_),
       producer_branch_(other.producer_branch_),
       consumer_id_(other.consumer_id_),
-      producer_id_(other.producer_id_),
-      is_shared_(other.is_shared_)
+      producer_id_(other.producer_id_)
   {
   }
 
@@ -588,10 +588,9 @@ public:
     producer_branch_ = other.producer_branch_;
     consumer_id_ = other.consumer_id_;
     producer_id_ = other.producer_id_;
-    is_shared_ = other.is_shared_;
     return *this;
   }
-  TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), K(is_shared_), K(expr_), KPC_(expr));
+  TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), KPC_(expr));
 
   ObRawExpr *expr_;
   // 一般情况下可以忽略这个变量，简单把它理解成一个 bool 变量，
@@ -617,8 +616,6 @@ public:
   // 如果看完还不明白，请直接 @溪峰
   uint64_t consumer_id_;
   uint64_t producer_id_;
-
-  bool is_shared_;
 };
 
 struct ObAllocExprContext
@@ -1183,8 +1180,14 @@ public:
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs);
 
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed);
+
+  int contain_my_fixed_expr(const ObRawExpr *expr, bool &is_contain);
   int get_next_producer_id(ObLogicalOperator *node,
                            uint64_t &producer_id);
+  int add_exprs_to_op_and_ctx(ObAllocExprContext &ctx,
+                              const ObIArray<ObRawExpr*> &exprs);
+  int add_exprs_to_op(const ObIArray<ObRawExpr*> &exprs);
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs);
   int build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_exprs);
@@ -1194,11 +1197,19 @@ public:
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs,
                        uint64_t producer_id);
+  int add_expr_to_ctx(ObAllocExprContext &ctx,
+                      ObRawExpr* epxr,
+                      uint64_t producer_id);
 
   bool can_update_producer_id_for_shared_expr(const ObRawExpr *expr);
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
+  int check_need_pushdown_expr(const bool producer_id,
+                               bool &need_pushdown);
+  int check_can_pushdown_expr(const ObRawExpr *expr, bool &can_pushdown);
+  int get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id);
+
   int force_pushdown_exprs(ObAllocExprContext &ctx);
   int get_pushdown_producer_id(uint64_t &producer_id);
 
@@ -1213,6 +1224,8 @@ public:
   int find_consumer_id_for_shared_expr(const ObIArray<ExprProducer> *ctx,
                                        const ObRawExpr *expr,
                                        uint64_t &consumer_id);
+  int find_producer_id_for_shared_expr(const ObRawExpr *expr,
+                                       uint64_t &producer_id);
   /**
    *  Allocate output expr post-traverse
    *

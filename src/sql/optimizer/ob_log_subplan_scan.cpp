@@ -167,3 +167,9 @@ int ObLogSubPlanScan::check_output_dependance(ObIArray<ObRawExpr *> &child_outpu
   }
   return ret;
 }
+
+int ObLogSubPlanScan::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(access_exprs_, expr);
+  return OB_SUCCESS;
+}

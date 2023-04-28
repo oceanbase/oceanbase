@@ -354,6 +354,22 @@ private:
                                 bool &best_need_sort,
                                 int64_t &best_prefix_pos,
                                 const bool can_ignore_merge_plan);
+  int decide_merge_set_sort_key(const ObIArray<OrderItem> &set_order_items,
+                                const ObIArray<OrderItem> &input_ordering,
+                                const ObFdItemSet &fd_item_set,
+                                const EqualSets &equal_sets,
+                                const ObIArray<ObRawExpr*> &const_exprs,
+                                const ObIArray<ObRawExpr*> &exec_ref_exprs,
+                                const bool is_at_most_one_row,
+                                const ObIArray<ObRawExpr*> &merge_exprs,
+                                const ObIArray<ObOrderDirection> &default_directions,
+                                MergeKeyInfo &merge_key);
+  int convert_set_order_item(const ObDMLStmt *stmt, const ObIArray<ObRawExpr*> &select_exprs, ObIArray<OrderItem> &order_items);
+  int create_merge_set_key(const ObIArray<OrderItem> &set_order_items,
+                           const ObIArray<ObRawExpr*> &merge_exprs,
+                           const EqualSets &equal_sets,
+                           MergeKeyInfo &merge_key);
+
   /**
    * @brief create_merge_set
    * create merge-based set operation

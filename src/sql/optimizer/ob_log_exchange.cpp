@@ -1014,3 +1014,11 @@ int ObLogExchange::allocate_startup_expr_post()
   return ret;
 }
 
+int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = expr == calc_part_id_expr_ ||
+             expr == partition_id_expr_ ||
+             expr == random_expr_;
+  return OB_SUCCESS;
+}

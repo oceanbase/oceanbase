@@ -89,6 +89,7 @@ public:
                                         const int64_t buf_len,
                                         int64_t &pos);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int set_exchange_info(const ObExchangeInfo &exch_info);
   const common::ObIArray<ObRawExpr *> &get_repart_keys() const {return repartition_keys_;}
   const common::ObIArray<ObRawExpr *> &get_repart_sub_keys() const {return repartition_sub_keys_;}

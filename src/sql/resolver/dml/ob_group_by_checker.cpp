@@ -222,38 +222,51 @@ int ObGroupByChecker::check_group_by(const ParamStore *param_store,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
   } else if (ref_stmt->has_group_by() ||
-              ref_stmt->has_rollup() ||
-              (is_oracle_mode() &&
-              (ref_stmt->has_grouping_sets() ||
-              has_having_self_column ||
-              has_group_by_clause))) {
+             ref_stmt->has_rollup() ||
+             (is_oracle_mode() && (ref_stmt->has_grouping_sets() ||
+                                   ref_stmt->has_cube() ||
+                                   has_having_self_column ||
+                                   has_group_by_clause))) {
     ObSEArray<ObGroupbyExpr, 4> all_grouping_sets_exprs;
     ObSEArray<ObRawExpr*, 4> all_rollup_exprs;
+    ObSEArray<ObRawExpr*, 4> all_cube_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_grouping_sets_items_size(); ++i) {
-      if (OB_FAIL(append(all_grouping_sets_exprs,
-                         ref_stmt->get_grouping_sets_items().at(i).grouping_sets_exprs_))) {
+      ObIArray<ObGroupbyExpr> &groupby_exprs =
+                                    ref_stmt->get_grouping_sets_items().at(i).grouping_sets_exprs_;
+      ObIArray<ObRollupItem> &rollup_items =
+                                    ref_stmt->get_grouping_sets_items().at(i).rollup_items_;
+      ObIArray<ObCubeItem> &cube_items = ref_stmt->get_grouping_sets_items().at(i).cube_items_;
+      if (OB_FAIL(append(all_grouping_sets_exprs, groupby_exprs))) {
         LOG_WARN("failed to append exprs", K(ret));
-      } else {
-        ObIArray<ObMultiRollupItem> &multi_rollup_items =
-                                      ref_stmt->get_grouping_sets_items().at(i).multi_rollup_items_;
-        for (int64_t j = 0; OB_SUCC(ret) && j < multi_rollup_items.count(); ++j) {
-          if (OB_FAIL(append(all_grouping_sets_exprs,
-                             multi_rollup_items.at(j).rollup_list_exprs_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_items.count(); ++j) {
+        if (OB_FAIL(append(all_grouping_sets_exprs, rollup_items.at(j).rollup_list_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_items.count(); ++j) {
+        if (OB_FAIL(append(all_grouping_sets_exprs, cube_items.at(j).cube_list_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
         }
       }
     }
     if (OB_FAIL(append(all_rollup_exprs, ref_stmt->get_rollup_exprs()))) {
       LOG_WARN("failed to expr", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_multi_rollup_items_size(); ++i) {
-        ObIArray<ObGroupbyExpr> &rollup_list_exprs =
-                                        ref_stmt->get_multi_rollup_items().at(i).rollup_list_exprs_;
-        for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
-          if (OB_FAIL(append(all_rollup_exprs, rollup_list_exprs.at(j).groupby_exprs_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          } else {/*do nothing*/}
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_rollup_items_size(); ++i) {
+      ObIArray<ObGroupbyExpr> &rollup_list_exprs =
+                                              ref_stmt->get_rollup_items().at(i).rollup_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(all_rollup_exprs, rollup_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ref_stmt->get_cube_items_size(); ++i) {
+      ObIArray<ObGroupbyExpr> &cube_list_exprs = ref_stmt->get_cube_items().at(i).cube_list_exprs_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
+        if (OB_FAIL(append(all_cube_exprs, cube_list_exprs.at(j).groupby_exprs_))) {
+          LOG_WARN("failed to append exprs", K(ret));
         }
       }
     }
@@ -261,6 +274,7 @@ int ObGroupByChecker::check_group_by(const ParamStore *param_store,
       ObGroupByChecker checker(param_store,
                                &ref_stmt->get_group_exprs(),
                                &all_rollup_exprs,
+                               &all_cube_exprs,
                                &all_grouping_sets_exprs);
       checker.set_query_ctx(ref_stmt->get_query_ctx());
       checker.set_nested_aggr(ref_stmt->contain_nested_aggr());
@@ -371,6 +385,38 @@ bool ObGroupByChecker::find_in_rollup(ObRawExpr &expr)
   }
   if (OB_FAIL(ret)) {
   } else if ((found || found_same_structure) && OB_SUCCESS == check_ctx.err_code_) {
+    if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
+                       check_ctx.equal_param_info_))) {
+      LOG_WARN("failed to append equal params constraints", K(ret));
+    } else if (OB_FAIL(add_pc_const_param_info(check_ctx))) {
+      LOG_WARN("failed to add pc const param info.", K(ret));
+    } else { /*do nothing.*/ }
+  }
+  return found;
+}
+
+bool ObGroupByChecker::find_in_cube(ObRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  ObStmtCompareContext check_ctx;
+  if (OB_ISNULL(query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer.", K(ret));
+  } else if (NULL != cube_exprs_) {
+    check_ctx.init(&query_ctx_->calculable_items_);
+    int64_t cube_cnt = cube_exprs_->count();
+    for (int64_t nth_cube = 0; !found && nth_cube < cube_cnt; ++nth_cube) {
+      check_ctx.reset();
+      check_ctx.override_const_compare_ = true;
+      check_ctx.override_query_compare_ = true;
+      if (expr.same_as(*cube_exprs_->at(nth_cube), &check_ctx)) {
+        found = true;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (found && OB_SUCCESS == check_ctx.err_code_ && lib::is_oracle_mode()) {
     if (OB_FAIL(append(query_ctx_->all_equal_param_constraints_,
                        check_ctx.equal_param_info_))) {
       LOG_WARN("failed to append equal params constraints", K(ret));
@@ -631,10 +677,10 @@ int ObGroupByChecker::visit(ObConstRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (is_mysql_mode()) {
-    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+    if (find_in_group_by(expr) || find_in_rollup(expr)) {
       set_skip_expr(&expr);
     }
-  } else if (find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  } else if (find_in_rollup(expr) || find_in_grouping_sets(expr) || find_in_cube(expr)) {
     set_skip_expr(&expr);
   } else if (OB_FAIL(add_abs_equal_constraint_in_grouping_sets(expr))) {
     LOG_WARN("fail to add abs_equal constraintd", K(ret));
@@ -703,10 +749,11 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
     // distinct case: select distinct count(*) from t1 group by c1 order by c2;  --report error "not a SELECTed expression" instead of "not a GROUP BY expression"
     //                it report error by order by check instead of group by check
     if (ref_stmt->is_order_siblings() ||
-            (is_top_select_stmt() &&
-            (NULL == group_by_exprs_ || group_by_exprs_->empty() || ref_stmt->has_distinct()) &&
-            (NULL == rollup_exprs_ || rollup_exprs_->empty() || ref_stmt->has_distinct()) &&
-            (NULL == grouping_sets_exprs_ || grouping_sets_exprs_->empty() || ref_stmt->has_distinct()))) {
+        (is_top_select_stmt() &&
+        (NULL == group_by_exprs_ || group_by_exprs_->empty() || ref_stmt->has_distinct()) &&
+        (NULL == rollup_exprs_ || rollup_exprs_->empty() || ref_stmt->has_distinct()) &&
+        (NULL == grouping_sets_exprs_ || grouping_sets_exprs_->empty() || ref_stmt->has_distinct()) &&
+        (NULL == cube_exprs_ || cube_exprs_->empty() || ref_stmt->has_distinct()))) {
       visitor.remove_scope(SCOPE_ORDERBY);
     }
     ObArray<ObRawExpr*> relation_expr_pointers;
@@ -750,7 +797,8 @@ int ObGroupByChecker::check_select_stmt(const ObSelectStmt *ref_stmt)
 int ObGroupByChecker::visit(ObQueryRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_grouping_sets(expr) || find_in_cube(expr)) {
     set_skip_expr(&expr);
   } else if (is_top_select_stmt() && !expr.has_exec_param()) {
     // do nothing
@@ -773,29 +821,28 @@ int ObGroupByChecker::visit(ObColumnRefRawExpr &expr)
   int ret = OB_SUCCESS;
   bool belongs_to = true;
   if (only_need_contraints_) {
-    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) ||
+        find_in_grouping_sets(expr) || find_in_cube(expr)) {
       set_skip_expr(&expr);
     }
   } else if (OB_FAIL(colref_belongs_to_check_stmt(expr, belongs_to))) {
     LOG_WARN("failed to get belongs to stmt", K(ret));
-  } else if (belongs_to) {
-    // expr is in the current  stmt
-    if ((!find_in_group_by(expr) && !find_in_rollup(expr)) && ! find_in_grouping_sets(expr)) {
-      if (NULL != dblink_groupby_expr_) {
-        if (OB_FAIL(dblink_groupby_expr_->push_back(static_cast<oceanbase::sql::ObRawExpr *>(&expr)))) {
-          LOG_WARN("failed to push checked_expr into group_by_exprs", K(ret));
-        } else {
-          LOG_DEBUG("succ to push checked_expr into group_by_exprs", K(expr));
-        }
-      } else {
-        ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-        ObString column_name = concat_qualified_name(expr.get_database_name(),
-                                                    expr.get_table_name(),
-                                                    expr.get_column_name());
-        LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
-        LOG_DEBUG("column not in group by", K(*group_by_exprs_), K(expr));
-      }
+  } else if (!belongs_to) {
+  } else if (find_in_group_by(expr) || find_in_rollup(expr) ||
+             find_in_grouping_sets(expr) || find_in_cube(expr)) {
+  } else if (NULL != dblink_groupby_expr_) {
+    if (OB_FAIL(dblink_groupby_expr_->push_back(static_cast<oceanbase::sql::ObRawExpr *>(&expr)))) {
+      LOG_WARN("failed to push checked_expr into group_by_exprs", K(ret));
+    } else {
+      LOG_DEBUG("succ to push checked_expr into group_by_exprs", K(expr));
     }
+  } else {
+    ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
+    ObString column_name = concat_qualified_name(expr.get_database_name(),
+                                                 expr.get_table_name(),
+                                                 expr.get_column_name());
+    LOG_USER_ERROR(OB_ERR_WRONG_FIELD_WITH_GROUP, column_name.length(), column_name.ptr());
+    LOG_DEBUG("column not in group by", K(*group_by_exprs_), K(expr));
   }
   return ret;
 }
@@ -821,7 +868,8 @@ int ObGroupByChecker::visit(ObPlQueryRefRawExpr &expr)
 int ObGroupByChecker::visit(ObOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   } else if (only_need_contraints_) {
     // do nothing
@@ -850,7 +898,8 @@ int ObGroupByChecker::visit(ObOpRawExpr &expr)
 int ObGroupByChecker::visit(ObCaseOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   }
   return ret;
@@ -863,7 +912,8 @@ int ObGroupByChecker::visit(ObAggFunRawExpr &expr)
   // expr is not in the current stmt, the expr is from subquery, it will check the expr from parent stmt
     // eg: select (select max(a.d2)from t1 b where b.c2=a.d1) from t2 b group by d1;
     //    then a.d2 that is in max(a.d2) is not in group by d1, it will report error
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   } else if (only_need_contraints_) {
     // do nothing
@@ -887,7 +937,8 @@ int ObGroupByChecker::visit(ObAggFunRawExpr &expr)
 int ObGroupByChecker::visit(ObSysFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   } else if (!only_need_contraints_) {
     if (T_FUN_SYS_ROWNUM == expr.get_expr_type()) {
@@ -910,7 +961,8 @@ int ObGroupByChecker::visit(ObSysFunRawExpr &expr)
 int ObGroupByChecker::visit(ObSetOpRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   }
   return ret;
@@ -919,7 +971,8 @@ int ObGroupByChecker::visit(ObSetOpRawExpr &expr)
 int ObGroupByChecker::visit(ObAliasRefRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   }
   return ret;
@@ -929,7 +982,8 @@ int ObGroupByChecker::visit(ObAliasRefRawExpr &expr)
 int ObGroupByChecker::visit(ObWinFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
-  if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+  if (find_in_group_by(expr) || find_in_rollup(expr) ||
+      find_in_cube(expr) || find_in_grouping_sets(expr)) {
     set_skip_expr(&expr);
   }
   return ret;
@@ -940,13 +994,15 @@ int ObGroupByChecker::visit(ObPseudoColumnRawExpr &expr)
   int ret = OB_SUCCESS;
   bool belongs_to = true;
   if (only_need_contraints_) {
-    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) ||
+        find_in_grouping_sets(expr) || find_in_cube(expr)) {
       set_skip_expr(&expr);
     }
   } else if (OB_FAIL(belongs_to_check_stmt(expr, belongs_to))) {
     LOG_WARN("failed to get belongs to stmt", K(ret));
   } else if (belongs_to) {
-    if (find_in_group_by(expr) || find_in_rollup(expr) || find_in_grouping_sets(expr)) {
+    if (find_in_group_by(expr) || find_in_rollup(expr) ||
+        find_in_cube(expr) || find_in_grouping_sets(expr)) {
       set_skip_expr(&expr);
     } else if (T_ORA_ROWSCN != expr.get_expr_type() &&
                NULL == dblink_groupby_expr_){

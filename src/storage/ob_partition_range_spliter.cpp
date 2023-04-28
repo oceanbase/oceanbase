@@ -29,7 +29,7 @@ using namespace blocksstable;
 namespace storage
 {
 
-ObMacroEndkeyIterator::ObMacroEndkeyIterator()
+ObEndkeyIterator::ObEndkeyIterator()
   : endkeys_(),
     cur_idx_(0),
     iter_idx_(0),
@@ -38,7 +38,7 @@ ObMacroEndkeyIterator::ObMacroEndkeyIterator()
 
 }
 
-void ObMacroEndkeyIterator::reset()
+void ObEndkeyIterator::reset()
 {
   endkeys_.reset();
   cur_idx_ = 0;
@@ -46,7 +46,7 @@ void ObMacroEndkeyIterator::reset()
   is_inited_ = false;
 }
 
-int ObMacroEndkeyIterator::open(
+int ObEndkeyIterator::open(
     const int64_t skip_cnt,
     const int64_t iter_idx,
     ObSSTable &sstable,
@@ -58,22 +58,17 @@ int ObMacroEndkeyIterator::open(
     STORAGE_LOG(WARN, "ObMacroEndkeyIterator init twice", K(ret), K(*this));
   } else if (OB_UNLIKELY(
       iter_idx < 0
-      || skip_cnt <= 0
+      || skip_cnt < 0
       || !sstable.is_valid()
-      || !range_info.is_valid()
-      || nullptr == range_info.key_allocator_)) {
+      || !range_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to open ObMacroEndkeyIterator",
+    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
         K(ret), K(skip_cnt), K(iter_idx), K(sstable), K(range_info));
   } else {
-    ObIAllocator *key_allocator = range_info.key_allocator_;
-    ObSSTableSecMetaIterator *macro_iter = nullptr;
     ObDatumRowkey sstable_endkey;
-    ObDataMacroBlockMeta macro_meta;
     ObArenaAllocator temp_allocator;
     ObDatumRange datum_range;
     const ObTableReadInfo *index_read_info = range_info.index_read_info_;
-    const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info->get_columns_desc();
     const ObStorageDatumUtils &datum_utils = index_read_info->get_datum_utils();
     int cmp_ret = 0;
     // Sample start from a specified point
@@ -87,35 +82,9 @@ int ObMacroEndkeyIterator::open(
     } else if (cmp_ret < 0) {
       // sstable not in range
       STORAGE_LOG(DEBUG, "Skip empty range", K(ret), K(range_info));
-    } else if (OB_FAIL(sstable.scan_secondary_meta(*key_allocator, datum_range,
-        *index_read_info, DATA_BLOCK_META, macro_iter, false, skip_cnt))) {
+    } else if (OB_FAIL(init_endkeys(skip_cnt, range_info, datum_range, sstable))) {
       STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(range_info));
-    } else {
-      ObStoreRowkey endkey;
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(macro_iter->get_next(macro_meta))) {
-          if (OB_LIKELY(OB_ITER_END == ret)) {
-            ret = OB_SUCCESS;
-            break;
-          } else {
-            STORAGE_LOG(WARN, "Fail to get next macro meta", K(ret));
-          }
-        } else if (OB_FAIL(build_rowkey(macro_meta, col_descs, *key_allocator, endkey))) {
-          STORAGE_LOG(WARN, "Fail to build new rowkey", K(ret), K(macro_meta));
-        } else if (OB_UNLIKELY(!endkey.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexpected invalid endkey", K(ret), K(endkey));
-        } else if (OB_FAIL(endkeys_.push_back(endkey))) {
-          STORAGE_LOG(WARN, "Fail to push endkey in searray", K(ret), K(endkey));
-        } else {
-          endkey.reset();
-        }
-      }
-      if (OB_NOT_NULL(macro_iter)) {
-        macro_iter->~ObSSTableSecMetaIterator();
-      }
     }
-
     if (OB_SUCC(ret)) {
       cur_idx_ = 0;
       iter_idx_ = iter_idx;
@@ -125,13 +94,13 @@ int ObMacroEndkeyIterator::open(
   return ret;
 }
 
-int ObMacroEndkeyIterator::get_endkey_cnt(int64_t &endkey_cnt) const
+int ObEndkeyIterator::get_endkey_cnt(int64_t &endkey_cnt) const
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObMacroEndkeyIterator is not init", K(ret));
+    STORAGE_LOG(WARN, "ObEndkeyIterator is not init", K(ret));
   } else {
     endkey_cnt = endkeys_.count();
   }
@@ -139,7 +108,7 @@ int ObMacroEndkeyIterator::get_endkey_cnt(int64_t &endkey_cnt) const
   return ret;
 }
 
-int ObMacroEndkeyIterator::get_next_macro_block_endkey(ObMacroEndkey &endkey)
+int ObEndkeyIterator::get_next_macro_block_endkey(ObMacroEndkey &endkey)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -156,27 +125,149 @@ int ObMacroEndkeyIterator::get_next_macro_block_endkey(ObMacroEndkey &endkey)
   return ret;
 }
 
-int ObMacroEndkeyIterator::build_rowkey(
-    const ObDataMacroBlockMeta &macro_meta,
+int ObEndkeyIterator::push_rowkey(
+    const int64_t rowkey_col_cnt,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    ObIAllocator &allocator,
-    ObStoreRowkey &new_rowkey)
+    const blocksstable::ObDatumRowkey &end_key,
+    ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObDatumRowkey rowkey;
-  ObStoreRowkey tmp_rowkey;
-  const int64_t rowkey_col_cnt =
-      macro_meta.val_.rowkey_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  if (OB_UNLIKELY(!macro_meta.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid data macro meta", K(ret), K(macro_meta));
-  } else if (OB_FAIL(rowkey.assign(macro_meta.end_key_.datums_, rowkey_col_cnt))) {
-    STORAGE_LOG(WARN, "Fail to construct src rowkey", K(ret), K(macro_meta));
-  } else if (OB_FAIL(rowkey.to_store_rowkey(col_descs, allocator, tmp_rowkey))) {
+  ObStoreRowkey endkey;
+  ObStoreRowkey newkey;
+
+  if (OB_UNLIKELY(rowkey_col_cnt <= 0 || end_key.datum_cnt_ < rowkey_col_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexptcted rowkey_col_cnt", K(ret), K(rowkey_col_cnt), K(end_key));
+  } else if (OB_FAIL(rowkey.assign(end_key.datums_, rowkey_col_cnt))) {
+    STORAGE_LOG(WARN, "Fail to construct src rowkey", K(ret), K(end_key));
+  } else if (OB_FAIL(rowkey.to_store_rowkey(col_descs, allocator, endkey))) {
     STORAGE_LOG(WARN, "Fail to transfer store rowkey", K(ret), K(rowkey));
-  } else if (OB_FAIL(tmp_rowkey.deep_copy(new_rowkey, allocator))) {
-    STORAGE_LOG(WARN, "Fail to deep copy rowkey", K(ret), K(tmp_rowkey));
+  } else if (OB_UNLIKELY(!endkey.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected invalid endkey", K(ret), K(endkey));
+  } else if (OB_FAIL(endkey.deep_copy(newkey, allocator))) {
+    STORAGE_LOG(WARN, "fail to deep copy endkey", K(ret), K(endkey));
+  } else if (OB_FAIL(endkeys_.push_back(newkey))) {
+    STORAGE_LOG(WARN, "Fail to push endkey in searray", K(ret), K(endkey));
+  } else {
+    endkey.reset();
   }
+  return ret;
+}
+
+int ObMacroEndkeyIterator::init_endkeys(
+      const int64_t skip_cnt,
+      const ObRangeSplitInfo &range_info,
+      const blocksstable::ObDatumRange &datum_range,
+      blocksstable::ObSSTable &sstable)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator *key_allocator = range_info.key_allocator_;
+  ObSSTableSecMetaIterator *macro_iter = nullptr;
+  const ObTableReadInfo *index_read_info = range_info.index_read_info_;
+  ObDataMacroBlockMeta macro_meta;
+
+  if (OB_UNLIKELY(
+      skip_cnt <= 0
+      || !sstable.is_valid()
+      || !range_info.is_valid()
+      || nullptr == range_info.key_allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
+        K(ret), K(skip_cnt), K(sstable), K(range_info));
+  } else if (OB_FAIL(sstable.scan_secondary_meta(*key_allocator, datum_range,
+        *index_read_info, DATA_BLOCK_META, macro_iter, false, skip_cnt))) {
+      STORAGE_LOG(WARN, "Fail to scan secondary meta", K(ret), K(range_info));
+  } else {
+    const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info->get_columns_desc();
+
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(macro_iter->get_next(macro_meta))) {
+        if (OB_LIKELY(OB_ITER_END == ret)) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          STORAGE_LOG(WARN, "Fail to get next macro meta", K(ret));
+        }
+      } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "Invalid data macro meta", K(ret), K(macro_meta));
+      }  else if (OB_FAIL(push_rowkey(index_read_info->get_schema_rowkey_count(), col_descs, macro_meta.end_key_, *key_allocator))) {
+        STORAGE_LOG(WARN, "Fail to push rowkey", K(ret), K(macro_meta));
+      }
+    }
+
+    if (OB_NOT_NULL(macro_iter)) {
+      macro_iter->~ObSSTableSecMetaIterator();
+      key_allocator->free(macro_iter);
+      macro_iter = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+int ObMicroEndkeyIterator::init_endkeys(
+      const int64_t skip_cnt,
+      const ObRangeSplitInfo &range_info,
+      const blocksstable::ObDatumRange &datum_range,
+      blocksstable::ObSSTable &sstable)
+{
+  int ret = OB_SUCCESS;
+  const ObTableReadInfo *index_read_info = range_info.index_read_info_;
+  ObIAllocator *key_allocator = range_info.key_allocator_;
+  ObIMacroBlockIterator *macro_block_iter = nullptr;
+
+  if (OB_UNLIKELY(
+      skip_cnt <= 0
+      || !sstable.is_valid()
+      || !range_info.is_valid()
+      || nullptr == range_info.key_allocator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to open ObEndkeyIterator",
+        K(ret), K(sstable), K(range_info));
+  } else if (OB_FAIL(sstable.scan_macro_block(datum_range,
+                                      *index_read_info,
+                                      *key_allocator,
+                                      macro_block_iter,
+                                      false,
+                                      true,
+                                      false))) {
+    STORAGE_LOG(WARN, "failed to scan macro block", K(ret), K(sstable), K(datum_range), KPC(index_read_info));
+  } else if (OB_UNLIKELY(nullptr == macro_block_iter)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected macro block iter", K(ret), KPC(macro_block_iter), K(sstable), K(datum_range));
+  } else {
+    blocksstable::ObMacroBlockDesc curr_block_desc;
+    const ObIArray<share::schema::ObColDesc> &col_descs = index_read_info->get_columns_desc();
+
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(macro_block_iter->get_next_macro_block(curr_block_desc))) {
+        if (OB_UNLIKELY(ret != OB_ITER_END)) {
+          STORAGE_LOG(WARN, "failed to get next macro block", K(ret), KPC(macro_block_iter));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else {
+        const ObIArray<ObDatumRowkey> &micro_endkeys = macro_block_iter->get_micro_endkeys();
+
+        for (int64_t i = skip_cnt - 1; OB_SUCC(ret) && i < micro_endkeys.count(); i += skip_cnt) {
+          if (OB_FAIL(push_rowkey(index_read_info->get_schema_rowkey_count(), col_descs, micro_endkeys.at(i), *key_allocator))) {
+            STORAGE_LOG(WARN, "failed to push rowkey", K(ret), K(i), K(micro_endkeys), K(col_descs), K(index_read_info->get_schema_rowkey_count()));
+          }
+        }
+      }
+    }
+
+    if (macro_block_iter != nullptr) {
+      macro_block_iter->~ObIMacroBlockIterator();
+      key_allocator->free(macro_block_iter);
+      macro_block_iter = nullptr;
+    }
+  }
+
   return ret;
 }
 
@@ -190,6 +281,7 @@ ObPartitionParallelRanger::ObPartitionParallelRanger(ObArenaAllocator &allocator
     total_endkey_cnt_(0),
     sample_cnt_(0),
     parallel_target_count_(0),
+    is_micro_level_(false),
     is_inited_(false)
 {
 }
@@ -201,10 +293,10 @@ ObPartitionParallelRanger::~ObPartitionParallelRanger()
 
 void ObPartitionParallelRanger::reset()
 {
-  ObMacroEndkeyIterator *endkey_iter = nullptr;
+  ObEndkeyIterator *endkey_iter = nullptr;
   for (int64_t i = 0; i < endkey_iters_.count(); i++) {
     if (OB_NOT_NULL(endkey_iter = endkey_iters_.at(i)))  {
-      endkey_iter->~ObMacroEndkeyIterator();
+      endkey_iter->~ObEndkeyIterator();
       allocator_.free(endkey_iter);
     }
   }
@@ -216,10 +308,11 @@ void ObPartitionParallelRanger::reset()
   total_endkey_cnt_ = 0;
   sample_cnt_ = 0;
   parallel_target_count_ = 0;
+  is_micro_level_ = false;
   is_inited_ = false;
 }
 
-int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info)
+int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info, const bool for_compaction)
 {
   int ret = OB_SUCCESS;
 
@@ -231,10 +324,10 @@ int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info)
     STORAGE_LOG(WARN, "Invalid arugment to init ObPartitionParallelRanger", K(ret), K(range_info));
   } else if (parallel_target_count_ == 1) {
     //  construct single range
-  } else if (OB_FAIL(calc_sample_count(range_info))) {
+  } else if (OB_FAIL(calc_sample_count(for_compaction, range_info))) {
     STORAGE_LOG(WARN, "Failed to calculate sample count", K(ret), K(range_info));
   } else if (sample_cnt_ == 0) {
-    // no enough macroblock count, construct single range
+    // no enough block count, construct single range
   } else if (OB_FAIL(init_macro_iters(range_info))) {
     STORAGE_LOG(WARN, "Failed to init macro iters", K(ret), K(range_info));
   } else if (OB_FAIL(build_parallel_range_heap())) {
@@ -250,7 +343,7 @@ int ObPartitionParallelRanger::init(ObRangeSplitInfo &range_info)
   return ret;
 }
 
-int ObPartitionParallelRanger::calc_sample_count(ObRangeSplitInfo &range_info)
+int ObPartitionParallelRanger::calc_sample_count(const bool for_compaction, ObRangeSplitInfo &range_info)
 {
   int ret = OB_SUCCESS;
   // decide sample count due to the largest minor sstable
@@ -262,6 +355,17 @@ int ObPartitionParallelRanger::calc_sample_count(ObRangeSplitInfo &range_info)
     sample_cnt_ = range_info.max_macro_block_count_ / range_info.parallel_target_count_;
     if (sample_cnt_ > 2) {
       sample_cnt_ /= 2;
+    }
+    if (sample_cnt_ == 0 && !for_compaction) {
+      is_micro_level_ = true;
+      sample_cnt_ = range_info.max_estimate_micro_block_cnt_ / range_info.parallel_target_count_;
+      if (sample_cnt_ > 2) {
+        sample_cnt_ /= 2;
+      } else if (sample_cnt_ == 0) {
+        sample_cnt_ = 1;
+      }
+    } else {
+      is_micro_level_ = false;
     }
     STORAGE_LOG(DEBUG, "finish calc sample cnt", K(range_info), K_(sample_cnt));
   }
@@ -277,19 +381,30 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpecte sample count to init macro endkey iters", K(ret), K_(sample_cnt));
   } else {
-    ObMacroEndkeyIterator *endkey_iter = nullptr;
+    ObEndkeyIterator *endkey_iter = nullptr;
     total_endkey_cnt_ = 0;
     int64_t iter_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < range_info.tables_->count(); i++) {
-      int64_t sample_count = sample_cnt_;
       int64_t endkey_cnt = 0;
       void *buf = nullptr;
       ObITable *table = nullptr;
-      if (OB_FAIL(ret) || sample_count <= 0) {
-      } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMacroEndkeyIterator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
-      } else if (FALSE_IT(endkey_iter = new (buf) ObMacroEndkeyIterator())) {
+      if (is_micro_level_) {
+        if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroEndkeyIterator)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
+        } else {
+          endkey_iter = new (buf) ObMicroEndkeyIterator();
+        }
+      } else {
+        if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMacroEndkeyIterator)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));
+        } else {
+          endkey_iter = new (buf) ObMacroEndkeyIterator();
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(table = range_info.tables_->at(i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected null pointer to table", K(ret), KP(table));
@@ -297,9 +412,18 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected table type", K(ret), KPC(table));
       } else if (OB_FAIL(endkey_iter->open(
-          sample_count, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
-        STORAGE_LOG(WARN, "Failed to scan macro block in sstable",
-            K(ret), KP(table), K(sample_count), K(iter_idx));
+          sample_cnt_, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
+        STORAGE_LOG(WARN, "Failed to open endkey iter", K(ret), KP(table), K(sample_cnt_), K(iter_idx));
+      } else if (!is_micro_level_ && endkey_iter->is_empty() && sample_cnt_ >= 3) {
+        //Open again with a smaller sample_cnt_
+        endkey_iter->reset();
+        if (OB_FAIL(endkey_iter->open(
+          sample_cnt_ / 3, iter_idx, *(static_cast<ObSSTable *>(table)), range_info))) {
+          STORAGE_LOG(WARN, "Failed to open endkey iter", K(ret), KP(table), K(sample_cnt_), K(iter_idx));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(endkey_iters_.push_back(endkey_iter))) {
         STORAGE_LOG(WARN, "Failed to push back macro block iter", K(ret));
       } else if (OB_FAIL(endkey_iter->get_endkey_cnt(endkey_cnt))) {
@@ -316,7 +440,7 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < endkey_iters_.count(); i++) {
         if (OB_NOT_NULL(endkey_iter = endkey_iters_.at(i)))  {
-          endkey_iter->~ObMacroEndkeyIterator();
+          endkey_iter->~ObEndkeyIterator();
           allocator_.free(endkey_iter);
         }
       }
@@ -334,7 +458,7 @@ int ObPartitionParallelRanger::build_parallel_range_heap()
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to build parallel range heap", K(ret), K_(endkey_iters));
   } else {
-    ObMacroEndkeyIterator *endkey_iter = nullptr;
+    ObEndkeyIterator *endkey_iter = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < endkey_iters_.count(); i++) {
       ObMacroEndkey endkey;
       if (OB_ISNULL(endkey_iter = endkey_iters_.at(i))) {
@@ -369,7 +493,7 @@ int ObPartitionParallelRanger::get_next_macro_endkey(ObStoreRowkey &rowkey)
     STORAGE_LOG(WARN, "ObPartitionParallelRanger is not inited", K(ret), K(*this));
   } else {
     ObMacroEndkey endkey;
-    ObMacroEndkeyIterator *endkey_iter = nullptr;
+    ObEndkeyIterator *endkey_iter = nullptr;
     // already get last row from merge heap
     if (OB_NOT_NULL(last_macro_endkey_) && last_macro_endkey_->is_valid()) {
       if (OB_ISNULL(endkey_iter = endkey_iters_.at(last_macro_endkey_->iter_idx_))) {
@@ -645,6 +769,7 @@ ObRangeSplitInfo::ObRangeSplitInfo()
     total_size_(0),
     parallel_target_count_(1),
     max_macro_block_count_(0),
+    max_estimate_micro_block_cnt_(0),
     key_allocator_(nullptr),
     is_sstable_(false)
 {}
@@ -662,6 +787,7 @@ void ObRangeSplitInfo::reset()
   total_size_ = 0;
   parallel_target_count_ = 1;
   max_macro_block_count_ = 0;
+  max_estimate_micro_block_cnt_ = 0;
   key_allocator_ = nullptr;
   is_sstable_ = false;
 }
@@ -702,9 +828,11 @@ int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
     bool is_sstable = false;
     int64_t size = 0;
     int64_t macro_block_cnt = 0;
+    int64_t estimate_micro_block_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
       ObITable *table = tables.at(i);
       macro_block_cnt = 0;
+      estimate_micro_block_cnt = 0;
       if (OB_ISNULL(table)) {
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "Invalid null table pointer", K(ret), KP(table));
@@ -723,12 +851,13 @@ int ObPartitionRangeSpliter::get_range_split_info(ObIArray<ObITable *> &tables,
         STORAGE_LOG(WARN, "Unexpected memtable and sstable mixed up",
           K(ret), K(range_info), KPC(table), K(is_sstable), K(i));
       } else if (OB_FAIL(get_single_range_info(
-          *range_info.store_range_, index_read_info, table, size, macro_block_cnt))) {
+          *range_info.store_range_, index_read_info, table, size, macro_block_cnt, estimate_micro_block_cnt))) {
         STORAGE_LOG(WARN, "Failed to get single range info", K(ret), K(i), KPC(table));
       } else {
         range_info.total_size_ += size;
         range_info.index_read_info_ = &index_read_info;
         range_info.max_macro_block_count_ = MAX(macro_block_cnt, range_info.max_macro_block_count_);
+        range_info.max_estimate_micro_block_cnt_ = MAX(estimate_micro_block_cnt, range_info.max_estimate_micro_block_cnt_);
       }
       STORAGE_LOG(DEBUG, "get range para from one table",
           K(ret), K(i), KP(table), K(size), K(macro_block_cnt));
@@ -746,7 +875,8 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
                                                    const ObTableReadInfo &index_read_info,
                                                    ObITable *table,
                                                    int64_t &total_size,
-                                                   int64_t &macro_block_cnt)
+                                                   int64_t &macro_block_cnt,
+                                                   int64_t &estimate_micro_block_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table)) {
@@ -766,15 +896,18 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
     if (store_range.is_whole_range()) {
       total_size = sstable->get_meta().get_basic_meta().occupy_size_;
       macro_block_cnt = sstable->get_meta().get_basic_meta().data_macro_block_count_;
+      estimate_micro_block_cnt = sstable->get_meta().get_basic_meta().data_micro_block_count_;
     } else if (0 == sstable->get_meta().get_basic_meta().data_macro_block_count_) {
       total_size = 0;
       macro_block_cnt = 0;
+      estimate_micro_block_cnt = 0;
     } else {
       ObArenaAllocator temp_allocator;
       ObDatumRange datum_range;
       ObDatumRowkey sstable_endkey;
       total_size = 0;
       macro_block_cnt = 0;
+      estimate_micro_block_cnt = 0;
       ObSSTableSecMetaIterator *macro_meta_iter = nullptr;
       ObDataMacroBlockMeta macro_meta;
       const ObStorageDatumUtils &datum_utils = index_read_info.get_datum_utils();
@@ -808,6 +941,7 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
           } else {
             total_size += macro_meta.val_.occupy_size_;
             macro_block_cnt++;
+            estimate_micro_block_cnt += macro_meta.val_.micro_block_count_;
           }
         }
         if (OB_NOT_NULL(macro_meta_iter)) {
@@ -863,7 +997,7 @@ int ObPartitionRangeSpliter::split_ranges(ObRangeSplitInfo &range_info,
     }
   } else if (range_info.is_sstable()) {
     range_info.key_allocator_ = &allocator;
-    if (OB_FAIL(parallel_ranger_.init(range_info))) {
+    if (OB_FAIL(parallel_ranger_.init(range_info, for_compaction))) {
       STORAGE_LOG(WARN, "Failed to init parallel ranger", K(ret), K(range_info));
     } else if (OB_FAIL(parallel_ranger_.split_ranges(for_compaction, allocator, range_array))) {
       STORAGE_LOG(WARN, "Failed to split ranges", K(ret));
@@ -1092,8 +1226,12 @@ int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_
         range_info.set_parallel_target(1);
         cur_avg_task_size = MAX(range_info.total_size_, MIN_SPLIT_TASK_SIZE);
       } else {
-        range_info.set_parallel_target(range_info.total_size_ / split_task_size);
-        cur_avg_task_size = range_info.total_size_ / range_info.parallel_target_count_;
+        int64_t parallel = range_info.total_size_ / split_task_size;
+        if (range_info.max_macro_block_count_ > 0 && (range_info.total_size_ / range_info.max_macro_block_count_) < avg_task_size) {
+          parallel = MIN(parallel, range_info.max_macro_block_count_);
+        }
+        range_info.set_parallel_target(parallel);
+        cur_avg_task_size = range_info.total_size_ / parallel;
       }
       STORAGE_LOG(DEBUG, "start to split range array", K(range_info), K(cur_avg_task_size),
                   K(avg_task_size));
@@ -1103,6 +1241,9 @@ int ObPartitionMultiRangeSpliter::split_multi_ranges(RangeSplitInfoArray &range_
         STORAGE_LOG(WARN, "Failed to split ranges", K(ret), K(range_info));
       } else {
         STORAGE_LOG(DEBUG, "get split ranges", K(range_split_array));
+        if (range_info.parallel_target_count_ != range_split_array.count()) {
+          cur_avg_task_size = range_info.total_size_ / range_split_array.count();
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < range_split_array.count(); i++) {
           if (sum_size >= avg_task_size
               || (sum_size >= task_size_low_watermark
@@ -1310,6 +1451,8 @@ int ObPartitionMultiRangeSpliter::get_split_multi_ranges(
       STORAGE_LOG(WARN, "Failed to build single range array", K(ret));
     }
   }
+  //TODO:huronghui.hrh delete log before merge into master
+  STORAGE_LOG(TRACE, "finish split multi ranges", K(ret), K(expected_task_count), K(range_array), K(multi_range_split_array.count()), K(multi_range_split_array));
   return ret;
 }
 

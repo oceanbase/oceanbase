@@ -191,6 +191,12 @@ struct ObExecTimestamp {
   int64_t get_plan_t_;
   int64_t executor_t_;
 
+  TO_STRING_KV(K(exec_type_), K(rpc_send_ts_), K(receive_ts_), K(enter_queue_ts_),
+               K(run_ts_), K(before_process_ts_), K(single_process_ts_),
+               K(process_executor_ts_), K(executor_end_ts_), K(multistmt_start_ts_),
+               K(elapsed_t_), K(net_t_), K(net_wait_t_), K(queue_t_),
+               K(decode_t_), K(get_plan_t_), K(executor_t_));
+
   //出现重试时时间累加
   void update_stage_time() {
     // elapsed_t_ 重试不需要累加，其他重试需要累加，且在 multistmt 场景下计算方式更改
@@ -277,6 +283,7 @@ struct ObAuditRecordData {
     trx_lock_for_read_elapse_ = 0;
     params_value_len_ = 0;
     partition_hit_ = true;
+    is_perf_event_closed_ = false;
   }
 
   int64_t get_elapsed_time() const
@@ -295,9 +302,7 @@ struct ObAuditRecordData {
     return exec_timestamp_.executor_end_ts_ - exec_timestamp_.single_process_ts_;
   }
 
-  void update_stage_stat()
-  {
-    exec_timestamp_.update_stage_time();
+  void update_event_stage_state() {
     exec_record_.update_stat();
     const int64_t cpu_time = MAX(exec_timestamp_.elapsed_t_ - exec_record_.wait_time_, 0);
     const int64_t elapsed_time = MAX(exec_timestamp_.elapsed_t_, 0);
@@ -397,6 +402,7 @@ struct ObAuditRecordData {
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
   uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
+  bool is_perf_event_closed_;
 };
 
 } //namespace sql

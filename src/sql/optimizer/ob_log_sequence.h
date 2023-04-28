@@ -26,6 +26,7 @@ namespace sql
     ObLogSequence(ObLogPlan &plan) : ObLogicalOperator(plan) {}
     virtual ~ObLogSequence() {}
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     const common::ObIArray<uint64_t> &get_sequence_ids() const
     { return nextval_seq_ids_; }
     common::ObIArray<uint64_t> &get_sequence_ids()

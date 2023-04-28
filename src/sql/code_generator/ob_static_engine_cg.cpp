@@ -3486,8 +3486,29 @@ int ObStaticEngineCG::set_rollup_adaptive_info(ObLogGroupBy &op, ObMergeGroupByS
   }
   if (OB_SUCC(ret) && 0 < op.get_inner_sort_keys().count()) {
     ObIArray<OrderItem> &sork_keys = op.get_inner_sort_keys();
-    if (OB_FAIL(spec.sort_exprs_.init(sork_keys.count()))) {
-      LOG_WARN("failed to init all exprs", K(ret));
+    if (!op.has_encode_sort()) {
+      if (OB_FAIL(spec.sort_exprs_.init(sork_keys.count()))) {
+        LOG_WARN("failed to init all exprs", K(ret));
+      }
+    } else {
+      if (1 != op.get_inner_ecd_sort_keys().count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: encode sortkey expr more than one", K(ret), K(op.get_inner_ecd_sort_keys().count()));
+      } else {
+        ObExpr *encode_expr = nullptr;
+        OrderItem order_item = op.get_inner_ecd_sort_keys().at(0);
+        if (OB_FAIL(spec.sort_exprs_.init(1 + sork_keys.count()))) {
+          LOG_WARN("failed to init all exprs", K(ret));
+        } else if (OB_FAIL(generate_rt_expr(*order_item.expr_, encode_expr))) {
+          LOG_WARN("failed to generate rt expr", K(ret));
+        } else if (OB_FAIL(spec.sort_exprs_.push_back(encode_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(fill_sort_info(sork_keys, spec.sort_collations_, spec.sort_exprs_))) {
       LOG_WARN("failed to sort info", K(ret));
     } else if (OB_FAIL(fill_sort_funcs(

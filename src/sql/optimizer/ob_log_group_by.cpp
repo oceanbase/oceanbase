@@ -54,8 +54,11 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   rollup_status_ = info.rollup_status_;
   enable_encode_sort_ = info.enable_encode_sort_;
   sort_keys_.reset();
+  ecd_sort_keys_.reset();
   if (OB_FAIL(append(sort_keys_, info.sort_keys_))) {
     LOG_WARN("failed to assign distinct col idx", K(ret));
+  } else if (OB_FAIL(append(ecd_sort_keys_, info.ecd_sort_keys_))) {
+    LOG_WARN("failed to append sort keys", K(ret));
   }
   return ret;
 }
@@ -165,6 +168,11 @@ int ObLogGroupBy::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   if (OB_SUCC(ret) && rollup_adaptive_info_.enable_encode_sort_) {
     for (int64_t i = 0; i < rollup_adaptive_info_.sort_keys_.count() && OB_SUCC(ret); ++i) {
       if (OB_FAIL(all_exprs.push_back(rollup_adaptive_info_.sort_keys_.at(i).expr_))) {
+        LOG_WARN("failed to push back distinct expr", K(ret));
+      }
+    }
+    for (int64_t i = 0; i < rollup_adaptive_info_.ecd_sort_keys_.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(all_exprs.push_back(rollup_adaptive_info_.ecd_sort_keys_.at(i).expr_))) {
         LOG_WARN("failed to push back distinct expr", K(ret));
       }
     }
@@ -454,6 +462,12 @@ int ObLogGroupBy::inner_replace_op_exprs(
         LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
       } else { /* Do nothing */ }
     }
+    for(int64_t i = 0; OB_SUCC(ret) && i < rollup_adaptive_info_.ecd_sort_keys_.count(); ++i) {
+      OrderItem &cur_order_item = rollup_adaptive_info_.ecd_sort_keys_.at(i);
+      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+        LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
+      } else { /* Do nothing */ }
+    }
   }
   if (OB_SUCC(ret) && is_three_stage_aggr()) {
     if (OB_FAIL(replace_exprs_action(to_replace_exprs, three_stage_info_.distinct_exprs_))) {
@@ -730,6 +744,7 @@ int ObLogGroupBy::set_rollup_info(
   const ObRollupStatus rollup_status,
   ObRawExpr *rollup_id_expr,
   ObIArray<OrderItem> &sort_keys,
+  ObIArray<OrderItem> &ecd_sort_keys,
   bool enable_encode_sort)
 {
   int ret = OB_SUCCESS;
@@ -737,7 +752,10 @@ int ObLogGroupBy::set_rollup_info(
   rollup_adaptive_info_.rollup_status_ = rollup_status;
   rollup_adaptive_info_.enable_encode_sort_ = enable_encode_sort;
   rollup_adaptive_info_.sort_keys_.reset();
+  rollup_adaptive_info_.ecd_sort_keys_.reset();
   if (OB_FAIL(append(rollup_adaptive_info_.sort_keys_, sort_keys))) {
+    LOG_WARN("failed to append sort keys", K(ret));
+  } else if (OB_FAIL(append(rollup_adaptive_info_.ecd_sort_keys_, ecd_sort_keys))) {
     LOG_WARN("failed to append sort keys", K(ret));
   }
   return ret;
@@ -804,4 +822,18 @@ int ObLogGroupBy::set_third_stage_info(ObRawExpr *aggr_code_expr,
     three_stage_info_.distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
   }
   return ret;
+}
+
+int ObLogGroupBy::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    is_fixed = ObOptimizerUtil::find_item(aggr_exprs_, expr) ||
+        (T_FUN_SYS_REMOVE_CONST == expr->get_expr_type() && ObOptimizerUtil::find_item(rollup_exprs_, expr));
+  }
+  return OB_SUCCESS;
 }

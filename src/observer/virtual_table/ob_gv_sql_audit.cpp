@@ -510,11 +510,61 @@ int ObGvSqlAudit::extract_tenant_ids()
   return ret;
 }
 
+bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
+  bool is_contain = false;
+  switch (col_id) {
+    case EVENT:
+    case P1TEXT:
+    case P1:
+    case P2TEXT:
+    case P2:
+    case P3TEXT:
+    case P3:
+    case LEVEL:
+    case WAIT_CLASS_ID:
+    case WAIT_CLASS_NO:
+    case WAIT_CLASS:
+    case STATE:
+    case WAIT_TIME_MICRO:
+    case TOTAL_WAIT_TIME:
+    case TOTAL_WAIT_COUNT:
+    case RPC_COUNT:
+    case APPLICATION_WAIT_TIME:
+    case CONCURRENCY_WAIT_TIME:
+    case USER_IO_WAIT_TIME:
+    case SCHEDULE_TIME:
+    case ROW_CACHE_HIT:
+    case FUSE_ROW_CACHE_HIT:
+    case BLOOM_FILTER_NOT_HIT:
+    case BLOCK_CACHE_HIT:
+    case DISK_READS:
+    case MEMSTORE_READ_ROW_COUNT:
+    case SSSTORE_READ_ROW_COUNT:
+    case DATA_BLOCK_READ_CNT:
+    case DATA_BLOCK_CACHE_HIT:
+    case INDEX_BLOCK_READ_CNT:
+    case INDEX_BLOCK_CACHE_HIT:
+    case BLOCKSCAN_BLOCK_CNT:
+    case BLOCKSCAN_ROW_CNT:
+    case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
+      is_contain = true;
+      break;
+    }
+    default: {
+      is_contain = false;
+      break;
+    }
+  }
+  return is_contain;
+}
+
+
 int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
 {
   int ret = OB_SUCCESS;
   const int64_t col_count = output_column_ids_.count();
   ObObj *cells = cur_row_.cells_;
+  const bool is_perf_event_closed = record.data_.is_perf_event_closed_;
 
   if (OB_ISNULL(cells)) {
     ret = OB_INVALID_ARGUMENT;
@@ -522,469 +572,473 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
   } else {
     for (int64_t cell_idx = 0; OB_SUCC(ret) && cell_idx < col_count; cell_idx++) {
       uint64_t col_id = output_column_ids_.at(cell_idx);
-      switch(col_id) {
-        //server ip
-      case SERVER_IP: {
-        cells[cell_idx].set_varchar(ipstr_); //ipstr_ and port_ were set in set_ip func call
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-        //server port
-      case SERVER_PORT: {
-        cells[cell_idx].set_int(port_);
-      } break;
-        //request_id
-      case REQUEST_ID: {
-        cells[cell_idx].set_int(record.data_.request_id_);
-      } break;
-        //sql_exec_id
-      case SQL_EXEC_ID: {
-        cells[cell_idx].set_int(record.data_.execution_id_);
-      } break;
-      case SESSION_ID: {
-        cells[cell_idx].set_uint64(record.data_.session_id_);
-      } break;
-      case PROXY_SESSION_ID: {
-        cells[cell_idx].set_uint64(record.data_.proxy_session_id_);
-      } break;
-      case TRACE_ID: {
-        int len = record.data_.trace_id_.to_string(trace_id_, sizeof(trace_id_));
-        cells[cell_idx].set_varchar(trace_id_, len);
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-        //client ip
-      case CLIENT_IP: {
-        MEMSET(client_ip_, 0, sizeof(client_ip_));
-        const ObAddr &myaddr = record.data_.client_addr_;
-        if (OB_UNLIKELY(!myaddr.ip_to_string(client_ip_, sizeof(client_ip_)))) {
+      if (is_perf_event_closed && is_perf_event_dep_field(col_id)) {
+        cells[cell_idx].set_null();
+      } else {
+        switch(col_id) {
+          //server ip
+        case SERVER_IP: {
+          cells[cell_idx].set_varchar(ipstr_); //ipstr_ and port_ were set in set_ip func call
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+          //server port
+        case SERVER_PORT: {
+          cells[cell_idx].set_int(port_);
+        } break;
+          //request_id
+        case REQUEST_ID: {
+          cells[cell_idx].set_int(record.data_.request_id_);
+        } break;
+          //sql_exec_id
+        case SQL_EXEC_ID: {
+          cells[cell_idx].set_int(record.data_.execution_id_);
+        } break;
+        case SESSION_ID: {
+          cells[cell_idx].set_uint64(record.data_.session_id_);
+        } break;
+        case PROXY_SESSION_ID: {
+          cells[cell_idx].set_uint64(record.data_.proxy_session_id_);
+        } break;
+        case TRACE_ID: {
+          int len = record.data_.trace_id_.to_string(trace_id_, sizeof(trace_id_));
+          cells[cell_idx].set_varchar(trace_id_, len);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+          //client ip
+        case CLIENT_IP: {
+          MEMSET(client_ip_, 0, sizeof(client_ip_));
+          const ObAddr &myaddr = record.data_.client_addr_;
+          if (OB_UNLIKELY(!myaddr.ip_to_string(client_ip_, sizeof(client_ip_)))) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "ip to string failed", K(myaddr), K(ret));
+          } else {
+            cells[cell_idx].set_varchar(client_ip_);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+          }
+        } break;
+          //client port
+        case CLIENT_PORT: {
+          cells[cell_idx].set_int(record.data_.client_addr_.get_port());
+        } break;
+        case USER_CLIENT_IP: {
+          MEMSET(user_client_ip_, 0, sizeof(user_client_ip_));
+          const ObAddr &myaddr = record.data_.user_client_addr_;
+          if (OB_UNLIKELY(!myaddr.ip_to_string(user_client_ip_, sizeof(user_client_ip_)))) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "ip to string failed", K(myaddr), K(ret));
+          } else {
+            cells[cell_idx].set_varchar(user_client_ip_);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+          }
+          break;
+        }
+        case TENANT_ID: {
+          cells[cell_idx].set_int(record.data_.tenant_id_);
+        } break;
+        case TENANT_NAME: {
+          int64_t len = min(record.data_.tenant_name_len_, OB_MAX_TENANT_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.tenant_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+        case EFFECTIVE_TENANT_ID: {
+          cells[cell_idx].set_int(record.data_.effective_tenant_id_);
+        } break;
+        case USER_ID: {
+          cells[cell_idx].set_int(record.data_.user_id_);
+        } break;
+        case USER_NAME: {
+          int64_t len = min(record.data_.user_name_len_, OB_MAX_USER_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.user_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+        case USER_GROUP: {
+          cells[cell_idx].set_int(record.data_.user_group_);
+          break;
+        }
+        case DB_ID: {
+          cells[cell_idx].set_uint64(record.data_.db_id_);
+        } break;
+        case DB_NAME: {
+          int64_t len = min(record.data_.db_name_len_, OB_MAX_DATABASE_NAME_LENGTH);
+          cells[cell_idx].set_varchar(record.data_.db_name_,
+                                      static_cast<ObString::obstr_size_t>(len));
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+          //sql_id
+        case SQL_ID: {
+          if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.sql_id_)) {
+            cells[cell_idx].set_varchar(record.data_.sql_id_,
+                                        static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+        case QUERY_SQL: {
+          ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
+                record.data_.sql_cs_type_ : ObCharset::get_system_collation();
+          ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
+          ObString dst_string;
+          if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
+                                                        src_string,
+                                                        src_cs_type,
+                                                        ObCharset::get_system_collation(),
+                                                        dst_string,
+                                                        ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+            SERVER_LOG(WARN, "fail to convert sql string", K(ret));
+          } else {
+            cells[cell_idx].set_lob_value(ObLongTextType, dst_string.ptr(),
+                                          min(dst_string.length(), OB_MAX_PACKET_LENGTH));
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+          }
+        } break;
+        case PLAN_ID: {
+          cells[cell_idx].set_int(record.data_.plan_id_);
+        } break;
+        case AFFECTED_ROWS: {
+          cells[cell_idx].set_int(record.data_.affected_rows_);
+        } break;
+        case RETURN_ROWS: {
+          cells[cell_idx].set_int(record.data_.return_rows_);
+        } break;
+        case PARTITION_CNT: {
+          cells[cell_idx].set_int(record.data_.partition_cnt_);
+        } break;
+        case RET_CODE: {
+          cells[cell_idx].set_int(record.data_.status_);
+        } break;
+        case QC_ID: {
+          cells[cell_idx].set_uint64(record.data_.qc_id_);
+        } break;
+        case DFO_ID: {
+          cells[cell_idx].set_int(record.data_.dfo_id_);
+        } break;
+        case SQC_ID: {
+          cells[cell_idx].set_int(record.data_.sqc_id_);
+        } break;
+        case WORKER_ID: {
+          cells[cell_idx].set_int(record.data_.worker_id_);
+        } break;
+          // max wait event related
+        case EVENT: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].event_name_);
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_default_collation_type();
+          break;
+        }
+        case P1TEXT: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param1_);
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_default_collation_type();
+          break;
+        }
+        case P1: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p1_);
+          break;
+        }
+        case P2TEXT: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param2_);
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_default_collation_type();
+          break;
+        }
+        case P2: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p2_);
+          break;
+        }
+        case P3TEXT: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param3_);
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_default_collation_type();
+          break;
+        }
+        case P3: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p3_);
+          break;
+        }
+        case LEVEL: {
+          cells[cell_idx].set_int(record.data_.exec_record_.max_wait_event_.level_);
+          break;
+        }
+        case WAIT_CLASS_ID: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_int(EVENT_NO_TO_CLASS_ID(event_no));
+          } else {
+            cells[cell_idx].set_int(common::OB_INVALID_ID);
+          }
+          break;
+        }
+        case WAIT_CLASS_NO: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_int(OB_WAIT_EVENTS[event_no].wait_class_);
+          } else {
+            cells[cell_idx].set_int(common::OB_INVALID_ID);
+          }
+          break;
+        }
+        case WAIT_CLASS: {
+          int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
+          if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
+            cells[cell_idx].set_varchar(EVENT_NO_TO_CLASS(event_no));
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_default_collation_type();
+          break;
+        }
+        case STATE: {
+          if (record.data_.exec_record_.max_wait_event_.wait_time_ == 0) {
+            cells[cell_idx].set_varchar("MAX_WAIT TIME ZERO");
+            cells[cell_idx].set_default_collation_type();
+          } else if (0 < record.data_.exec_record_.max_wait_event_.wait_time_
+                    && record.data_.exec_record_.max_wait_event_.wait_time_ < 10000) {
+            cells[cell_idx].set_varchar("WAITED SHORT TIME");
+            cells[cell_idx].set_default_collation_type();
+          } else if (record.data_.exec_record_.max_wait_event_.wait_time_ >= 10000) {
+            cells[cell_idx].set_varchar("WAITED KNOWN TIME");
+            cells[cell_idx].set_default_collation_type();
+          } else {
+            cells[cell_idx].set_varchar("UNKONEW WAIT");
+            cells[cell_idx].set_default_collation_type();
+          }
+          break;
+        }
+        case WAIT_TIME_MICRO: {
+          cells[cell_idx].set_int(record.data_.exec_record_.max_wait_event_.wait_time_);
+          break;
+        }
+        case TOTAL_WAIT_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_record_.wait_time_);
+          break;
+        }
+        case TOTAL_WAIT_COUNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.wait_count_);
+          break;
+        }
+        case RPC_COUNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.rpc_packet_out_);
+          break;
+        }
+        case PLAN_TYPE: {
+          cells[cell_idx].set_int(record.data_.plan_type_);
+          break;
+        }
+          //is_executor_rpc
+        case IS_EXECUTOR_RPC: {
+          cells[cell_idx].set_bool(record.data_.is_executor_rpc_);
+          break;
+        }
+          // is_inner_sql
+        case IS_INNER_SQL: {
+          cells[cell_idx].set_bool(record.data_.is_inner_sql_);
+        } break;
+        case IS_HIT_PLAN: {
+          cells[cell_idx].set_bool(record.data_.is_hit_plan_cache_);
+        } break;
+          //request timestamp
+        case REQUEST_TIMESTAMP: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.receive_ts_);
+        } break;
+          //elapsetime
+        case ELAPSED_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.elapsed_t_);
+        } break;
+        case NET_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.net_t_);
+        } break;
+        case NET_WAIT_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.net_wait_t_);
+        } break;
+        case QUEUE_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.queue_t_);
+        } break;
+        case DECODE_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.decode_t_);
+        } break;
+        case GET_PLAN_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.get_plan_t_);
+        } break;
+        case EXECUTE_TIME: {
+          cells[cell_idx].set_int(record.data_.exec_timestamp_.executor_t_);
+        } break;
+        case APPLICATION_WAIT_TIME: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.application_time_);
+        } break;
+        case CONCURRENCY_WAIT_TIME: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.concurrency_time_);
+        } break;
+        case USER_IO_WAIT_TIME: {
+          cells[cell_idx].set_uint64(record.data_.exec_record_.user_io_time_);
+        } break;
+        case SCHEDULE_TIME: {
+          cells[cell_idx].set_uint64(0);
+        } break;
+        case ROW_CACHE_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.row_cache_hit_);
+        } break;
+        case FUSE_ROW_CACHE_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.fuse_row_cache_hit_);
+        } break;
+        case BLOOM_FILTER_NOT_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.bloom_filter_filts_);
+        } break;
+        case BLOCK_CACHE_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.block_cache_hit_);
+        } break;
+        case DISK_READS: {
+          cells[cell_idx].set_int(record.data_.exec_record_.io_read_count_);
+        } break;
+        case RETRY_CNT: {
+          cells[cell_idx].set_int(record.data_.try_cnt_ - 1);
+        } break;
+        case TABLE_SCAN: {
+          cells[cell_idx].set_bool(record.data_.table_scan_);
+        } break;
+        case CONSISTENCY_LEVEL: {
+          cells[cell_idx].set_int(static_cast<int64_t>(record.data_.consistency_level_));
+        } break;
+        case MEMSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
+        } break;
+        case SSSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
+        } break;
+        case DATA_BLOCK_READ_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.data_block_read_cnt_);
+        } break;
+        case DATA_BLOCK_CACHE_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.data_block_cache_hit_);
+        } break;
+        case INDEX_BLOCK_READ_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.index_block_read_cnt_);
+        } break;
+        case INDEX_BLOCK_CACHE_HIT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.index_block_cache_hit_);
+        } break;
+        case BLOCKSCAN_BLOCK_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.blockscan_block_cnt_);
+        } break;
+        case BLOCKSCAN_ROW_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.blockscan_row_cnt_);
+        } break;
+        case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
+          cells[cell_idx].set_int(record.data_.exec_record_.pushdown_storage_filter_row_cnt_);
+        } break;
+        case REQUEST_MEMORY_USED: {
+          cells[cell_idx].set_int(record.data_.request_memory_used_);
+        } break;
+        case EXPECTED_WORKER_COUNT: {
+          cells[cell_idx].set_int(record.data_.expected_worker_cnt_);
+        } break;
+        case USED_WORKER_COUNT: {
+          cells[cell_idx].set_int(record.data_.used_worker_cnt_);
+        } break;
+        case SCHED_INFO: {
+          //
+          cells[cell_idx].set_default_collation_type();
+        } break;
+        case PS_CLIENT_STMT_ID: {
+          cells[cell_idx].set_int(record.data_.ps_stmt_id_);
+        } break;
+        case PS_INNER_STMT_ID: {
+          cells[cell_idx].set_int(record.data_.ps_inner_stmt_id_);
+        } break;
+        case TRANSACTION_HASH: {
+          cells[cell_idx].set_int(record.data_.trans_id_);
+          break;
+        }
+        case SNAPSHOT_VERSION: {
+          uint64_t set_v = record.data_.get_snapshot_version().is_valid()
+              ? record.data_.get_snapshot_version().get_val_for_inner_table_field() : 0;
+          cells[cell_idx].set_uint64(set_v);
+          break;
+        }
+        case SNAPSHOT_SOURCE: {
+          ObString src_name = record.data_.get_snapshot_source();
+          cells[cell_idx].set_varchar(src_name);
+          break;
+        }
+        case REQUEST_TYPE: {
+          cells[cell_idx].set_int(record.data_.request_type_);
+          break;
+        }
+        case IS_BATCHED_MULTI_STMT: {
+          cells[cell_idx].set_bool(record.data_.is_batched_multi_stmt_);
+          break;
+        }
+        case OB_TRACE_INFO: {
+          cells[cell_idx].set_default_collation_type();
+        } break;
+        case PLAN_HASH: {
+          cells[cell_idx].set_uint64(record.data_.plan_hash_);
+        } break;
+        case LOCK_FOR_READ_TIME: {
+          cells[cell_idx].set_int(record.data_.trx_lock_for_read_elapse_);
+          break;
+        }
+        case PARAMS_VALUE: {
+          if ((record.data_.params_value_len_ > 0) && (NULL != record.data_.params_value_)) {
+            cells[cell_idx].set_lob_value(ObLongTextType, record.data_.params_value_,
+                                          record.data_.params_value_len_);
+          } else {
+            cells[cell_idx].set_lob_value(ObLongTextType, "", 0);
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                            ObCharset::get_default_charset()));
+        } break;
+        case RULE_NAME: {
+          if ((record.data_.rule_name_len_ > 0) && (NULL != record.data_.rule_name_)) {
+            cells[cell_idx].set_varchar(record.data_.rule_name_, record.data_.rule_name_len_);
+          } else {
+            cells[cell_idx].set_varchar("");
+          }
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        } break;
+        case TX_INTERNAL_ROUTE_FLAG: {
+          cells[cell_idx].set_uint64(record.data_.txn_free_route_flag_);
+        }  break;
+        case PARTITION_HIT: {
+          cells[cell_idx].set_bool(record.data_.partition_hit_);
+        } break;
+        case TX_INTERNAL_ROUTE_VERSION: {
+          cells[cell_idx].set_uint64(record.data_.txn_free_route_version_);
+          break;
+        }
+        default: {
           ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "ip to string failed", K(myaddr), K(ret));
-        } else {
-          cells[cell_idx].set_varchar(client_ip_);
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
+          SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));
+        } break;
         }
-      } break;
-        //client port
-      case CLIENT_PORT: {
-        cells[cell_idx].set_int(record.data_.client_addr_.get_port());
-      } break;
-      case USER_CLIENT_IP: {
-        MEMSET(user_client_ip_, 0, sizeof(user_client_ip_));
-        const ObAddr &myaddr = record.data_.user_client_addr_;
-        if (OB_UNLIKELY(!myaddr.ip_to_string(user_client_ip_, sizeof(user_client_ip_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "ip to string failed", K(myaddr), K(ret));
-        } else {
-          cells[cell_idx].set_varchar(user_client_ip_);
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-        }
-        break;
-      }
-      case TENANT_ID: {
-        cells[cell_idx].set_int(record.data_.tenant_id_);
-      } break;
-      case TENANT_NAME: {
-        int64_t len = min(record.data_.tenant_name_len_, OB_MAX_TENANT_NAME_LENGTH);
-        cells[cell_idx].set_varchar(record.data_.tenant_name_,
-                                    static_cast<ObString::obstr_size_t>(len));
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-      case EFFECTIVE_TENANT_ID: {
-        cells[cell_idx].set_int(record.data_.effective_tenant_id_);
-      } break;
-      case USER_ID: {
-        cells[cell_idx].set_int(record.data_.user_id_);
-      } break;
-      case USER_NAME: {
-        int64_t len = min(record.data_.user_name_len_, OB_MAX_USER_NAME_LENGTH);
-        cells[cell_idx].set_varchar(record.data_.user_name_,
-                                    static_cast<ObString::obstr_size_t>(len));
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-      case USER_GROUP: {
-        cells[cell_idx].set_int(record.data_.user_group_);
-        break;
-      }
-      case DB_ID: {
-        cells[cell_idx].set_uint64(record.data_.db_id_);
-      } break;
-      case DB_NAME: {
-        int64_t len = min(record.data_.db_name_len_, OB_MAX_DATABASE_NAME_LENGTH);
-        cells[cell_idx].set_varchar(record.data_.db_name_,
-                                    static_cast<ObString::obstr_size_t>(len));
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-        //sql_id
-      case SQL_ID: {
-        if (OB_MAX_SQL_ID_LENGTH == strlen(record.data_.sql_id_)) {
-          cells[cell_idx].set_varchar(record.data_.sql_id_,
-                                      static_cast<ObString::obstr_size_t>(OB_MAX_SQL_ID_LENGTH));
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-      case QUERY_SQL: {
-        ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
-              record.data_.sql_cs_type_ : ObCharset::get_system_collation();
-        ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
-        ObString dst_string;
-        if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
-                                                      src_string,
-                                                      src_cs_type,
-                                                      ObCharset::get_system_collation(),
-                                                      dst_string,
-                                                      ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
-          SERVER_LOG(WARN, "fail to convert sql string", K(ret));
-        } else {
-          cells[cell_idx].set_lob_value(ObLongTextType, dst_string.ptr(),
-                                        min(dst_string.length(), OB_MAX_PACKET_LENGTH));
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                               ObCharset::get_default_charset()));
-        }
-      } break;
-      case PLAN_ID: {
-        cells[cell_idx].set_int(record.data_.plan_id_);
-      } break;
-      case AFFECTED_ROWS: {
-        cells[cell_idx].set_int(record.data_.affected_rows_);
-      } break;
-      case RETURN_ROWS: {
-        cells[cell_idx].set_int(record.data_.return_rows_);
-      } break;
-      case PARTITION_CNT: {
-        cells[cell_idx].set_int(record.data_.partition_cnt_);
-      } break;
-      case RET_CODE: {
-        cells[cell_idx].set_int(record.data_.status_);
-      } break;
-      case QC_ID: {
-        cells[cell_idx].set_uint64(record.data_.qc_id_);
-      } break;
-      case DFO_ID: {
-        cells[cell_idx].set_int(record.data_.dfo_id_);
-      } break;
-      case SQC_ID: {
-        cells[cell_idx].set_int(record.data_.sqc_id_);
-      } break;
-      case WORKER_ID: {
-        cells[cell_idx].set_int(record.data_.worker_id_);
-      } break;
-        // max wait event related
-      case EVENT: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].event_name_);
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_default_collation_type();
-        break;
-      }
-      case P1TEXT: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param1_);
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_default_collation_type();
-        break;
-      }
-      case P1: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p1_);
-        break;
-      }
-      case P2TEXT: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param2_);
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_default_collation_type();
-        break;
-      }
-      case P2: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p2_);
-        break;
-      }
-      case P3TEXT: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_varchar(OB_WAIT_EVENTS[event_no].param3_);
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_default_collation_type();
-        break;
-      }
-      case P3: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.max_wait_event_.p3_);
-        break;
-      }
-      case LEVEL: {
-        cells[cell_idx].set_int(record.data_.exec_record_.max_wait_event_.level_);
-        break;
-      }
-      case WAIT_CLASS_ID: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_int(EVENT_NO_TO_CLASS_ID(event_no));
-        } else {
-          cells[cell_idx].set_int(common::OB_INVALID_ID);
-        }
-        break;
-      }
-      case WAIT_CLASS_NO: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_int(OB_WAIT_EVENTS[event_no].wait_class_);
-        } else {
-          cells[cell_idx].set_int(common::OB_INVALID_ID);
-        }
-        break;
-      }
-      case WAIT_CLASS: {
-        int64_t event_no = record.data_.exec_record_.max_wait_event_.event_no_;
-        if (event_no >= 0 && event_no < ObWaitEventIds::WAIT_EVENT_END) {
-          cells[cell_idx].set_varchar(EVENT_NO_TO_CLASS(event_no));
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_default_collation_type();
-        break;
-      }
-      case STATE: {
-        if (record.data_.exec_record_.max_wait_event_.wait_time_ == 0) {
-          cells[cell_idx].set_varchar("MAX_WAIT TIME ZERO");
-          cells[cell_idx].set_default_collation_type();
-        } else if (0 < record.data_.exec_record_.max_wait_event_.wait_time_
-                   && record.data_.exec_record_.max_wait_event_.wait_time_ < 10000) {
-          cells[cell_idx].set_varchar("WAITED SHORT TIME");
-          cells[cell_idx].set_default_collation_type();
-        } else if (record.data_.exec_record_.max_wait_event_.wait_time_ >= 10000) {
-          cells[cell_idx].set_varchar("WAITED KNOWN TIME");
-          cells[cell_idx].set_default_collation_type();
-        } else {
-          cells[cell_idx].set_varchar("UNKONEW WAIT");
-          cells[cell_idx].set_default_collation_type();
-        }
-        break;
-      }
-      case WAIT_TIME_MICRO: {
-        cells[cell_idx].set_int(record.data_.exec_record_.max_wait_event_.wait_time_);
-        break;
-      }
-      case TOTAL_WAIT_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_record_.wait_time_);
-        break;
-      }
-      case TOTAL_WAIT_COUNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.wait_count_);
-        break;
-      }
-      case RPC_COUNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.rpc_packet_out_);
-        break;
-      }
-      case PLAN_TYPE: {
-        cells[cell_idx].set_int(record.data_.plan_type_);
-        break;
-      }
-        //is_executor_rpc
-      case IS_EXECUTOR_RPC: {
-        cells[cell_idx].set_bool(record.data_.is_executor_rpc_);
-        break;
-      }
-        // is_inner_sql
-      case IS_INNER_SQL: {
-        cells[cell_idx].set_bool(record.data_.is_inner_sql_);
-      } break;
-      case IS_HIT_PLAN: {
-        cells[cell_idx].set_bool(record.data_.is_hit_plan_cache_);
-      } break;
-        //request timestamp
-      case REQUEST_TIMESTAMP: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.receive_ts_);
-      } break;
-        //elapsetime
-      case ELAPSED_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.elapsed_t_);
-      } break;
-      case NET_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.net_t_);
-      } break;
-      case NET_WAIT_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.net_wait_t_);
-      } break;
-      case QUEUE_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.queue_t_);
-      } break;
-      case DECODE_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.decode_t_);
-      } break;
-      case GET_PLAN_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.get_plan_t_);
-      } break;
-      case EXECUTE_TIME: {
-        cells[cell_idx].set_int(record.data_.exec_timestamp_.executor_t_);
-      } break;
-      case APPLICATION_WAIT_TIME: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.application_time_);
-      } break;
-      case CONCURRENCY_WAIT_TIME: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.concurrency_time_);
-      } break;
-      case USER_IO_WAIT_TIME: {
-        cells[cell_idx].set_uint64(record.data_.exec_record_.user_io_time_);
-      } break;
-      case SCHEDULE_TIME: {
-        cells[cell_idx].set_uint64(0);
-      } break;
-      case ROW_CACHE_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.row_cache_hit_);
-      } break;
-      case FUSE_ROW_CACHE_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.fuse_row_cache_hit_);
-      } break;
-      case BLOOM_FILTER_NOT_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.bloom_filter_filts_);
-      } break;
-      case BLOCK_CACHE_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.block_cache_hit_);
-      } break;
-      case DISK_READS: {
-        cells[cell_idx].set_int(record.data_.exec_record_.io_read_count_);
-      } break;
-      case RETRY_CNT: {
-        cells[cell_idx].set_int(record.data_.try_cnt_ - 1);
-      } break;
-      case TABLE_SCAN: {
-        cells[cell_idx].set_bool(record.data_.table_scan_);
-      } break;
-      case CONSISTENCY_LEVEL: {
-        cells[cell_idx].set_int(static_cast<int64_t>(record.data_.consistency_level_));
-      } break;
-      case MEMSTORE_READ_ROW_COUNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.memstore_read_row_count_);
-      } break;
-      case SSSTORE_READ_ROW_COUNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.ssstore_read_row_count_);
-      } break;
-      case DATA_BLOCK_READ_CNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.data_block_read_cnt_);
-      } break;
-      case DATA_BLOCK_CACHE_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.data_block_cache_hit_);
-      } break;
-      case INDEX_BLOCK_READ_CNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.index_block_read_cnt_);
-      } break;
-      case INDEX_BLOCK_CACHE_HIT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.index_block_cache_hit_);
-      } break;
-      case BLOCKSCAN_BLOCK_CNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.blockscan_block_cnt_);
-      } break;
-      case BLOCKSCAN_ROW_CNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.blockscan_row_cnt_);
-      } break;
-      case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
-        cells[cell_idx].set_int(record.data_.exec_record_.pushdown_storage_filter_row_cnt_);
-      } break;
-      case REQUEST_MEMORY_USED: {
-        cells[cell_idx].set_int(record.data_.request_memory_used_);
-      } break;
-      case EXPECTED_WORKER_COUNT: {
-        cells[cell_idx].set_int(record.data_.expected_worker_cnt_);
-      } break;
-      case USED_WORKER_COUNT: {
-        cells[cell_idx].set_int(record.data_.used_worker_cnt_);
-      } break;
-      case SCHED_INFO: {
-        //
-        cells[cell_idx].set_default_collation_type();
-      } break;
-      case PS_CLIENT_STMT_ID: {
-        cells[cell_idx].set_int(record.data_.ps_stmt_id_);
-      } break;
-      case PS_INNER_STMT_ID: {
-        cells[cell_idx].set_int(record.data_.ps_inner_stmt_id_);
-      } break;
-      case TRANSACTION_HASH: {
-        cells[cell_idx].set_int(record.data_.trans_id_);
-        break;
-      }
-      case SNAPSHOT_VERSION: {
-        uint64_t set_v = record.data_.get_snapshot_version().is_valid() ? record.data_.get_snapshot_version().get_val_for_inner_table_field() : 0;
-        cells[cell_idx].set_uint64(set_v);
-        break;
-      }
-      case SNAPSHOT_SOURCE: {
-        ObString src_name = record.data_.get_snapshot_source();
-        cells[cell_idx].set_varchar(src_name);
-        break;
-      }
-      case REQUEST_TYPE: {
-        cells[cell_idx].set_int(record.data_.request_type_);
-        break;
-      }
-      case IS_BATCHED_MULTI_STMT: {
-        cells[cell_idx].set_bool(record.data_.is_batched_multi_stmt_);
-        break;
-      }
-      case OB_TRACE_INFO: {
-        cells[cell_idx].set_default_collation_type();
-      } break;
-      case PLAN_HASH: {
-        cells[cell_idx].set_uint64(record.data_.plan_hash_);
-      } break;
-      case LOCK_FOR_READ_TIME: {
-        cells[cell_idx].set_int(record.data_.trx_lock_for_read_elapse_);
-        break;
-      }
-      case PARAMS_VALUE: {
-        if ((record.data_.params_value_len_ > 0) && (NULL != record.data_.params_value_)) {
-          cells[cell_idx].set_lob_value(ObLongTextType, record.data_.params_value_,
-                                        record.data_.params_value_len_);
-        } else {
-          cells[cell_idx].set_lob_value(ObLongTextType, "", 0);
-        }
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                           ObCharset::get_default_charset()));
-      } break;
-      case RULE_NAME: {
-        if ((record.data_.rule_name_len_ > 0) && (NULL != record.data_.rule_name_)) {
-          cells[cell_idx].set_varchar(record.data_.rule_name_, record.data_.rule_name_len_);
-        } else {
-          cells[cell_idx].set_varchar("");
-        }
-        cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                             ObCharset::get_default_charset()));
-      } break;
-      case TX_INTERNAL_ROUTE_FLAG: {
-        cells[cell_idx].set_uint64(record.data_.txn_free_route_flag_);
-        break;
-      }
-      case PARTITION_HIT: {
-        cells[cell_idx].set_bool(record.data_.partition_hit_);
-      } break;
-      case TX_INTERNAL_ROUTE_VERSION: {
-        cells[cell_idx].set_uint64(record.data_.txn_free_route_version_);
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));
-      } break;
       }
     }
   }

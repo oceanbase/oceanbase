@@ -233,7 +233,6 @@ int ObTscCgService::generate_agent_vt_access_meta(const ObLogTableScan &op, ObTa
   ObArray<ObRawExpr*> tsc_columns; //these columns need by TSC operator
   VTMapping *vt_mapping = nullptr;
   const ObTableSchema *table_schema = nullptr;
-
   agent_vt_meta.vt_table_id_ = op.get_ref_table_id();
   spec.is_vt_mapping_ = true;
   get_real_table_vt_mapping(op.get_ref_table_id(), vt_mapping);
@@ -290,13 +289,11 @@ int ObTscCgService::generate_agent_vt_access_meta(const ObLogTableScan &op, ObTa
       LOG_WARN("get table schema failed", K(agent_vt_meta.vt_table_id_), K(ret));
     } else {
       // set vt has tenant_id column
-      for (int64_t nth_col = 0; OB_SUCC(ret) && nth_col < table_schema->get_column_count(); ++nth_col) {
-        const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema_by_idx(nth_col);
-        if (OB_ISNULL(col_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column schema is null", K(ret));
-        } else if (0 == col_schema->get_column_name_str().case_compare("TENANT_ID")) {
+      for (int64_t nth_col = 0; OB_SUCC(ret) && nth_col < range_columns.count(); ++nth_col) {
+        const ColumnItem &col_item = range_columns.at(nth_col);
+        if (0 == col_item.column_name_.case_compare("TENANT_ID")) {
           spec.has_tenant_id_col_ = true;
+          spec.tenant_id_col_idx_ = nth_col;
           break;
         }
       }
@@ -307,10 +304,6 @@ int ObTscCgService::generate_agent_vt_access_meta(const ObLogTableScan &op, ObTa
         if (OB_ISNULL(vt_col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: column schema is null", K(range_column_id), K(ret));
-        } else if (spec.has_tenant_id_col_ && 0 == k
-                && 0 != vt_col_schema->get_column_name_str().case_compare("TENANT_ID")) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status: the first key must be tenant id", K(range_column_id), K(ret));
         }
         for (int64_t nth_col = 0; nth_col < table_schema->get_column_count() && OB_SUCC(ret); ++nth_col) {
           const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema_by_idx(nth_col);
@@ -892,7 +885,11 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   int ret = OB_SUCCESS;
   loc_meta.reset();
   loc_meta.table_loc_id_ = table_loc_id;
-  loc_meta.ref_table_id_ = table_schema.get_table_id();
+  ObTableID real_table_id =
+      share::is_oracle_mapping_real_virtual_table(table_schema.get_table_id()) ?
+            ObSchemaUtils::get_real_table_mappings_tid(table_schema.get_table_id())
+              : table_schema.get_table_id();
+  loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
   bool is_weak_read = false;
   if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
@@ -920,7 +917,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
     TableLocRelInfo *rel_info = nullptr;
     ObTableID data_table_id = table_schema.is_index_table() ?
                               table_schema.get_data_table_id() :
-                              table_schema.get_table_id();
+                              real_table_id;
     rel_info = cg_.opt_ctx_->get_loc_rel_info_by_id(table_loc_id, data_table_id);
     if (OB_ISNULL(rel_info)) {
       ret = OB_ERR_UNEXPECTED;

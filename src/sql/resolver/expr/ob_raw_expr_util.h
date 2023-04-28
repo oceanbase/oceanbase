@@ -767,6 +767,7 @@ public:
   /* 计算基本列的flag */
   static uint32_t calc_column_result_flag(const share::schema::ObColumnSchemaV2 &column_schema);
   static int expr_is_order_consistent(const ObRawExpr *from, const ObRawExpr *to, bool &is_consistent);
+  static int is_expr_comparable(const ObRawExpr *expr, bool &can_be);
   static int exprs_contain_subquery(const common::ObIArray<ObRawExpr*> &exprs, bool &cnt_subquery);
   static int function_alias(ObRawExprFactory &expr_factory, ObSysFunRawExpr *&expr);
   //extract from const value

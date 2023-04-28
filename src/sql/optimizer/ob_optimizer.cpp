@@ -627,6 +627,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int64_t max_table_hint = 1;
   ObDMLStmt *target_stmt = &stmt;
   ObSQLSessionInfo *session = ctx_.get_session_info();
+  bool force_serial_set_order = false;
   int64_t link_stmt_count = 0;
   if (OB_ISNULL(target_stmt) || OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
@@ -651,11 +652,14 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
                                                session_enable_parallel,
                                                session_force_parallel_dop))) {
     LOG_WARN("failed to get session parallel info", K(ret));
+  } else if (OB_FAIL(session->is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
+      LOG_WARN("fail to get force_serial_set_order", K(ret));
   } else if (OB_FAIL(check_force_default_stat())) {
     LOG_WARN("failed to check force default stat", K(ret));
   } else if (OB_FAIL(calc_link_stmt_count(*target_stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
   } else {
+    ctx_.set_serial_set_order(force_serial_set_order);
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
     parallel = ctx_.get_global_hint().get_parallel_hint();
     if (parallel <= 0) {

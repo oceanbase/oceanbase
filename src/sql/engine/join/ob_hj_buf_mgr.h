@@ -28,7 +28,7 @@ class ObHJBufMgr : public ObSqlMemoryCallback
 public:
   ObHJBufMgr() :
     reserve_memory_size_(0), pre_total_alloc_size_(0), total_alloc_size_(0),
-    page_size_(-1), dumped_size_(0)
+    page_size_(0), dumped_size_(0)
   {}
 
   ~ObHJBufMgr() {}

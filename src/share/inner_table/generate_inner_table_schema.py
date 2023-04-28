@@ -737,12 +737,12 @@ def find_column_def(keywords, column_name, is_shadow_pk_column):
         i += 1
   else:
     for col in keywords['rowkey_columns']:
-      if col[0] == column_name:
+      if col[0].upper() == column_name.upper():
         return (i, col)
       else:
         i += 1
     for col in keywords['normal_columns']:
-      if col[0] == column_name:
+      if col[0].upper() == column_name.upper():
         return (i, col)
       else:
         i += 1
@@ -782,7 +782,7 @@ def add_index_columns(columns, **keywords):
     # rowkey columns of main table are normal in the unique index table.
     # i.e., rowkey_position = 0, index_position = 0.
     for col in keywords['rowkey_columns']:
-      if col[0] not in columns:
+      if col[0].upper() not in [x.upper() for x in columns]:
         (idx, column_def) = find_column_def(keywords, col[0], False)
         add_column(column_def, 0, 0, 0, idx)
         max_used_column_idx = max(max_used_column_idx, idx)
@@ -792,7 +792,7 @@ def add_index_columns(columns, **keywords):
       max_used_column_idx = max(max_used_column_idx, column_idx)
       rowkey_id += 1
     for col in keywords['rowkey_columns']:
-      if col[0] not in columns:
+      if col[0].upper() not in [x.upper() for x in columns]:
         column_idx = add_index_column(keywords, rowkey_id, 0, col[0])
         max_used_column_idx = max(max_used_column_idx, column_idx)
         rowkey_id += 1
@@ -943,7 +943,7 @@ def fill_default_values(default_filed_values, keywords, missing_fields, index_va
         if index_value[0] != '':
           keywords[key] = default_filed_values[key]
       elif key == 'data_table_id':
-        tid = table_name2tid(keywords['table_name'])
+        tid = table_name2tid(keywords['table_name'] + (keywords.has_key('name_postfix') and keywords['name_postfix'] or ''))
         add_field(field, tid)
       else:
         keywords[key] = default_filed_values[key]
@@ -1342,6 +1342,64 @@ def def_sys_index_table(index_name, index_table_id, index_columns, index_using_t
   cpp_f = cpp_f_tmp
   cpp_f.write(index_def)
 
+def def_agent_index_table(index_name, index_table_id, index_columns, index_using_type, index_type,
+  real_table_name, real_index_name, keywords):
+  global cpp_f
+  global cpp_f_tmp
+  global StringIO
+  global sys_index_tables
+  kw = copy.deepcopy(keywords)
+  index_kw = copy.deepcopy(all_def_keywords[real_table_name + '_' + real_index_name])
+  if kw.has_key('index'):
+    raise Exception("should not have index", kw['table_name'])
+  if not kw['real_vt']:
+    raise Exception("only support oracle mapping table", kw['table_name'])
+  if not index_name.endswith('_real_agent'):
+    raise Exception("wrong index name", index_name)
+  if not index_name.startswith(real_index_name):
+    raise Exception("wrong index name", index_name, real_index_name)
+  if not is_ora_virtual_table(index_table_id):
+    raise Exception("index table id is invalid", index_table_id)
+  if not kw['base_def_keywords']['table_name'] == real_table_name:
+    raise Exception("table name mismatch", kw['base_def_keywords']['table_name'], real_table_name)
+  if not index_kw['index_name'] == real_index_name:
+    raise Exception("index name mismatch", index_kw['index_name'], real_index_name)
+  if not index_kw['index_columns'] == index_columns:
+    raise Exception("index column mismatch", index_kw['index_columns'], index_columns)
+
+
+  index_def = ''
+  cpp_f_tmp = cpp_f
+  cpp_f = StringIO.StringIO()
+  kw['index_name'] = index_name
+  kw['index_columns'] = index_columns
+  kw['index_table_id'] = index_table_id
+  kw['index_using_type'] = index_using_type
+  kw['index_type'] = index_type
+  kw['table_type'] = 'USER_INDEX'
+  kw['index_status'] = 'INDEX_STATUS_AVAILABLE'
+  kw['name_postfix'] = '_ORA'
+  dtid = table_name2tid(kw['table_name'] + kw['name_postfix'])
+  kw['data_table_id'] = dtid
+  kw['partition_columns'] = []
+  kw['partition_expr'] = []
+  kw['storing_columns'] =[]
+  kw["mapping_tid"] = table_name2tid(real_table_name + '_' + real_index_name)
+  kw["self_tid"] = table_name2index_tid(kw['table_name'] + kw['name_postfix'], kw['index_name'])
+  kw["real_vt"] = True
+  real_table_virtual_table_names.append(kw)
+
+  #In order to upgrade compatibility,
+  #the oracle inner table index cannot be added to the schema of the main table following the path of the main table.
+  #Only the schema refresh triggered by the creation of the index table can add simple index info,
+  #so the agent table index is not added to the sys index here
+
+  #sys_index_tables.append(kw)
+  def_table_schema(**kw)
+  index_def = cpp_f.getvalue()
+  cpp_f = cpp_f_tmp
+  cpp_f.write(index_def)
+
 def gen_iterate_private_virtual_table_def(
     table_id, table_name, keywords, in_tenant_space = False):
   global all_iterate_private_virtual_tables
@@ -1618,6 +1676,11 @@ def def_table_schema(**keywords):
       all_def_keywords[keywords['table_name'] + keywords['name_postfix']] = copy.deepcopy(keywords)
     else:
       all_def_keywords[keywords['table_name']] = copy.deepcopy(keywords)
+  else:
+    if 'name_postfix' in keywords:
+      all_def_keywords[keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name']] = copy.deepcopy(keywords)
+    else:
+      all_def_keywords[keywords['table_name'] + '_' + keywords['index_name']] = copy.deepcopy(keywords)
 
   index_defs = []
   index_def = ''
@@ -1650,8 +1713,11 @@ def def_table_schema(**keywords):
   if keywords.has_key('index_name'):
     print_method_start(keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name'])
     if True == is_ora_virtual_table(int(keywords['table_id'])):
-      index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
-      ora_virtual_index_table_id -= 1
+      if keywords.has_key('real_vt') and True == keywords['real_vt']:
+        index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+      else:
+        index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+        ora_virtual_index_table_id -= 1
     elif True == is_mysql_virtual_table(int(keywords['table_id'])):
       index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
       ob_virtual_index_table_id -= 1

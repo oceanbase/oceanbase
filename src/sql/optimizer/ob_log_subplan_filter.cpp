@@ -680,6 +680,13 @@ int ObLogSubPlanFilter::allocate_startup_expr_post(int64_t child_idx)
   return ret;
 }
 
+int ObLogSubPlanFilter::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = ObOptimizerUtil::find_item(subquery_exprs_, expr);
+  return OB_SUCCESS;
+}
+
 int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
                                                  ObShardingInfo *&strong_sharding,
                                                  ObIArray<ObShardingInfo*> &weak_sharding)

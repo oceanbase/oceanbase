@@ -1463,16 +1463,17 @@ protected:
 
   static int subquery_cmp_eval_with_none(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter);
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter, bool left_all_null);
   static int subquery_cmp_eval_with_any(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter);
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter, bool left_all_null);
   static int subquery_cmp_eval_with_all(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter);
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter, bool left_all_null);
 
   static int cmp_one_row(const ObExpr &expr, ObDatum &res,
-                         ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx);
+                         ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx,
+                         bool left_all_null, bool right_all_null);
 
   static int check_exists(const ObExpr &expr, ObEvalCtx &ctx, bool &exists);
 

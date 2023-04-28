@@ -1307,6 +1307,7 @@ int ObDMLStmtPrinter::print_subquery(const ObSelectStmt *subselect_stmt,
                               subselect_stmt,
                               schema_guard_,
                               print_params_,
+                              param_store_,
                               subquery_print_params & FORCE_COL_ALIAS);
   if (subquery_print_params & PRINT_CTE) {
     printer.enable_print_temp_table_as_cte();

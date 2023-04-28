@@ -5965,6 +5965,23 @@ int ObRawExprUtils::expr_is_order_consistent(const ObRawExpr *from, const ObRawE
   return ret;
 }
 
+int ObRawExprUtils::is_expr_comparable(const ObRawExpr *expr, bool &can_be)
+{
+  int ret = OB_SUCCESS;
+  can_be = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret), K(expr));
+  } else if (ob_is_text_tc(expr->get_data_type())
+            || ob_is_lob_tc(expr->get_data_type())
+            || ob_is_json_tc(expr->get_data_type())
+            || ob_is_geometry_tc(expr->get_data_type())
+            || ob_is_extend(expr->get_data_type())) {
+    can_be = false;
+  }
+  return ret;
+}
+
 int ObRawExprUtils::exprs_contain_subquery(const ObIArray<ObRawExpr*> &exprs, bool &cnt_subquery)
 {
   int ret = OB_SUCCESS;

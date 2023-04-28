@@ -9807,7 +9807,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       OB_MAX_WAIT_EVENT_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9822,7 +9822,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9837,7 +9837,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9852,7 +9852,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9867,7 +9867,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9882,7 +9882,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9897,7 +9897,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9912,7 +9912,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9927,7 +9927,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9942,7 +9942,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9957,7 +9957,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9972,7 +9972,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       19, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -9987,7 +9987,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10002,7 +10002,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10017,7 +10017,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10032,7 +10032,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10227,7 +10227,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10242,7 +10242,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10257,7 +10257,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10272,7 +10272,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10287,7 +10287,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10302,7 +10302,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10317,7 +10317,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10332,7 +10332,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10422,7 +10422,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10437,7 +10437,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10452,7 +10452,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10467,7 +10467,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10482,7 +10482,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10497,7 +10497,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10512,7 +10512,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10527,7 +10527,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10542,7 +10542,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -10617,7 +10617,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -11375,7 +11375,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       OB_MAX_WAIT_EVENT_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11392,7 +11392,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11409,7 +11409,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11426,7 +11426,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11443,7 +11443,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11460,7 +11460,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11477,7 +11477,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11494,7 +11494,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11511,7 +11511,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11528,7 +11528,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11545,7 +11545,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11562,7 +11562,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       19, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11579,7 +11579,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11596,7 +11596,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11613,7 +11613,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11630,7 +11630,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11851,7 +11851,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11868,7 +11868,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11885,7 +11885,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11902,7 +11902,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11919,7 +11919,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11936,7 +11936,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11953,7 +11953,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -11970,7 +11970,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12072,7 +12072,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12089,7 +12089,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12106,7 +12106,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12123,7 +12123,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12140,7 +12140,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12157,7 +12157,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12174,7 +12174,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12191,7 +12191,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12208,7 +12208,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -12293,7 +12293,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column

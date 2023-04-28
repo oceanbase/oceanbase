@@ -220,11 +220,12 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
     ObMaxWaitGuard max_wait_guard(enable_perf_event
                                     ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-    if (enable_sql_audit) {
+    if (enable_perf_event) {
       audit_record.exec_record_.record_start(di);
     }
     int64_t execution_id = 0;
     ObString sql = "send long data";
+    //监控项统计开始
     exec_start_timestamp_ = ObTimeUtility::current_time();
     if (FALSE_IT(execution_id = gctx_.sql_engine_->get_execution_id())) {
       //nothing to do
@@ -234,25 +235,24 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
     } else if (OB_FAIL(store_piece(session))) {
       exec_end_timestamp_ = ObTimeUtility::current_time();
     } else {
-      //监控项统计开始
-      if (enable_perf_event) {
-        exec_end_timestamp_ = ObTimeUtility::current_time();
-      }
+      //监控项统计结束
+      exec_end_timestamp_ = ObTimeUtility::current_time();
+
       session.set_current_execution_id(execution_id);
+
+      // some statistics must be recorded for plan stat, even though sql audit disabled
+      bool first_record = (1 == audit_record.try_cnt_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      audit_record.exec_timestamp_.update_stage_time();
+
       if (enable_perf_event) {
-        exec_end_timestamp_ = ObTimeUtility::current_time();
-        if (lib::is_diagnose_info_enabled()) {
-          const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
-          EVENT_INC(SQL_PS_PREPARE_COUNT);
-          EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
-        }
-      }
-      if (enable_sql_audit) {
         audit_record.exec_record_.record_end(di);
-        bool first_record = (1 == audit_record.try_cnt_);
-        ObExecStatUtils::record_exec_timestamp(*this,
-            first_record,
-            audit_record.exec_timestamp_);
+        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+        audit_record.update_event_stage_state();
+        const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
+        EVENT_INC(SQL_PS_PREPARE_COUNT);
+        EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
       }
     }
   } // diagnose end
@@ -278,11 +278,10 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
     audit_record.client_addr_ = session.get_peer_addr();
     audit_record.user_client_addr_ = session.get_user_client_addr();
     audit_record.user_group_ = THIS_WORKER.get_group_id();
-    audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-    audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-    audit_record.ps_stmt_id_ = stmt_id_;
     audit_record.plan_id_ = param_id_;
     audit_record.return_rows_ = buffer_len_;
+    audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
+    audit_record.ps_stmt_id_ = stmt_id_;
     if (OB_NOT_NULL(session.get_ps_cache())) {
       ObPsStmtInfoGuard guard;
       ObPsStmtInfo *ps_info = NULL;
@@ -294,12 +293,11 @@ int ObMPStmtSendPieceData::do_process(ObSQLSessionInfo &session)
         audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
         audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
       } else {
-        LOG_INFO("get sql fail in fetch", K(stmt_id_));
+        LOG_WARN("get sql fail in send piece data", K(stmt_id_));
       }
     }
-    audit_record.update_stage_stat();
-    ObSQLUtils::handle_audit_record(false, EXECUTE_PS_SEND_PIECE, session);
   }
+  ObSQLUtils::handle_audit_record(false, EXECUTE_PS_SEND_PIECE, session, ctx_.is_sensitive_);
 
   clear_wb_content(session);
   return ret;

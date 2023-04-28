@@ -363,14 +363,16 @@ public:
 
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                              ObSchemaGetterGuard *schema_guard,
-                             ObObjPrintParams print_params = ObObjPrintParams());
+                             ObObjPrintParams print_params = ObObjPrintParams(),
+                             const ParamStore *param_store = NULL);
   static int print_sql(ObIAllocator &allocator,
                        char *buf,
                        int64_t buf_len,
                        const ObStmt *stmt,
                        ObString &sql,
                        ObSchemaGetterGuard *schema_guard,
-                       ObObjPrintParams print_params);
+                       ObObjPrintParams print_params,
+                       const ParamStore *param_store = NULL);
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,
@@ -897,7 +899,7 @@ public:
       output_row_alloc_(), init_alloc_(nullptr), inited_row_(false), convert_row_(), output_row_cast_ctx_(),
       base_table_id_(UINT64_MAX), cur_tenant_id_(UINT64_MAX), table_schema_(nullptr), output_column_ids_(nullptr),
       cols_schema_(), tenant_id_col_id_(UINT64_MAX), max_col_cnt_(INT64_MAX),
-      has_tenant_id_col_(false)
+      has_tenant_id_col_(false), tenant_id_col_idx_(-1)
   {}
   ~ObVirtualTableResultConverter() { destroy(); }
 
@@ -911,6 +913,7 @@ public:
       const share::schema::ObTableSchema *table_schema,
       const common::ObIArray<uint64_t> *output_column_ids,
       const bool has_tenant_id_col,
+      const int64_t tenant_id_col_idx,
       const int64_t max_col_cnt = INT64_MAX);
   int init_without_allocator(
     const common::ObIArray<const share::schema::ObColumnSchemaV2*> &col_schemas,
@@ -928,7 +931,8 @@ public:
       sql::ObSQLSessionInfo *session,
       const share::schema::ObTableSchema *table_schema,
       const common::ObIArray<ObObjMeta> *key_types,
-      const bool has_tenant_id_col);
+      const bool has_tenant_id_col,
+      const int64_t tenant_id_col_idx);
 private:
   int convert_key(const ObRowkey &src, ObRowkey &dst, bool is_start_key, int64_t pos);
   int get_all_columns_schema();
@@ -956,6 +960,7 @@ public:
   int64_t max_col_cnt_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   bool has_tenant_id_col_;
+  int64_t tenant_id_col_idx_;
 };
 
 class ObLinkStmtParam

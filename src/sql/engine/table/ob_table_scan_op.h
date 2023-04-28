@@ -353,6 +353,7 @@ public:
       uint64_t reserved_                        : 54;
     };
   };
+  int64_t tenant_id_col_idx_;
 };
 
 class ObTableScanOp : public ObOperator

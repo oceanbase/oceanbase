@@ -12,6 +12,7 @@
 # - (50000, 60000)   : Lob meta table
 # - (60000, 70000)   : Lob piece table
 # - (100000, 200000) : System table Index
+# - (15305, <20000)  : Oracle Real Agent table Index
 # - (500000, ~)      : User Table
 #
 # Here are some table_name definition principles.
@@ -6636,23 +6637,23 @@ def_table_schema(
     ('sqc_id', 'int'),
     ('worker_id', 'int'),
 
-    ('event', 'varchar:OB_MAX_WAIT_EVENT_NAME_LENGTH', 'false'),
-    ('p1text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p1', 'uint', 'false'),
-    ('p2text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p2', 'uint', 'false'),
-    ('p3text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p3', 'uint', 'false'),
-    ('level', 'int', 'false'),
-    ('wait_class_id', 'int', 'false'),
-    ('wait_class#', 'int', 'false'),
-    ('wait_class', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('state', 'varchar:19', 'false'),
-    ('wait_time_micro', 'int', 'false'),
-    ('total_wait_time_micro', 'int', 'false'),
-    ('total_waits', 'int'),
+    ('event', 'varchar:OB_MAX_WAIT_EVENT_NAME_LENGTH', 'true'),
+    ('p1text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p1', 'uint', 'true'),
+    ('p2text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p2', 'uint', 'true'),
+    ('p3text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p3', 'uint', 'true'),
+    ('level', 'int', 'true'),
+    ('wait_class_id', 'int', 'true'),
+    ('wait_class#', 'int', 'true'),
+    ('wait_class', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('state', 'varchar:19', 'true'),
+    ('wait_time_micro', 'int', 'true'),
+    ('total_wait_time_micro', 'int', 'true'),
+    ('total_waits', 'int', 'true'),
 
-    ('rpc_count', 'int'),
+    ('rpc_count', 'int', 'true'),
     ('plan_type', 'int'),
 
     ('is_inner_sql', 'bool'),
@@ -6667,33 +6668,33 @@ def_table_schema(
     ('decode_time','int'),
     ('get_plan_time', 'int'),
     ('execute_time', 'int'),
-    ('application_wait_time', 'uint'),
-    ('concurrency_wait_time', 'uint'),
-    ('user_io_wait_time', 'uint'),
-    ('schedule_time', 'uint'),
-    ('row_cache_hit', 'int'),
-    ('bloom_filter_cache_hit', 'int'),
-    ('block_cache_hit', 'int'),
-    ('disk_reads', 'int'),
+    ('application_wait_time', 'uint', 'true'),
+    ('concurrency_wait_time', 'uint', 'true'),
+    ('user_io_wait_time', 'uint', 'true'),
+    ('schedule_time', 'uint', 'true'),
+    ('row_cache_hit', 'int', 'true'),
+    ('bloom_filter_cache_hit', 'int', 'true'),
+    ('block_cache_hit', 'int', 'true'),
+    ('disk_reads', 'int', 'true'),
     ('execution_id', 'int'),
     ('session_id', 'uint'),
     ('retry_cnt', 'int'),
     ('table_scan', 'bool'),
     ('consistency_level', 'int'),
-    ('memstore_read_row_count', 'int'),
-    ('ssstore_read_row_count', 'int'),
-    ('data_block_read_cnt', 'int'),
-    ('data_block_cache_hit', 'int'),
-    ('index_block_read_cnt', 'int'),
-    ('index_block_cache_hit', 'int'),
-    ('blockscan_block_cnt', 'int'),
-    ('blockscan_row_cnt', 'int'),
-    ('pushdown_storage_filter_row_cnt', 'int'),
+    ('memstore_read_row_count', 'int', 'true'),
+    ('ssstore_read_row_count', 'int', 'true'),
+    ('data_block_read_cnt', 'int', 'true'),
+    ('data_block_cache_hit', 'int', 'true'),
+    ('index_block_read_cnt', 'int', 'true'),
+    ('index_block_cache_hit', 'int', 'true'),
+    ('blockscan_block_cnt', 'int', 'true'),
+    ('blockscan_row_cnt', 'int', 'true'),
+    ('pushdown_storage_filter_row_cnt', 'int', 'true'),
     ('request_memory_used', 'bigint'),
     ('expected_worker_count', 'int'),
     ('used_worker_count', 'int'),
     ('sched_info', 'varchar:16384', 'true'),
-    ('fuse_row_cache_hit', 'int'),
+    ('fuse_row_cache_hit', 'int', 'true'),
 
     ('user_client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
     ('ps_client_stmt_id', 'int'),
@@ -11870,10 +11871,85 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
-
 # 15305: __all_virtual_obj_lock
 
-# [15306, 15375] for oracle inner_table index
+#######################################################################
+# oracle agent table index is defined after the System table Index area
+#######################################################################
+# 15306: idx_data_table_id_real_agent
+# 15307: idx_db_tb_name_real_agent
+# 15308: idx_tb_name_real_agent
+# 15309: idx_tb_column_name_real_agent
+# 15310: idx_column_name_real_agent
+# 15311: idx_ur_name_real_agent
+# 15312: idx_db_name_real_agent
+# 15313: idx_tg_name_real_agent
+# 15314: idx_recyclebin_db_type_real_agent
+# 15315: idx_part_name_real_agent
+# 15316: idx_sub_part_name_real_agent
+# 15317: idx_def_sub_part_name_real_agent
+# 15318: idx_fk_child_tid_real_agent
+# 15319: idx_fk_parent_tid_real_agent
+# 15320: idx_fk_name_real_agent
+# 15321: idx_db_synonym_name_real_agent
+# 15322: idx_synonym_name_real_agent
+# 15323: idx_db_routine_name_real_agent
+# 15324: idx_routine_name_real_agent
+# 15325: idx_routine_pkg_id_real_agent
+# 15326: idx_routine_param_name_real_agent
+# 15327: idx_db_pkg_name_real_agent
+# 15328: idx_pkg_name_real_agent
+# 15329: idx_cst_name_real_agent
+# 15330: idx_db_type_name_real_agent
+# 15331: idx_type_name_real_agent
+# 15332: idx_type_attr_name_real_agent
+# 15333: idx_coll_name_type_real_agent
+# 15334: idx_owner_dblink_name_real_agent
+# 15335: idx_dblink_name_real_agent
+# 15336: idx_grantee_role_id_real_agent
+# 15337: idx_keystore_master_key_id_real_agent
+# 15338: idx_ols_policy_name_real_agent
+# 15339: idx_ols_policy_col_name_real_agent
+# 15340: idx_ols_com_policy_id_real_agent
+# 15341: idx_ols_lab_policy_id_real_agent
+# 15342: idx_ols_lab_tag_real_agent
+# 15343: idx_ols_lab_real_agent
+# 15344: idx_ols_level_uid_real_agent
+# 15345: idx_ols_level_policy_id_real_agent
+# 15346: idx_profile_name_real_agent
+# 15347: idx_audit_type_real_agent
+# 15348: idx_trigger_base_obj_id_real_agent
+# 15349: idx_db_trigger_name_real_agent
+# 15350: idx_trigger_name_real_agent
+# 15351: idx_objauth_grantor_real_agent
+# 15352: idx_objauth_grantee_real_agent
+# 15353: idx_obj_type_db_obj_name_real_agent
+# 15354: idx_obj_type_obj_name_real_agent
+# 15355: idx_dependency_ref_obj_real_agent
+# 15356: idx_table_stat_his_savtime_real_agent
+# 15357: idx_column_stat_his_savtime_real_agent
+# 15358: idx_histogram_stat_his_savtime_real_agent
+# 15359: idx_tablet_to_ls_id_real_agent
+# 15360: idx_tablet_to_table_id_real_agent
+# 15361: idx_ctx_namespace_real_agent
+# 15362: idx_spm_item_sql_id_real_agent
+# 15363: idx_spm_item_value_real_agent
+# 15364: idx_directory_name_real_agent
+# 15365: idx_job_powner_real_agent
+# 15366: idx_seq_obj_db_name_real_agent
+# 15367: idx_seq_obj_name_real_agent
+# 15368: idx_recyclebin_ori_name_real_agent
+# 15369: idx_tb_priv_db_name_real_agent
+# 15370: idx_tb_priv_tb_name_real_agent
+# 15371: idx_db_priv_db_name_real_agent
+# 15372: idx_rls_policy_table_id_real_agent
+# 15373: idx_rls_policy_group_id_real_agent
+# 15374: idx_rls_group_table_id_real_agent
+# 15375: idx_rls_context_table_id_real_agent
+#######################################################################
+# end for oracle agent table index
+#######################################################################
+
 # 15376: __all_virtual_log_restore_source
 # 15377: __all_virtual_balance_job
 # 15378: __all_virtual_balance_job_history
@@ -49894,3 +49970,718 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
+
+
+################################################################################
+# Oracle Agent table Index [15306, 15375]
+def_agent_index_table(
+  index_name = 'idx_data_table_id_real_agent',
+  index_table_id = 15306,
+  index_columns = ['data_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_data_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_tb_name_real_agent',
+  index_table_id = 15307,
+  index_columns = ['database_id', 'table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_db_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_name_real_agent',
+  index_table_id = 15308,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_tb_column_name_real_agent',
+  index_table_id = 15309,
+  index_columns = ['table_id', 'column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column',
+  real_index_name = 'idx_tb_column_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_column_name_real_agent',
+  index_table_id = 15310,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column',
+  real_index_name = 'idx_column_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ur_name_real_agent',
+  index_table_id = 15311,
+  index_columns = ['user_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_user' ,
+  real_index_name = 'idx_ur_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_USER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_name_real_agent',
+  index_table_id = 15312,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_database' ,
+  real_index_name = 'idx_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DATABASE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tg_name_real_agent',
+  index_table_id = 15313,
+  index_columns = ['tablegroup_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablegroup' ,
+  real_index_name = 'idx_tg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_recyclebin_db_type_real_agent',
+  index_table_id = 15314,
+  index_columns = ['tenant_id', 'database_id','type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_recyclebin' ,
+  real_index_name = 'idx_recyclebin_db_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_RECYCLEBIN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_part_name_real_agent',
+  index_table_id = 15315,
+  index_columns = ['part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_part' ,
+  real_index_name = 'idx_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_sub_part_name_real_agent',
+  index_table_id = 15316,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sub_part' ,
+  real_index_name = 'idx_sub_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SUB_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_def_sub_part_name_real_agent',
+  index_table_id = 15317,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_def_sub_part' ,
+  real_index_name = 'idx_def_sub_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DEF_SUB_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_child_tid_real_agent',
+  index_table_id = 15318,
+  index_columns = ['child_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_child_tid',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_parent_tid_real_agent',
+  index_table_id = 15319,
+  index_columns = ['parent_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_parent_tid',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_name_real_agent',
+  index_table_id = 15320,
+  index_columns = ['foreign_key_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_synonym_name_real_agent',
+  index_table_id = 15321,
+  index_columns = ['database_id', 'synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_synonym' ,
+  real_index_name = 'idx_db_synonym_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SYNONYM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_synonym_name_real_agent',
+  index_table_id = 15322,
+  index_columns = ['synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_synonym' ,
+  real_index_name = 'idx_synonym_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SYNONYM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_routine_name_real_agent',
+  index_table_id = 15323,
+  index_columns = ['database_id', 'routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_db_routine_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_name_real_agent',
+  index_table_id = 15324,
+  index_columns = ['routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_routine_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_pkg_id_real_agent',
+  index_table_id = 15325,
+  index_columns = ['package_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_routine_pkg_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_param_name_real_agent',
+  index_table_id = 15326,
+  index_columns = ['param_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine_param' ,
+  real_index_name = 'idx_routine_param_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_PARAM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_pkg_name_real_agent',
+  index_table_id = 15327,
+  index_columns = ['database_id', 'package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_package' ,
+  real_index_name = 'idx_db_pkg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PACKAGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_name_real_agent',
+  index_table_id = 15328,
+  index_columns = ['package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_package' ,
+  real_index_name = 'idx_pkg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PACKAGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_cst_name_real_agent',
+  index_table_id = 15329,
+  index_columns = ['constraint_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_constraint' ,
+  real_index_name = 'idx_cst_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_CONSTRAINT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_type_name_real_agent',
+  index_table_id = 15330,
+  index_columns = ['database_id', 'type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type' ,
+  real_index_name = 'idx_db_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_type_name_real_agent',
+  index_table_id = 15331,
+  index_columns = ['type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type' ,
+  real_index_name = 'idx_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_type_attr_name_real_agent',
+  index_table_id = 15332,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type_attr' ,
+  real_index_name = 'idx_type_attr_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_ATTR_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_coll_name_type_real_agent',
+  index_table_id = 15333,
+  index_columns = ['coll_name', 'coll_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_coll_type' ,
+  real_index_name = 'idx_coll_name_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_owner_dblink_name_real_agent',
+  index_table_id = 15334,
+  index_columns = ['owner_id', 'dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dblink' ,
+  real_index_name = 'idx_owner_dblink_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBLINK_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dblink_name_real_agent',
+  index_table_id = 15335,
+  index_columns = ['dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dblink' ,
+  real_index_name = 'idx_dblink_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBLINK_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_grantee_role_id_real_agent',
+  index_table_id = 15336,
+  index_columns = ['tenant_id', 'role_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_role_grantee_map' ,
+  real_index_name = 'idx_grantee_role_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_ROLE_GRANTEE_MAP_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_keystore_master_key_id_real_agent',
+  index_table_id = 15337,
+  index_columns = ['master_key_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_keystore' ,
+  real_index_name = 'idx_keystore_master_key_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_KEYSTORE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_ols_policy_name_real_agent',
+  index_table_id = 15338,
+  index_columns = ['policy_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_policy' ,
+  real_index_name = 'idx_ols_policy_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_policy_col_name_real_agent',
+  index_table_id = 15339,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_policy' ,
+  real_index_name = 'idx_ols_policy_col_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_com_policy_id_real_agent',
+  index_table_id = 15340,
+  index_columns = ['label_se_policy_id', 'comp_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_component' ,
+  real_index_name = 'idx_ols_com_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_COMPONENT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_policy_id_real_agent',
+  index_table_id = 15341,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_tag_real_agent',
+  index_table_id = 15342,
+  index_columns = ['label_tag'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab_tag',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_real_agent',
+  index_table_id = 15343,
+  index_columns = ['label'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_level_uid_real_agent',
+  index_table_id = 15344,
+  index_columns = ['user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_user_level' ,
+  real_index_name = 'idx_ols_level_uid',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_USER_LEVEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_level_policy_id_real_agent',
+  index_table_id = 15345,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_user_level' ,
+  real_index_name = 'idx_ols_level_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_USER_LEVEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_profile_name_real_agent',
+  index_table_id = 15346,
+  index_columns = ['profile_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_profile' ,
+  real_index_name = 'idx_profile_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_audit_type_real_agent',
+  index_table_id = 15347,
+  index_columns = ['audit_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_security_audit' ,
+  real_index_name = 'idx_audit_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_SECURITY_AUDIT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_trigger_base_obj_id_real_agent',
+  index_table_id = 15348,
+  index_columns = ['base_object_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_trigger_base_obj_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_trigger_name_real_agent',
+  index_table_id = 15349,
+  index_columns = ['database_id', 'trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_db_trigger_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_trigger_name_real_agent',
+  index_table_id = 15350,
+  index_columns = ['trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_trigger_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_objauth_grantor_real_agent',
+  index_table_id = 15351,
+  index_columns = ['grantor_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth' ,
+  real_index_name = 'idx_objauth_grantor',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_objauth_grantee_real_agent',
+  index_table_id = 15352,
+  index_columns = ['grantee_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth' ,
+  real_index_name = 'idx_objauth_grantee',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_obj_type_db_obj_name_real_agent',
+  index_table_id = 15353,
+  index_columns = ['database_id', 'object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_object_type' ,
+  real_index_name = 'idx_obj_type_db_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_obj_type_obj_name_real_agent',
+  index_table_id = 15354,
+  index_columns = ['object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_object_type' ,
+  real_index_name = 'idx_obj_type_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_dependency_ref_obj_real_agent',
+  index_table_id = 15355,
+  index_columns = ['ref_obj_id', 'ref_obj_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_dependency' ,
+  real_index_name = 'idx_dependency_ref_obj',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_DEPENDENCY_REAL_AGENT_ORA'])
+
+
+
+def_agent_index_table(
+  index_name = 'idx_table_stat_his_savtime_real_agent',
+  index_table_id = 15356,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_stat_history' ,
+  real_index_name = 'idx_table_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_column_stat_his_savtime_real_agent',
+  index_table_id = 15357,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column_stat_history' ,
+  real_index_name = 'idx_column_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_histogram_stat_his_savtime_real_agent',
+  index_table_id = 15358,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_histogram_stat_history' ,
+  real_index_name = 'idx_histogram_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_HISTOGRAM_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tablet_to_ls_id_real_agent',
+  index_table_id = 15359,
+  index_columns = ['ls_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablet_to_ls' ,
+  real_index_name = 'idx_tablet_to_ls_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLET_TO_LS_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tablet_to_table_id_real_agent',
+  index_table_id = 15360,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablet_to_ls' ,
+  real_index_name = 'idx_tablet_to_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLET_TO_LS_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_ctx_namespace_real_agent',
+  index_table_id = 15361,
+  index_columns = ['namespace'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_context' ,
+  real_index_name = 'idx_ctx_namespace',
+  keywords = all_def_keywords['ALL_VIRTUAL_CONTEXT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_spm_item_sql_id_real_agent',
+  index_table_id = 15362,
+  index_columns = ['sql_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_plan_baseline_item' ,
+  real_index_name = 'idx_spm_item_sql_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_PLAN_BASELINE_ITEM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_spm_item_value_real_agent',
+  index_table_id = 15363,
+  index_columns = ['plan_hash_value'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_plan_baseline_item' ,
+  real_index_name = 'idx_spm_item_value',
+  keywords = all_def_keywords['ALL_VIRTUAL_PLAN_BASELINE_ITEM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_directory_name_real_agent',
+  index_table_id = 15364,
+  index_columns = ['directory_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_directory' ,
+  real_index_name = 'idx_directory_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_job_powner_real_agent',
+  index_table_id = 15365,
+  index_columns = ['powner'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_job' ,
+  real_index_name = 'idx_job_powner',
+  keywords = all_def_keywords['ALL_VIRTUAL_JOB_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_seq_obj_db_name_real_agent',
+  index_table_id = 15366,
+  index_columns = ['database_id', 'sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sequence_object' ,
+  real_index_name = 'idx_seq_obj_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SEQUENCE_OBJECT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_seq_obj_name_real_agent',
+  index_table_id = 15367,
+  index_columns = ['sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sequence_object' ,
+  real_index_name = 'idx_seq_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SEQUENCE_OBJECT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_recyclebin_ori_name_real_agent',
+  index_table_id = 15368,
+  index_columns = ['original_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_recyclebin' ,
+  real_index_name = 'idx_recyclebin_ori_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_RECYCLEBIN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_priv_db_name_real_agent',
+  index_table_id = 15369,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_privilege' ,
+  real_index_name = 'idx_tb_priv_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_priv_tb_name_real_agent',
+  index_table_id = 15370,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_privilege' ,
+  real_index_name = 'idx_tb_priv_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_priv_db_name_real_agent',
+  index_table_id = 15371,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_database_privilege' ,
+  real_index_name = 'idx_db_priv_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DATABASE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_policy_table_id_real_agent',
+  index_table_id = 15372,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_policy' ,
+  real_index_name = 'idx_rls_policy_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_policy_group_id_real_agent',
+  index_table_id = 15373,
+  index_columns = ['rls_group_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_policy' ,
+  real_index_name = 'idx_rls_policy_group_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_group_table_id_real_agent',
+  index_table_id = 15374,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_group' ,
+  real_index_name = 'idx_rls_group_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_GROUP_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_rls_context_table_id_real_agent',
+  index_table_id = 15375,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_context' ,
+  real_index_name = 'idx_rls_context_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT_ORA'])
+
+# End Oracle Agent table Index [15306, 15375]
+################################################################################

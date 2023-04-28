@@ -42,7 +42,7 @@ public:
                      double sel, 
                      double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int inner_replace_op_exprs(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
 

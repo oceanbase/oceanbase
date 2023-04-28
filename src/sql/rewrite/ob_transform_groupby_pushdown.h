@@ -144,29 +144,10 @@ private:
                                  ObIArray<bool> &table_types,
                                  ObRawExpr *&new_aggr_expr);
 
-  int convert_aggr_expr(ObDMLStmt *stmt, ObAggFunRawExpr *aggr_expr, ObRawExpr *&output_expr);
-
-  int build_case_when(ObDMLStmt *stmt,
-                      ObRawExpr *when_expr,
-                      ObRawExpr *value_expr,
-                      ObRawExpr *else_expr,
-                      ObRawExpr *&case_when);
-
   int get_count_star(ObDMLStmt &stmt,
                      TableItem *table_item,
                      bool is_outer_join_table,
                      ObRawExpr *&count_column);
-
-  int get_view_column(ObDMLStmt &stmt,
-                      TableItem *table_item,
-                      bool is_outer_join_table,
-                      ObRawExpr *aggr_expr,
-                      ObRawExpr *&aggr_column);
-
-  int wrap_case_when_for_count(ObDMLStmt *stmt,
-                               ObColumnRefRawExpr *view_count,
-                               ObRawExpr *&output,
-                               bool is_count_star = false);
 
   int update_joined_table(TableItem *table,
                           const TableItem *old_table,

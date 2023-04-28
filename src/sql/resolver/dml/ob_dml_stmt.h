@@ -793,16 +793,12 @@ public:
   int pull_all_expr_relation_id();
   int formalize_stmt(ObSQLSessionInfo *session_info);
   int formalize_relation_exprs(ObSQLSessionInfo *session_info);
-  int adjust_subquery_exec_params(ObSQLSessionInfo *session_info);
-  int remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *session_info, bool &is_happened);
-  int do_remove_const_exec_param(ObRawExpr *&expr, bool &is_happened);
   int formalize_stmt_expr_reference();
   int formalize_child_stmt_expr_reference();
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr();
-  virtual int remove_useless_exec_param();
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
@@ -1121,6 +1117,15 @@ public:
   const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
 
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
+
+  int formalize_query_ref_exprs();
+
+  int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,
+                                      bool need_replace);
+
+  int do_formalize_query_ref_exprs_pre();
+
+  int do_formalize_query_ref_exprs_post();
 
 protected:
   int create_table_item(TableItem *&table_item);

@@ -399,7 +399,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   //DOP
   if (OB_SUCC(ret) && !dops_.empty() && !ignore_parallel) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dops_.count(); ++i) {
-      if (OB_FAIL(BUF_PRINTF("%sDOP(%lu %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
+      if (OB_FAIL(BUF_PRINTF("%sDOP(%lu, %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
         LOG_WARN("failed to print dop hint", K(ret));
       }
     }

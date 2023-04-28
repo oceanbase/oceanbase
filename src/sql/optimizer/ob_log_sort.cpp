@@ -425,3 +425,16 @@ int ObLogSort::compute_op_ordering()
   }
   return ret;
 }
+
+int ObLogSort::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_FUN_SYS_ENCODE_SORTKEY == expr->get_expr_type() || expr == hash_sortkey_.expr_) {
+    is_fixed = true;
+  }
+  return ret;
+}

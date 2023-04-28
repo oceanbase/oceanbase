@@ -3525,13 +3525,44 @@ int ObSubQueryRelationalExpr::setup_row(
 
 int ObSubQueryRelationalExpr::cmp_one_row(
     const ObExpr &expr, ObDatum &res,
-    ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx)
+    ObExpr **l_row, ObEvalCtx &l_ctx, ObExpr **r_row, ObEvalCtx &r_ctx,
+    bool left_all_null, bool right_all_null)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_OP_SQ_NSEQ == expr.type_)) {
-    ret = ObExprNullSafeEqual::ns_equal(expr, res, l_row, l_ctx, r_row, r_ctx);
+    if (left_all_null && right_all_null) {
+      res.set_true();
+    } else if (left_all_null || right_all_null) {
+      bool both_are_null = true;
+      ObDatum *l = NULL;
+      ObDatum *r = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && both_are_null && i < expr.inner_func_cnt_; i++) {
+        if (NULL == expr.inner_functions_[i]) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("NULL inner function", K(ret), K(i), K(expr));
+        } else if ((!left_all_null && OB_FAIL(l_row[i]->eval(l_ctx, l)))
+            || (!right_all_null && OB_FAIL(r_row[i]->eval(r_ctx, r)))) {
+          LOG_WARN("expr evaluate failed", K(ret));
+        } else {
+          if ((left_all_null || l->is_null()) && (right_all_null || r->is_null())) {
+            both_are_null = true;
+          } else {
+            both_are_null = false;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        res.set_int(both_are_null);
+      }
+    } else {
+      ret = ObExprNullSafeEqual::ns_equal(expr, res, l_row, l_ctx, r_row, r_ctx);
+    }
   } else {
-    ret = ObRelationalExprOperator::row_cmp(expr, res, l_row, l_ctx, r_row, r_ctx);
+    if (left_all_null || right_all_null) {
+      res.set_null();
+    } else {
+      ret = ObRelationalExprOperator::row_cmp(expr, res, l_row, l_ctx, r_row, r_ctx);
+    }
   }
   return ret;
 }
@@ -3547,6 +3578,7 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval(
   ObExpr **r_row = NULL;
   ObEvalCtx *l_ctx = NULL;
   ObEvalCtx *r_ctx = NULL;
+  bool left_all_null = false;
   if (2 != expr.arg_cnt_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected argument count", K(ret));
@@ -3567,11 +3599,7 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval(
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           l_end = true;
-          // set row to NULL
-          for (int64_t i = 0; i < expr.inner_func_cnt_; i++) {
-            l_row[i]->locate_expr_datum(*l_ctx).set_null();
-            l_row[i]->set_evaluated_projected(*l_ctx);
-          }
+          left_all_null = true;
         } else {
           LOG_WARN("get next row failed", K(ret));
         }
@@ -3580,15 +3608,15 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval(
     if (OB_SUCC(ret)) {
       switch (info.subquery_key_) {
         case T_WITH_NONE: {
-          ret = subquery_cmp_eval_with_none(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter);
+          ret = subquery_cmp_eval_with_none(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter, left_all_null);
           break;
         }
         case T_WITH_ANY: {
-          ret = subquery_cmp_eval_with_any(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter);
+          ret = subquery_cmp_eval_with_any(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter, left_all_null);
           break;
         }
         case T_WITH_ALL: {
-          ret = subquery_cmp_eval_with_all(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter);
+          ret = subquery_cmp_eval_with_all(expr, *l_ctx, expr_datum, l_row, *r_ctx, r_row, r_iter, left_all_null);
           break;
         }
       }
@@ -3611,29 +3639,27 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval(
 
 int ObSubQueryRelationalExpr::subquery_cmp_eval_with_none(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter)
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter,
+      bool left_all_null)
 {
   int ret = OB_SUCCESS;
   // %l_row, %r_row is checked no need to check.
   // %iter may be NULL for with none.
   bool iter_end = false;
+  bool right_all_null = false;
   if (NULL != r_iter) {
     if (OB_FAIL(r_iter->get_next_row())) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
         iter_end = true;
-        // set row to NULL
-        for (int64_t i = 0; i < expr.inner_func_cnt_; i++) {
-          r_row[i]->locate_expr_datum(r_ctx).set_null();
-          r_row[i]->set_evaluated_projected(r_ctx);
-        }
+        right_all_null = true;
       } else {
         LOG_WARN("get next row failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx))) {
+    if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx, left_all_null, right_all_null))) {
       LOG_WARN("compare one row failed", K(ret));
     }
   }
@@ -3655,10 +3681,12 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval_with_none(
 // copy from ObSubQueryRelationalExpr::calc_result_with_any
 int ObSubQueryRelationalExpr::subquery_cmp_eval_with_any(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter)
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter,
+      bool left_all_null)
 {
   // %l_row, %r_row is checked no need to check.
   int ret = OB_SUCCESS;
+  bool right_all_null = false;
   if (OB_ISNULL(r_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter should not be null", K(ret));
@@ -3668,7 +3696,7 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval_with_any(
     res.set_false();
     while (OB_SUCC(ret) && OB_SUCC(r_iter->get_next_row())) {
       // use subquery's eval ctx for right row to avoid ObEvalCtx::alloc_ expanding.
-      if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx))) {
+      if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx, left_all_null, right_all_null))) {
         LOG_WARN("compare single row failed", K(ret));
       } else if (res.is_true()) {
         break;
@@ -3692,10 +3720,12 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval_with_any(
 // copy from ObSubQueryRelationalExpr::calc_result_with_all
 int ObSubQueryRelationalExpr::subquery_cmp_eval_with_all(
       const ObExpr &expr, ObEvalCtx &l_ctx, ObDatum &res,
-      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter)
+      ObExpr **l_row, ObEvalCtx &r_ctx, ObExpr **r_row, ObSubQueryIterator *r_iter,
+      bool left_all_null)
 {
   // %l_row, %r_row is checked no need to check.
   int ret = OB_SUCCESS;
+  bool right_all_null = false;
   if (OB_ISNULL(r_iter)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter should not be null", K(ret));
@@ -3705,7 +3735,7 @@ int ObSubQueryRelationalExpr::subquery_cmp_eval_with_all(
     res.set_true();
     while (OB_SUCC(ret) && OB_SUCC(r_iter->get_next_row())) {
       // use subquery's eval ctx for right row to avoid ObEvalCtx::alloc_ expanding.
-      if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx))) {
+      if (OB_FAIL(cmp_one_row(expr, res, l_row, l_ctx, r_row, r_ctx, left_all_null, right_all_null))) {
         LOG_WARN("compare single row failed", K(ret));
       } else if (res.is_false()) {
         break;

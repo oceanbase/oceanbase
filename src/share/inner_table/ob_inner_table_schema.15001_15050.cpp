@@ -430,7 +430,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       OB_MAX_WAIT_EVENT_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -445,7 +445,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -460,7 +460,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -475,7 +475,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -490,7 +490,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -505,7 +505,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -520,7 +520,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -535,7 +535,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -550,7 +550,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -565,7 +565,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -580,7 +580,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -595,7 +595,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       19, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -610,7 +610,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -625,7 +625,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -640,7 +640,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -655,7 +655,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -850,7 +850,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -865,7 +865,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -880,7 +880,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -895,7 +895,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -910,7 +910,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -925,7 +925,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -940,7 +940,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -955,7 +955,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1045,7 +1045,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1060,7 +1060,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1075,7 +1075,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1090,7 +1090,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1105,7 +1105,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1120,7 +1120,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1135,7 +1135,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1150,7 +1150,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1165,7 +1165,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1240,7 +1240,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_schema(ObTableSchema &table_sc
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -1998,7 +1998,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       OB_MAX_WAIT_EVENT_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2015,7 +2015,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2032,7 +2032,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2049,7 +2049,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2066,7 +2066,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2083,7 +2083,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2100,7 +2100,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2117,7 +2117,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2134,7 +2134,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2151,7 +2151,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2168,7 +2168,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       OB_MAX_WAIT_EVENT_PARAM_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2185,7 +2185,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       19, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2202,7 +2202,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2219,7 +2219,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2236,7 +2236,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2253,7 +2253,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2474,7 +2474,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2491,7 +2491,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2508,7 +2508,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2525,7 +2525,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2542,7 +2542,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2559,7 +2559,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2576,7 +2576,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2593,7 +2593,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2695,7 +2695,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2712,7 +2712,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2729,7 +2729,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2746,7 +2746,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2763,7 +2763,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2780,7 +2780,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2797,7 +2797,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2814,7 +2814,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2831,7 +2831,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -2916,7 +2916,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_ora_all_virtual_sql_audit_i1_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column

@@ -3700,9 +3700,9 @@ Outputs & filters:
   1 - output([t9.c3], [t9.c2], [t9.c5], [T_FUN_MAX(t9.c1)], [T_FUN_SUM(t9.c1)], [T_FUN_COUNT(t9.c1)]), filter(nil), rowset=256
       win_expr(T_FUN_SUM(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
       win_expr(T_FUN_COUNT(t9.c1)), partition_by([t9.c3]), order_by([t9.c5, ASC]), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(CURRENT ROW)
-  2 - output([t9.c3], [t9.c2], [t9.c5], [T_FUN_MAX(t9.c1)], [t9.c1]), filter(nil), rowset=256
+  2 - output([t9.c3], [t9.c2], [t9.c5], [t9.c1], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=256
       sort_keys([t9.c3, ASC], [t9.c5, ASC])
-  3 - output([t9.c3], [t9.c2], [t9.c5], [T_FUN_MAX(t9.c1)], [t9.c1]), filter(nil), rowset=256
+  3 - output([t9.c3], [t9.c2], [t9.c5], [t9.c1], [T_FUN_MAX(t9.c1)]), filter(nil), rowset=256
       win_expr(T_FUN_MAX(t9.c1)), partition_by([t9.c2], [t9.c3], [t9.c5]), order_by(nil), window_type(RANGE), upper(UNBOUNDED PRECEDING), lower(UNBOUNDED
       FOLLOWING)
   4 - output([t9.c1], [t9.c3], [t9.c5], [t9.c2]), filter(nil), rowset=256

@@ -161,9 +161,9 @@ Outputs & filters:
       dop=2
   2 - output([t1.c2], [T_FUN_COUNT(*)], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
       group([b.__pk_increment], [t1.c2]), agg_func([T_FUN_COUNT(*)])
-  3 - output([t1.c2], [b.__pk_increment], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
+  3 - output([b.__pk_increment], [t1.c2], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
       sort_keys([HASH(b.__pk_increment, t1.c2), ASC], [b.__pk_increment, ASC], [t1.c2, ASC])
-  4 - output([t1.c2], [b.__pk_increment], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
+  4 - output([b.__pk_increment], [t1.c2], [t1.c1], [b.c1], [b.c2], [b.c3]), filter(nil), rowset=256
       equal_conds([t1.c1 = b.c1]), other_conds(nil)
       merge_directions([ASC])
   5 - output([t1.c2], [t1.c1]), filter(nil), rowset=256

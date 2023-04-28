@@ -6157,7 +6157,10 @@ int ObPartitionUtils::check_param_valid_(
         // if table_schema is local index, check its existence in data table schema.
         bool index_exist = !is_index;
         for (int64_t i = 0; OB_SUCC(ret) && i < related_table->related_tids_->count(); i++) {
-          const uint64_t related_tid = related_table->related_tids_->at(i);
+          const uint64_t related_tid =
+            share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(i)) ?
+                  ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(i))
+                  : related_table->related_tids_->at(i);
           bool finded = false;
           for (int64_t j = 0; !finded && OB_SUCC(ret) && j < simple_index_infos.count(); j++) {
             const ObAuxTableMetaInfo &index_info = simple_index_infos.at(j);
@@ -6257,7 +6260,10 @@ int ObPartitionUtils::get_tablet_and_object_id(
     ObSchemaGetterGuard *guard = related_table->guard_;
     const uint64_t tenant_id = table_schema.get_tenant_id();
     for (int64_t i = 0; OB_SUCC(ret) && i < related_table->related_tids_->count(); i++) {
-      const uint64_t related_table_id = related_table->related_tids_->at(i);
+      const uint64_t related_table_id =
+          share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(i)) ?
+                ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(i))
+                : related_table->related_tids_->at(i);
       const ObSimpleTableSchemaV2 *related_schema = NULL;
       ObTabletID related_tablet_id;
       ObObjectID related_object_id;

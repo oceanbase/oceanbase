@@ -66,11 +66,7 @@ protected:
   { ObExecStatUtils::record_exec_timestamp(*this, is_first, exec_timestamp); }
   void record_sql_audit_and_plan_stat(
                         const ObPhysicalPlan *plan,
-                        ObSQLSessionInfo *session,
-                        ObExecRecord exec_record,
-                        ObExecTimestamp exec_timestamp,
-                        ObWaitEventDesc &max_wait_desc,
-                        ObWaitEventStat &total_wait_desc);
+                        ObSQLSessionInfo *session);
   int base_before_response(common::ObScanner &scanner);
   int base_after_process();
   void base_cleanup();

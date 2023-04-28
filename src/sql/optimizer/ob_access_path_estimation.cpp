@@ -1112,7 +1112,7 @@ int ObAccessPathEstimation::get_key_ranges(ObOptimizerContext &ctx,
   } else if (!share::is_oracle_mapping_real_virtual_table(ap->ref_table_id_)) {
     //do nothing
   } else if (OB_FAIL(convert_agent_vt_key_ranges(ctx, allocator, ap, new_ranges))) {
-    LOG_WARN("failed to convert agent vt key ranges", K(ret));
+    LOG_WARN("failed to convert agent vt key ranges", K(ret), K(new_ranges));
   } else {/*do nothing*/}
   if (OB_SUCC(ret)) {
     if (OB_FAIL(convert_physical_rowid_ranges(ctx, allocator, tablet_id,
@@ -1137,10 +1137,10 @@ int ObAccessPathEstimation::convert_agent_vt_key_ranges(ObOptimizerContext &ctx,
   } else {
     void *buf = NULL;
     uint64_t vt_table_id = ap->ref_table_id_;
-    uint64_t real_table_id = ObSchemaUtils::get_real_table_mappings_tid(ap->ref_table_id_);
+    uint64_t real_index_id = ObSchemaUtils::get_real_table_mappings_tid(ap->index_id_);
     ObSqlSchemaGuard *schema_guard = NULL;
     const ObTableSchema *vt_table_schema = NULL;
-    const ObTableSchema *real_table_schema = NULL;
+    const ObTableSchema *real_index_schema = nullptr;
     if (OB_ISNULL(schema_guard = ctx.get_sql_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret));
@@ -1148,30 +1148,32 @@ int ObAccessPathEstimation::convert_agent_vt_key_ranges(ObOptimizerContext &ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate", K(ret), K(buf));
     } else if (OB_FAIL(schema_guard->get_table_schema(vt_table_id, vt_table_schema)) ||
-               OB_FAIL(schema_guard->get_table_schema(real_table_id, real_table_schema))) {
+               OB_FAIL(schema_guard->get_table_schema(real_index_id, real_index_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
-    } else if (OB_ISNULL(vt_table_schema) || OB_ISNULL(real_table_schema)) {
+    } else if (OB_ISNULL(vt_table_schema) || OB_ISNULL(real_index_schema)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(vt_table_schema), K(real_table_schema));
+      LOG_WARN("get unexpected error", K(ret), K(vt_table_schema), K(real_index_schema));
     } else {
       ObVirtualTableResultConverter *vt_converter = new (buf) ObVirtualTableResultConverter();
       ObSEArray<ObObjMeta, 4> key_types;
-      bool has_tenant_id_col = false;
+      int64_t tenant_id_col_idx = -1;
+      bool dummy_has_tenant_id = true;
       if (OB_FAIL(gen_agent_vt_table_convert_info(vt_table_id,
                                                   vt_table_schema,
-                                                  real_table_schema,
+                                                  real_index_schema,
                                                   ap->est_cost_info_.range_columns_,
-                                                  has_tenant_id_col,
+                                                  tenant_id_col_idx,
                                                   key_types))) {
         LOG_WARN("failed to gen agent vt table convert info", K(ret));
       } else if (OB_FAIL(vt_converter->init_convert_key_ranges_info(&allocator,
                                                                     ctx.get_session_info(),
                                                                     vt_table_schema,
                                                                     &key_types,
-                                                                    has_tenant_id_col))) {
+                                                                    dummy_has_tenant_id,
+                                                                    tenant_id_col_idx))) {
         LOG_WARN("failed to init convert key ranges info", K(ret));
       } else if (OB_FAIL(vt_converter->convert_key_ranges(new_ranges))) {
-        LOG_WARN("convert key ranges failed", K(ret));
+        LOG_WARN("convert key ranges failed", K(ret), K(new_ranges));
       } else {
         LOG_TRACE("succeed to convert agent vt key ranges", K(new_ranges));
       }
@@ -1182,30 +1184,23 @@ int ObAccessPathEstimation::convert_agent_vt_key_ranges(ObOptimizerContext &ctx,
 
 int ObAccessPathEstimation::gen_agent_vt_table_convert_info(const uint64_t vt_table_id,
                                                             const ObTableSchema *vt_table_schema,
-                                                            const ObTableSchema *real_table_schema,
+                                                            const ObTableSchema *real_index_schema,
                                                             const ObIArray<ColumnItem> &range_columns,
-                                                            bool &has_tenant_id_col,
+                                                            int64_t &tenant_id_col_idx_,
                                                             ObIArray<ObObjMeta> &key_types)
 {
   int ret = OB_SUCCESS;
-  VTMapping *vt_mapping = NULL;
-  has_tenant_id_col = false;
   key_types.reset();
-  get_real_table_vt_mapping(vt_table_id, vt_mapping);
-  if (OB_ISNULL(vt_table_schema) || OB_ISNULL(real_table_schema) || OB_ISNULL(vt_mapping)) {
+  if (OB_ISNULL(vt_table_schema) || OB_ISNULL(real_index_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(vt_table_schema), K(real_table_schema));
+    LOG_WARN("get unexpected null", K(ret), K(vt_table_schema), K(real_index_schema));
   } else {
     // set vt has tenant_id column
-    for (int64_t i = 0;
-         OB_SUCC(ret) && !has_tenant_id_col && i < real_table_schema->get_column_count();
-         ++i) {
-      const ObColumnSchemaV2 *col_schema = real_table_schema->get_column_schema_by_idx(i);
-      if (OB_ISNULL(col_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column schema is null", K(ret));
-      } else if (0 == col_schema->get_column_name_str().case_compare("TENANT_ID")) {
-        has_tenant_id_col = true;
+    for (int64_t nth_col = 0; OB_SUCC(ret) && nth_col < range_columns.count(); ++nth_col) {
+      const ColumnItem &col_item = range_columns.at(nth_col);
+      if (0 == col_item.column_name_.case_compare("TENANT_ID")) {
+        tenant_id_col_idx_ = nth_col;
+        break;
       }
     }
     //set key types
@@ -1216,13 +1211,11 @@ int ObAccessPathEstimation::gen_agent_vt_table_convert_info(const uint64_t vt_ta
       if (OB_ISNULL(vt_col_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(range_column_id), K(ret));
-      } else if (has_tenant_id_col && 0 == i &&
-                 0 != vt_col_schema->get_column_name_str().case_compare("TENANT_ID")) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(range_column_id), K(ret), K(i), K(has_tenant_id_col));
       } else {
-        for (int64_t j = 0; OB_SUCC(ret) && !find_it && j < real_table_schema->get_column_count(); ++j) {
-          const ObColumnSchemaV2 *col_schema = real_table_schema->get_column_schema_by_idx(j);
+        for (int64_t j = 0;
+             OB_SUCC(ret) && !find_it && j < real_index_schema->get_column_count();
+             ++j) {
+          const ObColumnSchemaV2 *col_schema = real_index_schema->get_column_schema_by_idx(j);
           if (OB_ISNULL(col_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column schema is null", K(ret), K(column_id));

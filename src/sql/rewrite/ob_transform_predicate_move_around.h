@@ -43,7 +43,7 @@ private:
                              const ObDMLStmt &stmt,
                              bool &need_trans) override;
 
-  int sort_transed_stmts();
+  int adjust_transed_stmts();
 
   int check_outline_valid_to_transform(const ObDMLStmt &stmt, bool &need_trans);
 

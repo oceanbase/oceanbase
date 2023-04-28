@@ -1108,11 +1108,9 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
       need_response_error = true;
     }
   } else {
-    if (enable_perf_event) {
-      //监控项统计开始
-      exec_start_timestamp_ = ObTimeUtility::current_time();
-      result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
-    }
+    //监控项统计开始
+    exec_start_timestamp_ = ObTimeUtility::current_time();
+    result.get_exec_context().set_plan_start_time(exec_start_timestamp_);
     // 本分支内如果出错，全部会在response_result内部处理妥当
     // 无需再额外处理回复错误包
 
@@ -1172,7 +1170,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-      if (enable_sql_audit) {
+      if (enable_perf_event) {
         audit_record.exec_record_.record_start(di);
       }
 
@@ -1236,20 +1234,26 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
           }
         }
       }
+      //监控项统计结束
+      exec_end_timestamp_ = ObTimeUtility::current_time();
+
+      // some statistics must be recorded for plan stat, even though sql audit disabled
+      bool first_record = (1 == audit_record.try_cnt_);
+      ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+      audit_record.exec_timestamp_.update_stage_time();
+
       if (enable_perf_event) {
-        //监控项统计结束
-        exec_end_timestamp_ = ObTimeUtility::current_time();
+        audit_record.exec_record_.record_end(di);
         record_stat(result.get_stmt_type(), exec_end_timestamp_);
+        audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+        audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+        audit_record.update_event_stage_state();
       }
+
       if (enable_perf_event && !THIS_THWORKER.need_retry()
         && OB_NOT_NULL(result.get_physical_plan())) {
         const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
         ObSQLUtils::record_execute_time(result.get_physical_plan()->get_plan_type(), time_cost);
-      }
-      if (enable_sql_audit) {
-        audit_record.exec_record_.record_end(di);
-        bool first_record = (1 == audit_record.try_cnt_);
-        ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
       }
 
       if (OB_FAIL(ret)
@@ -1298,8 +1302,6 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
         result.get_exec_context().get_task_exec_ctx().get_expected_worker_cnt();
       audit_record.used_worker_cnt_ =
         result.get_exec_context().get_task_exec_ctx().get_admited_worker_cnt();
-      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
 
       audit_record.is_executor_rpc_ = false;
       audit_record.is_inner_sql_ = false;
@@ -1311,13 +1313,12 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
       audit_record.ps_inner_stmt_id_ = inner_stmt_id;
       audit_record.params_value_ = params_value_;
       audit_record.params_value_len_ = params_value_len_;
+      audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
 
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();
       if (OB_NOT_NULL(plan_ctx)) {
         audit_record.consistency_level_ = plan_ctx->get_consistency_level();
       }
-      //更新阶段累加时间
-      audit_record.update_stage_stat();
     }
 
     //update v$sql statistics

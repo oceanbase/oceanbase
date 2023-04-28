@@ -871,7 +871,8 @@ public:
   //字段初始化
   const ObAuditRecordData &get_final_audit_record(ObExecuteMode mode);
   ObSessionStat &get_session_stat() { return session_stat_; }
-  void update_stat_from_audit_record();
+  void update_stat_from_exec_record();
+  void update_stat_from_exec_timestamp();
   void update_alive_time_stat();
   void handle_audit_record(bool need_retry, ObExecuteMode exec_mode);
 

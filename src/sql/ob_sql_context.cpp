@@ -239,6 +239,7 @@ ObSqlCtx::ObSqlCtx()
     res_map_rule_param_idx_(OB_INVALID_INDEX),
     res_map_rule_version_(0),
     is_text_ps_mode_(false),
+    first_plan_hash_(0),
     is_bulk_(false),
     reroute_info_(nullptr)
 {
@@ -281,6 +282,8 @@ void ObSqlCtx::reset()
   res_map_rule_param_idx_ = OB_INVALID_INDEX;
   res_map_rule_version_ = 0;
   is_protocol_weak_read_ = false;
+  first_plan_hash_ = 0;
+  first_outline_data_.reset();
   if (nullptr != reroute_info_) {
     reroute_info_->reset();
     op_reclaim_free(reroute_info_);

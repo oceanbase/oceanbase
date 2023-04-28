@@ -31,6 +31,7 @@ public:
   ~ObLogSubPlanScan() {};
   int generate_access_exprs();
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
   void set_subquery_id(uint64_t subquery_id) { subquery_id_ = subquery_id; }
   inline const uint64_t &get_subquery_id() const { return subquery_id_; }

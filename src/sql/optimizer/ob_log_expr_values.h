@@ -61,6 +61,7 @@ class ObLogExprValues : public ObLogicalOperator
     virtual int compute_one_row_info() override;
     virtual int compute_sharding_info() override;
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
     int extract_err_log_info();
     int mark_probably_local_exprs();

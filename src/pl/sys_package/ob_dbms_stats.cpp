@@ -5044,6 +5044,9 @@ int ObDbmsStats::get_all_table_ids_in_database(ObExecContext &ctx,
             // 1. user table
             // 2. valid sys table
             // 3. valid virtual table
+          } else if (share::is_oracle_mapping_real_virtual_table(table_schemas.at(i)->get_table_id())
+                     && table_schemas.at(i)->is_index_table()) {
+            // skip
           } else if (OB_FAIL(table_ids.push_back(table_schemas.at(i)->get_table_id()))) {
             LOG_WARN("failed to push back id", K(ret));
           } else {/*do nothing*/}
@@ -5761,6 +5764,8 @@ int ObDbmsStats::get_table_index_infos(sql::ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_schema));
+  } else if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())) {
+    // do not gather stat for oracle inner table index
   } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos, false))) {
     LOG_WARN("failed to get simple index infos", K(ret));
   } else {

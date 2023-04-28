@@ -111,6 +111,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     global_hint_(global_hint),
     expr_factory_(expr_factory),
     log_plan_factory_(allocator),
+    force_serial_set_order_(false),
     parallel_(1),
     px_parallel_rule_(PXParallelRule::NOT_USE_PX),
     use_pdml_(false),
@@ -224,6 +225,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool is_heap_table_ddl() const { return is_heap_table_ddl_; }
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
   inline int64_t get_parallel() const { return parallel_; }
+  inline bool force_serial_set_order() const { return force_serial_set_order_; }
   inline bool is_use_parallel_rule() const
   {
     return px_parallel_rule_ == MANUAL_HINT ||
@@ -245,6 +247,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     return px_parallel_rule_ == PXParallelRule::MANUAL_TABLE_HINT;
   }
   inline ObFdItemFactory &get_fd_item_factory() { return fd_item_factory_; }
+  void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
   void set_use_pdml(bool u) { use_pdml_ = u; }
   void set_is_online_ddl(bool flag) { is_online_ddl_ = flag; }
@@ -496,6 +499,7 @@ private:
   const ObGlobalHint &global_hint_;
   ObRawExprFactory &expr_factory_;
   ObLogPlanFactory log_plan_factory_;
+  bool force_serial_set_order_; //to keep a serial execute for set query
   int64_t parallel_;
   // 决定计划并行度的规则
   PXParallelRule px_parallel_rule_;

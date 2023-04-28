@@ -383,7 +383,7 @@ int ObDelUpdResolver::try_add_remove_const_epxr(ObSelectStmt &stmt)
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_item_size(); ++i) {
       ObRawExpr *&expr = stmt.get_select_item(i).expr_;
       CK(NULL != expr);
-      if (OB_SUCC(ret) && expr->is_const_expr()) {
+      if (OB_SUCC(ret)) {
         ObRawExpr *new_expr = NULL;
         OZ(ObRawExprUtils::build_remove_const_expr(
                 *params_.expr_factory_, *session_info_, expr, new_expr));

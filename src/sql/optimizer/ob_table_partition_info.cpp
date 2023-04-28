@@ -199,6 +199,8 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
 
       loc_meta.related_table_ids_.reset();
       loc_meta.related_table_ids_.set_capacity(1);
+      ref_table_id = share::is_oracle_mapping_real_virtual_table(ref_table_id) ?
+        ObSchemaUtils::get_real_table_mappings_tid(ref_table_id) : ref_table_id;
       if (OB_FAIL(loc_meta.related_table_ids_.push_back(ref_table_id))) {
         LOG_WARN("store related table ids failed", K(ret));
       } else if (OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(table_location_, exec_ctx, related_map))) {

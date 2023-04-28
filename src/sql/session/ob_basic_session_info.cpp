@@ -3332,6 +3332,18 @@ int ObBasicSessionInfo::is_transformation_enabled(bool &transformation_enabled) 
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_TRANSFORMATION, transformation_enabled);
 }
 
+int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const
+{
+  int ret = OB_SUCCESS;
+  force_set_order = false;
+  if (!is_oracle_mode) {
+    //do nothing
+  } else {
+    ret = get_bool_sys_var(SYS_VAR__FORCE_ORDER_PRESERVE_SET, force_set_order);
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) const
 {
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);

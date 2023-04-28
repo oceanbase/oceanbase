@@ -1584,23 +1584,23 @@ Query Plan
 |ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
 |0 |MERGE UNION DISTINCT|       |6       |5           |
-|1 |├─TABLE FULL SCAN   |x2(ix2)|3       |2           |
-|2 |└─SORT              |       |3       |3           |
-|3 |  └─TABLE FULL SCAN |x1     |3       |2           |
+|1 |├─SORT              |       |3       |3           |
+|2 |│ └─TABLE FULL SCAN |x1     |3       |2           |
+|3 |└─TABLE FULL SCAN   |x2(ix2)|3       |2           |
 =======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
-  1 - output([x2.d2], [x2.d3]), filter(nil), rowset=256
-      access([x2.d2], [x2.d3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  2 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
+  1 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
       sort_keys([x1.c2, ASC], [x1.c3, ASC])
-  3 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
+  2 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
       access([x1.c2], [x1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([x1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([x2.d2], [x2.d3]), filter(nil), rowset=256
+      access([x2.d2], [x2.d3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 1,2;
 +------+------+
 | c2   | c3   |

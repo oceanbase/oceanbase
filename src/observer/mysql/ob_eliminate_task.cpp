@@ -155,7 +155,7 @@ void ObEliminateTask::runTimerTask()
     }
     if (OB_SUCC(ret) && REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s delay
       LOG_INFO("Eliminate task evict sql audit",
-          K(request_manager_->get_tenant_id()), K(queue_size),
+          K(request_manager_->get_tenant_id()), K(queue_size), K(config_mem_limit_),
           K(request_manager_->get_size_used()), K(evict_high_size_level), K(evict_low_size_level),
           K(allocator->allocated()), K(evict_high_mem_level), K(evict_low_mem_level));
     }
@@ -167,6 +167,7 @@ void ObEliminateTask::runTimerTask()
     //按内存淘汰
     if (evict_high_mem_level < allocator->allocated()) {
       LOG_INFO("sql audit evict mem start",
+               K(request_manager_->get_tenant_id()),
                K(evict_low_mem_level),
                K(evict_high_mem_level),
                "size_used",request_manager_->get_size_used(),
@@ -186,6 +187,7 @@ void ObEliminateTask::runTimerTask()
     if (request_manager_->get_size_used() > evict_high_size_level) {
       evict_batch_count = (request_manager_->get_size_used() - evict_low_size_level) / release_cnt;
       LOG_INFO("sql audit evict record start",
+               K(request_manager_->get_tenant_id()),
                K(evict_high_size_level),
                K(evict_low_size_level),
                "size_used",request_manager_->get_size_used(),
@@ -200,6 +202,7 @@ void ObEliminateTask::runTimerTask()
     }
     int64_t end_time = ObTimeUtility::current_time();
     LOG_INFO("sql audit evict task end",
+             K(request_manager_->get_tenant_id()),
              K(evict_high_mem_level),
              K(evict_high_size_level),
              K(evict_batch_count),

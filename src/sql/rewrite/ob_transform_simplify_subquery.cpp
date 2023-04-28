@@ -86,8 +86,21 @@ int ObTransformSimplifySubquery::transform_one_stmt(common::ObIArray<ObParentDML
       LOG_TRACE("succeed to transform_exists_query", K(is_happened));
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(transform_any_all_as_exists(stmt, is_happened))) {
+      LOG_WARN("failed to transform_any_all_as_exists", K(ret));
+    } else {
+      trans_happened |= is_happened;
+      OPT_TRACE("transform any/all as exists/not exists:", is_happened);
+      LOG_TRACE("succeed to transform_any_all_as_exists", K(is_happened));
+    }
+  }
   if (OB_SUCC(ret) && trans_happened) {
-    if (OB_FAIL(add_transform_hint(*stmt))) {
+    if (OB_FAIL(stmt->adjust_subquery_list())) {
+      LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+      LOG_WARN("failed to formalize query ref exprs");
+    } else if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
     }
   }
@@ -265,71 +278,82 @@ int ObTransformSimplifySubquery::transform_not_expr(ObDMLStmt *stmt,
                                                     bool &trans_happened)
 {
   int ret = OB_SUCCESS;
+  bool is_happened = false;
   trans_happened = false;
-  ObRawExprFactory *expr_factory = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+  ObSEArray<ObRawExprPointer, 16> relation_expr_pointers;
+  if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(ctx_));
-  } else if (OB_ISNULL(expr_factory = ctx_->expr_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null ctx_ info", K(expr_factory));
-  } else {
-    ObSEArray<ObRawExpr *, 8> old_exprs;
-    ObSEArray<ObRawExpr *, 8> new_exprs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
-      ObRawExpr *expr = stmt->get_condition_expr(i);
-
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (expr->get_expr_type() == T_OP_NOT &&
-                 expr->has_flag(CNT_SUB_QUERY)) {
-        ObRawExpr *param = expr->get_param_expr(0);
-        ObItemType expr_type = param->get_expr_type();
-        if (OB_ISNULL(param)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret), K(*param));
-        } else if (expr_type == T_OP_SQ_NSEQ) {
-          // same to T_OP_SQ_EQ as long as the expr is not null
-          // do nothing current now
-        } else if (param->has_flag(IS_WITH_ALL) || param->has_flag(IS_WITH_ANY)) {
-          ObRawExpr *new_param = NULL;
-          ObOpRawExpr *new_op_expr = NULL;
-          ObSubQueryKey key_flag = param->has_flag(IS_WITH_ALL) ?
-                                   T_WITH_ANY : T_WITH_ALL;
-          ObItemType new_type = get_opposite_expr_type(expr_type);
-          // 1. not col = all subquery can not be transformed
-          // 2. not col != any subquery can not be transformed
-          // 3. item type with T_INVALID can not be transformed
-          bool is_not_valid = (expr_type == T_OP_SQ_EQ &&
-                               param->has_flag(IS_WITH_ALL)) ||
-                              (expr_type == T_OP_SQ_NE &&
-                               param->has_flag(IS_WITH_ANY)) ||
-                              (new_type == T_INVALID);
-          if (is_not_valid) {
-          } else if (OB_FAIL(expr_factory->create_raw_expr(
-                                           ObRawExpr::EXPR_OPERATOR,
-                                           new_type,
-                                           new_param))) {
-            LOG_WARN("failed to create raw expr", K(ret));
-          } else if (OB_FALSE_IT(new_op_expr = static_cast<ObOpRawExpr *>(new_param))) {
-          } else if (OB_FALSE_IT(new_op_expr->set_subquery_key(key_flag))) {
-          } else if (OB_FAIL(append(new_op_expr->get_param_exprs(),
-                              static_cast<ObOpRawExpr *>(param)->get_param_exprs()))) {
-            LOG_WARN("failed to append param exprs", K(ret));
-          } else if (OB_FALSE_IT(new_param = new_op_expr)) {
-          } else if (OB_FAIL(new_exprs.push_back(new_param))) {
-            LOG_WARN("failed to push back new expr", K(ret));
-          } else if (OB_FAIL(old_exprs.push_back(expr))) {
-            LOG_WARN("failed to push back old expr", K(ret));
-          }
-        }
-      }
-    }
-    if (OB_FAIL(ret) || old_exprs.empty() || new_exprs.empty()) {
-    } else if (OB_FAIL(stmt->replace_relation_exprs(old_exprs, new_exprs))) {
-      LOG_WARN("failed to replace expr in stmt", K(ret));
+    LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_expr_pointers))) {
+      LOG_WARN("failed to get_relation_exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_expr_pointers.count(); ++i) {
+    ObRawExpr *expr = NULL;
+    if (OB_FAIL(relation_expr_pointers.at(i).get(expr))) {
+      LOG_WARN("failed to get relation expr", K(ret));
+    } else if (OB_FAIL(do_transform_not_expr(expr, is_happened))) {
+      LOG_WARN("failed to transform expr", K(ret));
+    } else if (!is_happened) {
+      // do nothing
+    } else if (OB_FAIL(relation_expr_pointers.at(i).set(expr))) {
+      LOG_WARN("failed to set expr", K(ret));
     } else {
+      trans_happened |= is_happened;
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::do_transform_not_expr(ObRawExpr *&expr, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *param = NULL;
+  ObItemType expr_type = T_INVALID;
+  trans_happened = false;
+  if (OB_ISNULL(expr) ||
+      OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(*param));
+  } else if (expr->get_expr_type() != T_OP_NOT ||
+             !expr->has_flag(CNT_SUB_QUERY)) {
+    // do nothing
+  } else if (OB_ISNULL(param = expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(*param));
+  } else if (OB_FALSE_IT(expr_type = param->get_expr_type())) {
+  } else if (expr_type == T_OP_SQ_NSEQ) {
+    // same to T_OP_SQ_EQ as long as the expr is not null
+    // do nothing current now
+  } else if (param->has_flag(IS_WITH_ALL) || param->has_flag(IS_WITH_ANY)) {
+    ObRawExpr *new_param = NULL;
+    ObOpRawExpr *new_op_expr = NULL;
+    ObSubQueryKey key_flag = param->has_flag(IS_WITH_ALL) ?
+                              T_WITH_ANY : T_WITH_ALL;
+    ObItemType new_type = get_opposite_expr_type(expr_type);
+    // 1. not col = all subquery can not be transformed
+    // 2. not col != any subquery can not be transformed
+    // 3. item type with T_INVALID can not be transformed
+    bool is_not_valid = (expr_type == T_OP_SQ_EQ &&
+                          param->has_flag(IS_WITH_ALL)) ||
+                        (expr_type == T_OP_SQ_NE &&
+                          param->has_flag(IS_WITH_ANY)) ||
+                        (new_type == T_INVALID);
+    if (is_not_valid) {
+    } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(
+                                            ObRawExpr::EXPR_OPERATOR,
+                                            new_type,
+                                            new_param))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_FALSE_IT(new_op_expr = static_cast<ObOpRawExpr *>(new_param))) {
+    } else if (OB_FALSE_IT(new_op_expr->set_subquery_key(key_flag))) {
+    } else if (OB_FAIL(append(new_op_expr->get_param_exprs(),
+                        static_cast<ObOpRawExpr *>(param)->get_param_exprs()))) {
+      LOG_WARN("failed to append param exprs", K(ret));
+    } else if (OB_FAIL(new_op_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    } else {
+      expr = new_op_expr;
       trans_happened = true;
     }
   }
@@ -773,7 +797,15 @@ int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt, ObRawExpr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(expr));
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
-    if (OB_FAIL(transform_any_all_as_min_max(stmt, expr, is_happened))) {
+
+    if (OB_FAIL(eliminate_groupby_distinct_in_any_all(expr, is_happened))) {
+      LOG_WARN("failed to eliminate groupby distinct in any all", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(transform_any_all_as_min_max(stmt, expr, is_happened))) {
       LOG_WARN("failed to trans_any_all_as_min_max", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -782,6 +814,13 @@ int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt, ObRawExpr
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(eliminate_any_all_before_subquery(stmt, expr, is_happened))) {
       LOG_WARN("failed to eliminate_any_all_before_scalar_query", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(add_limit_for_any_all_subquery(expr, is_happened))) {
+      LOG_WARN("failed to add limit for any all subquery", K(ret));
     } else {
       trans_happened |= is_happened;
     }
@@ -1111,26 +1150,35 @@ ObItemType ObTransformSimplifySubquery::query_cmp_to_value_cmp(const ObItemType 
 int ObTransformSimplifySubquery::transform_exists_query(ObDMLStmt *stmt, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  ObIArray<ObRawExpr*> &conditions = stmt->get_condition_exprs();
+  ObSEArray<ObRawExprPointer, 16> relation_expr_pointers;
   if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret), K(stmt));
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("stmt is NULL", K(ret));
   } else if (!stmt->has_subquery()) {
-    //do nothing
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
-      bool is_happened = false;
-      if (OB_FAIL(transform_one_expr(stmt, conditions.at(i), is_happened))) {
-        LOG_WARN("failed to transform one subquery expr", K(ret));
-      } else {
-        trans_happened |= is_happened;
-      }
-    }
+    // do nothing
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_expr_pointers))) {
+    LOG_WARN("failed to get_relation_exprs", K(ret));
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < relation_expr_pointers.count(); ++i) {
+    ObRawExpr *target = NULL;
+    bool is_happened = false;
+    if (OB_FAIL(relation_expr_pointers.at(i).get(target))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("find to get expr from group", K(ret), K(target));
+    } else if (OB_FAIL(try_eliminate_subquery(stmt, target, is_happened))) {
+      LOG_WARN("fail to transform expr", K(ret));
+    } else if (!is_happened) {
+      // do nothing
+    } else if (OB_FAIL(relation_expr_pointers.at(i).set(target))) {
+      LOG_WARN("failed to set expr", K(ret));
+    } else {
+      trans_happened = true;
+    }
+  } // for end
   return ret;
 }
 
-int ObTransformSimplifySubquery::transform_one_expr(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened)
+int ObTransformSimplifySubquery::try_eliminate_subquery(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -1236,32 +1284,6 @@ int ObTransformSimplifySubquery::eliminate_subquery(ObDMLStmt *stmt,
         if (OB_SUCC(ret) && trans_happened) {
           subq_expr->set_output_column(subquery->get_select_item_size());
         }
-      }
-    } else if (expr->has_flag(IS_WITH_ANY) || expr->has_flag(IS_WITH_ALL)) {
-      if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1)))
-          || OB_ISNULL(left_hand = static_cast<ObRawExpr *>(expr->get_param_expr(0)))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Subquery or left_hand expr is NULL", K(ret));
-      } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Subquery stmt is NULL", K(ret));
-      } else if (OB_FAIL(eliminate_groupby_in_any_all(subquery, trans_happened))) {
-        LOG_WARN("Subquery elimination of group by in ANY, ALL fails", K(ret));
-      } else if (!subq_expr->get_exec_params().empty()) {
-        // correlated subquery
-        if (OB_FAIL(eliminate_distinct_in_any_all(subquery, trans_happened))) {
-          LOG_WARN("Subquery elimination of distinct in ANY, ALL fails", K(ret));
-        } else {/*do nothing*/}
-      } else if (!expr->has_flag(IS_WITH_ANY)) {
-        /*do nothing*/
-      } else if (OB_FAIL(check_need_add_limit(subquery, check_status))) {
-        LOG_WARN("check need add limit failed", K(ret));
-      } else if (!check_status) {
-        /*do nothing*/
-      } else if (OB_FAIL(ObTransformUtils::set_limit_expr(subquery, ctx_))) {
-        LOG_WARN("add limit expr failed", K(ret));
-      } else {
-        trans_happened = true;
       }
     }
   }
@@ -1645,6 +1667,34 @@ int ObTransformSimplifySubquery::eliminate_groupby_in_any_all(ObSelectStmt *&sub
   return ret;
 }
 
+
+int ObTransformSimplifySubquery::eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *subq_expr = NULL;
+  ObSelectStmt *subquery = NULL;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), K(expr));
+  } else if (!expr->has_flag(IS_WITH_ALL) && !expr->has_flag(IS_WITH_ANY)) {
+  } else if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1))) ||
+             OB_ISNULL(static_cast<ObRawExpr *>(expr->get_param_expr(0)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Subquery or left_hand expr is NULL", K(ret));
+  } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("subquery stmt is NULL", K(ret));
+  } else if (OB_FAIL(eliminate_groupby_in_any_all(subquery, trans_happened))) {
+        LOG_WARN("Subquery elimination of group by in ANY, ALL fails", K(ret));
+  } else if (!subq_expr->get_exec_params().empty()) {
+    // correlated subquery
+    if (OB_FAIL(eliminate_distinct_in_any_all(subquery, trans_happened))) {
+      LOG_WARN("Subquery elimination of distinct in ANY, ALL fails", K(ret));
+    } else {/*do nothing*/}
+  }
+
+  return ret;
+}
 int ObTransformSimplifySubquery::eliminate_distinct_in_any_all(ObSelectStmt *subquery,
                                                          bool &trans_happened)
 {
@@ -1663,6 +1713,38 @@ int ObTransformSimplifySubquery::eliminate_distinct_in_any_all(ObSelectStmt *sub
     subquery->assign_all();
     trans_happened = true;
   } else { /* do nothing */ }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::add_limit_for_any_all_subquery(ObRawExpr *expr, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *subq_expr = NULL;
+  ObSelectStmt *subquery = NULL;
+  bool check_status = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!expr->has_flag(IS_WITH_ANY))  {
+    /*do nothing*/
+  } else if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1)))
+             || OB_ISNULL(static_cast<ObRawExpr *>(expr->get_param_expr(0)))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Subquery or left_hand expr is NULL", K(ret));
+  } else if (OB_ISNULL(subquery = subq_expr->get_ref_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Subquery stmt is NULL", K(ret));
+  } else if (subq_expr->has_exec_param())  {
+    //do nothing
+  } else if (OB_FAIL(check_need_add_limit(subquery, check_status))) {
+    LOG_WARN("check need add limit failed", K(ret));
+  } else if (!check_status) {
+    /*do nothing*/
+  } else if (OB_FAIL(ObTransformUtils::set_limit_expr(subquery, ctx_))) {
+    LOG_WARN("add limit expr failed", K(ret));
+  } else {
+    trans_happened = true;
+  }
   return ret;
 }
 
@@ -1792,6 +1874,546 @@ int ObTransformSimplifySubquery::check_const_select(const ObSelectStmt &stmt,
       LOG_WARN("expr is null", K(ret));
     } else {
       is_const_select = stmt.get_select_item(i).expr_->is_const_expr();
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::try_trans_any_all_as_exists(ObDMLStmt *stmt,
+                                                             ObRawExpr *&expr,
+                                                             ObNotNullContext *not_null_ctx,
+                                                             bool is_bool_expr,
+                                                             bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  bool is_happened = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt), K(expr));
+  } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
+    if (OB_FAIL(check_can_trans_as_exists(expr, is_bool_expr, is_valid))) {
+      LOG_WARN("failed to check in can tras as exists", K(ret));
+    } else if (!is_valid) {
+      // do nothing
+    } else if (OB_FAIL(do_trans_any_all_as_exists(expr,
+                                                  not_null_ctx,
+                                                  is_happened))) {
+      LOG_WARN("failed to do trans any all as exists", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+  } else if (!expr->has_flag(CNT_SUB_QUERY)) {
+    // do nothing
+  } else if (expr->get_expr_type() == T_OP_CASE) {
+    ObCaseOpRawExpr* case_expr = static_cast<ObCaseOpRawExpr*>(expr);
+    for (int64_t i = 0; OB_SUCC(ret) && i < case_expr->get_when_expr_size(); ++i) {
+      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
+                                                         case_expr->get_when_param_expr(i),
+                                                         not_null_ctx,
+                                                         true,
+                                                         is_happened)))) {
+        LOG_WARN("failed to try_transform_any_all for param", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < case_expr->get_then_expr_size(); ++i) {
+      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
+                                                         case_expr->get_then_param_expr(i),
+                                                         not_null_ctx,
+                                                         false,
+                                                         is_happened)))) {
+        LOG_WARN("failed to try_transform_any_all for param", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(case_expr->get_default_param_expr()) &&
+               OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(
+                                  stmt,
+                                  case_expr->get_default_param_expr(),
+                                  not_null_ctx,
+                                  false,
+                                  is_happened)))) {
+      LOG_WARN("failed to try_transform_any_all for param", K(ret));
+    } else if (OB_FALSE_IT(trans_happened |= is_happened)) {
+      //do nothing
+    } else if (OB_NOT_NULL(case_expr->get_arg_param_expr()) &&
+               OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(
+                                  stmt,
+                                  case_expr->get_arg_param_expr(),
+                                  not_null_ctx,
+                                  false,
+                                  is_happened)))) {
+      LOG_WARN("failed to try_transform_any_all for param", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+  } else {
+    //check children
+    bool child_is_bool_expr = expr->get_expr_type() == T_OP_OR ||
+                              expr->get_expr_type() == T_OP_AND ||
+                              expr->get_expr_type() == T_OP_XOR;
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(try_trans_any_all_as_exists(stmt,
+                                                         expr->get_param_expr(i),
+                                                         not_null_ctx,
+                                                         child_is_bool_expr,
+                                                         is_happened)))) {
+        LOG_WARN("failed to try_transform_any_all for param", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::do_trans_any_all_as_exists(ObRawExpr *&expr,
+                                                            ObNotNullContext *not_null_ctx,
+                                                            bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory* expr_factory = NULL;
+  ObSelectStmt *right_stmt = NULL;
+  ObRawExpr *left_hand = NULL;
+  ObQueryRefRawExpr *right_hand = NULL;
+  ObSEArray<ObRawExpr*, 4> left_exprs;
+  ObOpRawExpr* exists_expr = NULL;
+  ObItemType cmp_type = T_INVALID;
+  ObSEArray<ObRawExpr*, 4> constraints;
+  ObSEArray<ObRawExpr*, 4> or_exprs;
+  trans_happened = false;
+
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
+      OB_ISNULL(ctx_->session_info_) ||
+      OB_ISNULL(left_hand = expr->get_param_expr(0)) ||
+      OB_ISNULL(expr->get_param_expr(1)) ||
+      OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL pointer Error", KP_(ctx), K(ret));
+  } else if (OB_FALSE_IT(right_hand =
+                         static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1)))) {
+  } else if (OB_FAIL(prepare_trans_any_all_as_exists(right_hand, right_stmt))) {
+    LOG_WARN("failed to prepare trans any all as exists", K(ret));
+  } else if (T_OP_ROW != left_hand->get_expr_type() &&
+              OB_FAIL(left_exprs.push_back(left_hand))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else if (T_OP_ROW == left_hand->get_expr_type() &&
+              OB_FAIL(append(left_exprs, static_cast<ObOpRawExpr *>(left_hand)->get_param_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_ISNULL(right_stmt) ||
+             OB_UNLIKELY(left_exprs.count() != right_stmt->get_select_item_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select item size not equal to in expr size", K(left_exprs.count()),
+              K(right_stmt->get_select_item_size()));
+  } else {
+    ObNotNullContext right_null_ctx(*ctx_, right_stmt);
+    if (expr->has_flag(IS_WITH_ALL) &&
+        OB_FAIL(right_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))) {
+      LOG_WARN("failed to generate stmt context", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < left_exprs.count(); ++i) {
+      ObOpRawExpr* cmp_expr = NULL;
+      ObRawExpr* left_expr = NULL;
+      ObRawExpr* exec_param = NULL;
+      ObRawExpr* op_expr = NULL;
+      if (OB_ISNULL(left_expr = left_exprs.at(i)) ||
+          OB_ISNULL(right_stmt->get_select_item(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(left_expr));
+      } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*expr_factory,
+                                                              right_hand,
+                                                              left_expr,
+                                                              exec_param))) {
+        LOG_WARN("failed to get exec param expr", K(ret));
+      } else if (OB_FAIL(query_cmp_to_exists_value_cmp(expr->get_expr_type(),
+                                                      expr->has_flag(IS_WITH_ALL),
+                                                      cmp_type))) {
+        LOG_WARN("failed to get query cmp to value cmp type", K(ret));
+      } else if (OB_FAIL(expr_factory->create_raw_expr(cmp_type, cmp_expr))) {
+        LOG_WARN("failed to create raw expr", K(ret));
+      } else if (OB_ISNULL(cmp_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(left_expr));
+      } else if (OB_FAIL(cmp_expr->set_param_exprs(exec_param,
+                                                    right_stmt->get_select_item(i).expr_))) {
+        LOG_WARN("failed to set param exprs", K(ret));
+      } else if (OB_FAIL(cmp_expr->formalize(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize cmp expr", K(ret));
+      } else if (OB_FAIL(cmp_expr->pull_relation_id())) {
+        LOG_WARN("failed to pull relation id", K(ret));
+      } else if (expr->has_flag(IS_WITH_ALL)) {
+        ObRawExpr* left_is_null_expr = NULL;
+        ObRawExpr* right_is_null_expr = NULL;
+        ObRawExpr* or_expr = NULL;
+        bool is_not_null = false;
+        constraints.reuse();
+        or_exprs.reuse();
+        if (OB_FAIL(or_exprs.push_back(cmp_expr))) {
+          LOG_WARN("failed to push back or expr");
+        } else if (not_null_ctx != NULL &&
+                  OB_FAIL(ObTransformUtils::is_expr_not_null(*not_null_ctx,
+                                                              left_expr,
+                                                              is_not_null,
+                                                              &constraints))) {
+          LOG_WARN("failed to check whether expr is nullable", K(ret));
+        } else if (is_not_null &&
+                  OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
+          LOG_WARN("failed to add param not null constraint", K(ret));
+        } else if (!is_not_null &&
+                  OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*expr_factory,
+                                                                  exec_param,
+                                                                  false,
+                                                                  left_is_null_expr))) {
+          LOG_WARN("failed to build is not null expr", K(ret));
+        } else if (!is_not_null &&
+                  OB_FAIL(or_exprs.push_back(left_is_null_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FALSE_IT(is_not_null = false)) {
+        } else if (OB_FALSE_IT(constraints.reuse())) {
+        } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(right_null_ctx,
+                                                              right_stmt->get_select_item(i).expr_,
+                                                              is_not_null,
+                                                              &constraints))) {
+          LOG_WARN("failed to check whether expr is nullable", K(ret));
+        } else if (is_not_null &&
+                  OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
+          LOG_WARN("failed to add param not null constraint", K(ret));
+        } else if (!is_not_null &&
+                  OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*expr_factory,
+                                                                  right_stmt->get_select_item(i).expr_,
+                                                                  false,
+                                                                  right_is_null_expr))) {
+          LOG_WARN("failed to build is not null expr", K(ret));
+        } else if (!is_not_null &&
+                  OB_FAIL(or_exprs.push_back(right_is_null_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*expr_factory,
+                                                          or_exprs,
+                                                          or_expr))) {
+          LOG_WARN("failed to build or exprs", K(ret));
+        } else if (OB_ISNULL(or_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(or_expr));
+        } else if (OB_FAIL(or_expr->formalize(ctx_->session_info_))) {
+          LOG_WARN("failed to formalize expr", K(ret));
+        } else if (OB_FAIL(or_expr->pull_relation_id())) {
+          LOG_WARN("failed to pull releation id", K(ret));
+        } else {
+          op_expr = or_expr;
+        }
+      } else {
+        op_expr = cmp_expr;
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(right_stmt->get_condition_exprs().push_back(op_expr))) {
+        LOG_WARN("failed to push back op expr", K(ret));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_factory->create_raw_expr(expr->has_flag(IS_WITH_ALL)
+                                                   ? T_OP_NOT_EXISTS : T_OP_EXISTS,
+                                                   exists_expr))) {
+    LOG_WARN("failed to create raw expr");
+  } else if (OB_FAIL(OB_ISNULL(exists_expr))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(exists_expr));
+  } else if (OB_FAIL(exists_expr->set_param_expr(right_hand))) {
+    LOG_WARN("failed to set param expr", K(ret));
+  } else if (OB_FAIL(exists_expr->formalize(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else {
+    expr = exists_expr;
+    trans_happened = true;
+  }
+
+  return ret;
+}
+
+int ObTransformSimplifySubquery::check_can_trans_as_exists(ObRawExpr* expr, bool is_bool_expr, bool& is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr* right_hand = NULL;
+  ObRawExpr* left_hand = NULL;
+  is_valid = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(expr));
+  } else if (!is_bool_expr ||
+             !IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type()) ||
+             (!expr->has_flag(IS_WITH_ALL) &&
+              !expr->has_flag(IS_WITH_ANY))) {
+    // do nothing
+  } else if (OB_UNLIKELY(expr->get_param_count() != 2) ||
+             OB_ISNULL(left_hand = expr->get_param_expr(0)) ||
+             OB_ISNULL(expr->get_param_expr(1)) ||
+             OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param expr is null", K(ret));
+  } else if (left_hand->has_flag(CNT_SUB_QUERY)) {
+    // do nothing
+  } else if (OB_FALSE_IT(right_hand = static_cast<ObQueryRefRawExpr*>(expr->get_param_expr(1)))) {
+  } else if (right_hand->get_ref_count() > 1) {
+    // do nothing
+  } else if (OB_FAIL(check_stmt_can_trans_as_exists(right_hand->get_ref_stmt(),
+                                                    !right_hand->get_exec_params().empty(),
+                                                    is_valid))) {
+    LOG_WARN("failed to check stmt can trans as exists", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::check_stmt_can_trans_as_exists(ObSelectStmt *stmt, bool is_correlated, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  bool contain_rownum = false;
+  is_valid = false;
+  if (OB_ISNULL(stmt) ||
+      OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child stmt is null", K(ret));
+  } else if (OB_FAIL(stmt->has_rownum(contain_rownum))) {
+    LOG_WARN("failed to check child statement contain rownum", K(ret));
+  } else if (contain_rownum ||
+             stmt->has_limit()) {
+    // do nothing
+  } else if (stmt->is_set_stmt()) {
+    if (stmt->is_recursive_union()) {
+    } else if (stmt->get_set_op() == ObSelectStmt::EXCEPT) {
+      if (OB_UNLIKELY(stmt->get_set_query().empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get except set query is empty", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_stmt_can_trans_as_exists(stmt->get_set_query(0),
+                                                                   is_correlated,
+                                                                   is_valid)))) {
+        LOG_WARN("failted to check stmt can trans as exists", K(ret));
+      }
+    } else {
+      is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt->get_set_query().count(); ++i) {
+        if (OB_FAIL(SMART_CALL(check_stmt_can_trans_as_exists(stmt->get_set_query(i),
+                                                              is_correlated,
+                                                              is_valid)))) {
+          LOG_WARN("failted to check stmt can trans as exists", K(ret));
+        }
+      }
+    }
+  } else if (stmt->is_contains_assignment() ||
+             stmt->is_hierarchical_query() ||
+             stmt->has_window_function() ||
+             stmt->has_rollup()) {
+    LOG_TRACE("stmt not support trans in as exists", K(stmt->is_contains_assignment()),
+              K(stmt->is_hierarchical_query()), K(stmt->has_window_function()),
+              K(stmt->has_rollup()));
+  } else if (is_correlated) {
+    is_valid = true;
+  } else if (stmt->has_group_by() ||
+             stmt->has_having()) {
+    // do nothing
+  } else {
+    ObArenaAllocator alloc;
+    EqualSets &equal_sets = ctx_->equal_sets_;
+    ObSEArray<ObRawExpr *, 4> const_exprs;
+    if (OB_FAIL(stmt->get_stmt_equal_sets(equal_sets, alloc, true))) {
+      LOG_WARN("failed to get stmt equal sets", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(stmt->get_condition_exprs(),
+                                                            const_exprs))) {
+      LOG_WARN("failed to compute const equivalent exprs", K(ret));
+    } else {
+      ObRawExpr *sel_expr = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < stmt->get_select_item_size(); ++i) {
+        if (OB_ISNULL(sel_expr = stmt->get_select_item(i).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("select expr is NULL", K(ret));
+        } else if (!sel_expr->is_column_ref_expr()) {
+        } else if (OB_FAIL(ObTransformUtils::is_match_index(ctx_->sql_schema_guard_,
+                                                            stmt,
+                                                            static_cast<ObColumnRefRawExpr *>(sel_expr),
+                                                            is_valid,
+                                                            &equal_sets,
+                                                            &const_exprs))) {
+          LOG_WARN("failed to check is match index prefix", K(ret));
+        }
+      }
+    }
+    equal_sets.reuse();
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::query_cmp_to_exists_value_cmp(ObItemType type, bool is_with_all, ObItemType& new_type)
+{
+  int64_t ret = OB_SUCCESS;
+  if (is_with_all) {
+    type = get_opposite_expr_type(type);
+  }
+  ret = ObTransformUtils::query_cmp_to_value_cmp(type, new_type);
+  return ret;
+}
+
+int ObTransformSimplifySubquery::prepare_trans_any_all_as_exists(ObQueryRefRawExpr* right_hand, ObSelectStmt *&trans_stmt)
+{
+  int ret = OB_SUCCESS;
+  trans_stmt = NULL;
+  if (OB_ISNULL(right_hand) ||
+      OB_ISNULL(trans_stmt = right_hand->get_ref_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to prepare trans any all as exists", K(ret));
+  } else if (trans_stmt->is_spj()) {
+  } else if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_,
+                                                                        trans_stmt,
+                                                                        trans_stmt))) {
+    LOG_WARN("failed to create stmt with generated table", K(ret));
+  } else {
+    right_hand->set_ref_stmt(trans_stmt);
+  }
+
+  return ret;
+}
+
+int ObTransformSimplifySubquery::transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  bool is_happened = false;
+  if (OB_ISNULL(stmt) ||
+      OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    ObNotNullContext not_null_ctx(*ctx_, stmt);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_joined_tables().count(); ++i) {
+      if (OB_FAIL(transform_any_all_as_exists_joined_table(stmt,
+                                                           stmt->get_joined_tables().at(i),
+                                                           is_happened))) {
+        LOG_WARN("failed to flatten join condition exprs", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(not_null_ctx.reset())) {
+    } else if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
+      LOG_WARN("failed to generate where context", K(ret));
+    } else if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+                                                   stmt->get_condition_exprs(),
+                                                   &not_null_ctx,
+                                                   true,
+                                                   is_happened))) {
+      LOG_WARN("failed to trans any all as exists", K(ret));
+    } else {
+      trans_happened |= is_happened;
+    }
+
+    if (OB_SUCC(ret) && stmt->is_select_stmt()) {
+      ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt);
+      not_null_ctx.reset();
+      if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_TOP))) {
+        LOG_WARN("failed to generate where context", K(ret));
+      } else if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+                                                     select_stmt->get_having_exprs(),
+                                                     &not_null_ctx,
+                                                     true,
+                                                     is_happened))) {
+        LOG_WARN("failed to try trans any all as exists", K(ret));
+      } else {
+        trans_happened |= is_happened;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_items().count(); ++i) {
+        if (OB_ISNULL(select_stmt->get_select_items().at(i).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+                                                       select_stmt->get_select_items().at(i).expr_,
+                                                       &not_null_ctx,
+                                                       false,
+                                                       is_happened))) {
+          LOG_WARN("failed to try trans any all as exists", K(ret));
+        } else {
+          trans_happened |= is_happened;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::transform_any_all_as_exists_joined_table(
+                                 ObDMLStmt* stmt,
+                                 TableItem *table,
+                                 bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  JoinedTable *join_table = NULL;
+  TableItem *left_table = NULL;
+  TableItem *right_table = NULL;
+  trans_happened = false;
+  bool cur_happened = false;
+  bool left_happened = false;
+  bool right_happened = false;
+  if (OB_ISNULL(table) ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(table));
+  } else if (!table->is_joined_table()) {
+    /*do nothing*/
+  } else if (OB_ISNULL(join_table = static_cast<JoinedTable*>(table)) ||
+             OB_ISNULL(left_table = join_table->left_table_) ||
+             OB_ISNULL(right_table = join_table->right_table_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(join_table));
+  } else {
+    ObNotNullContext not_null_ctx(*ctx_, stmt);
+    if (left_table->is_joined_table() &&
+        OB_FAIL(not_null_ctx.add_joined_table(static_cast<JoinedTable *>(left_table)))) {
+      LOG_WARN("failed to add context", K(ret));
+    } else if (right_table->is_joined_table() &&
+        OB_FAIL(not_null_ctx.add_joined_table(static_cast<JoinedTable *>(right_table)))) {
+      LOG_WARN("failed to add context", K(ret));
+    } else if (OB_FAIL(not_null_ctx.add_filter(join_table->get_join_conditions()))) {
+      LOG_WARN("failed to add null reject conditions", K(ret));
+    } else if (OB_FAIL(try_trans_any_all_as_exists(stmt, join_table->get_join_conditions(),
+                                                   &not_null_ctx, true, cur_happened))) {
+      LOG_WARN("failed to try trans any all as exists", K(ret));
+    } else if (OB_FAIL(SMART_CALL(transform_any_all_as_exists_joined_table(stmt,
+                                                                          join_table->left_table_,
+                                                                          left_happened)))) {
+      LOG_WARN("failed to flatten left child join condition exprs", K(ret));
+    } else if (OB_FAIL(SMART_CALL(transform_any_all_as_exists_joined_table(stmt,
+                                                                          join_table->right_table_,
+                                                                          right_happened)))) {
+      LOG_WARN("failed to flatten right child join condition exprs", K(ret));
+    } else {
+      trans_happened = cur_happened | left_happened | right_happened;
+    }
+  }
+  return ret;
+}
+
+int ObTransformSimplifySubquery::try_trans_any_all_as_exists(
+                                 ObDMLStmt *stmt,
+                                 ObIArray<ObRawExpr* > &exprs,
+                                 ObNotNullContext *not_null_cxt,
+                                 bool is_bool_expr,
+                                 bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  bool is_happened = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(try_trans_any_all_as_exists(stmt,
+                                            exprs.at(i),
+                                            not_null_cxt,
+                                            is_bool_expr,
+                                            is_happened))) {
+      LOG_WARN("failed to try trans any all as exists", K(ret));
+    } else {
+      trans_happened |= is_happened;
     }
   }
   return ret;

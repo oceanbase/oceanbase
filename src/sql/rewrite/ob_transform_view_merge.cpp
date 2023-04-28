@@ -44,6 +44,8 @@ int ObTransformViewMerge::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
     LOG_WARN("failed to do view merge in semi info", K(ret));
   } else if (!is_from_item_happened && !is_semi_info_happened) {
     /*do nothing*/
+  } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+    LOG_WARN("failed to fromalize query ref exprs", K(ret));
   } else if (OB_FAIL(add_transform_hint(*stmt, &merged_stmts))) {
     LOG_WARN("failed to add transform hint", K(ret));
   } else {
@@ -76,9 +78,14 @@ int ObTransformViewMerge::transform_one_stmt_with_outline(ObIArray<ObParentDMLSt
       LOG_TRACE("succeed to do view merge with outline", K(ctx_->src_qb_name_));
     }
   } while (OB_SUCC(ret) && is_happened);
-  if (OB_SUCC(ret) && trans_happened && OB_FAIL(add_transform_hint(*stmt, &merged_stmts))) {
-    LOG_WARN("failed to add transform hint", K(ret));
+  if (OB_SUCC(ret) && trans_happened) {
+    if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
+      LOG_WARN("failed to fromalize query ref exprs", K(ret));
+    } else if (OB_FAIL(add_transform_hint(*stmt, &merged_stmts))) {
+      LOG_WARN("failed to add transform hint", K(ret));
+    }
   }
+
   return ret;
 }
 

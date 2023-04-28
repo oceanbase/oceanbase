@@ -377,7 +377,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     tsc_ctdef_(alloc),
     pdml_partition_id_(NULL),
     agent_vt_meta_(alloc),
-    flags_(0)
+    flags_(0),
+    tenant_id_col_idx_(0)
 {
 }
 
@@ -400,7 +401,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     tsc_ctdef_,
                     pdml_partition_id_,
                     agent_vt_meta_,
-                    ddl_output_cids_);
+                    ddl_output_cids_,
+                    tenant_id_col_idx_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -424,7 +426,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K(tsc_ctdef_),
        K(report_col_checksum_),
        K_(agent_vt_meta),
-       K_(ddl_output_cids));
+       K_(ddl_output_cids),
+       K_(tenant_id_col_idx));
   J_OBJ_END();
   return pos;
 }
@@ -909,11 +912,6 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
     }
   }
-  if (OB_SUCC(ret) && is_lookup && MY_SPEC.is_vt_mapping_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "virtual table with index lookup");
-    LOG_WARN("virtual table with index lookup not supported", K(das_ctdef.ref_table_id_), K(MY_SPEC.agent_vt_meta_));
-  }
   if (OB_SUCC(ret)) {
     ObTableID table_loc_id = MY_SPEC.get_table_loc_id();
     das_rtdef.table_loc_ = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, das_ctdef.ref_table_id_);
@@ -1157,7 +1155,7 @@ int ObTableScanOp::init_converter()
   int ret = OB_SUCCESS;
   if (MY_SPEC.is_vt_mapping_) {
     ObSqlCtx *sql_ctx = NULL;
-    if (MY_SPEC.is_index_back()|| MY_SPEC.is_index_global_) {
+    if (MY_SPEC.is_index_global_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table id is not match", K(ret), K(MY_CTDEF), K(MY_SPEC.is_index_global_));
     } else if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx())
@@ -1195,7 +1193,8 @@ int ObTableScanOp::init_converter()
                                           &ctx_.get_allocator(),
                                           org_table_schema,
                                           &agent_vt_meta.access_column_ids_,
-                                          MY_SPEC.has_tenant_id_col_
+                                          MY_SPEC.has_tenant_id_col_,
+                                          MY_SPEC.tenant_id_col_idx_
                                           ))) {
         LOG_WARN("failed to init converter", K(ret));
       }
@@ -2108,7 +2107,7 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   ObDASGroupScanOp *batch_op = DAS_GROUP_SCAN_OP(scan_op);
   bool add_all = false;
   bool prune_all = true;
-  if (OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
+  if (!MY_SPEC.is_vt_mapping_ && OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ranges and skip scan postfix ranges mismatch", K(ret), K(input_ranges.count()),
                                                              K(input_ss_ranges.count()));

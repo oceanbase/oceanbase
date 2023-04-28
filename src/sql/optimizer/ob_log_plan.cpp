@@ -2546,55 +2546,7 @@ int ObLogPlan::init_width_estimation_info(const ObDMLStmt *stmt)
       LOG_WARN("failed to add group exprs into output exprs", K(ret));
     } else if (OB_FAIL(append_array_no_dup(groupby_rollup_exprs_, select_stmt->get_rollup_exprs()))) {
       LOG_WARN("failed to add rollup exprs into output exprs", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_multi_rollup_items_size(); ++i) {
-        ObMultiRollupItem multi_rollup_item = select_stmt->get_multi_rollup_items().at(i);
-        for (int64_t j = 0; OB_SUCC(ret) && j < multi_rollup_item.rollup_list_exprs_.count(); ++j) {
-          ObGroupbyExpr expr = multi_rollup_item.rollup_list_exprs_.at(j);
-          for (int64_t k = 0; OB_SUCC(ret) && k < expr.groupby_exprs_.count(); ++k) {
-            ObRawExpr *gby_expr = expr.groupby_exprs_.at(k);
-            if (OB_ISNULL(gby_expr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid expr", K(ret));
-            } else if (OB_FAIL(add_var_to_array_no_dup(groupby_rollup_exprs_, gby_expr))) {
-              LOG_WARN("failed to do appending to current array", K(ret));
-            }
-          }
-        }
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_grouping_sets_items_size(); ++i) {
-        ObGroupingSetsItem groupingsets_item = select_stmt->get_grouping_sets_items().at(i);
-        for (int64_t j = 0; OB_SUCC(ret) && j < groupingsets_item.grouping_sets_exprs_.count(); ++j) {
-          ObGroupbyExpr expr = groupingsets_item.grouping_sets_exprs_.at(j);
-          for (int64_t k = 0; OB_SUCC(ret) && k < expr.groupby_exprs_.count(); ++k) {
-            ObRawExpr *gby_expr = expr.groupby_exprs_.at(k);
-            if (OB_ISNULL(gby_expr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid expr", K(ret));
-            } else if (OB_FAIL(add_var_to_array_no_dup(groupby_rollup_exprs_, gby_expr))) {
-              LOG_WARN("failed to do appending to current array", K(ret));
-            }
-          }
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < select_stmt->get_multi_rollup_items_size(); ++j) {
-          ObMultiRollupItem multi_rollup_item = select_stmt->get_multi_rollup_items().at(j);
-          for (int64_t k = 0; OB_SUCC(ret) && k < multi_rollup_item.rollup_list_exprs_.count(); ++k) {
-            ObGroupbyExpr expr = multi_rollup_item.rollup_list_exprs_.at(k);
-              for (int64_t l = 0; OB_SUCC(ret) && l < expr.groupby_exprs_.count(); ++l) {
-              ObRawExpr *gby_expr = expr.groupby_exprs_.at(l);
-              if (OB_ISNULL(gby_expr)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("invalid expr", K(ret));
-              } else if (OB_FAIL(add_var_to_array_no_dup(groupby_rollup_exprs_, gby_expr))) {
-                LOG_WARN("failed to do appending to current array", K(ret));
-              }
-            }
-          }
-        }
-      }
-    }
-    // having exprs
-    if (OB_SUCC(ret) && OB_FAIL(append_array_no_dup(having_exprs_, select_stmt->get_having_exprs()))) {
+    } else if (OB_FAIL(append_array_no_dup(having_exprs_, select_stmt->get_having_exprs()))) {
       LOG_WARN("failed to add having exprs into output exprs", K(ret));
     }
     // winfunc exprs
@@ -6094,6 +6046,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
   ObSEArray<OrderItem, 4> second_sort_keys;
   ObSEArray<ObRawExpr *, 8> rd_second_sort_exprs;
   ObSEArray<OrderItem, 4> rd_second_sort_keys;
+  ObSEArray<OrderItem, 4> rd_second_ecd_sort_keys;
   OrderItem encode_sort_key;
   bool enable_encode_sort = false;
   ObExchangeInfo second_exch_info;
@@ -6189,15 +6142,15 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
       } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(rd_second_sort_keys,
                                                                     can_sort_opt, *this, top->get_card()))) {
         LOG_WARN("failed to check encode sortkey expr", K(ret));
-      } else if (false
+      } else if (can_sort_opt
           && (OB_FAIL(ObSQLUtils::create_encode_sortkey_expr(get_optimizer_context().get_expr_factory(),
                                                             get_optimizer_context().get_exec_ctx(),
                                                             rd_second_sort_keys,
                                                             0,
                                                             encode_sort_key)
-          || FALSE_IT(rd_second_sort_keys.reset())
+          // just append
           || FALSE_IT(enable_encode_sort = true)
-          || OB_FAIL(rd_second_sort_keys.push_back(encode_sort_key))))) {
+          || OB_FAIL(rd_second_ecd_sort_keys.push_back(encode_sort_key))))) {
         LOG_WARN("failed to create encode sortkey expr", K(ret));
       }
     } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(first_group_by_exprs,
@@ -6239,6 +6192,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
     } else if (OB_FAIL(second_group_by->set_rollup_info(second_rollup_status,
                                                         helper.rollup_id_expr_,
                                                         rd_second_sort_keys,
+                                                        rd_second_ecd_sort_keys,
                                                         enable_encode_sort))) {
       LOG_WARN("failed to set rollup parallel info", K(ret));
     }

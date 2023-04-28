@@ -83,6 +83,7 @@ namespace sql
     inline ObRawExpr *get_topk_offset_expr() { return topk_offset_expr_; }
     int set_sort_keys(const common::ObIArray<OrderItem> &order_keys);
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     virtual uint64_t hash(uint64_t seed) const override;
     virtual const char *get_name() const;
     inline void set_minimal_row_count(int64_t minimum_row_count)

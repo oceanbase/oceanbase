@@ -40,6 +40,7 @@ public:
   {
   }
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   ObSelectLogPlan *get_left_plan() const;
   ObSelectLogPlan *get_right_plan() const;
   const ObSelectStmt *get_left_stmt() const;

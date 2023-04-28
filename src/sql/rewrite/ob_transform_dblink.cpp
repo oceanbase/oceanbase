@@ -43,7 +43,12 @@ int ObTransformDBlink::transform_one_stmt(ObIArray<ObParentDMLStmt> &parent_stmt
       LOG_TRACE("succeed to reverse link table", K(ret));
     }
   } else {
-    if ((!stmt->is_dml_write_stmt() || stmt->is_merge_stmt()) &&
+    if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {
+      //dblink trace point
+      if (OB_FAIL(formalize_link_table(stmt))) {
+        LOG_WARN("failed to formalize link table", K(ret));
+      }
+    } else if ((!stmt->is_dml_write_stmt() || stmt->is_merge_stmt()) &&
         OB_FAIL(pack_link_table(stmt, trans_happened))) {
       LOG_WARN("failed to pack link table", K(ret));
     } else {
@@ -1314,6 +1319,7 @@ int ObTransformDBlink::formalize_column_item(ObDMLStmt *stmt)
     for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
       ObColumnRefRawExpr *col = column_items.at(i).expr_;
       TableItem *table = NULL;
+      ObString alias_name;
       if (OB_ISNULL(col) ||
           OB_ISNULL(table=stmt->get_table_item_by_id(col->get_table_id()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1322,15 +1328,12 @@ int ObTransformDBlink::formalize_column_item(ObDMLStmt *stmt)
       } else if (OB_FALSE_IT(col->set_database_name(table->database_name_))) {
       } else if (table->is_generated_table() || table->is_temp_table()) {
         int64_t sel_idx = col->get_column_id() - OB_APP_MIN_COLUMN_ID;
-        if (OB_ISNULL(table->ref_query_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect null ref query", K(ret));
-        } else if (sel_idx < 0 ||
-                   sel_idx >= table->ref_query_->get_select_item_size()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpect column id for view", K(ret));
+        if (OB_FAIL(ObTransformUtils::get_real_alias_name(table->ref_query_,
+                                                          sel_idx,
+                                                          alias_name))) {
+          LOG_WARN("failed to get real alias name", K(ret));
         } else {
-          col->set_column_name(table->ref_query_->get_select_item(sel_idx).alias_name_);
+          col->set_column_name(alias_name);
         }
       }
       if (OB_SUCC(ret) && table->is_link_type()) {

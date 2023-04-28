@@ -197,5 +197,24 @@ int ObLogCount::inner_replace_op_exprs(
   return ret;
 }
 
+int ObLogCount::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  ObRawExpr *rownum_expr = NULL;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(get_stmt()->get_rownum_expr(rownum_expr))) {
+    LOG_WARN("failed to get rownum expr", K(ret));
+  } else if (OB_ISNULL(rownum_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr == rownum_expr) {
+    is_fixed = true;
+  }
+  return ret;
+}
+
 } /* namespace sql */
 } /* namespace oceanbase */

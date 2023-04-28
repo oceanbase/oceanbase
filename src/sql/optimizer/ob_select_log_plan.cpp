@@ -578,6 +578,7 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   ObSEArray<ObRawExpr *, 4> rc_group_exprs; // rollup collector
   ObSEArray<ObRawExpr *, 4> exch_keys;
   ObSEArray<OrderItem, 4> rd_sort_keys;
+  ObSEArray<OrderItem, 4> rd_ecd_sort_keys;
   OrderItem encode_sort_key;
   bool enable_encode_sort = false;
   ObSEArray<OrderItem, 4> sort_keys;
@@ -629,19 +630,19 @@ int ObSelectLogPlan::create_rollup_pushdown_plan(const ObIArray<ObRawExpr*> &gro
   } else if (OB_FAIL(ObOptimizerUtil::check_can_encode_sortkey(rd_sort_keys,
                                                                 can_sort_opt, *this, top->get_card()))) {
     LOG_WARN("failed to check encode sortkey expr", K(ret));
-  } else if (false
+  } else if (can_sort_opt
       && (OB_FAIL(ObSQLUtils::create_encode_sortkey_expr(get_optimizer_context().get_expr_factory(),
                                                               get_optimizer_context().get_exec_ctx(),
                                                               rd_sort_keys,
                                                               0,
                                                               encode_sort_key)
-      || FALSE_IT(rd_sort_keys.reset())
       || FALSE_IT(enable_encode_sort = true)
-      || OB_FAIL(rd_sort_keys.push_back(encode_sort_key))))) {
+      || OB_FAIL(rd_ecd_sort_keys.push_back(encode_sort_key))))) {
     LOG_WARN("failed to create encode sortkey expr", K(ret));
   } else if (OB_FAIL(rollup_distributor->set_rollup_info(ObRollupStatus::ROLLUP_DISTRIBUTOR,
                                                          groupby_helper.rollup_id_expr_,
                                                          rd_sort_keys,
+                                                         rd_ecd_sort_keys,
                                                          enable_encode_sort))) {
     LOG_WARN("failed to set rollup distributor info", K(ret));
   } else if (OB_FAIL(append(exch_keys, group_by_exprs)) ||
@@ -2057,26 +2058,36 @@ int ObSelectLogPlan::create_union_all_plan(const ObIArray<ObLogicalOperator*> &c
   int ret = OB_SUCCESS;
   ObSEArray<ObLogicalOperator*, 8> set_child_ops;
   top = NULL;
+  const ObSelectStmt* select_stmt = NULL;
   uint64_t set_dist_methods = DistAlgo::DIST_BASIC_METHOD
                               | DistAlgo::DIST_PARTITION_WISE
                               | DistAlgo::DIST_SET_PARTITION_WISE
                               | DistAlgo::DIST_EXT_PARTITION_WISE
                               | DistAlgo::DIST_PULL_TO_LOCAL
                               | DistAlgo::DIST_SET_RANDOM;
-
-  if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
-      get_optimizer_context().has_var_assign()) {
-    set_dist_methods &= DistAlgo::DIST_PULL_TO_LOCAL | DistAlgo::DIST_BASIC_METHOD;
-  }
   int64_t random_none_idx = OB_INVALID_INDEX;
   bool is_partition_wise = false;
   bool is_ext_partition_wise = false;
   bool is_set_partition_wise = false;
   DistAlgo hint_dist_methods = get_log_plan_hint().get_valid_set_dist_algo(&random_none_idx);
-  if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
+  if (OB_ISNULL(select_stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(select_stmt), K(ret));
+  } else if (!get_optimizer_context().is_var_assign_only_in_root_stmt() &&
+      get_optimizer_context().has_var_assign()) {
+    set_dist_methods &= DistAlgo::DIST_PULL_TO_LOCAL | DistAlgo::DIST_BASIC_METHOD;
+  } else if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
     set_dist_methods &= hint_dist_methods;
   } else {
     random_none_idx = OB_INVALID_INDEX;
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (!ignore_hint && DistAlgo::DIST_INVALID_METHOD != hint_dist_methods) {
+    //do nothing
+  } else if (select_stmt->is_set_stmt() && !select_stmt->is_set_distinct() && get_optimizer_context().force_serial_set_order()) {
+    //for union all to keep child branches execute serially from left to right
+    set_dist_methods &= (DistAlgo::DIST_PULL_TO_LOCAL | DistAlgo::DIST_BASIC_METHOD);
   }
   OPT_TRACE("start create unoin all plan");
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_BASIC_METHOD)) {
@@ -2833,12 +2844,12 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       set_dist_methods |= DistAlgo::DIST_PULL_TO_LOCAL;
       if (get_optimizer_context().get_parallel() > 1) {
        set_dist_methods |= DistAlgo::DIST_HASH_HASH;
-       OPT_TRACE("candi hash set dist method:basic,partition wise,none partition,partition none,pull to local,hash hash");
+       OPT_TRACE("candi hash set dist method:basic,partition wise, none all, all none, none partition,partition none,pull to local,hash hash");
       } else {
-        OPT_TRACE("candi hash set dist method:basic,partition wise,none partition,partition none,pull to local");
+        OPT_TRACE("candi hash set dist method:basic,partition wise, none all, all none, none partition,partition none,pull to local");
       }
     } else {
-      OPT_TRACE("candi merge set dist method:basic, partition wise");
+      OPT_TRACE("candi merge set dist method:basic, partition wise,  none all, all none, ");
     }
   } else {
     OPT_TRACE("use dist method with hint");
@@ -3409,6 +3420,156 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
   return ret;
 }
 
+int ObSelectLogPlan::convert_set_order_item(const ObDMLStmt *stmt,
+                                             const ObIArray<ObRawExpr*> &select_exprs,
+                                             ObIArray<OrderItem> &order_items)
+{
+  /*
+  *the output order_items may have following case
+  *  1. select c1,c2,c3 from t1 union select c1,c2,c3 from t2 order by c2,c1,c3
+  *  --> full match, the merge sort key could be [c2,c1,c3]
+  *  2. select c1,c2,c3 from t1 union select c1,c2,c3 from t2 order by c2,c1+c3,c1,
+  *  --> pre match, the merge sort key could use pre match [c2] to adjust its merge sort key as [c2,c1,c3]
+  *  3. select c1,c2,c3 from t1 union select c1,c2,c3 from t2 order by c2,c1+c3,c1,
+  *  --> no match, set order item not match any, merge sort key directly use it child select expr as [c1,c2,c3]
+  */
+  int ret = OB_SUCCESS;
+  bool found = true;
+  ObSEArray<ObRawExpr*, 4> order_exprs;
+  ObSEArray<ObOrderDirection, 2> directions;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", K(ret));
+  } else if (OB_UNLIKELY(!(stmt->is_select_stmt() && static_cast<const ObSelectStmt*>(stmt)->is_set_stmt()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only use for set stmt to convert its order items expr with child order expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && found && i < stmt->get_order_items().count(); ++i) {
+      int64_t idx = -1;
+      ObRawExpr *order_expr = NULL;
+      if (OB_ISNULL(order_expr = stmt->get_order_items().at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(stmt->get_order_items().at(i)));
+      } else if (!order_expr->is_set_op_expr()) {
+        found = false;
+      } else if (-1 == (idx = static_cast<ObSetOpRawExpr*>(order_expr)->get_idx())){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index", K(idx), K(ret));
+      } else if (OB_FAIL(order_exprs.push_back(select_exprs.at(idx)))){
+        LOG_WARN("fail to push back expr", K(ret));
+      } else if (OB_FAIL(directions.push_back(stmt->get_order_items().at(i).order_type_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(order_exprs, directions, order_items))) {
+      LOG_WARN("failed to make sort keys", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::create_merge_set_key(const ObIArray<OrderItem> &set_order_items,
+                                          const ObIArray<ObRawExpr*> &merge_exprs,
+                                          const EqualSets &equal_sets,
+                                          MergeKeyInfo &merge_key)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 2> sort_exprs;
+  ObSEArray<ObOrderDirection, 2> directions;
+  ObSEArray<int64_t, 2> sort_map;
+  if (sort_exprs.empty() && !set_order_items.empty()) {
+    // find direction in order by exprs
+    if (OB_FAIL(ObOptimizerUtil::create_interesting_merge_key(merge_exprs, set_order_items, equal_sets, sort_exprs, directions, sort_map))) {
+      LOG_WARN("failed to create interesting key", K(ret));
+    } else {
+      LOG_TRACE("succeed to create merge key use order by items", K(sort_exprs), K(directions));
+    }
+  }
+  if (OB_SUCC(ret) && sort_exprs.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < merge_exprs.count(); ++i) {
+      if (OB_FAIL(sort_exprs.push_back(merge_exprs.at(i)))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(directions.push_back(default_asc_direction()))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(sort_map.push_back(i))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(merge_key.order_exprs_.assign(sort_exprs))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(merge_key.order_directions_.assign(directions))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(merge_key.map_array_.assign(sort_map))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::decide_merge_set_sort_key(const ObIArray<OrderItem> &set_order_items,
+                                               const ObIArray<OrderItem> &input_ordering,
+                                               const ObFdItemSet &fd_item_set,
+                                               const EqualSets &equal_sets,
+                                               const ObIArray<ObRawExpr*> &const_exprs,
+                                               const ObIArray<ObRawExpr*> &exec_ref_exprs,
+                                               const bool is_at_most_one_row,
+                                               const ObIArray<ObRawExpr*> &merge_exprs,
+                                               const ObIArray<ObOrderDirection> &default_directions,
+                                               MergeKeyInfo &merge_key)
+{
+  int ret = OB_SUCCESS;
+  int64_t prefix_count = -1;
+  bool input_ordering_all_used = false;
+  ObSEArray<OrderItem, 8> order_items;
+  ObSEArray<OrderItem, 8> final_items;
+  if (OB_FAIL(merge_key.order_exprs_.assign(merge_exprs))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(merge_key.order_directions_.assign(default_directions))) {
+    LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::adjust_exprs_by_ordering(merge_key.order_exprs_,
+                                                               input_ordering,
+                                                               equal_sets,
+                                                               const_exprs,
+                                                               exec_ref_exprs,
+                                                               prefix_count,
+                                                               input_ordering_all_used,
+                                                               merge_key.order_directions_,
+                                                               &merge_key.map_array_))) {
+    LOG_WARN("failed to adjust expr by ordering", K(ret));
+  } else if (!input_ordering_all_used && prefix_count <= 0 && OB_FAIL(create_merge_set_key(set_order_items, merge_exprs, equal_sets, merge_key))) {
+    LOG_WARN("failed to create merge set key", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::make_sort_keys(merge_key.order_exprs_,
+                                              merge_key.order_directions_,
+                                              order_items))) {
+    LOG_WARN("failed to make sort keys", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::simplify_ordered_exprs(fd_item_set,
+                                                             equal_sets,
+                                                             const_exprs,
+                                                             exec_ref_exprs,
+                                                             order_items,
+                                                             final_items))) {
+    LOG_WARN("failed to simply ordered exprs", K(ret));
+  } else if (OB_FAIL(merge_key.order_items_.assign(final_items))) {
+    LOG_WARN("failed to assign final items", K(ret));
+  } else if (input_ordering_all_used) {
+    merge_key.need_sort_ = false;
+  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(merge_key.order_items_,
+                                                    input_ordering,
+                                                    fd_item_set,
+                                                    equal_sets,
+                                                    const_exprs,
+                                                    exec_ref_exprs,
+                                                    is_at_most_one_row,
+                                                    merge_key.need_sort_,
+                                                    merge_key.prefix_pos_))) {
+    LOG_WARN("failed to check need sort", K(ret));
+  }
+  return ret;
+}
+
 int ObSelectLogPlan::init_merge_set_structure(ObIAllocator &allocator,
                                               const ObIArray<CandidatePlan> &plans,
                                               const ObIArray<ObRawExpr*> &select_exprs,
@@ -3420,8 +3581,10 @@ int ObSelectLogPlan::init_merge_set_structure(ObIAllocator &allocator,
   ObSEArray<ObOrderDirection, 8> default_directions;
   MergeKeyInfo *interesting_key = NULL;
   MergeKeyInfo *merge_key = NULL;
-  int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
-  if (OB_FAIL(ObOptimizerUtil::get_default_directions(select_exprs.count(), default_directions))) {
+  ObSEArray<OrderItem, 8> order_items;
+  if (OB_FAIL(convert_set_order_item(get_stmt(), select_exprs, order_items))) {
+    LOG_WARN("failed to convert order item", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_default_directions(select_exprs.count(), default_directions))) {
     LOG_WARN("failed to get default directions", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < plans.count(); ++i) {
@@ -3433,36 +3596,30 @@ int ObSelectLogPlan::init_merge_set_structure(ObIAllocator &allocator,
       LOG_WARN("get unexpected null", K(ret), K(child));
     } else if (OB_FALSE_IT(merge_key = new (merge_key) MergeKeyInfo(allocator,
                                                                     select_exprs.count()))) {
-    /* get_equal_sets() is empty before compute_property,
-       can not get a valid interesting key from set order items */
-    } else if (OB_FAIL(ObOptimizerUtil::decide_sort_keys_for_merge_style_op(
-                                                    get_stmt(),
-                                                    get_equal_sets(),
-                                                    child->get_op_ordering(),
-                                                    child->get_fd_item_set(),
-                                                    child->get_output_equal_sets(),
-                                                    child->get_output_const_exprs(),
-                                                    get_onetime_query_refs(),
-                                                    child->get_is_at_most_one_row(),
-                                                    select_exprs,
-                                                    default_directions,
-                                                    *merge_key,
-                                                    interesting_key))) {
+    } else if (OB_FAIL(decide_merge_set_sort_key(order_items,
+                                                 child->get_op_ordering(),
+                                                 child->get_fd_item_set(),
+                                                 child->get_output_equal_sets(),
+                                                 child->get_output_const_exprs(),
+                                                 get_onetime_query_refs(),
+                                                 child->get_is_at_most_one_row(),
+                                                 select_exprs,
+                                                 default_directions,
+                                                 *merge_key))) {
       LOG_WARN("failed to decide sort key for merge set", K(ret));
     } else if (OB_FAIL(merge_keys.push_back(merge_key))) {
       LOG_WARN("failed to push back merge key", K(ret));
     } else if (can_ignore_merge_plan) {
-      if (OB_FAIL(ObOptimizerUtil::compute_stmt_interesting_order(merge_key->order_items_,
-                                                    get_stmt(),
-                                                    false,
-                                                    const_cast<EqualSets &>(child->get_output_equal_sets()),
-                                                    child->get_output_const_exprs(),
-                                                    get_is_parent_set_distinct(),
-                                                    OrderingCheckScope::CHECK_ORDERBY,
-                                                    interesting_order_info))) {
-        LOG_WARN("failed to compute interesting order", K(ret));
-      } else if (OrderingFlag::NOT_MATCH == interesting_order_info) {
+      bool is_match = false;
+      if (OB_FAIL(ObOptimizerUtil::is_order_by_match(order_items,
+                                                     merge_key->order_items_,
+                                                     child->get_output_equal_sets(),
+                                                     child->get_output_const_exprs(),
+                                                     is_match))) {
+        LOG_WARN("failed to check is order by match", K(ret));
+      } else if (!is_match) {
         merge_key->order_needed_ = false;
+        LOG_TRACE("ordering is not math order by");
       }
     }
   }

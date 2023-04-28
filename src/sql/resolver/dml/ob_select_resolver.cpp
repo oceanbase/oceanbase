@@ -375,11 +375,14 @@ int ObSelectResolver::do_resolve_set_query(const ParseNode &parse_tree)
   ParseNode *right_node = NULL;
   ObSEArray<ObSelectStmt*, 2> left_child_stmts;
   ObSEArray<ObSelectStmt*, 2> right_child_stmts;
+  bool force_serial_set_order = false;
   if (OB_ISNULL(left_node = parse_tree.children_[PARSE_SELECT_FORMER])
       || OB_ISNULL(right_node = parse_tree.children_[PARSE_SELECT_LATER])
-      || OB_ISNULL(parse_tree.children_[PARSE_SELECT_SET]) || OB_ISNULL(select_stmt)) {
+      || OB_ISNULL(parse_tree.children_[PARSE_SELECT_SET]) || OB_ISNULL(select_stmt)
+      || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
+    LOG_WARN("unexpected null pointer", K(left_node), K(right_node), K(parse_tree.children_[PARSE_SELECT_SET]),
+                                        K(select_stmt), K(session_info_), K(ret));
   } else if (right_node->value_ == 1) {
     ret = OB_ERR_ILLEGAL_ID;
     LOG_WARN("Select for update statement can not process set query", K(ret));
@@ -429,10 +432,23 @@ int ObSelectResolver::do_resolve_set_query(const ParseNode &parse_tree)
   }
 
   if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (OB_FAIL(session_info_->is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
+    LOG_WARN("fail to get explicit_defaults_for_timestamp", K(ret));
+  } else if (!force_serial_set_order) {
+    //do nothing
+  } else if (T_SET_UNION == parse_tree.children_[PARSE_SELECT_SET]->type_ &&
+             NULL != parse_tree.children_[PARSE_SELECT_SET]->children_[0] &&
+             T_ALL == parse_tree.children_[PARSE_SELECT_SET]->children_[0]->type_) {
+      // for set query except union-all/recursive, when force serial set order, will add select expr as oder by expr
+      force_serial_set_order = false;
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (parse_tree.children_[PARSE_SELECT_FOR_UPD] != NULL && is_oracle_mode()) {
     ret = OB_ERR_FOR_UPDATE_EXPR_NOT_ALLOWED;
     LOG_WARN("set stmt can not have for update clause", K(ret));
-  } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[PARSE_SELECT_ORDER]))) {
+  } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[PARSE_SELECT_ORDER], force_serial_set_order))) {
     LOG_WARN("failed to resolve order clause", K(ret));
   } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[PARSE_SELECT_LIMIT]))) {
     LOG_WARN("failed to resolve limit clause", K(ret));
@@ -789,9 +805,12 @@ int ObSelectResolver::check_group_by()
       for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_grouping_sets_items_size(); i++) {
         const ObIArray<ObGroupbyExpr> &grouping_sets_exprs =
                                   select_stmt->get_grouping_sets_items().at(i).grouping_sets_exprs_;
-        if (OB_FAIL(check_multi_rollup_items_valid(
-                               select_stmt->get_grouping_sets_items().at(i).multi_rollup_items_))) {
-          LOG_WARN("failed to check multi rollup items valid", K(ret));
+        if (OB_FAIL(check_rollup_items_valid(
+                                    select_stmt->get_grouping_sets_items().at(i).rollup_items_))) {
+          LOG_WARN("failed to check rollup items valid", K(ret));
+        } else if (OB_FAIL(check_cube_items_valid(
+                                      select_stmt->get_grouping_sets_items().at(i).cube_items_))) {
+          LOG_WARN("failed to check cube items valid", K(ret));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < grouping_sets_exprs.count(); ++j) {
             const ObIArray<ObRawExpr*> &groupby_exprs = grouping_sets_exprs.at(j).groupby_exprs_;
@@ -799,7 +818,7 @@ int ObSelectResolver::check_group_by()
               ObRawExpr *groupby_expr = NULL;
               if (OB_ISNULL(groupby_expr = groupby_exprs.at(k))) {
                 ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("rollup expr is null", K(ret));
+                LOG_WARN("group by expr is null", K(ret));
               } else if (ObLongTextType == groupby_expr->get_data_type()
                         || ObLobType == groupby_expr->get_data_type()
                         || ObJsonType == groupby_expr->get_data_type()
@@ -814,8 +833,10 @@ int ObSelectResolver::check_group_by()
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(check_multi_rollup_items_valid(select_stmt->get_multi_rollup_items()))) {
+        if (OB_FAIL(check_rollup_items_valid(select_stmt->get_rollup_items()))) {
           LOG_WARN("failed to check multi rollup items valid", K(ret));
+        } else if (OB_FAIL(check_cube_items_valid(select_stmt->get_cube_items()))) {
+          LOG_WARN("failed to check multi cube items valid", K(ret));
         } else {/*do nothing*/}
       }
     } else {
@@ -1149,6 +1170,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
         && (!select_stmt->is_calc_found_rows())
         && select_stmt->get_group_expr_size() > 0
         && !select_stmt->has_rollup()
+        && !select_stmt->has_cube()
         && select_stmt->get_window_func_exprs().empty()
         && select_stmt->has_order_by()
         && !select_stmt->has_sequence()
@@ -2152,7 +2174,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
       if (select_stmt->get_group_expr_size() == 0 &&
           select_stmt->get_rollup_expr_size() == 0 &&
           select_stmt->get_grouping_sets_items_size() == 0 &&
-          select_stmt->get_multi_rollup_items_size() == 0) {
+          select_stmt->get_rollup_items_size() == 0 &&
+          select_stmt->get_cube_items_size() == 0) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("nested group function without group by", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested group function without group by");
@@ -3685,7 +3708,6 @@ int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resolver arguments", K(ret), K(node), K(select_stmt));
   } else {
-    bool can_conv_multi_rollup = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
       const ParseNode *child_node = node->children_[i];
       if (OB_ISNULL(child_node)) {
@@ -3714,10 +3736,8 @@ int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
             break;
           }
           case T_ROLLUP_LIST: {
-            ObMultiRollupItem rollup_item;
-            if (OB_FAIL(resolve_rollup_list(child_node,
-                                            rollup_item,
-                                            can_conv_multi_rollup))) {
+            ObRollupItem rollup_item;
+            if (OB_FAIL(resolve_rollup_list(child_node, rollup_item))) {
               LOG_WARN("failed to resolve rollup list", K(ret));
             } else if (OB_FAIL(select_stmt->add_rollup_item(rollup_item))) {
               LOG_WARN("failed to add rollup item", K(ret));
@@ -3725,16 +3745,18 @@ int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
             break;
           }
           case T_CUBE_LIST: {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "group by cube");
-            LOG_WARN("cube by not supported.", K(ret));//TODO, @jiangxiu.wt
+            ObCubeItem cube_item;
+            if (OB_FAIL(resolve_cube_list(child_node, cube_item))) {
+              LOG_WARN("failed to resolve cube list", K(ret));
+            } else if (OB_FAIL(select_stmt->add_cube_item(cube_item))) {
+              LOG_WARN("failed to add cube item", K(ret));
+            } else {/* do nothing */}
             break;
           }
           case T_GROUPING_SETS_LIST: {
             HEAP_VAR(ObGroupingSetsItem, grouping_sets_item) {
-              if (OB_FAIL(resolve_grouping_sets_list(child_node,
-                                                     grouping_sets_item))) {
-                LOG_WARN("failed to resolve rollup list", K(ret));
+              if (OB_FAIL(resolve_grouping_sets_list(child_node, grouping_sets_item))) {
+                LOG_WARN("failed to resolve grouping sets list", K(ret));
               } else if (OB_FAIL(select_stmt->add_grouping_sets_item(grouping_sets_item))) {
                 LOG_WARN("failed to add grouping sets item", K(ret));
               } else {/*do nothing*/}
@@ -3760,28 +3782,11 @@ int ObSelectResolver::resolve_group_by_list(const ParseNode *node,
         }
       }
     }
-    if (OB_SUCC(ret) && can_conv_multi_rollup && select_stmt->get_multi_rollup_items_size() == 1) {
-      const ObIArray<ObGroupbyExpr> &rollup_list_exprs =
-                                     select_stmt->get_multi_rollup_items().at(0).rollup_list_exprs_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rollup_list_exprs.count(); ++i) {
-        if (OB_UNLIKELY(rollup_list_exprs.at(i).groupby_exprs_.count() != 1)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(rollup_list_exprs.at(i).groupby_exprs_));
-        } else if (OB_FAIL(rollup_exprs.push_back(rollup_list_exprs.at(i).groupby_exprs_.at(0)))) {
-          LOG_WARN("failed to push back exprs", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        select_stmt->get_multi_rollup_items().reset();
-      }
-    }
   }
   return ret;
 }
 
-int ObSelectResolver::resolve_rollup_list(const ParseNode *node,
-                                          ObMultiRollupItem &rollup_item,
-                                          bool &can_conv_multi_rollup)
+int ObSelectResolver::resolve_rollup_list(const ParseNode *node, ObRollupItem &rollup_item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_ROLLUP_LIST || !lib::is_oracle_mode())) {
@@ -3810,8 +3815,6 @@ int ObSelectResolver::resolve_rollup_list(const ParseNode *node,
         LOG_WARN("failed to resolve group node.", K(ret));
       } else if (OB_FAIL(rollup_item.rollup_list_exprs_.push_back(item))) {
         LOG_WARN("failed to push back item", K(ret));
-      } else if (item.groupby_exprs_.count() > 1) {//description includes vector rollup
-        can_conv_multi_rollup = false;
       }
     }
   }
@@ -3870,21 +3873,21 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
             break;
           }
           case T_ROLLUP_LIST: {
-            ObMultiRollupItem rollup_item;
-            bool can_conv_multi_rollup = false;
-            if (OB_FAIL(resolve_rollup_list(child_node,
-                                            rollup_item,
-                                            can_conv_multi_rollup))) {
+            ObRollupItem rollup_item;
+            if (OB_FAIL(resolve_rollup_list(child_node, rollup_item))) {
               LOG_WARN("failed to resolve rollup list", K(ret));
-            } else if (OB_FAIL(grouping_sets_item.multi_rollup_items_.push_back(rollup_item))) {
+            } else if (OB_FAIL(grouping_sets_item.rollup_items_.push_back(rollup_item))) {
               LOG_WARN("failed to add grouping sets item", K(ret));
             }
             break;
           }
           case T_CUBE_LIST: {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "cube in grouping sets");
-            LOG_WARN("cube/rollup in groupings sets not supported.", K(ret));//TODO, @jiangxiu.wt
+            ObCubeItem cube_item;
+            if (OB_FAIL(resolve_cube_list(child_node, cube_item))) {
+              LOG_WARN("failed to resolve cube list", K(ret));
+            } else if (OB_FAIL(grouping_sets_item.cube_items_.push_back(cube_item))) {
+              LOG_WARN("failed push back into grouping sets item", K(ret));
+            } else {/* do nothing */}
             break;
           }
           default: {
@@ -3900,6 +3903,39 @@ int ObSelectResolver::resolve_grouping_sets_list(const ParseNode *node,
   return ret;
 }
 
+int ObSelectResolver::resolve_cube_list(const ParseNode *node, ObCubeItem &cube_item)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> dummy_groupby_exprs;
+  ObSEArray<OrderItem, 4> dummy_order_items;
+  bool dummy_has_explicit_dir = false;
+  if (OB_ISNULL(node) || OB_UNLIKELY(node->type_ != T_CUBE_LIST || !lib::is_oracle_mode())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(node));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      ObGroupbyExpr item;
+      const ParseNode *group_key_node = node->children_[i];
+      if (OB_ISNULL(group_key_node) ||
+          OB_UNLIKELY(group_key_node->type_ != T_GROUPBY_KEY || group_key_node->num_child_ != 1)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid resolver arguments", K(ret), K(group_key_node));
+      } else if (OB_FAIL(resolve_groupby_node(group_key_node->children_[0],
+                                              group_key_node,
+                                              dummy_groupby_exprs,
+                                              item.groupby_exprs_,
+                                              dummy_order_items,
+                                              dummy_has_explicit_dir,
+                                              false,
+                                              0))) {// 0 level.
+        LOG_WARN("failed to resolve group node.", K(ret));
+      } else if (OB_FAIL(cube_item.cube_list_exprs_.push_back(item))) {
+        LOG_WARN("failed to push back item", K(ret));
+      } else { /* do nothing */ }
+    }
+  }
+  return ret;
+}
 
 int ObSelectResolver::resolve_with_rollup_clause(const ParseNode *node,
                                                  common::ObIArray<ObRawExpr*> &groupby_exprs,
@@ -4106,10 +4142,15 @@ int ObSelectResolver::can_find_group_column(ObRawExpr *&col_expr,
     const ObIArray<ObGroupbyExpr> &grouping_sets_exprs =
                                                      grouping_sets_items.at(i).grouping_sets_exprs_;
     if (OB_FAIL(can_find_group_column(col_expr,
-                                      grouping_sets_items.at(i).multi_rollup_items_,
+                                      grouping_sets_items.at(i).rollup_items_,
                                       can_find,
                                       check_context))) {
       LOG_WARN("failed to failed to find group column.");
+    } else if (!can_find && OB_FAIL(can_find_group_column(col_expr,
+                                                          grouping_sets_items.at(i).cube_items_,
+                                                          can_find,
+                                                          check_context))) {
+      LOG_WARN("failed to find group column.");
     } else {
       for (int64_t j = 0 ; OB_SUCC(ret) && !can_find && j < grouping_sets_exprs.count(); ++j) {
         if (OB_FAIL(can_find_group_column(col_expr,
@@ -4127,17 +4168,40 @@ int ObSelectResolver::can_find_group_column(ObRawExpr *&col_expr,
 }
 
 int ObSelectResolver::can_find_group_column(ObRawExpr *&col_expr,
-                                            const ObIArray<ObMultiRollupItem> &multi_rollup_items,
+                                            const ObIArray<ObRollupItem> &rollup_items,
                                             bool &can_find,
                                             ObStmtCompareContext *check_context/*default = NULL*/)
 {
   int ret = OB_SUCCESS;
   can_find = false;
-  for (int64_t i = 0 ; OB_SUCC(ret) && !can_find && i < multi_rollup_items.count(); ++i) {
-    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items.at(i).rollup_list_exprs_;
+  for (int64_t i = 0 ; OB_SUCC(ret) && !can_find && i < rollup_items.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items.at(i).rollup_list_exprs_;
     for (int64_t j = 0 ; OB_SUCC(ret) && !can_find && j < rollup_list_exprs.count(); ++j) {
       if (OB_FAIL(can_find_group_column(col_expr,
                                         rollup_list_exprs.at(j).groupby_exprs_,
+                                        can_find,
+                                        check_context))) {
+        LOG_WARN("failed to find group column.", K(ret));
+      } else {
+        /*do nothing*/
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::can_find_group_column(ObRawExpr *&col_expr,
+                                            const ObIArray<ObCubeItem> &cube_items,
+                                            bool &can_find,
+                                            ObStmtCompareContext *check_context/*default = NULL*/)
+{
+  int ret = OB_SUCCESS;
+  can_find = false;
+  for (int64_t i = 0 ; OB_SUCC(ret) && !can_find && i < cube_items.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items.at(i).cube_list_exprs_;
+    for (int64_t j = 0 ; OB_SUCC(ret) && !can_find && j < cube_list_exprs.count(); ++j) {
+      if (OB_FAIL(can_find_group_column(col_expr,
+                                        cube_list_exprs.at(j).groupby_exprs_,
                                         can_find,
                                         check_context))) {
         LOG_WARN("failed to find group column.", K(ret));
@@ -4231,7 +4295,13 @@ int ObSelectResolver::check_grouping_columns(ObSelectStmt &stmt, ObRawExpr *&exp
     LOG_WARN("failed to find group column.", K(ret));
   } else if (!find && is_oracle_mode()
              && OB_FAIL(can_find_group_column(expr,
-                                              stmt.get_multi_rollup_items(),
+                                              stmt.get_rollup_items(),
+                                              find,
+                                              &questionmark_checker))) {
+    LOG_WARN("failed to find group column.", K(ret));
+  } else if (!find && is_oracle_mode()
+             && OB_FAIL(can_find_group_column(expr,
+                                              stmt.get_cube_items(),
                                               find,
                                               &questionmark_checker))) {
     LOG_WARN("failed to find group column.", K(ret));
@@ -6328,12 +6398,11 @@ int ObSelectResolver::resolve_check_option_clause(const ParseNode *node)
   return ret;
 }
 
-int ObSelectResolver::check_multi_rollup_items_valid(
-                                              const ObIArray<ObMultiRollupItem> &multi_rollup_items)
+int ObSelectResolver::check_rollup_items_valid(const ObIArray<ObRollupItem> &rollup_items)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < multi_rollup_items.count(); i++) {
-    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = multi_rollup_items.at(i).rollup_list_exprs_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items.count(); i++) {
+    const ObIArray<ObGroupbyExpr> &rollup_list_exprs = rollup_items.at(i).rollup_list_exprs_;
     for (int64_t j = 0; OB_SUCC(ret) && j < rollup_list_exprs.count(); ++j) {
       const ObIArray<ObRawExpr*> &groupby_exprs = rollup_list_exprs.at(j).groupby_exprs_;
       for (int64_t k = 0; OB_SUCC(ret) && k < groupby_exprs.count(); ++k) {
@@ -6349,6 +6418,30 @@ int ObSelectResolver::check_multi_rollup_items_valid(
                   || ObUserDefinedSQLType == groupby_expr->get_data_type()) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("group by lob or udt expr is not allowed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_cube_items_valid(const ObIArray<ObCubeItem> &cube_items)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cube_items.count(); i++) {
+    const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items.at(i).cube_list_exprs_;
+    for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
+      const ObIArray<ObRawExpr*> &groupby_exprs = cube_list_exprs.at(j).groupby_exprs_;
+      for (int64_t k = 0; OB_SUCC(ret) && k < groupby_exprs.count(); ++k) {
+        ObRawExpr *groupby_expr = NULL;
+        if (OB_ISNULL(groupby_expr = groupby_exprs.at(k))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("group by expr is null", K(ret));
+        } else if (ObLongTextType == groupby_expr->get_data_type() ||
+                   ObLobType == groupby_expr->get_data_type() ||
+                   ObJsonType == groupby_expr->get_data_type()) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("group by lob expr is not allowed", K(ret), K(groupby_expr->get_data_type()));
         }
       }
     }
