@@ -2254,7 +2254,11 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
       lease_response.force_frozen_status_ = to_alive;
       lease_response.baseline_schema_version_ = baseline_schema_version_;
       // set observer stopped after has no leader
-      lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
+      if (is_full_service()) {
+        lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
+      } else {
+        lease_response.rs_server_status_ = RSS_INVALID;
+      }
       (void)OTC_MGR.get_lease_response(lease_response);
 
       // after split schema, the schema_version is not used, but for the legality detection, set schema_version to sys's schema_version
