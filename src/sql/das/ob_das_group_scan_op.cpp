@@ -362,7 +362,16 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
   return ret;
 }
 
-
+int ObGroupLookupOp::revert_iter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {
+    LOG_WARN("revert ObLocalIndexLookupOp fail",K(ret));
+  } else {
+    group_iter_.reset();
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);
 

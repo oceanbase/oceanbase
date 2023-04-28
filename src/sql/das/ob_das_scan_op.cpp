@@ -1197,6 +1197,7 @@ int ObLocalIndexLookupOp::revert_iter()
     LOG_WARN("revert scan iterator failed", K(ret));
   }
   //release the memory hold by local index lookup op
+
   rowkey_iter_ = NULL;
   lookup_iter_ = NULL;
   scan_param_.destroy_schema_guard();

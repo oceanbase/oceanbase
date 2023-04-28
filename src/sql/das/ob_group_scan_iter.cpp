@@ -39,7 +39,8 @@ int ObGroupResultRows::init(const common::ObIArray<ObExpr *> &exprs,
       reuse_alloc_ = new(reuse_alloc_buf_) common::ObArenaAllocator();
       reuse_alloc_->set_attr(attr);
     }
-    rows_ = static_cast<LastDASStoreRow *>(reuse_alloc_->alloc(max_size * sizeof(LastDASStoreRow)));
+    //rows_ = static_cast<LastDASStoreRow *>(reuse_alloc_->alloc(max_size * sizeof(LastDASStoreRow)));
+    rows_ = static_cast<LastDASStoreRow *>(das_op_allocator.alloc(max_size * sizeof(LastDASStoreRow)));
     if (NULL == rows_) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", K(max_size), K(ret));
