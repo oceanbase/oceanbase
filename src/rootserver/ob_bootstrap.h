@@ -102,6 +102,7 @@ private:
 
   virtual int check_is_all_server_empty(bool &is_empty);
   virtual int check_all_server_bootstrap_mode_match(bool &match);
+  virtual int notify_sys_tenant_root_key();
   virtual int notify_sys_tenant_server_unit_resource();
   virtual int create_ls();
   virtual int wait_elect_ls(common::ObAddr &master_rs);

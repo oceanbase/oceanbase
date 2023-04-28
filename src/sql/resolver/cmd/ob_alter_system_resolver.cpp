@@ -2470,7 +2470,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null");
-  } else if (OB_UNLIKELY(6 != parse_tree.num_child_)) {
+  } else if (OB_UNLIKELY(8 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num of children not match", K(ret), "child_num", parse_tree.num_child_);
   } else {
@@ -2495,7 +2495,31 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
           }
         }
       }
-      ParseNode *description_node = parse_tree.children_[4];
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_NOT_NULL(parse_tree.children_[4])
+          && OB_FAIL(Util::resolve_string(parse_tree.children_[4],
+                                          stmt->get_rpc_arg().encrypt_key_))) {
+        LOG_WARN("failed to resolve encrypt key", K(ret));
+      } else if (OB_NOT_NULL(parse_tree.children_[5])) {
+        ParseNode *kms_node = parse_tree.children_[5];
+        if (2 != kms_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", kms_node->num_child_);
+        } else if (OB_ISNULL(kms_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("kms uri should not be NULL", K(ret));
+        } else if (OB_FAIL(Util::resolve_string(kms_node->children_[0],
+                                                stmt->get_rpc_arg().kms_uri_))) {
+          LOG_WARN("failed to resolve kms uri", K(ret));
+        } else if (OB_NOT_NULL(kms_node->children_[1])
+            && OB_FAIL(Util::resolve_string(kms_node->children_[1],
+                                            stmt->get_rpc_arg().kms_encrypt_key_))) {
+          LOG_WARN("failed to resolve kms encrypt key", K(ret));
+        }
+      }
+
+      ParseNode *description_node = parse_tree.children_[6];
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3],
@@ -2520,8 +2544,8 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       }
 
       if (OB_SUCC(ret)) {
-        if (6 == parse_tree.num_child_) { // resolve table_list
-          const ParseNode *node = parse_tree.children_[5];
+        if (8 == parse_tree.num_child_) { // resolve table_list
+          const ParseNode *node = parse_tree.children_[7];
           if (OB_ISNULL(node)) {
             stmt->set_is_preview(false);
           } else {
@@ -4043,6 +4067,12 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
       stmt_ = stmt;
     }
   }
+  return ret;
+}
+
+int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_ERR_PARSE_SQL;
   return ret;
 }
 

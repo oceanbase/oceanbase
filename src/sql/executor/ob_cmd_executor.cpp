@@ -850,6 +850,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObDeletePolicyStmt, ObDeletePolicyExecutor);
         break;
       }
+      case stmt::T_BACKUP_KEY: {
+        DEFINE_EXECUTE_CMD(ObBackupKeyStmt, ObBackupKeyExecutor);
+        break;
+      }
       case stmt::T_CREATE_DBLINK: {
         DEFINE_EXECUTE_CMD(ObCreateDbLinkStmt, ObCreateDbLinkExecutor);
         break;

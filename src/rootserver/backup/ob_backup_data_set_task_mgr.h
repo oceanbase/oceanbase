@@ -56,6 +56,7 @@ private:
   int disable_transfer_();
   int enable_transfer_();
   int do_backup_meta_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
+  int do_backup_root_key_();
   int merge_tablet_to_ls_info_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
   int construct_ls_task_map_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       hash::ObHashMap<share::ObLSID, const share::ObBackupLSTaskAttr *> &ls_map);

@@ -305,6 +305,12 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
       LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_info_, kms_info_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.encrypt_key_, encrypt_key_))) {
+      LOG_WARN("failed to copy string", KR(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_dest_, kms_dest_))) {
+      LOG_WARN("failed to copy string", KR(ret), K(other));
+    } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.kms_encrypt_key_, kms_encrypt_key_))) {
+      LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.passwd_array_, passwd_array_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
     } else if (OB_FAIL(deep_copy_ob_string(allocator_, other.backup_tenant_name_, backup_tenant_name_))) {
@@ -349,6 +355,9 @@ void ObPhysicalRestoreJob::reset()
   compatible_ = 0;
   kms_info_.reset();
   kms_encrypt_ = false;
+  encrypt_key_.reset();
+  kms_dest_.reset();
+  kms_encrypt_key_.reset();
   concurrency_ = 0;
 
 

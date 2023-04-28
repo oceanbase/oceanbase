@@ -25,7 +25,8 @@ using namespace share;
 
 static const char *type_strs[] = {
     "backup_data",
-    "archive_log"
+    "archive_log",
+    "backup_key"
 };
 
 const char *ObBackupDestType::get_str(const TYPE &type)

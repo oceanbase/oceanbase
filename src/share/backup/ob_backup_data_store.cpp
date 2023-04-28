@@ -731,6 +731,18 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
   return ret;
 }
 
+int ObBackupDataStore::write_root_key_info(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObBackupDataStore::read_root_key_info(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
 int ObBackupDataStore::get_backup_set_placeholder_path_(
     const bool is_inner, 
     const bool is_start, 

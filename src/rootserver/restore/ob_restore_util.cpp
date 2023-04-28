@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_path.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "storage/backup/ob_backup_restore_util.h"
@@ -72,6 +73,12 @@ int ObRestoreUtil::fill_physical_restore_job(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(fill_backup_info_(arg, job))) {
         LOG_WARN("failed to fill backup info", KR(ret), K(arg), K(job));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(fill_encrypt_info_(arg, job))) {
+        LOG_WARN("failed to fill encrypt info", KR(ret), K(arg), K(job));
       }
     }
 
@@ -361,6 +368,14 @@ int ObRestoreUtil::fill_restore_scn_(const obrpc::ObPhysicalRestoreTenantArg &ar
       }
     }
   } 
+  return ret;
+}
+
+int ObRestoreUtil::fill_encrypt_info_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    share::ObPhysicalRestoreJob &job)
+{
+  int ret = OB_SUCCESS;
   return ret;
 }
 

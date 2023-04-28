@@ -179,6 +179,9 @@ public:
   //for kms
   Property_declare_ObString(kms_info)
   Property_declare_int(bool, kms_encrypt)
+  Property_declare_ObString(encrypt_key)
+  Property_declare_ObString(kms_dest)
+  Property_declare_ObString(kms_encrypt_key)
   Property_declare_ObString(passwd_array)
   Property_declare_int(int64_t, concurrency)
 

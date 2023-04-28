@@ -986,6 +986,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(BackupDatabase);
         break;
       }
+      case T_BACKUP_KEY: {
+        REGISTER_STMT_RESOLVER(BackupKey);
+        break;
+      }
       case T_BACKUP_MANAGE: {
         REGISTER_STMT_RESOLVER(BackupManage);
         break;

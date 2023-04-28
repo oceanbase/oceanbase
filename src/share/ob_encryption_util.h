@@ -94,6 +94,7 @@ public:
   static const int OB_AES_BLOCK_SIZE = 16;
 };
 
+const int64_t OB_ROOT_KEY_LEN = 16;
 const int64_t OB_ORIGINAL_TABLE_KEY_LEN = 15;
 const int64_t OB_ENCRYPTED_TABLE_KEY_LEN = 16;
 const int64_t OB_MAX_MASTER_KEY_LENGTH = 16;

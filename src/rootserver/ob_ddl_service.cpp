@@ -20721,6 +20721,8 @@ int ObDDLService::create_tenant_schema(
       LOG_INFO("[CREATE_TENANT] STEP 1.4. finish change pool owners", KR(ret), K(user_tenant_id),
                "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
     }
+
+
     if (OB_SUCC(ret)) {
       ObArray<ObAddr> addrs;
       ObZone zone; // empty means get all zone's servers

@@ -266,7 +266,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISCARD DISK DISKGROUP DO DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT
 
-        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED
 
@@ -489,7 +489,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
-%type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until
+%type <node> opt_copy_id opt_backup_dest opt_preview opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_backup_key_info opt_encrypt_key
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
 %type <node> on_empty on_error json_on_response opt_returning_type opt_on_empty_or_error json_value_expr opt_ascii
 %type <node> ws_nweights opt_ws_as_char opt_ws_levels ws_level_flag_desc ws_level_flag_reverse ws_level_flags ws_level_list ws_level_list_item ws_level_number ws_level_range ws_level_list_or_range
@@ -14435,16 +14435,16 @@ ALTER SYSTEM CLEAR RESTORE SOURCE
   malloc_terminal_node($$, result->malloc_pool_, T_CLEAR_RESTORE_SOURCE);
 }
 |
-ALTER SYSTEM RESTORE table_list FOR relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_description
+ALTER SYSTEM RESTORE table_list FOR relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_description
 {
   ParseNode *tables = NULL;
   merge_nodes(tables, result, T_TABLE_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 6, $6, $7, $8, $10, $11, tables);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 8, $6, $7, $8, $10, $11, $12, $13, tables);
 }
 |
-ALTER SYSTEM RESTORE relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_description opt_preview
+ALTER SYSTEM RESTORE relation_name opt_backup_dest opt_restore_until WITH STRING_VALUE opt_encrypt_key opt_backup_key_info opt_description opt_preview
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 6, $4, $5, $6, $8, $9, $10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PHYSICAL_RESTORE_TENANT, 8, $4, $5, $6, $8, $9, $10, $11, $12);
 }
 |
 ALTER SYSTEM CHANGE TENANT change_tenant_name_or_tenant_id
@@ -14599,6 +14599,22 @@ ALTER SYSTEM BACKUP INCREMENTAL opt_backup_tenant_list opt_backup_to PLUS ARCHIV
   malloc_terminal_node(tenant, result->malloc_pool_, T_INT);
   tenant->value_ = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_DATABASE, 6, tenant, compl_log, incremental, $5, $6, $9);
+}
+|
+ALTER SYSTEM BACKUP KEY opt_backup_to opt_encrypt_key
+{
+  ParseNode *tenant = NULL;
+  malloc_terminal_node(tenant, result->malloc_pool_, T_INT);
+  tenant->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_KEY, 3, tenant, $5, $6);
+}
+|
+ALTER SYSTEM BACKUP KEY tenant_list_tuple opt_backup_to opt_encrypt_key
+{
+  ParseNode *tenant = NULL;
+  malloc_terminal_node(tenant, result->malloc_pool_, T_INT);
+  tenant->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_KEY, 4, tenant, $5, $6, $7);
 }
 |
 ALTER SYSTEM CANCEL BACKUP opt_backup_tenant_list
@@ -16242,6 +16258,21 @@ opt_restore_until:
 }
 ;
 
+opt_backup_key_info:
+/*EMPTY*/  { $$ = NULL; }
+| WITH KEY FROM STRING_VALUE opt_encrypt_key
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_KEY, 2, $4, $5);
+}
+;
+
+opt_encrypt_key:
+/*EMPTY*/  { $$ = NULL; }
+| ENCRYPTED BY STRING_VALUE
+{
+  $$ = $3;
+}
+;
 
 /*===========================================================
  * savepoint
@@ -16992,6 +17023,7 @@ ACCOUNT
 |       ENABLE
 |       ENABLE_ARBITRATION_SERVICE
 |       ENABLE_EXTENDED_ROWID
+|       ENCRYPTED
 |       ENCRYPTION
 |       END
 |       ENDS

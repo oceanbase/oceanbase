@@ -185,6 +185,10 @@ struct ObBackupPathUtil
   // file:///obbackup/backup_set_1_full/infos/meta_info/ls_meta_infos.obbak
   static int get_ls_meta_infos_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &backup_path);
 
+  // file:///obbackup/backup_set_1_full/infos/meta_info/root_key.obbak
+  static int get_backup_root_key_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path);
+
   // file:///obbackup/backup_set_1_full/tenant_backup_set_infos.obbak
   static int get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_set_dest,
       share::ObBackupPath &backup_path);  

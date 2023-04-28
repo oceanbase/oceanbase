@@ -892,6 +892,18 @@ int ObBackupPathUtil::get_ls_meta_infos_path(const share::ObBackupDest &backup_s
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/meta_info/root_key.obbak
+int ObBackupPathUtil::get_backup_root_key_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_tenant_meta_info_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get backup set dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join(OB_STR_ROOT_KEY, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join ls meta infos", K(ret));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/tenant_backup_set_infos.obbak
 int ObBackupPathUtil::get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_set_dest, 
     ObBackupPath &backup_path)

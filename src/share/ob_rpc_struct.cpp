@@ -4251,7 +4251,10 @@ OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     table_items_,
                     multi_uri_,
                     description_,
-                    with_restore_scn_);
+                    with_restore_scn_,
+                    encrypt_key_,
+                    kms_uri_,
+                    kms_encrypt_key_);
 
 ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
   : ObCmdArg(),
@@ -4264,7 +4267,10 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     table_items_(),
     multi_uri_(),
     description_(),
-    with_restore_scn_(false)
+    with_restore_scn_(false),
+    encrypt_key_(),
+    kms_uri_(),
+    kms_encrypt_key_()
 {
 }
 
@@ -4284,6 +4290,9 @@ int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg &other)
     passwd_array_ = other.passwd_array_;
     description_ = other.description_;
     with_restore_scn_ = other.with_restore_scn_;
+    encrypt_key_ = other.encrypt_key_;
+    kms_uri_ = other.kms_uri_;
+    kms_encrypt_key_ = other.kms_encrypt_key_;
   }
   return ret;
 }

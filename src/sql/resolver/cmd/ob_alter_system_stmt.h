@@ -1093,6 +1093,45 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDeletePolicyStmt);
 };
 
+class ObBackupKeyStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupKeyStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_KEY),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      backup_dest_()
+  {
+  }
+  virtual ~ObBackupKeyStmt() {}
+
+  uint64 get_tenant_id() const { return tenant_id_; }
+  const share::ObBackupPathString &get_backup_dest() const { return backup_dest_; }
+  const ObString &get_encrypt_key() const { return encrypt_key_; }
+  int set_param(const uint64_t tenant_id,
+                const share::ObBackupPathString &backup_dest,
+                const ObString &encrypt_key)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_INVALID_ID == tenant_id) {
+      ret = OB_INVALID_ARGUMENT;
+	    COMMON_LOG(WARN, "invalid args", K(tenant_id));
+    } else if (OB_FAIL(backup_dest_.assign(backup_dest))) {
+      COMMON_LOG(WARN, "set backup dest failed", K(backup_dest));
+    } else {
+      tenant_id_ = tenant_id;
+      encrypt_key_ = encrypt_key;
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(backup_dest));
+
+private:
+  uint64_t tenant_id_;
+  share::ObBackupPathString backup_dest_;
+  ObString encrypt_key_;
+};
+
 class ObBackupSetEncryptionStmt : public ObSystemCmdStmt
 {
 public:

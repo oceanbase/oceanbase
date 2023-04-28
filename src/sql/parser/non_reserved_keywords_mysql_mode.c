@@ -236,6 +236,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"enable_arbitration_service", ENABLE_ARBITRATION_SERVICE},
   {"enable_extended_rowid", ENABLE_EXTENDED_ROWID},
   {"enclosed", ENCLOSED},
+  {"encrypted", ENCRYPTED},
   {"encryption", ENCRYPTION},
   {"end", END},
   {"ends", ENDS},

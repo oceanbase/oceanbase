@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX RS_RESTORE
 
 #include "ob_restore_scheduler.h"
+#include "rootserver/ob_ddl_service.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_unit_manager.h"//convert_pool_name_lis
 #include "rootserver/ob_tenant_role_transition_service.h"//failover_to_primary
@@ -32,7 +34,6 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h"//ObLSRecoveryStatOperator
 #include "logservice/palf/log_define.h"//scn
 #include "share/scn.h"
-
 
 namespace oceanbase
 {
@@ -451,8 +452,10 @@ int ObRestoreService::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id_));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (OB_FAIL(convert_parameters(job_info))) {
-    LOG_WARN("fail to convert parameters", K(ret), K(job_info));
+  } else if (OB_FAIL(restore_root_key(job_info))) {
+    LOG_WARN("fail to restore root key", K(ret));
+  } else if (OB_FAIL(restore_keystore(job_info))) {
+    LOG_WARN("fail to restore keystore", K(ret), K(job_info));
   } else {
     if (OB_FAIL(fill_restore_statistics(job_info))) {
       LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
@@ -513,41 +516,18 @@ int ObRestoreService::convert_parameters(
     const ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = gen_meta_tenant_id(tenant_id_);
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret));
-  } else if (OB_INVALID_TENANT_ID == tenant_id
-             || OB_SYS_TENANT_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
-  } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("restore scheduler stopped", K(ret));
-  } else if (job_info.get_kms_encrypt()) {
-    int64_t affected_row = 0;
-    ObSqlString sql;
-    // set tde_method
-    if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET tde_method = 'bkmi'"))) {
-      LOG_WARN("failed to assign fmt", K(ret), K(sql));
-    } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
-      LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
-    }
-    // set external_kms_info
-    if (OB_SUCC(ret)) {
-      sql.reset();
-      if (OB_FAIL(sql.assign_fmt("ALTER SYSTEM SET external_kms_info= '%s'", job_info.get_kms_info().ptr()))) {
-        LOG_WARN("failed to assign fmt", K(ret), K(sql));
-      } else if (OB_FAIL(sql_proxy_->write(tenant_id, sql.ptr(), affected_row))) {
-        LOG_WARN("failed to execute", K(ret), K(affected_row), K(sql));
-      }
-    }
-  }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    // Broadcast tenant's config version after system tables are restored.
-    // bugfix:
-    // TODO check all config is valid on observer
-  }
+int ObRestoreService::restore_root_key(const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObRestoreService::restore_keystore(const share::ObPhysicalRestoreJob &job_info)
+{
+  int ret = OB_SUCCESS;
   return ret;
 }
 
@@ -603,6 +583,10 @@ int ObRestoreService::post_check(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
       LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
     }
+  }
+
+  if (FAILEDx(convert_parameters(job_info))) {
+    LOG_WARN("fail to convert parameters", K(ret), K(job_info));
   }
 
   if (OB_SUCC(ret)) {

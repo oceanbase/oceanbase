@@ -393,7 +393,9 @@ int ObBackupSetTaskMgr::backup_user_meta_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]no lostream task", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
   } else if (OB_FAIL(do_backup_meta_(ls_task, finish_cnt))) {
-    LOG_WARN("[DATA_BACKUP]failed to do backuo meta", K(ret), K(ls_task));
+    LOG_WARN("[DATA_BACKUP]failed to do backup meta", K(ret), K(ls_task));
+  } else if (OB_FAIL(do_backup_root_key_())) {
+    LOG_WARN("[DATA_BACKUP]failed to do backup root key", K(ret));
   } else if (ls_task.count() == finish_cnt) {
     ROOTSERVICE_EVENT_ADD("backup_data", "before_backup_data");
     DEBUG_SYNC(BEFORE_BACKUP_DATA);
@@ -792,6 +794,15 @@ int ObBackupSetTaskMgr::do_backup_meta_(ObArray<ObBackupLSTaskAttr> &ls_task, in
         LOG_WARN("[DATA_BACKUP]failed to process ls backup meta task", K(ret), K(ls_attr), K(set_task_attr_));
       } 
     }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::do_backup_root_key_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(store_.write_root_key_info(job_attr_->tenant_id_))) {
+    LOG_WARN("failed to write root key info");
   }
   return ret;
 }

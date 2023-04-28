@@ -17,6 +17,7 @@
 #define private public
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_log_archive_backup_info_mgr.h"
+#include "share/ob_master_key_getter.h"
 using namespace oceanbase;
 using namespace common;
 using namespace share;
@@ -87,6 +88,9 @@ TEST(ObBackupDest, oss)
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
   ASSERT_TRUE(dest.storage_info_->device_type_ == 0);
 
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
+                                                        obrpc::RootKeyType::DEFAULT, ObString()));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)));
   ASSERT_EQ(0, strcmp(backup_dest_str, "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F&delete_mode=tagging"));
   ASSERT_EQ(OB_SUCCESS, dest.get_backup_path_str(backup_path_str, sizeof(backup_path_str)));
@@ -99,12 +103,16 @@ TEST(ObBackupDest, oss)
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(dest.get_root_path().ptr(), dest.get_storage_info()));
   ASSERT_TRUE(dest == dest1);
+  ObMasterKeyGetter::instance().destroy();
 }
 
 TEST(ObBackupDest, oss_encrypt)
 {
   const char *backup_test = "oss://backup_dir?host=xxx.com&access_id=111&encrypt_key=9B6FDE7E1E54CD292CDE5494CEB86B6F";
   ObBackupDest dest;
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(OB_SYS_TENANT_ID,
+                                                        obrpc::RootKeyType::DEFAULT, ObString()));
   ASSERT_EQ(OB_SUCCESS, dest.set(backup_test));
   LOG_INFO("dump backup dest", K(dest.get_root_path()), K(*(dest.get_storage_info())));
   ASSERT_EQ(0, strcmp(dest.root_path_, "oss://backup_dir"));
@@ -127,6 +135,7 @@ TEST(ObBackupDest, oss_encrypt)
   dest1.reset();
   ASSERT_EQ(OB_SUCCESS, dest1.set(path, endpoint, authorization, extension));
   ASSERT_TRUE(dest == dest1);
+  ObMasterKeyGetter::instance().destroy();
 }
 
 int main(int argc, char **argv)

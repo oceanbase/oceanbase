@@ -15,6 +15,7 @@
 #include <gmock/gmock.h>
 #define private public
 #include "share/ob_encryption_util.h"
+#include "share/ob_master_key_getter.h"
 #undef private
 
 namespace oceanbase
@@ -175,18 +176,24 @@ TEST(TestEncryptionUtil, encrypt_master_key)
   int64_t encrypt_len = 0;
   char out_buf[buf_len] = {0};
   int64_t out_len = 0;
+  uint64_t tenant_id = 123;
 
+  system("rm -rf wallet");
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().init(NULL));
+  EXPECT_EQ(OB_SUCCESS, ObMasterKeyGetter::instance().set_root_key(tenant_id,
+                                                        obrpc::RootKeyType::DEFAULT, ObString()));
   EXPECT_EQ(OB_SUCCESS, ObKeyGenerator::generate_encrypt_key(data, data_len));
-  EXPECT_EQ(OB_SUCCESS, ObEncryptionUtil::encrypt_master_key(data, data_len,
+  EXPECT_EQ(OB_SUCCESS, ObEncryptionUtil::encrypt_master_key(tenant_id, data, data_len,
                                                              encrypt_buf, buf_len, encrypt_len));
   EXPECT_LE(encrypt_len, OB_MAX_ENCRYPTED_KEY_LENGTH);
   encrypt_buf[encrypt_len] = '\0';
   EXPECT_STRNE(data, encrypt_buf);
-  EXPECT_EQ(OB_SUCCESS, ObEncryptionUtil::decrypt_master_key(encrypt_buf, encrypt_len,
+  EXPECT_EQ(OB_SUCCESS, ObEncryptionUtil::decrypt_master_key(tenant_id, encrypt_buf, encrypt_len,
                                                              out_buf, buf_len, out_len));
   EXPECT_EQ(data_len, out_len);
   out_buf[out_len] = '\0';
   EXPECT_STREQ(data, out_buf);
+  ObMasterKeyGetter::instance().destroy();
 }
 
 //TEST(TestWebService, store)

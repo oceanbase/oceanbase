@@ -253,6 +253,8 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
   } else if (!is_empty) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot do bootstrap on not empty server", KR(ret));
+  } else if (OB_FAIL(notify_sys_tenant_root_key())) {
+    LOG_WARN("fail to notify sys tenant root key", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_server_unit_resource())) {
     LOG_WARN("fail to notify sys tenant server unit resource", KR(ret));
   } else if (OB_FAIL(notify_sys_tenant_config_())) {
@@ -263,6 +265,12 @@ int ObPreBootstrap::prepare_bootstrap(ObAddr &master_rs)
     LOG_WARN("failed to wait elect master partition", KR(ret));
   }
   BOOTSTRAP_CHECK_SUCCESS();
+  return ret;
+}
+
+int ObPreBootstrap::notify_sys_tenant_root_key()
+{
+  int ret = OB_SUCCESS;
   return ret;
 }
 

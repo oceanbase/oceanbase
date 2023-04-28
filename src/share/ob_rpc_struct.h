@@ -4811,7 +4811,10 @@ public:
                K_(kms_info),
                K_(table_items),
                K_(multi_uri),
-               K_(with_restore_scn));
+               K_(with_restore_scn),
+               K_(encrypt_key),
+               K_(kms_uri),
+               K_(kms_encrypt_key));
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -4823,6 +4826,9 @@ public:
   common::ObString multi_uri_; // 备份拆分用
   common::ObString description_;
   bool with_restore_scn_;
+  common::ObString encrypt_key_;
+  common::ObString kms_uri_;
+  common::ObString kms_encrypt_key_;
 };
 
 struct ObServerZoneArg

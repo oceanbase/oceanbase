@@ -10115,5 +10115,6 @@ int ObRootService::try_add_dep_infos_for_synonym_batch(const obrpc::ObTryAddDepI
   return ret;
 }
 
+
 } // end namespace rootserver
 } // end namespace oceanbase
