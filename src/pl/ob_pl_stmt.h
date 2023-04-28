@@ -1921,7 +1921,13 @@ public:
   inline bool get_is_autonomous() const { return is_autonomous_block_; }
   inline void clear_aotonomous() { is_autonomous_block_ = false; }
   inline bool get_is_contain_goto_stmt() const { return is_contain_goto_stmt_; }
-  inline void set_is_contain_goto_stmt(bool flag) { is_contain_goto_stmt_ = flag; }
+  inline void set_is_contain_goto_stmt(bool flag)
+  {
+    if (flag && OB_NOT_NULL(parent_)) {
+      (const_cast<ObPLStmtBlock *>(parent_))->set_is_contain_goto_stmt(true);
+    }
+    is_contain_goto_stmt_ = flag;
+  }
   inline const ObPLSymbolTable *get_symbol_table() const { return ns_.get_symbol_table(); }
   inline const ObPLLabelTable *get_label_table() const { return ns_.get_label_table(); }
   inline const ObPLConditionTable *get_condition_table() const { return ns_.get_condition_table(); }
