@@ -30,7 +30,9 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "common/ob_smart_call.h"
 #include "storage/ob_locality_manager.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -86,6 +88,164 @@ int ObPXServerAddrUtil::build_dynamic_partition_table_location(common::ObIArray<
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::sort_and_collect_local_file_distribution(
+    ObIArray<ObExternalFileInfo> &files,
+    ObIArray<ObAddr> &dst_addrs)
+{
+  int ret = OB_SUCCESS;
+  ObAddr pre_addr;
+  if (OB_SUCC(ret)) {
+    auto addrcmp = [](const ObExternalFileInfo &l, const ObExternalFileInfo &r) -> bool {
+      return l.file_addr_ < r.file_addr_;
+    };
+    std::sort(files.get_data(), files.get_data() + files.count(), addrcmp);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
+    ObAddr &cur_addr = files.at(i).file_addr_;
+    if (!cur_addr.is_equal_except_port(pre_addr)) {
+      pre_addr = cur_addr;
+      OZ (dst_addrs.push_back(files.at(i).file_addr_));
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::get_external_table_loc(
+    ObExecContext &ctx,
+    uint64_t table_id,
+    uint64_t ref_table_id,
+    const ObQueryRange &pre_query_range,
+    ObDfo &dfo,
+    ObDASTableLoc *&table_loc)
+{
+  int ret = OB_SUCCESS;
+  ObDASTableLoc *local_loc = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
+  bool is_external_files_on_disk = false;
+  ObIArray<ObExternalFileInfo> &ext_file_urls = dfo.get_external_table_files();
+  ObQueryRangeArray ranges;
+  if (OB_ISNULL(local_loc = DAS_CTX(ctx).get_table_loc_by_id(table_id, ref_table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get table loc", K(ret), K(table_id), K(ref_table_id));
+  } else if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+    is_external_files_on_disk = local_loc->loc_meta_->is_external_files_on_disk_;
+  }
+  if (OB_SUCC(ret) && ext_file_urls.empty()) {
+    // TODO EXTARNAL TABLE
+    // if (pre_query_range.has_exec_param() || 0 == pre_query_range.get_column_count()) {
+    //   ret = OB_NOT_SUPPORTED;
+    //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
+    //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
+    if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
+                                    pre_query_range, ctx.get_allocator(), ctx, ranges,
+                                    ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
+      LOG_WARN("failed to extract external file fiter", K(ret));
+    } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(
+                            tenant_id, ref_table_id, is_external_files_on_disk,
+                            ctx.get_allocator(), ext_file_urls, ranges.empty() ? NULL : &ranges))) {
+      LOG_WARN("fail to get external files", K(ret));
+    } else if (ext_file_urls.empty()) {
+      const char* dummy_file_name = "#######DUMMY_FILE#######";
+      ObExternalFileInfo dummy_file;
+      dummy_file.file_url_ = dummy_file_name;
+      dummy_file.file_id_ = INT64_MAX;
+      if (is_external_files_on_disk) {
+        dummy_file.file_addr_ = GCTX.self_addr();
+      }
+      OZ (dfo.get_external_table_files().push_back(dummy_file));
+    }
+  }
+
+  if (OB_SUCC(ret)
+      && NULL == (table_loc = DAS_CTX(ctx).get_external_table_loc_by_id(table_id, ref_table_id))) {
+    //generate locations
+    ObSEArray<ObAddr, 16> target_locations;
+    if (is_external_files_on_disk) {
+      // locations are the collection of file's ip
+      if (OB_FAIL(sort_and_collect_local_file_distribution(dfo.get_external_table_files(),
+                                                           target_locations))) {
+        LOG_WARN("fail to collect local file distribution", K(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < target_locations.count(); ++i) {
+        if (OB_UNLIKELY(ObPxCheckAlive::is_in_blacklist(
+                          target_locations.at(i), ctx.get_my_session()->get_process_query_time()))) {
+          ret = OB_SERVER_NOT_ALIVE;
+          LOG_WARN("observer is not alive", K(target_locations.at(i)));
+        }
+      }
+    } else {
+      ObSEArray<ObAddr, 16> all_locations;
+      int64_t expected_location_cnt = std::min(dfo.get_dop(), dfo.get_external_table_files().count());
+      if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, ref_table_id, all_locations))) {
+        LOG_WARN("fail to get external table location", K(ret));
+      } else if (expected_location_cnt >= all_locations.count() ?
+                 OB_FAIL(target_locations.assign(all_locations))
+               : OB_FAIL(ObPXServerAddrUtil::do_random_dfo_distribution(all_locations,
+                                                                        expected_location_cnt,
+                                                                        target_locations)))
+      LOG_WARN("fail to calc random dfo distribution", K(ret), K(all_locations), K(expected_location_cnt));
+    }
+    LOG_TRACE("calc external table location", K(target_locations));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(DAS_CTX(ctx).build_external_table_location(table_id, ref_table_id, target_locations))) {
+        LOG_WARN("fail to build external table locations", K(ret));
+      } else if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_external_table_loc_by_id(table_id, ref_table_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected location", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPXServerAddrUtil::assign_external_files_to_sqc(
+    const ObIArray<ObExternalFileInfo> &files,
+    bool is_file_on_disk,
+    ObIArray<ObPxSqcMeta *> &sqcs)
+{
+  int ret = OB_SUCCESS;
+  if (is_file_on_disk) {
+    ObAddr pre_addr;
+    ObPxSqcMeta *target_sqc = NULL;
+    for (int i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+      if (pre_addr != files.at(i).file_addr_) {
+        // TODO [External Table] OPT this
+        for (int j = 0; j < sqcs.count(); j++) {
+          if (sqcs.at(j)->get_exec_addr() == files.at(i).file_addr_) {
+            target_sqc = sqcs.at(j);
+            break;
+          }
+        }
+        pre_addr = files.at(i).file_addr_;
+      }
+      if (OB_ISNULL(target_sqc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to find sqc", K(files.at(i).file_addr_));
+      } else if (OB_FAIL(target_sqc->get_access_external_table_files().push_back(files.at(i)))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+  } else {
+    const int64_t file_count = files.count();
+    int64_t files_per_sqc = (file_count - 1) / sqcs.count() + 1;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
+      for (int j = i * files_per_sqc; OB_SUCC(ret) && j < std::min((i + 1) * files_per_sqc, file_count); j++) {
+        OZ (sqcs.at(i)->get_access_external_table_files().push_back(files.at(j)));
+      }
+    }
+  }
+  LOG_TRACE("check dfo external files", K(files));
+  for (int64_t i = 0; i < sqcs.count(); ++i) {
+    LOG_TRACE("check sqc external files", K(sqcs.at(i)->get_access_external_table_files()));
   }
   return ret;
 }
@@ -153,6 +313,10 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
                                    ref_table_id,
                                    table_loc));
     } else {
+      if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
+        // create new table loc for a random dfo distribution for external table
+        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
+      } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
       if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
@@ -325,6 +489,13 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
     for (int64_t i = 0; OB_SUCC(ret) && i < sqc_max_task_count.count(); ++i) {
       sqcs.at(i)->set_total_task_count(total_task_count);
       sqcs.at(i)->set_total_part_count(total_part_cnt);
+    }
+    if (OB_SUCC(ret) && !locations.empty()
+        && (*locations.begin())->loc_meta_->is_external_table_) {
+      if (OB_FAIL(assign_external_files_to_sqc(dfo.get_external_table_files(),
+                    (*locations.begin())->loc_meta_->is_external_files_on_disk_, sqcs))) {
+        LOG_WARN("fail to assign external files to sqc", K(ret));
+      }
     }
   }
   return ret;
@@ -733,7 +904,7 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
 
   // 处理tsc对应的partition location信息
   for (int64_t i = 0; OB_SUCC(ret) && i < scan_ops.count(); ++i) {
-    const ObDASTableLoc *table_loc = nullptr;
+    ObDASTableLoc *table_loc = nullptr;
     const ObTableScanSpec *scan_op = nullptr;
     uint64_t table_location_key = common::OB_INVALID_ID;
     uint64_t ref_table_id = common::OB_INVALID_ID;
@@ -746,6 +917,9 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
     } else if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get phy table location", K(ret));
+    } else if (scan_op->is_external_table_
+               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc))) {
+      LOG_WARN("fail to get external table loc", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,
           // table scan does not need to be set again
@@ -775,6 +949,12 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(ObExecContext &ctx,
     LOG_WARN("unexpected null table_loc or phy_op", K(phy_op), K(table_loc));
   } else if (OB_FAIL(dfo.get_sqcs(sqcs))) {
     LOG_WARN("fail to get sqcs", K(ret));
+  } else if (table_loc->loc_meta_->is_external_table_) {
+    //just copy locations, do not need reorder
+    OZ (temp_locations.reserve(locations.size()));
+    for (auto iter = locations.begin(); iter != locations.end() && OB_SUCC(ret); ++iter) {
+      OZ (temp_locations.push_back(*iter));
+    }
   } else {
     int64_t table_location_key = table_loc->get_table_location_key();
     bool asc_order = true;

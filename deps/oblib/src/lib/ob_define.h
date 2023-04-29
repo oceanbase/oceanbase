@@ -562,6 +562,8 @@ const uint64_t OB_HIDDEN_SESSION_ID_COLUMN_ID = 9;
 const uint64_t OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID = 10;
 const uint64_t OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID = 11;
 const uint64_t OB_HIDDEN_GROUP_IDX_COLUMN_ID = 13; // used for batch nlj
+const uint64_t OB_HIDDEN_FILE_ID_COLUMN_ID = 14; // used for external table
+const uint64_t OB_HIDDEN_LINE_NUMBER_COLUMN_ID = 15; // used for external table
 const int64_t OB_END_RESERVED_COLUMN_ID_NUM = 16;
 const uint64_t OB_APP_MIN_COLUMN_ID = 16;
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
@@ -582,6 +584,8 @@ const char *const OB_HIDDEN_PK_INCREMENT_COLUMN_NAME = "__pk_increment"; //hidde
 const char *const OB_MOCK_LINK_TABLE_PK_COLUMN_NAME = "__link_table_pkey"; //hidden
 const char *const OB_HIDDEN_SESSION_ID_COLUMN_NAME = "SYS_SESSION_ID"; //oracle temporary table
 const char *const OB_HIDDEN_SESS_CREATE_TIME_COLUMN_NAME = "SYS_SESS_CREATE_TIME"; //oracle temporary table
+const char *const OB_HIDDEN_FILE_ID_COLUMN_NAME = "__file_id"; // used for external table
+const char *const OB_HIDDEN_LINE_NUMBER_COLUMN_NAME = "__line_number"; // used for external table
 
 // hidden rowid name
 const char *const OB_HIDDEN_ROWID_COLUMN_NAME = "__ob_rowid";

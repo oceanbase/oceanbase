@@ -78,7 +78,8 @@ public:
         calc_part_id_expr_(NULL),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
-        has_index_lookup_filter_(false)
+        has_index_lookup_filter_(false),
+        table_type_(share::schema::MAX_TABLE_TYPE)
   {
   }
 
@@ -247,6 +248,12 @@ public:
 // removal it in cg layer, up to opt layer.
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
   { return ddl_output_column_ids_; }
+
+  inline common::ObIArray<ObRawExpr *> &get_ext_file_column_exprs()
+  { return ext_file_column_exprs_; }
+
+  inline common::ObIArray<ObRawExpr *> &get_ext_column_convert_exprs()
+  { return ext_column_convert_exprs_; }
 
   ObRawExpr* get_real_expr(const ObRawExpr *col) const;
   /**
@@ -419,6 +426,8 @@ public:
   const common::ObIArray<ObRawExpr*> &get_part_exprs() const { return part_exprs_; }
   inline const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
   int init_calc_part_id_expr();
+  void set_table_type(share::schema::ObTableType table_type) { table_type_ = table_type; }
+  share::schema::ObTableType get_table_type() const { return table_type_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   int get_plan_object_info(PlanText &plan_text,
@@ -442,6 +451,7 @@ public:
                                       uint64_t scan_table_id);
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
+  int extract_file_column_exprs_recursively(ObRawExpr *expr);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -492,6 +502,9 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
+  //for external table
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
   // for oracle-mapping, map access expr to a real column expr
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan
@@ -558,6 +571,7 @@ protected: // memeber variables
   bool has_index_lookup_filter_;
   // end for global index lookup
 
+  share::schema::ObTableType table_type_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

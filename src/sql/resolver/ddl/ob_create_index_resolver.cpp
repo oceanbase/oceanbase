@@ -496,6 +496,9 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
+  } else if (tbl_schema->is_external_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
   } else {
     is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;

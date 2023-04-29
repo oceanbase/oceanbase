@@ -4187,6 +4187,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_estimate_method(ap->est_cost_info_.row_est_method_);
     scan->set_pre_query_range(ap->pre_query_range_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
+    scan->set_table_type(table_schema->get_table_type());
     if (!ap->is_inner_path_ &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {
@@ -6922,7 +6923,8 @@ int ObLogPlan::check_scalar_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &
   } else if (!table_item->is_basic_table() ||
              table_item->is_link_table() ||
              is_sys_table(table_item->ref_id_) ||
-             is_virtual_table(table_item->ref_id_)) {
+             is_virtual_table(table_item->ref_id_) ||
+             EXTERNAL_TABLE == table_item->table_type_) {
     /*do nothing*/
   } else if (OB_FAIL(stmt->has_virtual_generated_column(table_item->table_id_, has_virtual_col))) {
     LOG_WARN("failed to check has virtual generated column", K(ret), K(*table_item));
@@ -8423,6 +8425,7 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
     }
 
     if (OB_SUCC(ret) && !contain_udf && !is_virtual_table(table_scan->get_ref_table_id()) &&
+        table_scan->get_table_type() != schema::EXTERNAL_TABLE &&
         !(OB_INVALID_ID != table_scan->get_dblink_id() && NULL != offset_expr) &&
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
         !(table_scan->get_is_index_global() && table_scan->get_index_back() && table_scan->has_index_lookup_filter()) &&
@@ -11213,6 +11216,21 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
     } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replaced_exprs_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
+    if (OB_SUCC(ret) && EXTERNAL_TABLE == scan_op->get_table_type()) {
+      for (int i = 0; OB_SUCC(ret) && i < scan_op->get_access_exprs().count(); ++i) {
+        ObColumnRefRawExpr *col_expr = NULL;
+        if (scan_op->get_access_exprs().at(i)->is_column_ref_expr()
+            && (col_expr = static_cast<ObColumnRefRawExpr*>(
+                  scan_op->get_access_exprs().at(i)))->is_stored_generated_column()) {
+          ObRawExpr *dep_expr = col_expr->get_dependant_expr();
+          if (OB_FAIL(scan_op->extract_file_column_exprs_recursively(dep_expr))) {
+            LOG_WARN("fail to extract file column expr", K(ret));
+          } else if (OB_FAIL(scan_op->get_ext_column_convert_exprs().push_back(dep_expr))) {
+            LOG_WARN("fail to push back expr", K(ret));
+          }
+        }
+      }
+    }
   } else if ((op->get_type() == log_op_def::LOG_INSERT) ||
             ((op->get_type() == log_op_def::LOG_INSERT_ALL))) {
     ObLogDelUpd *insert_op = static_cast<ObLogDelUpd*>(op);
@@ -11278,6 +11296,31 @@ int ObLogPlan::generate_old_column_values_exprs(ObLogicalOperator *root)
     ObLogForUpdate *for_upd_op = static_cast<ObLogForUpdate*>(root);
     if (OB_FAIL(generate_old_column_exprs(for_upd_op->get_index_dml_infos()))) {
       LOG_WARN("failed to generate column old values exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(col_expr) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr", K(ret));
+  } else if (expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_COL) {
+    // The file column PSEUDO expr does not have relation_ids.
+    // Using relation_ids in column expr to act as a column from the table.
+    // Relation_ids are required when cg join conditions.
+    if (OB_FAIL(expr->add_relation_ids(col_expr->get_relation_ids()))) {
+      LOG_WARN("fail to add relation ids", K(ret));
+    } else {
+      static_cast<ObPseudoColumnRawExpr *>(expr)->set_table_name(
+            static_cast<ObColumnRefRawExpr *>(col_expr)->get_table_name());
+    }
+  }
+  for (int i = 0; OB_SUCC(ret) && i < expr->get_children_count(); i++) {
+    if (OB_FAIL(adjust_expr_properties_for_external_table(col_expr, expr->get_param_expr(i)))) {
+      LOG_WARN("fail to adjust expr properties for external table", K(ret));
     }
   }
   return ret;

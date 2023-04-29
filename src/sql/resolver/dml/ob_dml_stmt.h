@@ -181,6 +181,7 @@ struct TableItem
     ddl_schema_version_ = 0;
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
+    table_type_ = MAX_TABLE_TYPE;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -202,7 +203,7 @@ struct TableItem
                K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
-               KPC_(function_table_expr));
+               KPC_(function_table_expr), K_(table_type));
 
   enum TableType
   {
@@ -216,6 +217,7 @@ struct TableItem
     TEMP_TABLE,
     LINK_TABLE,
     JSON_TABLE,
+    EXTERNAL_TABLE,
   };
 
   /**
@@ -308,6 +310,7 @@ struct TableItem
   bool is_index_table_; //just for index table resolver
   bool is_view_table_; //for VIEW privilege check
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
+  share::schema::ObTableType table_type_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */
@@ -1118,6 +1121,7 @@ public:
 
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
 
+  int disable_writing_external_table();
   int formalize_query_ref_exprs();
 
   int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,

@@ -79,6 +79,7 @@ void ObTableMetaInfo::assign(const ObTableMetaInfo &table_meta_info)
   row_count_ = table_meta_info.row_count_;
   has_opt_stat_ = table_meta_info.has_opt_stat_;
   micro_block_count_ = table_meta_info.micro_block_count_;
+  table_type_ = table_meta_info.table_type_;
 }
 
 double ObTableMetaInfo::get_micro_block_numbers() const
@@ -1248,6 +1249,11 @@ int ObOptEstCostModel::cost_normal_table(const ObCostTableScanInfo &est_cost_inf
   if (OB_UNLIKELY(parallel < 1 || part_cnt < 1)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected error", K(parallel), K(part_cnt), K(ret));
+  } else if (OB_NOT_NULL(est_cost_info.table_meta_info_)
+             && EXTERNAL_TABLE == est_cost_info.table_meta_info_->table_type_) {
+    //TODO [ExternalTable] need refine
+    index_back_cost = 0;
+    cost = 4.0 * phy_query_range_row_count;
   } else if (OB_FAIL(ObOptEstCostModel::cost_table_one_batch(est_cost_info,
                                                  part_cnt / parallel,
                                                  est_cost_info.batch_type_,
@@ -1256,7 +1262,8 @@ int ObOptEstCostModel::cost_normal_table(const ObCostTableScanInfo &est_cost_inf
                                                  cost,
                                                  index_back_cost))) {
     LOG_WARN("Failed to estimate cost", K(ret), K(est_cost_info));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
     LOG_TRACE("OPT:[ESTIMATE FINISH]", K(cost), K(index_back_cost),
               K(phy_query_range_row_count), K(query_range_row_count),
               K(est_cost_info));

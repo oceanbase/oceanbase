@@ -695,6 +695,8 @@ private:
                                     bool use_part_sort,
                                     bool can_ignore_merge = false);
 
+  int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
+
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };
 }//end of namespace sql

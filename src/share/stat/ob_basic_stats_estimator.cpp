@@ -853,7 +853,7 @@ int ObBasicStatsEstimator::gen_tablet_list(const ObTableStatParam &param,
   ObSEArray<uint64_t, 4> tablet_ids;
   if (param.global_stat_param_.need_modify_) {
     if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO) {
-      if (OB_UNLIKELY(param.global_tablet_id_ == 0)) {
+      if (OB_UNLIKELY(param.global_tablet_id_ == ObTabletID::INVALID_TABLET_ID)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(param));
       } else if (OB_FAIL(tablet_ids.push_back(param.global_tablet_id_))) {

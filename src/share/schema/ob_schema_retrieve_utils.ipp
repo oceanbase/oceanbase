@@ -1285,6 +1285,19 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         true, ignore_column_error, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, object_status, table_schema, int64_t, true, ignore_column_error, static_cast<int64_t> (ObObjectStatus::VALID));
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
+
+    ObString external_file_location;
+    ObString external_file_location_access_info;
+    ObString external_file_format;
+    ObString external_file_pattern;
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_location_access_info, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location_access_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_format);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_pattern);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));

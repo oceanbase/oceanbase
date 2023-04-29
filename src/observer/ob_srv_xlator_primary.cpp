@@ -49,6 +49,8 @@
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_processor.h"
 
+#include "share/external_table/ob_external_table_file_rpc_processor.h"
+
 using namespace oceanbase;
 using namespace oceanbase::observer;
 using namespace oceanbase::lib;
@@ -225,4 +227,6 @@ void oceanbase::observer::init_srv_xlator_for_executor(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObDASAsyncEraseP);
   RPC_PROCESSOR(ObRpcEraseIntermResultP, gctx_);
   RPC_PROCESSOR(ObDASAsyncAccessP, gctx_);
+  RPC_PROCESSOR(ObFlushExternalTableKVCacheP);
+  RPC_PROCESSOR(ObAsyncLoadExternalTableFileListP);
 }

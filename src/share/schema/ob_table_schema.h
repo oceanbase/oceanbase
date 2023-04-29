@@ -736,6 +736,7 @@ public:
   { return MATERIALIZED_VIEW == table_type; }
   inline bool is_in_recyclebin() const
   { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
+  inline bool is_external_table() const { return EXTERNAL_TABLE == table_type_; }
   inline ObTenantTableId get_tenant_table_id() const
   { return ObTenantTableId(tenant_id_, table_id_); }
   inline ObTenantTableId get_tenant_data_table_id() const
@@ -979,6 +980,10 @@ public:
   int set_compress_func_name(const char *compressor);
   int set_compress_func_name(const common::ObString &compressor);
   inline void set_dop(int64_t table_dop) { table_dop_ = table_dop; }
+  int set_external_file_location(const common::ObString &location) { return deep_copy_str(location, external_file_location_); }
+  int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
+  int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
+  int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   template<typename ColumnType>
   int add_column(const ColumnType &column);
   int delete_column(const common::ObString &column_name);
@@ -1101,6 +1106,10 @@ public:
 
   inline uint64_t get_index_attributes_set() const { return index_attributes_set_; }
   inline int64_t get_dop() const  { return table_dop_; }
+  const ObString &get_external_file_location() const { return external_file_location_; }
+  const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
+  const ObString &get_external_file_format() const { return external_file_format_; }
+  const ObString &get_external_file_pattern() const { return external_file_pattern_; }
   inline bool is_index_visible() const
   {
     return 0 == (index_attributes_set_ & ((uint64_t)(1) << INDEX_VISIBILITY));
@@ -1592,6 +1601,12 @@ protected:
   common::ObSArray<uint64_t> rls_policy_ids_;
   common::ObSArray<uint64_t> rls_group_ids_;
   common::ObSArray<uint64_t> rls_context_ids_;
+
+  //external table
+  common::ObString external_file_format_;
+  common::ObString external_file_location_;
+  common::ObString external_file_location_access_info_;
+  common::ObString external_file_pattern_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

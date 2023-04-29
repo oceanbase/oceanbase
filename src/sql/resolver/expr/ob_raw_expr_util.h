@@ -1080,6 +1080,12 @@ public:
                                                    const share::schema::ObTableSchema &table_schema,
                                                    const uint64_t logical_table_id,
                                                    ObSysFunRawExpr *&calc_rowid_expr);
+  static int add_calc_partition_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
+                                                  ObRawExprFactory &expr_factory,
+                                                  const ObSQLSessionInfo &session_info,
+                                                  const share::schema::ObTableSchema &table_schema,
+                                                  const uint64_t logical_table_id,
+                                                  ObSysFunRawExpr *&calc_rowid_expr);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,
                                           ObColumnRefRawExpr *&column_expr);
 

@@ -32,6 +32,8 @@
 #include "sql/engine/px/ob_px_bloom_filter.h"
 #include "sql/engine/ob_exec_feedback_info.h"
 #include "sql/das/ob_das_define.h"
+#include "lib/string/ob_strings.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 namespace oceanbase
 {
 namespace sql
@@ -161,7 +163,9 @@ public:
               access_table_location_indexes_(),
               server_not_alive_(false),
               adjoining_root_dfo_(false),
-              is_single_tsc_leaf_dfo_(false)
+              is_single_tsc_leaf_dfo_(false),
+              allocator_("PxSqcMetaInner"),
+              access_external_table_files_()
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -175,6 +179,7 @@ public:
   const dtl::ObDtlChannelInfo &get_sqc_channel_info_const() const { return sqc_ch_info_; }
   ObIArray<ObSqcTableLocationKey> &get_access_table_location_keys() { return access_table_location_keys_; }
   ObIArray<ObSqcTableLocationIndex> &get_access_table_location_indexes() { return access_table_location_indexes_; }
+  ObIArray<share::ObExternalFileInfo> &get_access_external_table_files() { return access_external_table_files_; }
   DASTabletLocIArray &get_access_table_locations_for_update() { return access_table_locations_; }
   const DASTabletLocIArray &get_access_table_locations() const { return access_table_locations_; }
   void set_execution_id(uint64_t execution_id) { execution_id_ = execution_id; }
@@ -242,6 +247,8 @@ public:
     serial_receive_channels_.reset();
     rescan_batch_params_.reset();
     partition_pruning_table_locations_.reset();
+    access_external_table_files_.reset();
+    allocator_.reset();
   }
   // SQC 端收到 InitSQC 消息后通过 data_channel 信息是否为空
   // 来判断 data channel 是否已经预分配好，是否要走轻量调度
@@ -333,6 +340,8 @@ private:
   bool adjoining_root_dfo_;
   //for auto scale
   bool is_single_tsc_leaf_dfo_;
+  ObArenaAllocator allocator_;
+  ObSEArray<share::ObExternalFileInfo, 8> access_external_table_files_;
 };
 
 class ObDfo
@@ -386,7 +395,8 @@ public:
     use_filter_ch_map_(),
     total_task_cnt_(0),
     pkey_table_loc_id_(0),
-    tsc_op_cnt_(0)
+    tsc_op_cnt_(0),
+    external_table_files_()
   {
   }
 
@@ -555,6 +565,7 @@ public:
   void inc_tsc_op_cnt() { tsc_op_cnt_++; }
   bool is_leaf_dfo() { return child_dfos_.empty(); }
   bool is_single_tsc_leaf_dfo() { return is_leaf_dfo() && 1 == tsc_op_cnt_; }
+  common::ObIArray<share::ObExternalFileInfo> &get_external_table_files() { return external_table_files_; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -648,6 +659,7 @@ private:
   int64_t total_task_cnt_;      // the task total count of dfo start worker
   int64_t pkey_table_loc_id_; // record pkey table loc id for child dfo
   int64_t tsc_op_cnt_;
+  common::ObArray<share::ObExternalFileInfo> external_table_files_;
 };
 
 

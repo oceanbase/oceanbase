@@ -113,6 +113,20 @@ private:
   common::ObIAllocator& allocator_;
 };
 
+class ObFullPathArrayOp : public ObBaseDirEntryOperator
+{
+public:
+  ObFullPathArrayOp(common::ObIArray <common::ObString> &name_array, common::ObString &path,
+                              common::ObIAllocator &array_allocator)
+    : name_array_(name_array), path_(path), allocator_(array_allocator) {}
+  ~ObFullPathArrayOp() {}
+  int func(const dirent *entry) ;
+private:
+  common::ObIArray <common::ObString> &name_array_;
+  common::ObString &path_;
+  common::ObIAllocator &allocator_;
+};
+
 class ObDirPrefixEntryNameFilter : public ObBaseDirEntryOperator
 {
 public:

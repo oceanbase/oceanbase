@@ -5438,6 +5438,7 @@ int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
       cte_cycle_value_ = tmp.cte_cycle_value_;
       cte_cycle_default_value_ = tmp.cte_cycle_default_value_;
       table_id_ = tmp.table_id_;
+      table_name_ = tmp.table_name_;
     }
   }
   return ret;
@@ -5511,6 +5512,13 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
     case T_PSEUDO_STMT_ID:
     case T_PSEUDO_GROUP_PARAM:
       if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
+        LOG_WARN("failed to print expr name", K(ret));
+      }
+      break;
+    case T_PSEUDO_EXTERNAL_FILE_COL:
+      if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
+          LOG_WARN("failed to print table name", K(ret));
+      } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
         LOG_WARN("failed to print expr name", K(ret));
       }
       break;

@@ -75,6 +75,7 @@
 #include "storage/tx/ob_i_ts_source.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/scn.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 
 namespace oceanbase
 {
@@ -1492,7 +1493,7 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
   }
 
   // add audit in table if necessary
-  if (OB_SUCC(ret) && !is_truncate_table && table_schema.is_user_table()) {
+  if (OB_SUCC(ret) && !is_truncate_table && (table_schema.is_user_table() || table_schema.is_external_table())) {
     const uint64_t tenant_id = table_schema.get_tenant_id();
     ObArray<const ObSAuditSchema *> audits;
 
@@ -4214,8 +4215,15 @@ int ObDDLOperator::drop_table(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(drop_tablet_of_table(table_schema, trans))) {
-    LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+  } else if (table_schema.is_external_table()) {
+    if (OB_FAIL(ObExternalTableFileManager::get_instance().clear_inner_table_files(
+                  table_schema.get_tenant_id(), table_schema.get_table_id(), trans))) {
+      LOG_WARN("delete external table file list failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(drop_tablet_of_table(table_schema, trans))) {
+      LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+    }
   }
 
   return ret;
@@ -4274,7 +4282,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   }
 
   // delete audit in table
-  if (OB_SUCC(ret) && table_schema.is_user_table()) {
+  if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
     ObArray<const ObSAuditSchema *> audits;
     if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
                                                        AUDIT_TABLE,

@@ -156,6 +156,14 @@ public:
       ObTabletIdxMap &idx_map);
   static int find_dml_ops(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                           const ObOpSpec &op);
+  static int get_external_table_loc(
+      ObExecContext &ctx,
+      uint64_t table_id,
+      uint64_t ref_table_id,
+      const ObQueryRange &pre_query_range,
+      ObDfo &dfo,
+      ObDASTableLoc *&table_loc);
+
 private:
   static int find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op);
@@ -234,6 +242,11 @@ private:
   static int do_random_dfo_distribution(const common::ObIArray<common::ObAddr> &src_addrs,
                                         int64_t dst_addrs_count,
                                         common::ObIArray<common::ObAddr> &dst_addrs);
+  static int sort_and_collect_local_file_distribution(common::ObIArray<share::ObExternalFileInfo> &files,
+                                                      common::ObIArray<common::ObAddr> &dst_addrs);
+  static int assign_external_files_to_sqc(const common::ObIArray<share::ObExternalFileInfo> &files,
+                                          bool is_file_on_disk,
+                                          common::ObIArray<ObPxSqcMeta *> &sqcs);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);
 };
 

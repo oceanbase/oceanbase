@@ -38,6 +38,8 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/parser/ob_parser_utils.h"
+#include "lib/json/ob_json_print_utils.h"
 
 namespace oceanbase
 {
@@ -4127,6 +4129,133 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
   return ret;
 }
 
+int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx)
+{
+  int ret = OB_SUCCESS;
+  constexpr int32_t PREFIX_LEN = str_length(N_EXTERNAL_FILE_COLUMN_PREFIX);
+  if (column_name.length() <= PREFIX_LEN) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    int err = 0;
+    file_column_idx = ObCharset::strntoull(column_name.ptr() + PREFIX_LEN, column_name.length() - PREFIX_LEN, 10, &err);
+    if (err != 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid file column name", K(column_name));
+    }
+  }
+  return ret;
+}
+
+ObRawExpr *ObResolverUtils::find_file_column_expr(
+    ObIArray<ObRawExpr *> &pseudo_exprs,
+    int64_t table_id,
+    int64_t column_idx
+    )
+{
+  ObRawExpr *expr = nullptr;
+  for (int i = 0; i < pseudo_exprs.count(); ++i) {
+    ObPseudoColumnRawExpr *pseudo_expr = static_cast<ObPseudoColumnRawExpr *>(pseudo_exprs.at(i));
+    if (pseudo_expr->get_table_id() == table_id && pseudo_expr->get_extra() == column_idx) {
+      expr = pseudo_expr;
+      break;
+    }
+  }
+  return expr;
+}
+
+int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_factory,
+                                                       const ObSQLSessionInfo &session_info,
+                                                       const ObQualifiedName &q_name,
+                                                       ObIArray<ObRawExpr *> &real_exprs,
+                                                       ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *file_column_expr = nullptr;
+  uint64_t file_column_idx = UINT64_MAX;
+  if (!ObResolverUtils::is_external_file_column_name(q_name.col_name_)) {
+    ret = OB_ERR_BAD_FIELD_ERROR;
+    ObString scope_name = "external file column";
+    LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
+                   scope_name.length(), scope_name.ptr());
+  } else if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+    LOG_WARN("fail to calc file column idx", K(ret));
+  } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                           real_exprs, OB_INVALID_ID, file_column_idx))) {
+    ObString table_name;
+    if (OB_FAIL(ObResolverUtils::build_file_column_expr(expr_factory, session_info, OB_INVALID_ID,
+                                                        table_name, q_name.col_name_,
+                                                        file_column_idx, file_column_expr, CHARSET_UTF8MB4))) {
+      LOG_WARN("fail to build external table file column expr", K(ret));
+    } else if (OB_FAIL(real_exprs.push_back(file_column_expr))) {
+      LOG_WARN("fail to push back expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTransformUtils::replace_expr(q_name.ref_expr_, file_column_expr, expr))) {
+      LOG_WARN("fail replace expr", K(ret));
+    }
+  }
+  LOG_DEBUG("resolve external table column ref", K(q_name.col_name_), KPC(expr));
+  return ret;
+}
+
+bool ObResolverUtils::is_external_file_column_name(const ObString &name)
+{
+  return name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX);
+}
+
+int ObResolverUtils::build_file_column_expr(ObRawExprFactory &expr_factory,
+                                            const ObSQLSessionInfo &session_info,
+                                            const uint64_t table_id,
+                                            const ObString &table_name,
+                                            const ObString &column_name,
+                                            int64_t column_idx,
+                                            ObRawExpr *&expr,
+                                            ObCharsetType cs_type)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+
+  if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_EXTERNAL_FILE_COL, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else{
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_data_type(ObVarcharType);
+    file_column_expr->set_collation_type(ObCharset::get_default_collation(cs_type));
+    file_column_expr->set_length(OB_MAX_VARCHAR_LENGTH);
+    if (lib::is_oracle_mode()) {
+      file_column_expr->set_length_semantics(LS_BYTE);
+    }
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_extra(column_idx);
+
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &exprs, const ObString &file_column_name)
+{
+  ObRawExpr *res_expr = nullptr;
+  for (int i = 0; i < exprs.count(); ++i) {
+    if (0 == exprs.at(i)->get_expr_name().case_compare(file_column_name)) {
+      res_expr = exprs.at(i);
+      break;
+    }
+  }
+  return res_expr;
+}
+
 // 解析生成列表达式时，首先在table_schema中的column_schema中寻找依赖的列，如果找不到，再在 resolved_cols中找
 int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    const ParseNode *node,
@@ -4181,31 +4310,50 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
     } else if (FALSE_IT(col_schema = tbl_schema.get_column_schema(q_name.col_name_) == NULL ?
                                      get_column_schema_from_array(resolved_cols, q_name.col_name_) :
                                      tbl_schema.get_column_schema(q_name.col_name_))) {
-    } else if (NULL == col_schema || (col_schema->is_hidden() && !col_schema->is_udt_hidden_column())) {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      ObString scope_name = "generated column function";
-      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
-                     scope_name.length(), scope_name.ptr());
-    } else if (col_schema->is_generated_column()) {
-      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
-      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
-                     "Defining a generated column on generated column(s)");
-    } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob() &&
-               !col_schema->is_udt_hidden_column()) { // generated column depends on xml: gen_expr(sys_makexml(blob))
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "blob column in generated column definition");
-    } else if (lib::is_mysql_mode() && col_schema->is_autoincrement()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("generated column cannot refer to auto-increment column", K(ret), K(*expr));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generated column refer to auto-increment column");
-    } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
-      LOG_WARN("init column expr failed", K(ret));
-    } else if (OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
-      LOG_WARN("add cascaded column id to generated column failed", K(ret));
-    } else {
-      col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
-      OZ (real_exprs.push_back(q_name.ref_expr_));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (tbl_schema.is_external_table()) {
+        // c1 int as( concat(file$col1, file$col2) )
+        // defination of external generated column can only contain file columns
+        if (NULL != col_schema) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Refering a normal external table column");
+        } else if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(*params.expr_factory_,
+                                                                              *params.session_info_,
+                                                                              q_name,
+                                                                              real_exprs,
+                                                                              expr))) {
+          LOG_WARN("fail to resolve external table column def", K(ret));
+        }
+      } else {
+        if (NULL == col_schema || (col_schema->is_hidden() && !col_schema->is_udt_hidden_column())) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          ObString scope_name = "generated column function";
+          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, q_name.col_name_.length(), q_name.col_name_.ptr(),
+                        scope_name.length(), scope_name.ptr());
+        } else if (col_schema->is_generated_column()) {
+          ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+          LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
+                        "Defining a generated column on generated column(s)");
+        } else if (lib::is_oracle_mode() && col_schema->get_meta_type().is_blob() &&
+                  !col_schema->is_udt_hidden_column()) { // generated column depends on xml: gen_expr(sys_makexml(blob))
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("Define a blob column in generated column def is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "blob column in generated column definition");
+        } else if (lib::is_mysql_mode() && col_schema->is_autoincrement()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("generated column cannot refer to auto-increment column", K(ret), K(*expr));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "generated column refer to auto-increment column");
+        } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+          LOG_WARN("init column expr failed", K(ret));
+        } else if (OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
+          LOG_WARN("add cascaded column id to generated column failed", K(ret));
+        } else {
+          col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
+          OZ (real_exprs.push_back(q_name.ref_expr_));
+        }
+      }
     }
   }
 
@@ -4277,7 +4425,9 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         }
       }
     }
-    if OB_FAIL(ret) {
+    if (OB_FAIL(ret)) {
+    } else if (tbl_schema.is_external_table()) {
+      //skip length check
     } else if (lib::is_oracle_mode() && ob_is_string_type(dst_datatype)) {
       // generated_column是用户定义的生成列，其长度以及长度语义(按照字符计算长度还是字节计算长度)依赖于SQL语句的定义
       // expr是用于生成generated_column数据的表达式。expr计算结果的长度不能大于generated_column定义的长度
@@ -7153,7 +7303,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
           ret = OB_ERR_NO_PRIVILEGE;
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
-            && full_path[pos] != '/') {
+                   && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
@@ -7443,6 +7593,103 @@ bool ObResolverUtils::in_updatable_view_path(const TableItem &table_item,
   return in_path;
 }
 
+int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
+                                                      const ObCharsetType &format_charset,
+                                                      ObResolverParams &params,
+                                                      ObString &result_value)
+{
+  int ret = OB_SUCCESS;
+  // 1. resolve expr
+  ObRawExpr *expr = NULL;
+  ObRawExprFactory *expr_factory = params.expr_factory_;
+  ObSQLSessionInfo *session_info = params.session_info_;
+  if (OB_ISNULL(node) || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed. get unexpect NULL ptr", K(ret), K(node), K(expr_factory), K(session_info));
+  } else if (OB_FAIL(resolve_const_expr(params, *node, expr, NULL))) {
+    LOG_WARN("fail to resolve const expr", K(ret));
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed. invalid param", K(ret), K(node->type_));
+  } else if (OB_FAIL(expr->formalize(session_info))) {
+    LOG_WARN("failed to formalize expr", K(ret), K(*expr));
+  } else if (!expr->is_static_scalar_const_expr()) {
+    ret = OB_NOT_SUPPORTED;
+    ObSqlString err_msg;
+    err_msg.append_fmt("using '%s' as format value", get_type_name(expr->get_expr_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+    LOG_WARN("failed. invalid params", K(ret), K(*expr));
+  }
+
+  // 2. try case convert
+  if (OB_SUCC(ret)) {
+    ObRawExpr *new_expr = NULL;
+    const int64_t max_len = 64;
+    ObCastMode cast_mode = CM_NONE;
+    ObExprResType expr_output_type = expr->get_result_type();
+    ObCollationType result_collation_type = ObCharset::get_bin_collation(format_charset);
+    ObExprResType cast_dst_type;
+    cast_dst_type.set_type(ObVarcharType);
+    cast_dst_type.set_length(max_len);
+    cast_dst_type.set_calc_meta(ObObjMeta());
+    cast_dst_type.set_collation_type(result_collation_type);
+    if (!(expr_output_type.is_varchar() ||
+          expr_output_type.is_nvarchar2() ||
+          expr_output_type.is_char() ||
+          expr_output_type.is_nchar())) {
+      if (result_collation_type == CS_TYPE_INVALID) {
+        ret = OB_ERR_PARAM_INVALID;
+        LOG_WARN("failed. get invalid collaction", K(ret), K(format_charset));
+      } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session_info, cast_mode))) {
+        LOG_WARN("get default cast mode failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory,
+                                                                 session_info,
+                                                                 *expr,
+                                                                 cast_dst_type,
+                                                                 cast_mode,
+                                                                 new_expr))) {
+        LOG_WARN("try add cast expr above failed", K(ret), K(*expr));
+      } else if (OB_ISNULL(new_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed. get unexpect NULL ptr", K(ret));
+      } else if (OB_FAIL(new_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST))) {
+        LOG_WARN("failed to add flag", K(ret));
+      } else {
+        expr = new_expr;
+      }
+    }
+  }
+
+  // 3. compute expr result
+  if (OB_SUCC(ret)) {
+    RowDesc row_desc;
+    ObNewRow tmp_row;
+    ObObj value_obj;
+    ObTempExpr *temp_expr = NULL;
+    ObExecContext *exec_ctx = session_info->get_cur_exec_ctx();
+    if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed. get unexpected NULL", K(ret));
+    } else if (OB_FAIL(ObStaticEngineExprCG::gen_expr_with_row_desc(expr,
+                                                            row_desc,
+                                                            exec_ctx->get_allocator(),
+                                                            exec_ctx->get_my_session(),
+                                                            exec_ctx->get_sql_ctx()->schema_guard_,
+                                                            temp_expr))) {
+      LOG_WARN("fail to fill sql expression", K(ret));
+    } else if (OB_ISNULL(temp_expr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to gen temp expr", K(ret));
+    } else if (OB_FAIL(temp_expr->eval(*exec_ctx, tmp_row, value_obj))) {
+      LOG_WARN("fail to calc value", K(ret), K(*expr));
+    } else if (value_obj.is_null()) {
+      result_value = ObString();
+    } else {
+      result_value = value_obj.get_string();
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

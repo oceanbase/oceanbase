@@ -74,6 +74,10 @@ int ObAccessPathEstimation::process_common_estimate_rowcount(ObOptimizerContext 
       if (OB_FAIL(process_vtable_default_estimation(paths.at(i)))) {
         LOG_WARN("failed to process process vtable default estimation", K(ret));
       }
+    } else if (EXTERNAL_TABLE == paths.at(i)->est_cost_info_.table_meta_info_->table_type_) {
+      if (OB_FAIL(process_external_table_estimation(paths.at(i)))) {
+        LOG_WARN("failed to process external table estimation", K(ret));
+      }
     } else if (OB_FAIL(process_statistics_estimation(paths.at(i)))) {
       LOG_WARN("failed to process statistics estimation", K(ret));
     } else if (!use_storage_stat) {
@@ -138,6 +142,32 @@ int ObAccessPathEstimation::check_path_can_use_stroage_estimate(const AccessPath
     }
   }
   LOG_TRACE("check_path_can_use_stroage_estimate", K(can_use));
+  return ret;
+}
+
+int ObAccessPathEstimation::process_external_table_estimation(AccessPath *path)
+{
+  //TODO [ExternalTable] need refine
+  int ret = OB_SUCCESS;
+  double output_row_count = 0.0;
+  if (OB_ISNULL(path)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("path is null", K(ret), K(path));
+  } else {
+    ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
+    est_cost_info.batch_type_ = ObSimpleBatch::T_SCAN;
+    if (est_cost_info.table_meta_info_->has_opt_stat_) {
+      if (OB_FAIL(process_statistics_estimation(path))) {
+        LOG_WARN("failed to process statistics estimation", K(ret));
+      }
+    } else {
+      output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
+      path->query_range_row_count_ = output_row_count;
+      path->phy_query_range_row_count_ = output_row_count;
+      path->index_back_row_count_ = 0;
+      path->output_row_count_ = output_row_count;
+    }
+  }
   return ret;
 }
 
@@ -1041,8 +1071,9 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
     if (OB_ISNULL(ctx.get_session_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (is_virtual_table(meta.ref_table_id_) &&
-        !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_)) {
+    } else if ((is_virtual_table(meta.ref_table_id_) &&
+                !share::is_oracle_mapping_real_virtual_table(meta.ref_table_id_))
+               || EXTERNAL_TABLE == meta.table_type_) {
       // do nothing
     } else if (OB_FAIL(ObSQLUtils::choose_best_replica_for_estimation(
                 part_loc_info,

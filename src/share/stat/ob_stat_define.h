@@ -444,7 +444,8 @@ struct ObTableStatParam {
     data_table_id_(INVALID_GLOBAL_PART_ID),
     need_estimate_block_(true),
     is_temp_table_(false),
-    allocator_(NULL)
+    allocator_(NULL),
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -516,6 +517,7 @@ struct ObTableStatParam {
   bool need_estimate_block_;//need estimate macro/micro block count
   bool is_temp_table_;
   common::ObIAllocator *allocator_;
+  share::schema::ObTableType ref_table_type_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -559,7 +561,8 @@ struct ObTableStatParam {
                K(global_data_part_id_),
                K(data_table_id_),
                K(need_estimate_block_),
-               K(is_temp_table_));
+               K(is_temp_table_),
+               K(ref_table_type_));
 };
 
 struct ObOptStat

@@ -36,9 +36,10 @@ typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
 
 class ObAlterTableResolver : public ObDDLResolver
 {
-  static const int64_t ALTER_TABLE_NODE_COUNT = 2;
+  static const int64_t ALTER_TABLE_NODE_COUNT = 3;
   static const int64_t TABLE = 0;         // 0. table_node
   static const int64_t ACTION_LIST = 1;   // 1. alter table action list
+  static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
   virtual ~ObAlterTableResolver();

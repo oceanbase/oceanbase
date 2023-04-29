@@ -49,6 +49,7 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr)
   int ret = OB_SUCCESS;
   int64_t param_count = expr.has_flag(IS_ONETIME) ? 1 : expr.get_param_count();
   if (!expr.is_column_ref_expr() &&
+      T_PSEUDO_EXTERNAL_FILE_COL != expr.get_expr_type() &&
       T_ORA_ROWSCN != expr.get_expr_type()) {
     expr.get_relation_ids().reuse();
   }

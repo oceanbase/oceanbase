@@ -801,7 +801,7 @@ int ObDDLService::generate_tablet_id(ObTableSchema &table_schema)
     LOG_WARN("part level is unexpected", K(table_schema), K(ret));
   } else if (is_sys_table(table_schema.get_table_id())) {
     table_schema.set_tablet_id(table_schema.get_table_id());
-  } else if (table_schema.is_vir_table() || table_schema.is_view_table()) {
+  } else if (table_schema.is_vir_table() || table_schema.is_view_table() || table_schema.is_external_table()) {
   } else if ((tablet_num = table_schema.get_all_part_num()) <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tablet num", K(table_schema), K(ret), K(tablet_num));
@@ -11108,7 +11108,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    alter_table_arg.consumer_group_id_,
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg);
-        if (orig_table_schema->is_tmp_table()) {
+        if (orig_table_schema->is_tmp_table() || orig_table_schema->is_external_table()) {
           ret = OB_OP_NOT_ALLOW;
           char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
           (void)snprintf(err_msg, sizeof(err_msg), "%s on temporary table is", ddl_type_str(ddl_type));
@@ -11343,7 +11343,9 @@ int ObDDLService::get_and_check_table_schema(
       LOG_WARN("can not alter table in recyclebin",
       K(ret), K(alter_table_arg), K(is_db_in_recyclebin));
     } else if (!orig_table_schema->is_user_table()
-      && !orig_table_schema->is_sys_table() && !orig_table_schema->is_tmp_table()) {
+               && !orig_table_schema->is_sys_table()
+               && !orig_table_schema->is_tmp_table()
+               && !orig_table_schema->is_external_table()) {
       ret = OB_ERR_WRONG_OBJECT;
       LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
       to_cstring(origin_database_name), to_cstring(origin_table_name), "BASE TABLE");
@@ -16712,7 +16714,7 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
   } else if (0 != table_schema.get_autoinc_column_id()) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("table with autoinc column should not get in new_truncate_table", KR(ret), K(table_id), K(table_name), K(database_name));
-  } else if (table_schema.is_sys_table()) {
+  } else if (table_schema.is_sys_table() || table_schema.is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate table is not supported on system table", KR(ret), K(table_id), K(table_name));
   } else if (table_schema.is_index_table() || table_schema.is_aux_vp_table() || table_schema.is_aux_lob_table()) {
@@ -16869,7 +16871,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate table is not supported on index or aux vp table", K(ret));
       } else if (!orig_table_schema->is_user_table() && !orig_table_schema->is_tmp_table()) {
-        if (orig_table_schema->is_sys_table()) {
+        if (orig_table_schema->is_sys_table() || orig_table_schema->is_external_table()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("truncate table is not supported on system table", K(ret));
         } else {
@@ -17359,6 +17361,8 @@ int ObDDLService::rebuild_table_schema_with_new_id(const ObTableSchema &orig_tab
       new_table_schema.set_table_type(USER_TABLE);
     } else if (orig_table_schema.is_sys_view()) {
       new_table_schema.set_table_type(USER_VIEW);
+    } else if (orig_table_schema.is_external_table()) {
+      new_table_schema.set_table_type(EXTERNAL_TABLE);
     }
     if (new_table_schema.is_user_table()
         && (TMP_TABLE == table_type_ || TMP_TABLE_ORA_SESS == table_type_)) {
@@ -19043,7 +19047,7 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
           LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(*tmp_table_schema), K(ret));
         }
       } else if (USER_TABLE == expected_table_type) {
-        if (!tmp_table_schema->is_table() && !tmp_table_schema->is_tmp_table()) {
+        if (!tmp_table_schema->is_table() && !tmp_table_schema->is_tmp_table() && !tmp_table_schema->is_external_table()) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(ret));
         } else { /*maybe SYS_TABLE or VIRTUAL TABLE */ }
@@ -19567,7 +19571,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             } else {
               bool to_recyclebin = drop_table_arg.to_recyclebin_;
               bool has_conflict_ddl = false;
-              if (table_schema->get_table_type() == MATERIALIZED_VIEW || table_schema->is_tmp_table()) {
+              if (table_schema->get_table_type() == MATERIALIZED_VIEW || table_schema->is_tmp_table() || table_schema->is_external_table()) {
                 to_recyclebin = false;
               }
               if (drop_table_arg.table_type_ == USER_TABLE && OB_FAIL(ObDDLTaskRecordOperator::check_has_conflict_ddl(
@@ -32207,7 +32211,7 @@ int ObDDLService::handle_rls_policy_ddl(const obrpc::ObRlsPolicyDDLArg &arg)
     } else if (is_db_in_recyclebin) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
-    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table() && !table_schema->is_external_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");
@@ -32334,7 +32338,7 @@ int ObDDLService::handle_rls_group_ddl(const obrpc::ObRlsGroupDDLArg &arg)
     } else if (is_db_in_recyclebin) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
-    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table() && !table_schema->is_external_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");
@@ -32441,7 +32445,7 @@ int ObDDLService::handle_rls_context_ddl(const obrpc::ObRlsContextDDLArg &arg)
     } else if (is_db_in_recyclebin) {
       ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
       LOG_WARN("database of rls table is in recyclebin", KR(ret), KPC(table_schema));
-    } else if (!table_schema->is_user_table() && !table_schema->is_view_table()) {
+    } else if (!table_schema->is_user_table() && !table_schema->is_view_table() && !table_schema->is_external_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support rls on user table or user view", KR(ret), KPC(table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "policy on non-user table");

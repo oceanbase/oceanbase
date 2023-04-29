@@ -467,6 +467,7 @@ public:
     is_col_part_expr_(false),
     is_col_subpart_expr_(false),
     is_oracle_temp_table_(false),
+    table_type_(share::schema::MAX_TABLE_TYPE),
     inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
     allocator_(inner_allocator_),
     loc_meta_(inner_allocator_),
@@ -512,6 +513,7 @@ public:
     is_col_part_expr_(false),
     is_col_subpart_expr_(false),
     is_oracle_temp_table_(false),
+    table_type_(share::schema::MAX_TABLE_TYPE),
     allocator_(allocator),
     loc_meta_(allocator),
     calc_node_(NULL),
@@ -1117,6 +1119,7 @@ private:
   bool is_col_subpart_expr_;
   bool is_oracle_temp_table_;//是否为oracle模式下的临时表, 根据此调用不同的hash计算函数, 因为内部sql时
                              //is_oracle_mode()不可靠
+  share::schema::ObTableType table_type_;
   common::ObArenaAllocator inner_allocator_;
   common::ObIAllocator &allocator_; //used for deep copy other table location
   ObDASTableLocMeta loc_meta_;

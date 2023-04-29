@@ -743,6 +743,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_table_scan_op.cpp
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
+  engine/table/ob_external_table_access_service.cpp
 )
 
 ob_set_subtarget(ob_sql executor

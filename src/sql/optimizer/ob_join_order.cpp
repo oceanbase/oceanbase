@@ -359,17 +359,34 @@ int ObJoinOrder::compute_sharding_info_for_base_path(ObIArray<AccessPath *> &acc
   AccessPath *path = NULL;
   ObShardingInfo *sharding_info = NULL;
   ObTablePartitionInfo *table_partition_info = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
   if (OB_UNLIKELY(access_paths.count() <= cur_idx) ||
       OB_ISNULL(path = access_paths.at(cur_idx)) ||
       OB_ISNULL(table_partition_info = path->table_partition_info_) ||
       OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
+      OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(access_paths.count()), K(path), K(table_partition_info),
                                   K(cur_idx), K(get_plan()), K(stmt), K(opt_ctx), K(session_info));
   } else if (path->use_das_) {
     sharding_info = opt_ctx->get_match_all_sharding();
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_partition_info->get_ref_table_id(),
+                                      table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (table_schema->is_external_table()) {
+    int64_t parallel = opt_ctx->is_use_table_dop() ? table_schema->get_dop() :opt_ctx->get_parallel();
+    if (parallel > 1
+        || ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location())) {
+      sharding_info = opt_ctx->get_distributed_sharding();
+    } else {
+      sharding_info = opt_ctx->get_local_sharding();
+    }
   } else if (OB_FAIL(table_partition_info->get_location_type(opt_ctx->get_local_server_addr(),
                                                                     location_type))) {
     LOG_WARN("failed to get location type", K(ret));
@@ -1475,11 +1492,11 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   } else if (OB_ISNULL(index_info_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index info entry should not be null", K(ret));
+  } else if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_item is null", K(ret), K(table_id));
   } else if (get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
-    if (OB_ISNULL(table_item = get_plan()->get_stmt()->get_table_item_by_id(table_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table_item is null", K(ret), K(table_id));
-    } else if (table_item->is_basic_table()) {
+    if (table_item->is_basic_table()) {
       is_batch_update_table = true;
     }
   }
@@ -1493,6 +1510,10 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
                     is_batch_update_table;
+    if (EXTERNAL_TABLE == table_item->table_type_) {
+      create_das_path = false;
+      create_basic_path = true;
+    } else
     //this sql force to use DAS TSC:
     //batch update table(multi queries or arraybinding)
     //contain nested sql(pl udf or in nested sql)
@@ -5587,6 +5608,7 @@ int JoinPath::can_use_batch_nlj(ObLogPlan *plan,
                       || access_path->is_json_table_path()
                       || table_item->for_update_
                       || !access_path->subquery_exprs_.empty()
+                      || EXTERNAL_TABLE == table_item->table_type_
                       );
 
     if (use_batch_nlj) {
@@ -6518,6 +6540,7 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
   } else {
     table_id_ = table_item->table_id_;
     table_meta_info_.ref_table_id_ = table_item->ref_id_;
+    table_meta_info_.table_type_ = table_item->table_type_;
     table_bit_index = stmt->get_table_bit_index(table_item->table_id_);
     if (OB_FAIL(get_tables().add_member(table_bit_index)) ||
         OB_FAIL(get_output_tables().add_member(table_bit_index))) {
@@ -6828,8 +6851,9 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
     LOG_WARN("failed to calc table location", K(ret));
   } else if (OB_FAIL(estimate_size_and_width_for_base_table(helper, access_paths))) {
     LOG_WARN("failed to estimate_size", K(ret));
-  } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id) &&
-             OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
+  } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id)
+             && EXTERNAL_TABLE != table_meta_info_.table_type_
+             && OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
     LOG_WARN("failed to compute one row info", K(ret));
   } else if (OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
@@ -10992,6 +11016,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_WARN("null table schema", K(ret));
   } else {
     table_meta_info_.ref_table_id_ = ref_table_id;
+    table_meta_info_.table_type_ = table_schema->get_table_type();
     table_meta_info_.table_rowkey_count_ = table_schema->get_rowkey_info().get_size();
     table_meta_info_.table_column_count_ = table_schema->get_column_count();
     table_meta_info_.micro_block_size_ = table_schema->get_block_size();
@@ -11342,7 +11367,8 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
 
       //3. fallback with default stats temporary
       if (OB_SUCC(ret) && table_meta_info_.table_row_count_ <= 0) {
-        table_meta_info_.table_row_count_ = ObOptStatManager::get_default_table_row_count();
+        table_meta_info_.table_row_count_ =
+              table_schema.is_external_table() ? 100000.0 : ObOptStatManager::get_default_table_row_count();
         table_meta_info_.average_row_size_ = ObOptStatManager::get_default_avg_row_size();
         table_meta_info_.part_size_ = ObOptStatManager::get_default_data_size();
         LOG_TRACE("total rowcount, empty table", K(table_meta_info_.table_row_count_));

@@ -167,6 +167,12 @@ int ObDASTabletMapper::get_tablet_and_object_id(
       related_info_ptr = &related_info_;
     }
     if (OB_FAIL(ret)) {
+    } else if (table_schema_->is_external_table()) {
+      if (OB_FAIL(tmp_tablet_ids.push_back(ObTabletID(ObTabletID::INVALID_TABLET_ID)))) {
+        LOG_WARN("fail to push back tablet_id", KR(ret));
+      } else if (OB_FAIL(tmp_part_ids.push_back(table_schema_->get_object_id()))) {
+        LOG_WARN("fail to push back object_id", KR(ret));
+      }
     } else if (PARTITION_LEVEL_ZERO == part_level) {
       ObTabletID tablet_id;
       ObObjectID object_id;
@@ -759,6 +765,8 @@ int ObDASLocationRouter::get(const ObDASTableLocMeta &loc_meta,
     if (OB_FAIL(get_vt_ls_location(ref_table_id, tablet_id, location))) {
       LOG_WARN("get virtual table ls location failed", K(ret), K(ref_table_id), K(tablet_id));
     }
+  } else if (loc_meta.is_external_table_) {
+    ret = get_external_table_ls_location(location);
   } else {
     int64_t expire_renew_time = 2 * 1000000; // 2s
     bool is_cache_hit = false;
@@ -981,5 +989,21 @@ OB_NOINLINE int ObDASLocationRouter::get_vt_ls_location(uint64_t table_id,
   }
   return ret;
 }
+
+int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)
+{
+  int ret = OB_SUCCESS;
+  int64_t now = ObTimeUtility::current_time();
+  ObReplicaProperty mock_prop;
+  ObLSReplicaLocation ls_replica;
+  ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::RESTORE_NONE);
+  OZ (location.init(GCONF.cluster_id, MTL_ID(), ObLSID(ObLSID::VT_LS_ID), now));
+  OZ (ls_replica.init(GCTX.self_addr(), common::LEADER,
+                      GCONF.mysql_port, REPLICA_TYPE_FULL,
+                      mock_prop, ls_restore_status, 1 /*proposal_id*/));
+  OZ (location.add_replica_location(ls_replica));
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

@@ -249,6 +249,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   is_system_table_ = other.is_system_table_;
   is_index_table_ = other.is_index_table_;
   is_view_table_ = other.is_view_table_;
+  table_type_ = other.table_type_;
   is_recursive_union_fake_table_ = other.is_recursive_union_fake_table_;
   cte_type_ = other.cte_type_;
   database_name_ = other.database_name_;
@@ -4332,6 +4333,53 @@ bool ObDMLStmt::is_hierarchical_query() const
 bool ObDMLStmt::is_set_stmt() const
 {
   return is_select_stmt() ? (static_cast<const ObSelectStmt*>(this)->is_set_stmt()) : false;
+}
+
+int ObDMLStmt::disable_writing_external_table()
+{
+  int ret = OB_SUCCESS;
+  bool disable_write_table = false;
+  const TableItem *table_item = NULL;
+  if (stmt::T_SELECT == get_stmt_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !disable_write_table && i < table_items_.count(); ++i) {
+      if (OB_ISNULL(table_item = table_items_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (table_item->for_update_ && schema::EXTERNAL_TABLE == table_item->table_type_) {
+        disable_write_table = true;
+      }
+    }
+  } else if (is_dml_write_stmt()) {
+    ObSEArray<ObDmlTableInfo*, 4> dml_table_infos;
+    if (OB_FAIL(static_cast<ObDelUpdStmt*>(this)->get_dml_table_infos(dml_table_infos))) {
+      LOG_WARN("failed to get dml table infos");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !disable_write_table && i < dml_table_infos.count(); ++i) {
+      if (OB_ISNULL(dml_table_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (OB_ISNULL(table_item = get_table_item_by_id(dml_table_infos.at(i)->table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (schema::EXTERNAL_TABLE == table_item->table_type_) {
+        disable_write_table = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObSelectStmt*, 4> child_stmts;
+    if (disable_write_table) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on External Table");
+    } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get stmt's child_stmts", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+        OZ( child_stmts.at(i)->disable_writing_external_table() );
+      }
+    }
+  }
+  return ret;
 }
 
 int ObDMLStmt::formalize_query_ref_exprs()

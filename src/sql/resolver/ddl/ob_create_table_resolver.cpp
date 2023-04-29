@@ -37,6 +37,7 @@
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
+#include "lib/charset/ob_template_helper.h"
 
 
 namespace oceanbase
@@ -191,6 +192,41 @@ int ObCreateTableResolver::add_hidden_tablet_seq_col()
   } else {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "tablet seq expects to be the first primary key", K(stmt_), K(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_hidden_external_table_pk_col()
+{
+  int ret = OB_SUCCESS;
+  uint64_t COL_IDS[2] = {OB_HIDDEN_FILE_ID_COLUMN_ID, OB_HIDDEN_LINE_NUMBER_COLUMN_ID};
+  const char* COL_NAMES[2] = {OB_HIDDEN_FILE_ID_COLUMN_NAME, OB_HIDDEN_LINE_NUMBER_COLUMN_NAME};
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));
+  } else {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+    for (int i = 0; OB_SUCC(ret) && i < array_elements(COL_IDS); i++) {
+      ObColumnSchemaV2 hidden_pk;
+      hidden_pk.reset();
+      hidden_pk.set_column_id(COL_IDS[i]);
+      hidden_pk.set_data_type(ObIntType);
+      hidden_pk.set_nullable(false);
+      hidden_pk.set_is_hidden(true);
+      hidden_pk.set_charset_type(CHARSET_BINARY);
+      hidden_pk.set_collation_type(CS_TYPE_BINARY);
+      if (OB_FAIL(hidden_pk.set_column_name(COL_NAMES[i]))) {
+        SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+      } else if (OB_FAIL(primary_keys_.push_back(COL_IDS[i]))) {
+        SQL_RESV_LOG(WARN, "failed to push_back column_id", K(ret));
+      } else {
+        hidden_pk.set_rowkey_position(primary_keys_.count());
+        if (OB_FAIL(table_schema.add_column(hidden_pk))) {
+          SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_pk));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -439,23 +475,36 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       create_table_stmt->set_allocator(*allocator_);
       stmt_ = create_table_stmt;
     }
-    //resolve temporary option
+    //resolve temporary option or external table option
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[0]) {
-        if (T_TEMPORARY != create_table_node->children_[0]->type_) {
-          ret = OB_INVALID_ARGUMENT;
-          SQL_RESV_LOG(WARN, "invalid argument.",
-                       K(ret), K(create_table_node->children_[0]->type_));
-        } else if (create_table_node->children_[5] != NULL) { //临时表不支持分区
-          ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
-
-//        } else if (is_create_as_sel && is_mysql_mode) { //暂时不支持查询建mysql临时表
-//          ret = OB_NOT_SUPPORTED;
-//          LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
-        } else {
-          is_temporary_table = true;
-          is_oracle_temp_table_ = (is_mysql_mode == false);
-        }
+          switch (create_table_node->children_[0]->type_) {
+            case T_TEMPORARY:
+              if (create_table_node->children_[5] != NULL) { //临时表不支持分区
+                ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+              } else {
+                is_temporary_table = true;
+                is_oracle_temp_table_ = (is_mysql_mode == false);
+              }
+              break;
+            case T_EXTERNAL: {
+              uint64_t tenant_version = 0;
+              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+                LOG_WARN("failed to get data version", K(ret));
+              } else if (tenant_version < DATA_VERSION_4_2_0_0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, external table");
+              } else {
+                create_table_stmt->get_create_table_arg().schema_.set_table_type(EXTERNAL_TABLE);
+                is_external_table_ = true;
+              }
+              break;
+            }
+            default:
+              ret = OB_INVALID_ARGUMENT;
+              SQL_RESV_LOG(WARN, "invalid argument.",
+                           K(ret), K(create_table_node->children_[0]->type_));
+            }
       }
     }
     //resolve if_not_exists
@@ -631,6 +680,19 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           }
         }
 
+        if (OB_SUCC(ret) && is_external_table_) {
+          //external table support check
+          ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+          if (index_node_position_list.count() > 0
+              || foreign_key_node_position_list.count() > 0
+              || table_level_constraint_list.count() > 0
+              || table_schema.get_constraint_count() > 0
+              || is_create_as_sel) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
+          }
+        }
+
         // !!Attention!! resolve_partition_option should always call after resolve_table_options
         if (OB_SUCC(ret)) {
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
@@ -638,6 +700,12 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
                       create_table_node->children_[5], table_schema,
                       (is_mysql_mode && 1 == create_table_node->reserved_) ? false : true))) {
             SQL_RESV_LOG(WARN, "resolve partition option failed", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret) && create_table_stmt->get_create_table_arg().schema_.is_external_table()) {
+          if (OB_FAIL(add_hidden_external_table_pk_col())) {
+            LOG_WARN("fail to add hidden pk col for external table", K(ret));
           }
         }
 
@@ -1011,6 +1079,9 @@ int ObCreateTableResolver::resolve_primary_key_node(const ParseNode &pk_node,
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "the num_child of primary_node is wrong.",
                  K(ret), K(pk_node.num_child_), K(pk_node.children_));
+  } else if (is_external_table_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Primary key constraint on external table");
   } else {
     ParseNode *column_list_node = pk_node.children_[0];
     if (OB_ISNULL(column_list_node)) {
@@ -1158,12 +1229,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       ParseNode *element = node->children_[i];
       CK (OB_NOT_NULL(element));
       if (OB_FAIL(ret)) {
-      } else if (RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_) {
-        continue;
-      } else if (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_) {
-        continue;
-      }
-      if (OB_FAIL(ret)) {
+      } else if ((RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_)
+                 || (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_)) {
+        //continue
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         ObColumnSchemaV2 column;
         column.set_tenant_id(tenant_id);
@@ -1190,12 +1258,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       ParseNode *element = node->children_[i];
       CK (OB_NOT_NULL(element));
       if (OB_FAIL(ret)) {
-      } else if (RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_) {
+      } else if ((RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_)
+                 || (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_)) {
         continue;
-      } else if (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_) {
-        continue;
-      }
-      if (OB_FAIL(ret)) {
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         bool is_modify_column_visibility = false;
         const bool is_create_table_as = (RESOLVE_COL_ONLY == resolve_rule);
@@ -1214,7 +1279,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                                 is_modify_column_visibility,
                                                 pk_name,
                                                 is_oracle_temp_table_,
-                                                is_create_table_as))) {
+                                                is_create_table_as,
+                                                table_schema.is_external_table()))) {
             SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
           } else if (!column.is_xmltype() && // xmltype will check after hidden column generated
                      OB_FAIL(check_default_value(column.get_cur_default_value(),
@@ -1467,7 +1533,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
     }
 
     // Oracle 模式下，一个表至少有一个列为非 generated 列
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && !table_schema.is_external_table()) {
       bool has_non_virtual_column = false;
       for (int64_t i = 0;
            OB_SUCC(ret) && !has_non_virtual_column && i < table_schema.get_column_count();
@@ -1481,6 +1547,22 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       if (OB_SUCC(ret) && !has_non_virtual_column) {
         ret = OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL;
         SQL_RESV_LOG(WARN, "table must have at least one column that is not virtual", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      bool all_virtual_column = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column = table_schema.get_column_schema_by_idx(i);
+        CK (OB_NOT_NULL(column));
+        if (OB_SUCC(ret) && !column->is_generated_column()) {
+          all_virtual_column = false;
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && !all_virtual_column) {
+        ret = OB_NOT_SUPPORTED; //[TODO EXTERNAL-TABLE]
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "normal columns");
       }
     }
 
@@ -2254,6 +2336,13 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
           OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_))) {
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
+    }
+
+    if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      if (table_schema.get_external_file_format().empty()
+          || table_schema.get_external_file_location().empty())
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
     }
   }
   return ret;

@@ -53,6 +53,8 @@ const char *ObLogTableScan::get_name() const
     name = (sample_method == SampleInfo::ROW_SAMPLE) ? "TABLE ROW SAMPLE SCAN" : "TABLE BLOCK SAMPLE SCAN";
   } else if (is_skip_scan()) {
     name = use_das() ? "DISTRIBUTED TABLE SKIP SCAN" : "TABLE SKIP SCAN";
+  } else if (EXTERNAL_TABLE == get_table_type()) {
+    name = "EXTERNAL TABLE SCAN";
   } else if (use_das()) {
     if (is_get) {
       name = "DISTRIBUTED TABLE GET";
@@ -252,6 +254,31 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   return ret;
 }
 
+int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+    auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
+    if (pseudo_col_expr->get_table_id() != table_id_) {
+      //table id may be changed because of rewrite
+      pseudo_col_expr->set_table_id(table_id_);
+    }
+    if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
+      LOG_WARN("failed to add var to array", K(ret));
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < expr->get_children_count(); ++i) {
+      if (OB_FAIL(extract_file_column_exprs_recursively(expr->get_param_expr(i)))) {
+        LOG_WARN("fail to extract file column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -302,16 +329,18 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
+
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
       ObRawExpr *expr = stmt->get_pseudo_column_like_exprs().at(i);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (T_ORA_ROWSCN == expr->get_expr_type() &&
-          static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_ &&
-          OB_FAIL(access_exprs_.push_back(expr))) {
-        LOG_WARN("failed to get next row", K(ret));
-      } else { /*do nothing*/}
+      } else if ((T_ORA_ROWSCN == expr->get_expr_type())
+                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+        if (OB_FAIL(access_exprs_.push_back(expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        }
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -430,7 +459,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
+  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id()) || EXTERNAL_TABLE == get_table_type()) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
@@ -1104,9 +1133,19 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("failed to adjust print access info", K(ret));
     } else {
       EXPLAIN_PRINT_EXPRS(access, type);
-      END_BUF_PRINT(plan_item.access_predicates_,
-                    plan_item.access_predicates_len_);
     }
+    if (OB_SUCC(ret) && EXTERNAL_TABLE == get_table_type() && EXPLAIN_EXTENDED == type) {
+      if(OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        ObIArray<ObRawExpr*> &column_values = get_ext_column_convert_exprs();
+        EXPLAIN_PRINT_EXPRS(column_values, type);
+      }
+    }
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
   }
   if (OB_SUCC(ret)) {
     //print index selection and stats version

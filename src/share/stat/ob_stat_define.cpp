@@ -186,6 +186,7 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   need_estimate_block_ = other.need_estimate_block_;
   is_temp_table_ = other.is_temp_table_;
   allocator_ = other.allocator_;
+  ref_table_type_ = other.ref_table_type_;
   if (OB_FAIL(part_infos_.assign(other.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(subpart_infos_.assign(other.subpart_infos_))) {

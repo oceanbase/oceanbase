@@ -4762,6 +4762,79 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
   dst_timeout_ts += THIS_WORKER.get_ntp_offset();
 }
 
+bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
+{
+  return url.prefix_match_ci(OB_FILE_PREFIX) ||
+          (!url.prefix_match_ci(OB_OSS_PREFIX) && !url.prefix_match_ci(OB_COS_PREFIX));
+}
+
+int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
+{
+  int ret = OB_SUCCESS;
+  ObString access_id;
+  ObString access_key;
+  ObString host_name;
+  ObString access_info = url.split_on('/').trim_space_only();
+  if (access_info.empty()) {
+    ret = OB_URI_ERROR;
+    LOG_WARN("incorrect uri", K(ret));
+  } else {
+    access_id = access_info.split_on(':').trim_space_only();
+    access_key = access_info.split_on('@').trim_space_only();
+    host_name = access_info.trim_space_only();
+  }
+
+  //fill storage_info
+  if (OB_SUCC(ret)) {
+    int64_t pos = 0;
+    OZ (databuff_printf(storage_info.access_id_, OB_MAX_BACKUP_ACCESSID_LENGTH, pos,
+                        "%s%.*s", ACCESS_ID, access_id.length(), access_id.ptr()));
+    pos = 0;
+    OZ (databuff_printf(storage_info.access_key_, OB_MAX_BACKUP_ACCESSKEY_LENGTH, pos,
+                        "%s%.*s", ACCESS_KEY, access_key.length(), access_key.ptr()));
+    pos = 0;
+    OZ (databuff_printf(storage_info.endpoint_, OB_MAX_BACKUP_ENDPOINT_LENGTH, pos,
+                        "%s%.*s", "host=", host_name.length(), host_name.ptr()));
+    if (OB_FAIL(ret)) {
+      ret = OB_URI_ERROR;
+      LOG_WARN("incorrect uri", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid session", K(ret));
+  } else if (is_external_files_on_local_disk(location) && !session->is_inner()) {
+    ObArenaAllocator allocator;
+    ObString real_location = location;
+    real_location += strlen(OB_FILE_PREFIX);
+    if (!real_location.empty() && '.' == real_location[0]) {
+      //Relative path
+      ObArrayWrap<char> buffer;
+      OZ (buffer.allocate_array(allocator, PATH_MAX));
+      if (OB_SUCC(ret)) {
+        real_location = ObString(realpath(to_cstring(real_location), buffer.get_data()));
+      }
+    }
+
+    if (OB_SUCC(ret) && !real_location.empty()) {
+      ObString secure_file_priv;
+      OZ (session->get_secure_file_priv(secure_file_priv));
+      OZ (ObResolverUtils::check_secure_path(secure_file_priv, real_location));
+      if (OB_ERR_NO_PRIVILEGE == ret) {
+        ret = OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS;
+        LOG_WARN("fail to check secure path", K(ret), K(secure_file_priv), K(real_location));
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                      ObSelectStmt *select_stmt,

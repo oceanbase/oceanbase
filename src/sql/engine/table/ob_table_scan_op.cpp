@@ -28,6 +28,9 @@
 #include "observer/virtual_table/ob_virtual_data_access_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/external_table/ob_external_table_utils.h"
+#include "lib/container/ob_array_wrap.h"
 
 namespace oceanbase
 {
@@ -1089,6 +1092,21 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                 key_ranges,
                 ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
+    } else if (MY_CTDEF.scan_ctdef_.is_external_table_) {
+      uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
+      ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
+      if (OB_ISNULL(tab_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table lock is null", K(ret));
+      } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
+                                                  ctx_.get_my_session()->get_effective_tenant_id(),
+                                                  MY_CTDEF.scan_ctdef_.ref_table_id_,
+                                                  key_ranges,
+                                                  range_allocator,
+                                                  key_ranges,
+                           tab_loc->loc_meta_->is_external_files_on_disk_))) {
+        LOG_WARN("failed to prepare single scan range for external table", K(ret));
+      }
     } else if (OB_FAIL(MY_CTDEF.pre_query_range_.get_ss_tablet_ranges(range_allocator,
                                   ctx_,
                                   ss_key_ranges,

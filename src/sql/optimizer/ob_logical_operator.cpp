@@ -4004,6 +4004,16 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_SLAVE_MAPPING);
       }
 
+      if (OB_SUCC(ret) && LOG_TABLE_SCAN == get_type()
+          && EXTERNAL_TABLE == static_cast<ObLogTableScan *>(this)->get_table_type()) {
+        if (ctx.force_partition()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("external table do not support partition GI", K(ret));
+        } else {
+          gi_op->set_used_by_external_table();
+        }
+      }
+
       if (OB_SUCC(ret)) {
         if (OB_FAIL(gi_op->is_partition_gi(partition_granule))) {
           LOG_WARN("failed judge partition granule", K(ret));

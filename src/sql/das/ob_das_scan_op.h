@@ -37,7 +37,12 @@ public:
       aggregate_column_ids_(alloc),
       group_id_expr_(nullptr),
       result_output_(alloc),
-      is_get_(false)
+      is_get_(false),
+      is_external_table_(false),
+      external_file_access_info_(alloc),
+      external_file_location_(alloc),
+      external_files_(alloc),
+      external_file_format_str_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -64,7 +69,11 @@ public:
                        K_(pd_expr_spec),
                        KPC_(group_id_expr),
                        K_(result_output),
-                       K_(is_get));
+                       K_(is_get),
+                       K_(is_external_table),
+                       K_(external_files),
+                       K_(external_file_format_str),
+                       K_(external_file_location));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -77,6 +86,11 @@ public:
   //result_output_ indicate exprs that the storage layer will fill in the value
   sql::ExprFixedArray result_output_;
   bool is_get_;
+  bool is_external_table_;
+  ObExternalFileFormat::StringData external_file_access_info_;
+  ObExternalFileFormat::StringData external_file_location_;
+  ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
+  ObExternalFileFormat::StringData external_file_format_str_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef

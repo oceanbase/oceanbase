@@ -3752,6 +3752,14 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
         }
         break;
       }
+      case T_PSEUDO_EXTERNAL_FILE_COL: {
+        if (!expr->get_table_name().empty()) {
+          PRINT_IDENT(expr->get_table_name());
+          DATA_PRINTF(".");
+        }
+        PRINT_IDENT(expr->get_expr_name());
+        break;
+      }
       default : {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected pseudo column type", K(type));

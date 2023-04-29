@@ -707,6 +707,27 @@ public:
                                                      const ObExprResType &column_type,
                                                      const ObString &column_name,
                                                      ObObj &part_value);
+  static ObRawExpr *find_file_column_expr(ObIArray<ObRawExpr *> &pseudo_exprs, int64_t table_id, int64_t column_idx);
+  static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
+  static int build_file_column_expr(ObRawExprFactory &expr_factory,
+                                    const ObSQLSessionInfo &session_info,
+                                    const uint64_t table_id,
+                                    const common::ObString &table_name,
+                                    const common::ObString &column_name,
+                                    int64_t column_idx,
+                                    ObRawExpr *&expr,
+                                    ObCharsetType cs_type);
+  static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
+                                               const ObSQLSessionInfo &session_info,
+                                               const ObQualifiedName &q_name,
+                                               common::ObIArray<ObRawExpr*> &real_exprs,
+                                               ObRawExpr *&expr);
+  static bool is_external_file_column_name(const common::ObString &name);
+
+  static int resolve_file_format_string_value(const ParseNode *node,
+                                              const ObCharsetType &format_charset,
+                                              ObResolverParams &params,
+                                              ObString &result_value);
   static int get_generated_column_expr_temp(TableItem *table_item,
                                             ObIArray<ObRawExpr *> &gen_col_depend, ObIArray<ObString> &gen_col_names,
                                             ObIArray<ObColumnSchemaV2 *> &gen_col_schema,

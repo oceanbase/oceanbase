@@ -2287,13 +2287,22 @@ int ObSelectLogPlan::check_if_union_all_match_set_partition_wise(const ObIArray<
   for (int64_t i = 0; OB_SUCC(ret) && is_union_all_set_pw && i < child_ops.count(); i++) {
     ObLogicalOperator *child_op = NULL;
     ObShardingInfo *child_sharding = NULL;
-    if (OB_ISNULL(child_op = child_ops.at(i)) ||
-        OB_ISNULL(child_sharding = child_op->get_sharding())) {
+    const ObSelectStmt *child_stmt = NULL;
+    bool has_external_table_scan = false;
+    if (OB_ISNULL(child_op = child_ops.at(i))
+        || OB_ISNULL(child_sharding = child_op->get_sharding())
+        || !child_ops.at(i)->get_plan()->get_stmt()->is_select_stmt()
+        || OB_ISNULL(child_stmt = static_cast<const ObSelectStmt*>(child_ops.at(i)->get_plan()->get_stmt()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid input", K(ret), K(child_op), K(child_sharding));
     } else if (!child_sharding->is_distributed()) {
       is_union_all_set_pw = false;
       OPT_TRACE("not distributed sharding, can not use set partition wise");
+    } else if (OB_FAIL(check_external_table_scan(const_cast<ObSelectStmt*>(child_stmt), has_external_table_scan))) {
+      LOG_WARN("fail to check has external table scan", K(ret));
+    } else if (has_external_table_scan) {
+      is_union_all_set_pw = false;
+      OPT_TRACE("has external table scan, can not use set partition wise");
     } else if (i == 0) {
       if (OB_FAIL(check_sharding_inherit_from_access_all(child_op,
                                                          is_inherit_from_access_all))) {
@@ -6536,6 +6545,7 @@ int ObSelectLogPlan::generate_late_materialization_table_item(ObSelectStmt *stmt
     temp_item->is_view_table_ = old_table_item->is_view_table_;
     temp_item->table_id_ = new_table_id;
     temp_item->ref_id_ = old_table_item->ref_id_;
+    temp_item->table_type_ = old_table_item->table_type_;
 
     const char *str = "_alias";
     char *buf = static_cast<char*>(get_allocator().alloc(
@@ -6883,6 +6893,27 @@ int ObSelectLogPlan::init_selectivity_metas_for_set(ObSelectLogPlan *sub_plan,
   } else if (OB_FAIL(get_update_table_metas().copy_table_meta_info(get_basic_table_metas(),
                                                                    child_offset))) {
     LOG_WARN("failed to copy table meta info", K(ret));
+  }
+  return ret;
+}
+
+
+int ObSelectLogPlan::check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObSelectStmt*> child_stmts;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (stmt->has_external_table()) {
+    has_external_table = true;
+  } else {
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("fail to get child stmt", K(ret));
+    }
+    for (int i = 0; OB_SUCC(ret) && !has_external_table && i < child_stmts.count(); i++) {
+      ret = SMART_CALL(check_external_table_scan(child_stmts.at(i), has_external_table));
+    }
   }
   return ret;
 }

@@ -1313,7 +1313,8 @@ int ObAllVirtualProxySchema::get_table_tablet_location_(
       // impossible
     } else if ((table_schema->is_vir_table())
         || (table_schema->is_tmp_table())
-        || (table_schema->is_view_table())) {
+        || (table_schema->is_view_table())
+        || (table_schema->is_external_table())) {
       // virtual table use virtual tablet
       if (OB_FAIL(location_.init_fake_location())) {
         LOG_WARN("fail to init fake location", KR(ret), KPC(table_schema));

@@ -2444,6 +2444,9 @@ int ObDmlCgService::generate_table_loc_meta(const IndexDMLInfo &index_dml_info,
     //we will build the related tablet_id map when dml operator be opened in distributed plan
     loc_meta.unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
                                        && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());
+    loc_meta.is_external_table_ = table_schema->is_external_table();
+    loc_meta.is_external_files_on_disk_ =
+        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
   }
   if (OB_SUCC(ret) && index_dml_info.is_primary_index_) {
     TableLocRelInfo *rel_info = nullptr;

@@ -77,13 +77,31 @@ public:
   ObAlterTableExecutor();
   virtual ~ObAlterTableExecutor();
   int execute(ObExecContext &ctx, ObAlterTableStmt &stmt);
+
+  static int update_external_file_list(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const common::ObString &location,
+      const common::ObString &access_info,
+      const common::ObString &pattern,
+      ObExecContext &ctx);
+  static int collect_local_files_on_servers(
+      const uint64_t tenant_id,
+      const common::ObString &location,
+      common::ObIArray<common::ObAddr> &all_servers,
+      common::ObIArray<common::ObString> &file_urls,
+      common::ObIArray<int64_t> &file_sizes,
+      common::ObIAllocator &allocator);
+  static int flush_external_file_cache(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const common::ObIArray<common::ObAddr> &all_servers);
 private:
   static const int64_t TIME_INTERVAL_PER_PART_US = 50 * 1000; // 50ms
   static const int64_t MAX_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 120LL * 1000000LL; // 120s
   static const int64_t MIN_WAIT_CHECK_SCHEMA_VERSION_INTERVAL_US = 20LL * 1000000LL; // 20s
   static const int64_t WAIT_US = 500 * 1000; // 500ms
   static const int64_t GET_ASSOCIATED_SNAPSHOT_TIMEOUT = 9000000LL; // 9s
-
   int check_constraint_validity(ObExecContext &ctx,
       obrpc::ObAlterTableArg &alter_table_arg,
       common::ObIAllocator &allocator,
@@ -158,6 +176,18 @@ private:
   int set_index_arg_list(ObExecContext &ctx, ObAlterTableStmt &stmt);
 
   int refresh_schema_for_table(const uint64_t tenant_id);
+  int execute_alter_external_table(ObExecContext &ctx, ObAlterTableStmt &stmt);
+  static int get_external_file_list(
+    const ObString &location,
+    common::ObIArray<common::ObString> &file_urls,
+    common::ObIArray<int64_t> &file_sizes,
+    const common::ObString &access_info,
+    common::ObIAllocator &allocator,
+    common::ObStorageType &storage_type);
+  static int filter_and_sort_external_files(const ObString &pattern,
+                                            ObExecContext &exec_ctx,
+                                            ObIArray<ObString> &file_urls,
+                                            ObIArray<int64_t> &file_sizes);
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };

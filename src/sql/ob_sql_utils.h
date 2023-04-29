@@ -32,6 +32,9 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 namespace oceanbase
 {
+namespace share {
+class ObBackupStorageInfo;
+}
 namespace sql
 {
 class RowDesc;
@@ -565,6 +568,11 @@ public:
   *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
+
+  static int split_remote_object_storage_url(common::ObString &url, share::ObBackupStorageInfo &storage_info);
+  static bool is_external_files_on_local_disk(const common::ObString &url);
+  static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
+
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,

@@ -26,6 +26,7 @@
 #include "share/ob_schema_status_proxy.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/config/ob_server_config.h"
+#include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_printer.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -53,16 +54,15 @@ ObSchemaPrinter::ObSchemaPrinter(ObSchemaGetterGuard &schema_guard, bool strict_
 {
 }
 
-int ObSchemaPrinter::print_table_definition(
-    const uint64_t tenant_id,
-    const uint64_t table_id,
-    char* buf,
-    const int64_t& buf_len,
-    int64_t& pos,
-    const ObTimeZoneInfo *tz_info,
-    const common::ObLengthSemantics default_length_semantics,
-    bool agent_mode,
-    ObSQLMode sql_mode) const
+int ObSchemaPrinter::print_table_definition(const uint64_t tenant_id,
+                                          const uint64_t table_id,
+                                          char* buf,
+                                          const int64_t& buf_len,
+                                          int64_t& pos,
+                                          const ObTimeZoneInfo *tz_info,
+                                          const common::ObLengthSemantics default_length_semantics,
+                                          bool agent_mode,
+                                          ObSQLMode sql_mode) const
 {
   //TODO(yaoying.yyy: refactor this function):consider index_position in
 
@@ -70,7 +70,7 @@ int ObSchemaPrinter::print_table_definition(
   const ObTableSchema *table_schema = NULL;
   const ObDatabaseSchema *db_schema = NULL;
   ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
-  const char* prefix_arr[3] = {"", " TEMPORARY", " GLOBAL TEMPORARY"};
+  const char* prefix_arr[4] = {"", " TEMPORARY", " GLOBAL TEMPORARY", " EXTERNAL"};
   int prefix_idx = 0;
   bool is_oracle_mode = false;
   if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema))) {
@@ -90,16 +90,17 @@ int ObSchemaPrinter::print_table_definition(
       prefix_idx = 1;
     } else if (table_schema->is_oracle_tmp_table()) {
       prefix_idx = 2;
+    } else if (table_schema->is_external_table()) {
+      prefix_idx = 3;
     } else {
       prefix_idx = 0;
     }
     ObString new_table_name;
     ObString new_db_name;
-    if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
-                allocator,
-                table_schema->get_table_name_str(),
-                new_table_name,
-                is_oracle_mode))) {
+    if (OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(allocator,
+                                                                table_schema->get_table_name_str(),
+                                                                new_table_name,
+                                                                is_oracle_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to generate new name with escape character", K(ret), K(table_schema->get_table_name()));
     } else if (agent_mode && OB_FAIL(sql::ObSQLUtils::generate_new_name_with_escape_character(
                                      allocator, db_schema->get_database_name_str(),
@@ -116,9 +117,7 @@ int ObSchemaPrinter::print_table_definition(
     }
   }
 
-  if (OB_FAIL(ret)) {
-    //do nothing...
-  } else {
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(print_table_definition_columns(*table_schema, buf, buf_len, pos, tz_info, default_length_semantics, agent_mode, sql_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print columns", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_rowkeys(*table_schema, buf, buf_len, pos))) {
@@ -134,6 +133,8 @@ int ObSchemaPrinter::print_table_definition(
       SHARE_SCHEMA_LOG(WARN, "fail to print constraints", K(ret), K(*table_schema));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
+    } else if (table_schema->is_external_table() && (OB_FAIL(print_external_table_file_info(*table_schema, allocator, buf, buf_len, pos)))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print external table file format", K(ret));
     } else if (OB_FAIL(print_table_definition_table_options(*table_schema, buf, buf_len, pos, false, agent_mode, sql_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print table options", K(ret), K(*table_schema));
     } else if (OB_FAIL(print_table_definition_partition_options(*table_schema, buf, buf_len, pos, agent_mode, tz_info))) {
@@ -458,12 +459,10 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
       SHARE_SCHEMA_LOG(WARN, "fail to print expr string", K(ret));
     } else if ((OB_FAIL(databuff_printf(buf, buf_len, pos, ")")))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
-    } else if (gen_col.is_virtual_generated_column()) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " VIRTUAL"))) {
-        SHARE_SCHEMA_LOG(WARN, "print virtual keyword failed", K(ret));
-      }
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " STORED"))) {
-      SHARE_SCHEMA_LOG(WARN, "print stored keyword failed", K(ret));
+    } else if (!table_schema.is_external_table()
+               && OB_FAIL(databuff_printf(buf, buf_len, pos, gen_col.is_virtual_generated_column() ?
+                                          " VIRTUAL" : " STORED"))) {
+      SHARE_SCHEMA_LOG(WARN, "print virtual keyword failed", K(ret));
     }
   }
   return ret;
@@ -4824,6 +4823,77 @@ int ObSchemaPrinter::print_synonym_definition(const ObSynonymInfo &synonym_info,
   }
   return ret;
 }
+
+int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_schema,
+                                                    ObIAllocator& allocator,
+                                                    char* buf,
+                                                    const int64_t& buf_len,
+                                                    int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  // 1. print file location, pattern
+  const ObString &location = table_schema.get_external_file_location();
+  const ObString &pattern = table_schema.get_external_file_pattern();
+  if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
+  } else if (!pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
+  }
+
+  // 2. print file format
+  if (OB_SUCC(ret)) {
+    ObExternalFileFormat format;
+    if (OB_FAIL(format.load_from_string(table_schema.get_external_file_format(), allocator))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to load from json string", K(ret));
+    } else if (format.format_type_ != ObExternalFileFormat::CSV_FORMAT) {
+      SHARE_SCHEMA_LOG(WARN, "unsupported to print file format", K(ret), K(format.format_type_));
+    } else {
+      const ObCSVGeneralFormat &csv = format.csv_format_;
+      const ObOriginFileFormat &origin_format = format.origin_file_format_str_;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nFORMAT (\n"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = 'CSV',"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
+      } else if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
+                        databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
+      } else if (OB_FAIL(0 != csv.field_term_str_.case_compare(ObDataInFileStruct::DEFAULT_FIELD_TERM_STR) &&
+                        databuff_printf(buf, buf_len, pos, "\n  FIELD_DELIMITER = %.*s,", origin_format.origin_field_term_str_.length(), origin_format.origin_field_term_str_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print FIELD_DELIMITER", K(ret));
+      } else if (OB_FAIL(ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR != csv.field_escaped_char_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  ESCAPE = %.*s,", origin_format.origin_field_escaped_str_.length(), origin_format.origin_field_escaped_str_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ESCAPE", K(ret));
+      } else if (OB_FAIL(ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR != csv.field_enclosed_char_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  FIELD_OPTIONALLY_ENCLOSED_BY = %.*s,", origin_format.origin_field_enclosed_str_.length(), origin_format.origin_field_enclosed_str_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print FIELD_OPTIONALLY_ENCLOSED_BY", K(ret));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  ENCODING = '%s',", ObCharset::charset_name(csv.cs_type_)))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print ENCODING", K(ret));
+      } else if (OB_FAIL(0 != csv.skip_header_lines_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  SKIP_HEADER = %ld,", csv.skip_header_lines_))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print SKIP_HEADER", K(ret));
+      } else if (OB_FAIL(csv.skip_blank_lines_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  SKIP_BLANK_LINES = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print SKIP_BLANK_LINES", K(ret));
+      } else if (OB_FAIL(csv.trim_space_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  TRIM_SPACE = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print TRIM_SPACE", K(ret));
+      } else if (OB_FAIL(csv.empty_field_as_null_ &&
+                        databuff_printf(buf, buf_len, pos, "\n  EMPTY_FIELD_AS_NULL = TRUE,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print EMPTY_FIELD_AS_NULL", K(ret));
+      } else if (OB_FAIL(0 != csv.null_if_.count() &&
+                        databuff_printf(buf, buf_len, pos, "\n  NULL_IF = (%.*s),", origin_format.origin_null_if_str_.length(), origin_format.origin_null_if_str_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print NULL_IF", K(ret));
+      } else {
+        --pos;
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n)"))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print )", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 
 } // end namespace schema
 } //end of namespace share

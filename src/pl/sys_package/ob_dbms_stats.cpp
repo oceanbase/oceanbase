@@ -117,8 +117,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                          stat_param,
                                          &running_monitor))) {
       LOG_WARN("failed to update stat cache", K(ret));
-    } else if (is_virtual_table(stat_param.table_id_)) {//not gather virtual table index.
-      //do nothing
+    } else if (!need_gather_index_stats(stat_param)) {
+      //not gather virtual table/external table index.
     } else if (stat_param.cascade_ &&
               OB_FAIL(fast_gather_index_stats(ctx, stat_param,
                                               is_all_fast_gather, no_gather_index_ids))) {
@@ -224,6 +224,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
         } else {
           LOG_WARN("failed check stat locked", K(ret));
         }
+      } else if (share::schema::ObTableType::EXTERNAL_TABLE == stat_param.ref_table_type_) {
+        // not allow gather external table in schema scope
       } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param))) {
         LOG_WARN("failed to gather table stats", K(ret));
       } else if (OB_FAIL(update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(),
@@ -3068,6 +3070,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     LOG_WARN("failed to parse partition name", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
+    param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
     // we can't get part/subpart type anyway, because default value of part_func_type is
@@ -3120,6 +3123,7 @@ int ObDbmsStats::parse_table_part_info(ObExecContext &ctx,
     LOG_WARN("failed to init column stat params", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
+    param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
     param.total_part_cnt_ = table_schema->get_all_part_num();
   }
@@ -3184,6 +3188,7 @@ int ObDbmsStats::parse_index_part_info(ObExecContext &ctx,
   }
   if (OB_SUCC(ret)) {
     param.table_id_ = index_schema->get_table_id();
+    param.ref_table_type_ = index_schema->get_table_type();
     param.part_level_ = index_schema->get_part_level();
     param.total_part_cnt_ = index_schema->get_all_part_num();
     param.is_global_index_ = index_schema->is_global_index_table();
@@ -3370,6 +3375,7 @@ int ObDbmsStats::parse_set_table_info(ObExecContext &ctx,
     LOG_WARN("failed to init column stat params", K(ret));
   } else {
     param.table_id_ = table_schema->get_table_id();
+    param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
     decide_modified_part(param, false /* cascade_part */);
   }
@@ -3451,6 +3457,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
           LOG_WARN("failed to parser part info", K(ret));
         } else {
           param.table_id_ = table_schema->get_table_id();
+          param.ref_table_type_ = table_schema->get_table_type();
           param.part_level_ = table_schema->get_part_level();
           decide_modified_part(param, false /* cascade_part */);
         }
@@ -3614,6 +3621,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
+    param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
@@ -3663,6 +3671,7 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && table_schema != NULL && !table_schema->is_view_table()) {
     param.table_id_ = table_schema->get_table_id();
+    param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
@@ -3719,6 +3728,7 @@ int ObDbmsStats::parse_index_table_info(ObExecContext &ctx,
     param.tenant_id_ = data_table_param.tenant_id_;
     param.db_id_ = data_table_param.db_id_;
     param.table_id_ = index_schema->get_table_id();
+    param.ref_table_type_ = index_schema->get_table_type();
     param.part_level_ = index_schema->get_part_level();
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
@@ -5210,7 +5220,7 @@ int ObDbmsStats::get_need_statistics_tables(sql::ObExecContext &ctx, ObGatherTab
                                                                    table_schema->get_table_id(),
                                                                    is_valid))) {
             LOG_WARN("failed to check sy table validity", K(ret));
-          } else if (!is_valid) {
+          } else if (!is_valid || table_schema->is_external_table()) {
             // only gather statistics for following tables:
             // 1. user table
             // 2. valid sys table
@@ -5594,8 +5604,8 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
                                                                  duration_time,
                                                                  stat_param.duration_time_))) {
       LOG_WARN("failed to get valid duration time", K(ret));
-    } else if (is_virtual_table(stat_param.table_id_)) {//not gather virtual table index.
-      //do nothing
+    } else if (!need_gather_index_stats(stat_param)) {
+      LOG_TRACE("Succeed to gather table stats", K(stat_param));
     } else if (stat_param.cascade_ &&
                OB_FAIL(fast_gather_index_stats(ctx, stat_param,
                                                is_all_fast_gather, no_gather_index_ids))) {
@@ -6008,6 +6018,12 @@ bool ObDbmsStats::is_func_index(const ObTableStatParam &index_param)
     is_true = index_param.column_params_.at(i).is_hidden_column();
   }
   return is_true;
+}
+
+bool ObDbmsStats::need_gather_index_stats(const ObTableStatParam &param)
+{
+  return !(is_virtual_table(param.table_id_) ||
+           share::schema::ObTableType::EXTERNAL_TABLE == param.ref_table_type_);
 }
 
 /**

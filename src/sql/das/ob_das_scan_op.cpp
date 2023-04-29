@@ -50,7 +50,12 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     aggregate_column_ids_,
                     group_id_expr_,
                     result_output_,
-                    is_get_);
+                    is_get_,
+                    is_external_table_,
+                    external_file_location_,
+                    external_file_access_info_,
+                    external_files_,
+                    external_file_format_str_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -218,6 +223,9 @@ int ObDASScanOp::init_scan_param()
   scan_param_.frozen_version_ = scan_rtdef_->frozen_version_;
   scan_param_.force_refresh_lc_ = scan_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(scan_ctdef_->pd_expr_spec_.access_exprs_);
+  scan_param_.ext_file_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_);
+  scan_param_.ext_column_convert_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
+  scan_param_.calc_exprs_ = &(scan_ctdef_->pd_expr_spec_.calc_exprs_);
   scan_param_.aggregate_exprs_ = &(scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_);
   scan_param_.table_param_ = &(scan_ctdef_->table_param_);
   scan_param_.op_ = scan_rtdef_->p_pd_expr_op_;
@@ -255,14 +263,29 @@ int ObDASScanOp::init_scan_param()
   if (OB_FAIL(scan_param_.column_ids_.assign(scan_ctdef_->access_column_ids_))) {
     LOG_WARN("init column ids failed", K(ret));
   }
+  //external table scan params
+  if (OB_SUCC(ret) && scan_ctdef_->is_external_table_) {
+    scan_param_.external_file_access_info_ = scan_ctdef_->external_file_access_info_.str_;
+    scan_param_.external_file_location_ = scan_ctdef_->external_file_location_.str_;
+    if (OB_FAIL(scan_param_.external_file_format_.load_from_string(scan_ctdef_->external_file_format_str_.str_, *scan_param_.allocator_))) {
+      LOG_WARN("fail to load from string", K(ret));
+    } else {
+      uint64_t max_idx = 0;
+      for (int i = 0; i < scan_param_.ext_file_column_exprs_->count(); i++) {
+        max_idx = std::max(max_idx, scan_param_.ext_file_column_exprs_->at(i)->extra_);
+      }
+      scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
+    }
+  }
   LOG_DEBUG("init scan param", K(scan_param_));
   return ret;
 }
 
 ObITabletScan &ObDASScanOp::get_tsc_service()
 {
-  return is_virtual_table(scan_ctdef_->ref_table_id_) ?
-      *GCTX.vt_par_ser_ : *(MTL(ObAccessService *));
+  return is_virtual_table(scan_ctdef_->ref_table_id_) ? *GCTX.vt_par_ser_
+                                                      : scan_ctdef_->is_external_table_ ? *GCTX.et_access_service_
+                                                                                        : *(MTL(ObAccessService *));
 }
 
 int ObDASScanOp::open_op()

@@ -37,7 +37,7 @@ WAIT_EVENT_DEF(OMT_IDLE, 12002, "sched idle", "wait start timestamp", "", "", ID
 WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, "sync rpc", true)
 WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", NETWORK, "mysql response wait client", true)
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, "das wait remote response", true)
-//WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, "external table wait remote response", true)
+WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, "external table wait remote response", true)
 
 //application
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,"memstore read lock wait", false)

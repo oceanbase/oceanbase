@@ -64,6 +64,7 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/engine/px/ob_px_worker.h"
@@ -350,6 +351,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init device manager failed", KR(ret));
     } else if (OB_FAIL(ObTenantMutilAllocatorMgr::get_instance().init())) {
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
+    } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
+      LOG_ERROR("init external table file manager failed", KR(ret));
     } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
         storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_,
         true/*need_reserved*/))) {
@@ -1906,6 +1909,8 @@ int ObServer::init_network()
     LOG_ERROR("get rpc proxy fail");
   } else if (OB_FAIL(net_frame_.get_proxy(load_data_proxy_))) {
     LOG_ERROR("get rpc proxy fail", KR(ret));
+  } else if (OB_FAIL(net_frame_.get_proxy(external_table_proxy_))) {
+    LOG_ERROR("get rpc proxy fail", KR(ret));
   } else if (OB_FAIL(net_frame_.get_proxy(interrupt_proxy_))) {
     LOG_ERROR("get rpc proxy fail");
   } else if (OB_FAIL(net_frame_.get_proxy(dbms_job_rpc_proxy_))) {
@@ -2149,6 +2154,7 @@ int ObServer::init_global_context()
   gctx_.dbms_sched_job_rpc_proxy_ = &dbms_sched_job_rpc_proxy_;
   gctx_.rs_rpc_proxy_ = &rs_rpc_proxy_;
   gctx_.load_data_proxy_ = &load_data_proxy_;
+  gctx_.external_table_proxy_ = &external_table_proxy_;
   gctx_.sql_proxy_ = &sql_proxy_;
   gctx_.ddl_sql_proxy_ = &ddl_sql_proxy_;
   gctx_.ddl_oracle_sql_proxy_ = &ddl_oracle_sql_proxy_;
@@ -2159,6 +2165,7 @@ int ObServer::init_global_context()
   gctx_.rs_mgr_ = &rs_mgr_;
   gctx_.bandwidth_throttle_ = &bandwidth_throttle_;
   gctx_.vt_par_ser_ = &vt_data_service_;
+  gctx_.et_access_service_ = &et_access_service_;
   gctx_.session_mgr_ = &session_mgr_;
   gctx_.sql_engine_ = &sql_engine_;
   gctx_.pl_engine_ = &pl_engine_;

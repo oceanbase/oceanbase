@@ -23,6 +23,7 @@ using namespace share;
 using namespace share::schema;
 namespace sql
 {
+
 int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc_ctdef)
 {
   int ret = OB_SUCCESS;
@@ -42,6 +43,34 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     query_flag.scan_order_ = ObQueryFlag::Forward;
   }
   tsc_ctdef.scan_flags_ = query_flag;
+
+  if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+    const ObTableSchema *table_schema = nullptr;
+    ObSqlSchemaGuard *schema_guard = cg_.opt_ctx_->get_sql_schema_guard();
+    ObBasicSessionInfo *session_info = cg_.opt_ctx_->get_session_info();
+    if (OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(schema_guard->get_table_schema(op.get_table_id(),
+                                               op.get_ref_table_id(),
+                                               op.get_stmt(),
+                                               table_schema))) {
+      LOG_WARN("get table schema failed", K(ret), K(op.get_ref_table_id()));
+    } else if (OB_FAIL(ObSQLUtils::check_location_access_priv(table_schema->get_external_file_location(),
+                                                              cg_.opt_ctx_->get_session_info()))) {
+      LOG_WARN("fail to check location access priv", K(ret));
+    } else {
+      scan_ctdef.is_external_table_ = true;
+      if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_schema->get_external_file_format()))) {
+        LOG_WARN("fail to set string", K(ret));
+      } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
+        LOG_WARN("fail to set string", K(ret));
+      } else if (OB_FAIL(scan_ctdef.external_file_access_info_.store_str(table_schema->get_external_file_location_access_info()))) {
+        LOG_WARN("fail to set access info", K(ret));
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && (OB_NOT_NULL(op.get_flashback_query_expr()))) {
     if (OB_FAIL(cg_.generate_rt_expr(*op.get_flashback_query_expr(),
                                      tsc_ctdef.flashback_item_.flashback_query_expr_))) {
@@ -147,6 +176,18 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     OZ(op.extract_bnlj_param_idxs(bnlj_params));
     OZ(tsc_ctdef.bnlj_param_idxs_.assign(bnlj_params));
   }
+
+  OZ (cg_.generate_rt_exprs(op.get_ext_file_column_exprs(),
+                            tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
+  OZ (cg_.generate_rt_exprs(op.get_ext_column_convert_exprs(),
+                            tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_column_convert_exprs_));
+  if (OB_SUCC(ret)) {
+    for (int i = 0; i < op.get_ext_file_column_exprs().count(); i++) {
+      tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_.at(i)->extra_
+          = op.get_ext_file_column_exprs().at(i)->get_extra();
+    }
+  }
+
   LOG_DEBUG("generate tsc ctdef finish", K(ret), K(op), K(tsc_ctdef));
   return ret;
 }
@@ -659,6 +700,8 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
       }
     } else if (T_PSEUDO_GROUP_ID == expr->get_expr_type()) {
       OZ(access_column_ids.push_back(common::OB_HIDDEN_GROUP_IDX_COLUMN_ID));
+    } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+      //TODO EXTERNAL-TABLE
     } else {
       ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       bool is_mapping_vt_table = op.get_real_ref_table_id() != op.get_ref_table_id();
@@ -891,6 +934,9 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
               : table_schema.get_table_id();
   loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
+  loc_meta.is_external_table_ = table_schema.is_external_table();
+  loc_meta.is_external_files_on_disk_ =
+      ObSQLUtils::is_external_files_on_local_disk(table_schema.get_external_file_location());
   bool is_weak_read = false;
   if (OB_ISNULL(cg_.opt_ctx_) || OB_ISNULL(cg_.opt_ctx_->get_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;

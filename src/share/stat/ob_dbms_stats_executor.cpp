@@ -51,6 +51,7 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
                                                           param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (param.need_estimate_block_ &&
+             share::schema::ObTableType::EXTERNAL_TABLE != param.ref_table_type_ &&
              OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, param,
                                                                  extra.partition_id_block_map_))) {
     LOG_WARN("failed to estimate block count", K(ret));
@@ -116,7 +117,8 @@ int ObDbmsStatsExecutor::gather_table_stats(ObExecContext &ctx,
                                                                    history_tab_handles,
                                                                    history_col_handles))) {
       LOG_WARN("failed to batch write history stats", K(ret));
-    } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
+    } else if (share::schema::ObTableType::EXTERNAL_TABLE != param.ref_table_type_ &&
+               OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, param))) {
       LOG_WARN("failed to update last modified count", K(ret));
     } else {/*do nothing*/}
   }

@@ -1,4 +1,4 @@
-/** 
+/**
  * Copyright (c) 2021 OceanBase 
  * OceanBase CE is licensed under Mulan PubL v2. 
  * You can use this software according to the terms and conditions of the Mulan PubL v2. 
@@ -268,10 +268,11 @@ END_P SET_VAR DELIMITER
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
-        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED
+        EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL
 
         FAILOVER FAST FAULTS FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
+        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GROUP_CONCAT GROUPING GTS
         GLOBAL_NAME GLOBAL_ALIAS
@@ -288,7 +289,7 @@ END_P SET_VAR DELIMITER
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
-        LEVEL LN LOG LS
+        LEVEL LN LOG LS LINE_DELIMITER
 
         MAJOR MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
@@ -302,6 +303,7 @@ END_P SET_VAR DELIMITER
 
         NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
         NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NOPARALLEL
+        NULL_IF_EXETERNAL
 
         OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
@@ -310,7 +312,7 @@ END_P SET_VAR DELIMITER
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
-        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS 
+        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
@@ -332,12 +334,12 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION STOP STORAGE STORAGE_FORMAT_VERSION STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
-        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES
+        TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
         UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
@@ -383,7 +385,7 @@ END_P SET_VAR DELIMITER
 %type <node> update_basic_stmt delete_basic_stmt
 %type <node> table_element_list table_element column_definition column_definition_ref column_definition_list column_name_list
 %type <node> opt_generated_keyname opt_generated_option_list opt_generated_column_attribute_list generated_column_attribute opt_storage_type
-%type <node> data_type temporary_option opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
+%type <node> data_type special_table_type opt_if_not_exists opt_if_exists opt_charset collation opt_collation cast_data_type
 %type <node> replace_with_opt_hint insert_with_opt_hint column_list opt_on_duplicate_key_clause opt_into opt_replace opt_temporary opt_algorithm opt_sql_security opt_definer view_algorithm no_param_column_ref
 %type <node> insert_vals_list insert_vals value_or_values
 %type <node> select_with_parens select_no_parens select_clause select_into no_table_select_with_order_and_limit simple_select_with_order_and_limit select_with_parens_with_order_and_limit select_clause_set select_clause_set_left select_clause_set_right  select_clause_set_with_order_and_limit
@@ -498,6 +500,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause
 %type <node> recover_tenant_stmt recover_point_clause
+%type <node> external_file_format_list external_file_format external_table_partition_option
 %type <node> dynamic_sampling_hint
 
 %start sql_stmt
@@ -4242,10 +4245,15 @@ FORCE
 { $$ = NULL; }
 ;
 
-temporary_option:
+special_table_type:
 TEMPORARY
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_TEMPORARY); }
+  malloc_terminal_node($$, result->malloc_pool_, T_TEMPORARY);
+}
+| EXTERNAL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_EXTERNAL);
+}
 | /* EMPTY */
 { $$ = NULL; }
 ;
@@ -4257,12 +4265,12 @@ TEMPORARY
  *****************************************************************************/
 
 create_table_like_stmt:
-create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor LIKE relation_factor
+create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor LIKE relation_factor
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE_LIKE, 4, $2, $4, $5, $7);
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor '(' LIKE relation_factor ')'
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' LIKE relation_factor ')'
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE_LIKE, 4, $2, $4, $5, $8);
@@ -4276,7 +4284,7 @@ create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor LI
  *****************************************************************************/
 
 create_table_stmt:
-create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
+create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
 opt_table_option_list opt_partition_option
 {
   ParseNode *table_elements = NULL;
@@ -4294,7 +4302,7 @@ opt_table_option_list opt_partition_option
                            NULL);               /* oracle兼容模式下存放临时表的 on commit 选项 */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
  opt_table_option_list opt_partition_option opt_as select_stmt
 {
   (void)($1);
@@ -4314,7 +4322,7 @@ opt_table_option_list opt_partition_option
                            $12);                 /* select_stmt */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option opt_as select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option opt_as select_stmt
 {
   (void)($1);
   (void)$8;
@@ -4331,7 +4339,7 @@ opt_table_option_list opt_partition_option
                            $9);                  /* select_stmt */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor partition_option opt_as select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option opt_as select_stmt
 {
   (void)($1);
   (void)$7;
@@ -4346,7 +4354,7 @@ opt_table_option_list opt_partition_option
                            $8);                  /* select_stmt */
   $$->reserved_ = 1; /* mean partition optition is partition_option, not opt_partition_option*/
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor select_stmt
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
@@ -4360,7 +4368,7 @@ opt_table_option_list opt_partition_option
                            $6);                  /* select_stmt */
   $$->reserved_ = 0;
 }
-| create_with_opt_hint temporary_option TABLE opt_if_not_exists relation_factor AS select_stmt
+| create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor AS select_stmt
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
@@ -6002,6 +6010,21 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ENABLE_EXTENDED_ROWID, 1, $3);
 }
+| LOCATION opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_LOCATION, 1, $3);
+}
+| FORMAT opt_equal_mark '(' external_file_format_list ')'
+{
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_EXTERNAL_FILE_FORMAT, $4);
+}
+| PATTERN opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
+}
 ;
 
 parallel_option:
@@ -6060,6 +6083,22 @@ hash_partition_option
 | list_partition_option
 {
   $$ = $1;
+}
+| external_table_partition_option
+{
+  $$ = $1;
+}
+;
+
+external_table_partition_option: /* list partition without partition defines*/
+PARTITION BY '(' column_name_list ')'
+{
+  ParseNode *column_names = NULL;
+  ParseNode *partition_defs = NULL;
+  merge_nodes(column_names, result, T_EXPR_LIST, $4);
+  malloc_terminal_node(partition_defs, result->malloc_pool_, T_PARTITION_LIST);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LIST_COLUMNS_PARTITION, 5, column_names, partition_defs, NULL, NULL, NULL);
+  dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
 ;
 
@@ -6775,6 +6814,73 @@ REDUNDANT
   $$->is_hidden_const_ = 1;
 }
 ;
+
+external_file_format_list:
+external_file_format
+{
+  $$ = $1;
+}
+| external_file_format_list opt_comma external_file_format
+{
+  (void) ($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+external_file_format:
+TYPE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_FORMAT_TYPE, 1, $3);
+}
+| FIELD_DELIMITER COMP_EQ expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FIELD_TERMINATED_STR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| LINE_DELIMITER COMP_EQ expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINE_TERMINATED_STR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| ESCAPE COMP_EQ expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ESCAPED_STR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| FIELD_OPTIONALLY_ENCLOSED_BY COMP_EQ expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CLOSED_STR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
+| ENCODING COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHARSET, 1, $3);
+}
+| SKIP_HEADER COMP_EQ INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SKIP_HEADER, 1, $3);
+}
+| SKIP_BLANK_LINES COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SKIP_BLANK_LINE, 1, $3);
+}
+| TRIM_SPACE COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TRIM_SPACE, 1, $3);
+}
+| NULL_IF_EXETERNAL COMP_EQ '(' expr_list ')'
+{
+  ParseNode *expr_list_node = NULL;
+  merge_nodes(expr_list_node, result, T_EXPR_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NULL_IF_EXETERNAL, 1, expr_list_node);
+  dup_expr_string($$, result, @4.first_column, @4.last_column);
+}
+| EMPTY_FIELD_AS_NULL COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EMPTY_FIELD_AS_NULL, 1, $3);
+}
+;
+
 /*****************************************************************************
  *
  * create tablegroup
@@ -13485,7 +13591,17 @@ ALTER TABLE relation_factor alter_table_actions
 {
   ParseNode *table_actions = NULL;
   merge_nodes(table_actions, result, T_ALTER_TABLE_ACTION_LIST, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 2, $3, table_actions);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 3, $3, table_actions, NULL);
+  $$->value_ = 0;
+}
+|
+ALTER EXTERNAL TABLE relation_factor alter_table_actions
+{
+  ParseNode *table_actions = NULL;
+  merge_nodes(table_actions, result, T_ALTER_TABLE_ACTION_LIST, $5);
+  ParseNode *external_node = NULL;
+  malloc_terminal_node(external_node, result->malloc_pool_, T_EXTERNAL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 3, $4, table_actions, external_node);
   $$->value_ = 0;
 }
 ;
@@ -13548,6 +13664,10 @@ opt_set table_option_list_space_seperated
 DROP CONSTRAINT constraint_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_CONSTRAINT, 1, $3); // drop foreign key or check constraint, to be compatible with mysql
+}
+| REFRESH
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALTER_REFRESH_EXTERNAL_TABLE);
 }
 /*  | ORDER BY column_list
 //    {
@@ -17020,9 +17140,11 @@ ACCOUNT
 |       DEFAULT_TABLEGROUP
 |       EFFECTIVE
 |       EMPTY
+|       EMPTY_FIELD_AS_NULL
 |       ENABLE
 |       ENABLE_ARBITRATION_SERVICE
 |       ENABLE_EXTENDED_ROWID
+|       ENCODING
 |       ENCRYPTED
 |       ENCRYPTION
 |       END
@@ -17051,12 +17173,15 @@ ACCOUNT
 |       EXTENDED
 |       EXTENDED_NOADDR
 |       EXTENT_SIZE
+|       EXTERNAL
 |       FAILOVER
 |       EXTRACT
 |       FAST
 |       FAULTS
 |       FLASHBACK
 |       FIELDS
+|       FIELD_DELIMITER
+|       FIELD_OPTIONALLY_ENCLOSED_BY
 |       FILEX
 |       FILE_ID
 |       FINAL_COUNT
@@ -17139,6 +17264,7 @@ ACCOUNT
 |       LEAVES
 |       LESS
 |       LEVEL
+|       LINE_DELIMITER
 |       LINESTRING
 |       LIST_
 |       LISTAGG
@@ -17240,6 +17366,7 @@ ACCOUNT
 |       NTILE
 |       NTH_VALUE
 |       NUMBER
+|       NULL_IF_EXETERNAL
 |       NULLS
 |       NVARCHAR
 |       OCCUR
@@ -17271,6 +17398,7 @@ ACCOUNT
 |       LS
 |       PARTITIONING
 |       PARTITIONS
+|       PATTERN
 |       PERCENT_RANK
 |       PAUSE
 |       PERCENTAGE
@@ -17398,6 +17526,8 @@ ACCOUNT
 |       SIGNED
 |       SIZE %prec LOWER_PARENS
 |       SIMPLE
+|       SKIP_BLANK_LINES
+|       SKIP_HEADER
 |       SLAVE
 |       SLOW
 |       SNAPSHOT
@@ -17496,6 +17626,7 @@ ACCOUNT
 |       TRADITIONAL
 |       TRIGGERS
 |       TRIM
+|       TRIM_SPACE
 |       TRUNCATE
 |       TYPE
 |       TYPES

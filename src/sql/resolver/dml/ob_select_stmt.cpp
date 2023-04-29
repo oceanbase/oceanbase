@@ -1259,6 +1259,17 @@ bool ObSelectStmt::has_hidden_rowid() const {
   return res;
 }
 
+bool ObSelectStmt::has_external_table() const {
+  bool res = false;
+  for (int i = 0; i < get_table_items().count(); i++) {
+    if (OB_NOT_NULL(get_table_items().at(i))
+        && EXTERNAL_TABLE == get_table_items().at(i)->table_type_) {
+      res = true;
+      break;
+    }
+  }
+  return res;
+}
 int ObSelectStmt::get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const
 {
   int ret = OB_SUCCESS;

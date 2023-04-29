@@ -703,6 +703,36 @@ int ObFileListArrayOp::func(const dirent *entry)
   return ret;
 }
 
+
+int ObFullPathArrayOp::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid list entry, entry is null");
+  } else if (OB_ISNULL(entry->d_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid list entry, d_name is null");
+  } else {
+    ObSqlString full_path;
+    const ObString file_name(entry->d_name);
+    ObString tmp_file;
+    if (OB_FAIL(full_path.assign(path_))) {
+      OB_LOG(WARN, "assign string failed", K(ret));
+    } else if (full_path.length() > 0 && *(full_path.ptr() + full_path.length() - 1) != '/' &&
+                                                              OB_FAIL(full_path.append("/"))) {
+      OB_LOG(WARN, "append failed", K(ret)) ;
+    } else if (OB_FAIL(full_path.append(file_name))) {
+      OB_LOG(WARN, "append file name failed", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, full_path.string(), tmp_file))) {
+      OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
+    } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
+      OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
+    }
+  }
+  return ret;
+}
+
 //*************ObDirPrefixEntryNameFilter*************
 int ObDirPrefixEntryNameFilter::func(const dirent *entry)
 {

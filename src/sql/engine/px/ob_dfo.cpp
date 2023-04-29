@@ -15,6 +15,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -50,7 +51,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     temp_table_ctx_,
                     access_table_location_keys_,
                     adjoining_root_dfo_,
-                    is_single_tsc_leaf_dfo_);
+                    is_single_tsc_leaf_dfo_,
+                    access_external_table_files_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -136,6 +138,18 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     server_not_alive_ = other.server_not_alive_;
     adjoining_root_dfo_ = other.adjoining_root_dfo_;
     is_single_tsc_leaf_dfo_ = other.is_single_tsc_leaf_dfo_;
+  }
+  access_external_table_files_.reuse();
+  for (int i = 0; OB_SUCC(ret) && i < other.access_external_table_files_.count(); i++) {
+    const ObExternalFileInfo &other_file = other.access_external_table_files_.at(i);
+    ObExternalFileInfo temp_file;
+    temp_file.file_id_ = other_file.file_id_;
+    temp_file.file_addr_ = other_file.file_addr_;
+    if (OB_FAIL(ob_write_string(allocator_, other_file.file_url_, temp_file.file_url_))) {
+      LOG_WARN("fail to write string", K(ret));
+    } else if (OB_FAIL(access_external_table_files_.push_back(temp_file))) {
+      LOG_WARN("fail to push back", K(ret));
+    }
   }
   return ret;
 }

@@ -952,6 +952,7 @@ protected:
 
   //store json table column info
   common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_external_file_col_exprs_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

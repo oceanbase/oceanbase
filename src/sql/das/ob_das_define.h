@@ -113,7 +113,8 @@ public:
                K_(select_leader),
                K_(is_dup_table),
                K_(is_weak_read),
-               K_(unuse_related_pruning));
+               K_(unuse_related_pruning),
+               K_(is_external_table));
 
   uint64_t table_loc_id_; //location object id
   uint64_t ref_table_id_; //table object id
@@ -126,7 +127,9 @@ public:
       uint64_t is_dup_table_                    : 1; //mark if this table is a duplicated table
       uint64_t is_weak_read_                    : 1; //mark if this tale can use weak read consistency
       uint64_t unuse_related_pruning_           : 1; //mark if this table use the related pruning to prune local index tablet_id
-      uint64_t reserved_                        : 59;
+      uint64_t is_external_table_               : 1; //mark if this table is an external table
+      uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
+      uint64_t reserved_                        : 57;
     };
   };
 
@@ -321,6 +324,7 @@ typedef common::ObFixedArray<uint64_t, common::ObIAllocator> UIntFixedArray;
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;
 typedef common::ObFixedArray<ObDASTableLoc*, common::ObIAllocator> DASTableLocFixedArray;
+typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ExternalFileNameArray;
 
 //DAS: data access service
 //CtDef: Compile time Definition

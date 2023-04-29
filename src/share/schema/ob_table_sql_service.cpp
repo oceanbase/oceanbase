@@ -2522,6 +2522,14 @@ int ObTableSqlService::gen_table_dml(
              && OB_UNLIKELY((OB_INVALID_VERSION != table.get_truncate_version()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate version is not support before 4.1", K(ret), K(table));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_2_0_0
+                         && (table.is_external_table()
+                             || !table.get_external_file_location().empty()
+                             || !table.get_external_file_format().empty()
+                             || !table.get_external_file_location_access_info().empty()
+                             || !table.get_external_file_pattern().empty()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("external table is not support before 4.2", K(ret), K(table));
   } else {
     const ObPartitionOption &part_option = table.get_part_option();
     const ObPartitionOption &sub_part_option = table.get_sub_part_option();
@@ -2631,6 +2639,14 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
         || (data_version >= DATA_VERSION_4_1_0_0
             && OB_FAIL(dml.add_column("truncate_version", table.get_truncate_version())))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_location", ObHexEscapeSqlStr(table.get_external_file_location()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_location_access_info", ObHexEscapeSqlStr(table.get_external_file_location_access_info()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_format", ObHexEscapeSqlStr(table.get_external_file_format()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_pattern", ObHexEscapeSqlStr(table.get_external_file_pattern()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }

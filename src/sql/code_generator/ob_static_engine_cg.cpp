@@ -880,6 +880,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_FUN_SYS_ROWNUM != raw_expr->get_expr_type()
             && T_CTE_SEARCH_COLUMN != raw_expr->get_expr_type()
             && T_CTE_CYCLE_COLUMN != raw_expr->get_expr_type()
+            && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_USER_VARIABLE))
             // TODO:@guoping.wgp, following T_FUN_SYS_PART restrictions should be removed later
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())) {
@@ -3845,6 +3846,11 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
       }
     }
   }
+
+  if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+    spec.is_external_table_ = true;
+  }
+
   return ret;
 }
 

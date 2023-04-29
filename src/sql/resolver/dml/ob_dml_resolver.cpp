@@ -4739,6 +4739,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
           item->alias_name_ = tschema->get_table_name_str();
           item->ddl_schema_version_ = tschema->get_schema_version();
           item->ddl_table_id_ = tschema->get_table_id();
+          item->table_type_ = tschema->get_table_type();
         } else {
           const ObTableSchema *tab_schema = nullptr;
           if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
@@ -4753,6 +4754,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
             item->alias_name_ = tab_schema->get_table_name_str();
             item->ddl_schema_version_ = tschema->get_schema_version();
             item->ddl_table_id_ = tschema->get_table_id();
+            item->table_type_ = tschema->get_table_type();
           }
         }
         if (OB_SUCC(ret)) {
@@ -4821,6 +4823,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         item->is_system_table_ = tschema->is_sys_table();
         item->is_view_table_ = tschema->is_view_table();
         item->ddl_schema_version_ = tschema->get_schema_version();
+        item->table_type_ = tschema->get_table_type();
         if (item->ref_id_ == OB_INVALID_ID) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(tbl_name));
@@ -4917,6 +4920,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_dblink(uint64_t dblink_id,
     item->is_index_table_ = false;
     item->is_system_table_ = false;
     item->is_view_table_ = false;
+    item->table_type_ = MAX_TABLE_TYPE;
     item->synonym_name_ = synonym_name;
     item->synonym_db_name_ = synonym_db_name;
     // dblink info.
@@ -7121,6 +7125,29 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       } else if (!real_ref_expr->is_udf_expr()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid exor", K(*real_ref_expr), K(ret));
+      }
+    } else if (table_schema->is_external_table()
+               && ObResolverUtils::is_external_file_column_name(columns.at(i).col_name_)) {
+      uint64_t file_column_idx = UINT64_MAX;
+      if (OB_ISNULL(stmt)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::calc_file_column_idx(columns.at(i).col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                               pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx))) {
+        ObExternalFileFormat format;
+        if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
+          LOG_WARN("load from string failed", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::build_file_column_expr(*params_.expr_factory_, *params_.session_info_,
+                                                            table_item.table_id_, table_item.table_name_,
+                                                            columns.at(i).col_name_, file_column_idx, real_ref_expr,
+                                                            format.csv_format_.cs_type_))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        } else if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
+          LOG_WARN("fail to push back to array", K(ret));
+        }
+        LOG_DEBUG("add external file column", KPC(real_ref_expr), K(columns.at(i).col_name_));
       }
     } else {
       if (OB_FAIL(resolve_basic_column_item(table_item, columns.at(i).col_name_,

@@ -267,6 +267,7 @@ public:
   int get_full_ls_replica_loc(const common::ObObjectID &tenant_id,
                               const ObDASTabletLoc &tablet_loc,
                               share::ObLSReplicaLocation &replica_loc);
+  int get_external_table_ls_location(share::ObLSLocation &location);
 private:
   int get_vt_svr_pair(uint64_t vt_id, const VirtualSvrPair *&vt_svr_pair);
   int get_vt_tablet_loc(uint64_t table_id,

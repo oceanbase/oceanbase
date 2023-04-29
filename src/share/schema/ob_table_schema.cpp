@@ -292,6 +292,7 @@ bool ObSimpleTableSchemaV2::has_tablet() const
            || is_view_table()
            || is_aux_vp_table()
            || is_virtual_table(get_table_id()) // virtual table index
+           || is_external_table()
            );
 }
 
@@ -1327,7 +1328,15 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
-      } else {} // no more to do
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
+        LOG_WARN("deep copy external_file_location failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {
+        LOG_WARN("deep copy external_file_location_access_info failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_format_, external_file_format_))) {
+        LOG_WARN("deep copy external_file_format failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
+        LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      }
 
       //view schema
       if (OB_SUCC(ret)) {
@@ -1577,7 +1586,7 @@ bool ObTableSchema::is_valid() const
           }
 
           // TODO@nijia.nj data_length should be checked according specified charset
-          if ((is_table() || is_tmp_table()) && !column->is_column_stored_in_sstable()) {
+          if ((is_table() || is_tmp_table() || is_external_table()) && !column->is_column_stored_in_sstable()) {
             // When the column is a virtual generated column in the table, the column will not be stored,
             // so there is no need to calculate its length
           } else if (is_storage_index_table() && column->is_fulltext_column()) {
@@ -2139,7 +2148,7 @@ int ObTableSchema::create_idx_name_automatically_oracle(common::ObString &idx_na
 //              Generation rules: pk_name_sys_auto = tblname_OBPK_timestamp
 //                                check_name_sys_auto = tblname_OBCHECK_timestamp
 //                                unique_name_sys_auto = tblname_OBUNIQUE_timestamp
-// If the length of cst_name exceeds the max len of it, the part of table_name will be truncated unitil the len of cst_name equaling to the max len
+// If the length of cst_name exceeds the max len of it, the part of table_name will be truncated unitil the len of cst_name equaling to the max len
 // @param [in] cst_name
 // @return oceanbase error code defined in lib/ob_errno.def
 int ObTableSchema::create_cons_name_automatically(ObString &cst_name,
@@ -2838,6 +2847,10 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += rls_group_ids_.get_data_size();
   convert_size += rls_context_ids_.get_data_size();
 
+  convert_size += external_file_format_.length() + 1;
+  convert_size += external_file_location_.length() + 1;
+  convert_size += external_file_location_access_info_.length() + 1;
+  convert_size += external_file_pattern_.length() + 1;
   return convert_size;
 }
 
@@ -2913,9 +2926,15 @@ void ObTableSchema::reset()
   trigger_list_.reset();
   table_dop_ = 1;
   table_flags_ = 0;
+
   rls_policy_ids_.reset();
   rls_group_ids_.reset();
   rls_context_ids_.reset();
+
+  external_file_format_.reset();
+  external_file_location_.reset();
+  external_file_location_access_info_.reset();
+  external_file_pattern_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -3634,7 +3653,8 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema, const
   } else if (table_id_ != column_schema->get_table_id()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("The column schema does not belong to this table", K(ret));
-  } else if (!is_view_table() && !is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_aux_vp_table()) {
+  } else if (!is_view_table() && !is_user_table() && !is_index_table() && !is_tmp_table()
+             && !is_sys_table() && !is_aux_vp_table() && !is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only NORMAL table and index table and SYSTEM table and view table are allowed", K(ret));
   } else if (!for_view && ((!is_heap_table() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
@@ -4263,6 +4283,8 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
   } else if (get_table_id() != src_column->get_table_id()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column does not belong to this table", K(ret));
+  } else if (is_external_table()) {
+    is_offline = false;
   } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
@@ -4440,6 +4462,8 @@ int ObTableSchema::check_column_can_be_altered_online(
   } else if (get_table_id() != src_schema->get_table_id()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column does not belong to this table", K(ret));
+  } else if (is_external_table()) {
+    // external table canbe altered
   } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
@@ -4699,7 +4723,7 @@ int ObTableSchema::check_row_length(
     int64_t row_length = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       col = column_array_[i];
-      if ((is_table() || is_tmp_table()) && !col->is_column_stored_in_sstable()) {
+      if ((is_table() || is_tmp_table() || is_external_table()) && !col->is_column_stored_in_sstable()) {
         // The virtual column in the table does not actually store data, and does not count the length
       } else if (is_storage_index_table() && col->is_fulltext_column()) {
         // The full text column in the index only counts the length of one word segment
@@ -4728,7 +4752,7 @@ int ObTableSchema::check_row_length(
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
         } else {
           row_length -= src_byte_length;
-          if ((is_table() || is_tmp_table()) && !dst_schema->is_column_stored_in_sstable()) {
+          if ((is_table() || is_tmp_table() || is_external_table()) && !dst_schema->is_column_stored_in_sstable()) {
             // The virtual column in the table does not actually store data, and does not count the length
           } else if (is_storage_index_table() && dst_schema->is_fulltext_column()) {
             // The full text column in the index only counts the length of one word segment
@@ -5072,8 +5096,10 @@ int ObTableSchema::get_rowid_version(int64_t rowkey_cnt,
 {
   int ret = OB_SUCCESS;
 
-  if (is_heap_table()) {
+  if (is_heap_table() && !is_external_table()) {
     version = is_extended_rowid_mode() ? ObURowIDData::EXT_HEAP_TABLE_ROWID_VERSION : ObURowIDData::HEAP_TABLE_ROWID_VERSION;
+  } else if (is_heap_table() && is_external_table()) {
+    version = ObURowIDData::EXTERNAL_TABLE_ROWID_VERSION;
   } else {
     version = ObURowIDData::PK_ROWID_VERSION;
     if (rowkey_cnt != serialize_col_cnt) {
@@ -5822,6 +5848,13 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 rls_context_ids_);
   }
   LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_, truncate_version_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                external_file_location_,
+                external_file_location_access_info_,
+                external_file_format_,
+                external_file_pattern_);
+  }
   }();
   return ret;
 }
@@ -6159,6 +6192,13 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 rls_group_ids_,
                 rls_context_ids_);
     LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_, truncate_version_);
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  external_file_location_,
+                  external_file_location_access_info_,
+                  external_file_format_,
+                  external_file_pattern_);
+    }
   }
   }();
   return ret;
@@ -6293,6 +6333,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(object_status_);
   OB_UNIS_ADD_LEN(is_force_view_);
   OB_UNIS_ADD_LEN(truncate_version_);
+
+  OB_UNIS_ADD_LEN(external_file_location_);
+  OB_UNIS_ADD_LEN(external_file_location_access_info_);
+  OB_UNIS_ADD_LEN(external_file_format_);
+  OB_UNIS_ADD_LEN(external_file_pattern_);
   return len;
 }
 

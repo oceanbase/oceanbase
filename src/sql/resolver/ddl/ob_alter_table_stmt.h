@@ -44,6 +44,9 @@ public:
   uint64_t get_alter_table_action_count() { return alter_table_action_count_; }
   void inc_alter_table_action_count() { ++alter_table_action_count_; }
 
+  int64_t get_alter_external_table_type() { return alter_external_table_type_; }
+  void set_alter_external_table_type(int64_t type) { alter_external_table_type_ = type; }
+
   bool is_alter_system() const { return is_alter_system_; }
   void set_is_alter_system(const bool flag) { is_alter_system_ = flag; }
 
@@ -116,6 +119,7 @@ private:
   ObRawExpr *interval_expr_;
   ObRawExpr *transition_expr_;
   uint64_t alter_table_action_count_;
+  int64_t alter_external_table_type_;
 };
 
 inline int ObAlterTableStmt::set_tz_info_wrap(const common::ObTimeZoneInfoWrap &tz_info_wrap)

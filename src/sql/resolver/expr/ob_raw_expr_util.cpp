@@ -1936,25 +1936,31 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
                                       real_exprs,
                                       NULL));
       OZ (real_exprs.push_back(expr), q_name);
-    } else if (OB_UNLIKELY(!q_name.database_name_.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid generated column name", K(q_name));
-    } else if (!q_name.tbl_name_.empty()
-        && !ObCharset::case_insensitive_equal(q_name.tbl_name_, table_schema.get_table_name_str())) {
-      ret = OB_ERR_BAD_TABLE;
-      LOG_USER_ERROR(OB_ERR_BAD_TABLE, q_name.tbl_name_.length(), q_name.tbl_name_.ptr());
-    } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
-      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, q_name.col_name_.length(), q_name.col_name_.ptr());
-    } else if (OB_UNLIKELY(col_schema->is_generated_column())) {
-      ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
-      LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
-                     "Generated column in column expression");
-    } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
-      LOG_WARN("init column expr failed", K(ret), K(q_name));
+    } else if (table_schema.is_external_table()) {
+      if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr))) {
+        LOG_WARN("fail to resolve external table column def", K(ret));
+      }
     } else {
-      q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
-      OZ (real_exprs.push_back(q_name.ref_expr_), q_name);
+      if (OB_UNLIKELY(!q_name.database_name_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid generated column name", K(q_name));
+      } else if (!q_name.tbl_name_.empty()
+          && !ObCharset::case_insensitive_equal(q_name.tbl_name_, table_schema.get_table_name_str())) {
+        ret = OB_ERR_BAD_TABLE;
+        LOG_USER_ERROR(OB_ERR_BAD_TABLE, q_name.tbl_name_.length(), q_name.tbl_name_.ptr());
+      } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, q_name.col_name_.length(), q_name.col_name_.ptr());
+      } else if (OB_UNLIKELY(col_schema->is_generated_column())) {
+        ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
+        LOG_USER_ERROR(OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN,
+                       "Generated column in column expression");
+      } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, *q_name.ref_expr_))) {
+        LOG_WARN("init column expr failed", K(ret), K(q_name));
+      } else {
+        q_name.ref_expr_->set_ref_id(table_schema.get_table_id(), col_schema->get_column_id());
+        OZ (real_exprs.push_back(q_name.ref_expr_), q_name);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -2176,7 +2182,9 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
     // 比如 create table t1 (x int) partition by hash(x);
     if (OB_SUCC(ret)
         && true == need_check_simple_column
-        && T_REF_COLUMN == expr->get_expr_type()) {
+        && T_REF_COLUMN == expr->get_expr_type()
+        && !(columns.count() == 1
+             && ObResolverUtils::is_external_file_column_name(columns.at(0).col_name_))) {
       ret = OB_ERR_INVALID_COLUMN_EXPRESSION;
       LOG_WARN("simple column is not allowed in Oracle mode", K(ret), K(*expr));
     }
@@ -2833,17 +2841,23 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
                                       real_exprs,
                                       NULL));
       OZ (real_exprs.push_back(expr), q_name);
-    } else if (OB_UNLIKELY(!q_name.database_name_.empty()) || OB_UNLIKELY(!q_name.tbl_name_.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid generated column name", K(q_name));
-    } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("column schema is null");
-    } else if (OB_FAIL(init_column_expr(*col_schema, *q_name.ref_expr_))) {
-      LOG_WARN("init column expr failed", K(ret));
+    } else if (table_schema.is_external_table()) {
+      if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr))) {
+        LOG_WARN("fail to resolve external table column", K(ret));
+      }
     } else {
-      q_name.ref_expr_->set_ref_id(table_id, col_schema->get_column_id());
-      OZ (real_exprs.push_back(q_name.ref_expr_), q_name);
+      if (OB_UNLIKELY(!q_name.database_name_.empty()) || OB_UNLIKELY(!q_name.tbl_name_.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid generated column name", K(q_name));
+      } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(q_name.col_name_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null");
+      } else if (OB_FAIL(init_column_expr(*col_schema, *q_name.ref_expr_))) {
+        LOG_WARN("init column expr failed", K(ret));
+      } else {
+        q_name.ref_expr_->set_ref_id(table_id, col_schema->get_column_id());
+        OZ (real_exprs.push_back(q_name.ref_expr_), q_name);
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -7637,12 +7651,19 @@ int ObRawExprUtils::build_rowid_expr(const ObDMLStmt *dml_stmt,
     CK(OB_NOT_NULL(calc_urowid_expr));
     calc_urowid_expr->set_func_name(ObString::make_string(N_CALC_UROWID));
     OZ(calc_urowid_expr->add_param_expr(version_expr));
+    if (table_schema.is_external_table()) {
+      OZ(add_calc_partition_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
+                                                  table_schema, logical_table_id,
+                                                  calc_urowid_expr));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_exprs.count(); ++i) {
       OZ(calc_urowid_expr->add_param_expr(rowkey_exprs.at(i)));
     }
-    //set calc tablet id for heap table calc_urowid expr
-    OZ(add_calc_tablet_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
-                                             table_schema, logical_table_id, calc_urowid_expr));
+    if (OB_SUCC(ret) && !table_schema.is_external_table()) {
+      //set calc tablet id for heap table calc_urowid expr
+      OZ(add_calc_tablet_id_on_calc_rowid_expr(dml_stmt, expr_factory, session_info,
+                                               table_schema, logical_table_id, calc_urowid_expr));
+    }
     OZ(calc_urowid_expr->formalize(&session_info));
     rowid_expr = calc_urowid_expr;
     LOG_TRACE("succeed to build rowid expr", KPC(rowid_expr));
@@ -8012,6 +8033,52 @@ int ObRawExprUtils::add_calc_tablet_id_on_calc_rowid_expr(const ObDMLStmt *dml_s
     } else if (OB_FAIL(calc_rowid_expr->add_param_expr(calc_part_id_expr))) {
       LOG_WARN("failed to add param expr", K(ret));
     } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObRawExprUtils::add_calc_partition_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
+                                                             ObRawExprFactory &expr_factory,
+                                                             const ObSQLSessionInfo &session_info,
+                                                             const ObTableSchema &table_schema,
+                                                             const uint64_t logical_table_id,
+                                                             ObSysFunRawExpr *&calc_rowid_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dml_stmt) || OB_ISNULL(calc_rowid_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(dml_stmt),K(calc_rowid_expr));
+  } else if (table_schema.is_external_table()) {
+    ObRawExprCopier copier(expr_factory);
+    ObSEArray<ObRawExpr *, 4> column_exprs;
+    const ObRawExpr *part_expr = dml_stmt->get_part_expr(logical_table_id, table_schema.get_table_id());
+    const ObRawExpr *subpart_expr = dml_stmt->get_subpart_expr(logical_table_id, table_schema.get_table_id());
+    ObRawExpr *calc_part_id_expr = nullptr;
+    schema::ObPartitionLevel part_level = table_schema.get_part_level();
+    ObRawExpr *new_part_expr = NULL;
+    ObRawExpr *new_subpart_expr = NULL;
+    if (OB_FAIL(dml_stmt->get_column_exprs(logical_table_id, column_exprs))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
+      LOG_WARN("failed to add skipped expr", K(ret));
+    } else if (OB_FAIL(copier.copy(part_expr, new_part_expr))) {
+      LOG_WARN("fail to copy part expr", K(ret));
+    } else if (OB_FAIL(copier.copy(subpart_expr, new_subpart_expr))) {
+      LOG_WARN("fail to copy subpart expr", K(ret));
+    } else if (OB_FAIL(build_calc_part_id_expr(expr_factory,
+                                               session_info,
+                                               table_schema.get_table_id(),
+                                               part_level,
+                                               new_part_expr,
+                                               new_subpart_expr,
+                                               calc_part_id_expr))) {
+      LOG_WARN("fail to build table location expr", K(ret));
+    } else if (OB_ISNULL(calc_part_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FAIL(calc_rowid_expr->add_param_expr(calc_part_id_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    }
   }
   return ret;
 }

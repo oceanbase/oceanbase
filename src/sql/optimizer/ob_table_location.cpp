@@ -708,6 +708,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_col_part_expr_ = other.is_col_part_expr_;
     is_col_subpart_expr_ = other.is_col_subpart_expr_;
     is_oracle_temp_table_ = other.is_oracle_temp_table_;
+    table_type_ = other.table_type_;
     part_col_type_ = other.part_col_type_;
     part_collation_type_ = other.part_collation_type_;
     subpart_col_type_ = other.subpart_col_type_;
@@ -815,6 +816,7 @@ void ObTableLocation::reset()
   is_col_part_expr_ = false;
   is_col_subpart_expr_ = false;
   is_oracle_temp_table_ = false;
+  table_type_ = MAX_TABLE_TYPE;
 
   calc_node_ = NULL;
   gen_col_node_ = NULL;
@@ -944,6 +946,14 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(loc_meta_.ref_table_id_));
+  } else {
+    table_type_ = table_schema->get_table_type();
+    loc_meta_.is_external_table_ = table_schema->is_external_table();
+    loc_meta_.is_external_files_on_disk_ =
+        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (PARTITION_LEVEL_ZERO == (part_level_ = table_schema->get_part_level())) {
     is_partitioned_ = false; //Non-partitioned table, do not need to calc partition id
   } else if (PARTITION_LEVEL_ONE != part_level_ && PARTITION_LEVEL_TWO != part_level_) {
@@ -1251,6 +1261,14 @@ int ObTableLocation::init(
              || OB_ISNULL(session_info = exec_ctx->get_my_session())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input arguments error", K(table_id), K(ref_table_id), K(session_info), K(ret));
+  } else {
+    table_type_ = table_schema->get_table_type();
+    loc_meta_.is_external_table_ = table_schema->is_external_table();
+    loc_meta_.is_external_files_on_disk_ =
+        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (PARTITION_LEVEL_ZERO == (part_level_ = table_schema->get_part_level())) {
     is_partitioned_ = false; //Non-partitioned table, do not need to calc partition id
   } else if (PARTITION_LEVEL_ONE != part_level_ && PARTITION_LEVEL_TWO != part_level_) {
@@ -1738,7 +1756,7 @@ int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
         if (OB_FAIL(ret)) {
           //TODO shengle set partition key for location cache renew
           LOG_WARN("Get partition error, then set partition key for location cache renew later",
-                   K(ret), K(ref_table_id), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc));
+                   K(ret), K(ref_table_id), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc), K(table_type_));
         } else {
           if (OB_ISNULL(session)) {
             ret = OB_INVALID_ARGUMENT;
@@ -4688,6 +4706,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(tablet_id_);
   OB_UNIS_ENCODE(object_id_);
   OB_UNIS_ENCODE(related_list_);
+  OB_UNIS_ENCODE(table_type_);
   return ret;
 }
 
@@ -4764,6 +4783,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(object_id_);
   OB_UNIS_ADD_LEN(related_list_);
+  OB_UNIS_ADD_LEN(table_type_);
   return len;
 }
 
@@ -4918,6 +4938,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(tablet_id_);
   OB_UNIS_DECODE(object_id_);
   OB_UNIS_DECODE(related_list_);
+  OB_UNIS_DECODE(table_type_);
   return ret;
 }
 

@@ -6710,6 +6710,10 @@ int ObTransformUtils::check_need_pushdown_pseudo_column(const ObRawExpr &expr,
       }
       break;
     }
+    case T_PSEUDO_EXTERNAL_FILE_COL: {
+      need_pushdown = true;
+      break;
+    }
     default:
       break;
   }

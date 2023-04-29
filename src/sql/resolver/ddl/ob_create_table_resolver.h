@@ -71,6 +71,8 @@ private:
   int64_t get_primary_key_size() const;
   int add_primary_key_part(const common::ObString &column_name, common::ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
   int add_hidden_tablet_seq_col();
+  int add_hidden_external_table_pk_col();
+
   int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
                                           ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
                                           ObColumnSchemaV2 &udt_column);

@@ -70,6 +70,9 @@
 
 #include "share/table/ob_table_rpc_proxy.h"
 
+#include "sql/engine/table/ob_external_table_access_service.h"
+#include "share/external_table/ob_external_table_file_rpc_proxy.h"
+
 namespace oceanbase
 {
 namespace omt
@@ -351,6 +354,7 @@ private:
   obrpc::ObInterruptRpcProxy interrupt_proxy_; // global interrupt
   obrpc::ObLoadDataRpcProxy load_data_proxy_;
   obrpc::ObTableRpcProxy table_rpc_proxy_;
+  obrpc::ObExtenralTableRpcProxy external_table_proxy_;
 
   // The OceanBase configuration relating to.
   common::ObServerConfig &config_;
@@ -404,6 +408,8 @@ private:
 
   // virtual table related
   ObVirtualDataAccessService vt_data_service_;
+  // external table
+  ObExternalTableAccessService et_access_service_;
 
   // Weakly Consistent Read Service
   transaction::ObWeakReadService  weak_read_service_;

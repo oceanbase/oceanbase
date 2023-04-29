@@ -290,7 +290,9 @@ DEF_TO_STRING(ObTableScanParam)
        KPC_(table_param),
        K_(sample_info),
        K_(need_scn),
-       K_(need_switch_param));
+       K_(need_switch_param),
+       K_(external_file_format),
+       K_(external_file_location));
   J_OBJ_END();
   return pos;
 }

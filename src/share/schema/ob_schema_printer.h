@@ -447,6 +447,11 @@ public:
                                     bool print_sub_part_element,
                                     bool agent_mode,
                                     const common::ObTimeZoneInfo *tz_info) const;
+  int print_external_table_file_info(const ObTableSchema &table_schema,
+                                     ObIAllocator& allocator,
+                                     char* buf,
+                                     const int64_t& buf_len,
+                                     int64_t& pos) const;
 private:
   static bool is_subpartition_valid_in_mysql(const ObTableSchema &table_schema)
   {

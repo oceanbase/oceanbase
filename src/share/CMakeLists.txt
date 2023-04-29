@@ -449,6 +449,13 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_ds_stat_cache.cpp
 )
 
+ob_set_subtarget(ob_share external_table
+  external_table/ob_external_table_file_mgr.cpp
+  external_table/ob_external_table_file_rpc_processor.cpp
+  external_table/ob_external_table_file_task.cpp
+  external_table/ob_external_table_utils.cpp
+)
+
 ob_set_subtarget(ob_share io
   io/ob_io_define.cpp
   io/io_schedule/ob_io_mclock.cpp

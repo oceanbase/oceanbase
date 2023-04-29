@@ -8886,6 +8886,10 @@ const char *ob_table_type_str(ObTableType type)
       type_ptr = "AUX LOB META";
       break;
     }
+  case EXTERNAL_TABLE: {
+      type_ptr = "EXTERNAL TABLE";
+      break;
+    }
   default: {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unkonw table type", K(type));
       break;
@@ -10497,7 +10501,7 @@ ObRecycleObject::RecycleObjType ObRecycleObject::get_type_by_table_schema(
     type = INDEX;
   } else if (table_schema.is_view_table()) {
     type = VIEW;
-  } else if (table_schema.is_table() || table_schema.is_tmp_table()) {
+  } else if (table_schema.is_table() || table_schema.is_tmp_table() || table_schema.is_external_table()) {
     type = TABLE;
   } else if (table_schema.is_aux_vp_table()) {
     type = AUX_VP;

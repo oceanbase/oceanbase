@@ -176,6 +176,12 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         } else if (1 == parse_tree.value_ && OB_ISNULL(index_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
+        } else if (table_schema_->is_external_table() !=
+                  (OB_NOT_NULL(parse_tree.children_[SPECIAL_TABLE_TYPE])
+                   && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
+          SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
         } else if (ObSchemaChecker::is_ora_priv_check()) {
           OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                                   session_info_->get_priv_user_id(),
@@ -528,6 +534,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
+      } else if (table_schema_->is_external_table()) {
+        alter_table_stmt->set_alter_external_table_type(action_node->type_);
+        OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
       } else {
         switch (action_node->type_) {
         //deal with alter table option

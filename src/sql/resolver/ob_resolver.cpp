@@ -1074,6 +1074,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
     }  // end switch
 
+    if (OB_SUCC(ret) && stmt->is_dml_stmt()) {
+      OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
+    }
+
     if (OB_SUCC(ret)) {
       if (ObStmt::is_write_stmt(stmt->get_stmt_type(), stmt->has_global_variable())
           && !MTL_IS_PRIMARY_TENANT()) {

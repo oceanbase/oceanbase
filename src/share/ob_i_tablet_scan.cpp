@@ -60,7 +60,9 @@ DEF_TO_STRING(ObVTableScanParam)
        N_FROZEN_VERSION, frozen_version_,
        K_(is_get),
        KPC_(output_exprs),
-       KPC_(op_filters));
+       KPC_(op_filters),
+       K_(external_file_format),
+       K_(external_file_location));
   J_OBJ_END();
   return pos;
 }

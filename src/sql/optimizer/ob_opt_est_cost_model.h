@@ -55,7 +55,8 @@ struct ObTableMetaInfo
       average_row_size_(0),
       row_count_(0),
       has_opt_stat_(false),
-      micro_block_count_(-1)
+      micro_block_count_(-1),
+      table_type_(share::schema::MAX_TABLE_TYPE)
   { }
   virtual ~ObTableMetaInfo()
   { }
@@ -65,7 +66,7 @@ struct ObTableMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),
                K_(part_size), K_(average_row_size), K_(table_column_count),
                K_(table_rowkey_count), K_(table_row_count), K_(row_count),
-               K_(micro_block_count));
+               K_(micro_block_count), K_(table_type));
 
   /// the following fields come from schema info
   uint64_t ref_table_id_; //ref table id
@@ -83,6 +84,7 @@ struct ObTableMetaInfo
   double row_count_;  // row count after filters, estimated by stat manager
   bool has_opt_stat_;
   int64_t micro_block_count_;  // main table micro block count
+  share::schema::ObTableType table_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };

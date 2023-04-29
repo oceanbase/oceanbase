@@ -22,6 +22,9 @@
 
 namespace oceanbase
 {
+namespace share {
+struct ObExternalFileInfo;
+}
 namespace common
 {
 class ObStoreRange;
@@ -266,6 +269,18 @@ public:
                                 common::ObIArray<common::ObNewRange> &granule_ranges,
                                 common::ObIArray<int64_t> &granule_idx,
                                 bool range_independent);
+
+
+  static int split_granule_for_external_table(common::ObIAllocator &allocator,
+                                              const ObTableScanSpec *tsc,
+                                              const common::ObIArray<common::ObNewRange> &input_ranges,
+                                              const common::ObIArray<ObDASTabletLoc*> &tablet_array,
+                                              const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+                                              int64_t parallelism,
+                                              common::ObIArray<ObDASTabletLoc*> &granule_tablets,
+                                              common::ObIArray<common::ObNewRange> &granule_ranges,
+                                              common::ObIArray<int64_t> &granule_idx);
+
   /**
    * get the total task count for all partitions
    * params                     IN the parameters for splitting

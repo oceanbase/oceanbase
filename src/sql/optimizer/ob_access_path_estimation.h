@@ -68,6 +68,7 @@ private:
                                    const ObAddr &local_addr,
                                    EstimatedPartition &best_partition);
 
+  static int process_external_table_estimation(AccessPath *path);
   static int process_vtable_default_estimation(AccessPath *path);
 
   static int process_table_default_estimation(AccessPath *path);

@@ -834,6 +834,7 @@ typedef enum ObItemType
   T_PSEUDO_RANDOM = 3010,
   T_INNER_WF_AGGR_STAUTS = 3011,
   T_PSEUDO_GROUP_PARAM = 3040,
+  T_PSEUDO_EXTERNAL_FILE_COL = 3041,
 
   ///< @note values of the following symbols are insiginificant
   T_DEFAULT,
@@ -2219,17 +2220,19 @@ typedef enum ObItemType
   T_TRACE_FORMAT,
   T_TG_ALTER_OPTIONS,
 
+  //for external table
   T_EXTERNAL_FILE_LOCATION,
   T_EXTERNAL_FILE_FORMAT,
   T_EXTERNAL_FILE_FORMAT_TYPE,
   T_EXTERNAL,
   T_ALTER_REFRESH_EXTERNAL_TABLE,
-
   T_SKIP_HEADER,
   T_SKIP_BLANK_LINE,
   T_TRIM_SPACE,
   T_NULL_IF_EXETERNAL,
   T_EMPTY_FIELD_AS_NULL,
+  T_EXTERNAL_FILE_PATTERN,
+
   T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
   T_DYNAMIC_SAMPLING,
   T_TABLE_DYNAMIC_SAMPLING,

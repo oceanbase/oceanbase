@@ -25,6 +25,9 @@
 
 namespace oceanbase
 {
+namespace share {
+  struct ObExternalFileInfo;
+}
 namespace sql
 {
 
@@ -79,6 +82,7 @@ public :
     op_info_.reset();
     tablet_arrays_.reset();
     run_time_pruning_flags_.reset();
+    external_table_files_.reset();
   }
 
 
@@ -93,6 +97,7 @@ public :
   PruningStatus pruning_status_;
   //-----end
   common::ObArray<ObPxTabletInfo> partitions_info_;
+  common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
@@ -484,6 +489,7 @@ public:
                            ObIArray<const ObTableScanSpec*> &scan_ops,
                            const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                            common::ObIArray<ObPxTabletInfo> &partitions_info,
+                           common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                            const ObTableModifySpec* modify_op,
                            int64_t parallelism,
                            int64_t tablet_size,
@@ -493,6 +499,7 @@ public:
                       ObIArray<const ObTableScanSpec*> &scan_ops,
                       const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                       common::ObIArray<ObPxTabletInfo> &partitions_info,
+                      common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                       const ObTableModifySpec* modify_op,
                       int64_t parallelism,
                       int64_t tablet_size,
@@ -556,6 +563,7 @@ private:
                ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                common::ObIArray<ObPxTabletInfo> &partitions_info,
+               const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                const ObTableModifySpec* modify_op,
                int64_t parallelism,
                int64_t tablet_size,

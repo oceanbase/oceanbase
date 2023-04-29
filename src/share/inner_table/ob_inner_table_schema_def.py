@@ -268,7 +268,11 @@ all_table_def = dict(
       ('b_interval_range', 'varchar:OB_MAX_B_HIGH_BOUND_VAL_LENGTH', 'true'),
       ('object_status', 'int', 'false', '1'),
       ('table_flags', 'int', 'false', '0'),
-      ('truncate_version', 'int', 'false', '-1')
+      ('truncate_version', 'int', 'false', '-1'),
+      ('external_file_location', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_location_access_info', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_format', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_pattern', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
     ],
 )
 
@@ -5461,7 +5465,29 @@ def_table_schema(
 # 448 : __all_backup_transferring_tablets
 
 # 449 : __all_wait_for_partition_split_tablet
-# 450 : __all_external_table_file
+
+def_table_schema(
+  owner = 'jim.wjh',
+  table_name    = '__all_external_table_file',
+  table_id      = '450',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+      ('table_id', 'int'),
+      ('part_id', 'int'),
+      ('file_id', 'int'),
+  ],
+  normal_columns = [
+    ('file_url', 'varbinary:16384'),
+    ('create_version', 'int'),
+    ('delete_version', 'int'),
+    ('file_size', 'int'),
+  ],
+  in_tenant_space = True,
+)
+
+# 451 : __all_task_opt_stat_gather_history
+# 452 : __all_table_opt_stat_gather_history
 
 def_table_schema(
     owner = 'jiangxiu.wt',
@@ -11551,7 +11577,12 @@ def_table_schema(
 )
 
 # 12370: __all_virtual_wait_for_partition_split_tablet
-# 12371: __all_virtual_external_table_file
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12371',
+  table_name = '__all_virtual_external_table_file',
+  keywords = all_def_keywords['__all_external_table_file']))
+
 # 12372: __all_virtual_io_tracer
 # 12373: __all_virtual_mds_node_stat
 # 12374: __all_virtual_mds_event_history
@@ -11948,7 +11979,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289', all_def_keywords['__all_virtual_ls_arb_replica_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290', all_def_keywords['__all_virtual_archive_dest_status'])))
 # 15291: __all_virtual_backup_transferring_tablets
-# 15292: __all_virtual_external_table_file
+
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15292', all_def_keywords['__all_external_table_file']))
+
 # 15293: __all_data_dictionary_in_log
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15294', all_def_keywords['__all_virtual_task_opt_stat_gather_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295', all_def_keywords['__all_virtual_table_opt_stat_gather_history'])))
@@ -12454,7 +12487,7 @@ def_table_schema(
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     where a.tenant_id = 0
-                    and a.table_type in (0, 1, 2, 3, 4)
+                    and a.table_type in (0, 1, 2, 3, 4, 14)
                     and b.database_name != '__recyclebin'
                     and b.in_recyclebin = 0
                     and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name)
@@ -17009,7 +17042,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -17524,7 +17557,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 6, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 6, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
 
   LEFT JOIN
@@ -17752,7 +17785,7 @@ FROM
      AND C.COLUMN_ID = STAT.COLUMN_ID
      AND STAT.OBJECT_TYPE = 1
 WHERE
-  T.TABLE_TYPE IN (0,1,3,4,5,6,7,8,9)
+  T.TABLE_TYPE IN (0,1,3,4,5,6,7,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -19048,7 +19081,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,CAST(TABLE_ID AS SIGNED) AS OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -21182,7 +21215,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE IN (0,2,3,6))
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -21200,7 +21233,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -21223,7 +21256,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -21282,7 +21315,7 @@ def_table_schema(
             database_id,
             table_id,
             table_name
-      FROM oceanbase.__all_table where table_type in (0,2,3,6)) T
+      FROM oceanbase.__all_table where table_type in (0,2,3,6,14)) T
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
@@ -21368,7 +21401,7 @@ def_table_schema(
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,3,6)
+  AND t.table_type in (0,3,6,14)
 """.replace("\n", " ")
 )
 
@@ -21425,7 +21458,7 @@ def_table_schema(
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,3,6)
+  AND t.table_type in (0,3,6,14)
 """.replace("\n", " ")
 )
 
@@ -21460,7 +21493,7 @@ def_table_schema(
             database_id,
             table_id,
             table_name
-      FROM oceanbase.__all_table where table_type in (0,3,6)) T
+      FROM oceanbase.__all_table where table_type in (0,3,6,14)) T
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
@@ -21522,7 +21555,7 @@ def_table_schema(
       AND hist.object_type = 2
   WHERE
     c.is_hidden = 0
-    AND t.table_type in (0,3,6)
+    AND t.table_type in (0,3,6,14)
   """.replace("\n", " ")
 )
 
@@ -21568,7 +21601,7 @@ def_table_schema(
       AND hist.object_type = 3
   WHERE
     c.is_hidden = 0
-    AND t.table_type in (0,3,6)
+    AND t.table_type in (0,3,6,14)
   """.replace("\n", " ")
 )
 
@@ -21616,7 +21649,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE IN (0,3,6))
+        WHERE T.TABLE_TYPE IN (0,3,6,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -21634,7 +21667,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,3,6,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -21657,7 +21690,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,3,6,14)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -25835,7 +25868,7 @@ FROM
 
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
-WHERE T.TABLE_TYPE IN (3,6,8,9)
+WHERE T.TABLE_TYPE IN (3,6,8,9,14)
   """.replace("\n", " "),
 
 )
@@ -26303,12 +26336,61 @@ def_table_schema(
 # 21414: CDB_OB_TRANSFER_TASKS
 # 21415: DBA_OB_TRANSFER_TASK_HISTORY
 # 21416: CDB_OB_TRANSFER_TASK_HISTORY
-# 21417: ALL_OB_EXTERNAL_TABLE_FILE
-# 21418: CDB_OB_EXTERNAL_TABLE_FILE
 # 21419: GV$OB_PX_P2P_DATAHUB
 # 21420: V$OB_PX_P2P_DATAHUB
 # 21421: GV$SQL_JOIN_FILTER
 # 21422: V$SQL_JOIN_FILTER
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'DBA_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21417',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
+       INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+    WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'ALL_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21418',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
+       INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+    WHERE  B.TABLE_TYPE = 14
+          AND 0 = sys_privilege_check('table_acc', EFFECTIVE_TENANT_ID(), C.DATABASE_NAME, B.TABLE_NAME)
+          AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
+
 
 def_table_schema(
     owner = 'yibo.tyf',
@@ -26457,6 +26539,31 @@ JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
 )
 # 21424: V$OB_LS_LOG_RESTORE_STATUS
 
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'CDB_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21425',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      A.TENANT_ID AS TENANT_ID,
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_VIRTUAL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_VIRTUAL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND A.TENANT_ID=B.TENANT_ID
+       INNER JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID=C.TENANT_ID
+    WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
+
+
 ################################################################################
 # Oracle System View (25000, 30000]
 # Data Dictionary View (25000, 28000]
@@ -26594,7 +26701,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -27125,7 +27232,7 @@ def_table_schema(
       ,TABLE_ID OBJECT_ID
       ,TABLE_ID PRIV_OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -27692,7 +27799,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -29406,7 +29513,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -29623,7 +29730,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -29837,7 +29944,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -30388,7 +30495,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
     AND (T.DATABASE_ID = USERENV('SCHEMAID')
@@ -30561,7 +30668,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
 
@@ -30731,7 +30838,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND T.DATABASE_ID = USERENV('SCHEMAID')
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
@@ -30763,6 +30870,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -30793,6 +30901,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -30824,6 +30933,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -36240,7 +36350,7 @@ FROM
      AND T.DATABASE_ID = DB.DATABASE_ID
  WHERE
     T.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
     AND (T.DATABASE_ID = USERENV('SCHEMAID')
          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
@@ -36522,7 +36632,7 @@ FROM
      AND T.DATABASE_ID = DB.DATABASE_ID
  WHERE
     T.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
     AND T.DATABASE_ID = USERENV('SCHEMAID')
 """.replace("\n", " ")
@@ -43987,6 +44097,61 @@ def_table_schema(
 # 25247: DBA_OB_TABLE_STAT_STALE_INFO
 
 def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'DBA_OB_EXTERNAL_TABLE_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25234',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          B.TABLE_NAME AS TABLE_NAME,
+          C.DATABASE_NAME AS OWNER,
+          'P0' AS PARTITION_NAME,
+          A.FILE_URL AS FILE_URL,
+          A.FILE_SIZE AS FILE_SIZE
+        FROM
+          SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
+          INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID
+          INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+        WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
+              (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+    """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'ALL_OB_EXTERNAL_TABLE_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25235',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS OWNER,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
+       INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID
+       INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+    WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
+          (C.DATABASE_ID = USERENV('SCHEMAID') OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, C.DATABASE_ID) = 1) AND
+          (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+    """.replace("\n", " ")
+)
+
+def_table_schema(
   owner = 'yibo.tyf',
   table_name      = 'DBA_OB_TABLE_STAT_STALE_INFO',
   name_postfix    = '_ORA',
@@ -46031,7 +46196,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -46111,7 +46276,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -46188,7 +46353,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -46269,7 +46434,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46330,7 +46495,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46385,7 +46550,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46449,7 +46614,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46510,7 +46675,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46565,7 +46730,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46603,7 +46768,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -46660,7 +46825,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -46717,7 +46882,7 @@ FROM
     AND hist.object_type = 1
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46770,7 +46935,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46820,7 +46985,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46863,7 +47028,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46916,7 +47081,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46966,7 +47131,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -47009,7 +47174,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -47081,7 +47246,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -47099,7 +47264,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -47122,7 +47287,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -47207,7 +47372,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -47225,7 +47390,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -47248,7 +47413,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -47317,7 +47482,7 @@ def_table_schema(
                 'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47336,7 +47501,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47360,7 +47525,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     ) V
     LEFT JOIN
@@ -47640,7 +47805,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -47658,7 +47823,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -47681,7 +47846,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -47744,7 +47909,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -47762,7 +47927,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -47785,7 +47950,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -47832,7 +47997,7 @@ def_table_schema(
                 'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47851,7 +48016,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47875,7 +48040,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     ) V
     LEFT JOIN
@@ -49322,6 +49487,7 @@ FROM (
     ORDER BY A.TABLE_ID, A.TABLET_ID, C.ZONE, SVR_IP, SVR_PORT
   """.replace("\n", " "),
 )
+
 
 # 28153: GV$OB_TENANTS
 # 28154: V$OB_TENANTS
