@@ -29,6 +29,7 @@ namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
   template<typename T> class ObServerObjectPool;
+  class ObDetectManager;
 }
 namespace omt {
  class ObPxPools;
@@ -247,7 +248,8 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObFLTSpanMgr*,                            \
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
-      rootserver::ObHeartbeatService*                \
+      rootserver::ObHeartbeatService*,              \
+      oceanbase::common::ObDetectManager*            \
   )
 
 

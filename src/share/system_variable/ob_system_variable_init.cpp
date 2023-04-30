@@ -2994,13 +2994,64 @@ static struct VarsInit{
     ObSysVars[227].alias_ = "OB_SV_OPTIMIZER_DYNAMIC_SAMPLING" ;
     }();
 
+    [&] (){
+      ObSysVars[228].info_ = "set runtime filter type, including the bloom_filter/range/in filter" ;
+      ObSysVars[228].name_ = "runtime_filter_type" ;
+      ObSysVars[228].data_type_ = ObVarcharType ;
+      ObSysVars[228].value_ = "BLOOM_FILTER,RANGE,IN" ;
+      ObSysVars[228].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[228].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid" ;
+      ObSysVars[228].id_ = SYS_VAR_RUNTIME_FILTER_TYPE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_TYPE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_TYPE] = 228 ;
+    ObSysVars[228].alias_ = "OB_SV_RUNTIME_FILTER_TYPE" ;
+    }();
+
+    [&] (){
+      ObSysVars[229].info_ = "set default wait time ms for runtime filter, default is 10ms" ;
+      ObSysVars[229].name_ = "runtime_filter_wait_time_ms" ;
+      ObSysVars[229].data_type_ = ObIntType ;
+      ObSysVars[229].value_ = "10" ;
+      ObSysVars[229].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[229].id_ = SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS] = 229 ;
+    ObSysVars[229].alias_ = "OB_SV_RUNTIME_FILTER_WAIT_TIME_MS" ;
+    }();
+
+    [&] (){
+      ObSysVars[230].info_ = "set max in number for runtime in filter, default is 1024" ;
+      ObSysVars[230].name_ = "runtime_filter_max_in_num" ;
+      ObSysVars[230].data_type_ = ObIntType ;
+      ObSysVars[230].value_ = "1024" ;
+      ObSysVars[230].min_val_ = "0" ;
+      ObSysVars[230].max_val_ = "10240" ;
+      ObSysVars[230].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[230].id_ = SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM] = 230 ;
+    ObSysVars[230].alias_ = "OB_SV_RUNTIME_FILTER_MAX_IN_NUM" ;
+    }();
+
+    [&] (){
+      ObSysVars[231].info_ = "set max size for single runtime bloom filter, default is 2GB" ;
+      ObSysVars[231].name_ = "runtime_bloom_filter_max_size" ;
+      ObSysVars[231].data_type_ = ObIntType ;
+      ObSysVars[231].value_ = "2147483648" ;
+      ObSysVars[231].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[231].id_ = SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE] = 231 ;
+    ObSysVars[231].alias_ = "OB_SV_RUNTIME_BLOOM_FILTER_MAX_SIZE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 228;
+static int64_t var_amount = 232;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

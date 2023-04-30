@@ -121,6 +121,9 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
       if (OB_SUCC(ret)) {
         LST_DO_CODE(OB_UNIS_ENCODE, enable_channel_sync_);
       }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_ENCODE, register_dm_info_);
+      }
     }
   }
   return ret;
@@ -156,6 +159,9 @@ OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
       enable_channel_sync_ = false;
       LST_DO_CODE(OB_UNIS_DECODE, enable_channel_sync_);
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
+    }
   }
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
@@ -185,6 +191,7 @@ OB_DEF_SERIALIZE_SIZE(ObDtlLinkedBuffer)
     }
     LST_DO_CODE(OB_UNIS_ADD_LEN, dfo_id_, sqc_id_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, enable_channel_sync_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, register_dm_info_);
   return len;
 }
 

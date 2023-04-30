@@ -8151,9 +8151,6 @@ def_table_schema(
 
 # table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
 
-
-
-
 ################################################################
 ################################################################
 # INFORMATION SCHEMA
@@ -11701,6 +11698,30 @@ def_table_schema(
 # 12400 __all_virtual_ls_log_restore_status
 # 12401: __all_virtual_tenant_parameter
 #
+
+def_table_schema(
+  owner = 'mingdou.tmd',
+  table_name    = '__all_virtual_px_p2p_datahub',
+  table_id      = '12397',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('datahub_id', 'bigint'),
+    ('message_type', 'varchar:256'),
+    ('tenant_id', 'int'),
+    ('hold_size', 'bigint'),
+    ('timeout_ts', 'timestamp'),
+    ('start_time', 'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置
 #
 
@@ -12083,6 +12104,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15382: __all_virtual_transfer_task_history
 # 15383: __all_virtual_resource_pool_sys_agent
 # 15384: __all_virtual_px_p2p_datahub
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
 # 15387: __all_virtual_ls_log_restore_status
@@ -26336,10 +26358,6 @@ def_table_schema(
 # 21414: CDB_OB_TRANSFER_TASKS
 # 21415: DBA_OB_TRANSFER_TASK_HISTORY
 # 21416: CDB_OB_TRANSFER_TASK_HISTORY
-# 21419: GV$OB_PX_P2P_DATAHUB
-# 21420: V$OB_PX_P2P_DATAHUB
-# 21421: GV$SQL_JOIN_FILTER
-# 21422: V$SQL_JOIN_FILTER
 
 def_table_schema(
   owner           = 'jim.wjh',
@@ -26391,6 +26409,97 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$OB_PX_P2P_DATAHUB',
+    table_id       = '21419',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+          CAST(DATAHUB_ID AS SIGNED) AS DATAHUB_ID,
+          CAST(MESSAGE_TYPE AS CHAR(256)) AS MESSAGE_TYPE,
+          CAST(TENANT_ID AS SIGNED) as TENANT_ID,
+          CAST(HOLD_SIZE AS SIGNED) as HOLD_SIZE,
+          CAST(TIMEOUT_TS AS DATETIME) as TIMEOUT_TS,
+          CAST(START_TIME AS DATETIME) as START_TIME
+        FROM oceanbase.__all_virtual_px_p2p_datahub
+
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$OB_PX_P2P_DATAHUB',
+    table_id       = '21420',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT * FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$SQL_JOIN_FILTER',
+    table_id       = '21421',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(NULL AS SIGNED) AS QC_SESSION_ID,
+          CAST(NULL AS SIGNED) AS QC_INSTANCE_ID,
+          CAST(NULL AS SIGNED) AS SQL_PLAN_HASH_VALUE,
+          CAST(OTHERSTAT_5_VALUE AS SIGNED) as FILTER_ID,
+          CAST(NULL AS SIGNED) as BITS_SET,
+          CAST(OTHERSTAT_1_VALUE AS SIGNED) as FILTERED,
+          CAST(OTHERSTAT_3_VALUE AS SIGNED) as PROBED,
+          CAST(NULL AS SIGNED) as ACTIVE,
+          CAST(TENANT_ID AS SIGNED) as CON_ID,
+          CAST(TRACE_ID AS CHAR(64)) as TRACE_ID
+        FROM oceanbase.__all_virtual_sql_plan_monitor
+        WHERE plan_operation = 'PHY_JOIN_FILTER'
+
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$SQL_JOIN_FILTER',
+    table_id       = '21422',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT * FROM OCEANBASE.GV$SQL_JOIN_FILTER
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
 
 def_table_schema(
     owner = 'yibo.tyf',
@@ -26537,6 +26646,7 @@ JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
   ON GP.SNAME = 'STALE_PERCENT'
 """.replace("\n", " ")
 )
+
 # 21424: V$OB_LS_LOG_RESTORE_STATUS
 
 def_table_schema(
@@ -26562,7 +26672,6 @@ def_table_schema(
     WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
 """.replace("\n", " ")
 )
-
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -44082,19 +44191,6 @@ def_table_schema(
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
 # 25233: DBA_OB_LOG_RESTORE_SOURCE
-# 25234: DBA_OB_EXTERNAL_TABLE_FILES
-# 25235: ALL_OB_ETERNAL_TABLE_FILES
-# 25237: DBA_OB_BALANCE_JOBS
-# 25238: DBA_OB_BALANCE_JOB_HISTORY
-# 25239: DBA_OB_BALANCE_TASKS
-# 25240: DBA_OB_BALANCE_TASK_HISTORY
-# 25241: DBA_OB_TRANSFER_TASKS
-# 25242: DBA_OB_TRANSFER_TASK_HISTORY
-# 25243: GV$OB_PX_P2P_DATAHUB
-# 25244: V$OB_PX_P2P_DATAHUB
-# 25245: GV$SQL_JOIN_FILTER
-# 25246: V$SQL_JOIN_FILTER
-# 25247: DBA_OB_TABLE_STAT_STALE_INFO
 
 def_table_schema(
   owner           = 'jim.wjh',
@@ -44150,6 +44246,107 @@ def_table_schema(
           (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
     """.replace("\n", " ")
 )
+
+# 25237: DBA_OB_BALANCE_JOBS
+# 25238: DBA_OB_BALANCE_JOB_HISTORY
+# 25239: DBA_OB_BALANCE_TASKS
+# 25240: DBA_OB_BALANCE_TASK_HISTORY
+# 25241: DBA_OB_TRANSFER_TASKS
+# 25242: DBA_OB_TRANSFER_TASK_HISTORY
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$OB_PX_P2P_DATAHUB',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25243',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+          SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+          CAST(DATAHUB_ID AS NUMBER) AS DATAHUB_ID,
+          CAST(MESSAGE_TYPE AS VARCHAR2(256)) AS MESSAGE_TYPE,
+          CAST(TENANT_ID AS NUMBER) as TENANT_ID,
+          CAST(HOLD_SIZE AS NUMBER) as HOLD_SIZE,
+          CAST(TIMEOUT_TS AS TIMESTAMP) as TIMEOUT_TS,
+          CAST(START_TIME AS TIMESTAMP) as START_TIME
+        FROM SYS.ALL_VIRTUAL_PX_P2P_DATAHUB
+
+""".replace("\n", " "),
+
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$OB_PX_P2P_DATAHUB',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25244',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+        SELECT * FROM SYS.GV$OB_PX_P2P_DATAHUB
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$SQL_JOIN_FILTER',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25245',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(NULL AS NUMBER) AS QC_SESSION_ID,
+          CAST(NULL AS NUMBER) AS QC_INSTANCE_ID,
+          CAST(NULL AS NUMBER) AS SQL_PLAN_HASH_VALUE,
+          CAST(OTHERSTAT_5_VALUE AS NUMBER) as FILTER_ID,
+          CAST(NULL AS NUMBER) as BITS_SET,
+          CAST(OTHERSTAT_1_VALUE AS NUMBER) as FILTERED,
+          CAST(OTHERSTAT_3_VALUE AS NUMBER) as PROBED,
+          CAST(NULL AS NUMBER) as ACTIVE,
+          CAST(TENANT_ID AS NUMBER) as CON_ID,
+          CAST(TRACE_ID AS CHAR(64)) as TRACE_ID
+        FROM SYS.ALL_VIRTUAL_SQL_PLAN_MONITOR
+        WHERE plan_operation = 'PHY_JOIN_FILTER'
+
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$SQL_JOIN_FILTER',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25246',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+    SELECT * FROM SYS.GV$SQL_JOIN_FILTER
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+# 25247: DBA_OB_TABLE_STAT_STALE_INFO
 
 def_table_schema(
   owner = 'yibo.tyf',

@@ -16,12 +16,12 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/engine/ob_engine_op_traits.h"
-
 
 namespace oceanbase
 {

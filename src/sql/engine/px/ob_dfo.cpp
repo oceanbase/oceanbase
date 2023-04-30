@@ -21,6 +21,14 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 
+OB_SERIALIZE_MEMBER(ObPxDetectableIds,
+                    qc_detectable_id_,
+                    sqc_detectable_id_);
+
+OB_SERIALIZE_MEMBER(ObP2PDhMapInfo,
+                    p2p_sequence_ids_,
+                    target_addrs_);
+
 OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     execution_id_,
                     qc_id_,
@@ -52,7 +60,10 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     access_table_location_keys_,
                     adjoining_root_dfo_,
                     is_single_tsc_leaf_dfo_,
-                    access_external_table_files_);
+                    access_external_table_files_,
+                    px_detectable_ids_,
+                    p2p_dh_map_info_,
+                    sqc_count_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -108,6 +119,8 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     LOG_WARN("failed to assgin to table location keys.", K(ret));
   } else if (OB_FAIL(access_table_location_indexes_.assign(other.access_table_location_indexes_))) {
     LOG_WARN("failed to assgin to table location keys.", K(ret));
+  } else if (OB_FAIL(p2p_dh_map_info_.assign(other.p2p_dh_map_info_))) {
+    LOG_WARN("fail to assign p2p dh map info", K(ret));
   } else {
     execution_id_ = other.execution_id_;
     qc_id_ = other.qc_id_;
@@ -138,6 +151,9 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     server_not_alive_ = other.server_not_alive_;
     adjoining_root_dfo_ = other.adjoining_root_dfo_;
     is_single_tsc_leaf_dfo_ = other.is_single_tsc_leaf_dfo_;
+    px_detectable_ids_ = other.px_detectable_ids_;
+    interrupt_by_dm_ = other.interrupt_by_dm_;
+    sqc_count_ = other.sqc_count_;
   }
   access_external_table_files_.reuse();
   for (int i = 0; OB_SUCC(ret) && i < other.access_external_table_files_.count(); i++) {
@@ -370,40 +386,6 @@ int ObDfo::alloc_data_xchg_ch()
       }
     }
   }
-  return ret;
-}
-int ObDfo::alloc_bloom_filter_ch()
-{
-  int ret = OB_SUCCESS;
-  if (is_px_create_bloom_filter()) {
-  } else if (is_px_use_bloom_filter()) {
-    use_filter_ch_map_.set_filter_id(px_bf_id_);
-  }
-  return ret;
-}
-
-
-int ObDfo::condition_push_back(ObPxBloomFilterChSet &ch_set, ObPxBloomFilterChSets &ch_sets)
-{
-  int ret = OB_SUCCESS;
-  bool repeat = false;
-  for (int i = 0;i < ch_sets.count(); ++i) {
-    if (ch_set.get_exec_addr() == ch_sets.at(i).get_exec_addr()) {
-      repeat = true;
-      break;
-    }
-  }
-  if (!repeat && OB_FAIL(ch_sets.push_back(ch_set))) {
-    LOG_WARN("fail to push back ch_set", K(ret));
-  }
-  return ret;
-}
-
-
-int ObDfo::get_use_filter_chs(ObPxBloomFilterChInfo &create_filter_ch_map)
-{
-  int ret = OB_SUCCESS;
-  ret = create_filter_ch_map.assign(use_filter_ch_map_);
   return ret;
 }
 
@@ -1002,6 +984,7 @@ void ObDfo::reset_resource(ObDfo *dfo)
       }
     }
     dfo->transmit_ch_sets_.reset();
+    dfo->p2p_dh_map_info_.destroy();
     dfo->~ObDfo();
     dfo = nullptr;
   }

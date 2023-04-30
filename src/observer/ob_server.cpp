@@ -68,6 +68,7 @@
 #include "sql/dtl/ob_dtl.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
 #include "sql/engine/px/ob_px_worker.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/ob_sql_init.h"
 #include "sql/ob_sql_task.h"
 #include "storage/ob_i_store.h"
@@ -101,6 +102,7 @@
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
+#include "share/detect/ob_detect_manager.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -406,6 +408,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObBackupInfo failed", KR(ret));
     } else if (OB_FAIL(ObPxBloomFilterManager::instance().init())) {
       LOG_ERROR("init px blomm filter manager failed", KR(ret));
+    } else if (OB_FAIL(PX_P2P_DH.init())) {
+      LOG_ERROR("init px p2p datahub failed", KR(ret));
     } else if (OB_FAIL(ObBackupFileLockMgr::get_instance().init())) {
       LOG_ERROR("init backup file lock mgr failed", KR(ret));
     } else if (OB_FAIL(ObDagWarningHistoryManager::get_instance().init())) {
@@ -437,7 +441,9 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
       LOG_WARN("init DDL redo log writer failed", KR(ret));
     }
-    else {
+    else if (OB_FAIL(ObDetectManagerThread::instance().init(GCTX.self_addr(), net_frame_.get_req_transport()))) {
+      LOG_WARN("init ObDetectManagerThread failed", KR(ret));
+    } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
     }
   }
@@ -977,6 +983,10 @@ int ObServer::stop()
     FLOG_INFO("begin to stop server blacklist");
     TG_STOP(lib::TGDefIDs::Blacklist);
     FLOG_INFO("server blacklist stopped");
+
+    FLOG_INFO("begin to stop detect manager detect thread");
+    TG_STOP(lib::TGDefIDs::DetectManager);
+    FLOG_INFO("detect manager detect thread stopped");
 
     FLOG_INFO("begin to stop ObNetKeepAlive");
     ObNetKeepAlive::get_instance().stop();

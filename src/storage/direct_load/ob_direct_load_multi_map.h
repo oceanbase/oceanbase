@@ -8,6 +8,7 @@
 #include "lib/hash/ob_concurrent_hash_map.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/container/ob_array.h"
+#include "share/rc/ob_tenant_base.h"
 #include "share/ob_errno.h"
 
 namespace oceanbase

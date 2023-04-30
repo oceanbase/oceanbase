@@ -23,8 +23,11 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/optimizer/ob_sharding_info.h"
 #include "sql/optimizer/ob_opt_est_cost.h"
+#include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
+#include "share/config/ob_config_helper.h"
+
 
 namespace oceanbase
 {
@@ -126,7 +129,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_batch_opt_(-1),
     force_default_stat_(false),
     eval_plan_cost_(false),
-    enable_bloom_filter_(-1),
+    runtime_filter_type_(-1),
     batch_size_(0),
     root_stmt_(root_stmt),
     enable_px_batch_rescan_(-1),
@@ -304,15 +307,32 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_use_default_stat() { force_default_stat_ = true; }
   void set_cost_evaluation() { eval_plan_cost_ = true; }
   bool is_cost_evaluation() { return eval_plan_cost_; }
-  bool enable_bloom_filter() {
-    if (-1 == enable_bloom_filter_) {
-      if (session_info_->is_enable_bloom_filter()) {
-        enable_bloom_filter_ = 1;
-      } else {
-        enable_bloom_filter_ = 0;
-      }
+  bool enable_runtime_filter() {
+    if (0 > runtime_filter_type_) {
+      get_runtime_filter_type();
     }
-    return 1 == enable_bloom_filter_;
+    return 0 != runtime_filter_type_ && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0;
+  }
+  bool enable_bloom_filter() {
+    if (0 > runtime_filter_type_) {
+      get_runtime_filter_type();
+    }
+    return 0 != (runtime_filter_type_ & (1 << RuntimeFilterType::BLOOM_FILTER));
+  }
+  bool enable_range_filter() {
+    if (0 > runtime_filter_type_) {
+      get_runtime_filter_type();
+    }
+    return 0 != (runtime_filter_type_ & (1 << RuntimeFilterType::RANGE));
+  }
+  bool enable_in_filter() {
+    if (0 > runtime_filter_type_) {
+      get_runtime_filter_type();
+    }
+    return 0 != (runtime_filter_type_ & (1 << RuntimeFilterType::IN));
+  }
+  void get_runtime_filter_type() {
+    runtime_filter_type_ = session_info_->get_runtime_filter_type();
   }
 
   int64_t get_batch_size() const { return batch_size_; }
@@ -509,7 +529,8 @@ private:
   int enable_batch_opt_;
   bool force_default_stat_;
   bool eval_plan_cost_;
-  int enable_bloom_filter_;  //租户配置项是否打开join filter.
+  // for runtime filter
+  int64_t runtime_filter_type_;
   // batch row count for vectorized execution, 0 for no vectorize.
   int64_t batch_size_;
   ObDMLStmt *root_stmt_;

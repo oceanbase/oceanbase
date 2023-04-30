@@ -495,6 +495,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableDefensiveChecker);
 };
 
+class ObConfigRuntimeFilterChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigRuntimeFilterChecker() {}
+  virtual ~ObConfigRuntimeFilterChecker() {}
+  bool check(const ObConfigItem &t) const;
+  static int64_t get_runtime_filter_type(const char *str, int64_t len);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigRuntimeFilterChecker);
+};
+
 // config item container
 class ObConfigStringKey
 {

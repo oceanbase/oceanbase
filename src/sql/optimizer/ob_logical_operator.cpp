@@ -57,6 +57,9 @@
 #include "sql/optimizer/ob_join_order.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 #include "sql/optimizer/ob_log_merge.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
+#include "sql/engine/expr/ob_expr_join_filter.h"
+
 
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
@@ -1404,7 +1407,7 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
       }
       break;
     }
-    case BLOOM_FILTER: {
+    case RUNTIME_FILTER: {
       break;
     }
     case PROJECT_PRUNING: {
@@ -1515,10 +1518,10 @@ int ObLogicalOperator::do_post_traverse_operation(const TraverseOp &op, void *ct
         } else { /* Do nothing */ }
         break;
       }
-      case BLOOM_FILTER: {
+      case RUNTIME_FILTER: {
         AllocBloomFilterContext *alloc_bf_ctx = static_cast<AllocBloomFilterContext *>(ctx);
         CK( OB_NOT_NULL(alloc_bf_ctx));
-        OC( (allocate_bf_node_for_hash_join)(*alloc_bf_ctx));
+        OC( (allocate_runtime_filter_for_hash_join)(*alloc_bf_ctx));
         break;
       }
       case ALLOC_MONITORING_DUMP: {
@@ -4416,36 +4419,140 @@ int ObLogicalOperator::allocate_monitoring_dump_node_above(uint64_t flags, uint6
   return ret;
 }
 
-int ObLogicalOperator::push_down_bloom_filter_expr(ObLogicalOperator *op,
-    ObLogicalOperator *join_filter_op,  double join_filter_rate)
+int ObLogicalOperator::add_join_filter_info(
+    ObLogicalOperator *join_filter_create_op,
+    ObLogicalOperator *join_filter_use_op,
+    ObRawExpr *join_filter_expr,
+    RuntimeFilterType type)
 {
   int ret = OB_SUCCESS;
-  CK(OB_NOT_NULL(op) && OB_NOT_NULL(join_filter_op));
-  if (OB_SUCC(ret)) {
-    ObLogJoinFilter *join_filter_use = static_cast<ObLogJoinFilter *>(join_filter_op);
-    common::ObIArray<ObRawExpr *> &exprs = op->get_filter_exprs();
-    ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
-    common::ObIArray<ObRawExpr *> &join_exprs = join_filter_use->get_join_exprs();
-    ObOpRawExpr *join_filter_expr = NULL;
-    ObSQLSessionInfo *session_info = get_plan()->get_optimizer_context().get_session_info();
-    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_JOIN_BLOOM_FILTER, join_filter_expr))) {
-      LOG_WARN("fail to create raw expr", K(ret));
+  ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
+  ObLogJoinFilter *join_filter_use = static_cast<ObLogJoinFilter *>(join_filter_use_op);
+  int64_t p2p_sequence_id = OB_INVALID_ID;
+  if (OB_ISNULL(join_filter_create) || OB_ISNULL(join_filter_use) ||
+      OB_ISNULL(join_filter_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null operator", K(join_filter_use), K(join_filter_create_op), K(ret));
+  } else if (OB_FAIL(join_filter_use->add_join_filter_expr(join_filter_expr))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else if (OB_FAIL(join_filter_use->add_join_filter_type(type))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else if (OB_FAIL(join_filter_create->add_join_filter_type(type))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else if (OB_FAIL(PX_P2P_DH.generate_p2p_dh_id(p2p_sequence_id))) {
+    LOG_WARN("fail to generate p2p dh id", K(ret));
+  } else if (OB_FAIL(join_filter_create->add_p2p_sequence_id(p2p_sequence_id))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else if (OB_FAIL(join_filter_use->add_p2p_sequence_id(p2p_sequence_id))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  }
+  return ret;
+}
+
+int ObLogicalOperator::add_partition_join_filter_info(
+    ObLogicalOperator *join_filter_create_op,
+    RuntimeFilterType type)
+{
+  int ret = OB_SUCCESS;
+  int64_t p2p_sequence_id = OB_INVALID_ID;
+  ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
+  if (OB_ISNULL(join_filter_create)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null operator", K(join_filter_create_op), K(ret));
+  } else if (OB_FAIL(join_filter_create->add_join_filter_type(type))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else if (OB_FAIL(PX_P2P_DH.generate_p2p_dh_id(p2p_sequence_id))) {
+    LOG_WARN("fail to generate p2p dh id", K(ret));
+  } else if (OB_FAIL(join_filter_create->add_p2p_sequence_id(p2p_sequence_id))) {
+    LOG_WARN("fail to add join filter use", K(ret));
+  } else {
+    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
+    ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
+    if (LOG_JOIN != get_type()) {
+    //do nothing
     } else {
-      for (int i = 0; i < join_exprs.count() && OB_SUCC(ret); ++i) {
-        if (OB_FAIL(join_filter_expr->add_param_expr(join_exprs.at(i)))) {
-          LOG_WARN("fail to add param expr", K(ret));
+      for (int i = 0; i < join_op->get_join_conditions().count(); ++i) {
+        if (OB_FAIL(join_filter_create->get_is_null_safe_cmps().push_back(false))) {
+          LOG_WARN("fail to push back is null safe flag", K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(join_filter_expr->formalize(session_info))) {
-          LOG_WARN("fail to formalize expr", K(ret));
-        } else if (OB_FAIL(exprs.push_back(join_filter_expr))) {
-          LOG_WARN("fail to to push back expr", K(ret));
-        } else if (OB_FAIL(add_var_to_array_no_dup(get_plan()->get_predicate_selectivities(),
-            ObExprSelPair(join_filter_expr, join_filter_rate)))) {
-          LOG_WARN("fail to add join filter expr", K(ret));
-        } else {
-          join_filter_use->set_join_filter_expr(join_filter_expr);
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::generate_runtime_filter_expr(
+      ObLogicalOperator *op,
+      ObLogicalOperator *join_filter_create_op,
+      ObLogicalOperator *join_filter_use_op,
+      double join_filter_rate,
+      RuntimeFilterType type)
+{
+  int ret = OB_SUCCESS;
+  ObLogJoinFilter *join_filter_use = static_cast<ObLogJoinFilter *>(join_filter_use_op);
+  ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
+  common::ObIArray<ObRawExpr *> &exprs = op->get_filter_exprs();
+  ObRawExprFactory &expr_factory = get_plan()->get_optimizer_context().get_expr_factory();
+  common::ObIArray<ObRawExpr *> &join_exprs = join_filter_use->get_join_exprs();
+  ObOpRawExpr *join_filter_expr = NULL;
+  ObSQLSessionInfo *session_info = get_plan()->get_optimizer_context().get_session_info();
+  if (OB_FAIL(expr_factory.create_raw_expr(T_OP_RUNTIME_FILTER, join_filter_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else {
+    join_filter_expr->set_runtime_filter_type(type);
+    for (int i = 0; i < join_exprs.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(join_filter_expr->add_param_expr(join_exprs.at(i)))) {
+        LOG_WARN("fail to add param expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(join_filter_expr->formalize(session_info))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      } else if (OB_FAIL(exprs.push_back(join_filter_expr))) {
+        LOG_WARN("fail to to push back expr", K(ret));
+      } else if (OB_FAIL(add_var_to_array_no_dup(get_plan()->get_predicate_selectivities(),
+          ObExprSelPair(join_filter_expr, join_filter_rate)))) {
+        LOG_WARN("fail to add join filter expr", K(ret));
+      } else if (OB_FAIL(add_join_filter_info(join_filter_create_op,
+          join_filter_use_op, join_filter_expr, type))) {
+        LOG_WARN("fail to add join filter info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::create_runtime_filter_info(ObLogicalOperator *op,
+    ObLogicalOperator *join_filter_create_op,
+    ObLogicalOperator *join_filter_use_op,
+    double join_filter_rate)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || OB_ISNULL(join_filter_create_op) || OB_ISNULL(join_filter_use_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null operator", K(op), K(join_filter_create_op));
+  } else if (get_plan()->get_optimizer_context().enable_in_filter() &&
+      OB_FAIL(generate_runtime_filter_expr(op, join_filter_create_op,
+      join_filter_use_op, join_filter_rate, RuntimeFilterType::IN))) {
+    LOG_WARN("fail to generate range filter expr", K(ret));
+  } else if (get_plan()->get_optimizer_context().enable_range_filter() &&
+      OB_FAIL(generate_runtime_filter_expr(op, join_filter_create_op,
+      join_filter_use_op, join_filter_rate, RuntimeFilterType::RANGE))) {
+    LOG_WARN("fail to generate range filter expr", K(ret));
+  } else if (get_plan()->get_optimizer_context().enable_bloom_filter() &&
+      OB_FAIL(generate_runtime_filter_expr(op, join_filter_create_op,
+      join_filter_use_op, join_filter_rate, RuntimeFilterType::BLOOM_FILTER))) {
+    LOG_WARN("fail to generate range filter expr", K(ret));
+  } else {
+    ObLogJoin *join_op = static_cast<ObLogJoin*>(this);
+    ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
+    if (LOG_JOIN != get_type()) {
+    //do nothing
+    } else {
+      for (int i = 0; i < join_op->get_join_conditions().count(); ++i) {
+        if (OB_FAIL(join_filter_create->get_is_null_safe_cmps().push_back(
+              T_OP_NSEQ == join_op->get_join_conditions().at(i)->get_expr_type()))) {
+          LOG_WARN("fail to push back is null safe flag", K(ret));
         }
       }
     }
@@ -4499,7 +4606,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
   CK(LOG_JOIN == get_type());
   for (int i = 0; i < infos.count() && OB_SUCC(ret); ++i) {
     filter_create = NULL;
-    bool dummy_has_exchange = false;
+    bool right_has_exchange = false;
     const JoinFilterInfo &info = infos.at(i);
     ObLogTableScan *scan_op = NULL;
     ObLogicalOperator *node = NULL;
@@ -4511,7 +4618,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     } else if (OB_FAIL(find_table_scan(get_child(second_child),
                                        info.table_id_,
                                        node,
-                                       dummy_has_exchange))) {
+                                       right_has_exchange))) {
       LOG_WARN("failed to find table scan", K(ret));
     } else if (OB_ISNULL(node)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4522,6 +4629,9 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to allocate exchange nodes", K(ret));
+    } else if (OB_FAIL(add_partition_join_filter_info(filter_create, RuntimeFilterType::BLOOM_FILTER))) {
+      // only bloom filter.
+      LOG_WARN("fail to add parttition join filter info", K(ret));
     } else {
       bool is_shared_hash_join = static_cast<ObLogJoin*>(this)->is_shared_hash_join();
       scan_op = static_cast<ObLogTableScan*>(node);
@@ -4534,16 +4644,20 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       join_filter_create->set_parent(this);
       set_child(first_child, join_filter_create);
       join_filter_create->set_filter_length(info.sharding_->get_part_cnt() * 2);
-      if (is_shared_hash_join) {
-        join_filter_create->set_is_shared_partition_join_filter();
+      join_filter_create->set_is_use_filter_shuffle(right_has_exchange);
+      if (is_partition_wise_ && !right_has_exchange) {
+          join_filter_create->set_is_no_shared_partition_join_filter();
       } else {
-        join_filter_create->set_is_no_shared_partition_join_filter();
+          join_filter_create->set_is_shared_partition_join_filter();
       }
       join_filter_create->set_tablet_id_expr(info.calc_part_id_expr_);
-      join_filter_create->set_is_use_filter_shuffle(false);
       OZ(join_filter_create->compute_property());
       OZ(bf_info.init(get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id(),
-          filter_id, GCTX.server_id_, is_shared_hash_join, info.skip_subpart_));
+          filter_id, GCTX.server_id_,
+          join_filter_create->is_shared_join_filter(),
+          info.skip_subpart_,
+          join_filter_create->get_p2p_sequence_ids().at(0),
+          right_has_exchange));
       scan_op->set_join_filter_info(bf_info);
       filter_id++;
       for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
@@ -4616,10 +4730,6 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           if (right_has_exchange) {
             join_filter_create->set_is_use_filter_shuffle(true);
             join_filter_use->set_is_use_filter_shuffle(true);
-            // receive op record the id of bloom filter that will be sent by him
-            if (OB_FAIL(mark_bloom_filter_id_to_receive_op(join_filter_use, filter_id))) {
-              LOG_WARN("failed to mark bloom filter id to receive op", K(filter_id), K(join_filter_use));
-            }
           }
           if (is_partition_wise_ && !right_has_exchange) {
             join_filter_create->set_is_non_shared_join_filter();
@@ -4655,37 +4765,15 @@ int ObLogicalOperator::allocate_normal_join_filter(const ObIArray<JoinFilterInfo
           OZ(join_filter_create->get_join_exprs().push_back(lexpr));
           OZ(join_filter_use->get_join_exprs().push_back(rexpr));
         }
-        OZ(push_down_bloom_filter_expr(node, join_filter_use, info.join_filter_selectivity_));
+        OZ(create_runtime_filter_info(node,
+            join_filter_create, join_filter_use, info.join_filter_selectivity_));
       }
     }
   }
   return ret;
 }
 
-int ObLogicalOperator::mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id)
-{
-  int ret = OB_SUCCESS;
-  ObLogicalOperator *parent = NULL;
-  if (OB_ISNULL(filter_use)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null", K(ret));
-  } else if (FALSE_IT(parent = filter_use->get_parent())) {
-  } else if (NULL != parent) {
-    if (log_op_def::LOG_EXCHANGE == parent->get_type() &&
-        static_cast<ObLogExchange *>(parent)->is_consumer()) {
-      if (OB_FAIL(static_cast<ObLogExchange *>(parent)->get_bloom_filter_ids().push_back(filter_id))) {
-        LOG_WARN("ObLogExchange failed to record bloom filter id", K(parent), K(filter_id), K(ret));
-      } else {
-        LOG_DEBUG("ObLogExchange succ to record bloom filter id", K(parent), K(filter_id), K(parent->get_name()), KP(parent), K(parent->get_op_id()), K(filter_id));
-      }
-    } else if (OB_FAIL(SMART_CALL(mark_bloom_filter_id_to_receive_op(parent, filter_id)))) {
-      LOG_WARN("mark bloom filter id to receive op failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLogicalOperator::allocate_bf_node_for_hash_join(AllocBloomFilterContext &ctx)
+int ObLogicalOperator::allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx)
 {
   int ret = OB_SUCCESS;
   ObLogJoin *join_op = static_cast<ObLogJoin*>(this);

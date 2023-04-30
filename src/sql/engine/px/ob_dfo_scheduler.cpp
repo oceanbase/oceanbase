@@ -21,6 +21,9 @@
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
 #include "sql/engine/px/ob_px_sqc_async_proxy.h"
+#include "share/ob_server_blacklist.h"
+#include "share/detect/ob_detect_manager_utils.h"
+#include "ob_px_coord_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -64,17 +67,43 @@ int ObDfoSchedulerBasic::init_all_dfo_channel(ObExecContext &ctx) const
   return ret;
 }
 
+int ObDfoSchedulerBasic::prepare_schedule_info(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  // for temp table
+  if (!coord_info_.p2p_temp_table_info_.temp_access_ops_.empty()) {
+    ObIArray<ObSqlTempTableCtx>& temp_ctx = exec_ctx.get_temp_table_ctx();
+    ObSqlTempTableCtx *ctx = nullptr;
+    CK(coord_info_.p2p_temp_table_info_.temp_access_ops_.count() ==
+       coord_info_.p2p_temp_table_info_.dfos_.count());
+    for (int i = 0; i < coord_info_.p2p_temp_table_info_.dfos_.count() && OB_SUCC(ret); ++i) {
+      ObDfo *parent_dfo = coord_info_.p2p_temp_table_info_.dfos_.at(i);
+      ctx = nullptr;
+      if (parent_dfo->need_p2p_info() && parent_dfo->get_p2p_dh_addrs().empty()) {
+        for (int64_t j = 0; nullptr == ctx && j < temp_ctx.count(); j++) {
+          if (parent_dfo->get_temp_table_id() == temp_ctx.at(j).temp_table_id_) {
+            ctx = &temp_ctx.at(j);
+          }
+        }
+        if (OB_NOT_NULL(ctx) && !ctx->interm_result_infos_.empty()) {
+          for (int j = 0; OB_SUCC(ret) && j < ctx->interm_result_infos_.count(); ++j) {
+            if (OB_FAIL(parent_dfo->get_p2p_dh_addrs().push_back(ctx->interm_result_infos_.at(j).addr_))) {
+              LOG_WARN("fail to push back p2p dh addrs", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDfoSchedulerBasic::on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) const
 {
   int ret = OB_SUCCESS;
   UNUSED(ctx);
   if (OB_FAIL(dfo.prepare_channel_info())) {
     LOG_WARN("failed to prepare channel info", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    if (dfo.have_px_bloom_filter() && OB_FAIL(dfo.alloc_bloom_filter_ch())) {
-      LOG_WARN("fail to init px bloom filter channel", K(ret));
-    }
   }
   LOG_TRACE("on_sqc_threads_inited: dfo data xchg ch allocated", K(ret));
   return ret;
@@ -235,80 +264,6 @@ int ObDfoSchedulerBasic::dispatch_transmit_channel_info_via_sqc(ObExecContext &c
                   K(transmit_data_channel_msg), K(child), K(idx), K(cnt), K(ret));
       }
     }
-  }
-  return ret;
-}
-
-int ObDfoSchedulerBasic::dispatch_bf_channel_info(ObExecContext &ctx,
-    ObDfo &child, ObDfo &parent) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  UNUSED(child);
-  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
-  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("phy plan ctx NULL", K(ret));
-  } else if (parent.is_root_dfo()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support root dfo send bloom filter", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "root dfo send bloom filter");
-  } else {
-    // send to dfo with receive operator
-    ObArray<ObPxSqcMeta *> sqcs;
-    if (OB_FAIL(parent.get_sqcs(sqcs))) {
-      LOG_WARN("fail get sqcs", K(parent), K(ret));
-    } else {
-      ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-        ObDtlChannel *ch = sqcs.at(idx)->get_qc_channel();
-        int64_t sqc_id = sqcs.at(idx)->get_sqc_id();
-        ObPxCreateBloomFilterChannelMsg bloom_filter_channel_msg;
-        bloom_filter_channel_msg.sqc_count_ = sqcs.count();
-        bloom_filter_channel_msg.sqc_id_ = sqc_id;
-        if (OB_ISNULL(ch) || OB_INVALID_INDEX == sqc_id) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected param", KP(ch), K(parent), K(sqc_id), K(ret));
-        } else if (OB_FAIL(child.get_use_filter_chs(bloom_filter_channel_msg.ch_set_info_))) {
-          LOG_WARN("fail get parent channel", K(ret));
-        } else if (OB_FAIL(ch->send(bloom_filter_channel_msg,
-            phy_plan_ctx->get_timeout_timestamp()))) {
-          LOG_WARN("fail push data to channel", K(ret));
-        } else if (OB_FAIL(ch->flush(true, false))) {
-          LOG_WARN("fail flush dtl data", K(ret));
-        } else {
-          LOG_TRACE("dispatched bf ch",
-                    K(idx), K(cnt), K(*ch), K(sqc_id));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
-        LOG_WARN("failed to wait for sqcs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-int ObDfoSchedulerBasic::set_bloom_filter_ch_for_root_dfo(ObExecContext &ctx,
-    ObDfo &dfo) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(ctx);
-  dfo.set_px_bloom_filter_mode(JoinFilterMode::CREATE);
-  if (OB_FAIL(dfo.alloc_bloom_filter_ch())) {
-    LOG_WARN("fail to alloc bloom filter channel", K(ret));
-  }
-  return ret;
-}
-
-int ObDfoSchedulerBasic::build_bloom_filter_ch(ObExecContext &ctx,
-    ObDfo &child, ObDfo &parent) const
-{
-  int ret = OB_SUCCESS;
-  ObPxBloomFilterChInfo &use_filter_ch_info = child.get_use_filter_ch_info();
-  uint64_t tenant_id = OB_INVALID_ID;
-  if (OB_FAIL(get_tenant_id(ctx, tenant_id))) {
-  } else if (OB_FAIL(ObSlaveMapUtil::build_bf_mn_channel(
-      use_filter_ch_info, child, parent, tenant_id))) {
-    LOG_WARN("failed to build mn channel", K(ret));
   }
   return ret;
 }
@@ -770,6 +725,7 @@ int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo)
       ch->set_thread_id(thread_id);
       (void)coord_info_.msg_loop_.register_channel(*ch);
       sqc.set_qc_channel(ch);
+      sqc.set_sqc_count(sqcs.count());
       LOG_TRACE("link qc-sqc channel and registered to qc msg loop. ready to receive sqc ctrl msg",
                 K(idx), K(cnt), K(*ch), K(dfo), K(sqc));
     }
@@ -957,8 +913,6 @@ int ObParallelDfoScheduler::check_if_can_prealloc_xchg_ch(ObDfo &child,
   ObSEArray<const ObPxSqcMeta *, 16> sqcs;
 
   if (child.is_scheduled() || parent.is_scheduled()) {
-    bret = false;
-  } else if (parent.is_px_create_bloom_filter() && child.is_px_use_bloom_filter()) {
     bret = false;
   } else if (OB_FAIL(child.get_sqcs(sqcs))) {
     LOG_WARN("fail to get child sqcs", K(ret));
@@ -1174,6 +1128,8 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
       sqc.set_adjoining_root_dfo(true);
     }
   }
+  ObArray<ObPeerTaskState> peer_states;
+  ObArray<dtl::ObDtlChannel *> dtl_channels;
 
   // 分发 sqc 可能需要重试，
   // 分发 sqc 的 rpc 成功，但 sqc 上无法分配最小个数的 worker 线程，`dispatch_sqc`内部进行重试，
@@ -1198,6 +1154,14 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           OB_SUCCESS == cb->get_ret_code().rcode_ &&
           OB_SUCCESS == cb->get_result().rc_) {
         sqc.set_need_report(true);
+        ObPeerTaskState peer_state(sqc.get_sqc_addr());
+        if (OB_FAIL(peer_states.push_back(peer_state))) {
+          LOG_WARN("[DM] fail to push back", K(ret), K(sqc.get_sqc_addr()),
+              K(dfo.get_px_detectable_ids().sqc_detectable_id_));
+        } else if (OB_FAIL(dtl_channels.push_back(sqc.get_qc_channel()))) {
+          LOG_WARN("[DM] fail to push back dtl channels", K(ret), K(sqc.get_sqc_addr()),
+              K(dfo.get_px_detectable_ids().sqc_detectable_id_));
+        }
       } else if (!cb->is_processed()) {
         // if init_sqc_msg is not processed and the msg may be sent successfully, set server not alive.
         // then when qc waiting_all_dfo_exit, it will push sqc.access_table_locations into trans_result,
@@ -1225,6 +1189,15 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
       const ObPxRpcInitSqcResponse &resp = (*cb).get_result();
       ObPxSqcMeta &sqc = *sqcs.at(idx);
       sqc.set_need_report(true);
+      ObPeerTaskState peer_state(sqc.get_sqc_addr());
+      if (OB_FAIL(peer_states.push_back(peer_state))) {
+        LOG_WARN("[DM] fail to push back", K(ret), K(sqc.get_sqc_addr()),
+            K(dfo.get_px_detectable_ids().sqc_detectable_id_));
+      } else if (OB_FAIL(dtl_channels.push_back(sqc.get_qc_channel()))) {
+        LOG_WARN("[DM] fail to push back dtl channels", K(ret), K(sqc.get_sqc_addr()),
+            K(dfo.get_px_detectable_ids().sqc_detectable_id_));
+      }
+
       if (!fast_sqc) {
         ObPxInitSqcResultMsg pkt;
         pkt.dfo_id_ = sqc.get_dfo_id();
@@ -1241,6 +1214,15 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           LOG_WARN("fail to do sqc init callback", K(resp), K(pkt), K(ret));
         }
       }
+    }
+  }
+
+  if (OB_NOT_NULL(phy_plan) && phy_plan->is_enable_px_fast_reclaim() && !peer_states.empty()
+      && peer_states.count() == dtl_channels.count()) {
+    int reg_ret = ObDetectManagerUtils::qc_register_check_item_into_dm(dfo, peer_states, dtl_channels);
+    if (OB_SUCCESS != reg_ret) {
+      LOG_WARN("[DM] qc failed to register_check_item_into_dm", K(reg_ret),
+          K(dfo.get_px_detectable_ids().qc_detectable_id_));
     }
   }
   return ret;
@@ -1475,40 +1457,22 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
   // 那么它的 is_schedule 状态会被更新为 true，下面的 schedule_dfo
   // 显然就不会被调度。
   //
-  if (child.is_px_use_bloom_filter() && parent.is_px_create_bloom_filter()) {
-    // if with bloom filter, it is better to schedule parent first
-    // because child dfo depends on parent dfo's bloom filter creation
-    if (OB_SUCC(ret)) {
-      if (!parent.is_scheduled()) {
-        if (OB_FAIL(schedule_dfo(exec_ctx, parent))) { // 发送 DFO 到各个 server
-          LOG_WARN("fail schedule dfo", K(parent), K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (!child.is_scheduled()) {
-        if (OB_FAIL(schedule_dfo(exec_ctx, child))) { // 发送 DFO 到各个 server
-          LOG_WARN("fail schedule dfo", K(child), K(ret));
-        }
-      }
-    }
-  } else {
-    // otherwise I'd like to schedule child first
+    // schedule child first
     // because child can do some useful (e.g. scan) work while parent is scheduling
-    if (OB_SUCC(ret)) {
-      if (!child.is_scheduled()) {
-        if (OB_FAIL(schedule_dfo(exec_ctx, child))) { // 发送 DFO 到各个 server
-          LOG_WARN("fail schedule dfo", K(child), K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (!parent.is_scheduled()) {
-        if (OB_FAIL(schedule_dfo(exec_ctx, parent))) { // 发送 DFO 到各个 server
-          LOG_WARN("fail schedule dfo", K(parent), K(ret));
-        }
+  if (OB_SUCC(ret)) {
+    if (!child.is_scheduled()) {
+      if (OB_FAIL(schedule_dfo(exec_ctx, child))) { // 发送 DFO 到各个 server
+        LOG_WARN("fail schedule dfo", K(child), K(ret));
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (!parent.is_scheduled()) {
+      if (OB_FAIL(schedule_dfo(exec_ctx, parent))) { // 发送 DFO 到各个 server
+        LOG_WARN("fail schedule dfo", K(parent), K(ret));
+      }
+    }
+  }
+
   return ret;
 }

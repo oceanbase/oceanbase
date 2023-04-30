@@ -26,6 +26,7 @@
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/px/ob_px_rpc_processor.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
 #include "sql/das/ob_das_id_rpc.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "storage/tablelock/ob_table_lock_rpc_processor.h"
@@ -161,6 +162,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObInitSqcP, gctx_);
   RPC_PROCESSOR(ObInitTaskP, gctx_);
   RPC_PROCESSOR(ObInitFastSqcP, gctx_);
+  RPC_PROCESSOR(ObPxP2pDhMsgP, gctx_);
+  RPC_PROCESSOR(ObPxP2pDhClearMsgP, gctx_);
   RPC_PROCESSOR(ObPxTenantTargetMonitorP, gctx_);
   RPC_PROCESSOR(ObPxCleanDtlIntermResP, gctx_);
   // SQL Estimate
@@ -258,7 +261,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   // checkpoint slog rpc
   RPC_PROCESSOR(ObCheckpointSlogP, gctx_);
 
-  // check connectivity 
+  // check connectivity
   RPC_PROCESSOR(ObRpcCheckBackupDestConnectivityP, gctx_);
 
   // global auto increment service rpc

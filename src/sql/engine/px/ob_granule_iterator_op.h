@@ -21,12 +21,12 @@
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/px/ob_granule_pump.h"
-
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
 namespace oceanbase
 {
 namespace sql
 {
-
+class ObP2PDatahubMsgBase;
 class ObPartitionIdHashFunc
 {
 public:
@@ -238,8 +238,8 @@ private:
    //for partition pruning
   int64_t filter_count_; // filtered part count when part pruning activated
   int64_t total_count_; // total partition count or block count processed, rescan included
-  ObPXBloomFilterHashWrapper bf_key_;
-  ObPxBloomFilter *bloom_filter_ptr_;
+  ObP2PDatahubMsgBase *rf_msg_;
+  ObP2PDhKey rf_key_;
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
   bool is_parallel_runtime_filtered_;

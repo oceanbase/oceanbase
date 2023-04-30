@@ -42,6 +42,7 @@
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -86,6 +87,8 @@ int ObPxSubCoord::pre_process()
       LOG_WARN("unexpected status: op root is null", K(ret));
     } else if (OB_FAIL(rebuild_sqc_access_table_locations())) {
       LOG_WARN("fail to rebuild locations and tsc ops", K(ret));
+    } else if (OB_FAIL(construct_p2p_dh_map())) {
+      LOG_WARN("fail to construct p2p dh map", K(ret));
     } else if (OB_FAIL(setup_op_input(*sqc_arg_.exec_ctx_,
                                       *sqc_arg_.op_spec_root_,
                                       sqc_ctx_,
@@ -263,27 +266,7 @@ int ObPxSubCoord::pre_setup_op_input(ObExecContext &ctx,
     const ObIArray<ObSqcTableLocationKey> &tsc_location_keys)
 {
   int ret = OB_SUCCESS;
-  if (IS_PX_BLOOM_FILTER(root.get_type())) {
-    ObJoinFilterSpec &filter_op = reinterpret_cast<ObJoinFilterSpec &>(root);
-    if (filter_op.is_use_mode() && filter_op.is_shuffle()) {
-      ObPxBloomFilter *filter_use = NULL;
-      ObPXBloomFilterHashWrapper bf_key;
-      bf_key.init(ctx.get_my_session()->get_effective_tenant_id(), filter_op.get_filter_id(),
-                  filter_op.get_server_id(), sqc_arg_.sqc_.get_px_sequence_id());
-      if (OB_FAIL(ObPxBloomFilterManager::init_px_bloom_filter(filter_op.get_filter_length(),
-                                                               ctx.get_allocator(),
-                                                               filter_use))) {
-        LOG_WARN("fail to init px bloom filter", K(ret));
-      } else if (OB_FAIL(filter_use->generate_receive_count_array())) {
-        LOG_WARN("fail to generate receive count array", K(ret));
-      } else if (OB_FAIL(ObPxBloomFilterManager::instance().set_px_bloom_filter(bf_key, filter_use))) {
-        LOG_WARN("fail to set bloom filter to bloom filter manager", K(ret));
-      } else {
-        sqc_arg_.sqc_handler_->add_flag(OB_SQC_HANDLER_BLOOM_FILTER_NEED_CLEAR);
-        bf_key_ = bf_key;
-      }
-    }
-  } else if (IS_PX_GI(root.get_type())) {
+  if (IS_PX_GI(root.get_type())) {
     // if it's not single tsc leaf dfo,
     // setup_gi_op_input will be called later by subcoord preprocess func
     if (is_single_tsc_leaf_dfo_ &&
@@ -368,41 +351,41 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
     } else {
       gi_input->set_parallelism(sqc.get_task_count());
     }
-  } else if (IS_PX_BLOOM_FILTER(root.get_type())) {
+  } else if (IS_PX_JOIN_FILTER(root.get_type())) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&root);
     ObJoinFilterOpInput *filter_input = NULL;
     ObPxBloomFilter *filter_create = NULL;
-    ObPxBloomFilter *filter_use = NULL;
     int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
     ObOperatorKit *kit = ctx.get_operator_kit(root.id_);
     if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), KP(kit));
     } else if (FALSE_IT(filter_input = static_cast<ObJoinFilterOpInput*>(kit->input_))) {
-    } else if (OB_FAIL(filter_input->init_share_info(ctx.get_allocator(), sqc.get_task_count()))) {
+    } else if (FALSE_IT(filter_input->set_px_sequence_id(
+          sqc.get_interrupt_id().px_interrupt_id_.first_))) {
+    } else if (OB_FAIL(filter_input->load_runtime_config(*filter_spec, ctx))) {
+      LOG_WARN("fail to load runtime config", K(ret));
+    } else if (FALSE_IT(filter_input->init_register_dm_info(
+          sqc.get_px_detectable_ids().qc_detectable_id_, sqc.get_qc_addr()))) {
     } else if (filter_spec->is_create_mode()) {
       int64_t filter_len = filter_spec->get_filter_length();
-      filter_input->is_local_create_ = false;
+      filter_input->set_sqc_proxy(sqc_ctx.sqc_proxy_);
       if (!filter_spec->is_shared_join_filter()) {
         /*do nothing*/
-      } else if (OB_FAIL(ObPxBloomFilterManager::init_px_bloom_filter(filter_len,
-          ctx.get_allocator(), filter_create))) {
-        LOG_WARN("fail to init px bloom filter", K(ret));
-      } else {
-        filter_input->share_info_.filter_ptr_ = reinterpret_cast<uint64_t>(filter_create);
-        if (OB_NOT_NULL(filter_create) && filter_spec->is_shuffle()) {
-          int64_t bf_idx_at_sqc_proxy = -1;
-          if (OB_FAIL(sqc_ctx.sqc_proxy_.append_bf_send_ctx(bf_idx_at_sqc_proxy))) {
-            LOG_WARN("failed to pre alloc bloom filter send ctx", K(ret));
-          } else {
-            filter_input->set_bf_idx_at_sqc_proxy(bf_idx_at_sqc_proxy);
+      } else if (OB_FAIL(filter_input->init_share_info(*filter_spec,
+          ctx, sqc.get_task_count(),
+          filter_spec->is_shuffle_? sqc.get_sqc_count() : 1))) {
+        LOG_WARN("fail to init share info", K(ret));
+      } else if (filter_spec->is_shuffle_) {
+        ObArray<ObP2PDatahubMsgBase *> *array_ptr =
+          reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(filter_input->share_info_.shared_msgs_);
+        for (int i = 0; OB_SUCC(ret) && i < array_ptr->count(); ++i) {
+          if (OB_FAIL(rf_msgs_.push_back(array_ptr->at(i)))) {
+            LOG_WARN("fail to push back rf msgs", K(ret));
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      filter_input->set_sqc_proxy(sqc_ctx.sqc_proxy_);
     }
   } else if (root.get_type() == PHY_TEMP_TABLE_ACCESS) {
     ObPxSqcMeta &sqc = sqc_arg_.sqc_;
@@ -736,7 +719,13 @@ int ObPxSubCoord::end_process()
       LOG_WARN("fail check task finish status", K(ret));
     }
   }
-
+  for (int i = 0; i < rf_msgs_.count(); ++i) {
+    rf_msgs_.at(i)->destroy();
+    rf_msgs_.at(i) = nullptr;
+  }
+  if (!rf_msgs_.empty()) {
+    rf_msgs_.reset();
+  }
 
   NG_TRACE(tag3);
   LOG_TRACE("exit ObPxSubCoord process", K(ret));
@@ -787,29 +776,6 @@ void ObPxSubCoord::destroy_first_buffer_cache()
       K(first_buffer_cache_.get_first_buffer_key()));
   }
   LOG_TRACE("trace unregister first buffer cache", K(ret), K(dfo_key));
-}
-
-void ObPxSubCoord::destroy_bloom_filter()
-{
-  int ret = OB_SUCCESS;
-  ObPxBloomFilter *filter = NULL;
-  if (OB_FAIL(ObPxBloomFilterManager::instance()
-      .erase_px_bloom_filter(bf_key_, filter))) {
-    LOG_TRACE("fail to erase sqc px bloom filter", K(ret));
-  } else if (OB_NOT_NULL(filter)) {
-    int count = 0;
-    while (!filter->is_merge_filter_finish()) {
-      // A cumbersome but safe waiting behavior.
-      // When the worker thread exits,
-      // it is necessary to ensure that
-      // no one in the DTL holds the filter pointer or writing.
-      if (0 == (count++ % 1000)) { // one log per second
-        LOG_TRACE("wait dtl holds bloom filter end");
-      }
-      ob_usleep(1000);
-    }
-    filter->reset();
-  }
 }
 
 int ObPxSubCoord::check_need_start_ddl(bool &need_start_ddl)

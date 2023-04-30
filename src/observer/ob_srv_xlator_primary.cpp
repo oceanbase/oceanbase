@@ -48,6 +48,7 @@
 #include "observer/dbms_job/ob_dbms_job_rpc_processor.h"
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_processor.h"
+#include "share/detect/ob_detect_rpc_processor.h"
 
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 
@@ -94,6 +95,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   // server blacklist
   RPC_PROCESSOR(ObBlacklistReqP);
   RPC_PROCESSOR(ObBlacklistRespP);
+
+  RPC_PROCESSOR(ObDetectRpcP);
 
   // election provided
 //  RPC_PROCESSOR(ObElectionP);

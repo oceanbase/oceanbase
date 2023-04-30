@@ -141,6 +141,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "share/stat/ob_stat_define.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 namespace oceanbase
 {
@@ -2504,10 +2505,9 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   UNUSED(in_root_job);
   spec.set_mode(op.is_create_filter() ? JoinFilterMode::CREATE : JoinFilterMode::USE);
   spec.set_filter_id(op.get_filter_id());
-  spec.set_server_id(GCTX.server_id_);
   spec.set_filter_length(op.get_filter_length());
-  spec.set_is_shuffle(op.is_use_filter_shuffle());
-  spec.set_filter_type(op.get_filter_type());
+  spec.set_shared_filter_type(op.get_filter_type());
+  spec.is_shuffle_ = op.is_use_filter_shuffle();
   if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
@@ -2515,8 +2515,14 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
     LOG_WARN("fail to generate calc part id expr", K(ret), KP(op.get_tablet_id_expr()));
   } else if (OB_FAIL(spec.hash_funcs_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
+  } else if (OB_FAIL(spec.null_first_cmp_funcs_.init(op.get_join_exprs().count()))) {
+    LOG_WARN("failed to init cmp funcs", K(ret));
+  } else if (OB_FAIL(spec.null_last_cmp_funcs_.init(op.get_join_exprs().count()))) {
+    LOG_WARN("failed to init cmp funcs", K(ret));
   } else if (OB_FAIL(generate_rt_exprs(op.get_join_exprs(), spec.join_keys_))) {
     LOG_WARN("failed to generate rt exprs", K(ret));
+  } else if (OB_FAIL(spec.need_null_cmp_flags_.assign(op.get_is_null_safe_cmps()))) {
+    LOG_WARN("fail to assign cml flags", K(ret));
   } else {
     if (OB_NOT_NULL(spec.calc_tablet_id_expr_)) {
       ObHashFunc hash_func;
@@ -2528,28 +2534,80 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
         ObExpr *join_expr = spec.join_keys_.at(i);
         ObHashFunc hash_func;
+        ObCmpFunc null_first_cmp;
+        ObCmpFunc null_last_cmp;
+        null_first_cmp.cmp_func_ = join_expr->basic_funcs_->null_first_cmp_;
+        null_last_cmp.cmp_func_ = join_expr->basic_funcs_->null_last_cmp_;
         set_murmur_hash_func(hash_func, join_expr->basic_funcs_);
-        if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_)) {
+        if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
+            OB_ISNULL(null_first_cmp.cmp_func_) ||
+            OB_ISNULL(null_last_cmp.cmp_func_ )) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("hash func is null, check datatype is valid", K(ret));
         } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
           LOG_WARN("failed to push back hash func", K(ret));
+        } else if (OB_FAIL(spec.null_first_cmp_funcs_.push_back(null_first_cmp))) {
+          LOG_WARN("failed to push back null first cmp func", K(ret));
+        } else if (OB_FAIL(spec.null_last_cmp_funcs_.push_back(null_last_cmp))) {
+          LOG_WARN("failed to push back null last cmp func", K(ret));
         }
       }
     }
   }
-  if (OB_SUCC(ret) && !op.is_create_filter()) {
-    ObExpr *join_filter_expr = nullptr;
-    if (OB_ISNULL(op.get_join_filter_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("join filter expr is null", K(ret));
-    } else if (OB_ISNULL(join_filter_expr =
-        reinterpret_cast<ObExpr *>(
-            ObStaticEngineExprCG::get_left_value_rt_expr(*op.get_join_filter_expr())))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("join filter rt_expr_ is null", K(ret));
+
+  if (OB_SUCC(ret)) {
+    int64_t tenant_id =
+        op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      const char *ptr = NULL;
+      if (OB_ISNULL(ptr = tenant_config->_px_bloom_filter_group_size.get_value())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("each group size ptr is null", K(ret));
+      } else if (0 == ObString::make_string("auto").case_compare(ptr)) {
+        spec.each_group_size_ = -1;
+      } else {
+        char *end_ptr = nullptr;
+        spec.each_group_size_ = strtoull(ptr, &end_ptr, 10); // get group size from tenant config
+        if (*end_ptr != '\0') {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("each group size ptr is unexpected", K(ret));
+        }
+      }
     } else {
-      spec.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tenant config", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // construct runtime filter exec info
+    ObRuntimeFilterInfo rf_info;
+    const common::ObIArray<int64_t> &p2p_sequence_ids = op.get_p2p_sequence_ids();
+    const common::ObIArray<RuntimeFilterType> &rf_types =
+        op.get_join_filter_types();
+    CK(p2p_sequence_ids.count() > 0 && p2p_sequence_ids.count() == rf_types.count());
+    OZ(spec.rf_infos_.init(rf_types.count()));
+    ObExpr *join_filter_expr = nullptr;
+    for (int i = 0; i < rf_types.count() && OB_SUCC(ret); ++i) {
+      rf_info.reset();
+      join_filter_expr = nullptr;
+      rf_info.p2p_datahub_id_ = p2p_sequence_ids.at(i);
+      rf_info.filter_shared_type_ = op.get_filter_type();
+      rf_info.dh_msg_type_ = static_cast<ObP2PDatahubMsgBase::ObP2PDatahubMsgType>(rf_types.at(i));
+      if (!op.is_create_filter()) {
+        const common::ObIArray<ObRawExpr *> &join_filter_exprs =
+            op.get_join_filter_exprs();
+        if (OB_ISNULL(join_filter_expr =
+            reinterpret_cast<ObExpr *>(
+            ObStaticEngineExprCG::get_left_value_rt_expr(*join_filter_exprs.at(i))))) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          rf_info.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(spec.rf_infos_.push_back(rf_info))) {
+        LOG_WARN("fail to push back rf info", K(ret));
+      }
     }
   }
   return ret;
@@ -6479,6 +6537,10 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_minimal_worker_count(log_plan.get_optimizer_context().get_minimal_worker_count());
     phy_plan.set_is_batched_multi_stmt(log_plan.get_optimizer_context().is_batched_multi_stmt());
     phy_plan.set_need_consistent_snapshot(log_plan.need_consistent_read());
+    // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
+      phy_plan.set_enable_px_fast_reclaim(GCONF._enable_px_fast_reclaim);
+    }
     if (OB_FAIL(phy_plan.set_expected_worker_map(log_plan.get_optimizer_context().get_expected_worker_map()))) {
       LOG_WARN("set expected worker map", K(ret));
     } else if (OB_FAIL(phy_plan.set_minimal_worker_map(log_plan.get_optimizer_context().get_minimal_worker_map()))) {

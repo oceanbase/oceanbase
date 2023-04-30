@@ -3026,5 +3026,56 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "?singleDoc#"
+  },
+  "runtime_filter_type": {
+    "id": 10146,
+    "name": "runtime_filter_type",
+    "value": "BLOOM_FILTER,RANGE,IN",
+    "data_type": "varchar",
+    "info": "set runtime filter type, including the bloom_filter/range/in filter",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "runtime_filter_wait_time_ms": {
+    "id": 10147,
+    "name": "runtime_filter_wait_time_ms",
+    "value": "10",
+    "data_type": "int",
+    "info": "set default wait time ms for runtime filter, default is 10ms",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "runtime_filter_max_in_num": {
+    "id": 10148,
+    "name": "runtime_filter_max_in_num",
+    "value": "1024",
+    "data_type": "int",
+    "info": "set max in number for runtime in filter, default is 1024",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "min_val": "0",
+    "max_val": "10240",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "runtime_bloom_filter_max_size": {
+    "id": 10149,
+    "name": "runtime_bloom_filter_max_size",
+    "value": "2147483648",
+    "data_type": "int",
+    "info": "set max size for single runtime bloom filter, default is 2GB",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
+    "publish_version": "420",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

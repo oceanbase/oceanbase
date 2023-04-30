@@ -268,6 +268,7 @@ _enable_plan_cache_mem_diagnosis
 _enable_protocol_diagnose
 _enable_px_batch_rescan
 _enable_px_bloom_filter_sync
+_enable_px_fast_reclaim
 _enable_px_ordered_coord
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec

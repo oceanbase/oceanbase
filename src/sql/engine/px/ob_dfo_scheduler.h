@@ -47,13 +47,8 @@ public:
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
   virtual int on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) const;
   virtual int dispatch_root_dfo_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
-  int dispatch_bf_channel_info(ObExecContext &ctx,
-      ObDfo &child, ObDfo &parent) const;
-  int set_bloom_filter_ch_for_root_dfo(ObExecContext &ctx,
-      ObDfo &dfo) const;
-  int build_bloom_filter_ch(ObExecContext &ctx,
-      ObDfo &child, ObDfo &parent) const;
   int get_tenant_id(ObExecContext &ctx, uint64_t &tenant_id) const;
+  int prepare_schedule_info(ObExecContext &ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoSchedulerBasic);
 protected:

@@ -59,7 +59,7 @@ public:
   ObPxBloomFilter();
   virtual ~ObPxBloomFilter() {};
   int init(int64_t data_length, common::ObIAllocator &allocator, double fpp = 0.01);
-  int init(ObPxBloomFilter *filter);
+  int init(const ObPxBloomFilter *filter);
   void reset_filter();
   inline int might_contain(uint64_t hash, bool &is_match) {
     return (this->*might_contain_)(hash, is_match);
@@ -87,8 +87,9 @@ public:
   int64_t get_end_idx() { return end_idx_; }
   void prefetch_bits_block(uint64_t hash);
   typedef int (ObPxBloomFilter::*GetFunc)(uint64_t hash, bool &is_match);
-  int generate_receive_count_array();
+  int generate_receive_count_array(int64_t piece_size);
   void reset();
+  int assign(const ObPxBloomFilter &filter);
   TO_STRING_KV(K_(data_length), K_(bits_count), K_(fpp), K_(hash_func_count), K_(is_inited),
       K_(bits_array_length), K_(true_count));
 private:
@@ -129,18 +130,24 @@ public:
   ObPxBFStaticInfo()
   : is_inited_(false), tenant_id_(common::OB_INVALID_TENANT_ID),
     filter_id_(common::OB_INVALID_ID), server_id_(common::OB_INVALID_ID),
-    is_shared_(false), skip_subpart_(false)
+    is_shared_(false), skip_subpart_(false),
+    p2p_dh_id_(OB_INVALID_ID), is_shuffle_(false)
   {}
   int init(int64_t tenant_id, int64_t filter_id,
-           int64_t server_id, bool is_shared, bool skip_subpart);
+           int64_t server_id, bool is_shared,
+           bool skip_subpart, int64_t p2p_dh_id,
+           bool is_shuffle);
   bool is_inited_;
   int64_t tenant_id_;
   int64_t filter_id_;
   int64_t server_id_;
   bool is_shared_;    // 执行期join filter内存是否共享, false代表线程级, true代表sqc级.
   bool skip_subpart_; // 是否忽略二级分区
+  int64_t p2p_dh_id_;
+  bool is_shuffle_;
   TO_STRING_KV(K(is_inited_), K(tenant_id_), K(filter_id_),
-               K(server_id_), K(is_shared_), K(skip_subpart_));
+              K(server_id_), K(is_shared_), K(skip_subpart_),
+              K(is_shuffle_), K(p2p_dh_id_));
 };
 
 class ObPXBloomFilterHashWrapper

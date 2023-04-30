@@ -11,19 +11,20 @@ select /*+ USE_PX parallel(3) */* from
 (select c1,count(c2) c2 from t1 group by c1)c) a join
 (select c1,count(*) c2 from t2 group by c1)b on a.c1=b.c1 ;
 Query Plan
-===============================================
-|ID|OPERATOR                         |NAME    |
------------------------------------------------
-|0 |PX COORDINATOR                   |        |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|
-|2 |  └─HASH JOIN                    |        |
-|3 |    ├─PX PARTITION ITERATOR      |        |
-|4 |    │ └─TABLE FULL SCAN          |t1      |
-|5 |    └─EXCHANGE IN DISTR          |        |
-|6 |      └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|7 |        └─PX BLOCK ITERATOR      |        |
-|8 |          └─TABLE FULL SCAN      |t2      |
-===============================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |PX COORDINATOR                     |        |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|
+|2 |  └─HASH JOIN                      |        |
+|3 |    ├─PART JOIN FILTER CREATE      |:RF0000 |
+|4 |    │ └─PX PARTITION ITERATOR      |        |
+|5 |    │   └─TABLE FULL SCAN          |t1      |
+|6 |    └─EXCHANGE IN DISTR            |        |
+|7 |      └─EXCHANGE OUT DISTR (PKEY)  |:EX10000|
+|8 |        └─PX BLOCK HASH JOIN-FILTER|:RF0000 |
+|9 |          └─TABLE FULL SCAN        |t2      |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, 1, t2.c1, 1)]), filter(nil), rowset=256
@@ -32,16 +33,18 @@ Outputs & filters:
   2 - output([t1.c1], [t2.c1]), filter(nil), rowset=256
       equal_conds([t1.c1 = t2.c1]), other_conds(nil)
   3 - output([t1.c1]), filter(nil), rowset=256
-      affinitize
+      RF_TYPE(bloom), RF_EXPR[t1.c1]
   4 - output([t1.c1]), filter(nil), rowset=256
+      affinitize
+  5 - output([t1.c1]), filter(nil), rowset=256
       access([t1.c1]), partitions(p[0-9])
       is_index_back=false, is_global_index=false,
       range_key([t1.c1]), range(MIN ; MAX)always true
-  5 - output([t2.c1]), filter(nil), rowset=256
   6 - output([t2.c1]), filter(nil), rowset=256
-      (#keys=1, [t2.c1]), dop=3
   7 - output([t2.c1]), filter(nil), rowset=256
+      (#keys=1, [t2.c1]), dop=3
   8 - output([t2.c1]), filter(nil), rowset=256
+  9 - output([t2.c1], [PARTITION_ID]), filter(nil), rowset=256
       access([t2.c1]), partitions(p[0-5])
       is_index_back=false, is_global_index=false,
       range_key([t2.c1]), range(MIN ; MAX)always true
@@ -73,12 +76,12 @@ Query Plan
 |4 |      └─EXCHANGE OUT DISTR (HASH)          |:EX10001|
 |5 |        └─HASH GROUP BY                    |        |
 |6 |          └─HASH JOIN                      |        |
-|7 |            ├─PART JOIN FILTER CREATE      |:BF0000 |
+|7 |            ├─PART JOIN FILTER CREATE      |:RF0000 |
 |8 |            │ └─EXCHANGE IN DISTR          |        |
 |9 |            │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
 |10|            │     └─PX BLOCK ITERATOR      |        |
 |11|            │       └─TABLE FULL SCAN      |b       |
-|12|            └─PX PARTITION HASH JOIN-FILTER|:BF0000 |
+|12|            └─PX PARTITION HASH JOIN-FILTER|:RF0000 |
 |13|              └─TABLE FULL SCAN            |a       |
 =========================================================
 Outputs & filters:
@@ -96,6 +99,7 @@ Outputs & filters:
   6 - output([a.c2]), filter(nil), rowset=256
       equal_conds([a.c1 = b.c1]), other_conds(nil)
   7 - output([b.c1]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[b.c1]
   8 - output([b.c1]), filter(nil), rowset=256
   9 - output([b.c1]), filter(nil), rowset=256
       (#keys=1, [b.c1]), dop=3

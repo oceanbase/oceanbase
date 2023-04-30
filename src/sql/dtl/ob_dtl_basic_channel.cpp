@@ -1125,6 +1125,9 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
       msg_writer_->write_msg_type(write_buffer_);
       write_buffer_->set_data_msg(is_data_msg_);
       write_buffer_->is_eof() = is_eof;
+      if (is_data_msg_ && register_dm_info_.is_valid()) {
+        write_buffer_->set_register_dm_info(register_dm_info_);
+      }
       LOG_TRACE("trace new buffer", K(is_data_msg_), K(is_eof), KP(id_), KP(peer_id_));
     }
   }

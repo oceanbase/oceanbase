@@ -203,7 +203,7 @@ typedef enum ObItemType
   T_OP_COLL_PRED = 177, // collection predicate, such as: xx is member of collection
   T_OP_BOOL = 178,
   T_OP_STACK_OVERFLOW_CHECK = 179,  // stack over flow check expr.
-  T_OP_JOIN_BLOOM_FILTER = 180,
+  T_OP_RUNTIME_FILTER = 180,
   T_OP_TO_OUTFILE_ROW = 181,
   // The aggregation version arithmetic operator is used to ignore the double overflow error,
   // because mysql do not check overflow for double in aggregation.

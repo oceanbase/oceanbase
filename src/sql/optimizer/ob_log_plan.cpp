@@ -9683,7 +9683,7 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
         ctx = &md_ctx;
         break;
       }
-      case BLOOM_FILTER: {
+      case RUNTIME_FILTER: {
         ctx = &bf_ctx;
         break;
       }
@@ -11121,7 +11121,7 @@ int ObLogPlan::generate_plan()
     /*do nothing*/
   } else if (OB_FAIL(do_post_plan_processing())) {
     LOG_WARN("failed to post plan processing", K(ret));
-  } else if (OB_FAIL(plan_traverse_loop(BLOOM_FILTER,
+  } else if (OB_FAIL(plan_traverse_loop(RUNTIME_FILTER,
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
                                         ALLOC_MONITORING_DUMP,
@@ -13287,6 +13287,8 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (op->get_type() == log_op_def::LOG_SET) {
+    ObLogSet *log_set = static_cast<ObLogSet *>(op);
+    bool is_ext_pw = (log_set->get_distributed_algo() == DistAlgo::DIST_SET_PARTITION_WISE);
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
       ObLogicalOperator* child_op;
       ObLogPlan* child_plan;
@@ -13299,7 +13301,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         ObTabletID::INVALID_TABLET_ID,
                                                                         hint_info,
                                                                         is_current_dfo,
-                                                                        op->is_fully_paratition_wise(),
+                                                                        op->is_fully_paratition_wise() || is_ext_pw,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
                                                                         join_filter_infos))) {
@@ -13323,7 +13325,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                        can_join_filter,
                                                        force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
-    } else if (is_current_dfo && !is_fully_partition_wise &&
+    } else if (!is_fully_partition_wise &&
                OB_FAIL(hint_info.check_use_join_filter(*stmt,
                                                        stmt->get_query_ctx()->get_query_hint(),
                                                        scan->get_table_id(),
@@ -13344,7 +13346,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       info.can_use_join_filter_ = can_join_filter;
       info.force_filter_ = force_hint;
       info.need_partition_join_filter_ = can_part_join_filter;
-      info.force_part_filter_ = is_current_dfo ? force_part_hint : NULL;
+      info.force_part_filter_ = force_part_hint;
       info.in_current_dfo_ = is_current_dfo;
       if (info.can_use_join_filter_ || info.need_partition_join_filter_) {
         if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
@@ -13421,8 +13423,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                    join_filter_infos))) {
       LOG_WARN("failed to find pushdown join filter table", K(ret));
     }
-  } else if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) || is_current_dfo) &&
-              log_op_def::LOG_JOIN == op->get_type()) {
+  } else if (log_op_def::LOG_JOIN == op->get_type()) {
     ObLogJoin* join_op = static_cast<ObLogJoin*>(op);
     ObLogicalOperator* left_op;
     ObLogicalOperator* right_op;
@@ -13450,14 +13451,13 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
-  } else if (!is_current_dfo && log_op_def::LOG_JOIN == op->get_type()) {
-    /* do nothing */
-  } else if (!is_current_dfo && (log_op_def::LOG_EXCHANGE == op->get_type() &&
-                                 static_cast<ObLogExchange*>(op)->is_consumer())) {
-    /* do nothing */
   } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
              static_cast<ObLogExchange*>(op)->is_consumer() &&
              OB_FALSE_IT(is_current_dfo = false)) {
+    /* do nothing */
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
+             static_cast<ObLogExchange*>(op)->is_consumer() &&
+             static_cast<ObLogExchange*>(op)->is_local()) {
     /* do nothing */
   } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
     if (OB_FAIL(SMART_CALL(find_possible_join_filter_tables(op->get_child(ObLogicalOperator::first_child),

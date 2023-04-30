@@ -242,6 +242,12 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table_load_rpc_struct.cpp
   table/ob_table_load_shared_allocator.cpp
   table/ob_table_load_row.cpp
+  detect/ob_detect_manager.cpp
+  detect/ob_detectable_id.cpp
+  detect/ob_detect_callback.cpp
+  detect/ob_detect_rpc_proxy.cpp
+  detect/ob_detect_rpc_processor.cpp
+  detect/ob_detect_manager_utils.cpp
 )
 
 ob_set_subtarget(ob_share tablet

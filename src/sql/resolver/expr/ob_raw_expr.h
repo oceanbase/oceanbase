@@ -41,6 +41,7 @@
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "pl/ob_pl_type.h"
 #include "share/schema/ob_trigger_info.h"
+#include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 namespace oceanbase
@@ -1658,7 +1659,8 @@ public:
        is_calculated_(false),
        is_deterministic_(true),
        partition_id_calc_type_(CALC_INVALID),
-       may_add_interval_part_(MayAddIntervalPart::NO)
+       may_add_interval_part_(MayAddIntervalPart::NO),
+       runtime_filter_type_(NOT_INIT_RUNTIME_FILTER_TYPE)
   {
   }
   virtual ~ObRawExpr();
@@ -1710,9 +1712,9 @@ public:
   /**                                                   +-is_static_scalar_const_expr
    *                               （1、1+2、sysdate）   ｜     （1，not for[1,2,3])
    *                             +-is_static_const_expr-+
-   *                             |                      
-   * is_const_or_calculable_expr-+                     
-   *    (1、1+2、2+？、sysdate）   |                            
+   *                             |
+   * is_const_or_calculable_expr-+
+   *    (1、1+2、2+？、sysdate）   |
    *                             +-is_dynamic_const_expr
    *                                 （2 + ？）
    */
@@ -1856,6 +1858,8 @@ public:
   }
   MayAddIntervalPart get_may_add_interval_part() const
   { return may_add_interval_part_;}
+  RuntimeFilterType get_runtime_filter_type() const { return runtime_filter_type_; }
+  void set_runtime_filter_type(RuntimeFilterType type) { runtime_filter_type_ = type; }
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
@@ -1904,7 +1908,8 @@ protected:
   bool is_calculated_; // 用于在新引擎 cg 中检查 raw expr 是否被重复计算
   bool is_deterministic_; //expr is deterministic, given the same inputs, returns the same result
   PartitionIdCalcType partition_id_calc_type_; //for calc_partition_id func to mark calc part type
-  MayAddIntervalPart may_add_interval_part_; // for calc_partition_id 
+  MayAddIntervalPart may_add_interval_part_; // for calc_partition_id
+  RuntimeFilterType runtime_filter_type_; // for runtime filter
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
@@ -1971,7 +1976,7 @@ inline bool ObRawExpr::is_const_expr() const
 
 inline bool ObRawExpr::is_static_const_expr() const
 {
-  return is_const_expr() && 
+  return is_const_expr() &&
           !has_flag(CNT_DYNAMIC_PARAM);
 }
 
@@ -4745,7 +4750,7 @@ public:
   inline void set_stmt_type(stmt::StmtType type) { type_ = type; }
   inline void set_route_sql(const common::ObString &sql) { route_sql_ = sql; }
   inline void set_subquery_result_type(const sql::ObExprResType &type)
-  { 
+  {
     subquery_result_type_ = type;
   }
   inline const common::ObString &get_ps_sql() const { return ps_sql_; }

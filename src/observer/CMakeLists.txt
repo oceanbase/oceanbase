@@ -251,6 +251,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ps_stat.cpp
   virtual_table/ob_all_virtual_px_target_monitor.cpp
   virtual_table/ob_all_virtual_px_worker_stat.cpp
+  virtual_table/ob_all_virtual_px_p2p_datahub.cpp
   virtual_table/ob_all_virtual_dtl_interm_result_monitor.cpp
   virtual_table/ob_all_virtual_raid_stat.cpp
   virtual_table/ob_all_virtual_ls_archive_stat.cpp

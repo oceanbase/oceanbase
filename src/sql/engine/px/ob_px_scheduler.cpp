@@ -39,6 +39,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "storage/tx/ob_trans_service.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -120,7 +121,9 @@ int ObPxMsgProc::startup_msg_loop(ObExecContext &ctx)
   LOG_TRACE("TIMERECORD ",
             "reserve:=-1 name:=QC dfoid:=-1 sqcid:=-1 taskid:=-1 start:",
             ObTimeUtility::current_time());
-  if (OB_FAIL(scheduler_->init_all_dfo_channel(ctx))) {
+  if (OB_FAIL(scheduler_->prepare_schedule_info(ctx))) {
+    LOG_WARN("fail to prepare schedule info", K(ret));
+  } else if (OB_FAIL(scheduler_->init_all_dfo_channel(ctx))) {
     LOG_WARN("fail to init all dfo channel", K(ret));
   } else if (OB_FAIL(scheduler_->try_schedule_next_dfo(ctx))) {
     LOG_WARN("fail to sched next one dfo", K(ret));
@@ -311,6 +314,19 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
     } else { /*do nothing.*/ }
   } else { /*do nothing.*/ }
   if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(edge->get_detect_cb())) {
+#ifdef ERRSIM
+      if (OB_FAIL(OB_E(EventTable::EN_PX_SLOW_PROCESS_SQC_FINISH_MSG) OB_SUCCESS)) {
+        LOG_WARN("qc slow process sqc finish msg by desgin", K(ret));
+        usleep(100 * 1000L);
+        ret = OB_SUCCESS;
+      }
+#endif
+      int set_finish_ret = edge->get_detect_cb()->atomic_set_finished(sqc->get_sqc_addr());
+      if (OB_SUCCESS != set_finish_ret) {
+        LOG_WARN("[DM] failed to atomic_set_finished", K(set_finish_ret), K(sqc->get_sqc_addr()));
+      }
+    }
     sqc->set_thread_finish(true);
     if (sqc->is_ignore_vtable_error() && OB_SUCCESS != pkt.rc_
         && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(pkt.rc_)) {
@@ -383,6 +399,10 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
 
   if (OB_SUCC(ret)) {
     if (edge->is_thread_finish()) {
+      if (OB_NOT_NULL(ctx.get_physical_plan_ctx()->get_phy_plan()) &&
+          ctx.get_physical_plan_ctx()->get_phy_plan()->is_enable_px_fast_reclaim()) {
+        (void)ObDetectManagerUtils::qc_unregister_check_item_from_dm(edge);
+      }
       ret = scheduler_->try_schedule_next_dfo(ctx);
       if (OB_ITER_END == ret) {
         coord_info_.all_threads_finish_ = true;
@@ -494,94 +514,7 @@ int ObPxMsgProc::on_dfo_pair_thread_inited(ObExecContext &ctx, ObDfo &child, ObD
       LOG_TRACE("dispatch dtl data channel for pair ok", K(parent), K(child));
     }
   }
-  //如果执行计划包含px bloom filter, 判断子dfo是否包含use_filter算子,
-  //如果有, 则为它们建立channel信息, 并dispach给parent dfo
-  if (OB_SUCC(ret) && child.is_px_use_bloom_filter()) {
-    if (parent.is_root_dfo()
-        && OB_FAIL(scheduler_->set_bloom_filter_ch_for_root_dfo(ctx, parent))) {
-      LOG_WARN("fail to set bloom filter ch for root dfo", K(ret));
-    } else if (OB_FAIL(scheduler_->build_bloom_filter_ch(ctx, child, parent))) {
-      LOG_WARN("fail to setup bloom filter channel", K(ret));
-    } else if (OB_FAIL(scheduler_->dispatch_bf_channel_info(ctx, child, parent))) {
-      LOG_WARN("fail setup bloom filter data channel for child-parent pair", K(ret));
-    } else {
-      LOG_TRACE("dispatch px bloom filter channel for pair ok", K(parent), K(child));
-    }
-  }
-  return ret;
-}
 
-int ObPxMsgProc::mark_rpc_filter(ObExecContext &ctx,
-                                 ObJoinFilterDataCtx &bf_ctx,
-                                 int64_t &each_group_size)
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx);
-  bf_ctx.filter_ready_ = false; // make sure there is only one thread of this sqc can mark_rpc_filter
-  if (OB_ISNULL(bf_ctx.filter_data_) ||
-      OB_ISNULL(phy_plan_ctx) ||
-      OB_ISNULL(ctx.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the filter data or phy plan ctx is null", K(ret));
-  } else if (0 == bf_ctx.ch_provider_ptr_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support root dfo send bloom filter", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "root dfo send bloom filter");
-  } else {
-    int64_t sqc_count = 0;
-    int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
-    ObPxSQCProxy *ch_provider = reinterpret_cast<ObPxSQCProxy *>(bf_ctx.ch_provider_ptr_);
-    // get channel info(addr) between receive op that will send bloom filter and child dfo sqc thread
-    if (OB_FAIL(ch_provider->get_bloom_filter_ch(bf_ctx.ch_set_,
-        sqc_count, phy_plan_ctx->get_timeout_timestamp(), false))) {
-      LOG_WARN("fail get data ch sets from provider", K(ret));
-    } else if (bf_ctx.ch_set_.count() <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ch_info_set count is unexpected", K(ret));
-    } else {
-      if (0 == each_group_size) { // only need calc once
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        if (OB_LIKELY(tenant_config.is_valid())) {
-          const char *ptr = NULL;
-          if (OB_ISNULL(ptr = tenant_config->_px_bloom_filter_group_size.get_value())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("each group size ptr is null", K(ret));
-          } else if (0 == ObString::make_string("auto").case_compare(ptr)) {
-            each_group_size = sqrt(bf_ctx.ch_set_.count()); // auto calc group size
-          } else {
-            char *end_ptr = nullptr;
-            each_group_size = strtoull(ptr, &end_ptr, 10); // get group size from tenant config
-            if (*end_ptr != '\0') {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("each group size ptr is unexpected", K(ret));
-            }
-          }
-        }
-        each_group_size = (each_group_size <= 0 ? 1 : each_group_size);
-      }
-      int64_t send_size = GCONF._send_bloom_filter_size * 125; // 125 = 1000/8, send size means how many byte of partial bloom filter will be send at once
-      int64_t send_count = ceil(bf_ctx.filter_data_->filter_.get_bits_array_length() / (double)send_size); // how many piece of partial bloom filter will be send by all threads(sqc level)
-      bf_ctx.filter_data_->bloom_filter_count_ = sqc_count * send_count; // count of piece of partial bloom filter that child dfo will get
-      common::ObIArray<ObBloomFilterSendCtx> &sqc_bf_send_ctx_array = ch_provider->get_bf_send_ctx_array();
-      int64_t bf_idx_at_sqc_proxy = bf_ctx.bf_idx_at_sqc_proxy_;
-      if (0 > bf_idx_at_sqc_proxy  || bf_idx_at_sqc_proxy >= sqc_bf_send_ctx_array.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid bf_idx_at_sqc_proxy", K(bf_idx_at_sqc_proxy), K(sqc_bf_send_ctx_array.count()), K(ret));
-      } else {
-        ObBloomFilterSendCtx &bf_send_ctx = sqc_bf_send_ctx_array.at(bf_idx_at_sqc_proxy);
-        bf_send_ctx.set_filter_data(bf_ctx.filter_data_);
-        if (OB_FAIL(bf_send_ctx.assign_bf_ch_set(bf_ctx.ch_set_))) {
-          LOG_WARN("failed to assign bloom filter ch_set", K(ret));
-        } else if (OB_FAIL(bf_send_ctx.generate_filter_indexes(each_group_size, bf_ctx.ch_set_.count()))) {
-          LOG_WARN("failed to generate filter indexs", K(ret));
-        } else {
-          bf_send_ctx.set_bf_compress_type(bf_ctx.compressor_type_);
-          bf_send_ctx.set_per_channel_bf_count(send_count);
-          bf_send_ctx.set_bloom_filter_ready(true); // means bloom filter is ready to be sent
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -849,6 +782,18 @@ int ObPxTerminateMsgProc::on_piece_msg(
     const ObOptStatsGatherPieceMsg &)
 {
   return common::OB_SUCCESS;
+}
+
+int ObPxCoordInfo::init()
+{
+  int ret = OB_SUCCESS;
+  const int64_t bucket_num = 32;
+  if (OB_FAIL(p2p_dfo_map_.create(bucket_num,
+      "PxDfoMapKey",
+      "PxDfoMapNode"))) {
+    LOG_WARN("create hash table failed", K(ret));
+  }
+  return ret;
 }
 
 } // end namespace sql

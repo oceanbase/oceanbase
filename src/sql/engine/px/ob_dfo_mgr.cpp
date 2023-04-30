@@ -23,6 +23,7 @@
 #include "sql/engine/px/exchange/ob_px_repart_transmit_op.h"
 #include "sql/optimizer/ob_px_resource_analyzer.h"
 #include "sql/engine/px/ob_px_scheduler.h"
+#include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/ob_px_coord_op.h"
 
 using namespace oceanbase::common;
@@ -472,6 +473,26 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     } else {
       px_coord_info.table_access_type_ = TableAccessType::PURE_VIRTUAL_TABLE;
     }
+    if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
+      ObDASTableLoc *table_loc = nullptr;
+       if (OB_ISNULL(table_loc = DAS_CTX(exec_ctx).get_table_loc_by_id(
+            tsc_op->get_table_loc_id(), tsc_op->get_loc_ref_table_id()))) {
+         OZ(ObTableLocation::get_full_leader_table_loc(exec_ctx.get_allocator(),
+         exec_ctx.get_my_session()->get_effective_tenant_id(),
+         tsc_op->get_table_loc_id(),
+         tsc_op->get_loc_ref_table_id(),
+         table_loc));
+      }
+      if (OB_FAIL(ret)) {
+      } else {
+        const DASTabletLocList &locations = table_loc->get_tablet_locs();
+        parent_dfo->set_p2p_dh_loc(table_loc);
+        if (OB_FAIL(get_location_addrs<DASTabletLocList>(locations,
+            parent_dfo->get_p2p_dh_addrs()))) {
+          LOG_WARN("fail get location addrs", K(ret));
+        }
+      }
+    }
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     parent_dfo->set_dml_op(true);
@@ -479,11 +500,43 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);
     parent_dfo->set_temp_table_id(access->get_table_id());
-  } else if (IS_PX_BLOOM_FILTER(phy_op->get_type()) && NULL != parent_dfo) {
+    if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
+      OZ(px_coord_info.p2p_temp_table_info_.temp_access_ops_.push_back(phy_op));
+      OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
+    }
+  } else if (IS_PX_GI(phy_op->get_type()) && NULL != parent_dfo) {
+    const ObGranuleIteratorSpec *gi_spec =
+        static_cast<const ObGranuleIteratorSpec *>(phy_op);
+    if (gi_spec->bf_info_.is_inited_) {
+      ObP2PDfoMapNode node;
+      node.target_dfo_id_ = parent_dfo->get_dfo_id();
+      if (OB_FAIL(px_coord_info.p2p_dfo_map_.set_refactored(
+          gi_spec->bf_info_.p2p_dh_id_,
+          node))) {
+        LOG_WARN("fail to set p2p dh id to map", K(ret));
+      } else {
+        parent_dfo->set_need_p2p_info(true);
+      }
+    }
+  } else if (IS_PX_JOIN_FILTER(phy_op->get_type()) && NULL != parent_dfo) {
     const ObJoinFilterSpec *filter_spec = static_cast<const ObJoinFilterSpec *>(phy_op);
-    if(filter_spec->is_shuffle()) {
-      parent_dfo->set_px_bf_id(filter_spec->get_filter_id());
-      parent_dfo->set_px_bloom_filter_mode(filter_spec->get_mode());
+    if(filter_spec->is_shared_join_filter() && filter_spec->is_shuffle_) {
+      ObP2PDfoMapNode node;
+      node.target_dfo_id_ = parent_dfo->get_dfo_id();
+      for (int i = 0; i < filter_spec->rf_infos_.count() && OB_SUCC(ret); ++i) {
+        if (filter_spec->is_create_mode()) {
+          if (OB_FAIL(parent_dfo->add_p2p_dh_ids(
+              filter_spec->rf_infos_.at(i).p2p_datahub_id_))) {
+            LOG_WARN("fail to add p2p dh ids", K(ret));
+          }
+        } else if (OB_FAIL(px_coord_info.p2p_dfo_map_.set_refactored(
+              filter_spec->rf_infos_.at(i).p2p_datahub_id_,
+              node))) {
+          LOG_WARN("fail to set p2p dh id to map", K(ret));
+        } else {
+          parent_dfo->set_need_p2p_info(true);
+        }
+      }
     }
   } else if (IS_PX_COORD(phy_op->type_)) {
     if (top_px) {
@@ -511,63 +564,89 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
 
   if (OB_SUCC(ret) && nullptr != dfo) {
     if (IS_PX_COORD(phy_op->type_)) {
+      dfo->set_coord_info_ptr(&px_coord_info);
       dfo->set_root_dfo(true);
       dfo->set_single(true);
       dfo->set_dop(1);
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
-      // 存在嵌套情况，则dfo可能已经被设置过一些信息，所以这里不会覆盖
-      if (OB_INVALID_ID == dfo->get_dfo_id()) {
-        //只有顶层的dfo的receive才没有设置dfo id，即使嵌套dfo，也会设置，因为会根据transmit进行设置
-        dfo->set_dfo_id(ObDfo::MAX_DFO_ID);
-      }
-      if (OB_INVALID_ID == dfo->get_qc_id()) {
-        // receive的px记录在了transmit上
-        const ObTransmitSpec *transmit = static_cast<const ObTransmitSpec *>(phy_op->get_child());
-        if (OB_INVALID_ID != transmit->get_px_id()) {
-          dfo->set_qc_id(transmit->get_px_id());
+      if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
+        ObDetectableId sqc_detectable_id;
+        // if generate_detectable_id failed, means that server id is not ready
+        if (OB_FAIL(ObDetectManagerUtils::generate_detectable_id(sqc_detectable_id, GET_TENANT_ID()))) {
+          LOG_WARN("[DM] failed to generate_detectable_id for sqc");
+        } else {
+          ObPxDetectableIds px_detectable_ids(px_coord_info.qc_detectable_id_, sqc_detectable_id);
+          dfo->set_px_detectable_ids(px_detectable_ids);
         }
       }
-      // 对于 root dfo 来说，它并不是一个真实的 dfo，没有分配 id
-      // 所以使用 ObDfo::MAX_DFO_ID表示
-      if (OB_FAIL(dfo_int_gen.gen_id(dfo->get_dfo_id(), dfo->get_interrupt_id()))) {
-        LOG_WARN("fail gen dfo int id", K(ret));
+      if (OB_SUCC(ret)) {
+        // 存在嵌套情况，则dfo可能已经被设置过一些信息，所以这里不会覆盖
+        if (OB_INVALID_ID == dfo->get_dfo_id()) {
+          //只有顶层的dfo的receive才没有设置dfo id，即使嵌套dfo，也会设置，因为会根据transmit进行设置
+          dfo->set_dfo_id(ObDfo::MAX_DFO_ID);
+        }
+        if (OB_INVALID_ID == dfo->get_qc_id()) {
+          // receive的px记录在了transmit上
+          const ObTransmitSpec *transmit = static_cast<const ObTransmitSpec *>(phy_op->get_child());
+          if (OB_INVALID_ID != transmit->get_px_id()) {
+            dfo->set_qc_id(transmit->get_px_id());
+          }
+        }
+        // 对于 root dfo 来说，它并不是一个真实的 dfo，没有分配 id
+        // 所以使用 ObDfo::MAX_DFO_ID表示
+        if (OB_FAIL(dfo_int_gen.gen_id(dfo->get_dfo_id(), dfo->get_interrupt_id()))) {
+          LOG_WARN("fail gen dfo int id", K(ret));
+        }
+        LOG_TRACE("cur dfo info", K(dfo->get_qc_id()), K(dfo->get_dfo_id()), K(dfo->get_dop()));
       }
-      LOG_TRACE("cur dfo info", K(dfo->get_qc_id()), K(dfo->get_dfo_id()), K(dfo->get_dop()));
     } else {
       const ObTransmitSpec *transmit = static_cast<const ObTransmitSpec *>(phy_op);
       // 如果 transmit 下面的子树里包含 px coord 算子，那么下面这些设置都会被
       // 修改成 is_local = true, dop = 1
+      dfo->set_coord_info_ptr(&px_coord_info);
       dfo->set_single(transmit->is_px_single());
       dfo->set_dop(transmit->get_px_dop());
       dfo->set_qc_id(transmit->get_px_id());
       dfo->set_dfo_id(transmit->get_dfo_id());
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
-      dfo->set_dist_method(transmit->dist_method_);
-      dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
-      parent_dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
-      dfo->set_pkey_table_loc_id(
-        (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
-      if (OB_ISNULL(parent_dfo)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("parent dfo should not be null", K(ret));
-      } else if (transmit->get_px_dop() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("should have dop set by optimizer", K(ret), K(transmit->get_px_dop()));
-      } else if (OB_FAIL(dfo_int_gen.gen_id(transmit->get_dfo_id(),
-                                            dfo->get_interrupt_id()))) {
-        LOG_WARN("fail gen dfo int id", K(ret));
-      } else {
-        dfo->set_qc_server_id(GCTX.server_id_);
-        dfo->set_parent_dfo_id(parent_dfo->get_dfo_id());
-        LOG_TRACE("cur dfo dop",
-                  "dfo_id", dfo->get_dfo_id(),
-                  "is_local", transmit->is_px_single(),
-                  "dop", transmit->get_px_dop(),
-                  K(dfo->get_qc_id()),
-                  "parent dfo_id", parent_dfo->get_dfo_id(),
-                  "slave mapping", transmit->is_slave_mapping());
+      if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
+        ObDetectableId sqc_detectable_id;
+        // if generate_detectable_id failed, means that server id is not ready
+        if (OB_FAIL(ObDetectManagerUtils::generate_detectable_id(sqc_detectable_id, GET_TENANT_ID()))) {
+          LOG_WARN("[DM] failed to generate_detectable_id for sqc");
+        } else {
+          ObPxDetectableIds px_detectable_ids(px_coord_info.qc_detectable_id_, sqc_detectable_id);
+          dfo->set_px_detectable_ids(px_detectable_ids);
+        }
+      }
+      if (OB_SUCC(ret)) {
+        dfo->set_dist_method(transmit->dist_method_);
+        dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
+        parent_dfo->set_slave_mapping_type(transmit->get_slave_mapping_type());
+        dfo->set_pkey_table_loc_id(
+          (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
+        if (OB_ISNULL(parent_dfo)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("parent dfo should not be null", K(ret));
+        } else if (transmit->get_px_dop() <= 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should have dop set by optimizer", K(ret), K(transmit->get_px_dop()));
+        } else if (OB_FAIL(dfo_int_gen.gen_id(transmit->get_dfo_id(),
+                                              dfo->get_interrupt_id()))) {
+          LOG_WARN("fail gen dfo int id", K(ret));
+        } else {
+          dfo->set_qc_server_id(GCTX.server_id_);
+          dfo->set_parent_dfo_id(parent_dfo->get_dfo_id());
+          LOG_TRACE("cur dfo dop",
+                    "dfo_id", dfo->get_dfo_id(),
+                    "is_local", transmit->is_px_single(),
+                    "dop", transmit->get_px_dop(),
+                    K(dfo->get_qc_id()),
+                    "parent dfo_id", parent_dfo->get_dfo_id(),
+                    "slave mapping", transmit->is_slave_mapping());
+        }
       }
     }
   }

@@ -43,6 +43,8 @@
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
+#include "share/detect/ob_detect_manager_utils.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 namespace oceanbase
 {
@@ -129,6 +131,8 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   register_interrupted_(false),
   px_sequence_id_(0),
   interrupt_id_(0),
+  register_detectable_id_(false),
+  detectable_id_(),
   px_dop_(1),
   time_recorder_(0),
   batch_rescan_param_version_(0),
@@ -246,6 +250,7 @@ int ObPxCoordOp::rescan()
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (FALSE_IT(ObDetectManagerUtils::qc_unregister_detectable_id_from_dm(detectable_id_, register_detectable_id_))) {
     } else if (FALSE_IT(clear_interrupt())) {
     } else if (OB_FAIL(destroy_all_channel())) {
       LOG_WARN("release dtl channel failed", K(ret));
@@ -260,6 +265,9 @@ int ObPxCoordOp::rescan()
     } else if (FALSE_IT(px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id())) {
     } else if (OB_FAIL(register_interrupt())) {
       LOG_WARN("fail to register interrupt", K(ret));
+    } else if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()
+        && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_, GET_TENANT_ID()))) {
+      LOG_WARN("fail to register detectable_id", K(ret));
     } else if (OB_FAIL(init_dfo_mgr(
                 ObDfoInterruptIdGen(interrupt_id_,
                                     (uint32_t)GCTX.server_id_,
@@ -348,10 +356,15 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("Server is initializing", K(ret), K(GCTX.server_id_));
   } else if (OB_FAIL(post_init_op_ctx())) {
     LOG_WARN("init operator context failed", K(ret));
+  } else if (OB_FAIL(coord_info_.init())) {
+    LOG_WARN("fail to init coord info", K(ret));
   } else if (FALSE_IT(px_sequence_id_ = GCTX.sql_engine_->get_px_sequence_id())) {
     LOG_WARN("fail to get px sequence id", K(ret));
   } else if (OB_FAIL(register_interrupt())) {
     LOG_WARN("fail to register interrupt", K(ret));
+  } else if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()
+      && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_, GET_TENANT_ID()))) {
+    LOG_WARN("fail to register detectable_id", K(ret));
   } else if (OB_FAIL(init_dfo_mgr(
               ObDfoInterruptIdGen(interrupt_id_,
                                   (uint32_t)GCTX.server_id_,
@@ -422,6 +435,9 @@ int ObPxCoordOp::terminate_running_dfos(ObDfoMgr &dfo_mgr)
   } else if (!dfos.empty() && OB_FAIL(wait_all_running_dfos_exit())) {
     LOG_WARN("fail to exit dfo", K(ret));
   }
+  if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()) {
+    (void)ObDetectManagerUtils::qc_unregister_all_check_items_from_dm(dfos);
+  }
   return ret;
 }
 
@@ -471,21 +487,113 @@ int ObPxCoordOp::setup_op_input(ObDfo &root)
   return ret;
 }
 
+int ObPxCoordOp::try_clear_p2p_dh_info()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_NOT_ERASE_P2P_DH_MSG) OB_SUCCESS)) {
+    LOG_WARN("qc not clear p2p dh info by design", K(ret), K(query_timeout));
+    return OB_SUCCESS;
+  }
+#endif
+
+  if (!coord_info_.p2p_dfo_map_.empty()) {
+    hash::ObHashMap<ObAddr, ObSArray<int64_t> *, hash::NoPthreadDefendMode> dh_map;
+    if (OB_FAIL(dh_map.create(coord_info_.p2p_dfo_map_.size() * 2,
+        "ClearP2PDhMap",
+        "ClearP2PDhMap"))) {
+      LOG_WARN("fail to create dh map", K(ret));
+    }
+    ObSArray<int64_t> *p2p_ids = nullptr;
+    void *ptr = nullptr;
+    common::ObArenaAllocator allocator;
+    int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    allocator.set_tenant_id(tenant_id);
+    FOREACH_X(entry, coord_info_.p2p_dfo_map_, OB_SUCC(ret)) {
+      for (int i = 0; OB_SUCC(ret) && i < entry->second.addrs_.count(); ++i) {
+        ptr = nullptr;
+        p2p_ids = nullptr;
+        if (OB_FAIL(dh_map.get_refactored(entry->second.addrs_.at(i), p2p_ids))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSArray<int64_t>)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to alloc memory", K(ret));
+            } else {
+              p2p_ids = new(ptr) ObSArray<int64_t>();
+              ret = OB_SUCCESS;
+            }
+          } else {
+            LOG_WARN("fail to get array", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && OB_NOT_NULL(p2p_ids)) {
+          if (OB_FAIL(p2p_ids->push_back(entry->first))) {
+            LOG_WARN("fail to push back array ptr", K(ret));
+          } else if (OB_FAIL(dh_map.set_refactored(entry->second.addrs_.at(i), p2p_ids, 1))) {
+            LOG_WARN("fail to set p2p sequence ids", K(ret));
+          }
+        }
+      }
+    }
+    FOREACH_X(entry, dh_map, true) {
+      ObPxP2PClearMsgArg arg;
+      arg.px_seq_id_ = px_sequence_id_;
+      int tmp_ret = arg.p2p_dh_ids_.assign(*entry->second);
+      if (OB_SUCCESS == tmp_ret && !arg.p2p_dh_ids_.empty()) {
+        if (OB_FAIL(PX_P2P_DH.get_proxy().to(entry->first).
+            by(tenant_id).
+            clear_dh_msg(arg, nullptr))) {
+          LOG_WARN("fail to clear dh msg", K(ret));
+          ret = OB_SUCCESS;
+        }
+      }
+      entry->second->reset();
+    }
+    allocator.reset();
+  }
+  return ret;
+}
+
 int ObPxCoordOp::inner_close()
 {
   int ret = OB_SUCCESS;
   // close过程中忽略terminate错误码
   int terminate_ret = OB_SUCCESS;
-  if (OB_SUCCESS != (terminate_ret = terminate_running_dfos(coord_info_.dfo_mgr_))) {
-    // #issue/44180396
-    if (OB_NOT_NULL(ctx_.get_my_session()) &&
-        ctx_.get_my_session()->get_trans_result().is_incomplete()) {
-      ret = terminate_ret;
-    } else {
-      LOG_WARN("fail to terminate running dfo, ignore ret", K(terminate_ret));
+  bool should_terminate_running_dfos = true;
+
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout) OB_SUCCESS)) {
+    LOG_WARN("qc not interrupt qc by design", K(ret), K(query_timeout));
+    should_terminate_running_dfos = false;
+  }
+#endif
+
+  if (should_terminate_running_dfos) {
+    if (OB_SUCCESS != (terminate_ret = terminate_running_dfos(coord_info_.dfo_mgr_))) {
+      // #issue/44180396
+      if (OB_NOT_NULL(ctx_.get_my_session()) &&
+          ctx_.get_my_session()->get_trans_result().is_incomplete()) {
+        ret = terminate_ret;
+      } else {
+        LOG_WARN("fail to terminate running dfo, ignore ret", K(terminate_ret));
+      }
     }
   }
+
   unregister_first_buffer_cache();
+  (void)ObDetectManagerUtils::qc_unregister_detectable_id_from_dm(detectable_id_, register_detectable_id_);
+  const ObIArray<ObDfo *> &dfos = coord_info_.dfo_mgr_.get_all_dfos();
+  if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()) {
+    (void)ObDetectManagerUtils::qc_unregister_all_check_items_from_dm(dfos);
+  }
+  (void)try_clear_p2p_dh_info();
   (void)clear_interrupt();
   int release_channel_ret = OB_SUCCESS;
   if (OB_SUCCESS != (release_channel_ret = destroy_all_channel())) {
@@ -733,8 +841,9 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
           }
           all_dfo_terminate = false;
           break;
-        } else if (sqc->is_server_not_alive()) {
+        } else if (sqc->is_server_not_alive() || sqc->is_interrupt_by_dm()) {
           sqc->set_server_not_alive(false);
+          sqc->set_interrupt_by_dm(false);
           const DASTabletLocIArray &access_locations = sqc->get_access_table_locations();
           for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
             if (OB_FAIL(ctx_.get_my_session()->get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
@@ -969,6 +1078,15 @@ int ObPxCoordOp::batch_rescan()
 int ObPxCoordOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT) OB_SUCCESS)) {
+    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret), K(query_timeout));
+    return OB_SUCCESS;
+  }
+#endif
   if (static_cast<const ObPxCoordSpec&>(get_spec()).batch_op_info_.is_inited()) {
     ObDTLIntermResultKey key;
     ObDtlChannelInfo ci;

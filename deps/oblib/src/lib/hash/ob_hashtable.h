@@ -1304,6 +1304,73 @@ public:
     return ret;
   }
 
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  // return value:
+  //   OB_SUCCESS for success
+  //   OB_HASH_NOT_EXIST for node not exists
+  //   others for error
+  template<class _pred>
+  int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL)
+  {
+    return erase_if(key, pred, preproc_, is_erased, value);
+  }
+
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  template<class _pred, class _preproc>
+  int erase_if(const _key_type &key, _pred &pred, _preproc &preproc,
+               bool &is_erased, _value_type *value = NULL)
+  {
+    int ret = OB_SUCCESS;
+    uint64_t hash_value = 0;
+    is_erased = false;
+    if (OB_UNLIKELY(!inited(buckets_)) || OB_UNLIKELY(NULL == allocer_)) {
+      HASH_WRITE_LOG(HASH_WARNING, "hashtable not init");
+      ret = OB_NOT_INIT;
+    } else if (OB_FAIL(hashfunc_(key, hash_value))) {
+      HASH_WRITE_LOG(HASH_WARNING, "hash key failed, ret = %d", ret);
+    } else {
+      int64_t bucket_pos = hash_value % bucket_num_;
+      hashbucket &bucket = buckets_[bucket_pos];
+      bucket_lock_cond blc(bucket);
+      writelocker locker(blc.lock());
+      hashnode *node = bucket.node;
+      hashnode *prev = NULL;
+      ret = OB_HASH_NOT_EXIST;
+      while (NULL != node) {
+        if (equal_(getkey_(node->data), key)) {
+          ret = OB_SUCCESS;
+          if (pred(preproc(node->data))) {
+            if (NULL != value) {
+              if (OB_FAIL(copy_assign(*value, node->data))) {
+                HASH_WRITE_LOG(HASH_FATAL, "failed to copy data, ret = %d", ret);
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (NULL == prev) {
+                bucket.node = node->next;
+              } else {
+                prev->next = node->next;
+              }
+              allocer_->free(node);
+              node = NULL;
+              ATOMIC_DEC((uint64_t *) &size_);
+              bucket_lock_cond blc(bucket);
+              cond_broadcaster()(blc.cond());
+              is_erased = true;
+            }
+          }
+          break;
+        } else {
+          prev = node;
+          node = node->next;
+        }
+      }
+    }
+    return ret;
+  }
+
   // thread safe scan, will add read lock to the bucket,
   // the modification to the value is forbidden
   // @param callback

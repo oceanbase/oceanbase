@@ -27,6 +27,7 @@
 #include "sql/dtl/ob_op_metric.h"
 #include "observer/ob_server_struct.h"
 #include "lib/compress/ob_compress_util.h"
+#include "share/detect/ob_detectable_id.h"
 
 namespace oceanbase {
 
@@ -251,6 +252,10 @@ public:
 
   bool ignore_error() { return ignore_error_; }
   void set_ignore_error(bool flag) { ignore_error_ = flag; }
+
+  void set_register_dm_info(common::ObRegisterDmInfo &register_dm_info) { register_dm_info_ = register_dm_info; }
+  const common::ObRegisterDmInfo &get_register_dm_info() { return register_dm_info_; }
+
   virtual int push_buffer_batch_info() = 0;
 protected:
   common::ObThreadCond cond_;
@@ -278,6 +283,9 @@ protected:
   int64_t batch_id_;
   bool is_px_channel_;
   bool ignore_error_;
+  // for single dfo dispatch scene, the process of using intermediate results is at the rpc processor end
+  // the add the ObRegisterDmInfo in dtl channel and send to processor for register check item into dm
+  common::ObRegisterDmInfo register_dm_info_;
 
   int64_t loop_idx_;
 

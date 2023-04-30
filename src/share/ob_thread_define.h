@@ -132,4 +132,5 @@ TG_DEF(MemDumpTimer, MemDumpTimer, "", TG_STATIC, TIMER)
 TG_DEF(SSTableDefragment, SSTableDefragment, "", TG_STATIC, TIMER)
 TG_DEF(TenantMetaMemMgr, TenantMetaMemMgr, "", TG_STATIC, TIMER)
 TG_DEF(HeartbeatService, HeartbeatService, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(2, 2))
+TG_DEF(DetectManager, DetectManager, "", TG_STATIC, OB_THREAD_POOL, ThreadCountPair(1, 1))
 #endif

@@ -595,6 +595,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12384	__all_virtual_thread	2	201001	1
 12393	__all_virtual_virtual_long_ops_status_mysql_sys_agent	2	201001	1
 12395	__all_virtual_timestamp_service	2	201001	1
+12397	__all_virtual_px_p2p_datahub	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -893,6 +894,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21404	V$OB_TIMESTAMP_SERVICE	1	201001	1
 21417	DBA_OB_EXTERNAL_TABLE_FILES	1	201001	1
 21418	ALL_OB_EXTERNAL_TABLE_FILES	1	201001	1
+21419	GV$OB_PX_P2P_DATAHUB	1	201001	1
+21420	V$OB_PX_P2P_DATAHUB	1	201001	1
+21421	GV$SQL_JOIN_FILTER	1	201001	1
+21422	V$SQL_JOIN_FILTER	1	201001	1
 21423	DBA_OB_TABLE_STAT_STALE_INFO	1	201001	1
 21425	CDB_OB_EXTERNAL_TABLE_FILES	1	201001	1
 check sys table count and table_id range success

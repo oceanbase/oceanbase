@@ -244,6 +244,10 @@ namespace share
   static const char* const OB_SV_PARALLEL_DEGREE_LIMIT = "parallel_degree_limit";
   static const char* const OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD = "parallel_min_scan_time_threshold";
   static const char* const OB_SV_OPTIMIZER_DYNAMIC_SAMPLING = "optimizer_dynamic_sampling";
+  static const char* const OB_SV_RUNTIME_FILTER_TYPE = "runtime_filter_type";
+  static const char* const OB_SV_RUNTIME_FILTER_WAIT_TIME_MS = "runtime_filter_wait_time_ms";
+  static const char* const OB_SV_RUNTIME_FILTER_MAX_IN_NUM = "runtime_filter_max_in_num";
+  static const char* const OB_SV_RUNTIME_BLOOM_FILTER_MAX_SIZE = "runtime_bloom_filter_max_size";
 
 }
 }

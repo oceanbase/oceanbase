@@ -43,6 +43,7 @@ ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer)
       batch_id_(0),
       is_px_channel_(false),
       ignore_error_(false),
+      register_dm_info_(),
       loop_idx_(OB_INVALID_INDEX_INT64),
       compressor_type_(common::ObCompressorType::NONE_COMPRESSOR),
       owner_mod_(DTLChannelOwner::INVALID_OWNER),

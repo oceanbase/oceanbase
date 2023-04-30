@@ -10,6 +10,9 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#ifndef __OB_DTL_INTERM_RESULT_MANAGER_H__
+#define __OB_DTL_INTERM_RESULT_MANAGER_H__
+
 #include "lib/hash/ob_hashmap.h"
 #include "lib/ob_define.h"
 #include "common/sql_mode/ob_sql_mode.h"
@@ -17,8 +20,7 @@
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "lib/allocator/ob_allocator.h"
-#ifndef __OB_DTL_INTERM_RESULT_MANAGER_H__
-#define __OB_DTL_INTERM_RESULT_MANAGER_H__
+#include "share/detect/ob_detectable_id.h"
 
 namespace oceanbase
 {
@@ -76,7 +78,7 @@ struct ObDTLIntermResultInfo
   ObDTLIntermResultInfo()
       : datum_store_(NULL), ret_(common::OB_SUCCESS),
       is_read_(false), is_eof_(false), ref_count_(0),
-      trace_id_(), dump_time_(0), dump_cost_(0)
+      trace_id_(), dump_time_(0), dump_cost_(0), unregister_dm_info_()
   {}
   ~ObDTLIntermResultInfo() {}
   bool is_store_valid() const { return NULL != datum_store_; }
@@ -105,6 +107,7 @@ public:
   common::ObCurTraceId::TraceId trace_id_;
   int64_t dump_time_;
   int64_t dump_cost_;
+  common::ObUnregisterDmInfo unregister_dm_info_;
   ObDTLIntermResultMonitorInfo monitor_info_;
   uint64_t tenant_id_;
 };
@@ -237,7 +240,7 @@ public:
   int get_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo &result_info);
   int create_interm_result_info(ObMemAttr &attr, ObDTLIntermResultInfoGuard &result_info_guard,
                                 const ObDTLIntermResultMonitorInfo &monitor_info);
-  int erase_interm_result_info(ObDTLIntermResultKey &key);
+  int erase_interm_result_info(ObDTLIntermResultKey &key, bool need_unregister_check_item_from_dm=true);
   int insert_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo *&result_info);
   // 以下两个接口会持有bucket读锁.
   int clear_timeout_result_info(ObDTLIntermResultGC &gc);

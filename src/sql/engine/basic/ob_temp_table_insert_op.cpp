@@ -20,7 +20,8 @@
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/px/ob_dfo.h"
-
+#include "sql/engine/px/ob_px_sqc_handler.h"
+#include "share/detect/ob_detect_manager_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -341,6 +342,19 @@ int ObTempTableInsertOp::insert_chunk_row_store()
         dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(dtl_int_key);
       } else {
         row_store->datum_store_->reset_callback();
+        ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+        if (MY_SPEC.is_distributed_ && OB_NOT_NULL(handler) && handler->get_phy_plan().is_enable_px_fast_reclaim()) {
+          int reg_dm_ret = ObDetectManagerUtils::temp_table_register_check_item_into_dm(
+              handler->get_sqc_init_arg().sqc_.get_px_detectable_ids().qc_detectable_id_,
+              handler->get_sqc_init_arg().sqc_.get_qc_addr(),
+              dtl_int_key, row_store);
+          if (OB_SUCCESS != reg_dm_ret) {
+            LOG_WARN("[DM] failed register_check_item_into_dm", K(dtl_int_key), K(dtl_int_key));
+          }
+          LOG_TRACE("[DM] temptable register a check item", K(reg_dm_ret), K(dtl_int_key),
+              K(handler->get_sqc_init_arg().sqc_.get_px_detectable_ids().qc_detectable_id_),
+              K(handler->get_sqc_init_arg().sqc_.get_qc_addr()));
+        }
       }
     }
   }

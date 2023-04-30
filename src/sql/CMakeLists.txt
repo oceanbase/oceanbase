@@ -720,6 +720,11 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_init_channel.cpp
   engine/px/datahub/components/ob_dh_second_stage_reporting_wf.cpp
   engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_mgr.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_msg.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_rpc_process.cpp
+  engine/px/p2p_datahub/ob_runtime_filter_msg.cpp
 )
 
 ob_set_subtarget(ob_sql engine_set

@@ -247,6 +247,8 @@ private:
   static int assign_external_files_to_sqc(const common::ObIArray<share::ObExternalFileInfo> &files,
                                           bool is_file_on_disk,
                                           common::ObIArray<ObPxSqcMeta *> &sqcs);
+private:
+  static int generate_dh_map_info(ObDfo &dfo);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);
 };
 
@@ -567,6 +569,33 @@ class ObPxCheckAlive
 public:
   static bool is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time);
 };
+
+template<class T>
+static int get_location_addrs(const T &locations,
+                              ObIArray<ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashSet<ObAddr> addr_set;
+  if (OB_FAIL(addr_set.create(locations.size()))) {
+    SQL_LOG(WARN, "fail create addr set", K(locations.size()), K(ret));
+  }
+  for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
+    ret = addr_set.exist_refactored((*iter)->server_);
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      if (OB_FAIL(addrs.push_back((*iter)->server_))) {
+        SQL_LOG(WARN, "fail push back server", K(ret));
+      } else if (OB_FAIL(addr_set.set_refactored((*iter)->server_))) {
+        SQL_LOG(WARN, "fail set addr to addr_set", K(ret));
+      }
+    } else {
+      SQL_LOG(WARN, "fail check server exist in addr_set", K(ret));
+    }
+  }
+  (void)addr_set.destroy();
+  return ret;
+}
 
 }
 }

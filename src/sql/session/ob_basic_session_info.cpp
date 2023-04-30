@@ -546,7 +546,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, 
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
                   "try to switch to another tenant without commit/rollback in a transaction");
       LOG_ERROR("try to switch another tenant while session has active txn,"
                 " you must commit/rollback first", K(ret),
@@ -2576,6 +2576,35 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_ob_max_read_stale_time(int_val));
       break;
     }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      ObString str;
+      if (OB_FAIL(val.get_string(str))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        int64_t run_time_filter_type = ObConfigRuntimeFilterChecker::
+            get_runtime_filter_type(str.ptr(), str.length());
+        sys_vars_cache_.set_runtime_filter_type(run_time_filter_type);
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_filter_wait_time_ms(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_filter_max_in_num(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_bloom_filter_max_size(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -2970,6 +2999,35 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_ob_max_read_stale_time(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      ObString str;
+      if (OB_FAIL(val.get_string(str))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        int64_t run_time_filter_type = ObConfigRuntimeFilterChecker::
+            get_runtime_filter_type(str.ptr(), str.length());
+        sys_vars_cache.set_base_runtime_filter_type(run_time_filter_type);
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_filter_wait_time_ms(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_filter_max_in_num(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_bloom_filter_max_size(int_val));
       break;
     }
     default: {
@@ -3949,7 +4007,11 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   return ret;
 }
 
@@ -3975,7 +4037,11 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4006,7 +4072,11 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   return len;
 }
 

@@ -605,14 +605,13 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       input->set_sqc_id(sqc_id_);
       input->set_dfo_id(dfo_id_);
     }
-  } else if (IS_PX_BLOOM_FILTER(op.get_type())) {
+  } else if (IS_PX_JOIN_FILTER(op.get_type())) {
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&op);
     if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(op.id_), KP(kit));
     } else {
       ObJoinFilterOpInput *input = static_cast<ObJoinFilterOpInput *>(kit->input_);
-      input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
       if (!filter_spec->is_shared_join_filter()) {
         input->set_task_id(task_id_);
       }

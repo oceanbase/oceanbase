@@ -18,6 +18,7 @@
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "sql/dtl/ob_dtl.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/px/ob_px_scheduler.h"
 #include "sql/executor/ob_task_spliter.h"
 #include "observer/ob_server_struct.h"
 #include "sql/engine/px/exchange/ob_receive_op.h"
@@ -33,6 +34,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
 #include "share/external_table/ob_external_table_utils.h"
+
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -382,30 +384,45 @@ int ObPXServerAddrUtil::find_dml_ops_inner(common::ObIArray<const ObTableModifyS
   return ret;
 }
 
-template<class T>
-static int get_location_addrs(const T &locations,
-                              ObIArray<ObAddr> &addrs)
+
+int ObPXServerAddrUtil::generate_dh_map_info(ObDfo &dfo)
 {
   int ret = OB_SUCCESS;
-  hash::ObHashSet<ObAddr> addr_set;
-  if (OB_FAIL(addr_set.create(locations.size()))) {
-    LOG_WARN("fail creat addr set", "size", locations.size(), K(ret));
-  }
-  for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
-    ret = addr_set.exist_refactored((*iter)->server_);
-    if (OB_HASH_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else if (OB_HASH_NOT_EXIST == ret) {
-      if (OB_FAIL(addrs.push_back((*iter)->server_))) {
-        LOG_WARN("fail push back server", K(ret));
-      } else if (OB_FAIL(addr_set.set_refactored((*iter)->server_))) {
-        LOG_WARN("fail set addr to addr_set", K(ret));
+  ObP2PDhMapInfo &p2p_map_info = dfo.get_p2p_dh_map_info();
+  if (OB_ISNULL(dfo.get_coord_info_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected coord info ptr", K(ret));
+  } else if (!dfo.get_p2p_dh_ids().empty() && p2p_map_info.is_empty()) {
+    ObP2PDfoMapNode node;
+    for (int i = 0; i < dfo.get_p2p_dh_ids().count() && OB_SUCC(ret); ++i) {
+      node.reset();
+      if (OB_FAIL(dfo.get_coord_info_ptr()->p2p_dfo_map_.get_refactored(
+          dfo.get_p2p_dh_ids().at(i), node))) {
+        LOG_WARN("fail to get target dfo id", K(ret));
+      } else if (node.addrs_.empty()) {
+        ObDfo *target_dfo_ptr = nullptr;
+        if (OB_FAIL(dfo.get_coord_info_ptr()->dfo_mgr_.find_dfo_edge(
+            node.target_dfo_id_, target_dfo_ptr))) {
+          LOG_WARN("fail to find dfo edge", K(ret));
+        } else if (target_dfo_ptr->get_p2p_dh_addrs().empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get p2p dh addrs", K(ret), K(dfo.get_p2p_dh_ids().at(i)));
+        } else if (OB_FAIL(node.addrs_.assign(target_dfo_ptr->get_p2p_dh_addrs()))) {
+          LOG_WARN("fail to assign p2p dh addrs", K(ret));
+        } else if (OB_FAIL(dfo.get_coord_info_ptr()->p2p_dfo_map_.set_refactored(
+              dfo.get_p2p_dh_ids().at(i), node, 1/*over_write*/))) {
+          LOG_WARN("fail to set p2p dh addrs", K(ret));
+        }
       }
-    } else {
-      LOG_WARN("fail check server exist in addr_set", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(p2p_map_info.p2p_sequence_ids_.push_back(dfo.get_p2p_dh_ids().at(i)))) {
+          LOG_WARN("fail to push back p2p map info", K(ret));
+        } else if (OB_FAIL(p2p_map_info.target_addrs_.push_back(node.addrs_))) {
+          LOG_WARN("fail to push back addrs", K(ret));
+        }
+      }
     }
   }
-  (void)addr_set.destroy();
   return ret;
 }
 
@@ -435,6 +452,13 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
       LOG_TRACE("parallel not set in query hint. set default to 1");
     }
   }
+  // generate dh map info
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(generate_dh_map_info(dfo))) {
+      LOG_WARN("fail to generate dh map info", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret) && addrs.count() > 0) {
     common::ObArray<ObPxSqcMeta *> sqcs;
     int64_t total_part_cnt = 0;
@@ -450,10 +474,18 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_px_sequence_id(dfo.get_px_sequence_id());
         sqc.set_qc_id(dfo.get_qc_id());
         sqc.set_interrupt_id(dfo.get_interrupt_id());
+        sqc.set_px_detectable_ids(dfo.get_px_detectable_ids());
         sqc.set_fulltree(dfo.is_fulltree());
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
         sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
+        if (OB_SUCC(ret)) {
+          if (!dfo.get_p2p_dh_map_info().is_empty()) {
+            if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()))) {
+              LOG_WARN("fail to assign p2p dh map info", K(ret));
+            }
+          }
+        }
         for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
           if (addrs.at(i) == (*iter)->server_) {
             if (OB_FAIL(sqc_locations.push_back(*iter))) {
@@ -518,7 +550,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution(ObExecContext &exec_ctx
 }
 
 int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &exec_ctx,
-                                                              ObDfo &child)
+                                                               ObDfo &child)
 {
   int ret = OB_SUCCESS;
   ObSEArray<const ObTableScanSpec *, 2> scan_ops;
@@ -544,6 +576,8 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
     ObArray<int64_t> sqc_result_count;
     if (OB_FAIL(sqc_result_count.prepare_allocate(interm_result_infos.count()))) {
       LOG_WARN("Failed to pre allocate sqc part count");
+    } else if (OB_FAIL(generate_dh_map_info(child))) {
+      LOG_WARN("fail to generate dh map info", K(ret));
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < interm_result_infos.count(); j++) {
       SMART_VAR(ObPxSqcMeta, sqc) {
@@ -556,10 +590,19 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         sqc.set_px_sequence_id(child.get_px_sequence_id());
         sqc.set_qc_id(child.get_qc_id());
         sqc.set_interrupt_id(child.get_interrupt_id());
+        sqc.set_px_detectable_ids(child.get_px_detectable_ids());
         sqc.set_fulltree(child.is_fulltree());
         sqc.set_qc_server_id(child.get_qc_server_id());
         sqc.set_parent_dfo_id(child.get_parent_dfo_id());
-        if (OB_FAIL(child.add_sqc(sqc))) {
+        if (OB_SUCC(ret)) {
+          if (!child.get_p2p_dh_map_info().is_empty()) {
+            if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(child.get_p2p_dh_map_info()))) {
+              LOG_WARN("fail to assign p2p dh map info", K(ret));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(child.add_sqc(sqc))) {
           LOG_WARN("fail add sqc", K(sqc), K(ret));
         }
       }
@@ -632,6 +675,7 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_px_sequence_id(parent.get_px_sequence_id());
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
+        sqc.set_px_detectable_ids(parent.get_px_detectable_ids());
         sqc.set_fulltree(parent.is_fulltree());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
@@ -699,6 +743,12 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         total_task_count += sqc_max_task_counts.at(i);
       }
     }
+    // generate dh map info
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(generate_dh_map_info(parent))) {
+        LOG_WARN("fail to generate dh map info", K(ret));
+      }
+    }
     for (int64_t i = 0; i < addrs.count() && OB_SUCC(ret); ++i) {
       SMART_VAR(ObPxSqcMeta, sqc) {
         sqc.set_exec_addr(addrs.at(i));
@@ -713,10 +763,19 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         sqc.set_px_sequence_id(parent.get_px_sequence_id());
         sqc.set_qc_id(parent.get_qc_id());
         sqc.set_interrupt_id(parent.get_interrupt_id());
+        sqc.set_px_detectable_ids(parent.get_px_detectable_ids());
         sqc.set_fulltree(parent.is_fulltree());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
-        if (OB_FAIL(parent.add_sqc(sqc))) {
+        if (OB_SUCC(ret)) {
+          if (!parent.get_p2p_dh_map_info().is_empty()) {
+            if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
+              LOG_WARN("fail to assign p2p dh map info", K(ret));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(parent.add_sqc(sqc))) {
           LOG_WARN("fail add sqc", K(sqc), K(ret));
         }
       }
@@ -730,7 +789,14 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
-  if (OB_ISNULL(plan_ctx)) {
+  // generate dh map info
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(generate_dh_map_info(dfo))) {
+      LOG_WARN("fail to generate dh map info", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(plan_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL phy plan ctx", K(ret));
   } else {
@@ -745,12 +811,14 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       sqc.set_px_sequence_id(dfo.get_px_sequence_id());
       sqc.set_qc_id(dfo.get_qc_id());
       sqc.set_interrupt_id(dfo.get_interrupt_id());
+      sqc.set_px_detectable_ids(dfo.get_px_detectable_ids());
       sqc.set_fulltree(dfo.is_fulltree());
       sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
       sqc.set_qc_server_id(dfo.get_qc_server_id());
-      if (OB_FAIL(dfo.add_sqc(sqc))) {
-        LOG_WARN("fail add sqc", K(sqc), K(ret));
+      if (!dfo.get_p2p_dh_map_info().is_empty()) {
+        OZ(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()));
       }
+      OZ(dfo.add_sqc(sqc));
     }
   }
   return ret;

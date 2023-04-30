@@ -1649,6 +1649,34 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(227); }
 };
+class ObSysVarRuntimeFilterType : public ObVarcharSysVar
+{
+public:
+  ObSysVarRuntimeFilterType() : ObVarcharSysVar(ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_TYPE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(228); }
+};
+class ObSysVarRuntimeFilterWaitTimeMs : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeFilterWaitTimeMs() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(229); }
+};
+class ObSysVarRuntimeFilterMaxInNum : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeFilterMaxInNum() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(230); }
+};
+class ObSysVarRuntimeBloomFilterMaxSize : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeBloomFilterMaxSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(231); }
+};
 
 
 class ObSysVarFactory
@@ -1669,7 +1697,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 131;
+  const static int64_t OB_SYS_VARS_COUNT = 135;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;

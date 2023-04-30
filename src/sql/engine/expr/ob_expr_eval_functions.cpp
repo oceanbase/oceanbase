@@ -1029,6 +1029,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprXmlSerialize::eval_xml_serialize,                             /* 601 */
   ObExprXmlcast::eval_xmlcast,                                        /* 602 */
   ObExprUpdateXml::eval_update_xml,                                   /* 603 */
+  ObExprJoinFilter::eval_range_filter,                                /* 604 */
+  ObExprJoinFilter::eval_in_filter                                    /* 605 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1144,6 +1146,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
   ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
   NULL, //ObExprNlsInitCap::calc_nls_initcap_batch                    /* 111 */
+  ObExprJoinFilter::eval_range_filter_batch,                          /* 112 */
+  ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
   calc_sqrt_expr_oracle_number_in_batch                               /* 116 */

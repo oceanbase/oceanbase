@@ -1176,6 +1176,11 @@ public:
     return sys_vars_cache_.get_cursor_sharing_mode() == ObCursorSharingMode::EXACT_MODE;
   }
 
+  int64_t get_runtime_filter_type() const { return sys_vars_cache_.get_runtime_filter_type(); }
+  int64_t get_runtime_filter_wait_time_ms() const { return sys_vars_cache_.get_runtime_filter_wait_time_ms(); }
+  int64_t get_runtime_filter_max_in_num() const { return sys_vars_cache_.get_runtime_filter_max_in_num(); }
+  int64_t get_runtime_bloom_filter_max_size() const { return sys_vars_cache_.get_runtime_bloom_filter_max_size(); }
+
 
   const ObString &get_app_trace_id() const { return app_trace_id_; }
   void set_app_trace_id(common::ObString trace_id) {
@@ -1497,7 +1502,12 @@ public:
         nls_nation_collation_(CS_TYPE_INVALID),
         ob_trace_info_(),
         ob_plsql_ccflags_(),
-        ob_max_read_stale_time_(0)
+        ob_max_read_stale_time_(0),
+        runtime_filter_type_(0),
+        runtime_filter_wait_time_ms_(0),
+        runtime_filter_max_in_num_(0),
+        runtime_bloom_filter_max_size_(INT_MAX32)
+
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1552,6 +1562,10 @@ public:
       ob_plsql_ccflags_.reset();
       log_row_value_option_.reset();
       ob_max_read_stale_time_ = 0;
+      runtime_filter_type_ = 0;
+      runtime_filter_wait_time_ms_ = 0;
+      runtime_filter_max_in_num_ = 0;
+      runtime_bloom_filter_max_size_ = INT32_MAX;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1758,6 +1772,10 @@ public:
     ObString ob_plsql_ccflags_;
     char plsql_ccflags_[OB_TMP_BUF_SIZE_256];
     int64_t ob_max_read_stale_time_;
+    int64_t runtime_filter_type_;
+    int64_t runtime_filter_wait_time_ms_;
+    int64_t runtime_filter_max_in_num_;
+    int64_t runtime_bloom_filter_max_size_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -1865,6 +1883,10 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS_STR(iso_nls_currency);
     DEF_SYS_VAR_CACHE_FUNCS_STR(log_row_value_option);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_max_read_stale_time);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_type);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_wait_time_ms);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_filter_max_in_num);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -1928,6 +1950,10 @@ private:
         bool inc_iso_nls_currency_:1;
         bool inc_log_row_value_option_:1;
         bool inc_ob_max_read_stale_time_:1;
+        bool inc_runtime_filter_type_:1;
+        bool inc_runtime_filter_wait_time_ms_:1;
+        bool inc_runtime_filter_max_in_num_:1;
+        bool inc_runtime_bloom_filter_max_size_:1;
       };
     };
   };

@@ -299,6 +299,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "regexp_stack_limit",
   "regexp_time_limit",
   "resource_manager_plan",
+  "runtime_bloom_filter_max_size",
+  "runtime_filter_max_in_num",
+  "runtime_filter_type",
+  "runtime_filter_wait_time_ms",
   "secure_file_priv",
   "server_id",
   "server_uuid",
@@ -530,6 +534,10 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_REGEXP_STACK_LIMIT,
   SYS_VAR_REGEXP_TIME_LIMIT,
   SYS_VAR_RESOURCE_MANAGER_PLAN,
+  SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE,
+  SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM,
+  SYS_VAR_RUNTIME_FILTER_TYPE,
+  SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS,
   SYS_VAR_SECURE_FILE_PRIV,
   SYS_VAR_SERVER_ID,
   SYS_VAR_SERVER_UUID,
@@ -812,7 +820,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "parallel_degree_policy",
   "parallel_degree_limit",
   "parallel_min_scan_time_threshold",
-  "optimizer_dynamic_sampling"
+  "optimizer_dynamic_sampling",
+  "runtime_filter_type",
+  "runtime_filter_wait_time_ms",
+  "runtime_filter_max_in_num",
+  "runtime_bloom_filter_max_size"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1208,6 +1220,10 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarParallelDegreeLimit)
         + sizeof(ObSysVarParallelMinScanTimeThreshold)
         + sizeof(ObSysVarOptimizerDynamicSampling)
+        + sizeof(ObSysVarRuntimeFilterType)
+        + sizeof(ObSysVarRuntimeFilterWaitTimeMs)
+        + sizeof(ObSysVarRuntimeFilterMaxInNum)
+        + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3266,6 +3282,42 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerDynamicSampling));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterType())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterType", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_TYPE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterType));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterWaitTimeMs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterWaitTimeMs", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterWaitTimeMs));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterMaxInNum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterMaxInNum", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterMaxInNum));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeBloomFilterMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeBloomFilterMaxSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeBloomFilterMaxSize));
       }
     }
 
@@ -5783,6 +5835,50 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerDynamicSampling())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarOptimizerDynamicSampling", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterType)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterType)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterType())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterType", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterWaitTimeMs)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterWaitTimeMs)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterWaitTimeMs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterWaitTimeMs", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterMaxInNum)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterMaxInNum)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterMaxInNum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterMaxInNum", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeBloomFilterMaxSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeBloomFilterMaxSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeBloomFilterMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeBloomFilterMaxSize", K(ret));
       }
       break;
     }

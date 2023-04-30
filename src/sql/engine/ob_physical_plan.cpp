@@ -128,7 +128,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     need_record_plan_info_(false),
     enable_append_(false),
     append_table_id_(0),
-    logical_plan_()
+    logical_plan_(),
+    is_enable_px_fast_reclaim_(false)
 {
 }
 
@@ -219,6 +220,7 @@ void ObPhysicalPlan::reset()
   tm_sessid_ = -1;
   need_record_plan_info_ = false;
   logical_plan_.reset();
+  is_enable_px_fast_reclaim_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -766,7 +768,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     min_cluster_version_,
                     need_record_plan_info_,
                     enable_append_,
-                    append_table_id_);
+                    append_table_id_,
+                    is_enable_px_fast_reclaim_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

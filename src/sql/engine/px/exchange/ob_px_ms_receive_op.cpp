@@ -608,8 +608,6 @@ int ObPxMSReceiveOp::inner_get_next_row()
     LOG_ERROR("Get operator context failed", K(ret), K(MY_SPEC.id_));
   } else if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (!ctx_.get_bloom_filter_ctx_array().empty() && OB_FAIL(prepare_send_bloom_filter())) {
-    LOG_WARN("fail to prepare send bloom filter", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to send bloom filter", K(ret));
   }

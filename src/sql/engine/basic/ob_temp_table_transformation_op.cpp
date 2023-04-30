@@ -164,6 +164,17 @@ int ObTempTableTransformationOp::destory_interm_results()
       }
     }
   }
+
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_TEMP_TABLE_NOT_DESTROY_REMOTE_INTERM_RESULT) OB_SUCCESS)) {
+    LOG_WARN("ObTempTableTransformationOp not destory_remote_interm_results by design", K(ret), K(query_timeout));
+    return OB_SUCCESS;
+  }
+#endif
+
   if (OB_SUCC(ret) && !svrs.empty() &&
       OB_FAIL(destory_remote_interm_results(svrs, args))) {
     LOG_WARN("failed to destory interm results", K(ret));

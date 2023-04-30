@@ -198,6 +198,7 @@
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
+#include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 
 namespace oceanbase
 {
@@ -1884,6 +1885,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               px_worker_stat->set_allocator(&allocator);
               px_worker_stat->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(px_worker_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_PX_P2P_DATAHUB_TID: {
+            ObAllPxP2PDatahubTable *px_p2p_datahub = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllPxP2PDatahubTable, px_p2p_datahub))) {
+              px_p2p_datahub->set_allocator(&allocator);
+              px_p2p_datahub->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(px_p2p_datahub);
             }
             break;
           }

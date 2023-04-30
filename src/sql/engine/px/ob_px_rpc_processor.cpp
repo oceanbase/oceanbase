@@ -23,6 +23,8 @@
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
+#include "share/detect/ob_detect_callback.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -90,6 +92,9 @@ int ObInitSqcP::process()
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));
+  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+    LOG_WARN("[DM] sqc failed to register_into_dm");
   } else {
     /*do nothing*/
   }
@@ -395,6 +400,9 @@ int ObInitFastSqcP::process()
     LOG_WARN("Session can't be null", K(ret));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("fail to link qc sqc channel", K(ret));
+  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+    LOG_WARN("[DM] sqc failed to register_into_dm");
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     arg.sqc_.set_task_count(1);

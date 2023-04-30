@@ -9251,7 +9251,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                        right_path,
                        left_path.parent_->get_tables(),
                        right_tables,
-                       !get_plan()->get_optimizer_context().enable_bloom_filter(),
+                       !get_plan()->get_optimizer_context().enable_runtime_filter(),
                        !right_need_exchange,
                        is_fully_partition_wise,
                        left_exprs,
@@ -9313,7 +9313,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                            can_join_filter,
                                                            force_hint))) {
       LOG_WARN("failed to check use join filter", K(ret));
-    } else if (is_current_dfo && !is_fully_partition_wise &&
+    } else if (!is_fully_partition_wise &&
                OB_FAIL(log_plan_hint.check_use_join_filter(access.table_id_,
                                                            left_tables,
                                                            true,
@@ -9379,13 +9379,9 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
         LOG_WARN("failed to push back info", K(ret));
       }
     }
-  } else if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) || is_current_dfo) && right_path.is_join_path()) {
+  } else if (right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
-    if (!is_current_dfo && join_path.is_left_need_exchange()) {
-      // Stop recursive join_path.left_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
-      // is_current_dfo is false and join_path.is_left_need_exchange().
-      // Do not allow bloom filters to be sent between non-adjacent dfos.
-    } else if (OB_ISNULL(join_path.left_path_) ||
+    if (OB_ISNULL(join_path.left_path_) ||
                OB_ISNULL(join_path.left_path_->parent_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -9403,10 +9399,6 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
     if (OB_FAIL(ret)) {
-    } else if (!is_current_dfo && join_path.is_right_need_exchange()) {
-      // stop recursive join_path.right_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
-      // is_current_dfo is false and join_path.is_left_need_exchange().
-      // Do not allow bloom filters to be sent between non-adjacent dfos.
     } else if (OB_ISNULL(join_path.right_path_) ||
                OB_ISNULL(join_path.right_path_->parent_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -9514,20 +9506,11 @@ int ObJoinOrder::check_normal_join_filter_valid(const Path& left_path,
       OB_ISNULL(stmt = plan->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null plan", K(ret));
-  } else if (OB_FAIL(find_shuffle_join_filter(left_path, left_find))) {
-    LOG_WARN("failed to find shuffle join filter", K(ret));
-  } else if (OB_FAIL(find_shuffle_join_filter(right_path, right_find))) {
-    LOG_WARN("failed to find shuffle join filter", K(ret));
-  } else {
-    cur_dfo_has_shuffle_bf = left_find || right_find;
   }
   for (int i = 0; OB_SUCC(ret) && i < join_filter_infos.count(); ++i) {
     JoinFilterInfo &info = join_filter_infos.at(i);
     double join_filter_sel = 1.0;
-    if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) && cur_dfo_has_shuffle_bf && !info.in_current_dfo_) {
-      info.can_use_join_filter_ = false;
-      OPT_TRACE("current dfo has shuffle join filter, this hash join will not use join filter");
-    } else if (!info.can_use_join_filter_ || info.lexprs_.empty()) {
+    if (!info.can_use_join_filter_ || info.lexprs_.empty()) {
       info.can_use_join_filter_ = false;
     } else if (OB_FAIL(calc_join_filter_selectivity(left_path,
                                                     info,

@@ -104,7 +104,7 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
       get_join_filter_info().is_inited_ &&
       OB_INVALID_ID != get_join_filter_info().filter_id_) {
     BEGIN_BUF_PRINT;
-    if (OB_FAIL(BUF_PRINTF(":BF%04ld", get_join_filter_info().filter_id_))) {
+    if (OB_FAIL(BUF_PRINTF(":RF%04ld", get_join_filter_info().filter_id_))) {
       LOG_WARN("failed to print str", K(ret));
     }
     END_BUF_PRINT(plan_item.object_alias_,

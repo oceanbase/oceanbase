@@ -1367,9 +1367,9 @@ public:
    */
   int check_has_exchange_below(bool &has_exchange) const;
   /**
-   * Allocate bloom filter operator.
+   * Allocate runtime filter operator.
    */
-  int allocate_bf_node_for_hash_join(AllocBloomFilterContext &ctx);
+  int allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx);
 
   static int check_is_table_scan(const ObLogicalOperator &op,
                                  bool &is_table_scan);
@@ -1778,9 +1778,27 @@ private:
                                      int64_t &filter_id);
   int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
-  int mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id);
-  int push_down_bloom_filter_expr(ObLogicalOperator *op,
-      ObLogicalOperator *join_filter_op, double join_filter_rate);
+  int create_runtime_filter_info(
+      ObLogicalOperator *op,
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      double join_filter_rate);
+  int add_join_filter_info(
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      ObRawExpr *join_filter_expr,
+      RuntimeFilterType type);
+  int add_partition_join_filter_info(
+      ObLogicalOperator *join_filter_creare_op,
+      RuntimeFilterType type);
+  int generate_runtime_filter_expr(
+      ObLogicalOperator *op,
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      double join_filter_rate,
+      RuntimeFilterType type);
+
+
   /* manual set dop for each dfo */
   int refine_dop_by_hint();
   int check_has_temp_table_access(ObLogicalOperator *cur, bool &has_temp_table_access);

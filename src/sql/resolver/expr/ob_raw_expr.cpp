@@ -56,7 +56,7 @@ ObRawExpr *USELESS_POINTER = NULL;
       SQL_RESV_LOG(WARN, "failed to create raw expr", K(ret), K(expr_type)); \
     }                                                                   \
   }
-  
+
 template <>
 int ObRawExprFactory::create_raw_expr<ObSysFunRawExpr>(ObItemType expr_type, ObSysFunRawExpr *&raw_expr)
 {
@@ -2361,9 +2361,21 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
-  } else if (T_OP_JOIN_BLOOM_FILTER == get_expr_type()) {
-    if (OB_FAIL(BUF_PRINTF("SYS_OP_BLOOM_FILTER("))) {
-      LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (T_OP_RUNTIME_FILTER == get_expr_type()) {
+    if (RuntimeFilterType::BLOOM_FILTER == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_BLOOM_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    } else if (RuntimeFilterType::RANGE == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_RANGE_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    } else if (RuntimeFilterType::IN == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_IN_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
         if (OB_ISNULL(get_param_expr(i))) {

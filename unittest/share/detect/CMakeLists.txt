@@ -1,0 +1,1 @@
+ob_unittest(test_ob_detect_manager)
