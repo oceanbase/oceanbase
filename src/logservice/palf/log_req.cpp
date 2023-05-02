@@ -490,12 +490,13 @@ OB_SERIALIZE_MEMBER(LogChangeModeMetaResp, msg_proposal_id_);
 
 // ================= LogGetMCStReq start ================
 LogGetMCStReq::LogGetMCStReq()
-  : config_version_()
+  : config_version_(), need_purge_throttling_(false)
 {
 }
 
-LogGetMCStReq::LogGetMCStReq(const LogConfigVersion &config_version)
-  : config_version_(config_version)
+LogGetMCStReq::LogGetMCStReq(const LogConfigVersion &config_version,
+                             const bool need_purge_throttling)
+  : config_version_(config_version), need_purge_throttling_(need_purge_throttling)
 {
 }
 
@@ -512,9 +513,10 @@ bool LogGetMCStReq::is_valid() const
 void LogGetMCStReq::reset()
 {
   config_version_.reset();
+  need_purge_throttling_ = false;
 }
 
-OB_SERIALIZE_MEMBER(LogGetMCStReq, config_version_);
+OB_SERIALIZE_MEMBER(LogGetMCStReq, config_version_, need_purge_throttling_);
 // ================= LogGetMCStReq end ================
 
 // ================= LogGetMCStResp start ================

@@ -26,7 +26,8 @@ struct PalfDiskOptions
 {
   PalfDiskOptions() : log_disk_usage_limit_size_(-1),
                       log_disk_utilization_threshold_(-1),
-                      log_disk_utilization_limit_threshold_(-1)
+                      log_disk_utilization_limit_threshold_(-1),
+                      log_disk_throttling_percentage_(-1)
   {}
   ~PalfDiskOptions() { reset(); }
   static constexpr int64_t MB = 1024*1024ll;
@@ -37,13 +38,11 @@ struct PalfDiskOptions
   int64_t log_disk_usage_limit_size_;
   int log_disk_utilization_threshold_;
   int log_disk_utilization_limit_threshold_;
-  TO_STRING_KV(
-      "log_disk_size(MB)",
-      log_disk_usage_limit_size_/MB,
-      "log_disk_utilization_threshold(%)",
-      log_disk_utilization_threshold_,
-      "log_disk_utilization_limit_threshold(%)",
-      log_disk_utilization_limit_threshold_);
+  int64_t log_disk_throttling_percentage_;
+  TO_STRING_KV("log_disk_size(MB)", log_disk_usage_limit_size_ / MB,
+               "log_disk_utilization_threshold(%)", log_disk_utilization_threshold_,
+               "log_disk_utilization_limit_threshold(%)", log_disk_utilization_limit_threshold_,
+               "log_disk_throttling_percentage(%)", log_disk_throttling_percentage_);
 };
 
 
@@ -172,6 +171,39 @@ public:
   PalfDiskOptions disk_options_;
   PalfTransportCompressOptions compress_options_;
 };
+
+struct PalfThrottleOptions
+{
+  public:
+  PalfThrottleOptions() {reset();}
+  ~PalfThrottleOptions() {reset();}
+  void reset();
+  bool is_valid() const;
+  bool operator==(const PalfThrottleOptions &rhs) const;
+  // size of available log disk when writing throttling triggered
+  inline int64_t get_available_size_after_limit() const;
+  inline bool need_throttling() const;
+  TO_STRING_KV(K_(total_disk_space), K_(stopping_writing_percentage),
+               K_(trigger_percentage), K_(unrecyclable_disk_space));
+public:
+  int64_t total_disk_space_;
+  int64_t stopping_writing_percentage_;
+  int64_t trigger_percentage_;
+  int64_t unrecyclable_disk_space_;
+};
+
+inline int64_t PalfThrottleOptions::get_available_size_after_limit() const
+{
+  return (total_disk_space_ * MAX(0, stopping_writing_percentage_ - trigger_percentage_)) / 100;
+}
+
+inline bool PalfThrottleOptions::need_throttling() const
+{
+  return trigger_percentage_> 0  && total_disk_space_ > 0
+      && (trigger_percentage_ < stopping_writing_percentage_)
+      && unrecyclable_disk_space_ > (total_disk_space_ * trigger_percentage_ / 100);
+}
+
 } // end namespace palf
 } // end namspace oceanbase
 #endif

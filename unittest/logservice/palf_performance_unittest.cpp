@@ -79,7 +79,7 @@ public:
     log_meta_.log_snapshot_meta_.base_lsn_ = LSN(5 * PALF_BLOCK_SIZE);
     const int64_t new_palf_epoch = ATOMIC_AAF(&palf_epoch_, 1);
     if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta_, &allocator_, &log_block_pool_, \
-            &log_rpc_, &log_io_worker_, new_palf_epoch))) {
+            &log_rpc_, &log_io_worker_wrapper_, new_palf_epoch))) {
       PALF_LOG(WARN, "LogEngine init failed", K(ret));
     }
     start_lsn_ = base_lsn;
@@ -93,7 +93,7 @@ public:
     // log_engine_.destroy();
     LogGroupEntryHeader entry_header;
     const int64_t new_palf_epoch = ATOMIC_AAF(&palf_epoch_, 1);
-    ret = log_engine_.load(palf_id, log_dir, &allocator_, &log_block_pool_, &log_rpc_, &log_io_worker_, \
+    ret = log_engine_.load(palf_id, log_dir, &allocator_, &log_block_pool_, &log_rpc_, &log_io_worker_wrapper_, \
         entry_header, new_palf_epoch);
     block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
     block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
@@ -250,7 +250,7 @@ private:
   LogMeta log_meta_;
   LogEngine log_engine_;
   LogRpc log_rpc_;
-  LogIOWorker log_io_worker_;
+  LogIOWorker log_io_worker_wrapper_;
   LSN start_lsn_;
   LSN curr_lsn_;
   DummyBlockPool log_block_pool_;

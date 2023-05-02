@@ -19,6 +19,7 @@
 #include "log_storage.h"                               // LogStorage
 #include "log_net_service.h"                           // LogNetService
 #include "log_meta.h"                                  // LogMeta
+#include "log_define.h"
 
 namespace oceanbase
 {
@@ -49,6 +50,8 @@ class TruncatePrefixBlocksCbCtx;
 class LogIOTruncatePrefixBlocksTask;
 class LogIOFlashbackTask;
 class FlashbackCbCtx;
+class LogIOPurgeThrottlingTask;
+class PurgeThrottlingCbCtx;
 
 #define OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(type)                                \
   virtual int submit_change_config_meta_req(const type &member_list,                \
@@ -134,6 +137,7 @@ public:
   int submit_truncate_prefix_blocks_task(
       const TruncatePrefixBlocksCbCtx &truncate_prefix_blocks_ctx);
   int submit_flashback_task(const FlashbackCbCtx &flashback_ctx);
+  int submit_purge_throttling_task(const PurgeThrottlingType purge_type);
 
   // ==================== Submit aysnc task end ==================
 
@@ -295,6 +299,7 @@ public:
 
   virtual int submit_config_change_pre_check_req(const common::ObAddr &server,
                                                  const LogConfigVersion &config_version,
+                                                 const bool need_purge_throttling,
                                                  const int64_t timeout_us,
                                                  LogGetMCStResp &resp);
 
@@ -331,9 +336,9 @@ public:
   virtual int submit_learner_keepalive_resp(const common::ObAddr &server,
                                             const LogLearner &sender_itself);
 
-  int submit_notify_rebuild_req(const ObAddr &server,
-                                const LSN &base_lsn,
-                                const LogInfo &base_prev_log_info);
+  virtual int submit_notify_rebuild_req(const ObAddr &server,
+                                        const LSN &base_lsn,
+                                        const LogInfo &base_prev_log_info);
   int submit_notify_fetch_log_req(const ObMemberList &dst_list);
   int submit_committed_info_req(
       const ObAddr &server,
@@ -391,7 +396,7 @@ public:
   int get_total_used_disk_space(int64_t &total_used_size_byte) const;
   virtual int64_t get_palf_epoch() const { return palf_epoch_; }
   TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
-      K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), KP(this));
+      K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), K_(last_purge_throttling_ts), KP(this));
 private:
   int submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx, const LogMeta &log_meta);
   int append_log_meta_(const LogMeta &log_meta);
@@ -412,6 +417,8 @@ private:
                                 LogIOFlushMetaTask *&flush_meta_task);
   int generate_flashback_task_(const FlashbackCbCtx &flashback_cb_ctx,
                                LogIOFlashbackTask *&flashback_task);
+  int generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
+                                      LogIOPurgeThrottlingTask *&purge_task);
   int update_config_meta_guarded_by_lock_(const LogConfigMeta &meta, LogMeta &log_meta);
   int try_clear_up_holes_and_check_storage_integrity_(
       const LSN &last_entry_begin_lsn,
@@ -432,6 +439,7 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(LogEngine);
 
+  const int64_t PURGE_THROTTLING_INTERVAL = 100 * 1000;//100ml
 private:
   // used for GC
   mutable ObSpinLock block_gc_lock_;
@@ -450,6 +458,8 @@ private:
   int64_t palf_id_;
   // palf_epoch_ is used for identifying an uniq palf instance.
   int64_t palf_epoch_;
+  //used to control frequency of purging throttling
+  int64_t last_purge_throttling_ts_;
   bool is_inited_;
 };
 } // end namespace palf

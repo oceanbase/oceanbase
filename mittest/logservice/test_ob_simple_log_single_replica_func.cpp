@@ -319,6 +319,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback)
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx, 1000));
     EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(LSN(PALF_BLOCK_SIZE), leader));
     EXPECT_EQ(OB_ITER_END, read_log(leader));
+
     switch_append_to_flashback(leader, mode_version);
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->flashback(mode_version, SCN::min_scn(), timeout_ts_us));
     EXPECT_EQ(LSN(0), leader.palf_handle_impl_->get_max_lsn());
@@ -1369,29 +1370,6 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_gc_block)
   EXPECT_EQ(expect_scn, min_block_scn);
 }
 
-class IOTaskCond : public LogIOTask {
-public:
-	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
-  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
-  {
-    PALF_LOG(INFO, "before cond_wait");
-    cond_.wait();
-    PALF_LOG(INFO, "after cond_wait");
-    return OB_SUCCESS;
-  };
-  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
-  {
-    return OB_SUCCESS;
-  }
-  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
-  int init(int64_t palf_id)
-  {
-    palf_id_ = palf_id;
-    return OB_SUCCESS;
-  };
-  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
-  ObCond cond_;
-};
 TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_iterator_with_flashback");
@@ -1475,7 +1453,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
   LSN last_lsn = raw_write_leader.palf_handle_impl_->get_max_lsn();
   SCN last_scn = raw_write_leader.palf_handle_impl_->get_max_scn();
 
-  LogIOWorker *io_worker = &raw_write_leader.palf_env_impl_->log_io_worker_;
+  LogIOWorker *io_worker = &raw_write_leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_;
   IOTaskCond cond(id_raw_write, raw_write_leader.palf_env_impl_->last_palf_epoch_);
   io_worker->submit_io_task(&cond);
   std::vector<LSN> lsns;

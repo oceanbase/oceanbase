@@ -119,6 +119,7 @@ location_refresh_thread_count
 log_archive_concurrency
 log_disk_percentage
 log_disk_size
+log_disk_throttling_percentage
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency

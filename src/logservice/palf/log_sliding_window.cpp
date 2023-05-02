@@ -3630,9 +3630,13 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
                 match_log_end_lsn = curr_log_end_lsn;
               } else {
                 // this log has not been flushed
-                PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "local log is match with arg, but it has not been flushed", K(bool_ret),
+                PALF_LOG_RET(WARN, OB_STATE_NOT_MATCH, "local log is match with arg, but it has not been flushed", K(bool_ret),
                     K(msg_proposal_id), K_(palf_id), K_(self), K(max_flushed_end_lsn), K(curr_log_end_lsn),
                     K(lsn), K(log_proposal_id));
+                int local_ret = OB_SUCCESS;
+                if (OB_SUCCESS != (local_ret = log_engine_->submit_purge_throttling_task(PURGE_BY_PRE_CHECK_FOR_CONFIG))) {
+                  PALF_LOG_RET(WARN, local_ret, "submit_purge_throttling_task failed", K_(palf_id), K_(self));
+                }
               }
             } else {
               // proposal_id does not match with arg

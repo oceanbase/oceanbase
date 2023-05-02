@@ -23,6 +23,7 @@
 #include "log_sliding_window.h"
 #include "log_state_mgr.h"
 #include "log_engine.h"
+#include "log_io_task_cb_utils.h"
 #include "logservice/palf/log_define.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 
@@ -458,7 +459,9 @@ int LogReconfirm::reconfirm()
         break;
       }
       case WAITING_LOG_FLUSHED: {
-        if (OB_FAIL(wait_all_log_flushed_())) {
+        if (OB_FAIL(purge_throttling_())) {
+          PALF_LOG(WARN, "purge throttling failed", K_(palf_id));
+        } else if (OB_FAIL(wait_all_log_flushed_())) {
           PALF_LOG(WARN, "wait_all_log_flushed_ failed", K_(palf_id));
         } else if (OB_FAIL(submit_prepare_log_())) {
           PALF_LOG(WARN, "submit_prepare_log_ failed", K_(palf_id));
@@ -612,6 +615,14 @@ int LogReconfirm::reconfirm()
         PALF_LOG(INFO, "reconfirm waiting retry", K(ret), K_(palf_id), K_(state));
       }
     }
+  }
+  return ret;
+}
+int LogReconfirm::purge_throttling_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(log_engine_->submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_RECONFIRM))) {
+    PALF_LOG(WARN, "submit_purge_throttling_task", K_(palf_id));
   }
   return ret;
 }

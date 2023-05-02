@@ -145,7 +145,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
-          alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer))) {
+          alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
   } else {
     PALF_REPORT_INFO_KV(K_(palf_id));
@@ -206,7 +206,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
   } else if (OB_FAIL(construct_palf_base_info_(max_committed_end_lsn, palf_base_info))) {
     PALF_LOG(WARN, "construct_palf_base_info_ failed", K(ret), K(palf_id), K(entry_header), K(palf_base_info));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_engine_.get_log_meta(), log_dir, self,
-          fetch_log_engine, alloc_mgr, log_rpc, log_io_worker, palf_env_impl, election_timer))) {
+          fetch_log_engine, alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
   } else if (OB_FAIL(append_disk_log_to_sw_(max_committed_end_lsn))) {
     PALF_LOG(WARN, "append_disk_log_to_sw_ failed", K(ret), K(palf_id));
@@ -534,6 +534,13 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
     PALF_LOG(WARN, "get tenant data version failed", K(tmp_ret), K(req), K(resp));
   } else {
     RLockGuard guard(lock_);
+    if (req.need_purge_throttling_) {
+      int tmp_ret = OB_SUCCESS;
+      const PurgeThrottlingType purge_type = PurgeThrottlingType::PURGE_BY_GET_MC_REQ;
+      if (OB_SUCCESS != (tmp_ret = log_engine_.submit_purge_throttling_task(purge_type))) {
+        PALF_LOG_RET(WARN, tmp_ret, "failed to submit_purge_throttling_task with config_change_pre_check", K_(palf_id));
+      }
+    }
     int64_t curr_proposal_id = state_mgr_.get_proposal_id();
     resp.msg_proposal_id_ = curr_proposal_id;
     LogConfigVersion curr_config_version;
@@ -2412,7 +2419,6 @@ int PalfHandleImpl::do_init_mem_(
     FetchLogEngine *fetch_log_engine,
     ObILogAllocator *alloc_mgr,
     LogRpc *log_rpc,
-    LogIOWorker *log_io_worker,
     IPalfEnvImpl *palf_env_impl,
     common::ObOccamTimer *election_timer)
 {
@@ -2465,7 +2471,7 @@ int PalfHandleImpl::do_init_mem_(
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
     PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(self), K(log_dir), K(palf_base_info),
-        K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc), K(log_io_worker));
+        K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc));
   }
   if (OB_FAIL(ret)) {
     is_inited_ = true;
@@ -2858,6 +2864,8 @@ int PalfHandleImpl::handle_notify_fetch_log_req(const common::ObAddr &server)
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(log_engine_.submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_NOTIFY_FETCH_LOG))) {
+    PALF_LOG(WARN, "failed to submit_purge_throttling_task with notify_fetch_log", KPC(this), K(server));
   } else if (OB_FAIL(sw_.try_fetch_log(FetchTriggerType::RECONFIRM_NOTIFY_FETCH))) {
     PALF_LOG(WARN, "try_fetch_log failed", KR(ret), KPC(this), K(server));
   } else if (OB_FAIL(sw_.submit_push_log_resp(server))) {

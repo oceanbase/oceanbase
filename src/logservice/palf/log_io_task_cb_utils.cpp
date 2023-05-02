@@ -184,5 +184,15 @@ FlashbackCbCtx &FlashbackCbCtx::operator=(const FlashbackCbCtx &rhf)
   flashback_scn_ = rhf.flashback_scn_;
   return *this;
 }
+
+bool PurgeThrottlingCbCtx::is_valid() const
+{
+  return (purge_type_ > INVALID_PURGE_TYPE && purge_type_ < MAX_PURGE_TYPE);
+}
+
+void PurgeThrottlingCbCtx::reset()
+{
+  purge_type_ = MAX_PURGE_TYPE;
+}
 } // end of logservice
 } // end of oceanbase

@@ -102,6 +102,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   // do not check OB_SUCCESS, may return OB_NOT_MASTER during degrading member
   submit_log(leader, 100, id);
 
+  PALF_LOG(INFO, "CASE[1] degrade caused by block_net ");
   EXPECT_TRUE(is_degraded(leader, another_f_idx));
 
   loc_cb.leader_ = leader.palf_handle_impl_->self_;
@@ -112,12 +113,14 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
 
   // set clog disk error
-  ObTenantEnv::set_tenant(get_cluster()[leader_idx+1]->get_tenant_base());
+  ObTenantEnv::set_tenant(get_cluster()[another_f_idx]->get_tenant_base());
   logservice::coordinator::ObFailureDetector *detector = MTL(logservice::coordinator::ObFailureDetector *);
   if (NULL != detector) {
+    PALF_LOG(INFO, "set clog full event");
     detector->has_add_clog_full_event_ = true;
   }
 
+  PALF_LOG(INFO, "CASE[2] degrade caused by clog disk error");
   EXPECT_TRUE(is_degraded(leader, another_f_idx));
 
   if (NULL != detector) {
@@ -128,11 +131,13 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id));
 
   // test disable sync
+  PALF_LOG(INFO, "CASE[3] degrade caused by disable_sync");
   palf_list[another_f_idx]->palf_handle_impl_->disable_sync();
   EXPECT_TRUE(is_degraded(leader, another_f_idx));
   palf_list[another_f_idx]->palf_handle_impl_->enable_sync();
   EXPECT_TRUE(is_upgraded(leader, id));
 
+  PALF_LOG(INFO, "CASE[4] degrade caused by disable_vote");
   // test disbale vote
   palf_list[another_f_idx]->palf_handle_impl_->disable_vote(false/*no need check log missing*/);
   EXPECT_TRUE(is_degraded(leader, another_f_idx));

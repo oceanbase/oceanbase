@@ -105,6 +105,20 @@ struct FlushMetaCbCtx {
   bool is_applied_mode_meta_;
   LogModeMeta log_mode_meta_;
 };
+
+
+struct PurgeThrottlingCbCtx
+{
+public:
+  PurgeThrottlingCbCtx() : purge_type_(PurgeThrottlingType::INVALID_PURGE_TYPE) {}
+  explicit PurgeThrottlingCbCtx(PurgeThrottlingType type) : purge_type_(type) {}
+  ~PurgeThrottlingCbCtx() {reset();}
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K(purge_type_));
+public:
+  PurgeThrottlingType purge_type_;
+};
 }
 }
 

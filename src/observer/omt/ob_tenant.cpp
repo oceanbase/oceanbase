@@ -702,6 +702,7 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_usage_limit_size_ = meta.unit_.config_.log_disk_size();
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_threshold_ = 80;
     mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_limit_threshold_ = 95;
+    mtl_init_ctx_->palf_options_.disk_options_.log_disk_throttling_percentage_ = 100;
   }
   return ret;
 }

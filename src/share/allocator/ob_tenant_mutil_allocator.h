@@ -30,6 +30,7 @@ class LogIOFlushMetaTask;
 class LogIOTruncatePrefixBlocksTask;
 class LogIOFlushMetaTask;
 class LogIOFlashbackTask;
+class LogIOPurgeThrottlingTask;
 class FetchLogTask;
 }
 namespace logservice
@@ -69,6 +70,8 @@ public:
   virtual void free_replay_log_buf(void *ptr) = 0;
   virtual palf::LogIOFlashbackTask *alloc_log_io_flashback_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr) = 0;
+  virtual palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
+  virtual void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr) = 0;
   TO_STRING_KV(K_(flying_log_task), K_(flying_meta_task));
 
 protected:
@@ -129,6 +132,8 @@ public:
   void free_replay_log_buf(void *ptr);
   palf::LogIOFlashbackTask *alloc_log_io_flashback_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_flashback_task(palf::LogIOFlashbackTask *ptr);
+  palf::LogIOPurgeThrottlingTask *alloc_log_io_purge_throttling_task(const int64_t palf_id, const int64_t palf_epoch);
+  void free_log_io_purge_throttling_task(palf::LogIOPurgeThrottlingTask *ptr);
 
 private:
   uint64_t tenant_id_ CACHE_ALIGNED;
@@ -140,6 +145,7 @@ private:
   const int LOG_IO_TRUNCATE_PREFIX_BLOCKS_TASK_SIZE;
   const int PALF_FETCH_LOG_TASK_SIZE;
   const int LOG_IO_FLASHBACK_TASK_SIZE;
+  const int LOG_IO_PURGE_THROTTLING_TASK_SIZE;
   ObBlockAllocMgr clog_blk_alloc_;
   ObBlockAllocMgr common_blk_alloc_;
   ObBlockAllocMgr unlimited_blk_alloc_;
@@ -151,7 +157,8 @@ private:
   ObSliceAlloc log_io_truncate_prefix_blocks_task_alloc_;
   ObSliceAlloc palf_fetch_log_task_alloc_;
   ObVSliceAlloc replay_log_task_alloc_;
-  ObSliceAlloc log_io_flashback_task_alloc_;;
+  ObSliceAlloc log_io_flashback_task_alloc_;
+  ObSliceAlloc log_io_purge_throttling_task_alloc_;
 };
 
 } // end of namespace common

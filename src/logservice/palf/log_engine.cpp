@@ -28,6 +28,7 @@
 #include "lsn.h"                                        // LSN
 #include "log_meta_entry.h"                             // LogMetaEntry
 #include "log_group_entry_header.h"                     // LogGroupEntryHeader
+#include "log_define.h"
 
 namespace oceanbase
 {
@@ -51,6 +52,7 @@ LogEngine::LogEngine() :
     log_io_worker_(NULL),
     palf_id_(INVALID_PALF_ID),
     palf_epoch_(-1),
+    last_purge_throttling_ts_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
 
@@ -168,6 +170,7 @@ void LogEngine::destroy()
     base_lsn_for_block_gc_.reset();
     min_block_id_ = LOG_INVALID_BLOCK_ID;
     min_block_max_scn_.reset();
+    last_purge_throttling_ts_ = OB_INVALID_TIMESTAMP;
   }
 }
 
@@ -489,6 +492,33 @@ int LogEngine::submit_flashback_task(const FlashbackCbCtx &flashback_cb_ctx)
   }
   return ret;
 }
+int LogEngine::submit_purge_throttling_task(const PurgeThrottlingType purge_type)
+{
+  int ret = OB_SUCCESS;
+  PurgeThrottlingCbCtx purge_cb_ctx(purge_type);
+  LogIOPurgeThrottlingTask *purge_task = NULL;
+  const int64_t cur_ts = ObClockGenerator::getClock();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine not inited!!!", K(ret));
+  } else if (OB_UNLIKELY(!purge_cb_ctx.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "Invalid argument!!!", K(purge_cb_ctx));
+  } else if ((!need_force_purge(purge_type)) &&
+             (cur_ts - last_purge_throttling_ts_ <= PURGE_THROTTLING_INTERVAL)) {
+    PALF_LOG(INFO, "no need to purge throttling according to PURGE_THROTTLING_INTERVAL",
+    K(purge_cb_ctx), K(last_purge_throttling_ts_), K(cur_ts), K(PURGE_THROTTLING_INTERVAL));
+  } else if (OB_FAIL(generate_purge_throttling_task_(purge_cb_ctx, purge_task))) {
+    PALF_LOG(ERROR, "generate_purge_throttling_ failed", K(purge_cb_ctx));
+  } else if (OB_FAIL(log_io_worker_->submit_io_task(purge_task))) {
+    PALF_LOG(ERROR, "submit_io_task failed", K(purge_cb_ctx));
+  } else {
+    last_purge_throttling_ts_ = cur_ts;
+    PALF_LOG(INFO, "submit_purge_throttling success", K(last_purge_throttling_ts_), "purge_type",
+             get_purge_throttling_type_str(purge_type));
+  }
+  return ret;
+}
 
 // ====================== LogStorage start =====================
 int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
@@ -749,6 +779,7 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte) const
     log_storage_used = 0;
     ret = OB_SUCCESS;
   } else {
+    //usage calculation should be precise to avoid stopping writing when actually no need
     log_storage_used = (max_block_id - min_block_id) * (PALF_BLOCK_SIZE + MAX_INFO_BLOCK_SIZE)
       + lsn_2_offset(log_storage_.get_end_lsn(), PALF_BLOCK_SIZE) + MAX_INFO_BLOCK_SIZE;
     PALF_LOG(TRACE, "log_storage_used size", K(min_block_id), K(max_block_id), K(log_storage_used));
@@ -957,6 +988,7 @@ int LogEngine::submit_change_mode_meta_resp(const common::ObAddr &server,
 
 int LogEngine::submit_config_change_pre_check_req(const common::ObAddr &server,
                                                   const LogConfigVersion &config_version,
+                                                  const bool need_purge_throttling,
                                                   const int64_t timeout_us,
                                                   LogGetMCStResp &resp)
 {
@@ -965,7 +997,7 @@ int LogEngine::submit_config_change_pre_check_req(const common::ObAddr &server,
     ret = OB_NOT_INIT;
   } else {
     ret = log_net_service_.submit_config_change_pre_check_req(
-        server, config_version, timeout_us, resp);
+        server, config_version, need_purge_throttling, timeout_us, resp);
   }
   return ret;
 }
@@ -1257,7 +1289,6 @@ int LogEngine::generate_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx
 {
 
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
   char *buf = NULL;
   const int64_t buf_len = MAX_META_ENTRY_SIZE;
   flush_meta_task = NULL;
@@ -1296,9 +1327,8 @@ int LogEngine::generate_flashback_task_(const FlashbackCbCtx &flashback_cb_ctx,
 {
 
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
   flashback_task = NULL;
-  if (false == flashback_cb_ctx .is_valid()) {
+  if (false == flashback_cb_ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (NULL == (flashback_task = alloc_mgr_->alloc_log_io_flashback_task(palf_id_, palf_epoch_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1311,6 +1341,27 @@ int LogEngine::generate_flashback_task_(const FlashbackCbCtx &flashback_cb_ctx,
   }
   if (OB_FAIL(ret) && NULL != flashback_task) {
     alloc_mgr_->free_log_io_flashback_task(flashback_task);
+  }
+  return ret;
+}
+
+int LogEngine::generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
+    LogIOPurgeThrottlingTask *&purge_task) {
+
+  int ret = OB_SUCCESS;
+  purge_task = NULL;
+  if (!purge_cb_ctx.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (NULL == (purge_task = alloc_mgr_->alloc_log_io_purge_throttling_task(palf_id_, palf_epoch_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(ERROR, "alloc_log_io_purge_throttling_task failed", KPC(this));
+  } else if (OB_FAIL(purge_task->init(purge_cb_ctx))) {
+    PALF_LOG(ERROR, "init LogIOPurgeThrottlingTask failed", KPC(this));
+  } else {
+    PALF_LOG(TRACE, "generate_purge_throttling_task_ hsuccess", KPC(this));
+  }
+  if (OB_FAIL(ret) && NULL != purge_task) {
+    alloc_mgr_->free_log_io_purge_throttling_task(purge_task);
   }
   return ret;
 }

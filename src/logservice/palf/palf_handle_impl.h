@@ -947,7 +947,6 @@ private:
                    FetchLogEngine *fetch_log_engine,
                    ObILogAllocator *alloc_mgr,
                    LogRpc *log_rpc,
-                   LogIOWorker *log_io_worker,
                    IPalfEnvImpl *palf_env_impl,
                    common::ObOccamTimer *election_timer);
   int after_flush_prepare_meta_(const int64_t &proposal_id);

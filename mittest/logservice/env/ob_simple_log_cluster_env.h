@@ -139,6 +139,8 @@ public:
   int create_paxos_group(const int64_t id, const PalfBaseInfo &info, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group(const int64_t id, const PalfBaseInfo &info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group_with_arb(const int64_t id, int64_t &arb_replica_idx, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &arb_replica_idx,
+                                  int64_t &leader_idx, PalfHandleImplGuard &leader);
   virtual int delete_paxos_group(const int64_t id);
   virtual int update_disk_options(const int64_t server_id, const int64_t log_block_number);
   virtual int restart_paxos_groups();
@@ -204,10 +206,37 @@ public:
   void switch_append_to_raw_write(PalfHandleImplGuard &leader, int64_t &mode_version);
   void switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version);
   void switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version);
+  void set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl);
 public:
   static int64_t palf_id_;
 private:
   int64_t prev_leader_idx_;
+};
+
+class IOTaskCond : public LogIOTask {
+public:
+	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
+  {
+    PALF_LOG(INFO, "before cond_wait");
+    cond_.wait();
+    PALF_LOG(INFO, "after cond_wait");
+    return OB_SUCCESS;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
+  {
+    return OB_SUCCESS;
+  }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  virtual int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  ObCond cond_;
 };
 
 } // end namespace unittest

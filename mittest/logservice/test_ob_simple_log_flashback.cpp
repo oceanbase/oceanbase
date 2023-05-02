@@ -169,7 +169,7 @@ TEST_F(TestObSimpleLogClusterFlashback, flashback_basic_func)
   block_net(leader_idx1, (leader_idx1+1) % 3);
   int64_t mode_version;
   flashback_srv = get_cluster()[0]->get_flashback_service();
-  EXPECT_EQ(OB_OP_NOT_ALLOW, flashback_srv->flashback(MTL_ID(), flashback_scn, 5 * 1000 * 1000));
+  ASSERT_EQ(OB_OP_NOT_ALLOW, flashback_srv->flashback(MTL_ID(), flashback_scn, 5 * 1000 * 1000));
   unblock_net(leader_idx1, (leader_idx1+1) % 3);
 
   // 5. test basic flashback

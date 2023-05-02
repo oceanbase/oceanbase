@@ -17,6 +17,7 @@
 #include "lib/ob_errno.h"                     // OB_SUCCESS
 #include "lib/thread/ob_thread_name.h"        // set_thread_name
 #include "share/rc/ob_tenant_base.h"          // mtl_free
+#include "share/ob_throttling_utils.h"        //ObThrottlingUtils
 #include "log_io_task.h"                      // LogIOTask
 #include "palf_env_impl.h"                    // PalfEnvImpl
 
@@ -26,6 +27,193 @@ using namespace common;
 using namespace share;
 namespace palf
 {
+void LogThrottlingStat::reset()
+{
+  start_ts_ = OB_INVALID_TIMESTAMP;
+  stop_ts_ = OB_INVALID_TIMESTAMP;
+  total_throttling_interval_ = 0;
+  total_throttling_size_ = 0;
+  total_throttling_task_cnt_ = 0;
+  total_skipped_size_ = 0;
+  total_skipped_task_cnt_ = 0;
+  max_throttling_interval_ = 0;
+}
+void LogWritingThrottle::reset()
+{
+  last_update_ts_ = OB_INVALID_TIMESTAMP;
+  need_writing_throttling_notified_ = false;
+  ATOMIC_SET(&submitted_seq_, 0);
+  ATOMIC_SET(&handled_seq_, 0);
+  appended_log_size_cur_round_ = 0;
+  decay_factor_ = 0;
+  throttling_options_.reset();
+  stat_.reset();
+}
+
+int LogWritingThrottle::update_throttling_options(IPalfEnvImpl *palf_env_impl)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(palf_env_impl)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("palf_env_impl is NULL", KPC(this));
+  } else {
+    int64_t cur_ts = ObClockGenerator::getClock();
+    bool unused_has_freed_up_space = false;
+    if ((cur_ts > last_update_ts_ + UPDATE_INTERVAL_US)
+        && OB_FAIL(update_throtting_options_(palf_env_impl, unused_has_freed_up_space))) {
+      LOG_WARN("failed to update_throttling_info", KPC(this));
+    }
+  }
+  return ret;
+}
+
+int LogWritingThrottle::throttling(const int64_t throttling_size, IPalfEnvImpl *palf_env_impl)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(palf_env_impl)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (throttling_size < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid throttling_size", K(throttling_size), KPC(this));
+  } else if (0 == throttling_size) {
+    //no need throttling
+  } else {
+    if (need_throttling_()) {
+      const int64_t cur_unrecyclable_size = throttling_options_.unrecyclable_disk_space_ + appended_log_size_cur_round_;
+      const int64_t trigger_base_log_disk_size = throttling_options_.total_disk_space_ * throttling_options_.trigger_percentage_ /  100;
+      int64_t time_interval = 0;
+      if (OB_FAIL(ObThrottlingUtils::get_throttling_interval(THROTTLING_CHUNK_SIZE, throttling_size, trigger_base_log_disk_size,
+                                                             cur_unrecyclable_size, decay_factor_, time_interval))) {
+        LOG_WARN("failed to get_throttling_interval", KPC(this));
+      }
+      int64_t remain_interval_us = time_interval;
+      bool has_freed_up_space = false;
+      while (OB_SUCC(ret) && remain_interval_us > 0) {
+        const int64_t real_interval = MIN(remain_interval_us, DETECT_INTERVAL_US);
+        usleep(real_interval);
+        remain_interval_us -= real_interval;
+        if (remain_interval_us <= 0) {
+          //do nothing
+        } else if (OB_FAIL(update_throtting_options_(palf_env_impl, has_freed_up_space))) {
+          LOG_WARN("failed to update_throttling_info_", KPC(this), K(time_interval), K(remain_interval_us));
+        } else if (!need_throttling_() || has_freed_up_space) {
+          LOG_TRACE("no need throttling or log disk has been freed up", KPC(this), K(time_interval), K(remain_interval_us));
+          break;
+        }
+      }
+      stat_.after_throttling(time_interval - remain_interval_us, throttling_size);
+    } else if (need_throttling_with_options_()) {
+      stat_.after_throttling(0, throttling_size);
+    }
+
+    if (stat_.has_ever_throttled()) {
+      if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+         PALF_LOG(INFO, "[LOG DISK THROTTLING] [STAT]", KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
+int LogWritingThrottle::after_append_log(const int64_t log_size, const int64_t seq)
+{
+  appended_log_size_cur_round_ += log_size;
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(log_size < 0 || seq < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument", K(seq), K(log_size));
+  } else if (seq > 0) {
+    if (seq > ATOMIC_LOAD(&handled_seq_) && seq <= ATOMIC_LOAD(&submitted_seq_)) {
+      ATOMIC_SET(&handled_seq_, seq);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "unexpected seq", KPC(this), K(seq));
+    }
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int LogWritingThrottle::update_throtting_options_(IPalfEnvImpl *palf_env_impl, bool &has_freed_up_space)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cur_ts = ObClockGenerator::getClock();
+  if (ATOMIC_LOAD(&need_writing_throttling_notified_)) {
+    PalfThrottleOptions new_throttling_options;
+    if (OB_FAIL(palf_env_impl->get_throttling_options(new_throttling_options))) {
+      PALF_LOG(WARN, "failed to get_writing_throttling_option");
+    } else if (OB_UNLIKELY(!new_throttling_options.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "options is invalid", K(new_throttling_options), KPC(this));
+    } else {
+      const bool need_throttling = new_throttling_options.need_throttling();
+      const int64_t new_available_size_after_limit = new_throttling_options.get_available_size_after_limit();
+      bool need_update_decay_factor = false;
+      bool need_start_throttling = false;
+
+      if (need_throttling) {
+        if (!throttling_options_.need_throttling()) {
+          need_start_throttling = true;
+          need_update_decay_factor = true;
+        } else {
+          need_update_decay_factor = (throttling_options_.get_available_size_after_limit() != new_available_size_after_limit);
+        }
+        if (need_update_decay_factor) {
+          if (OB_FAIL(ObThrottlingUtils::calc_decay_factor(new_available_size_after_limit, THROTTLING_DURATION_US,
+                  THROTTLING_CHUNK_SIZE, decay_factor_))) {
+            PALF_LOG(ERROR, "failed to calc_decay_factor", K(throttling_options_), "duration(s)",
+                     THROTTLING_DURATION_US / (1000 * 1000), K(THROTTLING_CHUNK_SIZE));
+          } else {
+            PALF_LOG(INFO, "[LOG DISK THROTTLING] success to calc_decay_factor", K(decay_factor_), K(throttling_options_),
+                     K(new_throttling_options), "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          // update other field
+          has_freed_up_space = new_throttling_options.unrecyclable_disk_space_ < throttling_options_.unrecyclable_disk_space_;
+          bool has_unrecyclable_space_changed = new_throttling_options.unrecyclable_disk_space_ != throttling_options_.unrecyclable_disk_space_;
+          if (has_unrecyclable_space_changed || need_start_throttling) {
+            // reset appended_log_size_cur_round_ when unrecyclable_disk_space_ changed
+            appended_log_size_cur_round_ = 0;
+          }
+          throttling_options_ = new_throttling_options;
+          if (need_start_throttling) {
+            stat_.start_throttling();
+            PALF_LOG(INFO, "[LOG DISK THROTTLING] [START]", KPC(this),
+            "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+          }
+        }
+      } else {
+        if (throttling_options_.need_throttling()) {
+          PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP]", KPC(this),
+          "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+          clean_up_();
+          stat_.stop_throttling();
+        }
+      }
+    }
+  } else {
+    if (throttling_options_.need_throttling()) {
+      PALF_LOG(INFO, "[LOG DISK THROTTLING] [STOP] no need throttling any more", KPC(this),
+               "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+      clean_up_();
+      stat_.stop_throttling();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    last_update_ts_ = cur_ts;
+  }
+  return ret;
+}
+
+void LogWritingThrottle::clean_up_()
+{
+  //do not reset submitted_seq_  && handled_seq_ && last_update_ts_ && stat_
+  appended_log_size_cur_round_ = 0;
+  decay_factor_ = 0;
+  throttling_options_.reset();
+}
+
 LogIOWorker::LogIOWorker()
     : log_io_worker_num_(-1),
       cb_thread_pool_tg_id_(-1),
@@ -86,10 +274,6 @@ void LogIOWorker::destroy()
 {
   (void)stop();
   (void)wait();
-  if (palf_env_impl_ != NULL) {
-    ObILogAllocator *allocator = palf_env_impl_->get_log_allocator();
-    PALF_LOG(INFO, "LogIOWorker destroy success", KPC(this), KPC(allocator));
-  }
   is_inited_ = false;
   last_working_time_ = OB_INVALID_TIMESTAMP;
   cb_thread_pool_tg_id_ = -1;
@@ -106,12 +290,36 @@ int LogIOWorker::submit_io_task(LogIOTask *io_task)
     ret = OB_NOT_INIT;
   } else if (OB_ISNULL(io_task)) {
     ret = OB_INVALID_ARGUMENT;
-	} else if (OB_FAIL(queue_.push(io_task))) {
-    PALF_LOG(WARN, "fail to push io task into queue", K(ret), KP(io_task));
   } else {
-    PALF_LOG(TRACE, "submit_io_task success", KP(io_task));
+    const bool need_purge_throttling = io_task->need_purge_throttling();
+    if (need_purge_throttling) {
+      ObSpinLockGuard guard(throttling_lock_);
+      const int64_t submit_seq = throttle_.inc_and_fetch_submitted_seq();
+      (void)io_task->set_submit_seq(submit_seq);
+      PALF_LOG(INFO, "submit flush meta task success", KPC(io_task));
+      if (OB_FAIL(queue_.push(io_task))) {
+        PALF_LOG(WARN, "fail to push io task into queue", K(ret), KP(io_task));
+        //rollback submit_seq
+        (void)throttle_.dec_submitted_seq();
+      }
+    } else {
+      if (OB_FAIL(queue_.push(io_task))) {
+        PALF_LOG(WARN, "fail to push io task into queue", K(ret), KP(io_task));
+      }
+    }
+    PALF_LOG(TRACE, "after submit_io_task", KP(io_task));
   }
   return ret;
+}
+int LogIOWorker::notify_need_writing_throttling(const bool &need_throttling)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    (void)throttle_.notify_need_writing_throttling(need_throttling);
+  }
+  return  ret;
 }
 
 void LogIOWorker::run1()
@@ -120,16 +328,32 @@ void LogIOWorker::run1()
   (void) run_loop_();
 }
 
+int LogIOWorker::handle_io_task_with_throttling_(LogIOTask *io_task)
+{
+  int ret = OB_SUCCESS;
+  const int64_t throttling_size = io_task->get_io_size();
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = throttle_.throttling(throttling_size, palf_env_impl_))) {
+    LOG_ERROR_RET(tmp_ret, "failed to do_throttling", K(throttling_size));
+  }
+  const int64_t submit_seq = io_task->get_submit_seq();
+  if (OB_FAIL(io_task->do_task(cb_thread_pool_tg_id_, palf_env_impl_))) {
+    PALF_LOG(WARN, "LogIOTask do_task falied");
+  } else {
+    if (OB_SUCCESS != (tmp_ret = throttle_.after_append_log(throttling_size, submit_seq))) {
+      LOG_ERROR_RET(tmp_ret, "after_append failed", KP(io_task));
+    }
+    PALF_LOG(TRACE, "handle_io_task_ success", K(submit_seq));
+  }
+  return ret;
+}
+
 int LogIOWorker::handle_io_task_(LogIOTask *io_task)
 {
   int ret = OB_SUCCESS;
 	int64_t start_ts = ObTimeUtility::current_time();
-  if (OB_FAIL(io_task->do_task(cb_thread_pool_tg_id_, palf_env_impl_))) {
-    PALF_LOG(WARN, "LogIOTask do_task falied", K(ret));
-  } else {
-    PALF_LOG(TRACE, "handle_io_task_ success", K(ret));
-  }
-  if (OB_FAIL(ret)) {
+
+  if (OB_FAIL(handle_io_task_with_throttling_(io_task))) {
     io_task->free_this(palf_env_impl_);
   }
 	int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
@@ -154,6 +378,7 @@ int LogIOWorker::run_loop_()
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
       ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
+      update_throttling_options_();
       ret = reduce_io_task_(task);
       ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
     }
@@ -191,7 +416,8 @@ bool LogIOWorker::need_reduce_(LogIOTask *io_task)
     default:
       break;
   }
-  return bool_ret;
+  //do not reduce io when writing throttling is on
+  return (bool_ret && (!throttle_.need_writing_throttling_notified()));
 }
 
 int LogIOWorker::reduce_io_task_(void *task)
@@ -225,6 +451,7 @@ int LogIOWorker::reduce_io_task_(void *task)
         PALF_LOG(WARN, "batch_io_task_mgr_ insert failed", K(tmp_ret));
       } else if (OB_SUCCESS == (tmp_ret = queue_.pop(task))) {
       // When 'queue_' is empty, stop aggreating.
+        update_throttling_options_();
       } else {
       }
     }
@@ -239,6 +466,15 @@ int LogIOWorker::reduce_io_task_(void *task)
     ret = handle_io_task_(io_task);
   }
   PALF_LOG(TRACE, "reduce_io_task_ finished", K(ret), K(tmp_ret), KPC(this));
+  return ret;
+}
+
+int LogIOWorker::update_throttling_options_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(throttle_.update_throttling_options(palf_env_impl_))) {
+    LOG_WARN("failed to update_throttling_options");
+  }
   return ret;
 }
 
@@ -323,14 +559,12 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::handle(const int64_t tg_id, IPalfEnv
     BatchLogIOFlushLogTask *io_task = batch_io_task_array_[i];
     if (OB_ISNULL(io_task)) {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(ERROR,
-               "BatchLogIOFlushLogTask in batch_io_task_array_ is nullptr, unexpected error!!!",
+      PALF_LOG(ERROR, "BatchLogIOFlushLogTask in batch_io_task_array_ is nullptr, unexpected error!!!",
                K(ret), KP(io_task), K(i));
     } else if (OB_FAIL(io_task->do_task(tg_id, palf_env_impl))) {
       PALF_LOG(WARN, "do_task failed", K(ret), KP(io_task));
     } else {
-      PALF_LOG(TRACE, "BatchLogIOFlushLogTaskMgr::handle success", K(ret), K(has_batched_size_),
-          KP(io_task));
+      PALF_LOG(TRACE, "BatchLogIOFlushLogTaskMgr::handle success", K(ret), K(has_batched_size_), KP(io_task));
     }
     if (OB_NOT_NULL(io_task)) {
       // 'handle_count_' and 'has_batched_size_' are used for statistics

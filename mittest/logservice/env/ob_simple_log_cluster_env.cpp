@@ -121,7 +121,7 @@ int generate_data(char *&buf, const int buf_len, int &real_data_size, const int 
   logservice::ObLogBaseHeader header(logservice::TRANS_SERVICE_LOG_BASE_TYPE, barrier_type, rand());
   const int header_size = header.get_serialize_size();
   constexpr int MAX_SIZE = 100 * 1024;
-  constexpr int UNIT_STR_LENGTH = 1 * 1024;
+  constexpr int UNIT_STR_LENGTH = 2 * 1024;
   int64_t pos = 0;
   ObTimeGuard guard("generate_data", 0);
   int payload_size = 0;
@@ -146,13 +146,12 @@ int generate_data(char *&buf, const int buf_len, int &real_data_size, const int 
       dis = distribution(generator);
     }
     guard.click("random");
-    std::string rand_str(payload_size, '\0');
-    int cnt = 0;
-    int char_idx = 0;
-    for (auto& dis: rand_str) {
-      dis = rand_str_unit[cnt++ % UNIT_STR_LENGTH];
+    int64_t remain_size = payload_size;
+    for (int64_t cur_round_size = 0; remain_size > 0; remain_size -= cur_round_size) {
+      cur_round_size = MIN(remain_size, UNIT_STR_LENGTH);
+      MEMCPY(buf+pos, rand_str_unit.c_str(), cur_round_size);
+      pos+=cur_round_size;
     }
-    memcpy(buf+pos, rand_str.c_str(), payload_size);
     guard.click("fillbuf");
     CLOG_LOG(INFO, "generate_data finish", K(ret), K(payload_size), K(wanted_data_size), K(real_data_size), K(pos), KP(buf), K(guard));
   }
@@ -275,6 +274,16 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
     int64_t &leader_idx,
     PalfHandleImplGuard &leader)
 {
+  return create_paxos_group_with_arb(id, NULL, arb_replica_idx, leader_idx, leader);
+}
+
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
+    const int64_t id,
+    palf::PalfLocationCacheCb *loc_cb,
+    int64_t &arb_replica_idx,
+    int64_t &leader_idx,
+    PalfHandleImplGuard &leader)
+{
   int ret = OB_SUCCESS;
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
@@ -309,6 +318,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
         } else if (OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1))) {
           CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
         } else {
+          handle->set_location_cache_cb(loc_cb);
           handle->set_paxos_member_region_map(get_member_region_map());
           CLOG_LOG(INFO, "set_initial_member_list success", K(member_list));
         }
@@ -340,6 +350,7 @@ int ObSimpleLogClusterTestEnv::update_disk_options(const int64_t server_id, cons
   opts.disk_options_.log_disk_usage_limit_size_ = file_block_num * PALF_PHY_BLOCK_SIZE;
   opts.disk_options_.log_disk_utilization_threshold_ = 80;
   opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
+  opts.disk_options_.log_disk_throttling_percentage_ = 100;
   auto cluster = get_cluster();
   if (server_id >= 0 && server_id < cluster.size()) {
     ObTenantEnv::set_tenant(cluster[server_id]->get_tenant_base());
@@ -373,7 +384,7 @@ int ObSimpleLogClusterTestEnv::restart_paxos_groups()
   std::vector<std::thread> threads;
   for (auto svr : get_cluster()) {
     threads.emplace_back(std::thread(func, node_idx, svr));
-    node_idx++;
+    node_idx+=2;
   }
   for (auto &thread: threads) {
     thread.join();
@@ -394,7 +405,7 @@ int ObSimpleLogClusterTestEnv::restart_server(const int64_t server_id)
   if (server_id >= 0 && server_id < cluster.size()) {
     const auto svr = cluster[server_id];
     ObTenantEnv::set_tenant(svr->get_tenant_base());
-    if (OB_FAIL(svr->simple_restart(get_test_name(), get_node_idx_base() + server_id))) {
+    if (OB_FAIL(svr->simple_restart(get_test_name(), get_node_idx_base() + server_id * 2))) {
       PALF_LOG(WARN, "simple_restart failed", K(ret), K(server_id));
     } else {
       PALF_LOG(INFO, "restart_paxos_groups success", K(svr->get_addr()));
@@ -1192,5 +1203,22 @@ void ObSimpleLogClusterTestEnv::switch_flashback_to_append(PalfHandleImplGuard &
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::APPEND, SCN::min_scn()));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
 }
+
+void ObSimpleLogClusterTestEnv::set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl)
+{
+  const int64_t MB = 1024 * 1024L;
+  const int64_t total_disk_size = 400 * MB;
+  const int64_t utilization_limit_threshold = 95;
+  const int64_t utilization_threshold = 94;
+  const int64_t throttling_percentage = 100;
+  const int64_t unrecyclable_size = 0;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = throttling_percentage;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = total_disk_size;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_threshold_ = utilization_threshold;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_ = utilization_limit_threshold;
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_recycling_blocks_ = palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_;
+  palf_env_impl.disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
+}
+
 } // end namespace unittest
 } // end namespace oceanbase

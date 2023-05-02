@@ -302,7 +302,7 @@ public:
       const int64_t &prev_log_proposal_id,
       const LSN &prev_lsn,
       const LSN &curr_lsn,
-      const LogWriteBuf &write_buf)
+      const LogWriteBuf &write_buf) override
   {
     int ret = OB_SUCCESS;
     UNUSED(addr);
@@ -318,7 +318,7 @@ public:
   int submit_push_log_resp(
       const common::ObAddr &server,
       const int64_t &msg_proposal_id,
-      const LSN &lsn)
+      const LSN &lsn) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -327,7 +327,7 @@ public:
     return ret;
   }
 
-  int submit_prepare_meta_req(const ObMemberList &member_list, const int64_t &log_proposal_id)
+  int submit_prepare_meta_req(const ObMemberList &member_list, const int64_t &log_proposal_id) override
   {
     UNUSEDx(member_list, log_proposal_id);
     return OB_SUCCESS;
@@ -339,7 +339,8 @@ public:
       const bool vote_granted,
       const int64_t &log_proposal_id,
       const LSN &lsn,
-      const LogModeMeta &mode_meta)
+      const LSN &committed_end_lsn,
+      const LogModeMeta &mode_meta) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -347,6 +348,7 @@ public:
     UNUSED(vote_granted);
     UNUSED(log_proposal_id);
     UNUSED(lsn);
+    UNUSED(committed_end_lsn);
     UNUSED(mode_meta);
     return ret;
   }
@@ -357,7 +359,7 @@ public:
       const int64_t &prev_log_proposal_id,
       const LSN &prev_lsn,
       const int64_t &prev_mode_pid,
-      const LogConfigMeta &config_meta)
+      const LogConfigMeta &config_meta) override
   {
     int ret = OB_SUCCESS;
     UNUSED(member_list);
@@ -375,7 +377,7 @@ public:
       const int64_t &prev_log_proposal_id,
       const LSN &prev_lsn,
       const int64_t &prev_mode_pid,
-      const LogConfigMeta &config_meta)
+      const LogConfigMeta &config_meta) override
   {
     int ret = OB_SUCCESS;
     UNUSED(member_list);
@@ -393,7 +395,7 @@ public:
       const int64_t &prev_log_proposal_id,
       const LSN &prev_lsn,
       const int64_t &prev_mode_pid,
-      const LogConfigMeta &config_meta)
+      const LogConfigMeta &config_meta) override
   {
     int ret = OB_SUCCESS;
     UNUSED(member_list);
@@ -408,7 +410,7 @@ public:
   int submit_change_config_meta_resp(
       const common::ObAddr &server,
       const int64_t msg_proposal_id,
-      const LogConfigVersion &config_version)
+      const LogConfigVersion &config_version) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -421,7 +423,7 @@ public:
       const common::ObMemberList &member_list,
       const int64_t &msg_proposal_id,
       const bool is_applied_mode_meta,
-      const LogModeMeta &mode_meta)
+      const LogModeMeta &mode_meta) override
   {
     int ret = OB_SUCCESS;
     UNUSED(member_list);
@@ -433,7 +435,7 @@ public:
 
   int submit_change_mode_meta_resp(
       const common::ObAddr &server,
-      const int64_t &msg_proposal_id)
+      const int64_t &msg_proposal_id) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -444,13 +446,15 @@ public:
   int submit_config_change_pre_check_req(
       const common::ObAddr &server,
       const LogConfigVersion &config_version,
+      const bool need_purge_throttling,
       const int64_t timeout_ns,
-      LogGetMCStResp &resp)
+      LogGetMCStResp &resp) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
     UNUSED(config_version);
     UNUSED(timeout_ns);
+    UNUSED(need_purge_throttling);
     resp.is_normal_replica_ = true;
     resp.need_update_config_meta_ = false;
     resp.max_flushed_end_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
@@ -481,7 +485,8 @@ public:
 
   int submit_notify_rebuild_req(
     const ObAddr &server,
-    const LSN &base_lsn)
+    const LSN &base_lsn,
+    const LogInfo &base_prev_log_info) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -491,7 +496,7 @@ public:
 
   int submit_register_parent_req(const common::ObAddr &server,
                                  const LogLearner &child_itself,
-                                 const bool is_to_leader)
+                                 const bool is_to_leader) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -502,7 +507,7 @@ public:
   int submit_register_parent_resp(const common::ObAddr &server,
                                   const LogLearner &parent_itself,
                                   const LogCandidateList &candidate_list,
-                                  const RegisterReturn reg_ret)
+                                  const RegisterReturn reg_ret) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
@@ -511,21 +516,21 @@ public:
     reg_ret_ = reg_ret;
     return ret;
   }
-  int submit_retire_parent_req(const common::ObAddr &server, const LogLearner &child_itself)
+  int submit_retire_parent_req(const common::ObAddr &server, const LogLearner &child_itself) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
     UNUSED(child_itself);
     return ret;
   }
-  int submit_retire_child_req(const common::ObAddr &server, const LogLearner &parent_itself)
+  int submit_retire_child_req(const common::ObAddr &server, const LogLearner &parent_itself) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
     UNUSED(parent_itself);
     return ret;
   }
-  int submit_learner_keepalive_req(const common::ObAddr &server, const LogLearner &sender_itself)
+  int submit_learner_keepalive_req(const common::ObAddr &server, const LogLearner &sender_itself) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);

@@ -583,6 +583,11 @@ DEF_INT(log_disk_utilization_threshold, OB_TENANT_PARAMETER,"80",
         "Range: [10, 100)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(log_disk_throttling_percentage, OB_TENANT_PARAMETER, "60",
+        "[40, 100]",
+        "the threshold of the size of the log disk when writing_limit will be triggered. Rang:[40，100]. setting 100 means turn off writing limit",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "[1s,300s]",
         "time to tolerate log disk io delay, after that, the disk status will be set warning. "
