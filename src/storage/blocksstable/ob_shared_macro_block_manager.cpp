@@ -449,11 +449,6 @@ int ObSharedMacroBlockMgr::defragment()
     }
   }
 
-  if (OB_ITER_END == ret || OB_SUCC(ret)) {
-    ret = OB_SUCCESS;
-    FLOG_INFO("successfully defragment data blocks", K(ret), K(rewrite_cnt));
-  }
-
   if (nullptr != sstable_index_builder) {
     sstable_index_builder->~ObSSTableIndexBuilder();
     task_allocator.free(sstable_index_builder);
@@ -465,12 +460,12 @@ int ObSharedMacroBlockMgr::defragment()
     index_block_rebuilder = nullptr;
   }
 
-  if (OB_FAIL(ret)) {
-    if (REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
-      LOG_ERROR("defragmentation failed 10 times, something is wrong", K(ret), K(macro_ids));
-    } else {
-      LOG_WARN("fail to finish defragmentation", K(ret), K(macro_ids));
-    }
+  if (OB_ITER_END == ret || OB_SUCC(ret)) {
+    ret = OB_SUCCESS;
+    LOG_INFO("successfully defragment data blocks", K(rewrite_cnt));
+  } else if (OB_ALLOCATE_MEMORY_FAILED != ret && OB_SERVER_OUTOF_DISK_SPACE != ret
+      && REACH_COUNT_INTERVAL(FAILURE_COUNT_INTERVAL)) {
+    LOG_ERROR("defragmentation can't be finished, something is wrong", K(ret), K(macro_ids));
   }
 
   return ret;
@@ -492,7 +487,11 @@ int ObSharedMacroBlockMgr::update_tablet(
   if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(sstables))) {
     LOG_WARN("fail to get sstables of this tablet", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-    LOG_WARN("fail to get data version", K(ret));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_EAGAIN;
+    } else {
+      LOG_WARN("fail to get data version", K(ret));
+    }
   }
   for (int64_t i = 0; i < sstables.count() && OB_SUCC(ret); i++) {
     const ObSSTable *sstable = static_cast<ObSSTable *>(sstables.at(i));
