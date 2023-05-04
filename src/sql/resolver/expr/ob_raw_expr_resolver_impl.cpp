@@ -1261,6 +1261,9 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
       ObString col_name;
       para_expr = NULL;
       if (OB_FAIL(get_column_raw_text_from_node(expr_value_node, col_name))) {
+        // bugfix: 49298642
+        // parameter 1 of function xmlelement without aliased
+        ret = OB_ERR_XMLELEMENT_ALIASED;
         LOG_WARN("get column raw text failed", K(ret));
       } else if (!col_name.empty() && OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(ctx_.local_allocator_,
                                                                                 ObString(col_name.length(), easy_string_toupper(col_name.ptr())),
