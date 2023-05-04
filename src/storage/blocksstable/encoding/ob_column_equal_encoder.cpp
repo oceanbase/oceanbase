@@ -113,10 +113,11 @@ int ObColumnEqualEncoder::traverse(bool &suitable)
          && exc_row_ids_.count() <= max_exc_cnt; ++row_id) {
       const ObDatum &datum = ctx_->col_datums_->at(row_id);
       const ObDatum &ref_datum = ref_ctx_->col_datums_->at(row_id);
-      if (!is_datum_equal(datum, ref_datum, cmp_func)) {
-        if (OB_FAIL(exc_row_ids_.push_back(row_id))) {
-          LOG_WARN("push_back failed", K(ret), K(row_id));
-        }
+      bool equal = false;
+      if (OB_FAIL(is_datum_equal(datum, ref_datum, cmp_func, equal))) {
+        LOG_WARN("cmp datum failed", K(ret), K(row_id));
+      } else if (!equal && OB_FAIL(exc_row_ids_.push_back(row_id))) {
+        LOG_WARN("push_back failed", K(ret), K(row_id));
       }
     }
 

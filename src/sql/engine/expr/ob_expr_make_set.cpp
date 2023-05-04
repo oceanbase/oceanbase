@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprMakeSet::ObExprMakeSet(ObIAllocator &alloc)
-: ObStringExprOperator(alloc, T_FUN_SYS_MAKE_SET, "make_set", MORE_THAN_ONE)
+: ObStringExprOperator(alloc, T_FUN_SYS_MAKE_SET, "make_set", MORE_THAN_ONE, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

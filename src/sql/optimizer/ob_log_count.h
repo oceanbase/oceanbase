@@ -35,14 +35,14 @@ public:
   inline void set_rownum_expr(ObRawExpr *rownum_expr) { rownum_expr_ = rownum_expr; }
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double &child_card, 
                      double &child_cost, 
                      bool need_re_est_child_cost, 
                      double sel, 
                      double &op_cost);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
-
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int inner_replace_op_exprs(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
 

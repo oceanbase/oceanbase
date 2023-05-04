@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprConvert::ObExprConvert(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -100,7 +100,7 @@ int ObExprConvert::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 }
 
 ObExprConvertOracle::ObExprConvertOracle(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, TWO_OR_THREE)
+    : ObStringExprOperator(alloc, T_FUN_SYS_CONVERT, N_CONVERT, TWO_OR_THREE, VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -235,10 +235,17 @@ int ObExprConvertOracle::calc_convert_oracle_expr(const ObExpr &expr,
         ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
         int64_t src_byte_len = 0;
         int64_t buf_size = 0;
+        ObCharsetType src_cs = ObCharset::charset_type_by_coll(src_cs_type);
+        ObCharsetType dst_cs = ObCharset::charset_type_by_coll(dst_cs_type);
         if (ob_is_string_tc(expr.datum_meta_.type_)
             && (src.length() == 0
-               || ObCharset::charset_type_by_coll(src_cs_type) == ObCharset::charset_type_by_coll(dst_cs_type)
-               || ObCharset::charset_type_by_coll(dst_cs_type) == CHARSET_BINARY)) {
+               || src_cs == dst_cs
+               || dst_cs == CHARSET_BINARY
+               /** GB18030 and GB18030_2022 have the same code points,
+                *  but they have different mapping to unicode.
+                *  So, we do not do charset_convert for them in convert*/
+               || (src_cs == CHARSET_GB18030 && dst_cs == CHARSET_GB18030_2022)
+               || (src_cs == CHARSET_GB18030_2022 && dst_cs == CHARSET_GB18030))) {
           dst = src; // no need convert
         } else if (OB_FAIL(src_iter.init(0, NULL, &calc_alloc))) {
           LOG_WARN("init src_iter failed ", K(ret), K(src_iter));

@@ -126,6 +126,11 @@ public:
   {
     return common::murmurhash(&tenant_id_, sizeof(tenant_id_), func_name_.hash());
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const ObTenantFunctionKey& r) const
   {
     int cmp = 0;
@@ -375,6 +380,11 @@ public:
   uint64_t hash() const
   {
     return common::murmurhash(&tenant_id_, sizeof(tenant_id_), group_name_.hash());
+  }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
   }
   int compare(const ObTenantGroupKey& r) const
   {

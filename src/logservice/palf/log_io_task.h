@@ -32,7 +32,8 @@ enum class LogIOTaskType
   FLUSH_META_TYPE = 2,
   TRUNCATE_PREFIX_TYPE = 3,
   TRUNCATE_LOG_TYPE = 4,
-	FLASHBACK_LOG_TYPE = 5
+	FLASHBACK_LOG_TYPE = 5,
+  PURGE_THROTTLING_TYPE = 6,
 };
 
 class LogIOTask;
@@ -50,19 +51,26 @@ public:
   int after_consume(IPalfEnvImpl *palf_env_impl);
   LogIOTaskType get_io_task_type();
   void free_this(IPalfEnvImpl *palf_env_impl);
+  int64_t get_io_size();
   int64_t get_palf_id() const { return palf_id_; }
+  int64_t get_submit_seq() const {return submit_seq_;}
+  void set_submit_seq(const int64_t submit_seq) {submit_seq_ = submit_seq;}
+  bool need_purge_throttling();
   int64_t get_palf_epoch() const { return palf_epoch_; }
 	VIRTUAL_TO_STRING_KV("BaseClass", "LogIOTask",
 			"palf_id", palf_id_,
 			"palf_epoch", palf_epoch_,
 			"create_task_ts", init_task_ts_,
-			"push_cb_into_cb_pool_ts", push_cb_into_cb_pool_ts_);
+			"push_cb_into_cb_pool_ts", push_cb_into_cb_pool_ts_,
+      K(submit_seq_));
 
 protected:
   virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) = 0;
   virtual int after_consume_(IPalfEnvImpl *palf_env_impl) = 0;
   virtual LogIOTaskType get_io_task_type_() const = 0;
   virtual void free_this_(IPalfEnvImpl *palf_env_impl) = 0;
+  virtual int64_t get_io_size_() const = 0;
+  virtual bool need_purge_throttling_() const = 0;
 	int push_task_into_cb_thread_pool_(const int64_t tg_id, LogIOTask *io_task);
 
 protected:
@@ -70,6 +78,8 @@ protected:
   int64_t palf_epoch_;
 	int64_t init_task_ts_;
 	int64_t push_cb_into_cb_pool_ts_;
+  //used for writing throttling
+  int64_t submit_seq_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LogIOTask);
@@ -81,17 +91,19 @@ public:
   LogIOFlushLogTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOFlushLogTask() override;
 
-public:
   int init(const FlushLogCbCtx &flush_log_cb_ctx,
            const LogWriteBuf &write_buf);
   void destroy();
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(write_buf), K_(flush_log_cb_ctx), K(is_inited_));
+private:
   // IO thread will call this function to flush log
   int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
   // IO thread will call this function to submit async task
   int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_LOG_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
-  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(write_buf), K_(flush_log_cb_ctx));
+  int64_t get_io_size_() const override final;
+  bool need_purge_throttling_() const override final {return false;}
 
 private:
   FlushLogCbCtx flush_log_cb_ctx_;
@@ -113,6 +125,8 @@ private:
   int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::TRUNCATE_LOG_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  int64_t get_io_size_() const override final {return 0;}
+  bool need_purge_throttling_() const override final {return false;}
 private:
   TruncateLogCbCtx truncate_log_cb_ctx_;
   bool is_inited_;
@@ -135,6 +149,8 @@ private:
   int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_META_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  int64_t get_io_size_() const override final {return buf_len_;}
+  bool need_purge_throttling_() const override final {return true;}
 
 private:
   FlushMetaCbCtx flush_meta_cb_ctx_;
@@ -157,6 +173,8 @@ private:
   int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::TRUNCATE_PREFIX_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  int64_t get_io_size_() const override final {return 0;}
+  bool need_purge_throttling_() const override final {return false;}
 private:
   TruncatePrefixBlocksCbCtx truncate_prefix_blocks_ctx_;
   bool is_inited_;
@@ -190,7 +208,8 @@ private:
   bool is_inited_;
 };
 
-class LogIOFlashbackTask : public LogIOTask {
+class LogIOFlashbackTask : public LogIOTask
+{
 public:
   LogIOFlashbackTask(const int64_t palf_id,const int64_t palf_epoch);
   ~LogIOFlashbackTask();
@@ -204,9 +223,31 @@ private:
   int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLASHBACK_LOG_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  int64_t get_io_size_() const override final {return 0;}
+  bool need_purge_throttling_() const override final {return true;}
 private:
   FlashbackCbCtx flashback_ctx_;
-  int64_t palf_id_;
+  bool is_inited_;
+};
+
+class LogIOPurgeThrottlingTask : public LogIOTask {
+public:
+  LogIOPurgeThrottlingTask(const int64_t palf_id, const int64_t palf_epoch);
+  ~LogIOPurgeThrottlingTask();
+  void reset();
+public:
+  int init(const PurgeThrottlingCbCtx & flashback_ctx);
+  void destroy();
+  INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(purge_ctx), K_(is_inited));
+private:
+  int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final;
+  int after_consume_(IPalfEnvImpl *palf_env_impl) override final;
+  LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::PURGE_THROTTLING_TYPE; }
+  void free_this_(IPalfEnvImpl *palf_env_impl) override final;
+  int64_t get_io_size_() const override final {return 0;}
+  bool need_purge_throttling_() const override final {return true;}
+private:
+  PurgeThrottlingCbCtx purge_ctx_;
   bool is_inited_;
 };
 } // end namespace palf

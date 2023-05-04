@@ -259,6 +259,11 @@ private:
     {
       return static_cast<int64_t>(tenant_id_);
     }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
 
     bool operator== (const TenantID &other) const
     {

@@ -32,7 +32,7 @@ namespace sql
 
 ObExprUserCanAccessObj::ObExprUserCanAccessObj(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_USER_CAN_ACCESS_OBJ,
-                         N_USER_CAN_ACCESS_OBJ, 3, NOT_ROW_DIMENSION)
+                         N_USER_CAN_ACCESS_OBJ, 3, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

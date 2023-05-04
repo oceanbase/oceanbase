@@ -89,6 +89,8 @@ struct ObOptParamHint
     DEF(DDL_TASK_ID,)                     \
     DEF(ENABLE_NEWSORT,)                  \
     DEF(USE_PART_SORT_MGB,)               \
+    DEF(USE_DEFAULT_OPT_STAT,)            \
+    DEF(USE_FORCE_BLOCK_SAMPLE,)          \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -122,11 +124,14 @@ struct ObGlobalHint {
   static const common::ObConsistencyLevel UNSET_CONSISTENCY = common::INVALID_CONSISTENCY;
   static const int64_t UNSET_QUERY_TIMEOUT = -1;
   static const int64_t UNSET_MAX_CONCURRENT = -1;
-  static const int64_t UNSET_PARALLEL = -1;
   static const uint64_t UNSET_OPT_FEATURES_VERSION = 0;
   static const uint64_t MIN_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
   static const uint64_t CURRENT_OUTLINE_ENABLE_VERSION = CLUSTER_VERSION_4_0_0_0;
   static const int64_t DEFAULT_PARALLEL = 1;
+  static const int64_t UNSET_PARALLEL = 0;
+  static const int64_t SET_ENABLE_AUTO_DOP = -1;
+  static const int64_t SET_ENABLE_MANUAL_DOP = -2;
+  static const int64_t UNSET_DYNAMIC_SAMPLING = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_monitor_hints(const ObIArray<ObMonitorHint> &monitoring_ids);
@@ -146,6 +151,7 @@ struct ObGlobalHint {
   void merge_read_consistency_hint(ObConsistencyLevel read_consistency, int64_t frozen_version);
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
+  void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(PlanText &plan_text, const bool ignore_parallel) const;
@@ -155,8 +161,11 @@ struct ObGlobalHint {
   ObParamOption get_param_option() const { return param_option_; }
   int64_t get_dblink_tx_id_hint() const { return tx_id_; }
   int64_t get_dblink_tm_sessid_hint() const { return tm_sessid_; }
-  int64_t get_parallel_hint() const { return parallel_; }
+  int64_t get_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL ? parallel_ : UNSET_PARALLEL; }
+  bool has_parallel_degree() const { return parallel_ >= DEFAULT_PARALLEL; }
   bool has_parallel_hint() const { return UNSET_PARALLEL != parallel_; }
+  bool enable_auto_dop() const { return SET_ENABLE_AUTO_DOP == parallel_; }
+  bool enable_manual_dop() const { return SET_ENABLE_MANUAL_DOP == parallel_; }
   bool is_topk_specified() const { return topk_precision_ > 0 || sharding_minimum_row_count_ > 0; }
   bool has_valid_opt_features_version() const { return is_valid_opt_features_version(opt_features_version_); }
   static bool is_valid_opt_features_version(uint64_t version)
@@ -193,6 +202,8 @@ struct ObGlobalHint {
   bool has_gather_opt_stat_hint() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_OPT_STATS_GATHER) ? true : false;
   }
+  int64_t get_dynamic_sampling() const { return dynamic_sampling_; }
+  bool has_dynamic_sampling() const { return UNSET_DYNAMIC_SAMPLING != dynamic_sampling_; }
 
   TO_STRING_KV(K_(frozen_version),
                K_(topk_precision),
@@ -220,7 +231,9 @@ struct ObGlobalHint {
                K_(opt_params),
                K_(ob_ddl_schema_versions),
                K_(osg_hint),
-               K_(has_dbms_stats_hint));
+               K_(has_dbms_stats_hint),
+               K_(dynamic_sampling));
+
   int64_t frozen_version_;
   int64_t topk_precision_;
   int64_t sharding_minimum_row_count_;
@@ -248,6 +261,7 @@ struct ObGlobalHint {
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;
   bool has_dbms_stats_hint_;
+  int64_t dynamic_sampling_;
 };
 
 // used in physical plan
@@ -369,7 +383,8 @@ public:
       HINT_JOIN_METHOD,
       HINT_TABLE_PARALLEL,
       HINT_PQ_SET,
-      HINT_JOIN_FILTER
+      HINT_JOIN_FILTER,
+      HINT_TABLE_DYNAMIC_SAMPLING
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -432,6 +447,7 @@ public:
   bool is_table_parallel_hint() const { return HINT_TABLE_PARALLEL == hint_class_; }
   bool is_join_filter_hint() const { return HINT_JOIN_FILTER == hint_class_; }
   bool is_project_prune_hint() const { return T_PROJECT_PRUNE == hint_type_; }
+  bool is_table_dynamic_sampling_hint() const { return HINT_TABLE_DYNAMIC_SAMPLING == hint_class_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),
@@ -968,6 +984,31 @@ struct ObDDLSchemaVersionHint
   TO_STRING_KV(K_(table), K_(schema_version));
   ObTableInHint table_;
   int64_t schema_version_;
+};
+class ObTableDynamicSamplingHint : public ObOptHint
+{
+public:
+  ObTableDynamicSamplingHint(ObItemType hint_type)
+    : ObOptHint(hint_type), dynamic_sampling_(ObGlobalHint::UNSET_DYNAMIC_SAMPLING), sample_block_cnt_(0)
+  {
+    set_hint_class(HINT_TABLE_DYNAMIC_SAMPLING);
+  }
+  int assign(const ObTableDynamicSamplingHint &other);
+  virtual ~ObTableDynamicSamplingHint() {}
+  virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  ObTableInHint &get_table() { return table_; }
+  const ObTableInHint &get_table() const { return table_; }
+  int64_t get_dynamic_sampling() const { return dynamic_sampling_; }
+  void set_dynamic_sampling(int64_t dynamic_sampling) { dynamic_sampling_ = dynamic_sampling; }
+  int64_t get_sample_block_cnt() const { return sample_block_cnt_; }
+  void set_sample_block_cnt(int64_t sample_block_cnt) { sample_block_cnt_ = sample_block_cnt; }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(dynamic_sampling), K_(sample_block_cnt));
+
+private:
+  ObTableInHint table_;
+  int64_t dynamic_sampling_;
+  int64_t sample_block_cnt_;
 };
 
 }

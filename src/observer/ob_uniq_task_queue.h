@@ -21,6 +21,8 @@
 #include "lib/queue/ob_dedup_queue.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "share/ob_thread_pool.h"
+#include "share/ob_debug_sync.h"
+#include "share/ob_debug_sync_point.h"
 
 namespace oceanbase
 {
@@ -67,6 +69,7 @@ public:
   // The hash() and compare_without_version(...) are used to remove duplication when
   // adding tasks into queue.
   virtual int64_t hash() const = 0;
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   virtual bool compare_without_version(const Task &other) const = 0;
   // The following two interfaces are used to update the waiting tasks with same key.
   virtual bool need_assign_when_equal() const = 0;
@@ -197,6 +200,8 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
                                               const int64_t queue_size, const char *thread_name)
 {
   int ret = common::OB_SUCCESS;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, common::ObModIds::OB_PARTITION_TABLE_TASK);
+  SET_USE_500(attr);
   const int64_t group_count = 128;
   if (inited_) {
     ret = common::OB_INIT_TWICE;
@@ -206,12 +211,12 @@ int ObUniqTaskQueue<Task, Process>::init_only(Process *updater, const int64_t th
     SERVER_LOG(WARN, "invalid argument", K(thread_num), K(queue_size), K(updater));
   } else if (OB_FAIL(cond_.init(common::ObWaitEventIds::PARTITION_TABLE_UPDATER_COND_WAIT))) {
     SERVER_LOG(WARN, "fai to init condition, ", K(ret));
-  } else if (OB_FAIL(task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+  } else if (OB_FAIL(task_map_.create(queue_size, attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(queue_size));
   } else if (OB_FAIL(group_map_.create(group_count,
-      common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+                                       attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret), K(group_count));
-  } else if (OB_FAIL(processing_task_map_.create(queue_size, common::ObModIds::OB_PARTITION_TABLE_TASK))) {
+  } else if (OB_FAIL(processing_task_map_.create(queue_size, attr, attr))) {
     SERVER_LOG(WARN, "create hash map failed", K(ret));
   } else {
     this->set_thread_count(static_cast<int32_t>(thread_num));
@@ -348,6 +353,7 @@ void ObUniqTaskQueue<Task, Process>::run1()
     SERVER_LOG(WARN, "not init", K(ret));
   } else {
     while (!lib::Thread::current().has_set_stop()) {
+      DEBUG_SYNC(common::BEFORE_UNIQ_TASK_RUN);
       Task *t = NULL;
       tasks.reuse();
       if (OB_SUCC(tasks.reserve(batch_exec_cnt))) {
@@ -390,7 +396,10 @@ void ObUniqTaskQueue<Task, Process>::run1()
             if (common::OB_SUCCESS == ret && tasks.count() > 0) {
               ++processing_thread_count_;
               if (group->list_.get_size() <= 0) {
-                if (cur_group_ == group) {
+                if (group->get_next() == groups_.get_header()) {
+                  // bugfix: workitem/49006474
+                  cur_group_ = group->get_next();
+                } else {
                   cur_group_ = group->get_prev();
                 }
                 if (NULL == groups_.remove(group)) {

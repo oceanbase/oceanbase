@@ -21,6 +21,7 @@
 #include "pl/ob_pl_package.h"
 #include "observer/ob_req_time_service.h"
 #include "pl/ob_pl_compile.h"
+#include "pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -50,12 +51,13 @@ int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
 }
 int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
                                              const ObRoutineInfo *routine_info,
-                                             ObCallProcedureStmt *stmt)
+                                             ObCallProcedureInfo *call_proc_info,
+                                             ObIArray<ObRawExpr*> &params)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(routine_info));
-  CK (OB_NOT_NULL(stmt));
-  ObArray<ObRawExpr*> params;
+  CK (OB_NOT_NULL(call_proc_info));
+
   // Step 1: 初始化参数列表
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info->get_param_count(); ++i) {
     OZ (params.push_back(NULL));
@@ -103,8 +105,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
       OX (params.at(i) = default_expr);
     }
   }
-  // Step 4: 将参数数组设置到stmt中
-  OZ (stmt->add_params(params));
+
   if (OB_SUCC(ret)) { // 判断所有参数没有复杂表达式参数
     bool v = true;
     for (int64_t i = 0; v && OB_SUCC(ret) && i < params.count(); i ++) {
@@ -120,7 +121,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
         v = false;
       }
     } // for end
-    stmt->set_can_direct_use_param(v);
+    call_proc_info->set_can_direct_use_param(v);
   }
   return ret;
 }
@@ -252,6 +253,92 @@ int ObCallProcedureResolver::resolve_param_exprs(const ParseNode *params_node,
   return ret;
 }
 
+int ObCallProcedureResolver::generate_pl_cache_ctx(pl::ObPLCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(schema_checker_), K(session_info_), K(ret));
+  } else if (OB_ISNULL(schema_checker_->get_schema_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(ret));
+  } else {
+    pc_ctx.session_info_ = session_info_;
+    pc_ctx.schema_guard_ = schema_checker_->get_schema_mgr();
+    pc_ctx.cache_params_ = const_cast<ParamStore *>(params_.param_list_);
+    pc_ctx.raw_sql_ = params_.cur_sql_;
+    pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_CALLSTMT;
+    pc_ctx.key_.db_id_ = session_info_->get_database_id();
+    pc_ctx.key_.sessid_ = 0;
+    pc_ctx.key_.key_id_ = OB_INVALID_ID;
+    pc_ctx.key_.name_ = params_.cur_sql_;
+  }
+  return ret;
+}
+
+int ObCallProcedureResolver::add_call_proc_info(ObCallProcedureInfo *call_info)
+{
+  int ret = OB_SUCCESS;
+  ObPlanCache *plan_cache = NULL;
+  pl::ObPLCacheCtx pc_ctx;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(ret));
+  } else if (OB_ISNULL(plan_cache = session_info_->get_plan_cache())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(ret));
+  } else if (OB_FAIL(generate_pl_cache_ctx(pc_ctx))) {
+    LOG_WARN("generate pl cache ctx failed", K(ret));
+  } else if (OB_FAIL(pl::ObPLCacheMgr::add_pl_cache(plan_cache, call_info, pc_ctx))) {
+    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+      ret = OB_SUCCESS;
+      LOG_DEBUG("this plan has been added by others, need not add again", KPC(call_info));
+    } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
+      if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
+        LOG_DEBUG("can't add plan to plan cache",
+                K(ret), K(call_info->get_mem_size()), K(pc_ctx.key_),
+                K(plan_cache->get_mem_used()));
+      }
+      ret = OB_SUCCESS;
+    } else if (is_not_supported_err(ret)) {
+      ret = OB_SUCCESS;
+      LOG_DEBUG("plan cache don't support add this kind of plan now",  KPC(call_info));
+    } else {
+      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
+        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCallProcedureResolver::find_call_proc_info(ObCallProcedureStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObPlanCache *plan_cache = NULL;
+  ObCallProcedureInfo *call_proc_info = NULL;
+  pl::ObPLCacheCtx pc_ctx;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(ret));
+  } else if (OB_ISNULL(plan_cache = session_info_->get_plan_cache())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("argument is NULL", K(ret));
+  } else if (OB_FAIL(generate_pl_cache_ctx(pc_ctx))) {
+    LOG_WARN("generate pl cache ctx failed", K(ret));
+  } else if (OB_FAIL(pl::ObPLCacheMgr::get_pl_cache(plan_cache, stmt.get_cacheobj_guard(), pc_ctx))) {
+      LOG_INFO("get pl function by sql failed, will ignore this error",
+              K(ret), K(pc_ctx.key_));
+      ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
+  } else {
+    call_proc_info = static_cast<ObCallProcedureInfo*>(stmt.get_cacheobj_guard().get_cache_obj());
+    CK (OB_NOT_NULL(call_proc_info));
+    OX (stmt.set_call_proc_info(call_proc_info));
+  }
+  return ret;
+}
+
 int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -261,8 +348,8 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
   ObString db_name;
   ObString package_name;
   ObString sp_name;
+  ObCallProcedureInfo *call_proc_info = NULL;
   const ObRoutineInfo *proc_info = NULL;
-
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("argument is NULL", K(schema_checker_), K(session_info_), K(ret));
@@ -272,192 +359,222 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(stmt = create_stmt<ObCallProcedureStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create call stmt failed", K(ret));
+  } else if (FALSE_IT(stmt_ = stmt)) {
+  } else if (FALSE_IT(stmt->get_cacheobj_guard().init(CALLSTMT_HANDLE))) {
+  } else if (params_.is_execute_call_stmt_ && 0 != params_.cur_sql_.length() &&
+             OB_FAIL(find_call_proc_info(*stmt))) {
+    LOG_WARN("fail to find call stmt", K(ret));
+  } else if (NULL != stmt->get_call_proc_info()) {
+    // find call procedure info in pl cache.
   } else {
-    stmt_ = stmt;
-  }
-  // 解析过程名称
-  if (OB_SUCC(ret)) {
-    if (T_SP_ACCESS_NAME != name_node->type_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Invalid procedure name node", K(name_node->type_), K(ret));
-    } else {
-      if (OB_FAIL(ObResolverUtils::resolve_sp_access_name(*schema_checker_,
-                                                          session_info_->get_effective_tenant_id(),
-                                                          session_info_->get_database_name(),
-                                                          *name_node,
-                                                          db_name, package_name, sp_name))) {
-        LOG_WARN("resolve sp name failed", K(ret));
-      } else if (db_name.empty() && session_info_->get_database_name().empty()) {
-        ret = OB_ERR_NO_DB_SELECTED;
-        LOG_WARN("no database selected", K(ret), K(db_name));
-      } else {
-        if (!db_name.empty()) {
-          OX (stmt->set_db_name(db_name));
-        } else {
-          OX (stmt->set_db_name(session_info_->get_database_name()));
-        }
-        
-      }
-    }
-  }
-  ObSEArray<ObRawExpr*, 16> expr_params;
-  // 获取routine schem info
-  if (OB_SUCC(ret)) {
-    if (OB_NOT_NULL(params_node)
-        && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
-      LOG_WARN("failed to resolve param exprs", K(ret));
-    } else if (OB_FAIL(ObResolverUtils::get_routine(params_,
-                                             (*session_info_).get_effective_tenant_id(),
-                                             (*session_info_).get_database_name(),
-                                             db_name,
-                                             package_name,
-                                             sp_name,
-                                             ROUTINE_PROCEDURE_TYPE,
-                                             expr_params,
-                                             proc_info))) {
-      LOG_WARN("failed to get routine info", K(ret), K(db_name), K(package_name), K(sp_name));
-    } else if (OB_ISNULL(proc_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("proc info is null", K(ret), K(db_name), K(package_name), K(sp_name), K(proc_info));
-    } else if (proc_info->has_accessible_by_clause()) {
-      ret = OB_ERR_MISMATCH_SUBPROGRAM;
-      LOG_WARN("PLS-00263: mismatch between string on a subprogram specification and body",
-               K(ret), KPC(proc_info));
-    }
-    if (OB_SUCC(ret) && proc_info->is_udt_routine() && !proc_info->is_udt_static_routine()) {
-      ret = OB_ERR_CALL_WRONG_ARG;
-      LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, proc_info->get_routine_name().length(),
-                                            proc_info->get_routine_name().ptr());
-    }
-    if (OB_SUCC(ret) && proc_info->is_udt_routine()) {
-      stmt->set_is_udt_routine(true);
-    }
+    OZ (ObCacheObjectFactory::alloc(stmt->get_cacheobj_guard(),
+                                  ObLibCacheNameSpace::NS_CALLSTMT,
+                                  session_info_->get_effective_tenant_id()));
+    OX (call_proc_info = static_cast<ObCallProcedureInfo*>(stmt->get_cacheobj_guard().get_cache_obj()));
+    CK (OB_NOT_NULL(call_proc_info));
+
+    // 解析过程名称
     if (OB_SUCC(ret)) {
-      ObSchemaObjVersion obj_version;
-      obj_version.object_id_ = proc_info->get_routine_id();
-      obj_version.object_type_ = proc_info->is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION;
-      obj_version.version_ = proc_info->get_schema_version();
-      OZ (stmt->add_global_dependency_table(obj_version));
-    }
-  }
-  // 解析参数列表
-  // if (OB_SUCC(ret) && params_.is_execute_call_stmt_) {
-  //   OZ (stmt->add_params(expr_params));
-  //   OX (stmt->set_can_direct_use_param(true));
-  // } else {
-    OZ (resolve_cparams(params_node, proc_info, stmt));
-  // }
-
-  if (OB_SUCC(ret)) {
-    if (OB_INVALID_ID == proc_info->get_package_id()) {
-      //standalone procedure
-      stmt->set_package_id(proc_info->get_package_id());
-      stmt->set_routine_id(proc_info->get_routine_id());
-    } else {
-      //package procedure
-      stmt->set_package_id(proc_info->get_package_id());
-      stmt->set_routine_id(proc_info->get_subprogram_id());
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < proc_info->get_param_count(); ++i) {
-      const ObRoutineParam *param_info = proc_info->get_routine_params().at(i);
-      const ObRawExpr *param_expr = stmt->get_params().at(i);
-      pl::ObPLDataType pl_type;
-      CK (OB_NOT_NULL(param_info));
-      CK (OB_NOT_NULL(param_expr));
-
-      if (OB_SUCC(ret)) {
-        CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
-        CK (OB_NOT_NULL(params_.sql_proxy_));
-        CK (OB_NOT_NULL(params_.allocator_));
-        CK (OB_NOT_NULL(session_info_));
-        OZ (pl::ObPLDataType::transform_from_iparam(param_info,
-                                                    *(schema_checker_->get_schema_mgr()),
-                                                    *(session_info_),
-                                                    *(params_.allocator_),
-                                                    *(params_.sql_proxy_),
-                                                    pl_type));
-        if (OB_FAIL(ret)) {
-        } else if (params_.is_prepare_protocol_
-                  && params_.is_prepare_stage_
-                  && param_expr->get_expr_type() != T_QUESTIONMARK) {
-          // do nothing ...
-        } else if (!param_info->is_extern_type()) {
+      if (T_SP_ACCESS_NAME != name_node->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Invalid procedure name node", K(name_node->type_), K(ret));
+      } else {
+        if (OB_FAIL(ObResolverUtils::resolve_sp_access_name(*schema_checker_,
+                                                            session_info_->get_effective_tenant_id(),
+                                                            session_info_->get_database_name(),
+                                                            *name_node,
+                                                            db_name, package_name, sp_name))) {
+          LOG_WARN("resolve sp name failed", K(ret));
+        } else if (db_name.empty() && session_info_->get_database_name().empty()) {
+          ret = OB_ERR_NO_DB_SELECTED;
+          LOG_WARN("no database selected", K(ret), K(db_name));
         } else {
-          if (OB_SUCC(ret)) {
-            //not support complex param not in prepare, except default value
-            if (pl_type.is_user_type()) {
-              if (!params_.is_prepare_protocol_
-                  && !param_expr->has_flag(IS_PL_MOCK_DEFAULT_EXPR)) {
-                ret = OB_ERR_CALL_WRONG_ARG;
-                LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+          if (!db_name.empty()) {
+            OZ (call_proc_info->set_db_name(db_name));
+          } else {
+            OZ (call_proc_info->set_db_name(session_info_->get_database_name()));
+          }
+
+        }
+      }
+    }
+    ObSEArray<ObRawExpr*, 16> expr_params;
+    // 获取routine schem info
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(params_node)
+          && OB_FAIL(resolve_param_exprs(params_node, expr_params))) {
+        LOG_WARN("failed to resolve param exprs", K(ret));
+      } else if (OB_FAIL(ObResolverUtils::get_routine(params_,
+                                              (*session_info_).get_effective_tenant_id(),
+                                              (*session_info_).get_database_name(),
+                                              db_name,
+                                              package_name,
+                                              sp_name,
+                                              ROUTINE_PROCEDURE_TYPE,
+                                              expr_params,
+                                              proc_info))) {
+        LOG_WARN("failed to get routine info", K(ret), K(db_name), K(package_name), K(sp_name));
+      } else if (OB_ISNULL(proc_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("proc info is null", K(ret), K(db_name), K(package_name), K(sp_name), K(proc_info));
+      } else if (proc_info->has_accessible_by_clause()) {
+        ret = OB_ERR_MISMATCH_SUBPROGRAM;
+        LOG_WARN("PLS-00263: mismatch between string on a subprogram specification and body",
+                K(ret), KPC(proc_info));
+      }
+      if (OB_SUCC(ret) && proc_info->is_udt_routine() && !proc_info->is_udt_static_routine()) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, proc_info->get_routine_name().length(),
+                                              proc_info->get_routine_name().ptr());
+      }
+      if (OB_SUCC(ret) && proc_info->is_udt_routine()) {
+        call_proc_info->set_is_udt_routine(true);
+      }
+      if (OB_SUCC(ret)) {
+        ObSchemaObjVersion obj_version;
+        obj_version.object_id_ = proc_info->get_routine_id();
+        obj_version.object_type_ = proc_info->is_procedure() ? DEPENDENCY_PROCEDURE : DEPENDENCY_FUNCTION;
+        obj_version.version_ = proc_info->get_schema_version();
+        int64_t tenant_id = session_info_->get_effective_tenant_id();
+        int64_t tenant_schema_version = OB_INVALID_VERSION;
+        int64_t sys_schema_version = OB_INVALID_VERSION;
+        CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
+        OZ (schema_checker_->get_schema_mgr()->get_schema_version(tenant_id, tenant_schema_version));
+        OZ (schema_checker_->get_schema_mgr()->get_schema_version(OB_SYS_TENANT_ID, sys_schema_version));
+        OX (call_proc_info->set_tenant_schema_version(tenant_schema_version));
+        OX (call_proc_info->set_sys_schema_version(sys_schema_version));
+        OZ (call_proc_info->init_dependency_table_store(1));
+        OZ (call_proc_info->get_dependency_table().push_back(obj_version));
+      }
+    }
+    ObArray<ObRawExpr*> params;
+    OZ (resolve_cparams(params_node, proc_info, call_proc_info, params));
+
+    if (OB_SUCC(ret)) {
+      if (OB_INVALID_ID == proc_info->get_package_id()) {
+        //standalone procedure
+        call_proc_info->set_package_id(proc_info->get_package_id());
+        call_proc_info->set_routine_id(proc_info->get_routine_id());
+      } else {
+        //package procedure
+        call_proc_info->set_package_id(proc_info->get_package_id());
+        call_proc_info->set_routine_id(proc_info->get_subprogram_id());
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < proc_info->get_param_count(); ++i) {
+        const ObRoutineParam *param_info = proc_info->get_routine_params().at(i);
+        const ObRawExpr *param_expr = params.at(i);
+        pl::ObPLDataType pl_type;
+        CK (OB_NOT_NULL(param_info));
+        CK (OB_NOT_NULL(param_expr));
+
+        if (OB_SUCC(ret)) {
+          CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
+          CK (OB_NOT_NULL(params_.sql_proxy_));
+          CK (OB_NOT_NULL(session_info_));
+          OZ (pl::ObPLDataType::transform_from_iparam(param_info,
+                                                      *(schema_checker_->get_schema_mgr()),
+                                                      *(session_info_),
+                                                      *(params_.allocator_),
+                                                      *(params_.sql_proxy_),
+                                                      pl_type));
+          if (OB_FAIL(ret)) {
+          } else if (params_.is_prepare_protocol_
+                    && params_.is_prepare_stage_
+                    && param_expr->get_expr_type() != T_QUESTIONMARK) {
+            // do nothing ...
+          } else if (!param_info->is_extern_type()) {
+          } else {
+            if (OB_SUCC(ret)) {
+              //not support complex param not in prepare, except default value
+              if (pl_type.is_user_type()) {
+                if (!params_.is_prepare_protocol_
+                    && !param_expr->has_flag(IS_PL_MOCK_DEFAULT_EXPR)) {
+                  ret = OB_ERR_CALL_WRONG_ARG;
+                  LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
+                }
               }
             }
           }
         }
-      }
-      if (OB_SUCC(ret)) {
-        if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
-          const ObRawExpr* param = stmt->get_params().at(i);
-          if (lib::is_mysql_mode()
-              && param->get_expr_type() != T_OP_GET_USER_VAR
-              && param->get_expr_type() != T_OP_GET_SYS_VAR) {
-            ret = OB_ER_SP_NOT_VAR_ARG;
-            LOG_USER_ERROR(OB_ER_SP_NOT_VAR_ARG, static_cast<int32_t>(i), static_cast<int32_t>(sp_name.length()), sp_name.ptr());
-            LOG_WARN("OUT or INOUT argument for routine is not a variable", K(param->get_expr_type()), K(ret));
-          } else if (param_info->is_sys_refcursor_type()
-                     || (param_info->is_pkg_type() && pl_type.is_cursor_type())) {
-            OZ (stmt->add_out_param(i,
-                                    param_info->get_mode(),
-                                    param_info->get_param_name(),
-                                    pl_type,
-                                    ObString("SYS_REFCURSOR"),
-                                    ObString("")));
-          } else if (param_info->is_complex_type()) { // UDT
-            if (param_info->get_type_owner() == session_info_->get_database_id()) {
-              CK (!session_info_->get_database_name().empty());
-              OZ (stmt->add_out_param(i,
+        if (OB_SUCC(ret)) {
+          if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
+            const ObRawExpr* param = params.at(i);
+            if (lib::is_mysql_mode()
+                && param->get_expr_type() != T_OP_GET_USER_VAR
+                && param->get_expr_type() != T_OP_GET_SYS_VAR) {
+              ret = OB_ER_SP_NOT_VAR_ARG;
+              LOG_USER_ERROR(OB_ER_SP_NOT_VAR_ARG, static_cast<int32_t>(i), static_cast<int32_t>(sp_name.length()), sp_name.ptr());
+              LOG_WARN("OUT or INOUT argument for routine is not a variable", K(param->get_expr_type()), K(ret));
+            } else if (param_info->is_sys_refcursor_type()
+                      || (param_info->is_pkg_type() && pl_type.is_cursor_type())) {
+              OZ (call_proc_info->add_out_param(i,
                                       param_info->get_mode(),
                                       param_info->get_param_name(),
                                       pl_type,
-                                      param_info->get_type_name(),
-                                      session_info_->get_database_name()));
-            } else {
-              const ObDatabaseSchema *db_schema = NULL;
-              CK (OB_NOT_NULL(schema_checker_));
-              CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
-              OZ (schema_checker_->get_schema_mgr()->get_database_schema(param_info->get_tenant_id(),
-                  param_info->get_type_owner(), db_schema), param_info->get_type_owner());
-              if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
-                ret = OB_ERR_BAD_DATABASE;
-                LOG_WARN("failed to get type owner", K(param_info->get_type_owner()));
+                                      ObString("SYS_REFCURSOR"),
+                                      ObString("")));
+            } else if (param_info->is_complex_type()) { // UDT
+              if (param_info->get_type_owner() == session_info_->get_database_id()) {
+                CK (!session_info_->get_database_name().empty());
+                OZ (call_proc_info->add_out_param(i,
+                                        param_info->get_mode(),
+                                        param_info->get_param_name(),
+                                        pl_type,
+                                        param_info->get_type_name(),
+                                        session_info_->get_database_name()));
+              } else {
+                const ObDatabaseSchema *db_schema = NULL;
+                CK (OB_NOT_NULL(schema_checker_));
+                CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
+                OZ (schema_checker_->get_schema_mgr()->get_database_schema(param_info->get_tenant_id(),
+                    param_info->get_type_owner(), db_schema), param_info->get_type_owner());
+                if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
+                  ret = OB_ERR_BAD_DATABASE;
+                  LOG_WARN("failed to get type owner", K(param_info->get_type_owner()));
+                }
+                OZ (call_proc_info->add_out_param(i,
+                                        param_info->get_mode(),
+                                        param_info->get_param_name(),
+                                        pl_type,
+                                        param_info->get_type_name(),
+                                        OB_SYS_TENANT_ID == db_schema->get_tenant_id()
+                                          ? ObString("SYS") : db_schema->get_database_name_str()), i);
               }
-              OZ (stmt->add_out_param(i,
+            } else if (pl_type.is_user_type()) {
+              // 通过Call语句执行PL且参数是复杂类型的情况, 仅在PS模式支持, 通过客户端无法构造复杂数据类型;
+              // PS模式仅支持UDT作为出参, 这里将其他模式的复杂类型出参禁掉;
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not supported other type as out parameter except udt", K(ret), K(pl_type.is_user_type()));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "other complex type as out parameter except user define type");
+            } else {
+              OZ (call_proc_info->add_out_param(i,
                                       param_info->get_mode(),
                                       param_info->get_param_name(),
                                       pl_type,
                                       param_info->get_type_name(),
-                                      OB_SYS_TENANT_ID == db_schema->get_tenant_id()
-                                        ? ObString("SYS") : db_schema->get_database_name_str()), i);
+                                      ObString("")));
             }
-          } else if (pl_type.is_user_type()) {
-            // 通过Call语句执行PL且参数是复杂类型的情况, 仅在PS模式支持, 通过客户端无法构造复杂数据类型;
-            // PS模式仅支持UDT作为出参, 这里将其他模式的复杂类型出参禁掉;
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not supported other type as out parameter except udt", K(ret), K(pl_type.is_user_type()));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "other complex type as out parameter except user define type");
-          } else {
-            OZ (stmt->add_out_param(i,
-                                    param_info->get_mode(),
-                                    param_info->get_param_name(),
-                                    pl_type,
-                                    param_info->get_type_name(),
-                                    ObString("")));
           }
         }
       }
     }
+
+    // Step 4: cg raw expr
+    OX (call_proc_info->set_param_cnt(params.count()));
+    OZ (call_proc_info->prepare_expression(params));
+    OZ (call_proc_info->final_expression(params, session_info_, schema_checker_->get_schema_mgr()));
+    OX (stmt->set_call_proc_info(call_proc_info));
+    if (params_.is_execute_call_stmt_ && 0 != params_.cur_sql_.length()) {
+      if (NULL != params_.param_list_) {
+        OZ (call_proc_info->set_params_info(*params_.param_list_));
+      }
+      OZ (add_call_proc_info(call_proc_info));
+    }
+    CK (1 == call_proc_info->get_dependency_table().count());
+    OZ (stmt->add_global_dependency_table(call_proc_info->get_dependency_table().at(0)));
   }
+
   return ret;
 }
 

@@ -34,7 +34,6 @@
 #include "share/ob_max_id_fetcher.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/scheduler/ob_sys_task_stat.h"
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_zone_manager.h"
 #include "rootserver/ob_ddl_service.h"
 #include "rootserver/ob_root_service.h"
@@ -863,6 +862,7 @@ int ObDDLTask::convert_to_record(
   int ret = OB_SUCCESS;
   const int64_t serialize_param_size = get_serialize_param_size();
   int64_t pos = 0;
+  task_record.gmt_create_ = get_gmt_create();
   task_record.tenant_id_ = get_tenant_id();
   task_record.object_id_ = get_object_id();
   task_record.target_object_id_ = get_target_object_id();
@@ -1282,7 +1282,7 @@ int ObDDLTask::copy_longops_stat(ObLongopsValue &value)
   value.tenant_id_ = tenant_id_;
   value.start_time_ = gmt_create_;
   value.finish_time_ = stat_info_.finish_time_;
-  value.elapsed_seconds_ = (ObTimeUtility::current_time() - stat_info_.start_time_);
+  value.elapsed_seconds_ = (ObTimeUtility::current_time() - value.start_time_);
   value.time_remaining_ = stat_info_.time_remaining_;
   value.last_update_time_ = ObTimeUtility::current_time();
   MEMCPY(value.op_name_, stat_info_.op_name_, common::MAX_LONG_OPS_NAME_LENGTH);
@@ -2442,6 +2442,7 @@ bool ObDDLTaskRecord::is_valid() const
 
 void ObDDLTaskRecord::reset()
 {
+  gmt_create_ = 0;
   task_id_ = 0;
   parent_task_id_ = 0;
   ddl_type_ = ObDDLType::DDL_INVALID;
@@ -2988,9 +2989,9 @@ int ObDDLTaskRecordOperator::insert_record(
     } else if (OB_FAIL(to_hex_str(record.message_, message_string))) {
       LOG_WARN("append hex escaped string failed", K(ret));
     } else if (OB_FAIL(sql_string.assign_fmt(
-            " INSERT INTO %s (task_id, parent_task_id, tenant_id, object_id, schema_version, target_object_id, ddl_type, trace_id, status, task_version, execution_id, ret_code, ddl_stmt_str, message) "
-            " VALUES (%lu, %lu, %lu, %lu, %lu, %lu, %d, '%s', %ld, %lu, %ld, %lu, '%.*s', \"%.*s\") ",
-            OB_ALL_DDL_TASK_STATUS_TNAME, record.task_id_, record.parent_task_id_,
+            " INSERT INTO %s (gmt_create, gmt_modified, task_id, parent_task_id, tenant_id, object_id, schema_version, target_object_id, ddl_type, trace_id, status, task_version, execution_id, ret_code, ddl_stmt_str, message) "
+            " VALUES (usec_to_time(%lu), usec_to_time(%lu), %lu, %lu, %lu, %lu, %lu, %lu, %d, '%s', %ld, %lu, %ld, %lu, '%.*s', \"%.*s\") ",
+            OB_ALL_DDL_TASK_STATUS_TNAME, record.gmt_create_, record.gmt_create_, record.task_id_, record.parent_task_id_,
             ObSchemaUtils::get_extract_tenant_id(record.tenant_id_, record.tenant_id_), record.object_id_, record.schema_version_,
             get_record_id(record.ddl_type_, record.target_object_id_), record.ddl_type_, trace_id_str, record.task_status_, record.task_version_, record.execution_id_, record.ret_code_,
             static_cast<int>(ddl_stmt_string.length()), ddl_stmt_string.ptr(), static_cast<int>(message_string.length()), message_string.ptr()))) {

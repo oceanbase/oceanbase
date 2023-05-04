@@ -69,9 +69,12 @@ int OptTableMeta::assign(const OptTableMeta &other)
   ref_table_id_ = other.ref_table_id_;
   rows_ = other.rows_;
   stat_type_ = other.stat_type_;
+  ds_level_ = other.ds_level_;
 
   if (OB_FAIL(all_used_parts_.assign(other.all_used_parts_))) {
     LOG_WARN("failed to assign all used parts", K(ret));
+  } else if (OB_FAIL(all_used_tablets_.assign(other.all_used_tablets_))) {
+    LOG_WARN("failed to assign all used tablets", K(ret));
   } else if (OB_FAIL(column_metas_.assign(other.column_metas_))) {
     LOG_WARN("failed to assign all csata", K(ret));
   } else if (OB_FAIL(pk_ids_.assign(other.pk_ids_))) {
@@ -87,6 +90,7 @@ int OptTableMeta::init(const uint64_t table_id,
                        const int64_t stat_type,
                        ObSqlSchemaGuard &schema_guard,
                        ObIArray<int64_t> &all_used_part_id,
+                       common::ObIArray<ObTabletID> &all_used_tablets,
                        ObIArray<uint64_t> &column_ids,
                        const OptSelectivityCtx &ctx)
 {
@@ -100,6 +104,8 @@ int OptTableMeta::init(const uint64_t table_id,
   rows_ = rows;
   stat_type_ = stat_type;
   if (OB_FAIL(all_used_parts_.assign(all_used_part_id))) {
+    LOG_WARN("failed to assign all used partition ids", K(ret));
+  } else if (OB_FAIL(all_used_tablets_.assign(all_used_tablets))) {
     LOG_WARN("failed to assign all used partition ids", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id_, ref_table_id_, ctx.get_stmt(), table_schema))) {
     LOG_WARN("failed to get table schmea", K(ret), K(ref_table_id_));
@@ -205,6 +211,7 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
                                             const uint64_t ref_table_id,
                                             const int64_t rows,
                                             ObIArray<int64_t> &all_used_part_id,
+                                            ObIArray<ObTabletID> &all_used_tablets,
                                             ObIArray<uint64_t> &column_ids,
                                             const int64_t stat_type,
                                             int64_t last_analyzed)
@@ -219,7 +226,8 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate place holder for table meta", K(ret));
   } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, rows, stat_type,
-                                      *schema_guard, all_used_part_id, column_ids, ctx))) {
+                                      *schema_guard, all_used_part_id, all_used_tablets,
+                                      column_ids, ctx))) {
     LOG_WARN("failed to init new tstat", K(ret));
   } else {
     table_meta->set_version(last_analyzed);
@@ -481,11 +489,17 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
+  bool is_calculated = false;
   ObSEArray<ObRawExpr *, 4> join_conditions;
   ObSEArray<RangeExprs, 3> range_conditions;
   ObRawExpr *qual = NULL;
   double tmp_selectivity = 1.0;
   bool need_skip = false;
+  //we calc some complex predicates selectivity by dynamic sampling
+  if (OB_FAIL(calc_complex_predicates_selectivity_by_ds(table_metas, ctx, predicates,
+                                                        all_predicate_sel))) {
+    LOG_WARN("failed to calc complex predicates selectivity by ds", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
     qual = predicates.at(i);
     LOG_TRACE("calculate qual selectivity", "expr", PNAME(qual));
@@ -550,6 +564,249 @@ int ObOptSelectivity::calculate_selectivity(const OptTableMetas &table_metas,
     if (OB_SUCC(ret)) {
       tmp_selectivity = revise_between_0_1(tmp_selectivity);
       selectivity *= tmp_selectivity;
+    }
+  }
+  return ret;
+}
+
+//try to calc complex predicate selectivity by dynamic sampling
+int ObOptSelectivity::calc_complex_predicates_selectivity_by_ds(const OptTableMetas &table_metas,
+                                                                const OptSelectivityCtx &ctx,
+                                                                const ObIArray<ObRawExpr*> &predicates,
+                                                                ObIArray<ObExprSelPair> &all_predicate_sel)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<OptSelectivityDSParam, 4> ds_params;
+  for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
+    if (OB_FAIL(resursive_extract_valid_predicate_for_ds(table_metas, ctx, predicates.at(i), ds_params))) {
+      LOG_WARN("failed to resursive extract valid predicate for ds", K(ret));
+    } else {/*do nothing*/}
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ds_params.count(); ++i) {
+    if (OB_FAIL(calc_selectivity_by_dynamic_sampling(ctx, ds_params.at(i), all_predicate_sel))) {
+      LOG_WARN("failed to calc selectivity by dynamic sampling", K(ret));
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObOptSelectivity::calc_selectivity_by_dynamic_sampling(const OptSelectivityCtx &ctx,
+                                                           const OptSelectivityDSParam &ds_param,
+                                                           ObIArray<ObExprSelPair> &all_predicate_sel)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("begin to calc selectivity by dynamic sampling", K(ds_param));
+  OPT_TRACE("begin to process filter dynamic sampling estimation");
+  ObDSTableParam ds_table_param;
+  ObSEArray<ObDSResultItem, 4> ds_result_items;
+  bool specify_ds = false;
+  if (OB_FAIL(ObDynamicSamplingUtils::get_ds_table_param(const_cast<ObOptimizerContext &>(ctx.get_opt_ctx()),
+                                                         ctx.get_plan(),
+                                                         ds_param.table_meta_,
+                                                         true,
+                                                         ds_table_param,
+                                                         specify_ds))) {
+    LOG_WARN("failed to get ds table param", K(ret), K(ds_table_param));
+  } else if (!ds_table_param.is_valid()) {
+    //do nothing
+  } else if (OB_FAIL(add_ds_result_items(ds_param.quals_,
+                                         ds_param.table_meta_->get_ref_table_id(),
+                                         ds_result_items))) {
+    LOG_WARN("failed to init ds result items", K(ret));
+  } else {
+    ObArenaAllocator allocator("ObOpTableDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
+    ObDynamicSampling dynamic_sampling(const_cast<ObOptimizerContext &>(ctx.get_opt_ctx()), allocator);
+    int64_t start_time = ObTimeUtility::current_time();
+    bool throw_ds_error = false;
+    if (OB_FAIL(dynamic_sampling.estimate_table_rowcount(ds_table_param, ds_result_items, throw_ds_error))) {
+      if (!throw_ds_error) {
+        LOG_WARN("failed to estimate filter rowcount caused by some reason, please check!!!", K(ret),
+                K(start_time), K(ObTimeUtility::current_time() - start_time), K(ds_table_param),
+                K(ctx.get_session_info()->get_current_query_string()));
+        if (OB_FAIL(ObDynamicSamplingUtils::add_failed_ds_table_list(ds_param.table_meta_->get_ref_table_id(),
+                                                                     ds_param.table_meta_->get_all_used_parts(),
+                                                                     const_cast<ObOptimizerContext &>(ctx.get_opt_ctx()).get_failed_ds_tab_list()))) {
+          LOG_WARN("failed to add failed ds table list", K(ret));
+        }
+      } else {
+        LOG_WARN("failed to dynamic sampling", K(ret), K(start_time), K(ds_table_param));
+      }
+    } else if (OB_FAIL(add_ds_result_into_selectivity(ds_result_items,
+                                                      ds_param.table_meta_->get_ref_table_id(),
+                                                      all_predicate_sel))) {
+      LOG_WARN("failed to add ds result into selectivity", K(ret));
+    } else {
+      const_cast<OptTableMeta *>(ds_param.table_meta_)->set_ds_level(ds_table_param.ds_level_);
+    }
+  }
+  OPT_TRACE("end to process filter dynamic sampling estimation");
+  return ret;
+}
+
+int ObOptSelectivity::add_ds_result_into_selectivity(const ObIArray<ObDSResultItem> &ds_result_items,
+                                                     const uint64_t ref_table_id,
+                                                     ObIArray<ObExprSelPair> &all_predicate_sel)
+{
+  int ret = OB_SUCCESS;
+  const ObDSResultItem *basic_item = NULL;
+  if (OB_ISNULL(basic_item = ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_BASIC_STAT,
+                                                                        ref_table_id,
+                                                                        ds_result_items)) ||
+      OB_ISNULL(basic_item->stat_handle_.stat_) ||
+      OB_UNLIKELY(basic_item->stat_handle_.stat_->get_sample_block_ratio() <= 0 ||
+                  basic_item->stat_handle_.stat_->get_sample_block_ratio() > 100.0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(basic_item), K(ds_result_items));
+  } else if (basic_item->stat_handle_.stat_->get_rowcount() == 0 &&
+             basic_item->stat_handle_.stat_->get_sample_block_ratio() != 100.0) {
+    //do nothing
+  } else {
+    int64_t rowcount = basic_item->stat_handle_.stat_->get_rowcount();
+    for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
+      if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT) {
+        if (OB_ISNULL(ds_result_items.at(i).stat_handle_.stat_) ||
+            OB_UNLIKELY(ds_result_items.at(i).exprs_.count() != 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(basic_item), K(ds_result_items));
+        } else {
+          int64_t filter_row_count = ds_result_items.at(i).stat_handle_.stat_->get_rowcount();
+          double sample_ratio = ds_result_items.at(i).stat_handle_.stat_->get_sample_block_ratio();
+          filter_row_count = filter_row_count != 0 ? filter_row_count : static_cast<int64_t>(100.0 / sample_ratio);
+          double selectivity = 1.0 * filter_row_count / rowcount;
+          if (OB_FAIL(add_var_to_array_no_dup(all_predicate_sel, ObExprSelPair(ds_result_items.at(i).exprs_.at(0), selectivity)))) {
+            LOG_WARN("failed to add selectivity to plan", K(ret), K(ds_result_items.at(i).exprs_.at(0)), K(selectivity));
+          } else {
+            LOG_TRACE("Succeed to add ds result into selectivity", K(ds_result_items.at(i)), K(selectivity), K(rowcount));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptSelectivity::add_ds_result_items(const ObIArray<ObRawExpr*> &quals,
+                                          const uint64_t ref_table_id,
+                                          ObIArray<ObDSResultItem> &ds_result_items)
+{
+  int ret = OB_SUCCESS;
+  //add rowcount
+  ObDSResultItem basic_item(ObDSResultItemType::OB_DS_BASIC_STAT, ref_table_id);
+  if (OB_FAIL(ds_result_items.push_back(basic_item))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+  //add filter
+  for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
+    ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT, ref_table_id);
+    if (OB_FAIL(tmp_item.exprs_.push_back(quals.at(i)))) {
+      LOG_WARN("failed to assign", K(ret));
+    } else if (OB_FAIL(ds_result_items.push_back(tmp_item))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptSelectivity::resursive_extract_valid_predicate_for_ds(const OptTableMetas &table_metas,
+                                                               const OptSelectivityCtx &ctx,
+                                                               const ObRawExpr *qual,
+                                                               ObIArray<OptSelectivityDSParam> &ds_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(qual)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else if (qual->get_relation_ids().num_members() == 1) {//single table filter
+    if (qual->has_flag(CNT_DYNAMIC_PARAM) ||
+        qual->has_flag(CNT_SUB_QUERY)) {//can't do dynamic sampling
+      //do nothing
+    } else if (qual->has_flag(CNT_AGG) ||
+               qual->is_const_expr() ||
+               qual->is_column_ref_expr() ||
+               T_OP_EQ == qual->get_expr_type() ||
+               T_OP_NSEQ == qual->get_expr_type() ||
+               T_OP_IN == qual->get_expr_type() ||
+               T_OP_NOT_IN == qual->get_expr_type() ||
+               T_OP_IS == qual->get_expr_type() ||
+               T_OP_IS_NOT == qual->get_expr_type() ||
+               IS_RANGE_CMP_OP(qual->get_expr_type()) ||
+               T_OP_BTW == qual->get_expr_type() ||
+               T_OP_NOT_BTW == qual->get_expr_type() ||
+               T_OP_NE == qual->get_expr_type()) {
+      //here we can try use selectivity calc formula by opt stats, and we don't use dynmaic sampling.
+    } else if (T_OP_NOT == qual->get_expr_type() ||
+               T_OP_AND == qual->get_expr_type() ||
+               T_OP_OR == qual->get_expr_type()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < qual->get_param_count(); ++i) {
+        if (OB_FAIL(SMART_CALL(resursive_extract_valid_predicate_for_ds(table_metas,
+                                                                        ctx,
+                                                                        qual->get_param_expr(i),
+                                                                        ds_params)))) {
+          LOG_WARN("failed to resursive extract valid predicate for ds", K(ret));
+        }
+      }
+    } else if (T_OP_LIKE == qual->get_expr_type()) {
+      bool can_calc_sel = false;
+      double selectivity = 1.0;
+      if (OB_FAIL(get_like_sel(table_metas, ctx, *qual, selectivity, can_calc_sel))) {
+        LOG_WARN("failed to get like selectivity", K(ret));
+      } else if (can_calc_sel) {
+        //do nothing
+      } else if (OB_FAIL(add_valid_ds_qual(qual, table_metas, ds_params))) {
+        LOG_WARN("failed to add valid ds qual", K(ret));
+      }
+    //filter can't use selectivity calc formula, such as :lnnvl, regexp, not like and so on.
+    } else if (OB_FAIL(add_valid_ds_qual(qual, table_metas, ds_params))) {
+      LOG_WARN("failed to add valid ds qual", K(ret));
+    } else {/*do nothing*/}
+  } else {/*do nothing*/}
+  return ret;
+}
+
+int ObOptSelectivity::add_valid_ds_qual(const ObRawExpr *qual,
+                                        const OptTableMetas &table_metas,
+                                        ObIArray<OptSelectivityDSParam> &ds_params)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 8> table_ids;
+  ObSEArray<ObRawExpr *, 1> quals;
+  bool no_use = false;
+  if (OB_FAIL(quals.push_back(const_cast<ObRawExpr*>(qual)))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_use_filters(quals, no_use))) {
+    LOG_WARN("failed to check ds can use filters", K(ret));
+  } else if (no_use) {
+    //do nothing
+  } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(qual, table_ids))) {
+    LOG_WARN("failed to extract table ids", K(ret));
+  } else if (OB_UNLIKELY(table_ids.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(table_ids), KPC(qual));
+  } else {
+    const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_ids.at(0));
+    if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id() ||
+        !table_meta->use_opt_stat()) {
+      // do nothing
+    } else {
+      bool found_it = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < ds_params.count(); ++i) {
+        if (ds_params.at(i).table_meta_ == table_meta) {
+          found_it = true;
+          if (OB_FAIL(add_var_to_array_no_dup(ds_params.at(i).quals_, const_cast<ObRawExpr*>(qual)))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found_it) {
+        OptSelectivityDSParam ds_param;
+        ds_param.table_meta_ = table_meta;
+        if (OB_FAIL(ds_param.quals_.push_back(const_cast<ObRawExpr*>(qual)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else if (OB_FAIL(ds_params.push_back(ds_param))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+      LOG_TRACE("succeed to add valid ds qual", K(ds_params));
     }
   }
   return ret;
@@ -634,6 +891,8 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
 {
   int ret = OB_SUCCESS;
   selectivity = 1.0;
+  double tmp_sel = 1.0;
+  int64_t idx = 0;
   if (qual.has_flag(CNT_AGG)) {
     if (OB_FAIL(get_agg_sel(table_metas, ctx, qual, selectivity))) {
       LOG_WARN("failed to get agg expr selectivity", K(ret), K(qual));
@@ -663,8 +922,13 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
       LOG_WARN("failed to get range cmp selectivity", K(ret));
     }
   } else if (T_OP_LIKE == qual.get_expr_type()) {
-    if (OB_FAIL(get_like_sel(table_metas, ctx, qual, selectivity))) {
+    bool can_calc_sel = false;
+    if (OB_FAIL(get_like_sel(table_metas, ctx, qual, selectivity, can_calc_sel))) {
       LOG_WARN("failed to get like selectivity", K(ret));
+    } else if (can_calc_sel) {//do nothing
+    //try find the calc sel from dynamic sampling
+    } else if (ObOptimizerUtil::find_item(all_predicate_sel, ObExprSelPair(&qual, 0), &idx)) {
+      selectivity = all_predicate_sel.at(idx).sel_;
     }
   } else if (T_OP_BTW == qual.get_expr_type() || T_OP_NOT_BTW == qual.get_expr_type()) {
     if (OB_FAIL(get_btw_sel(table_metas, ctx, qual, selectivity))) {
@@ -716,6 +980,8 @@ int ObOptSelectivity::calculate_qual_selectivity(const OptTableMetas &table_meta
     }
   } else if (qual.is_spatial_expr()) {
     selectivity = DEFAULT_SPATIAL_SEL;
+  } else if (ObOptimizerUtil::find_item(all_predicate_sel, ObExprSelPair(&qual, 0), &idx)) {
+    selectivity = all_predicate_sel.at(idx).sel_;
   } else { //任何处理不了的表达式，都认为是0.5的选择率		  } else { //任何处理不了的表达式，都认为是0.5的选择率
     selectivity = DEFAULT_SEL;
   }
@@ -2077,11 +2343,11 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     ObObj maxscalar;
     ObObj startscalar;
     ObObj endscalar;
-    const ObObj *new_start_obj = NULL;
-    const ObObj *new_end_obj = NULL;
+    ObObj *new_start_obj = NULL;
+    ObObj *new_end_obj = NULL;
     ObArenaAllocator tmp_alloc("ObOptSel");
-    if (OB_FAIL(convert_valid_obj_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
-        OB_FAIL(convert_valid_obj_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
+    if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
+        OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
       LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(start_obj), K(end_obj),
                                                             KPC(new_start_obj), KPC(new_end_obj));
     } else if (OB_ISNULL(new_start_obj) || OB_ISNULL(new_end_obj)) {
@@ -2238,7 +2504,8 @@ double ObOptSelectivity::revise_range_sel(double selectivity,
 int ObOptSelectivity::get_like_sel(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    const ObRawExpr &qual,
-                                   double &selectivity)
+                                   double &selectivity,
+                                   bool &can_calc_sel)
 {
   int ret = OB_SUCCESS;
   selectivity = DEFAULT_INEQ_SEL;
@@ -2246,6 +2513,7 @@ int ObOptSelectivity::get_like_sel(const OptTableMetas &table_metas,
   const ObRawExpr *pattern = NULL;
   const ObRawExpr *escape = NULL;
   const ParamStore *params = ctx.get_params();
+  can_calc_sel = false;
   if (3 != qual.get_param_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("like expr should have 3 param", K(ret), K(qual));
@@ -2275,6 +2543,8 @@ int ObOptSelectivity::get_like_sel(const OptTableMetas &table_metas,
                                             static_cast<const ObColumnRefRawExpr&>(*variable),
                                             qual, selectivity))) {
       LOG_WARN("Failed to get column range selectivity", K(ret));
+    } else {
+      can_calc_sel = true;
     }
   }
   return ret;
@@ -3316,9 +3586,9 @@ int ObOptSelectivity::get_equal_pred_sel(const ObHistogram &histogram,
   int ret = OB_SUCCESS;
   int64_t idx = -1;
   bool is_equal = false;
-  const ObObj *new_value = NULL;
+  ObObj *new_value = NULL;
   ObArenaAllocator tmp_alloc("ObOptSel");
-  if (OB_FAIL(convert_valid_obj_for_opt_stats(&value, tmp_alloc, new_value))) {
+  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&value, tmp_alloc, new_value))) {
     LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(value), KPC(new_value));
   } else if (OB_ISNULL(new_value)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3362,11 +3632,11 @@ int ObOptSelectivity::get_range_sel_by_histogram(const ObHistogram &histogram,
           1 == startkey.get_obj_cnt()) {
         const ObObj *startobj = &startkey.get_obj_ptr()[0];
         const ObObj *endobj = &endkey.get_obj_ptr()[0];
-        const ObObj *new_startobj = NULL;
-        const ObObj *new_endobj = NULL;
+        ObObj *new_startobj = NULL;
+        ObObj *new_endobj = NULL;
         ObArenaAllocator tmp_alloc("ObOptSel");
-        if (OB_FAIL(convert_valid_obj_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
-            OB_FAIL(convert_valid_obj_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
+        if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(startobj, tmp_alloc, new_startobj)) ||
+            OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(endobj, tmp_alloc, new_endobj))) {
           LOG_WARN("failed to convert valid obj for opt stats", K(ret), KPC(startobj), KPC(endobj),
                                                                 KPC(new_startobj), KPC(new_endobj));
         } else if (OB_ISNULL(new_startobj) || OB_ISNULL(new_endobj)) {
@@ -3533,7 +3803,7 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
   ObIAllocator &allocator = ctx.get_allocator();
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
-  ObGetMethodArray get_methods;
+  bool dummy_all_single_value_ranges = true;
 
   if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) ||
       OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id))) {
@@ -3549,13 +3819,13 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
                                                                  params))) {
     LOG_WARN("failed to preliminary extract query range", K(ret));
   } else if (!query_range.need_deep_copy()) {
-    if (OB_FAIL(query_range.get_tablet_ranges(allocator, *exec_ctx, ranges,
-                                              get_methods, dtc_params))) {
+    if (OB_FAIL(query_range.direct_get_tablet_ranges(allocator, *exec_ctx, ranges,
+                                                     dummy_all_single_value_ranges, dtc_params))) {
       LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else if (OB_FAIL(query_range.final_extract_query_range(*exec_ctx, dtc_params))) {
     LOG_WARN("failed to final extract query range", K(ret));
-  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, get_methods, dtc_params))) {
+  } else if (OB_FAIL(query_range.get_tablet_ranges(ranges, dummy_all_single_value_ranges, dtc_params))) {
     LOG_WARN("failed to get tablet ranges", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -3956,8 +4226,7 @@ int ObOptSelectivity::classify_quals(const ObIArray<ObRawExpr*> &quals,
           sel_info->equal_count_ = std::min(sel_info->equal_count_, temp_equal_count);
         }
       } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("qual selectivity not find", K(ret));
+        //do nothing, maybe from dynamic sampling.
       }
     }
   }
@@ -4098,19 +4367,115 @@ int ObOptSelectivity::get_join_pred_rows(const ObHistogram &left_hist,
   return ret;
 }
 
-int ObOptSelectivity::convert_valid_obj_for_opt_stats(const ObObj *old_obj,
-                                                      ObIAllocator &alloc,
-                                                      const ObObj *&new_obj)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(old_obj,
-                                                             alloc,
-                                                             new_obj))) {
-    LOG_WARN("fail to truncated string", K(ret));
-  }
-  LOG_TRACE("Succeed to convert valid obj for opt stats", KPC(old_obj), KPC(new_obj));
-  return ret;
-}
+//will useful in dynamic sampling join in the future
+// int ObOptSelectivity::calculate_join_selectivity_by_dynamic_sampling(const OptTableMetas &table_metas,
+//                                                                      const OptSelectivityCtx &ctx,
+//                                                                      const ObIArray<ObRawExpr*> &predicates,
+//                                                                      double &selectivity,
+//                                                                      bool &is_calculated)
+// {
+//   int ret = OB_SUCCESS;
+//   ObOptDSJoinParam ds_join_param;
+//   is_calculated = false;
+//   if (OB_FAIL(collect_ds_join_param(table_metas, ctx, predicates, ds_join_param))) {
+//     LOG_WARN("failed to collect ds join param", K(ret));
+//   } else if (ds_join_param.is_valid()) {
+//     ObArenaAllocator allocator("ObOpJoinDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_opt_ctx().get_session_info()->get_effective_tenant_id());
+//     ObDynamicSampling dynamic_sampling(const_cast<ObOptimizerContext&>(ctx.get_opt_ctx()),
+//                                           allocator,
+//                                           ObDynamicSamplingType::OB_JOIN_DS);
+//     uint64_t join_output_cnt = 0;
+//     int64_t start_time = ObTimeUtility::current_time();
+//     OPT_TRACE("begin to process join dynamic sampling estimation");
+//     int tmp_ret = dynamic_sampling.estimate_join_rowcount(ds_join_param, join_output_cnt);
+//     OPT_TRACE("end to process join dynamic sampling estimation", static_cast<int64_t>(tmp_ret), join_output_cnt);
+//     if (OB_FAIL(tmp_ret)) {
+//       if (tmp_ret == OB_TIMEOUT) {
+//         LOG_INFO("failed to estimate join rowcount caused by timeout", K(start_time),
+//                                                 K(ObTimeUtility::current_time()), K(ds_join_param));
+//       } else {
+//         ret = tmp_ret;
+//         LOG_WARN("failed to estimate join rowcount by dynamic sampling", K(ret));
+//       }
+//     } else if (OB_UNLIKELY(join_output_cnt != 0 &&
+//                            ctx.get_row_count_1() * ctx.get_row_count_2() == 0)) {
+//       ret = OB_ERR_UNEXPECTED;
+//       LOG_WARN("get unexpected error", K(ret), K(ctx.get_row_count_1()), K(ctx.get_row_count_2()));
+//     } else {
+//       selectivity = join_output_cnt == 0 ? 0 : revise_between_0_1(join_output_cnt / (ctx.get_row_count_1() * ctx.get_row_count_2()));
+//       is_calculated = true;
+//       LOG_TRACE("succeed to calculate join selectivity by dynamic sampling", K(selectivity),
+//                                                        K(join_output_cnt), K(ctx.get_row_count_1()),
+//                                                        K(ctx.get_row_count_2()), K(ds_join_param));
+//     }
+//   }
+//   return ret;
+// }
+
+//maybe we can use basic table dynamic sampling info for join.
+// int ObOptSelectivity::collect_ds_join_param(const OptTableMetas &table_metas,
+//                                             const OptSelectivityCtx &ctx,
+//                                             const ObIArray<ObRawExpr*> &predicates,
+//                                             ObOptDSJoinParam &ds_join_param)
+// {
+//   int ret = OB_SUCCESS;
+//   ObSEArray<uint64_t, 2> table_ids;
+//   const ObDMLStmt *stmt = ctx.get_stmt();
+//   bool no_use = false;
+//   ObSEArray<ObRawExpr*, 4> tmp_raw_exprs;
+//   if (OB_ISNULL(stmt)) {
+//     ret = OB_ERR_UNEXPECTED;
+//     LOG_WARN("get unexpected null", K(ret), K(stmt));
+//   } else if (ctx.get_join_type() != INNER_JOIN &&
+//              ctx.get_join_type() != LEFT_OUTER_JOIN &&
+//              ctx.get_join_type() != RIGHT_OUTER_JOIN &&
+//              ctx.get_join_type() != FULL_OUTER_JOIN) {
+//     //now dynamic sampling just for inner join and outer join
+//   } else if (ObAccessPathEstimation::check_ds_can_use_filters(predicates, tmp_raw_exprs, no_use)) {
+//     LOG_WARN("failed to check ds can use filters", K(ret));
+//   } else if (no_use || predicates.empty()) {
+//     //do nothing
+//   } else if (OB_FAIL(ObRawExprUtils::extract_table_ids_from_exprs(predicates, table_ids))) {
+//     LOG_WARN("failed to extract table ids from exprs", K(ret));
+//   } else if (OB_UNLIKELY(table_ids.count() != 2)) {
+//     //do nothing, just skip.
+//     LOG_TRACE("get unexpected table cnt from join conditicons, can't use join dynamic sampling",
+//                                                        K(table_ids), K(table_metas), K(predicates));
+//   // } else if (OB_FAIL(ObAccessPathEstimation::get_dynamic_sampling_max_timeout(ctx.get_opt_ctx(),
+//   //                                                                 ds_join_param.max_ds_timeout_))) {
+//   //   LOG_WARN("failed to get dynamic sampling max timeout", K(ret));
+//   } else {
+//     bool succ_to_get_param = true;
+//     ds_join_param.join_type_ = ctx.get_join_type();
+//     ds_join_param.join_conditions_ = &predicates;
+//     ds_join_param.max_ds_timeout_ = ctx.get_opt_ctx().get_max_ds_timeout();
+//     for (int64_t i = 0; OB_SUCC(ret) && succ_to_get_param && i < table_ids.count(); ++i) {
+//       ObOptDSBaseParam &base_param = (i == 0 ? ds_join_param.left_table_param_ :
+//                                                ds_join_param.right_table_param_);
+//       const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_ids.at(i));
+//       const TableItem *table_item = stmt->get_table_item_by_id(table_ids.at(i));
+//       if (OB_ISNULL(table_meta) || OB_ISNULL(table_item) ||
+//           OB_UNLIKELY(OB_INVALID_ID == table_meta->get_ref_table_id())) {
+//         succ_to_get_param = false;
+//         LOG_TRACE("get invalid table info, can't use dynamic sampling", KPC(table_meta),
+//                                                                         KPC(table_item));
+//       } else if (table_meta->get_ds_base_param().is_valid()) {
+//         if (table_meta->get_ds_base_param().ds_level_ != ObDynamicSamplingLevel::ADS_DYNAMIC_SAMPLING) {
+//           succ_to_get_param = false;
+//         } else if (OB_FAIL(base_param.assign(table_meta->get_ds_base_param()))) {
+//           LOG_WARN("failed to assign", K(ret));
+//         } else {
+//           base_param.index_id_ = table_meta->get_ref_table_id();//reset the index id
+//           LOG_TRACE("succed get base param for join dynamic sampling", K(base_param));
+//         }
+//       } else {
+//         succ_to_get_param = false;
+//       }
+//     }
+//   }
+//   return ret;
+// }
+
 
 }//end of namespace sql
 }//end of namespace oceanbase

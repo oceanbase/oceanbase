@@ -53,6 +53,8 @@ const char *ObLogTableScan::get_name() const
     name = (sample_method == SampleInfo::ROW_SAMPLE) ? "TABLE ROW SAMPLE SCAN" : "TABLE BLOCK SAMPLE SCAN";
   } else if (is_skip_scan()) {
     name = use_das() ? "DISTRIBUTED TABLE SKIP SCAN" : "TABLE SKIP SCAN";
+  } else if (EXTERNAL_TABLE == get_table_type()) {
+    name = "EXTERNAL TABLE SCAN";
   } else if (use_das()) {
     if (is_get) {
       name = "DISTRIBUTED TABLE GET";
@@ -101,67 +103,43 @@ int ObLogTableScan::set_range_columns(const ObIArray<ColumnItem> &range_columns)
   return ret;
 }
 
-int ObLogTableScan::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  double index_back_cost = 0.0;
-  if (OB_FAIL(re_est_cost(param, card, index_back_cost, cost))) {
-    LOG_WARN("failed re est table scan cost", K(ret));
-  }
-  return ret;
-}
-
-int ObLogTableScan::re_est_cost(EstimateCostInfo &param, double &card, double &index_back_cost, double &cost)
-{
-  int ret = OB_SUCCESS;
-  int64_t limit_count = 0;
+  double limit_percent = -1.0;
+  int64_t limit_count = -1;
   int64_t offset_count = 0;
-  bool is_null_value = false;
-  index_back_cost = 0.0;
-  if (OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_ISNULL(access_path_)) {
+  double index_back_cost = 0.0;
+  ObOptimizerContext *opt_ctx = NULL;
+  if (OB_ISNULL(access_path_)) {  // table scan create from CteTablePath
     card = get_card();
+    op_cost = get_op_cost();
     cost = get_cost();
-  } else if (NULL != limit_count_expr_ &&
-             OB_FAIL(ObTransformUtils::get_limit_value(limit_count_expr_,
-                                                       get_plan()->get_optimizer_context().get_params(),
-                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
-                                                       &get_plan()->get_optimizer_context().get_allocator(),
-                                                       limit_count,
-                                                       is_null_value))) {
-    LOG_WARN("Get limit count num error", K(ret));
-  } else if (!is_null_value &&
-             NULL != limit_offset_expr_ &&
-             OB_FAIL(ObTransformUtils::get_limit_value(limit_offset_expr_,
-                                                       get_plan()->get_optimizer_context().get_params(),
-                                                       get_plan()->get_optimizer_context().get_exec_ctx(),
-                                                       &get_plan()->get_optimizer_context().get_allocator(),
-                                                       offset_count,
-                                                       is_null_value))) {
-    LOG_WARN("Get limit offset num error", K(ret));
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
+             || OB_ISNULL(est_cost_info_) || OB_UNLIKELY(1 > param.need_parallel_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected params", K(ret), K(opt_ctx), K(est_cost_info_), K(param));
+  } else if (OB_FAIL(get_limit_offset_value(NULL, limit_count_expr_, limit_offset_expr_,
+                                            limit_percent, limit_count, offset_count))) {
+    LOG_WARN("failed to get limit offset value", K(ret));
   } else {
+    card = get_card();
     double limit_count_double = static_cast<double>(limit_count);
     double offset_count_double = static_cast<double>(offset_count);
-    if (NULL != limit_count_expr_) {
-      if (param.need_row_count_ < 0 || limit_count_double < param.need_row_count_) {
-        param.need_row_count_ = limit_count_double + offset_count_double;
-      } else {
-        param.need_row_count_ += offset_count_double;
-      }
+    param.need_row_count_ = 0 > param.need_row_count_ ? card : param.need_row_count_;
+    if (0 <= limit_count) {
+      param.need_row_count_ = std::min(param.need_row_count_, limit_count_double * param.need_parallel_);
     }
-    if (OB_FAIL(access_path_->re_estimate_cost(param, card, index_back_cost, cost))) {
-      LOG_WARN("failed to re est cost", K(ret));
+    param.need_row_count_ = std::min(param.need_row_count_, card);
+    param.need_row_count_ += offset_count_double;
+    if (OB_FAIL(AccessPath::re_estimate_cost(param, *est_cost_info_, sample_info_,
+                                             opt_ctx->get_cost_model_type(),
+                                             phy_query_range_row_count_, query_range_row_count_,
+                                             card, index_back_cost, op_cost))) {
+      LOG_WARN("failed to re estimate cost", K(ret));
     } else {
-      if (NULL != limit_count_expr_) {
-        card = limit_count_double < card ? limit_count_double : card;
-      }
-      if (param.override_) {
-        set_card(card);
-        set_op_cost(cost);
-        set_cost(cost);
-      }
+      cost = op_cost;
+      card = std::min(param.need_row_count_ - offset_count_double, card);
     }
   }
   return ret;
@@ -276,6 +254,31 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   return ret;
 }
 
+int ObLogTableScan::extract_file_column_exprs_recursively(ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
+    auto pseudo_col_expr = static_cast<ObPseudoColumnRawExpr*>(expr);
+    if (pseudo_col_expr->get_table_id() != table_id_) {
+      //table id may be changed because of rewrite
+      pseudo_col_expr->set_table_id(table_id_);
+    }
+    if (OB_FAIL(add_var_to_array_no_dup(ext_file_column_exprs_, expr))) {
+      LOG_WARN("failed to add var to array", K(ret));
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < expr->get_children_count(); ++i) {
+      if (OB_FAIL(extract_file_column_exprs_recursively(expr->get_param_expr(i)))) {
+        LOG_WARN("fail to extract file column expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -326,16 +329,18 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
+
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
       ObRawExpr *expr = stmt->get_pseudo_column_like_exprs().at(i);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (T_ORA_ROWSCN == expr->get_expr_type() &&
-          static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_ &&
-          OB_FAIL(access_exprs_.push_back(expr))) {
-        LOG_WARN("failed to get next row", K(ret));
-      } else { /*do nothing*/}
+      } else if ((T_ORA_ROWSCN == expr->get_expr_type())
+                 && static_cast<ObPseudoColumnRawExpr*>(expr)->get_table_id() == table_id_) {
+        if (OB_FAIL(access_exprs_.push_back(expr))) {
+          LOG_WARN("fail to push back expr", K(ret));
+        }
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -454,7 +459,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
+  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id()) || EXTERNAL_TABLE == get_table_type()) {
     //all filters can not push down to storage
     if (OB_FAIL(nonpushdown_filters.assign(filters))) {
       LOG_WARN("store non-pushdown filters failed", K(ret));
@@ -1128,9 +1133,19 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("failed to adjust print access info", K(ret));
     } else {
       EXPLAIN_PRINT_EXPRS(access, type);
-      END_BUF_PRINT(plan_item.access_predicates_,
-                    plan_item.access_predicates_len_);
     }
+    if (OB_SUCC(ret) && EXTERNAL_TABLE == get_table_type() && EXPLAIN_EXTENDED == type) {
+      if(OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+        LOG_WARN("BUG_PRINTF fails", K(ret));
+      } else {
+        ObIArray<ObRawExpr*> &column_values = get_ext_column_convert_exprs();
+        EXPLAIN_PRINT_EXPRS(column_values, type);
+      }
+    }
+    END_BUF_PRINT(plan_item.access_predicates_,
+                  plan_item.access_predicates_len_);
   }
   if (OB_SUCC(ret)) {
     //print index selection and stats version
@@ -1146,10 +1161,16 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_FALSE_IT(table_meta =
+    } else if (OB_ISNULL(table_meta =
       plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
-    } else if (NULL != table_meta &&
-               OB_FAIL(BUF_PRINTF("stats version:%ld", table_meta->get_version()))) {
+      //do nothing
+    } else if (OB_FAIL(BUF_PRINTF("stats version:%ld", table_meta->get_version()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("dynamic sampling level:%ld", table_meta->get_ds_level()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     }
     END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);
@@ -1304,7 +1325,31 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
                                                  int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  ObString op_parallel_rule_name;
   if (OB_NOT_NULL(table_opt_info_)) {
+    switch (get_op_parallel_rule()) {
+      case OpParallelRule::OP_GLOBAL_DOP:
+        op_parallel_rule_name = "Global DOP";
+        break;
+      case OpParallelRule::OP_DAS_DOP:
+        op_parallel_rule_name = "DAS DOP";
+        break;
+      case OpParallelRule::OP_HINT_DOP:
+        op_parallel_rule_name = "Table Parallel Hint";
+        break;
+      case OpParallelRule::OP_TABLE_DOP:
+        op_parallel_rule_name = "Table DOP";
+        break;
+      case OpParallelRule::OP_AUTO_DOP:
+        op_parallel_rule_name = "Auto DOP";
+        break;
+      case OpParallelRule::OP_INHERIT_DOP:
+        op_parallel_rule_name = "Inherited";
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown op parallel rule", K(get_op_parallel_rule()));
+    }
     // print detail info of index selection method
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(BUF_PRINTF("  %.*s:", table_name_.length(), table_name_.ptr()))) {
@@ -1343,6 +1388,19 @@ int ObLogTableScan::explain_index_selection_info(char *buf,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("output_rows:%ld",
                             static_cast<int64_t>(output_row_count_)))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("table_dop:%ld", get_parallel()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("dop_method:%.*s", op_parallel_rule_name.length(),
+                                                     op_parallel_rule_name.ptr()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else {
       // print available index id
@@ -1620,7 +1678,6 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     index_name = &get_index_name();
   }
   const ObDMLStmt *stmt = NULL;
-  const ObTableParallelHint *parallel_hint = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULl", K(ret), K(get_plan()), K(stmt));
@@ -1629,10 +1686,9 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get table item", K(ret), "table_id", table_id_);
-  } else if (NULL != (parallel_hint = get_plan()->get_log_plan_hint().get_parallel_hint(table_id_)) &&
-             parallel_hint->get_parallel() > 1) { // parallel hint
+  } else if (get_parallel() > ObGlobalHint::DEFAULT_PARALLEL) { // parallel hint
     ObTableParallelHint temp_hint;
-    temp_hint.set_parallel(parallel_hint->get_parallel());
+    temp_hint.set_parallel(get_parallel());
     temp_hint.set_qb_name(qb_name);
     temp_hint.get_table().set_table(*table_item);
     if (OB_FAIL(temp_hint.print_hint(plan_text))) {
@@ -1692,7 +1748,8 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
       LOG_WARN("failed to print late material hint", K(ret));
     } else if (NULL == table_hint) {
       /*do nothing*/
-    } else if (NULL != table_hint->parallel_hint_ && table_hint->parallel_hint_->get_parallel() > 1
+    } else if (NULL != table_hint->parallel_hint_ && get_parallel() == table_hint->parallel_hint_->get_parallel()
+               && OpParallelRule::OP_HINT_DOP == get_op_parallel_rule()
                && OB_FAIL(table_hint->parallel_hint_->print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
     } else if (NULL != table_hint->use_das_hint_
@@ -1736,13 +1793,18 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
 {
   int ret = OB_SUCCESS;
   double card = 0.0;
+  double op_cost = 0.0;
   double cost = 0.0;
   limit_count_expr_ = limit;
   limit_offset_expr_ = offset;
   EstimateCostInfo param;
-  param.override_ = true;
-  if (OB_FAIL(re_est_cost(param, card, cost))) {
+  param.need_parallel_ = get_parallel();
+  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
     LOG_WARN("failed to re est cost error", K(ret));
+  } else {
+    set_op_cost(op_cost);
+    set_cost(cost);
+    set_card(card);
   }
   return ret;
 }

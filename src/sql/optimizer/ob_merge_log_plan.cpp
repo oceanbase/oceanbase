@@ -68,9 +68,11 @@ int ObMergeLogPlan::generate_normal_raw_plan()
 
     // allocate merge operator
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before call prepare_dml_infos
+        LOG_WARN("failed to compute dml parallel", K(ret));
+      } else if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
-      } else if (get_optimizer_context().use_pdml()) {
+      } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_merge())) {
           LOG_WARN("failed to allocate pdml merge", K(ret));
         }
@@ -240,45 +242,44 @@ int ObMergeLogPlan::candi_allocate_pdml_merge()
   ObSEArray<CandidatePlan, 8> best_plans;
   const IndexDMLInfo *index_dml_info = NULL;
   OPT_TRACE("start generate pdml merge plan");
-  if (get_stmt()->has_insert_clause()) {
-    if (index_dml_infos_.empty() || OB_ISNULL(index_dml_info = index_dml_infos_.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected index dml infos", K(ret), K(index_dml_infos_));
-    } else if (OB_FAIL(calculate_table_location_and_sharding(*get_stmt(),
-                                                             get_stmt()->get_sharding_conditions(),
-                                                             index_dml_info->loc_table_id_,
-                                                             index_dml_info->ref_table_id_,
-                                                             &index_dml_info->part_ids_,
-                                                             target_sharding,
-                                                             target_table_partition))) {
-      LOG_WARN("failed to calculate table location and sharding", K(ret));
-    } else if (OB_FAIL(compute_exchange_info_for_pdml_insert(*target_sharding,
-                                                             *index_dml_info,
-                                                             false,/*is_index_maintenance*/
-                                                             exch_info))) {
-      LOG_WARN("failed to compute exchange info for insert", K(ret));
-    }
-  } else if (index_update_infos_.empty() || OB_ISNULL(index_dml_info = index_update_infos_.at(0))) {
+  if (NULL != get_stmt() && get_stmt()->has_insert_clause()) {
+    index_dml_info = index_dml_infos_.empty() ? NULL : index_dml_infos_.at(0);
+  } else {
+    index_dml_info = index_update_infos_.empty() ? NULL : index_update_infos_.at(0);
+  }
+
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(index_dml_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected index dml infos", K(ret), K(index_update_infos_));
+    LOG_WARN("unexpected index dml infos", K(ret), K(get_stmt()), K(index_dml_info),
+                                          K(index_dml_infos_), K(index_update_infos_));
   } else if (OB_FAIL(calculate_table_location_and_sharding(*get_stmt(),
-                                                           get_stmt()->get_sharding_conditions(),
-                                                           index_dml_info->loc_table_id_,
-                                                           index_dml_info->ref_table_id_,
-                                                           &index_dml_info->part_ids_,
-                                                           target_sharding,
-                                                           target_table_partition))) {
+                                                          get_stmt()->get_sharding_conditions(),
+                                                          index_dml_info->loc_table_id_,
+                                                          index_dml_info->ref_table_id_,
+                                                          &index_dml_info->part_ids_,
+                                                          target_sharding,
+                                                          target_table_partition))) {
     LOG_WARN("failed to calculate table location and sharding", K(ret));
-  } else if (OB_FAIL(compute_exchange_info_for_pdml_del_upd(*target_sharding,
+  } else if (OB_ISNULL(target_sharding) || OB_ISNULL(target_table_partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(target_sharding), K(target_table_partition), K(ret));
+  } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_,
+                                                 best_plans))) {
+    LOG_WARN("failed to get minimal cost candidates", K(ret));
+  } else if (get_stmt()->has_insert_clause() &&
+             OB_FAIL(compute_exchange_info_for_pdml_insert(*target_sharding,
+                                                          *target_table_partition,
+                                                          *index_dml_info,
+                                                          false,/*is_index_maintenance*/
+                                                          exch_info))) {
+    LOG_WARN("failed to compute exchange info for insert", K(ret));
+  } else if (!get_stmt()->has_insert_clause() &&
+             OB_FAIL(compute_exchange_info_for_pdml_del_upd(*target_sharding,
+                                                            *target_table_partition,
                                                             *index_dml_info,
                                                             false,
                                                             exch_info))) {
     LOG_WARN("fail to compute exchange info for pdml merge", K(ret));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_,
-                                                 best_plans))) {
-    LOG_WARN("failed to get minimal cost candidates", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
       if (OB_FAIL(create_pdml_merge_plan(best_plans.at(i).plan_tree_,

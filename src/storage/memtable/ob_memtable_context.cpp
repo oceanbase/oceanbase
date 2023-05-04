@@ -139,7 +139,6 @@ void ObMemtableCtx::reset()
     truncate_cnt_ = 0;
     unsynced_cnt_ = 0;
     unsubmitted_cnt_ = 0;
-    partition_audit_info_cache_.reset();
     lock_mem_ctx_.reset();
     //FIXME: ctx_ is not reset
     log_conflict_interval_.reset();
@@ -344,7 +343,7 @@ void ObMemtableCtx::old_row_free(void *row)
 void *ObMemtableCtx::callback_alloc(const int64_t size)
 {
   void* ret = NULL;
-  if (OB_ISNULL(ret = ctx_cb_allocator_.alloc(size))) {
+  if (OB_ISNULL(ret = trans_mgr_.callback_alloc(size))) {
     TRANS_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "callback alloc error, no memory", K(size), K(*this));
   } else {
     ATOMIC_FAA(&callback_mem_used_, size);
@@ -363,7 +362,7 @@ void ObMemtableCtx::callback_free(ObITransCallback *cb)
   } else {
     ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
-    ctx_cb_allocator_.free(cb);
+    trans_mgr_.callback_free(cb);
     cb = NULL;
   }
 }
@@ -506,12 +505,6 @@ int ObMemtableCtx::do_trans_end(
       //commit or abort log ts for clear table lock
     } else if (OB_FAIL(clear_table_lock_(commit, trans_version, final_scn))) {
       TRANS_LOG(ERROR, "clear table lock failed.", K(ret), K(*this));
-    }
-    (void)partition_audit_info_cache_.stmt_end_update_audit_info(commit);
-    // flush partition audit statistics cached in ctx to partition
-    if (NULL != ATOMIC_LOAD(&ctx_) &&
-        OB_UNLIKELY(OB_SUCCESS != (tmp_ret = flush_audit_partition_cache_(commit)))) {
-      TRANS_LOG(WARN, "flush audit partition cache error", K(tmp_ret), K(commit), K(*ctx_));
     }
   }
   return ret;
@@ -778,50 +771,6 @@ int ObMemtableCtx::add_conflict_trans_id(const ObTransID conflict_trans_id)
   } else if (OB_FAIL(conflict_trans_ids_.push_back(conflict_trans_id))) {
     DETECT_LOG(WARN, "push trans id to blocked trans ids failed", K(*this), K(conflict_trans_id), K(conflict_trans_ids_));
   }
-
-  return ret;
-}
-
-int ObMemtableCtx::audit_partition(const enum ObPartitionAuditOperator op,
-                                   const int64_t count)
-{
-  return audit_partition_cache_(op, (int32_t)count);
-}
-
-// cache partition audit info in current context
-int ObMemtableCtx::audit_partition_cache_(const enum ObPartitionAuditOperator op,
-                                         const int32_t count)
-{
-  int ret = OB_SUCCESS;
-
-  if (!GCONF.enable_sql_audit) {
-    // do nothing
-  } else if (OB_FAIL(partition_audit_info_cache_.update_audit_info(op, count))) {
-    TRANS_LOG(WARN, "update audit info", K(ret), K(*ctx_));
-  }
-
-  return ret;
-}
-
-// flush partition audit info into partition
-int ObMemtableCtx::flush_audit_partition_cache_(bool commit)
-{
-  int ret = OB_SUCCESS;
-  //ObLSTxCtxMgr *partition_mgr = NULL;
-
-  //if (!GCONF.enable_sql_audit) {
-  //  // do nothing
-  //} else if (OB_ISNULL(ctx_)) {
-  //  ret = OB_ERR_UNEXPECTED;
-  //  TRANS_LOG(WARN, "memtable ctx is NULL", K(ret), KP(ctx_));
-  //} else if (OB_ISNULL(partition_mgr = ctx_->get_ls_tx_ctx_mgr())) {
-  //  // ret = OB_ERR_UNEXPECTED;
-  //  // TRANS_LOG(WARN, "partition mgr is NULL", K(ret), K(*ctx_));
-  //} else if (OB_FAIL(partition_mgr->audit_partition(partition_audit_info_cache_, commit))) {
-  //  TRANS_LOG(WARN, "partition mgr audit partition error", K(ret), K(*ctx_));
-  //} else {
-  //  //do nothing
-  //}
 
   return ret;
 }

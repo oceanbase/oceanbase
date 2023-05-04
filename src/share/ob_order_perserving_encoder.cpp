@@ -488,7 +488,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
     convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
-  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
+  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN
+             || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_GB18030_2022_BIN) {
     if (is_mem) {
       convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
     } else {
@@ -496,7 +497,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI) {
+             || cs == CS_TYPE_GB18030_CHINESE_CI ||
+             (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
                                                  max_buf_len, is_mem, is_valid_uni);
     if (res_len < 0) {
@@ -529,7 +531,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY) {
     convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
-  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
+  } else if (cs == CS_TYPE_UTF8MB4_BIN || cs == CS_TYPE_GBK_BIN ||
+             cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_GB18030_2022_BIN) {
     if (param.is_memcmp_) {
       convert_ob_charset_utf8mb4_bin((unsigned char *)str.ptr(), str.length(), to, to_len);
     } else {
@@ -537,7 +540,8 @@ int ObOrderPerservingEncoder::encode_from_string_varlen(
     }
   } else if (cs == CS_TYPE_UTF8MB4_GENERAL_CI || cs == CS_TYPE_GBK_CHINESE_CI
              || cs == CS_TYPE_UTF16_GENERAL_CI || cs == CS_TYPE_UTF16_BIN
-             || cs == CS_TYPE_GB18030_CHINESE_CI) {
+             || cs == CS_TYPE_GB18030_CHINESE_CI ||
+             (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     int64_t res_len = ObCharset::sortkey_var_len(cs, str.ptr(), str.length(), (char *)to,
                                                  max_buf_len, param.is_memcmp_, param.is_valid_uni_);
     if (!param.is_valid_uni_) {
@@ -562,7 +566,7 @@ int ObOrderPerservingEncoder::encode_from_string_fixlen(
     ret = OB_BUF_NOT_ENOUGH;
     LOG_TRACE("no enough memory to do encoding for fixed string", K(ret));
   } else if (cs == CS_TYPE_COLLATION_FREE || cs == CS_TYPE_BINARY || cs == CS_TYPE_UTF8MB4_BIN
-             || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN) {
+             || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN || cs == CS_TYPE_GB18030_2022_BIN) {
     MEMCPY(to, str.ptr(), str.length());
     to_len += str.length();
   } else {
@@ -770,6 +774,7 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
     to_len += 2;
   } else if (cs == CS_TYPE_UTF8MB4_BIN
            || cs == CS_TYPE_GBK_BIN || cs == CS_TYPE_GB18030_BIN
+           || cs == CS_TYPE_GB18030_2022_BIN
            || cs == CS_TYPE_UTF8MB4_GENERAL_CI) {
     if (with_empty_str) {
       *to = 0x00;
@@ -799,7 +804,9 @@ int ObOrderPerservingEncoder::encode_tails(unsigned char *to, int64_t max_buf_le
       *(to+3) = 0x20;
     }
     to_len += 4;
-  } else if (cs == CS_TYPE_UTF16_BIN || cs == CS_TYPE_GB18030_CHINESE_CI) {
+  } else if (cs == CS_TYPE_UTF16_BIN
+             || cs == CS_TYPE_GB18030_CHINESE_CI
+             || (CS_TYPE_GB18030_2022_PINYIN_CI <= cs && cs <= CS_TYPE_GB18030_2022_STROKE_CS)) {
     if (with_empty_str) {
       MEMSET(to, 0x00, 4);
       to += 4;

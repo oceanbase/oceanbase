@@ -73,7 +73,8 @@ public:
         route_sql_(),
         is_select_for_update_(false),
         has_hidden_rowid_(false),
-        stmt_sql_() {}
+        stmt_sql_(),
+        is_bulk_(false) {}
     virtual ~ExternalRetrieveInfo() {}
 
     int build(ObStmt &stmt,
@@ -94,6 +95,7 @@ public:
     bool is_select_for_update_;
     bool has_hidden_rowid_;
     ObString stmt_sql_;
+    bool is_bulk_;
   };
 
   enum PsMode
@@ -164,6 +166,7 @@ public:
   ObString &get_stmt_sql();
   bool get_is_select_for_update();
   inline bool has_hidden_rowid();
+  inline bool is_bulk();
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
@@ -619,6 +622,11 @@ inline bool ObResultSet::get_is_select_for_update()
 inline bool ObResultSet::has_hidden_rowid()
 {
   return external_retrieve_info_.has_hidden_rowid_;
+}
+
+inline bool ObResultSet::is_bulk()
+{
+  return external_retrieve_info_.is_bulk_;
 }
 
 inline bool ObResultSet::is_with_rows() const

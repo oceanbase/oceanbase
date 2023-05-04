@@ -19,7 +19,7 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/ob_root_addr_agent.h"
 #include "share/ob_debug_sync.h"
-#include "rootserver/ob_server_manager.h"
+#include "share/ob_all_server_tracer.h"
 #include "rootserver/ob_root_utils.h"
 #include "rootserver/ob_root_service.h"
 #include "observer/ob_server_struct.h"
@@ -33,7 +33,7 @@ using namespace share;
 
 ObUpdateRsListTask::ObUpdateRsListTask()
   : inited_(false), lst_operator_(NULL),
-    root_addr_agent_(NULL), server_mgr_(NULL), zone_mgr_(NULL),
+    root_addr_agent_(NULL), zone_mgr_(NULL),
     lock_(NULL), force_update_(false), self_addr_()
 {
 }
@@ -71,7 +71,6 @@ void ObUpdateRsListTask::clear_lock()
 
 int ObUpdateRsListTask::init(ObLSTableOperator &lst_operator,
                              ObRootAddrAgent *agent,
-                             ObServerManager &server_mgr,
                              ObZoneManager &zone_mgr,
                              SpinRWLock &lock,
                              const bool force_update,
@@ -90,7 +89,6 @@ int ObUpdateRsListTask::init(ObLSTableOperator &lst_operator,
   } else {
     lst_operator_ = &lst_operator;
     root_addr_agent_ = agent;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     lock_ = &lock;
     force_update_ = force_update;
@@ -115,11 +113,10 @@ int ObUpdateRsListTask::process_without_lock()
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_ISNULL(lst_operator_)
-             || OB_ISNULL(server_mgr_)) {
+  } else if (OB_ISNULL(lst_operator_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("is null", KP(lst_operator_), KP(server_mgr_));
-  } else if (OB_FAIL(get_rs_list(*lst_operator_, *server_mgr_, self_addr_,
+    LOG_WARN("lst_operator_ is null", KP(lst_operator_));
+  } else if (OB_FAIL(get_rs_list(*lst_operator_, self_addr_,
                                  new_rs_list, new_readonly_rs_list, rs_list_diff_member_list))) {
     LOG_WARN("get_rs_list failed", K(ret));
   } else if (common::INVALID_CLUSTER_ROLE == cluster_role) {
@@ -208,10 +205,10 @@ ObAsyncTask *ObUpdateRsListTask::deep_copy(char *buf, const int64_t buf_size) co
   } else {
     task = new(buf) ObUpdateRsListTask();
     if (OB_FAIL(static_cast<ObUpdateRsListTask *>(task)->init(
-                    *lst_operator_, root_addr_agent_, *server_mgr_,
+                    *lst_operator_, root_addr_agent_,
                     *zone_mgr_, *lock_, force_update_, self_addr_))) {
       LOG_WARN("init task failed", KP(lst_operator_), KP(root_addr_agent_),
-          KP(server_mgr_), KP(zone_mgr_), KP(lock_), K(ret));
+          KP(zone_mgr_), KP(lock_), K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -224,7 +221,6 @@ ObAsyncTask *ObUpdateRsListTask::deep_copy(char *buf, const int64_t buf_size) co
 
 int ObUpdateRsListTask::get_rs_list(
     ObLSTableOperator &lst,
-    ObServerManager &server_mgr,
     const ObAddr &self_addr,
     share::ObIAddrList &rs_list,
     share::ObIAddrList &readonly_rs_list,
@@ -241,8 +237,8 @@ int ObUpdateRsListTask::get_rs_list(
     ObRootAddr rs;
     FOREACH_CNT_X(replica, ls_info.get_replicas(), OB_SUCCESS == ret) {
       bool is_server_alive = false;
-      if (server_mgr.has_build()) {
-        if (OB_FAIL(server_mgr.check_server_alive(replica->get_server(), is_server_alive))) {
+      if (SVR_TRACER.has_build()) {
+        if (OB_FAIL(SVR_TRACER.check_server_alive(replica->get_server(), is_server_alive))) {
           LOG_WARN("check_server_alive failed", "server", replica->get_server(), KR(ret));
         }
       } else {

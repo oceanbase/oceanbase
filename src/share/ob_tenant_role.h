@@ -59,6 +59,7 @@ public:
   bool is_restore() const { return RESTORE_TENANT == value_; }
 
   TO_STRING_KV(K_(value));
+  DECLARE_TO_YSON_KV;
 private:
   Role value_;
 };

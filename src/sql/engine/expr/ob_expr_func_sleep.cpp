@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprSleep::ObExprSleep(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SLEEP, N_SYS_SLEEP, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SLEEP, N_SYS_SLEEP, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

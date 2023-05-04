@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprJsonEqual::ObExprJsonEqual(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_EQUAL, N_JSON_EQUAL, TWO_OR_THREE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_EQUAL, N_JSON_EQUAL, TWO_OR_THREE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -303,6 +303,7 @@ public:
                                        const ObIArray<uint64_t> &db_ids);
   ObDMLStmt *get_stmt();
 protected:
+  int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
                              ObIArray<ObString> &user_vars,
                              ObIArray<ObRawExpr*> &pl_vars,
@@ -365,7 +366,7 @@ protected:
   int resolve_and_split_sql_expr_with_bool_expr(const ParseNode &node,
                                                 ObIArray<ObRawExpr*> &and_exprs);
   int resolve_where_clause(const ParseNode *node);
-  int resolve_order_clause(const ParseNode *node);
+  int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
   int resolve_limit_clause(const ParseNode *node);
   int resolve_into_clause(const ParseNode *node);
   int resolve_hints(const ParseNode *node);
@@ -879,6 +880,12 @@ private:
                              int64_t &ref_id);
   int resolve_pq_distribute_window_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
+  int replace_col_udt_qname(ObQualifiedName& q_name);
+  int implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr);
+  int implict_cast_sql_udt_to_pl_udt(ObRawExpr* &real_ref_expr);
+  int check_column_udt_type(ParseNode *root_node);
+  int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+
   //////////end of functions for sql hint/////////////
 protected:
   struct GenColumnExprInfo {
@@ -945,6 +952,7 @@ protected:
 
   //store json table column info
   common::ObSEArray<ObDmlJtColDef *, 1, common::ModulePageAllocator, true> json_table_infos_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> pseudo_external_file_col_exprs_;
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObDMLResolver);
 };

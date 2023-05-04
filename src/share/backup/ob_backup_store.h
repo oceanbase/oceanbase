@@ -28,6 +28,7 @@ struct ObBackupDestType final
   {
     DEST_TYPE_BACKUP_DATA = 0,
     DEST_TYPE_ARCHIVE_LOG,
+    DEST_TYPE_BACKUP_KEY,
     DEST_TYPE_MAX
   };
   static const char *get_str(const TYPE &type);

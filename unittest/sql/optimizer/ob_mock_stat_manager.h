@@ -205,9 +205,9 @@ public:
     ObObj min;
     ObObj max;
     ObColumnStat *column_stat = (ObColumnStat *)allocator_.alloc(sizeof(ObColumnStat));
-    char *llc_bitmap = (char *)allocator_.alloc(oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+    char *llc_bitmap = (char *)allocator_.alloc(oceanbase::common::ObOptColumnStat::NUM_LLC_BUCKET);
     MEMSET(llc_bitmap, 1, 96);
-    MEMSET(llc_bitmap + 96, 0, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET - 96);
+    MEMSET(llc_bitmap + 96, 0, oceanbase::common::ObOptColumnStat::NUM_LLC_BUCKET - 96);
     if (NULL == column_stat) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "failed to allocate column stat", K(ret));
@@ -221,7 +221,7 @@ public:
       column_stat->set_column_id(column_id);
       column_stat->set_num_distinct(int_info_.distinct_num_);
       column_stat->set_num_null(int_info_.null_num_);
-      column_stat->set_llc_bitmap(llc_bitmap, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+      column_stat->set_llc_bitmap(llc_bitmap, oceanbase::common::ObOptColumnStat::NUM_LLC_BUCKET);
       column_stat->set_version(1);
     }
     if (OB_SUCC(ret) && NULL != schema_checker_) {
@@ -236,7 +236,7 @@ public:
         column_stat->set_num_null(0);
         min.set_min_value();
         max.set_max_value();
-        MEMSET(llc_bitmap, 0, oceanbase::common::ObColumnStat::NUM_LLC_BUCKET);
+        MEMSET(llc_bitmap, 0, oceanbase::common::ObOptColumnStat::NUM_LLC_BUCKET);
       } else if (oceanbase::common::ObStringTC == col_schema->get_meta_type().get_type_class()) {
         column_stat->set_num_distinct(str_info_.distinct_num_);
         column_stat->set_num_null(str_info_.null_num_);

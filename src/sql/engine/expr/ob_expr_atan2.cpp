@@ -27,7 +27,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprAtan2::ObExprAtan2(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ATAN2, N_ATAN2, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ATAN2, N_ATAN2, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   param_lazy_eval_ = true;
 }

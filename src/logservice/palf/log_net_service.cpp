@@ -257,6 +257,7 @@ int LogNetService::submit_change_mode_meta_resp(
 int LogNetService::submit_config_change_pre_check_req(
     const ObAddr &server,
     const LogConfigVersion &config_version,
+    const bool need_purge_throttling,
     const int64_t timeout_us,
     LogGetMCStResp &resp)
 {
@@ -264,7 +265,7 @@ int LogNetService::submit_config_change_pre_check_req(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    LogGetMCStReq req(config_version);
+    LogGetMCStReq req(config_version, need_purge_throttling);
     ret = post_sync_request_to_server_(server, timeout_us, req, resp);
   }
   return ret;

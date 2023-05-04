@@ -29,6 +29,7 @@ ObExprSpatialMbr::ObExprSpatialMbr(common::ObIAllocator &alloc)
                          T_FUN_SYS_SPATIAL_MBR,
                          N_SPATIAL_MBR,
                          1,
+                         NOT_VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
 

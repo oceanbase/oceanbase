@@ -96,7 +96,7 @@ OB_SERIALIZE_MEMBER(ObExprColumnConv, row_dimension_, real_param_num_, result_ty
 
 ObExprColumnConv::ObExprColumnConv(ObIAllocator &alloc)
     : ObBaseExprColumnConv(alloc),
-      ObFuncExprOperator(alloc, T_FUN_COLUMN_CONV, N_COLUMN_CONV, -1, NOT_ROW_DIMENSION,
+      ObFuncExprOperator(alloc, T_FUN_COLUMN_CONV, N_COLUMN_CONV, -1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
   disable_operand_auto_cast();
@@ -399,6 +399,14 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
           LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr), K(*val));
         }
         LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
+      } else if (is_lob_storage(out_type) && expr.args_[4]->obj_meta_.is_user_defined_sql_type()) {
+        // udt types can only insert to lob columns by rewrite.
+        // but before rewrite, column convert type deducing may happen
+        // so prevent the convertion during execution
+        ret = OB_ERR_INVALID_XML_DATATYPE;
+        LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, ob_obj_type_str(out_type), "ANYDATA");
+        LOG_WARN("convert xmltype to character type is not supported in PL",
+                 K(ret), K(expr.args_[4]->obj_meta_), K(out_type));
       } else {
         ObObjType in_type = expr.args_[4]->obj_meta_.get_type();
         ObCollationType in_cs_type = expr.args_[4]->obj_meta_.get_collation_type();

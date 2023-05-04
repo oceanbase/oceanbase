@@ -125,6 +125,14 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         TRANS_LOG(WARN, "batch multi stmt rollback found", K(ret),
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
+        // Case 8: For the case of on duplicate key update, it may operate the
+        // same row more than once if the sql insert onto duplicate with the
+        // same row more than once. It may have no chance to batch the same row.
+        // So we need bypass this case.
+      } else if (write_flag.is_insert_up()
+                 && blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag
+                 && blocksstable::ObDmlFlag::DF_UPDATE == locker_dml_flag) {
+        // bypass the case
       } else {
         // Others: It will never happen that two operaions on the same row for the
         // same txn except the above cases. So we should report unexpected error.

@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 namespace sql
 {
 ObExprLog::ObExprLog(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_LOG, N_LOG, 2, NOT_ROW_DIMENSION)
+    : ObExprOperator(alloc, T_FUN_SYS_LOG, N_LOG, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

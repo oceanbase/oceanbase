@@ -315,3 +315,9 @@ The read and write operation on configs in gc handler should be mutually exclusi
 ## latch: cdcservice clientlsctx lock wait
 
 The read and write operation on source(RemoteLogParent) in ClientLSCtx should be mutually exclusive.
+## latch: hb respnses lock wait
+
+The read and write operation on hb_responses_ should be mutually exclusive.
+## latch: all servers info in table lock wait
+
+The read and write operation on all_servers_info_in_table_ should be mutually exclusive.

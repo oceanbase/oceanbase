@@ -30,7 +30,7 @@ namespace sql
 {
 ObExprJsonLength::ObExprJsonLength(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_LENGTH, N_JSON_LENGTH,
-                         ONE_OR_TWO, NOT_ROW_DIMENSION)
+                         ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -223,6 +223,9 @@ public:
 
   int do_post_traverse_processing();
 
+  int add_explain_note();
+  int add_parallel_explain_note();
+
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
   int update_re_est_cost(ObLogicalOperator *op);
@@ -930,7 +933,7 @@ public:
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
 
-  int allocate_expr_values_as_top(ObLogicalOperator *&old_top,
+  int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);
 
   int allocate_values_as_top(ObLogicalOperator *&old_top);
@@ -1324,6 +1327,8 @@ public:
 
   int fill_join_filter_info(JoinFilterInfo &join_filter_info);
 
+  int perform_gather_stat_replace(ObLogicalOperator *op);
+
 protected:
   virtual int generate_normal_raw_plan() = 0;
   virtual int generate_dblink_raw_plan();
@@ -1713,8 +1718,9 @@ private: // member functions
                               ObOptColumnStatHandle &handle,
                               common::ObIArray<ObObj> &popular_values) const;
   bool has_depend_json_table(const ObRelIds& table_ids);
+  int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
 public:
-  const ObLogPlanHint &get_log_plan_hint() { return log_plan_hint_; }
+  const ObLogPlanHint &get_log_plan_hint() const { return log_plan_hint_; }
   bool has_join_order_hint() { return !log_plan_hint_.join_order_.leading_tables_.is_empty(); }
   const ObRelIds& get_leading_tables() { return log_plan_hint_.join_order_.leading_tables_; }
   void set_added_leading() { outline_print_flags_ |= ADDED_LEADING_HINT; }
@@ -1733,6 +1739,11 @@ protected: // member variable
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true >
       window_function_replaced_exprs_;
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true > gen_col_replaced_exprs_;
+  common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 1, common::ModulePageAllocator, true > stat_gather_replaced_exprs_;
+  // used for gather statistic begin
+  ObRawExpr* stat_partition_id_expr_;
+  ObLogTableScan* stat_table_scan_;
+  // used for gather statistics end
   //上层stmt条件下推下来的谓词，已经抽出？
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> pushdown_filters_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> startup_filters_;
@@ -1765,6 +1776,7 @@ private:
     {
       return left_ids_.hash() + right_ids_.hash();;
     }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator ==(const JoinPathPairInfo &src_info) const
     {
       return (left_ids_ == src_info.left_ids_) && (right_ids_ == src_info.right_ids_);

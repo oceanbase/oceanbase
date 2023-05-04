@@ -49,6 +49,8 @@ connection_control_min_connection_delay
 cpu_count
 cpu_quota_concurrency
 datafile_disk_percentage
+datafile_maxsize
+datafile_next
 datafile_size
 data_dir
 data_disk_usage_limit_percentage
@@ -117,6 +119,7 @@ location_refresh_thread_count
 log_archive_concurrency
 log_disk_percentage
 log_disk_size
+log_disk_throttling_percentage
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency
@@ -242,8 +245,11 @@ _bloom_filter_ratio
 _cache_wash_interval
 _chunk_row_store_mem_limit
 _ctx_memory_limit
+_datafile_usage_lower_bound_percentage
+_datafile_usage_upper_bound_percentage
 _data_storage_io_timeout
 _enable_adaptive_compaction
+_enable_backtrace_function
 _enable_block_file_punch_hole
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
@@ -263,6 +269,7 @@ _enable_plan_cache_mem_diagnosis
 _enable_protocol_diagnose
 _enable_px_batch_rescan
 _enable_px_bloom_filter_sync
+_enable_px_fast_reclaim
 _enable_px_ordered_coord
 _enable_reserved_user_dcl_restriction
 _enable_resource_limit_spec
@@ -305,6 +312,7 @@ _ob_plan_cache_gc_strategy
 _ob_query_rate_limit
 _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
+_optimizer_ads_time_limit
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time

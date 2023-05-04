@@ -89,8 +89,6 @@ public:
                             int64_t &buf_pos,
                             ObRedoLogSubmitHelper &helper,
                             const bool log_for_lock_node = true) = 0;
-  virtual int audit_partition(const enum transaction::ObPartitionAuditOperator op,
-                              const int64_t count) = 0;
   common::ActiveResource resource_link_;
 };
 
@@ -167,7 +165,8 @@ public:
                   const uint64_t table_id,
                   const storage::ObTableReadInfo &read_info,
                   const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
-                  const storage::ObStoreRow &row) = 0;
+                  const storage::ObStoreRow &row,
+                  const share::ObEncryptMeta *encrypt_meta) = 0;
   //
   // Lock rows
   //

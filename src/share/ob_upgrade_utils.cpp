@@ -17,6 +17,7 @@
 #include "share/ob_upgrade_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/ob_service_epoch_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -957,6 +958,44 @@ int ObUpgradeFor4100Processor::recompile_all_views_and_synonyms(const uint64_t t
 }
 
 /* =========== 4100 upgrade processor end ============= */
+
+int ObUpgradeFor4200Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_heartbeat_and_server_zone_op_service())) {
+    LOG_WARN("post upgrade for heartbeat and server zone op service failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4200Processor::post_upgrade_for_heartbeat_and_server_zone_op_service()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+	if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
+	} else if (!is_sys_tenant(tenant_id_)) {
+    LOG_INFO("only sys tenant need heartbeat and server zone op service", K(tenant_id_));
+  } else {
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s (tenant_id, name, value) VALUES "
+        "(%lu, '%s', 0), "
+        "(%lu, '%s', 0)",
+        OB_ALL_SERVICE_EPOCH_TNAME, OB_SYS_TENANT_ID, ObServiceEpochProxy::HEARTBEAT_SERVICE_EPOCH,
+        OB_SYS_TENANT_ID, ObServiceEpochProxy::SERVER_ZONE_OP_SERVICE_EPOCH))) {
+      LOG_WARN("fail to assign sql assign", KR(ret));
+    } else if (OB_FAIL(sql_proxy_->write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql));
+    } else {}
+  }
+  FLOG_INFO("insert heartbeat and server zone op service", KR(ret), K(affected_rows));
+  return ret;
+}
+
+/* =========== 4200 upgrade processor end ============= */
 /* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase

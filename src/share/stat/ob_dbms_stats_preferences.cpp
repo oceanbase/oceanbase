@@ -22,9 +22,9 @@ namespace oceanbase {
 using namespace sql;
 namespace common {
 
-#define FETCH_GLOBAL_PREFS "SELECT spare4 FROM %s WHERE sname = upper('%.*s')"
+#define FETCH_GLOBAL_PREFS "SELECT /*+ OPT_PARAM(\'USE_DEFAULT_OPT_STAT\',\'TRUE\') */ spare4 FROM %s WHERE sname = upper('%.*s')"
 
-#define FETCH_USER_PREFS "SELECT valchar FROM %s WHERE tenant_id = %lu and \
+#define FETCH_USER_PREFS "SELECT /*+ OPT_PARAM(\'USE_DEFAULT_OPT_STAT\',\'TRUE\') */ valchar FROM %s WHERE tenant_id = %lu and \
                           table_id = %lu and pname = upper('%.*s')"
 
 #define UPDATE_GLOBAL_PREFS "UPDATE %s SET spare4 = upper('%.*s'), \

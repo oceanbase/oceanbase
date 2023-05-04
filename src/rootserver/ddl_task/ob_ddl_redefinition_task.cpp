@@ -1023,6 +1023,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         param.autoinc_offset_ = 1;
         param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
         param.autoinc_mode_is_order_ = dest_table_schema->is_order_auto_increment_mode();
+        param.autoinc_auto_increment_ = dest_table_schema->get_auto_increment();
         if (OB_FAIL(auto_inc_service.get_sequence_value(tenant_id_, object_id_, cur_column_id, param.autoinc_mode_is_order_, sequence_value))) {
           LOG_WARN("get sequence value failed", K(ret), K(tenant_id_), K(object_id_), K(cur_column_id));
         } else if (FALSE_IT(param.global_value_to_sync_ = sequence_value - 1)) {
@@ -1634,6 +1635,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         LOG_WARN("col is NULL", K(ret));
       } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
         // bypass hidden column
+      } else if (col->is_udt_hidden_column()) {
+        // bypass udt hidden column
       } else if (OB_FAIL(col_name_map.get(col->get_column_name_str(), new_col_name))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // the column is not in column name map, meaning it is dropped in this ddl

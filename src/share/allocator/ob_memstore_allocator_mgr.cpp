@@ -60,6 +60,7 @@ int ObMemstoreAllocatorMgr::get_tenant_memstore_allocator(const uint64_t tenant_
       ObMemAttr attr;
       attr.tenant_id_ = OB_SERVER_TENANT_ID;
       attr.label_ = ObModIds::OB_MEMSTORE_ALLOCATOR;
+      SET_USE_500(attr);
       void *buf = ob_malloc(sizeof(TAllocator), attr);
       if (NULL != buf) {
         TAllocator *allocator = new (buf) TAllocator();

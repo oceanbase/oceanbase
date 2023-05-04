@@ -436,8 +436,10 @@ int ObMinMaxAggCell::process(blocksstable::ObStorageDatum &storage_datum)
       LOG_WARN("Failed to deep copy datum", K(ret), K(storage_datum), K(col_idx_));
     }
   } else if (!storage_datum.is_null()) {
-    int cmp_ret = cmp_fun_(datum_, storage_datum);
-    if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_fun_(datum_, storage_datum, cmp_ret))) {
+      LOG_WARN("Failed to compare", K(ret), K(storage_datum), K(datum_), K(col_idx_));
+    } else if ((is_min_ && cmp_ret > 0) || (!is_min_ && cmp_ret < 0)) {
       if (OB_FAIL(deep_copy_datum(storage_datum))) {
         LOG_WARN("Failed to deep copy datum", K(ret), K(storage_datum), K(datum_), K(col_idx_));
       }

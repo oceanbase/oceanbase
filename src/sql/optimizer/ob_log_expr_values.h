@@ -54,13 +54,16 @@ class ObLogExprValues : public ObLogicalOperator
     const ObErrLogDefine &get_err_log_define() const { return err_log_define_; }
 
     virtual int est_cost() override;
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost);
     virtual int compute_op_ordering() override;
     virtual int compute_equal_set() override;
     virtual int compute_table_set() override;
     virtual int compute_fd_item_set() override;
     virtual int compute_one_row_info() override;
     virtual int compute_sharding_info() override;
+    virtual int compute_op_parallel_and_server_info() override;
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
     int extract_err_log_info();
     int mark_probably_local_exprs();

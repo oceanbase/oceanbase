@@ -507,6 +507,7 @@ int ObConstraintTask::init(
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     object_id_ = table_schema->get_table_id();
     target_object_id_ = object_id;
     tenant_id_ = tenant_id;

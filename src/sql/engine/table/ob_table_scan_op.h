@@ -350,9 +350,12 @@ public:
       uint64_t report_col_checksum_             : 1;
       uint64_t has_tenant_id_col_               : 1;
       uint64_t is_spatial_ddl_                  : 1;
-      uint64_t reserved_                        : 54;
+      uint64_t is_external_table_               : 1;
+      uint64_t reserved_                        : 53;
     };
   };
+  int64_t tenant_id_col_idx_;
+  int64_t partition_id_calc_type_;
 };
 
 class ObTableScanOp : public ObOperator
@@ -468,7 +471,7 @@ protected:
                                              common::ObNewRange &new_range,
                                              bool &is_transform_end);
   inline void access_expr_sanity_check() {
-    if (OB_UNLIKELY(spec_.need_check_output_datum_)) {
+    if (OB_UNLIKELY(spec_.need_check_output_datum_ && !MY_SPEC.is_external_table_)) {
       const ObPushdownExprSpec &pd_expr_spec = MY_SPEC.tsc_ctdef_.scan_ctdef_.pd_expr_spec_;
       ObSQLUtils::access_expr_sanity_check(pd_expr_spec.access_exprs_,
                                eval_ctx_, pd_expr_spec.max_batch_size_);

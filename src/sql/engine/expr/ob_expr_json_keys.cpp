@@ -22,7 +22,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonKeys::ObExprJsonKeys(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_KEYS, N_JSON_KEYS, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_KEYS, N_JSON_KEYS, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

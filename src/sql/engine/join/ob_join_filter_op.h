@@ -23,6 +23,8 @@
 #include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
 #include "sql/dtl/ob_op_metric.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
+#include "share/detect/ob_detectable_id.h"
 
 
 namespace oceanbase
@@ -39,9 +41,34 @@ struct ObJoinFilterShareInfo
   uint64_t ch_provider_ptr_; // sqc_proxy, 由于序列化需要, 使用指针表示.
   uint64_t release_ref_ptr_; // 释放内存引用计数, 初始值为worker个数.
   uint64_t filter_ptr_;   //此指针将作为PX JOIN FILTER CREATE算子共享内存.
+  uint64_t shared_msgs_;  //sqc-shared dh msgs
   OB_UNIS_VERSION_V(1);
 };
 
+struct ObJoinFilterRuntimeConfig
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  TO_STRING_KV(K_(bloom_filter_ratio), K_(each_group_size), K_(bf_piece_size),
+               K_(runtime_filter_wait_time_ms), K_(runtime_filter_max_in_num),
+               K_(runtime_bloom_filter_max_size), K_(px_message_compression));
+public:
+  ObJoinFilterRuntimeConfig() :
+      bloom_filter_ratio_(0.0),
+      each_group_size_(OB_INVALID_ID),
+      bf_piece_size_(0),
+      runtime_filter_wait_time_ms_(0),
+      runtime_filter_max_in_num_(0),
+      runtime_bloom_filter_max_size_(0),
+      px_message_compression_(false) {}
+  double bloom_filter_ratio_;
+  int64_t each_group_size_;
+  int64_t bf_piece_size_;
+  int64_t runtime_filter_wait_time_ms_;
+  int64_t runtime_filter_max_in_num_;
+  int64_t runtime_bloom_filter_max_size_;
+  bool px_message_compression_;
+};
 class ObJoinFilterOpInput : public ObOpInput
 {
   OB_UNIS_VERSION_V(1);
@@ -49,10 +76,11 @@ public:
   ObJoinFilterOpInput(ObExecContext &ctx, const ObOpSpec &spec)
     : ObOpInput(ctx, spec),
       share_info_(),
-      is_local_create_(true),
       task_id_(0),
       px_sequence_id_(OB_INVALID_ID),
-      bf_idx_at_sqc_proxy_(-1)
+      bf_idx_at_sqc_proxy_(-1),
+      config_(),
+      register_dm_info_()
   {}
   virtual ~ObJoinFilterOpInput() {}
 
@@ -65,19 +93,29 @@ public:
     this->~ObJoinFilterOpInput();
     new (ptr) ObJoinFilterOpInput(ctx, spec);
   }
-  int check_finish(bool &is_end, bool is_shared);
-  bool check_release(bool is_shared);
+  bool is_finish();
+  bool check_release();
   // 每个worker共享同一块sqc_proxy
   void set_sqc_proxy(ObPxSQCProxy &sqc_proxy)
   {
     share_info_.ch_provider_ptr_ = reinterpret_cast<uint64_t>(&sqc_proxy);
   }
-  bool is_local_create() { return  is_local_create_; }
   ObJoinFilterOp *get_filter()
   {
     return reinterpret_cast<ObJoinFilterOp *>(share_info_.filter_ptr_);
   }
-  int init_share_info(common::ObIAllocator &allocator, int64_t task_count);
+  int init_share_info(
+      const ObJoinFilterSpec &spec,
+      ObExecContext &ctx,
+      int64_t task_count,
+      int64_t sqc_count);
+  int init_shared_msgs(const ObJoinFilterSpec &spec,
+      ObExecContext &ctx,
+      int64_t sqc_count);
+  static int construct_msg_details(const ObJoinFilterSpec &spec,
+      ObPxSQCProxy *sqc_proxy,
+      ObJoinFilterRuntimeConfig &config,
+      ObP2PDatahubMsgBase &msg, int64_t sqc_count);
   void set_task_id(int64_t task_id)  { task_id_ = task_id; }
 
   inline void set_bf_idx_at_sqc_proxy(int64_t idx) { bf_idx_at_sqc_proxy_ = idx; }
@@ -85,60 +123,95 @@ public:
   inline int64_t get_bf_idx_at_sqc_proxy() { return bf_idx_at_sqc_proxy_; }
   void set_px_sequence_id(int64_t id) { px_sequence_id_ = id; }
   int64_t get_px_sequence_id() { return px_sequence_id_; }
+  int load_runtime_config(const ObJoinFilterSpec &spec, ObExecContext &ctx);
+  void init_register_dm_info(ObDetectableId id, common::ObAddr addr)
+  {
+    register_dm_info_.detectable_id_ = id;
+    register_dm_info_.addr_ = addr;
+  }
 public:
   ObJoinFilterShareInfo share_info_; //bloom filter共享内存
-  bool is_local_create_;  //用于标记create算子是否是local的.
   int64_t task_id_; //在pwj join场景中会用到此task_id作为bf_key
   int64_t px_sequence_id_;
   int64_t bf_idx_at_sqc_proxy_;
+  ObJoinFilterRuntimeConfig config_;
+  common::ObRegisterDmInfo register_dm_info_;
   DISALLOW_COPY_AND_ASSIGN(ObJoinFilterOpInput);
+};
+
+struct ObRuntimeFilterInfo
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  TO_STRING_KV(K_(filter_expr_id), K_(p2p_datahub_id), K_(filter_shared_type));
+public:
+  ObRuntimeFilterInfo() :
+      filter_expr_id_(OB_INVALID_ID),
+      p2p_datahub_id_(OB_INVALID_ID),
+      filter_shared_type_(INVALID_TYPE),
+      dh_msg_type_(ObP2PDatahubMsgBase::ObP2PDatahubMsgType::NOT_INIT)
+      {}
+  virtual ~ObRuntimeFilterInfo() = default;
+  void reset () {
+    filter_expr_id_ = OB_INVALID_ID;
+    p2p_datahub_id_ = OB_INVALID_ID;
+    dh_msg_type_ = ObP2PDatahubMsgBase::ObP2PDatahubMsgType::NOT_INIT;
+  }
+  int64_t filter_expr_id_;
+  int64_t p2p_datahub_id_;
+  JoinFilterSharedType filter_shared_type_;
+  ObP2PDatahubMsgBase::ObP2PDatahubMsgType dh_msg_type_;
 };
 
 class ObJoinFilterSpec : public ObOpSpec
 {
-  OB_UNIS_VERSION_V(1);
+  OB_UNIS_VERSION_V(2);
 public:
   ObJoinFilterSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type);
 
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
-                       K_(mode), K_(filter_id), K_(server_id), K_(filter_len),
-                       K_(is_shuffle), K_(filter_expr_id));
+                       K_(mode), K_(filter_id), K_(filter_len), K_(rf_infos));
 
   inline void set_mode(JoinFilterMode mode) { mode_ = mode; }
   inline JoinFilterMode get_mode() const { return mode_; }
   inline void set_filter_id(int64_t id) { filter_id_ = id; }
   inline int64_t get_filter_id() const { return filter_id_; }
-  inline void set_server_id(int64_t id) { server_id_ = id; }
-  inline int64_t get_server_id() const { return server_id_; }
   inline void set_filter_length(int64_t len) { filter_len_ = len; }
   inline int64_t get_filter_length() const { return filter_len_; }
   inline ObIArray<ObExpr*> &get_exprs() { return join_keys_; }
   inline bool is_create_mode() const { return JoinFilterMode::CREATE == mode_; }
   inline bool is_use_mode() const { return JoinFilterMode::USE == mode_; }
-  inline bool is_shuffle() const { return is_shuffle_; }
-  inline void set_is_shuffle(bool flag) { is_shuffle_ = flag; }
   inline bool is_partition_filter() const
-  { return filter_type_ == JoinFilterType::NONSHARED_PARTITION_JOIN_FILTER ||
-           filter_type_ == JoinFilterType::SHARED_PARTITION_JOIN_FILTER; };
-  inline void set_filter_type(JoinFilterType type) { filter_type_ = type; }
+  { return filter_shared_type_ == JoinFilterSharedType::NONSHARED_PARTITION_JOIN_FILTER ||
+           filter_shared_type_ == JoinFilterSharedType::SHARED_PARTITION_JOIN_FILTER; };
+  inline void set_shared_filter_type(JoinFilterSharedType type) { filter_shared_type_ = type; }
   inline bool is_shared_join_filter() const
-  { return filter_type_ == JoinFilterType::SHARED_JOIN_FILTER ||
-           filter_type_ == JoinFilterType::SHARED_PARTITION_JOIN_FILTER; }
+  { return filter_shared_type_ == JoinFilterSharedType::SHARED_JOIN_FILTER ||
+           filter_shared_type_ == JoinFilterSharedType::SHARED_PARTITION_JOIN_FILTER; }
 
   JoinFilterMode mode_;
   int64_t filter_id_;
-  int64_t server_id_;
   int64_t filter_len_;
-  bool is_shuffle_; //filter create端检查filter use端是否需要做shuffle
   ExprFixedArray join_keys_;
   common::ObHashFuncs hash_funcs_;
-  int64_t filter_expr_id_;
-  JoinFilterType filter_type_;
+  ObCmpFuncs null_first_cmp_funcs_;
+  ObCmpFuncs null_last_cmp_funcs_;
+  JoinFilterSharedType filter_shared_type_;
   ObExpr *calc_tablet_id_expr_;
+  common::ObFixedArray<ObRuntimeFilterInfo, common::ObIAllocator> rf_infos_;
+  common::ObFixedArray<bool, common::ObIAllocator> need_null_cmp_flags_;
+  bool is_shuffle_;
+  int64_t each_group_size_;
 };
 
 class ObJoinFilterOp : public ObOperator
 {
+  struct ObJoinFilterMsg {
+    ObJoinFilterMsg() : bf_msg_(nullptr), range_msg_(nullptr), in_msg_(nullptr) {}
+    ObRFBloomFilterMsg *bf_msg_;
+    ObRFRangeFilterMsg *range_msg_;
+    ObRFInFilterMsg *in_msg_;
+  };
 public:
   ObJoinFilterOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObJoinFilterOp();
@@ -148,34 +221,44 @@ public:
   virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override; // for batch
-  virtual void destroy() override { ObOperator::destroy(); }
+  virtual void destroy() override {
+    lucky_devil_champions_.reset();
+    local_rf_msgs_.reset();
+    shared_rf_msgs_.reset();
+    ObOperator::destroy();
+  }
   static int link_ch_sets(ObPxBloomFilterChSets &ch_sets,
                           common::ObIArray<dtl::ObDtlChannel *> &channels);
 private:
   bool is_valid();
-  bool is_acceptable_filter();
-
   int destroy_filter();
-  int send_filter();
-  int send_local_filter();
-  int mark_rpc_filter();
-
   int insert_by_row();
   int insert_by_row_batch(const ObBatchRows *child_brs);
-  int check_contain_row(bool &match);
-  int calc_hash_value(uint64_t &hash_value, bool &ignore);
-  int calc_hash_value(uint64_t &hash_value);
+  int calc_expr_values(ObDatum *&datum);
   int do_create_filter_rescan();
   int do_use_filter_rescan();
+  int try_send_join_filter();
+  int try_merge_join_filter();
+  int calc_each_bf_group_size(int64_t &);
+  int update_plan_monitor_info();
+  int prepre_bloom_filter_ctx(ObBloomFilterSendCtx *bf_ctx);
+  int open_join_filter_create();
+  int open_join_filter_use();
+  int close_join_filter_create();
+  int close_join_filter_use();
+  int init_shared_msgs_from_input();
+  int init_local_msg_from_shared_msg(ObP2PDatahubMsgBase &msg);
+  int release_local_msg();
+  int release_shared_msg();
 private:
   static const int64_t ADAPTIVE_BF_WINDOW_ORG_SIZE = 4096;
   static constexpr double ACCEPTABLE_FILTER_RATE = 0.98;
 public:
-  ObPXBloomFilterHashWrapper bf_key_;
-  ObPxBloomFilter *filter_use_;
-  ObPxBloomFilter *filter_create_;
-  ObPxBloomFilterChSets *bf_ch_sets_;
+  ObJoinFilterMsg *filter_create_msg_;
+  ObArray<ObP2PDatahubMsgBase *> shared_rf_msgs_; // sqc level share
+  ObArray<ObP2PDatahubMsgBase *> local_rf_msgs_;
   uint64_t *batch_hash_values_;
+  ObArray<bool> lucky_devil_champions_;
 };
 
 }

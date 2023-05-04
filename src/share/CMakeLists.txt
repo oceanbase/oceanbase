@@ -117,6 +117,7 @@ ob_set_subtarget(ob_share common
   ob_label_security_os.cpp
   ob_leader_election_waiter.cpp
   ob_lease_struct.cpp
+  ob_heartbeat_struct.cpp
   ob_list_parser.cpp
   ob_local_device.cpp
   ob_locality_info.cpp
@@ -185,6 +186,7 @@ ob_set_subtarget(ob_share common
   ob_primary_standby_service.cpp
   ob_cluster_event_history_table_operator.cpp
   scn.cpp
+  ob_throttling_utils.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -241,6 +243,12 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table_load_rpc_struct.cpp
   table/ob_table_load_shared_allocator.cpp
   table/ob_table_load_row.cpp
+  detect/ob_detect_manager.cpp
+  detect/ob_detectable_id.cpp
+  detect/ob_detect_callback.cpp
+  detect/ob_detect_rpc_proxy.cpp
+  detect/ob_detect_rpc_processor.cpp
+  detect/ob_detect_manager_utils.cpp
 )
 
 ob_set_subtarget(ob_share tablet
@@ -420,7 +428,6 @@ ob_set_subtarget(ob_share schema
 
 ob_set_subtarget(ob_share stat
   stat/ob_basic_stats_estimator.cpp
-  stat/ob_column_stat.cpp
   stat/ob_opt_stat_monitor_manager.cpp
   stat/ob_dbms_stats_executor.cpp
   stat/ob_dbms_stats_export_import.cpp
@@ -431,6 +438,7 @@ ob_set_subtarget(ob_share stat
   stat/ob_hybrid_hist_estimator.cpp
   stat/ob_incremental_stat_estimator.cpp
   stat/ob_opt_column_stat.cpp
+  stat/ob_opt_osg_column_stat.cpp
   stat/ob_opt_column_stat_cache.cpp
   stat/ob_opt_stat_manager.cpp
   stat/ob_opt_stat_service.cpp
@@ -443,6 +451,16 @@ ob_set_subtarget(ob_share stat
   stat/ob_topk_hist_estimator.cpp
   stat/ob_index_stats_estimator.cpp
   stat/ob_dbms_stats_maintenance_window.cpp
+  stat/ob_opt_stat_gather_stat.cpp
+  stat/ob_opt_ds_stat.cpp
+  stat/ob_opt_ds_stat_cache.cpp
+)
+
+ob_set_subtarget(ob_share external_table
+  external_table/ob_external_table_file_mgr.cpp
+  external_table/ob_external_table_file_rpc_processor.cpp
+  external_table/ob_external_table_file_task.cpp
+  external_table/ob_external_table_utils.cpp
 )
 
 ob_set_subtarget(ob_share io

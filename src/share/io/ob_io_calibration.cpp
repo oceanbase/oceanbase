@@ -470,7 +470,7 @@ void ObIOBenchController::run1()
   finish_ts_ = 0;
   ret_code_ = OB_SUCCESS;
   // prepare io bench runner
-  const double MIN_FREE_SPACE_PERCENTAGE = 0.1;
+  const double MIN_FREE_SPACE_PERCENTAGE = 0.1; // if auto extend is on, _datafile_usage_upper_bound_percentage maybe less than (1 - 0.1 = 0.9), may cause OB_SERVER_OUTOF_DISK_SPACE
   const int64_t MIN_CALIBRATION_BLOCK_COUNT = 1024L * 1024L * 1024L / OB_DEFAULT_MACRO_BLOCK_SIZE;
   const int64_t MAX_CALIBRATION_BLOCK_COUNT = 20L * 1024L * 1024L * 1024L / OB_DEFAULT_MACRO_BLOCK_SIZE;
   const int64_t free_block_count = OB_SERVER_BLOCK_MGR.get_free_macro_block_count();

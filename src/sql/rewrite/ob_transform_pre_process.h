@@ -84,9 +84,14 @@ struct DistinctObjMeta
                                      ObIArray<ColumnItem> &column_items);
 
   /*
-   * following functions are for grouping sets and multi rollup
+   * following functions are for grouping sets and rollup and cube
    */
-  int transform_for_grouping_sets_and_multi_rollup(ObDMLStmt *&stmt, bool &trans_happened);
+  int transform_groupingsets_rollup_cube(ObDMLStmt *&stmt, bool &trans_happened);
+  int try_convert_rollup(ObDMLStmt *&stmt, ObSelectStmt *select_stmt);
+  int remove_single_item_groupingsets(ObSelectStmt &stmt, bool &trans_happened);
+  int create_set_view_stmt(ObSelectStmt *stmt, TableItem *view_table_item);
+  int create_cte_for_groupby_items(ObSelectStmt &select_stmt);
+  int expand_stmt_groupby_items(ObSelectStmt &select_stmt);
 
   int is_subquery_correlated(const ObSelectStmt *stmt,
                              bool &is_correlated);
@@ -104,31 +109,67 @@ struct DistinctObjMeta
 
   int add_generated_table_as_temp_table(ObTransformerCtx *ctx,
                                         ObDMLStmt *stmt);
-  int replace_with_set_stmt_view(ObSelectStmt *origin_stmt,
-                                 ObSelectStmt *grouping_sets_view,
-                                 ObSelectStmt *&union_stmt);
-  int create_set_view_stmt(ObSelectStmt *origin_stmt,
-                           ObSelectStmt *&set_view_stmt);
-  int create_select_list_from_grouping_sets(ObSelectStmt *stmt,
-                                            common::ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                            int64_t cur_index,
-                                            ObIArray<ObRawExpr*> &old_exprs,
-                                            ObIArray<ObRawExpr*> &new_exprs,
-                                            int64_t origin_groupby_num = -1);
-  int64_t get_total_count_of_groupby_stmt(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
-                                          ObIArray<ObMultiRollupItem> &multi_rollup_items);
-
   int get_groupby_exprs_list(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
-                             ObIArray<ObMultiRollupItem> &multi_rollup_items,
+                             ObIArray<ObRollupItem> &rollup_items,
+                             ObIArray<ObCubeItem> &cube_items,
                              ObIArray<ObGroupbyExpr> &groupby_exprs_list);
-
-  int expand_multi_rollup_items(ObIArray<ObMultiRollupItem> &multi_rollup_items,
-                                ObIArray<ObGroupbyExpr> &rollup_list_exprs);
-
+  int expand_grouping_sets_items(common::ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                 common::ObIArray<ObGroupbyExpr> &grouping_sets_exprs);
+  int expand_rollup_items(ObIArray<ObRollupItem> &rollup_items,
+                          ObIArray<ObGroupbyExpr> &rollup_list_exprs);
+  int expand_cube_items(ObIArray<ObCubeItem> &cube_items,
+                        ObIArray<ObRollupItem> &rollup_items_lists);
+  int expand_cube_item(ObCubeItem &cube_item,
+                       ObIArray<ObRollupItem> &rollup_items_lists);
   int combination_two_rollup_list(ObIArray<ObGroupbyExpr> &rollup_list_exprs1,
                                   ObIArray<ObGroupbyExpr> &rollup_list_exprs2,
                                   ObIArray<ObGroupbyExpr> &rollup_list_exprs);
-
+  int check_pre_aggregate(const ObSelectStmt &select_stmt, bool &can_pre_aggr);
+  int transform_grouping_sets_to_rollup_exprs(ObSelectStmt &origin_stmt,
+                                              ObIArray<ObGroupbyExpr> &origin_groupby_exprs_list,
+                                              ObIArray<ObGroupbyExpr> &groupby_exprs_list,
+                                              ObIArray<ObGroupbyExpr> &rollup_exprs_list);
+  int simple_expand_grouping_sets_items(ObIArray<ObGroupingSetsItem> &grouping_sets_items,
+                                        ObIArray<ObGroupingSetsItem> &simple_grouping_sets_items);
+  int create_child_stmts_for_groupby_sets(ObSelectStmt *origin_stmt,
+                                          ObIArray<ObSelectStmt*> &child_stmts);
+  int get_groupby_and_rollup_exprs_list(ObSelectStmt *origin_stmt,
+                                        ObIArray<ObGroupbyExpr> &groupby_exprs_list,
+                                        ObIArray<ObGroupbyExpr> &rollup_exprs_list);
+  int create_groupby_substmt(const ObIArray<ObRawExpr*> &origin_groupby_exprs,
+                             const ObIArray<ObRawExpr*> &origin_rollup_exprs,
+                             ObSelectStmt &origin_stmt,
+                             ObSelectStmt *&substmt,
+                             ObIArray<ObRawExpr*> &groupby_exprs);
+  int convert_select_having_in_groupby_stmt(const ObIArray<ObGroupbyExpr> &groupby_exprs_list,
+                                            const ObIArray<ObGroupbyExpr> &rollup_exprs_list,
+                                            const ObIArray<ObRawExpr*> &groupby_exprs,
+                                            const int64_t cur_index,
+                                            const ObSelectStmt &origin_stmt,
+                                            ObSelectStmt &substmt);
+  // calc 'grouping', 'grouping id', 'group id'
+  int calc_group_type_aggr_func(const ObIArray<ObRawExpr*> &groupby_exprs,
+                                const ObIArray<ObRawExpr*> &rollup_exprs,
+                                const ObIArray<ObGroupbyExpr> &groupby_exprs_list,
+                                const int64_t cur_index,
+                                const int64_t origin_groupby_num,
+                                ObAggFunRawExpr *expr,
+                                ObRawExpr *&new_expr);
+  int calc_grouping_in_grouping_sets(const ObIArray<ObRawExpr*> &groupby_exprs,
+                                     const ObIArray<ObRawExpr*> &rollup_exprs,
+                                     ObAggFunRawExpr *expr,
+                                     ObRawExpr *&new_expr);
+  int calc_grouping_id_in_grouping_sets(const ObIArray<ObRawExpr*> &groupby_exprs,
+                                        const ObIArray<ObRawExpr*> &rollup_exprs,
+                                        ObAggFunRawExpr *expr,
+                                        ObRawExpr *&new_expr);
+  int calc_group_id_in_grouping_sets(const ObIArray<ObRawExpr*> &groupby_exprs,
+                                     const ObIArray<ObRawExpr*> &rollup_exprs,
+                                     const ObIArray<ObGroupbyExpr> &groupby_exprs_list,
+                                     const int64_t cur_index,
+                                     const int64_t origin_groupby_num,
+                                     ObAggFunRawExpr *expr,
+                                     ObRawExpr *&new_expr);
   /*
    * following functions are for hierarchical query
    */
@@ -395,83 +436,28 @@ struct DistinctObjMeta
   int transform_generated_rownum_eq_cond(ObRawExpr *eq_value,
                                          ObRawExpr *&limit_expr,
                                          ObRawExpr *&offset_expr);
-  int expand_grouping_sets_items(common::ObIArray<ObGroupingSetsItem> &grouping_sets_items,
-                                 common::ObIArray<ObGroupbyExpr> &grouping_sets_exprs);
-  int replace_select_and_having_exprs(ObSelectStmt *select_stmt,
-                                      ObIArray<ObRawExpr*> &old_exprs,
-                                      ObIArray<ObRawExpr*> &new_exprs,
-                                      ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                      int64_t cur_index = -1,
-                                      int64_t origin_groupby_num = -1);
-  int replace_stmt_special_exprs(ObSelectStmt *select_stmt,
-                                 ObRawExpr *&expr,
-                                 common::ObIArray<ObRawExpr*> &old_exprs,
-                                 common::ObIArray<ObRawExpr*> &new_exprs,
-                                 ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                 bool ignore_const = false,
-                                 int64_t cur_index = -1,
-                                 int64_t origin_groupby_num = -1);
-  int replace_aggr_exprs_in_select_and_having(ObRawExpr *&expr,
-                                              ObIArray<ObRawExpr*> &groupby_exprs,
-                                              ObIArray<ObRawExpr*> &rollup_exprs,
-                                              ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                              ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                              int64_t cur_index,
-                                              ObIArray<ObRawExpr*> &old_exprs,
-                                              ObIArray<ObRawExpr*> &new_exprs,
-                                              ObRelIds &rel_ids,
-                                              int64_t origin_groupby_num = -1,
-                                              bool using_rel_ids = true);
-  int calc_grouping_in_grouping_sets(ObRawExpr *&expr,
-                                     ObIArray<ObRawExpr*> &groupby_exprs,
-                                     ObIArray<ObRawExpr*> &rollup_exprs,
-                                     ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                     ObIArray<ObRawExpr*> &old_exprs,
-                                     ObIArray<ObRawExpr*> &new_exprs,
-                                     ObRelIds &rel_ids,
-                                     bool using_rel_ids = true);
-  int calc_grouping_id_in_grouping_sets(ObRawExpr *&expr,
-                                        ObIArray<ObRawExpr*> &groupby_exprs,
-                                        ObIArray<ObRawExpr*> &rollup_exprs,
-                                        ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                        ObIArray<ObRawExpr*> &old_exprs,
-                                        ObIArray<ObRawExpr*> &new_exprs,
-                                        ObRelIds &rel_ids,
-                                        bool using_rel_ids = true);
-  int calc_group_id_in_grouping_sets(ObRawExpr *&expr,
-                                     ObIArray<ObRawExpr*> &groupby_exprs,
-                                     ObIArray<ObRawExpr*> &rollup_exprs,
-                                     ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                     ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                     int64_t cur_index,
-                                     ObIArray<ObRawExpr*> &old_exprs,
-                                     ObIArray<ObRawExpr*> &new_exprs,
-                                     ObRelIds &rel_ids,
-                                     int64_t origin_groupby_num = -1,
-                                     bool using_rel_ids = true);
-  bool is_select_expr_in_other_groupby_exprs(ObRawExpr *expr,
-                                             ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                             int64_t cur_index);
-  bool is_expr_in_select_item(ObIArray<SelectItem> &select_items,
-                              ObRawExpr *expr);
-  int extract_select_expr_and_replace_expr(ObRawExpr *expr,
-                                           ObIArray<ObRawExpr*> &groupby_exprs,
-                                           ObIArray<ObRawExpr*> &rollup_exprs,
-                                           ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                           ObIArray<ObGroupbyExpr> &groupby_exprs_list,
-                                           int64_t cur_index,
-                                           ObIArray<SelectItem> &select_items,
-                                           ObIArray<ObRawExpr*> &old_exprs,
-                                           ObIArray<ObRawExpr*> &new_exprs,
-                                           ObRelIds &rel_ids,
-                                           int64_t origin_groupby_num = -1);
-  int extract_stmt_replace_expr(ObSelectStmt *select_stmt, ObIArray<ObRawExpr*> &old_exprs);
-  int extract_replace_expr_from_select_expr(ObRawExpr *expr,
-                                            ObSelectStmt *select_stmt,
-                                            ObIArray<ObRawExpr*> &old_exprs);
 
   int replace_group_id_in_stmt(ObSelectStmt *stmt);
   int replace_group_id_in_expr_recursive(ObRawExpr *&expr);
+  int transform_udt_columns(const common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &trans_happened);
+  int transform_udt_column_conv_function(ObDmlTableInfo &table_info,
+                                         ObIArray<ObRawExpr*> &column_conv_exprs,
+                                         ObColumnRefRawExpr &udt_col,
+                                         ObColumnRefRawExpr &hidd_col);
+  int transform_udt_column_value_expr_inner(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObRawExpr *&old_expr, ObRawExpr *hidd_expr = NULL);
+  int transform_xml_binary(ObRawExpr *hidden_blob_expr, ObRawExpr *&new_expr);
+  int transform_udt_column_value_expr(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr, ObRawExpr *hidd_expr = NULL);
+  int transform_udt_column_conv_param_expr(ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr);
+  int transform_udt_column_value_xml_parse(ObDmlTableInfo &table_info, ObRawExpr *old_expr, ObRawExpr *&new_expr);
+  int replace_udt_assignment_exprs(ObDMLStmt *stmt, ObDmlTableInfo &table_info, ObIArray<ObAssignment> &assignments, bool &trans_happened);
+  int set_hidd_col_not_null_attr(const ObColumnRefRawExpr &udt_col, ObIArray<ObColumnRefRawExpr *> &column_exprs);
+  int check_skip_child_select_view(const ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &skip_for_view_table);
+  int transform_query_udt_columns_exprs(const ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *stmt, bool &trans_happened);
+  int transform_udt_columns_constraint_exprs(ObDMLStmt *stmt, bool &trans_happened);
+  int get_update_generated_udt_in_parent_stmt(const ObIArray<ObParentDMLStmt> &parent_stmts, const ObDMLStmt *stmt,
+                                              ObIArray<ObColumnRefRawExpr*> &col_exprs);
+  int get_dml_view_col_exprs(const ObDMLStmt *stmt, ObIArray<ObColumnRefRawExpr*> &assign_col_exprs);
+
    /*
    * following functions are used for transform rowid in subquery
    */

@@ -76,8 +76,9 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
 }
 
 ObExprNvl::ObExprNvl(ObIAllocator &alloc)
- : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, NOT_ROW_DIMENSION)
-{}
+ : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprNvl::~ObExprNvl()
 {}
@@ -111,6 +112,16 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
       type.set_scale(static_cast<ObScale>(max(scale1, scale2)));
     } else {
       type.set_scale(-1);
+    }
+    if (lib::is_mysql_mode() && SCALE_UNKNOWN_YET != type.get_scale()) {
+      if (ob_is_real_type(type.get_type())) {
+        type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
+      } else if (ob_is_number_tc(type.get_type())) { // TODO:@zuojiao.hzj add decimal_int here
+        const int16_t intd1 = type1.get_precision() - type1.get_scale();
+        const int16_t intd2 = type2.get_precision() - type2.get_scale();
+        const int16_t prec = MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale());
+        type.set_precision(static_cast<ObPrecision>(prec));
+      }
     }
     type.set_length(MAX(type1.get_length(), type2.get_length()));
     //对于 int 和uint64的混合类型，需要提升类型至decimal
@@ -159,8 +170,9 @@ int ObExprNvl::calc_result_type2(ObExprResType &type,
 
 
 ObExprOracleNvl::ObExprOracleNvl(ObIAllocator &alloc)
- : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, NOT_ROW_DIMENSION)
-{}
+ : ObFuncExprOperator(alloc, T_FUN_SYS_NVL, N_NVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprOracleNvl::~ObExprOracleNvl()
 {}
@@ -270,8 +282,9 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
 }
 
 ObExprNaNvl::ObExprNaNvl(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_NANVL, T_NANVL, 2, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_NANVL, T_NANVL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprNaNvl::~ObExprNaNvl()
 {}

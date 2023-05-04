@@ -175,6 +175,8 @@ public:
 
   void set_expected_worker_cnt(int64_t cnt) { expected_worker_cnt_ = cnt; }
   int64_t get_expected_worker_cnt() const { return expected_worker_cnt_; }
+  void set_minimal_worker_cnt(int64_t cnt) { minimal_worker_cnt_ = cnt; }
+  int64_t get_minimal_worker_cnt() const { return minimal_worker_cnt_; }
   void set_admited_worker_cnt(int64_t cnt) { admited_worker_cnt_ = cnt; } // alias
   int64_t get_admited_worker_cnt() const { return admited_worker_cnt_; } // alias
   // try to trigger a location update task and clear location in cache,
@@ -207,8 +209,9 @@ private:
   // 需要刷新location cache的partition key
   common::ObList<ObTabletID, common::ObIAllocator> need_renew_tablet_keys_;
   // PX 记录执行预期整个 Query 需要的线程数，以及实际分配的线程数
-  int64_t expected_worker_cnt_;
-  int64_t admited_worker_cnt_;
+  int64_t expected_worker_cnt_; // query expected worker count computed by optimizer
+  int64_t minimal_worker_cnt_;  // minimal worker count to support execute this query
+  int64_t admited_worker_cnt_; // query final used worker count admitted by admission
   // END 本地局部变量
 
   // BEGIN 需要序列化的变量

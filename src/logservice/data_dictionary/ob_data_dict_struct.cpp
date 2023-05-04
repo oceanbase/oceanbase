@@ -20,6 +20,9 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_table_param.h"
 
+#define DEFINE_DESERIALIZE_DATA_DICT(TypeName) \
+  int TypeName::deserialize(const ObDictMetaHeader &header, const char* buf, const int64_t data_len, int64_t& pos)
+
 #define PRECHECK_SERIALIZE \
     int ret = OB_SUCCESS; \
     if (OB_ISNULL(buf) \
@@ -83,7 +86,7 @@
       } \
     } while(0)
 
-#define DESERIALIZE_ARRAY_WITH_ARGS(ARRAY_TYPE, array_ptr, array_size, allocator, args... ) \
+#define DESERIALIZE_DICT_ARRAY_WITH_ARGS(ARRAY_TYPE, array_ptr, array_size, allocator, header, args... ) \
     do { \
       if (OB_SUCC(ret)) { \
         if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &array_size))) { \
@@ -98,7 +101,7 @@
           } else { \
             for (int i = 0; OB_SUCC(ret) && i < array_size; i++) { \
                 new (array_ptr + i) ARRAY_TYPE(args); \
-              if (OB_FAIL(array_ptr[i].deserialize(buf, data_len, pos))) { \
+              if (OB_FAIL(array_ptr[i].deserialize(header, buf, data_len, pos))) { \
                 DDLOG(WARN, #ARRAY_TYPE " deserialize fail", KR(ret), K(array_size), K(i)); \
               } \
             } \
@@ -283,7 +286,7 @@ DEFINE_SERIALIZE(ObDictTenantMeta)
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObDictTenantMeta)
+DEFINE_DESERIALIZE_DATA_DICT(ObDictTenantMeta)
 {
   PRECHECK_DESERIALIZE;
 
@@ -463,7 +466,7 @@ DEFINE_SERIALIZE(ObDictDatabaseMeta)
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObDictDatabaseMeta)
+DEFINE_DESERIALIZE_DATA_DICT(ObDictDatabaseMeta)
 {
   PRECHECK_DESERIALIZE;
 
@@ -584,6 +587,9 @@ void ObDictColumnMeta::reset()
   orig_default_value_.reset();
   cur_default_value_.reset();
   extended_type_info_.reset();
+  column_ref_ids_.reset();
+  udt_set_id_ = OB_INVALID_ID;
+  sub_type_ = OB_INVALID_ID;
 }
 
 DEFINE_EQUAL(ObDictColumnMeta)
@@ -601,9 +607,12 @@ DEFINE_EQUAL(ObDictColumnMeta)
       charset_type_,
       collation_type_,
       orig_default_value_,
-      cur_default_value_
+      cur_default_value_,
+      udt_set_id_,
+      sub_type_
       );
   IS_OBARRAY_EQUAL(extended_type_info_);
+  IS_OBARRAY_EQUAL(column_ref_ids_);
   return is_equal;
 }
 
@@ -626,13 +635,16 @@ DEFINE_SERIALIZE(ObDictColumnMeta)
       collation_type_,
       orig_default_value_,
       cur_default_value_,
-      extended_type_info_);
+      extended_type_info_,
+      column_ref_ids_,
+      udt_set_id_,
+      sub_type_);
   }
 
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObDictColumnMeta)
+DEFINE_DESERIALIZE_DATA_DICT(ObDictColumnMeta)
 {
   PRECHECK_DESERIALIZE;
   if (OB_FAIL(ret)) {
@@ -663,6 +675,21 @@ DEFINE_DESERIALIZE(ObDictColumnMeta)
       DDLOG(WARN, "deep copy orig_default_value failed", KR(ret), K(tmp_orig_default_val));
     } else if (OB_FAIL(deep_copy_default_val_(tmp_cur_default_val, cur_default_value_))) {
       DDLOG(WARN, "deep copy cur_default_value failed", KR(ret), K(tmp_cur_default_val));
+    } else {
+      if (header.get_version() > 1) {
+        // column_ref_ids_ is serialized when versin >= 2
+        if (OB_FAIL(common::serialization::decode(buf, data_len, pos, column_ref_ids_))) {
+          DDLOG(WARN, "deserialize column_ref_ids_ failed", KR(ret), K(data_len), K(pos));
+        }
+      }
+      if (OB_SUCC(ret) && header.get_version() > 2) {
+        //udt_set_id_ and sub_type_ is serialized when versin >= 3
+        if (OB_FAIL(NS_::decode(buf, data_len, pos, udt_set_id_))) {
+          DDLOG(WARN, "deserialize col_group_id failed", KR(ret));
+        } else if (OB_FAIL(NS_::decode(buf, data_len, pos, sub_type_))) {
+          DDLOG(WARN, "deserialize sub_type failed", KR(ret));
+        }
+      }
     }
   }
 
@@ -685,7 +712,10 @@ DEFINE_GET_SERIALIZE_SIZE(ObDictColumnMeta)
       collation_type_,
       orig_default_value_,
       cur_default_value_,
-      extended_type_info_);
+      extended_type_info_,
+      column_ref_ids_,
+      udt_set_id_,
+      sub_type_);
   return len;
 }
 
@@ -718,6 +748,8 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
     DDLOG(WARN, "copy_cur_default_value failed", KR(ret), K(column_schema), KPC(this));
   } else if (OB_FAIL(deep_copy_str_array(column_schema.get_extended_type_info(), extended_type_info_, *allocator_))) {
     DDLOG(WARN, "assign extended_type_info failed", KR(ret), K(column_schema), KPC(this));
+  } else if (OB_FAIL(column_schema.get_cascaded_column_ids(column_ref_ids_))) {
+    DDLOG(WARN, "get_cascaded_column_ids failed", KR(ret), K(column_schema));
   } else {
     column_id_ = column_schema.get_column_id();
     rowkey_position_ = column_schema.get_rowkey_position();
@@ -732,6 +764,8 @@ int ObDictColumnMeta::assign_(COLUMN_META &column_schema)
     column_flags_ = column_schema.get_column_flags();
     charset_type_ = column_schema.get_charset_type();
     collation_type_ = column_schema.get_collation_type();
+    udt_set_id_ = column_schema.get_udt_set_id();
+    sub_type_ = column_schema.get_sub_data_type();
   }
 
   return ret;
@@ -753,6 +787,18 @@ int ObDictColumnMeta::assign(const ObDictColumnMeta &src_column_meta)
 
   if (OB_FAIL(ret)) {
     DDLOG(WARN, "ObDictColumnMeta assign failed", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObDictColumnMeta::get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  column_ids.reset();
+
+  if (OB_FAIL(column_ids.assign(column_ref_ids_))) {
+    DDLOG(WARN, "assign cascaded_columns failed", KR(ret), KPC(this), K_(column_ref_ids));
   }
 
   return ret;
@@ -889,7 +935,7 @@ DEFINE_SERIALIZE(ObDictTableMeta)
   return ret;
 }
 
-DEFINE_DESERIALIZE(ObDictTableMeta)
+DEFINE_DESERIALIZE_DATA_DICT(ObDictTableMeta)
 {
   PRECHECK_DESERIALIZE;
 
@@ -920,7 +966,7 @@ DEFINE_DESERIALIZE(ObDictTableMeta)
     } else if (OB_FAIL(deep_copy_str(tmp_table_name, table_name_, *allocator_))) {
       DDLOG(WARN, "deep_copy_str for table_name failed", KR(ret), K(tmp_table_name));
     } else {
-      DESERIALIZE_ARRAY_WITH_ARGS(ObDictColumnMeta, col_metas_, column_count_, allocator_, allocator_);
+      DESERIALIZE_DICT_ARRAY_WITH_ARGS(ObDictColumnMeta, col_metas_, column_count_, allocator_, header, allocator_);
       DESERIALIZE_ARRAY(ObRowkeyColumn, rowkey_cols_, rowkey_column_count_, allocator_);
       DESERIALIZE_ARRAY(ObIndexColumn, index_cols_, index_column_count_, allocator_);
     }

@@ -153,9 +153,10 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
   // sort by (PBY, OBY, SQC_ID, THREAD_ID)
   std::sort(ctx.infos_.begin(), ctx.infos_.end(),
             [&](ObRDWFPartialInfo *l, ObRDWFPartialInfo *r) {
-              int cmp = rd_pby_oby_cmp(l->first_row_, r->first_row_);
+              int cmp = 0;
+              (void)rd_pby_oby_cmp(l->first_row_, r->first_row_, cmp);
               if (0 == cmp) {
-                cmp = rd_pby_oby_cmp(l->last_row_, r->last_row_);
+                (void)rd_pby_oby_cmp(l->last_row_, r->last_row_, cmp);
               }
               return (0 == cmp)
               ? (std::tie(l->sqc_id_, l->thread_id_) < std::tie(r->sqc_id_, r->thread_id_))
@@ -168,15 +169,26 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
   ObRDWFPartialInfo *prev = NULL;
 
   // generate frame offset first
+  int cmp_ret = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < ctx.infos_.count(); i++) {
     ObRDWFPartialInfo *cur = ctx.infos_.at(i);
     if (NULL == cur->first_row_) {
       break;
     }
-    bool prev_same_part = NULL != prev && 0 == rd_pby_cmp(prev->last_row_, cur->first_row_);
+    bool prev_same_part = NULL != prev;
     if (prev_same_part) {
+      if (OB_FAIL(rd_pby_cmp(prev->last_row_, cur->first_row_, cmp_ret))) {
+        LOG_WARN("compare failed", K(ret));
+      } else {
+        prev_same_part = prev_same_part && (cmp_ret == 0);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (prev_same_part) {
       frame_offset(cur->first_row_) = frame_offset(prev->last_row_) + 1;
-      if (0 == rd_pby_cmp(cur->first_row_, cur->last_row_)) {
+      if (OB_FAIL(rd_pby_cmp(cur->first_row_, cur->last_row_, cmp_ret))) {
+        LOG_WARN("compare failed", K(ret));
+      } else if (0 == cmp_ret) {
         frame_offset(cur->last_row_) += frame_offset(prev->last_row_) + 1;
       }
     }
@@ -199,8 +211,16 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
         }
         break;
       }
-      bool prev_same_part = NULL != prev && 0 == rd_pby_cmp(prev->last_row_, cur->first_row_);
-      if (!prev_same_part) {
+      bool prev_same_part = NULL != prev;
+      if (prev_same_part) {
+        if (OB_FAIL(rd_pby_cmp(prev->last_row_, cur->first_row_, cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else {
+          prev_same_part = prev_same_part && (cmp_ret == 0);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!prev_same_part) {
         res_datum(cur->first_row_).set_null();
         if (NULL != prev) {
           res_datum(prev->last_row_).set_null();
@@ -208,15 +228,23 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
       } else {
         ObDatum prev_last;
         prev_last.set_null();
-        bool prev_same_order = 0 == rd_oby_cmp(prev->last_row_, cur->first_row_);
-        if (prev_same_order) {
+        bool prev_same_order = false;
+        if (OB_FAIL(rd_oby_cmp(prev->last_row_, cur->first_row_, cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else {
+          prev_same_order = (0 == cmp_ret);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (prev_same_order) {
           // aggregate the remaining partial result of the same order to %prev_last
           if (!(is_rank || is_dense_rank) && WINDOW_RANGE == info.win_type_) {
             prev_last = res_datum(cur->first_row_);
             for (int64_t j = i + 1; OB_SUCC(ret) && j < ctx.infos_.count(); j++) {
               ObRDWFPartialInfo *partial_info = ctx.infos_.at(j);
-              if (NULL != partial_info->first_row_
-                  && 0 == rd_pby_oby_cmp(cur->first_row_, partial_info->first_row_)) {
+              cmp_ret = 1;
+              if (NULL != partial_info->first_row_ && OB_FAIL(rd_pby_oby_cmp(cur->first_row_, partial_info->first_row_, cmp_ret))) {
+                LOG_WARN("compare failed", K(ret));
+              } else if (cmp_ret == 0) {
                 OZ(OP::merge_aggregated_result(prev_last, info, ctx.arena_alloc_,
                                                prev_last, res_datum(partial_info->first_row_)));
               } else {
@@ -249,13 +277,26 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
         }
       }
 
-      if (OB_SUCC(ret) && 0 == rd_pby_cmp(cur->first_row_, cur->last_row_)) {
-        if (is_rank && 0 != rd_oby_cmp(cur->first_row_, cur->last_row_)) {
-          OZ(OP::rank_add(res_datum(cur->last_row_), info, ctx.arena_alloc_,
-                          res_datum(cur->last_row_), frame_offset(cur->first_row_)));
-        } else {
-          OZ(OP::merge_aggregated_result(res_datum(cur->last_row_), info, ctx.arena_alloc_,
-                                         res_datum(cur->last_row_), res_datum(cur->first_row_)));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(rd_pby_cmp(cur->first_row_, cur->last_row_, cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else if (cmp_ret == 0) {
+          bool do_rank_add = false;
+          if (is_rank) {
+            if (OB_FAIL(rd_oby_cmp(cur->first_row_, cur->last_row_, cmp_ret))) {
+              LOG_WARN("compare failed", K(ret));
+            } else if (cmp_ret != 0) {
+              do_rank_add = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (do_rank_add) {
+            OZ(OP::rank_add(res_datum(cur->last_row_), info, ctx.arena_alloc_,
+                            res_datum(cur->last_row_), frame_offset(cur->first_row_)));
+          } else {
+            OZ(OP::merge_aggregated_result(res_datum(cur->last_row_), info, ctx.arena_alloc_,
+                                          res_datum(cur->last_row_), res_datum(cur->first_row_)));
+          }
         }
       }
       prev = cur;
@@ -791,11 +832,15 @@ int ObWindowFunctionOp::NonAggrCellRankLike::eval(RowsReader &row_reader,
         const int64_t idx = sort_collations.at(i).field_idx_;
         const ObDatum &l_datum = tmp_row->cells()[idx];
         const ObDatum &r_datum = row.cells()[idx];
-        int match = cmp_func(l_datum, r_datum);
-        LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match));
-        if (0 != match) {
-          equal_with_prev_row = false;
-          break;
+        int match = 0;
+        if (OB_FAIL(cmp_func(l_datum, r_datum, match))) {
+          LOG_WARN("cmp failed", K(ret), K(idx), K(l_datum), K(r_datum), K(match));
+        } else {
+          LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match));
+          if (0 != match) {
+            equal_with_prev_row = false;
+            break;
+          }
         }
       }
     }
@@ -906,10 +951,14 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader &row_reader,
         const int64_t idx = sort_collations.at(i).field_idx_;
         const ObDatum &l_datum = ref_row.cells()[idx];
         const ObDatum &r_datum = iter_row.cells()[idx];
-        int match = cmp_func(l_datum, r_datum);
-        LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match));
-        if (0 != match) {
-          should_continue = false;
+        int match = 0;
+        if (OB_FAIL(cmp_func(l_datum, r_datum, match))) {
+          LOG_WARN("cmp failed", K(ret), K(idx), K(l_datum), K(r_datum), K(match));
+        } else {
+          LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match));
+          if (0 != match) {
+            should_continue = false;
+          }
         }
       }
       if (OB_SUCC(ret) && should_continue) {
@@ -958,6 +1007,7 @@ int ObWindowFunctionOp::NonAggrCellCumeDist::eval(RowsReader &row_reader,
 int ObWindowFunctionOp::check_same_partition(WinFuncCell &cell, bool &same)
 {
   int ret = OB_SUCCESS;
+  int cmp_ret = 0;
   same = true;
   const auto &exprs = cell.wf_info_.partition_exprs_;
   if (!exprs.empty()) {
@@ -971,8 +1021,10 @@ int ObWindowFunctionOp::check_same_partition(WinFuncCell &cell, bool &same)
       for (int64_t i = 0; OB_SUCC(ret) && same && i < exprs.count(); i++) {
         if (OB_FAIL(exprs.at(i)->eval(eval_ctx_, val))) {
           LOG_WARN("expression evaluate failed", K(ret));
-        } else if (0 != exprs.at(i)->basic_funcs_->null_first_cmp_(
-                   *val, cell.part_values_.store_row_->cells()[i])) {
+        } else if (OB_FAIL(exprs.at(i)->basic_funcs_->null_first_cmp_(*val,
+                           cell.part_values_.store_row_->cells()[i], cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else if (0 != cmp_ret) {
           same = false;
         }
       }
@@ -1156,7 +1208,8 @@ int ObWindowFunctionOp::init()
           case T_FUN_JSON_ARRAYAGG:
           case T_FUN_JSON_OBJECTAGG:
           case T_FUN_ORA_JSON_ARRAYAGG:
-          case T_FUN_ORA_JSON_OBJECTAGG: {
+          case T_FUN_ORA_JSON_OBJECTAGG:
+          case T_FUN_ORA_XMLAGG: {
             void *tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void *tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
             ObIArray<ObAggrInfo> *aggr_infos = NULL;
@@ -2170,7 +2223,9 @@ int ObWindowFunctionOp::output_row(int64_t idx,
 bool ObWindowFunctionOp::first_row_same_order(const ObRADatumStore::StoredRow *row)
 {
   if (SAME_ORDER_CACHE_DEFAULT == first_row_same_order_cache_) {
-    first_row_same_order_cache_ = MY_SPEC.rd_oby_cmp(rd_patch_->first_row_, row);
+    int cmp_ret = 0;
+    MY_SPEC.rd_oby_cmp(rd_patch_->first_row_, row, cmp_ret);
+    first_row_same_order_cache_ = cmp_ret;
   }
   return 0 == first_row_same_order_cache_;
 }
@@ -2178,7 +2233,9 @@ bool ObWindowFunctionOp::first_row_same_order(const ObRADatumStore::StoredRow *r
 bool ObWindowFunctionOp::last_row_same_order(const ObRADatumStore::StoredRow *row)
 {
   if (SAME_ORDER_CACHE_DEFAULT == last_row_same_order_cache_) {
-    last_row_same_order_cache_ = MY_SPEC.rd_oby_cmp(rd_patch_->last_row_, row);
+    int cmp_ret = 0;
+    MY_SPEC.rd_oby_cmp(rd_patch_->last_row_, row, cmp_ret);
+    last_row_same_order_cache_ = cmp_ret;
   }
   return 0 == last_row_same_order_cache_;
 }
@@ -2574,6 +2631,7 @@ int ObWindowFunctionOp::merge_aggregated_result(ObDatum &res,
                                                 const ObDatum &src1)
 {
   int ret = OB_SUCCESS;
+  int cmp_ret = 0;
   switch(wf_info.func_type_) {
     case T_FUN_SUM:
     case T_FUN_COUNT:
@@ -2589,13 +2647,19 @@ int ObWindowFunctionOp::merge_aggregated_result(ObDatum &res,
       break;
     }
     case T_FUN_MAX: {
-      res = wf_info.expr_->basic_funcs_->null_first_cmp_(src1, src0) > 0
-          ? src1 : src0;
+      if (OB_FAIL(wf_info.expr_->basic_funcs_->null_first_cmp_(src1, src0, cmp_ret))) {
+        LOG_WARN("fail to compare", K(ret));
+      } else {
+        res = cmp_ret > 0 ? src1 : src0;
+      }
       break;
     }
     case T_FUN_MIN: {
-      res = wf_info.expr_->basic_funcs_->null_last_cmp_(src1, src0) < 0
-          ? src1 : src0;
+      if (OB_FAIL(wf_info.expr_->basic_funcs_->null_last_cmp_(src1, src0, cmp_ret))) {
+        LOG_WARN("fail to compare", K(ret));
+      } else {
+        res = cmp_ret < 0 ? src1 : src0;
+      }
       break;
     }
     default : {
@@ -2712,14 +2776,20 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
         } else if (OB_FAIL(row_reader.get_row(pos, a_row))) {
           LOG_WARN("failed to get row", K(pos), K(ret));
         } else {
-          for (int64_t i = 0; i < sort_collations.count() && !match; i++) {
+          int cmp_ret = 0;
+          for (int64_t i = 0; OB_SUCC(ret) && i < sort_collations.count() && !match; i++) {
             ObDatumCmpFuncType cmp_func = sort_cmp_funcs.at(i).cmp_func_;
             const int64_t idx = sort_collations.at(i).field_idx_;
             const ObDatum &l_datum = a_row->cells()[idx];
             const ObDatum &r_datum = row.cells()[idx];
-            match = (0 != cmp_func(l_datum, r_datum));
-            LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match), K(step),
-                      K(is_upper), K(pos));
+            if (OB_FAIL(cmp_func(l_datum, r_datum, cmp_ret))) {
+              LOG_WARN("cmp failed", K(ret), K(idx), K(l_datum), K(r_datum), K(match), K(step),
+                        K(is_upper), K(pos));
+            } else {
+              match = (0 != cmp_ret);
+              LOG_DEBUG("cmp ", K(idx), K(l_datum), K(r_datum), K(match), K(step),
+                        K(is_upper), K(pos));
+            }
           }
         }
 
@@ -2830,7 +2900,8 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
         } else if (FALSE_IT(cur_val = a_row->cells()[cell_idx])) {
           // will not reach here
         } else {
-          int cmp_result = cmp_func(cur_val, *cmp_val);
+          int cmp_result = 0;
+          int tmp_ret = cmp_func(cur_val, *cmp_val, cmp_result);
           match = ((cmp_mode & L) && cmp_result < 0)
                   || ((cmp_mode & LE) && cmp_result <= 0)
                   || ((cmp_mode & G) && cmp_result > 0)
@@ -2838,7 +2909,7 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
 
           ObToStringDatum cur_val1(*bound_expr, cur_val);
           ObToStringDatum cmp_val1(*bound_expr, *cmp_val);
-          LOG_DEBUG("cmp result", K(pos), K(cell_idx), K(cmp_times), K(cur_val), KPC(cmp_val),
+          LOG_DEBUG("cmp result", K(tmp_ret), K(pos), K(cell_idx), K(cmp_times), K(cur_val), KPC(cmp_val),
                     K(cmp_mode),K(cmp_result), K(match),
                     "cur_val1", ObToStringDatum(*bound_expr, cur_val),
                     "cmp_val1", ObToStringDatum(*bound_expr, *cmp_val));
@@ -3142,7 +3213,11 @@ int ObWindowFunctionOp::calc_part_exprs_hash(
         } else {
           datum = const_cast<ObDatum *>(&row_->cells()[i]);
         }
-        hash_value = expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value, hash_value))) {
+            LOG_WARN("do hash failed", K(ret), KPC(expr));
+          }
+        }
       }
     }
   }

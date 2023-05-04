@@ -1612,6 +1612,71 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__SHOW_DDL_IN_COMPAT_MODE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(222); }
 };
+class ObSysVarForceOrderPreserveSet : public ObBoolSysVar
+{
+public:
+  ObSysVarForceOrderPreserveSet() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__FORCE_ORDER_PRESERVE_SET; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(223); }
+};
+class ObSysVarParallelDegreePolicy : public ObEnumSysVar
+{
+public:
+  const static char * PARALLEL_DEGREE_POLICY_NAMES[];
+public:
+  ObSysVarParallelDegreePolicy() : ObEnumSysVar(PARALLEL_DEGREE_POLICY_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_DEGREE_POLICY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(224); }
+};
+class ObSysVarParallelDegreeLimit : public ObIntSysVar
+{
+public:
+  ObSysVarParallelDegreeLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_DEGREE_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(225); }
+};
+class ObSysVarParallelMinScanTimeThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarParallelMinScanTimeThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(226); }
+};
+class ObSysVarOptimizerDynamicSampling : public ObIntSysVar
+{
+public:
+  ObSysVarOptimizerDynamicSampling() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(227); }
+};
+class ObSysVarRuntimeFilterType : public ObVarcharSysVar
+{
+public:
+  ObSysVarRuntimeFilterType() : ObVarcharSysVar(ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_TYPE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(228); }
+};
+class ObSysVarRuntimeFilterWaitTimeMs : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeFilterWaitTimeMs() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(229); }
+};
+class ObSysVarRuntimeFilterMaxInNum : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeFilterMaxInNum() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(230); }
+};
+class ObSysVarRuntimeBloomFilterMaxSize : public ObIntSysVar
+{
+public:
+  ObSysVarRuntimeBloomFilterMaxSize() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(231); }
+};
 
 
 class ObSysVarFactory
@@ -1623,6 +1688,7 @@ public:
   int create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var);
   int create_all_sys_vars();
   int free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx);
+  static int create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var_ptr);
   static int calc_sys_var_store_idx(ObSysVarClassType sys_var_id, int64_t &store_idx);
   static int calc_sys_var_store_idx_by_name(const common::ObString &sys_var_name, int64_t &store_idx);
   static bool is_valid_sys_var_store_idx(int64_t store_idx);
@@ -1631,7 +1697,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 126;
+  const static int64_t OB_SYS_VARS_COUNT = 135;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
 
   const static int16_t OB_SPECIFIC_SYS_VAR_ID_OFFSET = 10000;

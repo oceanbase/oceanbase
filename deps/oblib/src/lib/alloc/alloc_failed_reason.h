@@ -22,7 +22,8 @@ namespace lib
 {
 enum AllocFailedReason
 {
-  SINGLE_ALLOC_SIZE_OVERFLOW = 0,
+  UNKNOWN = 0,
+  SINGLE_ALLOC_SIZE_OVERFLOW,
   CTX_HOLD_REACH_LIMIT,
   TENANT_HOLD_REACH_LIMIT,
   SERVER_HOLD_REACH_LIMIT,
@@ -54,7 +55,7 @@ public:
   };
   bool need_wash() const
   {
-    return reason_ == lib::CTX_HOLD_REACH_LIMIT || 
+    return reason_ == lib::CTX_HOLD_REACH_LIMIT ||
             reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
             reason_ == lib::SERVER_HOLD_REACH_LIMIT;
   }

@@ -195,9 +195,11 @@ int ObUpdateLogPlan::generate_normal_raw_plan()
 
     // step. allocate update operator
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before call prepare_dml_infos
+        LOG_WARN("failed to compute dml parallel", K(ret));
+      } else if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
-      } else if (get_optimizer_context().use_pdml()) {
+      } else if (use_pdml()) {
         // PDML计划
         if (OB_FAIL(candi_allocate_pdml_update())) {
           LOG_WARN("failed to allocate pdml update operator", K(ret));
@@ -469,21 +471,25 @@ int ObUpdateLogPlan::perform_vector_assign_expr_replacement(ObUpdateStmt *stmt)
 {
   int ret = OB_SUCCESS;
   ObUpdateTableInfo* table_info = nullptr;
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
   if (OB_ISNULL(stmt) || OB_ISNULL(table_info = stmt->get_update_table_info().at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt), K(table_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_info->assignments_.count(); ++i) {
       ObRawExpr *value = table_info->assignments_.at(i).expr_;
-      if (OB_FAIL(replace_alias_ref_expr(value))) {
+      bool replace_happened = false;
+      if (OB_FAIL(replace_alias_ref_expr(value, replace_happened))) {
         LOG_WARN("failed to replace alias ref expr", K(ret));
+      } else if (replace_happened && OB_FAIL(value->formalize(session_info))) {
+        LOG_WARN("failed to foramlize expr", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObUpdateLogPlan::replace_alias_ref_expr(ObRawExpr *&expr)
+int ObUpdateLogPlan::replace_alias_ref_expr(ObRawExpr *&expr, bool &replace_happened)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
@@ -496,10 +502,11 @@ int ObUpdateLogPlan::replace_alias_ref_expr(ObRawExpr *&expr)
       LOG_WARN("invalid alias expr", K(ret), K(*alias));
     } else {
       expr = alias->get_ref_expr();
+      replace_happened = true;
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(replace_alias_ref_expr(expr->get_param_expr(i)))) {
+      if (OB_FAIL(replace_alias_ref_expr(expr->get_param_expr(i), replace_happened))) {
         LOG_WARN("failed to replace alias ref expr", K(ret));
       }
     }

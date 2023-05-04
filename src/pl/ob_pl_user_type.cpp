@@ -734,6 +734,18 @@ int ObRecordType::is_compatble(const ObRecordType &other, bool &is_comp) const
                                       left->get_data_type()->get_collation_type(),
                                       right->get_data_type()->get_obj_type(),
                                       right->get_data_type()->get_collation_type()));
+        } else if ((!left->is_obj_type() ||
+                    (left->get_data_type() != NULL && left->get_data_type()->get_meta_type().is_ext()))
+                      &&
+                    (!right->is_obj_type() ||
+                    (right->get_data_type() != NULL && right->get_data_type()->get_meta_type().is_ext()))) {
+          uint64_t left_udt_id = (NULL == left->get_data_type()) ? left->get_user_type_id()
+                                                                  : left->get_data_type()->get_udt_id();
+          uint64_t right_udt_id = (NULL == right->get_data_type()) ? right->get_user_type_id()
+                                                                    : right->get_data_type()->get_udt_id();
+          if (left_udt_id != right_udt_id) {
+            is_comp = false;
+          }
         } else {
           is_comp = false;
         }
@@ -1450,11 +1462,11 @@ int ObPLComposite::copy_element(const ObObj &src,
       CK (OB_NOT_NULL(dest_composite));
       if (src.get_ext() == dest.get_ext()) {
         OZ (ObPLComposite::deep_copy(*dest_composite,
-                                     src_composite,
-                                     allocator,
-                                     ns,
-                                     session,
-                                     need_new_allocator));
+                                   src_composite,
+                                   allocator,
+                                   ns,
+                                   session,
+                                   need_new_allocator));
         OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
                             src.get_meta().get_extend_type(),
                             src.get_val_len()));

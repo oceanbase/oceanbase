@@ -650,9 +650,10 @@ int ObKVCacheMap::clean_garbage_node(int64_t &start_pos, const int64_t clean_num
   return ret;
 }
 
-int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, const int64_t replace_num)
+int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, int64_t &replace_node_count, const int64_t replace_num)
 {
   int ret = OB_SUCCESS;
+  replace_node_count = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObKVCacheMap has not been inited, ", K(ret));
@@ -662,7 +663,6 @@ int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, const int64_t replac
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument, ", K(start_pos), K_(bucket_num), K(replace_num), K(ret));
   } else {
-    int64_t replace_node_count = 0;
     ObTimeGuard tg("replace_fragement_node", 100000);
     // The variable 'replace_start_pos' do not need atomic operation because it is only used by replace thread 
     int64_t replace_start_pos = start_pos % bucket_num_;

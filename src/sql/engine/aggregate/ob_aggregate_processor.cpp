@@ -27,7 +27,8 @@
 #include "sql/engine/sort/ob_sort_op_impl.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
-
+#include "sql/engine/basic/ob_material_op_impl.h"
+#include "share/stat/ob_hybrid_hist_estimator.h"
 
 namespace oceanbase
 {
@@ -353,7 +354,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
     } else {
       int64_t sort_area_size = 0;
       if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-                  SORT_WORK_AREA, tenant_id, sort_area_size))) {
+                  SORT_WORK_AREA, tenant_id, &eval_ctx.exec_ctx_, sort_area_size))) {
         LOG_WARN("failed to get workarea size", K(ret), K(tenant_id));
       } else if (OB_FAIL(row_store_.init(sort_area_size,
                                          tenant_id,
@@ -479,6 +480,203 @@ int ObAggregateProcessor::GroupConcatExtraResult::set_bool_mark(int64_t col_inde
   return ret;
 }
 
+ObAggregateProcessor::HybridHistExtraResult::~HybridHistExtraResult()
+{
+  if (sort_op_ != NULL) {
+    sort_op_->~ObSortOpImpl();
+    alloc_.free(sort_op_);
+    sort_op_ = NULL;
+  }
+  if (mat_op_ != NULL) {
+    mat_op_->~ObMaterialOpImpl();
+    alloc_.free(mat_op_);
+    mat_op_ = NULL;
+  }
+}
+
+void ObAggregateProcessor::HybridHistExtraResult::reuse_self()
+{
+  if (sort_op_ != NULL) {
+    sort_op_->reuse();
+  }
+  if (mat_op_ != NULL) {
+    mat_op_->reuse();
+  }
+  sort_row_count_ = 0;
+  material_row_count_ = 0;
+};
+
+void ObAggregateProcessor::HybridHistExtraResult::reuse()
+{
+  reuse_self();
+  ExtraResult::reuse();
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::init(const uint64_t tenant_id,
+    const ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx, const bool need_rewind,
+    ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+    ObMonitorNode &op_monitor_info)
+{
+  int ret = OB_SUCCESS;
+  sort_row_count_ = 0;
+  material_row_count_ = 0;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id));
+  } else {
+    if (OB_ISNULL(sort_op_ = static_cast<ObSortOpImpl *>(alloc_.alloc(sizeof(ObSortOpImpl))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fall to alloc buff", "size", sizeof(ObSortOpImpl));
+    } else {
+      new (sort_op_) ObSortOpImpl(op_monitor_info_);
+      if (OB_FAIL(sort_op_->init(tenant_id,
+                                 &aggr_info.sort_collations_,
+                                 &aggr_info.sort_cmp_funcs_,
+                                 &eval_ctx,
+                                 &eval_ctx.exec_ctx_,
+                                 false,
+                                 false,
+                                 need_rewind))) {
+        LOG_WARN("init sort_op_ failed");
+      } else {
+        sort_op_->set_io_event_observer(io_event_observer);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(mat_op_ = static_cast<ObMaterialOpImpl *>(alloc_.alloc(sizeof(ObMaterialOpImpl))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fall to alloc buff", "size", sizeof(ObMaterialOpImpl));
+    } else {
+      new (mat_op_) ObMaterialOpImpl(op_monitor_info, profile);
+      if (OB_FAIL(mat_op_->init(tenant_id,
+                                &eval_ctx,
+                                &eval_ctx.exec_ctx_,
+                                io_event_observer))) {
+        LOG_WARN("init mat_op_ failed");
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    if (NULL != sort_op_) {
+      sort_op_->~ObSortOpImpl();
+      alloc_.free(sort_op_);
+      sort_op_ = NULL;
+    }
+    if (NULL != mat_op_) {
+      mat_op_->~ObMaterialOpImpl();
+      alloc_.free(mat_op_);
+      mat_op_ = NULL;
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::add_sort_row(
+    const ObIArray<ObExpr *> &expr, ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(sort_op_)) {
+    if (OB_FAIL(sort_op_->add_row(expr))) {
+      LOG_WARN("failed to add row to sort op", K(expr));
+    } else {
+      ++sort_row_count_;
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::add_sort_row(
+    const ObChunkDatumStore::StoredRow &sr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(sort_op_)) {
+    if (OB_FAIL(sort_op_->add_stored_row(sr))) {
+      LOG_WARN("failed to add row to sort op", K(sr));
+    } else {
+      ++sort_row_count_;
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::get_next_row_from_sort(
+    const ObChunkDatumStore::StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  sr = NULL;
+  if (OB_NOT_NULL(sort_op_)) {
+    ret = sort_op_->get_next_row(sr);
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::finish_add_sort_row()
+{
+
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(sort_op_)) {
+    if (OB_FAIL(sort_op_->sort())) {
+      LOG_WARN("failed to sort rows");
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::add_material_row(
+    const ObDatum *src_datums,
+    const int64_t datum_cnt,
+    const int64_t extra_size,
+    const ObChunkDatumStore::StoredRow *&store_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(mat_op_)) {
+    if (OB_FAIL(mat_op_->add_row(src_datums, datum_cnt, extra_size, store_row))) {
+      LOG_WARN("failed to add row to sort op", K(src_datums), K(datum_cnt));
+    } else {
+      ++material_row_count_;
+    }
+  }
+  return ret;
+}
+int ObAggregateProcessor::HybridHistExtraResult::get_next_row_from_material(
+    const ObChunkDatumStore::StoredRow *&sr)
+{
+  int ret = OB_SUCCESS;
+  sr = NULL;
+  if (OB_NOT_NULL(mat_op_)) {
+    ret = mat_op_->get_next_row(sr);
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::HybridHistExtraResult::finish_add_material_row()
+{
+
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(mat_op_)) {
+    if (OB_FAIL(mat_op_->finish_add_row())) {
+      LOG_WARN("failed to sort rows");
+    }
+  }
+  return ret;
+}
+
+int64_t ObAggregateProcessor::HybridHistExtraResult::to_string(
+    char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(sort_row_count),
+       K_(material_row_count),
+       KP_(sort_op),
+       KP_(mat_op)
+      );
+  J_OBJ_END();
+  return pos;
+}
+
 int64_t ObAggregateProcessor::ExtraResult::to_string(char *buf,
     const int64_t buf_len) const
 {
@@ -537,7 +735,8 @@ ObAggregateProcessor::DllUdfExtra::~DllUdfExtra()
 
 ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
                                            ObIArray<ObAggrInfo> &aggr_infos,
-                                           const lib::ObLabel &label)
+                                           const lib::ObLabel &label,
+                                           ObMonitorNode &op_monitor_info)
     : has_distinct_(false),
       has_order_by_(false),
       has_group_concat_(false),
@@ -570,7 +769,9 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       io_event_observer_(nullptr),
       removal_info_(),
       support_fast_single_row_agg_(false),
-      op_eval_infos_(nullptr)
+      op_eval_infos_(nullptr),
+      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+      op_monitor_info_(op_monitor_info)
 {
 }
 
@@ -609,7 +810,8 @@ int ObAggregateProcessor::init()
                             T_FUN_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
                             T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
                             T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
-                            T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type());
+                            T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
+                            T_FUN_ORA_XMLAGG == aggr_info.get_expr_type());
       has_order_by_ |= aggr_info.has_order_by_;
       if (!has_extra_) {
         has_extra_ |= aggr_info.has_distinct_;
@@ -618,13 +820,34 @@ int ObAggregateProcessor::init()
 
       if (T_FUN_MEDIAN == aggr_info.get_expr_type()
           || T_FUN_GROUP_PERCENTILE_CONT == aggr_info.get_expr_type()) {
-        LinearInterAggrFuncCtx *ctx = OB_NEWx(LinearInterAggrFuncCtx,
-                                              (&eval_ctx_.exec_ctx_.get_allocator()));
-        if (NULL == ctx) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret));
-        } else {
-          aggr_func_ctxs_.at(i) = ctx;
+        // ObAggregateProcessor::init would be invoked many times under groupby rescan
+        // Only create LinearInterAggrFuncCtx once to prevent memory leak.
+        //
+        // Details:
+        // Normally ObAggregateProcessor::init would ONLY be invoked once under open
+        // stage and NEVER be triggered any more. Typically window function follows
+        // this rule.
+        // However, ObAggregateProcessor::init would be invoked many times under groupby
+        // rescan cases, see ObGroupByOp::inner_rescan. And LinearInterAggrFuncCtx would
+        // be created repeatedly. This break init semantic(invoked once) and leading
+        // memory leak.
+        //
+        // Solution:
+        // Only create LinearInterAggrFuncCtx once when ObAggregateProcessor::init is called
+        // repeatedly. So both window function and groupby cases would be well handled.
+        //
+        // TODO qubin.qb:
+        // Refactor group by rescan API to stop calling ObAggregateProcessor::init so that
+        // init semantic (only invoke one time) would be strictly followed
+        if (aggr_func_ctxs_.at(i) == nullptr) {
+          LinearInterAggrFuncCtx *ctx = OB_NEWx(LinearInterAggrFuncCtx,
+                                                (&eval_ctx_.exec_ctx_.get_allocator()));
+          if (NULL == ctx) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            aggr_func_ctxs_.at(i) = ctx;
+          }
         }
       }
     }
@@ -1518,7 +1741,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
     if (OB_ISNULL(cur_batch_group_buf_ = (char *)aggr_alloc_.alloc(
                 alloc_size * BATCH_GROUP_SIZE))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
+      LOG_WARN("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
     } else {
       // The memset is not needed here because the object will be constructed by NEW.
       // But we memset first then NEW got a better performance because of better CPU cache locality.
@@ -1557,11 +1780,12 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_KEEP_WM_CONCAT:
         case T_FUN_WM_CONCAT:
         case T_FUN_PL_AGG_UDF:
-        case T_FUN_HYBRID_HIST:
         case T_FUN_JSON_ARRAYAGG:
         case T_FUN_ORA_JSON_ARRAYAGG:
         case T_FUN_JSON_OBJECTAGG:
-        case T_FUN_ORA_JSON_OBJECTAGG: {
+        case T_FUN_ORA_JSON_OBJECTAGG:
+        case T_FUN_ORA_XMLAGG:
+        {
           void *tmp_buf = NULL;
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1600,6 +1824,27 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
                   }
                 }
               }
+            }
+          }
+          break;
+        }
+        case T_FUN_HYBRID_HIST: {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(HybridHistExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", "size", sizeof(HybridHistExtraResult));
+          } else {
+            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_);
+            aggr_cell.set_extra(result);
+            const bool need_rewind = (in_window_func_ || group_id > 0);
+            if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                                     aggr_info,
+                                     eval_ctx_,
+                                     need_rewind,
+                                     io_event_observer_,
+                                     profile_,
+                                     op_monitor_info_))) {
+              LOG_WARN("init hybrid hist extra result failed");
             }
           }
           break;
@@ -1948,11 +2193,12 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
-    case T_FUN_HYBRID_HIST:
     case T_FUN_JSON_ARRAYAGG: 
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
       if (OB_ISNULL(aggr_extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))
@@ -1989,6 +2235,12 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
           ret = OB_SUCCESS;
         }
       }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain agg hybrid hist still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain hybrid hist");
       break;
     }
     case T_FUN_AGG_UDF: {
@@ -2110,10 +2362,13 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         LOG_WARN("llc_init failed");
       } else {
         bool has_null_cell = false;
-        uint64_t hash_value = llc_calc_hash_value(stored_row,
-                                                  aggr_info.param_exprs_,
-                                                  has_null_cell);
-        if (has_null_cell) {
+        uint64_t hash_value = 0;
+        if (OB_FAIL(llc_calc_hash_value(stored_row,
+                                        aggr_info.param_exprs_,
+                                        has_null_cell,
+                                        hash_value))) {
+          LOG_WARN("fail to do hash", K(ret));
+        } else if (has_null_cell) {
           /*do nothing*/
         } else {
           ret = llc_add_value(hash_value, llc_bitmap.get_string());
@@ -2136,11 +2391,12 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
-    case T_FUN_HYBRID_HIST:
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2174,6 +2430,23 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
               }
             }
           }
+          LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
+        }
+      }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      HybridHistExtraResult *extra = NULL;
+      if (OB_ISNULL(extra = static_cast<HybridHistExtraResult *>(aggr_cell.get_extra()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra is null", K(aggr_cell));
+      } else {
+        extra->reuse_self();
+        if (param_exprs == NULL && OB_FAIL(extra->add_sort_row(stored_row))) {
+          LOG_WARN("fail to add row");
+        } else if (param_exprs != NULL && OB_FAIL(extra->add_sort_row(*param_exprs, eval_ctx_))) {
+          LOG_WARN("fail to add row");
+        } else {
           LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
         }
       }
@@ -2356,11 +2629,12 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
-    case T_FUN_HYBRID_HIST:
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2385,6 +2659,16 @@ int ObAggregateProcessor::process_aggr_batch_result(
             }
           }
         }
+      }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      HybridHistExtraResult *extra_info = NULL;
+      if (OB_ISNULL(extra_info = static_cast<HybridHistExtraResult *>(aggr_cell.get_extra()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra is null", K(aggr_cell));
+      } else if (OB_FAIL(selector.add_batch(param_exprs, extra_info, eval_ctx_))) {
+        LOG_WARN("add batch failed");
       }
       break;
     }
@@ -2481,6 +2765,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("curr_row_results count is not 1", K(stored_row));
+      } else if (ob_is_user_defined_sql_type(aggr_info.expr_->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (!stored_row.cells()[0].is_null()) {
         ret = max_calc(aggr_cell, aggr_cell.get_iter_result(),
                        stored_row.cells()[0],
@@ -2493,6 +2781,10 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
       if (OB_UNLIKELY(stored_row.cnt_ != 1)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("curr_row_results count is not 1", K(stored_row));
+      } else if (ob_is_user_defined_sql_type(aggr_info.expr_->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (!stored_row.cells()[0].is_null()) {
         ret = min_calc(aggr_cell, aggr_cell.get_iter_result(),
                        stored_row.cells()[0],
@@ -2538,10 +2830,13 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS: {
       bool has_null_cell = false;
       ObDatum *llc_bitmap = &aggr_cell.get_iter_result();
-      uint64_t hash_value = llc_calc_hash_value(stored_row,
-                                                aggr_info.param_exprs_,
-                                                has_null_cell);
-      if (has_null_cell) {
+      uint64_t hash_value = 0;
+      if (OB_FAIL(llc_calc_hash_value(stored_row,
+                                      aggr_info.param_exprs_,
+                                      has_null_cell,
+                                      hash_value))) {
+        LOG_WARN("fail to do hash", K(ret));
+      } else if (has_null_cell) {
        /*do nothing*/
       } else {
         ret = llc_add_value(hash_value, llc_bitmap->get_string());
@@ -2572,11 +2867,12 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_KEEP_WM_CONCAT:
     case T_FUN_WM_CONCAT:
     case T_FUN_PL_AGG_UDF:
-    case T_FUN_HYBRID_HIST:
     case T_FUN_JSON_ARRAYAGG:
     case T_FUN_ORA_JSON_ARRAYAGG:
     case T_FUN_JSON_OBJECTAGG:
-    case T_FUN_ORA_JSON_OBJECTAGG: {
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_ORA_XMLAGG:
+    {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
         ret = OB_ERR_UNEXPECTED;
@@ -2585,6 +2881,20 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         LOG_WARN("fail to add row", K(ret));
       } else if (param_exprs != NULL && OB_FAIL(extra->add_row(*param_exprs, eval_ctx_))) {
         LOG_WARN("fail to add row", K(ret));
+      } else {
+        LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
+      }
+      break;
+    }
+    case T_FUN_HYBRID_HIST: {
+      HybridHistExtraResult *extra = NULL;
+      if (OB_ISNULL(extra = static_cast<HybridHistExtraResult *>(aggr_cell.get_extra()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("extra is null", K(aggr_cell));
+      } else if (param_exprs == NULL && OB_FAIL(extra->add_sort_row(stored_row))) {
+        LOG_WARN("fail to add row");
+      } else if (param_exprs != NULL && OB_FAIL(extra->add_sort_row(*param_exprs, eval_ctx_))) {
+        LOG_WARN("fail to add row");
       } else {
         LOG_DEBUG("succ to add row", K(stored_row), KPC(extra));
       }
@@ -2865,7 +3175,14 @@ int ObAggregateProcessor::collect_aggr_result(
       }
       break;
     }
-
+    case T_FUN_ORA_XMLAGG: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_ora_xmlagg_result(aggr_info, extra, result))) {
+        LOG_WARN("failed to get xmlagg result", K(ret));
+      } else {
+      }
+      break;
+    }
     case T_FUN_JSON_ARRAYAGG: {
       GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(get_json_arrayagg_result(aggr_info, extra, result))) {
@@ -3434,7 +3751,7 @@ int ObAggregateProcessor::collect_aggr_result(
       break;
     }
     case T_FUN_HYBRID_HIST: {
-      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      HybridHistExtraResult *extra = static_cast<HybridHistExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(compute_hybrid_hist_result(aggr_info, extra, result))) {
         LOG_WARN("failed to compute_hybrid_hist_result", K(ret));
       } else {
@@ -3706,7 +4023,10 @@ int ObAggregateProcessor::max_calc(AggrCell &aggr_cell, ObDatum &base, const ObD
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cmp_func is NULL", K(ret));
   } else if (!base.is_null() && !other.is_null()) {
-    if (cmp_func(base, other) < 0) {
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_func(base, other, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (cmp_ret < 0) {
       ret = clone_aggr_cell(aggr_cell, other, is_number);
       removal_info_.is_index_change_ = true;
     }
@@ -3729,7 +4049,10 @@ int ObAggregateProcessor::min_calc(AggrCell &aggr_cell, ObDatum &base, const ObD
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cmp_func is NULL", K(ret));
   } else if (!base.is_null() && !other.is_null()) {
-    if (cmp_func(base, other) > 0) {
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_func(base, other, cmp_ret))) {
+      LOG_WARN("failed to compare", K(ret));
+    } else if (cmp_ret > 0) {
       ret = clone_aggr_cell(aggr_cell, other, is_number);
       removal_info_.is_index_change_ = true;
     }
@@ -3760,19 +4083,26 @@ int ObAggregateProcessor::max_calc_batch(
   } else {
     ObDatum *max = nullptr;
     uint16_t i = 0; // row num in a batch
-    for (auto it = selector.begin(); it < selector.end(); selector.next(it)) {
+    int cmp_ret = 0;
+    for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
       if (max && !src.at(i)->is_null()) {
-        if (cmp_func(*max, *src.at(i)) < 0) {
+        if (OB_FAIL(cmp_func(*max, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret < 0) {
           max = src.at(i);
         }
       } else if (!src.at(i)->is_null()) {
-        if (dst.is_null() || cmp_func(dst, *src.at(i)) < 0) {
+        if (dst.is_null()) {
+          max = src.at(i);
+        } else if (OB_FAIL(cmp_func(dst, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret < 0) {
           max = src.at(i);
         }
       }
     }
-    if (max) {
+    if (OB_SUCC(ret) && max) {
       ret = clone_aggr_cell(aggr_cell, *(max), is_number);
     }
   }
@@ -3795,19 +4125,26 @@ int ObAggregateProcessor::min_calc_batch(
   } else {
     ObDatum *min = nullptr;
     uint16_t i = 0; // row num in a batch
-    for (auto it = selector.begin(); it < selector.end(); selector.next(it)) {
+    int cmp_ret = 0;
+    for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
       if (min && !src.at(i)->is_null()) {
-        if (cmp_func(*min, *src.at(i)) > 0) {
+        if (OB_FAIL(cmp_func(*min, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret > 0) {
           min = src.at(i);
         }
       } else if (!src.at(i)->is_null()) {
-        if (dst.is_null() || cmp_func(dst, *src.at(i)) > 0) {
+        if (dst.is_null()) {
+          min = src.at(i);
+        } else if (OB_FAIL(cmp_func(dst, *src.at(i), cmp_ret))) {
+          LOG_WARN("failed to compare", K(ret));
+        } else if (cmp_ret > 0) {
           min = src.at(i);
         }
       }
     }
-    if (min) {
+    if (OB_SUCC(ret) && min) {
       ret = clone_aggr_cell(aggr_cell, *(min), is_number);
     }
   }
@@ -4359,6 +4696,25 @@ int ObAggregateProcessor::ObBatchRowsSlice::add_batch(
   return ret;
 }
 
+int ObAggregateProcessor::ObBatchRowsSlice::add_batch(
+  const ObIArray<ObExpr *> *param_exprs,
+  HybridHistExtraResult *extra_info,
+  ObEvalCtx &eval_ctx
+) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(extra_info->sort_op_)) {
+    int64_t stored_rows_count = 0;
+    if (OB_FAIL(extra_info->sort_op_->add_batch(
+        *param_exprs, *brs_->skip_, end_pos_, begin_pos_, &stored_rows_count))) {
+      LOG_WARN("failed to add batch");
+    } else {
+      extra_info->sort_row_count_ += stored_rows_count;
+    }
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::ObSelector::add_batch(
   const ObIArray<ObExpr *> *param_exprs,
   ObSortOpImpl *unique_sort_op,
@@ -4386,6 +4742,24 @@ int ObAggregateProcessor::ObSelector::add_batch(
       LOG_WARN("failed to add batch", K(ret));
     } else {
       extra_info->row_count_ += count_;
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::ObSelector::add_batch(
+  const ObIArray<ObExpr *> *param_exprs,
+  HybridHistExtraResult *extra_info,
+  ObEvalCtx &eval_ctx
+) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(extra_info->sort_op_)) {
+    if (OB_FAIL(extra_info->sort_op_->add_batch(
+        *param_exprs, *brs_->skip_, brs_->size_, selector_array_, count_))) {
+      LOG_WARN("failed to add batch");
+    } else {
+      extra_info->sort_row_count_ += count_;
     }
   }
   return ret;
@@ -4480,7 +4854,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     uint64_t hash_value = 0;
     bool has_null_cell = false;
-    for (int64_t nth_arg = 0; !has_null_cell && nth_arg < param_exprs->count(); ++nth_arg) {
+    for (int64_t nth_arg = 0; OB_SUCC(ret) && !has_null_cell && nth_arg < param_exprs->count(); ++nth_arg) {
       ObExpr *expr = param_exprs->at(nth_arg);
       ObDatumVector arg_datums = expr->locate_expr_datumvector(eval_ctx_);
       nth_row = selector.get_batch_index(it);
@@ -4489,11 +4863,15 @@ int ObAggregateProcessor::approx_count_calc_batch(
       }
       OB_ASSERT(NULL != expr->basic_funcs_);
       ObExprHashFuncType hash_func = expr->basic_funcs_->default_hash_;
-      hash_value = hash_func(*arg_datums.at(nth_row), hash_value);
+      if (OB_FAIL(hash_func(*arg_datums.at(nth_row), hash_value, hash_value))) {
+        LOG_WARN("fail to do hash", K(ret));
+      }
     }
-    LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
-    if (!has_null_cell) {
-      ret = llc_add_value(hash_value, dst.get_string());
+    if (OB_SUCC(ret)) {
+      LOG_DEBUG("debug approx_count_calc_batch", K(has_null_cell), K(dst));
+      if (!has_null_cell) {
+        ret = llc_add_value(hash_value, dst.get_string());
+      }
     }
   }
   return ret;
@@ -4934,15 +5312,10 @@ int ObAggregateProcessor::llc_add_value(const uint64_t value, char *llc_bitmap_b
     pmax = ObExprEstimateNdv::llc_leading_zeros(value << LLC_BUCKET_BITS, 64 - LLC_BUCKET_BITS) + 1;
   }
   ObString::obstr_size_t llc_num_buckets = size;
-  if (OB_UNLIKELY(size != get_llc_size())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("buffer size don't match", K(size), K(get_llc_size()));
-  } else if (OB_UNLIKELY(!ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets))
-             || OB_UNLIKELY(llc_num_buckets <= bucket_index)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("llc_add_value failed because number of buckets is not valid",
-             K(llc_num_buckets), K(bucket_index), K(ret));
-  } else if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
+  OB_ASSERT(size == get_llc_size());
+  OB_ASSERT(ObExprEstimateNdv::llc_is_num_buckets_valid(llc_num_buckets));
+  OB_ASSERT(llc_num_buckets > bucket_index);
+  if (pmax > static_cast<uint8_t>(llc_bitmap_buf[bucket_index])) {
     // 理论上pmax不会超过65.
     llc_bitmap_buf[bucket_index] = static_cast<uint8_t>(pmax);
   }
@@ -4978,12 +5351,13 @@ int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
   return ret;
 }
 
-uint64_t ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
-    const ObIArray<ObExpr *> &param_exprs, bool &has_null_cell)
+int ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow &stored_row,
+    const ObIArray<ObExpr *> &param_exprs, bool &has_null_cell, uint64_t &hash_value)
 {
+  int ret = OB_SUCCESS;
   has_null_cell = false;
-  uint64_t hash_value = 0;
-  for (int64_t i = 0; !has_null_cell && i < stored_row.cnt_; ++i) {
+  hash_value = 0;
+  for (int64_t i = 0; !has_null_cell && i < stored_row.cnt_ && OB_SUCC(ret); ++i) {
     const ObExpr &expr = *param_exprs.at(i);
     const ObDatum &datum = stored_row.cells()[i];
     if (datum.is_null()) {
@@ -4991,10 +5365,12 @@ uint64_t ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::Stor
     } else {
       OB_ASSERT(NULL != expr.basic_funcs_);
       ObExprHashFuncType hash_func = expr.basic_funcs_->default_hash_;
-      hash_value = hash_func(datum, hash_value);
+      if (OB_FAIL(hash_func(datum, hash_value, hash_value))) {
+        LOG_WARN("failed to do hash", K(ret));
+      }
     }
   }
-  return hash_value;
+  return ret;
 }
 
 int ObAggregateProcessor::compare_calc(const ObDatum &left_value,
@@ -5011,9 +5387,10 @@ int ObAggregateProcessor::compare_calc(const ObDatum &left_value,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(index), K(aggr_info.sort_collations_.count()),
                                      K(aggr_info.sort_cmp_funcs_.count()), K(ret));
+  } else if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(index).cmp_func_(left_value, right_value, compare_result))) {
+    LOG_WARN("failed to cmp", K(ret), K(index), K(left_value), K(right_value));
   } else {
-    compare_result = aggr_info.sort_cmp_funcs_.at(index).cmp_func_(left_value, right_value);
-    is_asc  = aggr_info.sort_collations_.at(index).is_ascending_;
+    is_asc = aggr_info.sort_collations_.at(index).is_ascending_;
   }
   return ret;
 }
@@ -5040,10 +5417,15 @@ int ObAggregateProcessor::check_rows_equal(const ObChunkDatumStore::LastStoredRo
       if (OB_UNLIKELY(index >= prev_row.store_row_->cnt_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid argument", K(ret), K(index), K(prev_row.store_row_->cnt_));
-      } else{
-        is_equal = 0 == aggr_info.sort_cmp_funcs_.at(i).cmp_func_(
-                                                                prev_row.store_row_->cells()[index],
-                                                                cur_row.cells()[index]);
+      } else {
+        int cmp_ret = 0;
+        if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(i).cmp_func_(prev_row.store_row_->cells()[index],
+                                                              cur_row.cells()[index],
+                                                              cmp_ret))) {
+          LOG_WARN("failed to cmp", K(ret), K(index));
+        } else {
+          is_equal = 0 == cmp_ret;
+        }
       }
     }
   }
@@ -5548,19 +5930,21 @@ int ObAggregateProcessor::convert_datum_to_obj(const ObAggrInfo &aggr_info,
 }
 
 int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info,
-                                                     GroupConcatExtraResult *&extra,
+                                                     HybridHistExtraResult *&extra,
                                                      ObDatum &result)
 {
   int ret = OB_SUCCESS;
   ObHybridHistograms hybrid_hist;
-  ObSEArray<BucketNode, 4> bucket_nodes;
   ObDatum *bucket_num_result = NULL;
   int64_t bucket_num = 0;
   int64_t num_distinct = 0;
   int64_t null_count = 0;
   int64_t total_count = 0;
+  int64_t pop_count = 0;
+  int64_t pop_freq = 0;
   if (OB_ISNULL(extra) || OB_ISNULL(aggr_info.bucket_num_param_expr_) ||
-     OB_UNLIKELY(extra->empty() || aggr_info.param_exprs_.count() != 1 ||
+     OB_UNLIKELY(extra->get_sort_row_count() == 0 ||
+                 aggr_info.param_exprs_.count() != 1 ||
                  aggr_info.sort_collations_.count() != 1 ||
                  !aggr_info.bucket_num_param_expr_->obj_meta_.is_numeric_type())) {
     ret = OB_ERR_UNEXPECTED;
@@ -5577,45 +5961,63 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
   } else if (bucket_num <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(bucket_num));
-  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
-    LOG_WARN("rewind failed", KPC(extra), K(ret));
-  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+  } else if ( OB_FAIL(extra->finish_add_sort_row())) {
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else {
-    ObObj pre_obj;
-    pre_obj.set_null();
+    ObChunkDatumStore::LastStoredRow prev_row(aggr_alloc_);
+    const int64_t extra_size = sizeof(BucketDesc);
     int64_t repeat_count = 0;
     const ObChunkDatumStore::StoredRow *stored_row = NULL;
-    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(stored_row))) {
-      ObObj cur_obj;
+    const ObChunkDatumStore::StoredRow *mat_stored_row = NULL;
+    // get null count
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row_from_sort(stored_row))) {
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
-      } else if (OB_FAIL(stored_row->cells()[0].to_obj(cur_obj,
-                                                       aggr_info.param_exprs_.at(0)->obj_meta_))) {
-        LOG_WARN("failed to obj", K(ret));
+      } else if (stored_row->cells()[0].is_null()) {
+        ++ null_count;
+      } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
+        LOG_WARN("failed to deep copy limit last rows", K(ret));
       } else {
-        ++ total_count;
-        if (cur_obj.is_null()) {
-          ++ null_count;
-        } else if (!pre_obj.is_null() &&
-                   pre_obj.is_equal(cur_obj, aggr_info.sort_collations_.at(0).cs_type_)) {
-          ++ repeat_count;
-        } else {
-          // new value is found
-          if (repeat_count > 0 && !pre_obj.is_null()) {
-            if (OB_FAIL(bucket_nodes.push_back(BucketNode(pre_obj, repeat_count)))) {
-              LOG_WARN("failed to push back bucket node", K(ret));
-            } else {/*do nothing*/}
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ob_write_obj(aggr_alloc_, cur_obj, pre_obj))) {
-            LOG_WARN("fail to clone cell", K(ret), K(cur_obj));
-          } else {
-            repeat_count = 1;
-            ++ num_distinct;
-          }
+        repeat_count = 1;
+        ++ num_distinct;
+        break;
+      }
+    }
+    total_count = extra->get_sort_row_count() - null_count;
+    int64_t pop_threshold = total_count / bucket_num;
+    // get all bucket node and store them into chunk datum store
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row_from_sort(stored_row))) {
+      bool is_equal = false;
+      if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(stored_row));
+      } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
+        LOG_WARN("failed to is order by item equal with prev row", K(ret));
+      } else if (is_equal) {
+        ++ repeat_count;
+      } else if (OB_ISNULL(prev_row.store_row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(prev_row.store_row_));
+      } else if (OB_FAIL(extra->add_material_row(prev_row.store_row_->cells(),
+                                                 prev_row.store_row_->cnt_,
+                                                 extra_size, mat_stored_row))) {
+        LOG_WARN("failed to add material row");
+      } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
+        LOG_WARN("failed to deep copy limit last rows", K(ret));
+      } else if (OB_ISNULL(mat_stored_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(mat_stored_row));
+      } else {
+        BucketDesc *desc = reinterpret_cast<BucketDesc*>(mat_stored_row->get_extra_payload());
+        desc->ep_count_ = repeat_count;
+        desc->is_pop_ = repeat_count > pop_threshold;
+        if (desc->is_pop_) {
+          pop_freq += repeat_count;
+          ++ pop_count;
         }
+        repeat_count = 1;
+        ++ num_distinct;
       }
     }
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {
@@ -5623,15 +6025,35 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
     } else {
       ret = OB_SUCCESS;
       bool has_lob_header = aggr_info.expr_->obj_meta_.has_lob_header();
-      if (!pre_obj.is_null() &&
-          OB_FAIL(bucket_nodes.push_back(BucketNode(pre_obj, repeat_count)))) {
-        LOG_WARN("failed to add the last value into bucket", K(ret));
-      } else if (OB_FAIL(hybrid_hist.build_hybrid_hist(bucket_nodes,
-                                                       bucket_num,
-                                                       total_count - null_count,
-                                                       num_distinct))) {
-        LOG_WARN("failed to build hybrid hist", K(ret));
-      } else if (OB_FAIL(get_hybrid_hist_result(hybrid_hist, has_lob_header, result))) {
+      if (prev_row.store_row_ != nullptr) {
+        if (OB_ISNULL(prev_row.store_row_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(prev_row.store_row_));
+        } else if (OB_FAIL(extra->add_material_row(prev_row.store_row_->cells(),
+                                                   prev_row.store_row_->cnt_,
+                                                   extra_size, mat_stored_row))) {
+          LOG_WARN("failed to add material row");
+        } else if (OB_ISNULL(mat_stored_row)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(mat_stored_row));
+        } else {
+          BucketDesc *desc = reinterpret_cast<BucketDesc*>(mat_stored_row->get_extra_payload());
+          desc->ep_count_ = repeat_count;
+          desc->is_pop_ = repeat_count > pop_threshold;
+          if (desc->is_pop_) {
+            pop_freq += repeat_count;
+            ++ pop_count;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(extra->finish_add_material_row())) {
+        LOG_WARN("failed to finish add material row", K(ret));
+      } else if (OB_FAIL(hybrid_hist.build_hybrid_hist(extra, &aggr_alloc_, bucket_num, total_count,
+                                                       num_distinct, pop_count, pop_freq,
+                                                       aggr_info.param_exprs_.at(0)->obj_meta_))) {
+        LOG_WARN("failed to build hybrid hist", K(ret), K(&aggr_alloc_));
+      } else if (OB_FAIL(get_hybrid_hist_result(&hybrid_hist, has_lob_header, result))) {
         LOG_WARN("failed to get hybrid hist result", K(ret));
       } else {/*do nothing*/}
     }
@@ -5639,21 +6061,24 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
   return ret;
 }
 
-int ObAggregateProcessor::get_hybrid_hist_result(ObHybridHistograms &hybrid_hist,
+int ObAggregateProcessor::get_hybrid_hist_result(ObHybridHistograms *hybrid_hist,
                                                  bool has_lob_header,
                                                  ObDatum &result_datum)
 {
   int ret = OB_SUCCESS;
-  if (hybrid_hist.get_buckets().count() > 0) {
+  if (OB_ISNULL(hybrid_hist)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null hybrid histograms", K(ret));
+  } else if (hybrid_hist->get_buckets().count() > 0) {
     char *buf = NULL;
-    int64_t buf_size = hybrid_hist.get_serialize_size();
+    int64_t buf_size = hybrid_hist->get_serialize_size();
     int64_t buf_pos = 0;
     ObTextStringResult new_tmp_lob(ObLongTextType, has_lob_header, &aggr_alloc_);
     if (OB_FAIL(new_tmp_lob.init(buf_size))) {
       LOG_WARN("tmp lob init failed", K(ret), K(buf_size));
     } else if (OB_FAIL(new_tmp_lob.get_reserved_buffer(buf, buf_size))) {
       LOG_WARN("tmp lob append failed", K(ret), K(new_tmp_lob));
-    } else if (OB_FAIL(hybrid_hist.serialize(buf, buf_size, buf_pos))) {
+    } else if (OB_FAIL(hybrid_hist->serialize(buf, buf_size, buf_pos))) {
       LOG_WARN("fail serialize init task arg", KP(buf), K(buf_size), K(buf_pos), K(ret));
     } else if (OB_FAIL(new_tmp_lob.lseek(buf_pos, 0))) {
       LOG_WARN("temp lob lseek failed", K(ret), K(new_tmp_lob), K(buf_pos));
@@ -5661,11 +6086,11 @@ int ObAggregateProcessor::get_hybrid_hist_result(ObHybridHistograms &hybrid_hist
       ObString lob_loc_str;
       new_tmp_lob.get_result_buffer(lob_loc_str);
       result_datum.set_string(lob_loc_str);
-      LOG_TRACE("succeed to get topK fre hist result", K(result_datum), K(hybrid_hist));
+      LOG_TRACE("succeed to get hybrid hist result", K(result_datum), KPC(hybrid_hist));
     }
   } else {
     result_datum.set_null();
-    LOG_TRACE("succeed to get topK fre hist result", K(result_datum), K(hybrid_hist));
+    LOG_TRACE("succeed to get hybrid hist result", K(result_datum), KPC(hybrid_hist));
   }
   return ret;
 }
@@ -5988,7 +6413,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
 {
   int ret = OB_SUCCESS;
   const int col_num = 2;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -6136,6 +6561,16 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
   return ret;
 }
 
+int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
+                                                GroupConcatExtraResult *&extra,
+                                                ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+
 int ObAggregateProcessor::check_key_valid(common::hash::ObHashSet<ObString> &view_key_names, const ObString &key_name)
 {
   INIT_SUCC(ret);
@@ -6154,7 +6589,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
                                                         ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const int64_t MAX_BUCKET_NUM = 1024;
   common::hash::ObHashSet<ObString> view_key_names;
   if (OB_FAIL(view_key_names.create(MAX_BUCKET_NUM))) {

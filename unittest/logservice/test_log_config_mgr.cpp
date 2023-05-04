@@ -57,6 +57,7 @@ public:
     mock_log_engine_ = OB_NEW(MockLogEngine, "TestLog");
     mock_mode_mgr_ = OB_NEW(MockLogModeMgr, "TestLog");
     mock_reconfirm_ = OB_NEW(MockLogReconfirm, "TestLog");
+    mock_plugins_ = OB_NEW(LogPlugins, "TestLog");
   }
   ~TestLogConfigMgr()
   {
@@ -66,6 +67,7 @@ public:
     OB_DELETE(MockLogEngine, "TestLog", mock_log_engine_);
     OB_DELETE(MockLogModeMgr, "TestLog", mock_mode_mgr_);
     OB_DELETE(MockLogReconfirm, "TestLog", mock_reconfirm_);
+    OB_DELETE(LogPlugins, "TestLog", mock_plugins_);
   }
   void init_test_log_config_env(const common::ObAddr &self,
                                 const LogConfigInfo &config_info,
@@ -88,7 +90,7 @@ public:
     LogConfigMeta config_meta;
     EXPECT_EQ(OB_SUCCESS, config_meta.generate(init_pid, config_info, config_info, 1, LSN(0), 1));
     EXPECT_EQ(OB_SUCCESS, cm.init(1, self, config_meta, mock_log_engine_, mock_sw_, mock_state_mgr_, mock_election_,
-        mock_mode_mgr_, mock_reconfirm_));
+        mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
     LogMemberRegionMap region_map;
     EXPECT_EQ(OB_SUCCESS, region_map.init("localmap", OB_MAX_MEMBER_NUMBER));
     for (int i = 0; i < cm.alive_paxos_memberlist_.get_member_number(); ++i) {
@@ -105,6 +107,7 @@ public:
   palf::MockLogEngine *mock_log_engine_;
   palf::MockLogModeMgr *mock_mode_mgr_;
   palf::MockLogReconfirm *mock_reconfirm_;
+  palf::LogPlugins *mock_plugins_;
 };
 
 TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
@@ -1284,6 +1287,21 @@ TEST_F(TestLogConfigMgr, test_handle_retire_msg)
   PALF_LOG(INFO, "test_handle_retire_msg end case");
 }
 
+TEST_F(TestLogConfigMgr, test_init_by_default_config_meta)
+{
+  const int64_t init_log_proposal_id = 0;
+  LogConfigInfo init_config_info;
+  LogConfigVersion init_config_version;
+  init_config_version.generate(init_log_proposal_id, 0);
+  init_config_info.config_version_ = init_config_version;
+  LogConfigMeta log_config_meta;
+  LogConfigMgr cm;
+  EXPECT_EQ(OB_SUCCESS, log_config_meta.generate_for_default(init_log_proposal_id,
+      init_config_info, init_config_info));
+  EXPECT_EQ(OB_SUCCESS, cm.init(1, addr1, log_config_meta, mock_log_engine_,
+      mock_sw_, mock_state_mgr_, mock_election_,
+      mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
+}
 
 } // end namespace unittest
 } // end namespace oceanbase

@@ -72,7 +72,9 @@ OB_SERIALIZE_MEMBER(ObDASTabletLoc,
                     tablet_id_,
                     ls_id_,
                     server_,
-                    flags_);
+                    flags_,
+                    partition_id_,
+                    first_level_part_id_);
 
 OB_DEF_SERIALIZE(ObDASTableLoc)
 {
@@ -157,6 +159,8 @@ int ObDASTableLoc::assign(const ObCandiTableLoc &candi_table_loc)
       tablet_loc->tablet_id_ = opt_tablet_loc.get_tablet_id();
       tablet_loc->ls_id_ = opt_tablet_loc.get_ls_id();
       tablet_loc->loc_meta_ = loc_meta_;
+      tablet_loc->partition_id_ = opt_tablet_loc.get_partition_id();
+      tablet_loc->first_level_part_id_ = opt_tablet_loc.get_first_level_part_id();
       if (OB_FAIL(tablet_locs_.push_back(tablet_loc))) {
         LOG_WARN("store tablet loc failed", K(ret), K(tablet_loc));
       }
@@ -268,11 +272,14 @@ int TabletHashMap::find_node(const ObTabletID key,
 int TabletHashMap::set(const ObTabletID key, ObDASTabletLoc *value)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (!created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("hash map was not created", KR(ret));
+  } else if (OB_FAIL(key.hash(hash_val))) {
+    LOG_WARN("hash failed", KR(ret));
   } else {
-    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *&bucket = buckets_[hash_val % bucket_num_];
     TabletHashNode *dst_node = NULL;
     if (OB_FAIL(find_node(key, bucket, dst_node))) {
       LOG_WARN("find node failed", KR(ret));
@@ -299,11 +306,14 @@ int TabletHashMap::set(const ObTabletID key, ObDASTabletLoc *value)
 int TabletHashMap::get(const ObTabletID key, ObDASTabletLoc *&value)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (!created()) {
     ret = OB_NOT_INIT;
     LOG_WARN("hash map was not created", KR(ret));
+  } else if (OB_FAIL(key.hash(hash_val))) {
+    LOG_WARN("hash failed", KR(ret));
   } else {
-    TabletHashNode *&bucket = buckets_[key.hash() % bucket_num_];
+    TabletHashNode *&bucket = buckets_[hash_val % bucket_num_];
     TabletHashNode *dst_node = NULL;
     if (OB_FAIL(find_node(key, bucket, dst_node))) {
       LOG_WARN("find node failed", KR(ret));

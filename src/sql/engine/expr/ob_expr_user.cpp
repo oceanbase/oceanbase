@@ -30,7 +30,7 @@ namespace sql
 
 
 ObExprUser::ObExprUser(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_USER, N_USER, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_USER, N_USER, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

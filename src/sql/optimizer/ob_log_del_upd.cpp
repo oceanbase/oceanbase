@@ -503,7 +503,6 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
         producer = &op;
       }
     } else if (op.get_type() == log_op_def::LOG_TABLE_SCAN) {
-
       // PDML partition id expr在table scan分配的逻辑
       // pdml table scan分配partition id expr的producer
       // table scan中分配partition id expr的producer的逻辑比较特殊：
@@ -521,14 +520,12 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
       // 其会被裁剪掉，因此目前insert与subplan之间会添加一个EX算子.
       // 后期会进行优化，如果insert与subplan是一个full partition wise
       // join，那么就在insert算子上分配一个GI算子，目前先使用在subplan上分配EX算子的方式实现
-
       ObLogTableScan &tsc = static_cast<ObLogTableScan &>(op);
       if (tid
           == (tsc.get_is_index_global() ? tsc.get_index_table_id() : tsc.get_ref_table_id())) {
         producer = &op;
       }
     }
-
     for (int64_t i = 0; OB_SUCC(ret) && NULL == producer && i < op.get_num_of_child(); i++) {
       if (OB_ISNULL(op.get_child(i))) {
         ret = OB_ERR_UNEXPECTED;

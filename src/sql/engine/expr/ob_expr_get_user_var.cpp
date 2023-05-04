@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprGetUserVar::ObExprGetUserVar(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_OP_GET_USER_VAR, N_GET_USER_VAR, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_OP_GET_USER_VAR, N_GET_USER_VAR, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

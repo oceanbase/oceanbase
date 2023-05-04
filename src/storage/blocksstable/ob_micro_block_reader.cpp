@@ -766,8 +766,9 @@ int ObMicroBlockReader::get_min_or_max(
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(agg_info.update_min_or_max(datum))) {
+        LOG_WARN("fail to update_min_or_max", K(ret), K(i), K(row_idx), K(datum), K(agg_info));
       } else {
-        agg_info.update_min_or_max(datum);
         LOG_DEBUG("update min/max", K(i), K(row_idx), K(datum), K(agg_info));
       }
     }

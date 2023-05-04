@@ -269,8 +269,10 @@ int ObExprOracleNullif::eval_nullif(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     // left is not null, right is null, not equal
     res.set_datum(*l);
   } else {
-    bool equal = (0 == reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[0])(*l, *r));
-    if (equal) {
+    int cmp_ret = 0;
+    if (OB_FAIL(reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[0])(*l, *r, cmp_ret))) {
+      LOG_WARN("cmp failed", K(ret));
+    } else if (0 == cmp_ret) {
       res.set_null();
     } else {
       res.set_datum(*l);
@@ -295,8 +297,10 @@ int ObExprOracleNullif::eval_nullif_not_null(const ObExpr &expr, ObEvalCtx &ctx,
     // left is not null, right is null, not equal
     res.set_datum(*l);
   } else {
-    bool equal = (0 == reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[0])(*l, *r));
-    if (equal) {
+    int cmp_ret = 0;
+    if (OB_FAIL(reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[0])(*l, *r, cmp_ret))) {
+      LOG_WARN("cmp failed", K(ret));
+    } else if (cmp_ret == 0) {
       res.set_null();
     } else {
       res.set_datum(*l);

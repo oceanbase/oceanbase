@@ -621,6 +621,7 @@ int ObResourceMgr::create_tenant_resource_mgr_unsafe(const uint64_t tenant_id,
     ptr = buf;
   } else {
     ObMemAttr attr(OB_SERVER_TENANT_ID, "TntResourceMgr");
+    SET_USE_500(attr);
     if (OB_ISNULL(ptr = ob_malloc(sizeof(ObTenantResourceMgr), attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));

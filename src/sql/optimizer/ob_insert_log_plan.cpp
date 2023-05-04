@@ -39,17 +39,11 @@ using namespace oceanbase::sql::log_op_def;
 int ObInsertLogPlan::generate_normal_raw_plan()
 {
   int ret = OB_SUCCESS;
-  ObSQLSessionInfo *session_info = NULL;
   const ObInsertStmt *insert_stmt = get_stmt();
-  if (OB_ISNULL(insert_stmt) || OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+  if (OB_ISNULL(insert_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(session_info), K(insert_stmt), K(ret));
+    LOG_WARN("get unexpected error");
   } else {
-    LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
-    bool need_osg = false;
-    const ObInsertStmt *insert_stmt = get_stmt();
-    LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
     OPT_TRACE("generate plan for ", get_stmt());
     if (!insert_stmt->value_from_select()) {
       // insert into values xxxx
@@ -73,11 +67,19 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     }
 
     // allocal optimizer stat gather operator.
+    bool need_osg = false;
+    OSGShareInfo osg_info;
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_need_online_stats_gather(need_osg))) {
+      if (OB_FAIL(compute_dml_parallel())) {  // compute parallel before check allocate stats gather
+        LOG_WARN("failed to compute dml parallel", K(ret));
+      } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
+        LOG_WARN("failed to set is direct insert", K(ret));
+      } else if (OB_FAIL(check_need_online_stats_gather(need_osg))) { // allocal optimizer stat gather operator.
         LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
       } else if (need_osg) {
-        if (OB_FAIL(candi_allocate_optimizer_stats_gathering())) {
+        if (OB_FAIL(generate_osg_share_info(osg_info))) {
+          LOG_WARN("fail to generated share info", K(ret));
+        } else if (OB_FAIL(candi_allocate_optimizer_stats_gathering(osg_info))) {
           LOG_WARN("failed to allocate optimizer stats gathering", K(ret));
         }
       }
@@ -97,7 +99,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
-      } else if (get_optimizer_context().use_pdml() && insert_stmt->value_from_select()) {
+      } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_insert())) {
           LOG_WARN("failed to allocate pdml insert", K(ret));
         } else {
@@ -123,7 +125,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
      * all information collection by other OSG.
     */
     if (OB_SUCC(ret) && need_osg) {
-      if (OB_FAIL(candi_allocate_root_optimizer_stats_gathering())) {
+      if (OB_FAIL(candi_allocate_root_optimizer_stats_gathering(osg_info))) {
         LOG_WARN("fail to allcate osg on top", K(ret));
       } else {
         LOG_TRACE("succeed to allocate optimizer stat gather",
@@ -147,6 +149,34 @@ int ObInsertLogPlan::generate_normal_raw_plan()
                 K(candidates_.candidate_plans_.count()));
       }
     }
+  }
+  return ret;
+}
+
+
+// Direct-insert is enabled only:
+// 1. pdml insert
+// 2. _ob_enable_direct_load
+// 3. insert into select clause
+// 4. append hint
+// 5. auto_commit, not in a transaction
+int ObInsertLogPlan::set_is_direct_insert() {
+  int ret = OB_SUCCESS;
+  is_direct_insert_ = false;
+  bool auto_commit = false;
+  const ObSQLSessionInfo* session_info = get_optimizer_context().get_session_info();
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(session_info));
+  } else if (!get_stmt()->value_from_select()
+             || !get_optimizer_context().get_global_hint().has_append()
+             || !GCONF._ob_enable_direct_load
+             || session_info->is_in_transaction()) {
+    /* is not direct insert */
+  } else if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
+    LOG_WARN("failed to get auto commit", KR(ret));
+  } else {
+    is_direct_insert_ = auto_commit;
   }
   return ret;
 }
@@ -184,7 +214,7 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
                && !get_optimizer_context().get_query_ctx()->get_global_hint().has_no_gather_opt_stat_hint()
                && online_sys_var
                && ((get_optimizer_context().get_query_ctx()->get_global_hint().should_generate_osg_operator())
-               || (get_optimizer_context().use_pdml()));
+                   || use_pdml());
     LOG_TRACE("online insert stat", K(online_sys_var), K(need_osg), K(need_gathering));
   }
   return ret;
@@ -1310,17 +1340,14 @@ int ObInsertLogPlan::build_column_conv_for_shadow_pk(const ObInsertTableInfo& ta
   return ret;
 }
 
-int ObInsertLogPlan::candi_allocate_optimizer_stats_gathering()
+int ObInsertLogPlan::candi_allocate_optimizer_stats_gathering(const OSGShareInfo &osg_info)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
   CandidatePlan best_plan;
   ObSEArray<CandidatePlan, 4> stats_gathering_plan;
   ObSEArray<CandidatePlan, 8> best_candidates;
-  OSGShareInfo osg_info;
-  if (OB_FAIL(generate_osg_share_info(osg_info))) {
-    LOG_WARN("fail to generated share info", K(ret));
-  } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_candidates))) {
+  if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_candidates))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < best_candidates.count(); ++i) {
@@ -1346,17 +1373,14 @@ int ObInsertLogPlan::candi_allocate_optimizer_stats_gathering()
   return ret;
 }
 
-int ObInsertLogPlan::candi_allocate_root_optimizer_stats_gathering()
+int ObInsertLogPlan::candi_allocate_root_optimizer_stats_gathering(const OSGShareInfo &osg_info)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> stats_gathering_plan;
   ObSEArray<CandidatePlan, 8> best_candidates;
-  OSGShareInfo osg_info;
-  if (OB_FAIL(generate_osg_share_info(osg_info))) {
-    LOG_WARN("fail to generated share info", K(ret));
-  } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_candidates))) {
+  if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_candidates))) {
     LOG_WARN("failed to get minimal cost candidates", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < best_candidates.count(); i++) {
@@ -1364,7 +1388,7 @@ int ObInsertLogPlan::candi_allocate_root_optimizer_stats_gathering()
       if (OB_ISNULL(best_candidates.at(i).plan_tree_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (best_candidates.at(i).plan_tree_->get_allocated_osg()) {
+      } else if (best_candidates.at(i).plan_tree_->has_allocated_osg()) {
         if (best_candidates.at(i).plan_tree_->is_sharding() &&
             best_candidates.at(i).plan_tree_->get_phy_plan_type() != ObPhyPlanType::OB_PHY_PLAN_REMOTE &&
             OB_FAIL(allocate_exchange_as_top(best_candidates.at(i).plan_tree_, exch_info))) {
@@ -1389,7 +1413,7 @@ int ObInsertLogPlan::candi_allocate_root_optimizer_stats_gathering()
 
 int ObInsertLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                                OSG_TYPE type,
-                                                               OSGShareInfo &info)
+                                                               const OSGShareInfo &info)
 {
   int ret = OB_SUCCESS;
   ObLogOptimizerStatsGathering *osg = NULL;
@@ -1397,7 +1421,7 @@ int ObInsertLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Get unexpected null", K(ret), K(old_top));
   } else if (OB_ISNULL(osg = static_cast<ObLogOptimizerStatsGathering *>(get_log_op_factory().
-                                        allocate(*this, LOG_OPTIMIZER_STATS_GATHERING)))) {
+                                        allocate(*this, log_op_def::LOG_OPTIMIZER_STATS_GATHERING)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate sequence operator", K(ret));
   } else {
@@ -1405,12 +1429,14 @@ int ObInsertLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     osg->set_osg_type(type);
     osg->set_table_id(info.table_id_);
     osg->set_part_level(info.part_level_);
-    osg->set_calc_part_id_expr(info.calc_part_id_expr_);
     osg->set_generated_column_exprs(info.generated_column_exprs_);
     osg->set_col_conv_exprs(info.col_conv_exprs_);
     osg->set_column_ids(info.column_ids_);
     if (type == OSG_TYPE::GATHER_OSG) {
       osg->set_allocated_osg(true);
+    }
+    if (type != OSG_TYPE::MERGE_OSG) {
+      osg->set_calc_part_id_expr(info.calc_part_id_expr_);
     }
     if (OB_FAIL(osg->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
@@ -1444,15 +1470,13 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo &info)
       const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
       ObSEArray<uint64_t, 4> generated_column_ids;
       info.table_id_ = ref_table_id;
-      // generated calc_part_id;
       if (tab_schema->is_partitioned_table()) {
         info.part_level_ = tab_schema->get_part_level();
-        // should init calc_part_id here.
-        if (OB_FAIL(ObOptimizerUtil::init_calc_part_id_expr(this,
-                                                            table_id,
-                                                            ref_table_id,
-                                                            info.calc_part_id_expr_))) {
-          LOG_WARN("failed to init calc part id", K(ret));
+        if (OB_FAIL(gen_calc_part_id_expr(table_id,
+                                          ref_table_id,
+                                          CALC_PARTITION_TABLET_ID,
+                                          info.calc_part_id_expr_))) {
+          LOG_WARN("failed to gen calc part id expr");
         } else if (OB_FAIL(ObOptimizerUtil::replace_column_with_select_for_partid(stmt,
                                                                                   get_optimizer_context(),
                                                                                   info.calc_part_id_expr_))) {

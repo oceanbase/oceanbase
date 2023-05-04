@@ -250,7 +250,7 @@ public:
   }
 
 private:
-  inline void calc_llc_value(const common::ObObj &value);
+  inline int calc_llc_value(const common::ObObj &value, uint64_t &h);
   inline uint64_t trailing_zeroes(const uint64_t num);
   inline double select_alpha_value(const int64_t num_bucket);
 private:

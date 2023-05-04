@@ -635,8 +635,7 @@ private:
   }
 
   int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
-                                  memtable::ObMemtableMutatorIterator *mmi_ptr,
-                                  memtable::ObEncryptRowBuf &row_buf) override
+                                  memtable::ObMemtableMutatorIterator *mmi_ptr) override
   {
     int ret = OB_SUCCESS;
     storage::ObStoreCtx storeCtx;
@@ -649,7 +648,7 @@ private:
 
     switch (row_head.mutator_type_) {
     case memtable::MutatorType::MUTATOR_ROW: {
-      if (OB_FAIL(memtable_->replay_row(storeCtx, mmi_ptr_, row_buf))) {
+      if (OB_FAIL(memtable_->replay_row(storeCtx, mmi_ptr_))) {
         TRANS_LOG(WARN, "[Replay Tx] replay row error", K(ret));
       } else {
         TRANS_LOG(INFO, "[Replay Tx] replay row in memtable success");

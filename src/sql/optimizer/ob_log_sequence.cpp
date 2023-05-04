@@ -82,38 +82,54 @@ int ObLogSequence::est_width()
   return ret;
 }
 
-int ObLogSequence::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogSequence::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   double child_card = 0.0;
   double child_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(get_plan())) {
+  if (0 == get_num_of_child()) {
+    card = get_card();
+    op_cost = get_op_cost();
+    cost = get_cost();
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(child));
+  } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    LOG_WARN("failed to re est cost", K(ret));
   } else {
-    ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    if (0 == get_num_of_child()) {
-      card = get_card();
-      cost = get_cost();
-    } else if (OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
-      LOG_WARN("failed to re est cost", K(ret));
-    } else {
-      double op_cost = 0.0;
-      op_cost += ObOptEstCost::cost_sequence(child_card, 
-                                            nextval_seq_ids_.count(),
-                                            opt_ctx.get_cost_model_type());
-      cost = child_cost + op_cost;
-      card = child_card;
-      if (param.override_) {
-        set_op_cost(op_cost);
-        set_cost(cost);
-        set_card(card);
-      }
-    }
+    op_cost = ObOptEstCost::cost_sequence(child_card,
+                                          nextval_seq_ids_.count(),
+                                          get_plan()->get_optimizer_context().get_cost_model_type());
+    cost = child_cost + op_cost;
+    card = child_card;
+  }
+  return ret;
+}
+
+int ObLogSequence::compute_op_parallel_and_server_info()
+{
+  int ret = common::OB_SUCCESS;
+  if (get_num_of_child() == 0) {
+    ret = set_parallel_and_server_info_for_match_all();
+  } else {
+    ret = ObLogicalOperator::compute_op_parallel_and_server_info();
+  }
+  return ret;
+}
+
+int ObLogSequence::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  ObSEArray<ObRawExpr*, 8> sequence_exprs;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(get_stmt()->get_sequence_exprs(sequence_exprs))) {
+    LOG_WARN("fail get sequence exprs", K(ret));
+  } else {
+    is_fixed = ObOptimizerUtil::find_item(sequence_exprs, expr);
   }
   return ret;
 }

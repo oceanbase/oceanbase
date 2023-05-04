@@ -388,6 +388,18 @@
 #include "sql/engine/expr/ob_expr_encrypt.h"
 #include "sql/engine/expr/ob_expr_icu_version.h"
 #include "sql/engine/expr/ob_expr_sql_mode_convert.h"
+#include "sql/engine/expr/ob_expr_prefix_pattern.h"
+#include "sql/engine/expr/ob_expr_priv_xml_binary.h"
+#include "sql/engine/expr/ob_expr_sys_makexml.h"
+#include "sql/engine/expr/ob_expr_priv_xml_binary.h"
+#include "sql/engine/expr/ob_expr_xmlparse.h"
+#include "sql/engine/expr/ob_expr_xml_element.h"
+#include "sql/engine/expr/ob_expr_xml_attributes.h"
+#include "sql/engine/expr/ob_expr_extract_value.h"
+#include "sql/engine/expr/ob_expr_extract_xml.h"
+#include "sql/engine/expr/ob_expr_xml_serialize.h"
+#include "sql/engine/expr/ob_expr_xmlcast.h"
+#include "sql/engine/expr/ob_expr_update_xml.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -981,6 +993,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprUniform);
     REG_OP(ObExprRandom);
     REG_OP(ObExprRandstr);
+    REG_OP(ObExprPrefixPattern);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1276,6 +1289,18 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprUniform);
   REG_OP_ORCL(ObExprRandom);
   REG_OP_ORCL(ObExprRandstr);
+  REG_OP_ORCL(ObExprPrefixPattern);
+  REG_OP_ORCL(ObExprPrivXmlBinary);
+  REG_OP_ORCL(ObExprSysMakeXML);
+  REG_OP_ORCL(ObExprPrivXmlBinary);
+  REG_OP_ORCL(ObExprXmlparse);
+  REG_OP_ORCL(ObExprXmlElement);
+  REG_OP_ORCL(ObExprXmlAttributes);
+  REG_OP_ORCL(ObExprExtractValue);
+  REG_OP_ORCL(ObExprExtractXml);
+  REG_OP_ORCL(ObExprXmlSerialize);
+  REG_OP_ORCL(ObExprXmlcast);
+  REG_OP_ORCL(ObExprUpdateXml);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

@@ -58,7 +58,8 @@ public:
       random_expr_(NULL),
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
-      sample_type_(NOT_INIT_SAMPLE_TYPE)
+      sample_type_(NOT_INIT_SAMPLE_TYPE),
+      in_server_cnt_(0)
   {
     repartition_table_id_ = 0;
   }
@@ -89,6 +90,7 @@ public:
                                         const int64_t buf_len,
                                         int64_t &pos);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual int set_exchange_info(const ObExchangeInfo &exch_info);
   const common::ObIArray<ObRawExpr *> &get_repart_keys() const {return repartition_keys_;}
   const common::ObIArray<ObRawExpr *> &get_repart_sub_keys() const {return repartition_sub_keys_;}
@@ -126,8 +128,8 @@ public:
   virtual int compute_op_ordering() override;
   virtual int compute_op_parallel_and_server_info() override;
   virtual int est_cost() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double child_card, double &op_cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  int inner_est_cost(int64_t parallel, double child_card, double &op_cost);
   const ObIArray<uint64_t> &get_repart_all_tablet_ids() const { return repart_all_tablet_ids_; }
   virtual int compute_sharding_info() override;
   virtual int compute_plan_type() override;
@@ -182,6 +184,8 @@ public:
                             int64_t &pos,
                             ExplainType type,
                             const ObIArray<ObRawExpr *> &keys);
+  inline void set_in_server_cnt(int64_t in_server_cnt) {  in_server_cnt_ = in_server_cnt;  }
+  inline int64_t get_in_server_cnt() {  return in_server_cnt_;  }
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
@@ -258,6 +262,7 @@ private:
   // -for pkey range/range
   ObPxSampleType sample_type_;
   // -end pkey range/range
+  int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
   DISALLOW_COPY_AND_ASSIGN(ObLogExchange);
 };
 } // end of namespace sql

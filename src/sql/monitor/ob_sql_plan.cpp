@@ -65,14 +65,20 @@ namespace sql
 {
 
 ObSqlPlan::ObSqlPlan(common::ObIAllocator &allocator)
-  :allocator_(allocator)
+  :allocator_(allocator),
+   save_nested_count_(-1),
+   saved_session_(NULL)
 {
 
 }
 
 ObSqlPlan::~ObSqlPlan()
 {
-
+  save_nested_count_ = -1;
+  if (OB_NOT_NULL(saved_session_)) {
+    allocator_.free(saved_session_);
+    saved_session_ = NULL;
+  }
 }
 
 int ObSqlPlan::store_sql_plan(ObLogPlan* log_plan, ObPhysicalPlan* phy_plan)
@@ -200,7 +206,7 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
     } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text, /*ignore_parallel*/false))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else {
-      BUF_PRINT_CONST_STR("END_OUTLINE_DATA*/", plan_text);
+      BUF_PRINT_CONST_STR(" END_OUTLINE_DATA*/", plan_text);
       plan_text.is_outline_data_ = false;
     }
     if (OB_SIZE_OVERFLOW == ret) {
@@ -235,6 +241,8 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
   } else if (OB_ISNULL(conn)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null sql connection", K(ret));
+  } else if (OB_FAIL(prepare_and_store_session(session))) {
+    LOG_WARN("failed to begin nested session", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < sql_plan_infos.count(); ++i) {
     ObSqlPlanItem *plan_item = sql_plan_infos.at(i);
@@ -369,6 +377,15 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
       OB_NOT_NULL(ctx) &&
       OB_NOT_NULL(ctx->get_sql_proxy())) {
     ctx->get_sql_proxy()->close(conn, ret);
+  }
+  if (OB_NOT_NULL(session)) {
+    int end_ret = restore_session(session);
+    if (OB_SUCCESS != end_ret) {
+      LOG_WARN("failed to restore session", K(end_ret), K(ret));
+      if (OB_SUCCESS == ret) {
+        ret = end_ret;
+      }
+    }
   }
   return ret;
 }
@@ -2304,6 +2321,43 @@ int ObSqlPlan::plan_text_to_strings(PlanText &plan_text,
     } else {
       last_pos = i + 1;
     }
+  }
+  return ret;
+}
+
+int ObSqlPlan::prepare_and_store_session(ObSQLSessionInfo *session) {
+  int ret = OB_SUCCESS;
+  void *ptr = NULL;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected session value", K(ret));
+  } else if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSQLSessionInfo::StmtSavedValue)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for saved session value", K(ret));
+  } else {
+    saved_session_ = new(ptr) sql::ObSQLSessionInfo::StmtSavedValue();
+    if (OB_FAIL(session->save_session(*saved_session_))) {
+      LOG_WARN("failed to save session", K(ret));
+    } else {
+      save_nested_count_ = session->get_nested_count();
+      session->set_query_start_time(ObTimeUtility::current_time());
+      session->set_inner_session();
+      session->set_nested_count(-1);
+    }
+  }
+  return ret;
+}
+
+int ObSqlPlan::restore_session(ObSQLSessionInfo *session) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session) || OB_ISNULL(saved_session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected session value or saved session value", K(ret));
+  } else if (OB_FAIL(session->restore_session(*saved_session_))) {
+    LOG_WARN("failed to restore session", K(ret));
+  } else {
+    session->set_nested_count(save_nested_count_);
+    saved_session_->reset();
   }
   return ret;
 }

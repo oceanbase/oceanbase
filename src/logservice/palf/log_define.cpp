@@ -258,5 +258,43 @@ int reuse_block_at(const int dir_fd, const char *block_path)
   }
   return ret;
 }
+
+bool need_force_purge(PurgeThrottlingType type)
+{
+  return PURGE_BY_NOTIFY_FETCH_LOG == type;
+}
+
+const char *get_purge_throttling_type_str(PurgeThrottlingType type)
+{
+  const char *result= "UNKNOWN_TYPE";
+  switch (type) {
+    case INVALID_PURGE_TYPE :
+      result = "PURGE_BY_RECONFIRM";
+      break;
+    case PURGE_BY_RECONFIRM:
+      result = "PURGE_BY_RECONFIRM";
+      break;
+    case PURGE_BY_CHECK_BARRIER_CONDITION:
+      result = "PURGE_BY_CHECK_BARRIER_CONDITION";
+      break;
+    case PURGE_BY_PRE_CHECK_FOR_CONFIG:
+      result = "PURGE_BY_PRE_CHECK_FOR_CONFIG";
+      break;
+    case PURGE_BY_CHECK_SERVERS_LSN_AND_VERSION:
+      result = "PURGE_BY_CHECK_SERVERS_LSN_AND_VERSION";
+      break;
+    case PURGE_BY_GET_MC_REQ:
+      result = "PURGE_BY_GET_MC_REQ";
+      break;
+    case PURGE_BY_NOTIFY_FETCH_LOG:
+      result = "PURGE_BY_NOTIFY_FETCH_LOG";
+      break;
+    default:
+      PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid purge type", K(type));
+      break;
+  }
+  return result;
+}
+
 } // namespace palf
 } // namespace oceanbase

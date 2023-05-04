@@ -52,14 +52,15 @@ private:
 public:
   int init(ObMvccRow *row,
            ObMemtable *mt,
-           common::ObIAllocator *node_alloc,
-           const bool for_replay);
+           common::ObIAllocator *node_alloc);
   // compact and refresh the update counter by snapshot version
-  int compact(const share::SCN snapshot_version);
+  int compact(const share::SCN snapshot_version,
+              const int64_t flag);
 private:
   void find_start_pos_(const share::SCN snapshot_version,
                        ObMvccTransNode *&save);
   ObMvccTransNode *construct_compact_node_(const share::SCN snapshot_version,
+                                           const int64_t flag,
                                            ObMvccTransNode *save);
   int try_cleanout_tx_node_during_compact_(storage::ObTxTableGuard &tx_table_guard,
                                             ObMvccTransNode *tnode);
@@ -70,7 +71,6 @@ private:
   ObMvccRow *row_;
   ObMemtable *memtable_;
   common::ObIAllocator *node_alloc_;
-  bool for_replay_;
 };
 
 

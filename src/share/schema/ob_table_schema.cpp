@@ -292,6 +292,7 @@ bool ObSimpleTableSchemaV2::has_tablet() const
            || is_view_table()
            || is_aux_vp_table()
            || is_virtual_table(get_table_id()) // virtual table index
+           || is_external_table()
            );
 }
 
@@ -1073,10 +1074,12 @@ int ObSimpleTableSchemaV2::get_part_id_by_tablet(const ObTabletID &tablet_id, in
 int ObSimpleTableSchemaV2::get_part_id_and_tablet_id_by_idx(const int64_t part_idx,
                                                             const int64_t subpart_idx,
                                                             ObObjectID &object_id,
+                                                            ObObjectID &first_level_part_id,
                                                             ObTabletID &tablet_id) const
 {
   int ret = OB_SUCCESS;
   ObBasePartition *base_part = NULL;
+  first_level_part_id = OB_INVALID_ID;
   if (PARTITION_LEVEL_ZERO == part_level_) {
     object_id = get_object_id();
     tablet_id = get_tablet_id();
@@ -1085,6 +1088,9 @@ int ObSimpleTableSchemaV2::get_part_id_and_tablet_id_by_idx(const int64_t part_i
   } else {
     object_id = base_part->get_object_id();
     tablet_id = base_part->get_tablet_id();
+    if (PARTITION_LEVEL_TWO == part_level_) {
+      first_level_part_id = static_cast<ObObjectID>(base_part->get_part_id());
+    }
   }
   return ret;
 }
@@ -1322,7 +1328,15 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
-      } else {} // no more to do
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
+        LOG_WARN("deep copy external_file_location failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {
+        LOG_WARN("deep copy external_file_location_access_info failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_format_, external_file_format_))) {
+        LOG_WARN("deep copy external_file_format failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
+        LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      }
 
       //view schema
       if (OB_SUCC(ret)) {
@@ -1572,7 +1586,7 @@ bool ObTableSchema::is_valid() const
           }
 
           // TODO@nijia.nj data_length should be checked according specified charset
-          if ((is_table() || is_tmp_table()) && !column->is_column_stored_in_sstable()) {
+          if ((is_table() || is_tmp_table() || is_external_table()) && !column->is_column_stored_in_sstable()) {
             // When the column is a virtual generated column in the table, the column will not be stored,
             // so there is no need to calculate its length
           } else if (is_storage_index_table() && column->is_fulltext_column()) {
@@ -2134,7 +2148,7 @@ int ObTableSchema::create_idx_name_automatically_oracle(common::ObString &idx_na
 //              Generation rules: pk_name_sys_auto = tblname_OBPK_timestamp
 //                                check_name_sys_auto = tblname_OBCHECK_timestamp
 //                                unique_name_sys_auto = tblname_OBUNIQUE_timestamp
-// If the length of cst_name exceeds the max len of it, the part of table_name will be truncated unitil the len of cst_name equaling to the max len
+// If the length of cst_name exceeds the max len of it, the part of table_name will be truncated unitil the len of cst_name equaling to the max len
 // @param [in] cst_name
 // @return oceanbase error code defined in lib/ob_errno.def
 int ObTableSchema::create_cons_name_automatically(ObString &cst_name,
@@ -2461,6 +2475,38 @@ int ObTableSchema::get_orig_default_row(const common::ObIArray<ObColDesc> &colum
         ret = OB_ERR_SYS;
         LOG_WARN("column id not found", K(ret), K(column_ids.at(i)));
       }
+    }
+  }
+  return ret;
+}
+
+ObColumnSchemaV2* ObTableSchema::get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const
+{
+  ObColumnSchemaV2 *res = NULL;
+  for (int64_t i = 0; udt_set_id > 0 && OB_ISNULL(res) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (NULL != column && column_id != column->get_column_id()
+        && udt_set_id == column->get_udt_set_id()) {
+      res = column;
+    }
+  }
+  return res;
+}
+
+int ObTableSchema::get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
+                                                       common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; udt_set_id > 0 && OB_SUCC(ret) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (NULL == column) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column must not null", K(ret), K(i), K(column_cnt_));
+    } else if (column_id == column->get_column_id()) {
+      // do nothing
+    } else if (udt_set_id == column->get_udt_set_id()
+               && OB_FAIL(column_group.push_back(column))) {
+      LOG_WARN("column must not null", K(ret), K(i), K(column_cnt_), K(column_id), K(udt_set_id));
     }
   }
   return ret;
@@ -2801,6 +2847,10 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += rls_group_ids_.get_data_size();
   convert_size += rls_context_ids_.get_data_size();
 
+  convert_size += external_file_format_.length() + 1;
+  convert_size += external_file_location_.length() + 1;
+  convert_size += external_file_location_access_info_.length() + 1;
+  convert_size += external_file_pattern_.length() + 1;
   return convert_size;
 }
 
@@ -2876,19 +2926,27 @@ void ObTableSchema::reset()
   trigger_list_.reset();
   table_dop_ = 1;
   table_flags_ = 0;
+
   rls_policy_ids_.reset();
   rls_group_ids_.reset();
   rls_context_ids_.reset();
+
+  external_file_format_.reset();
+  external_file_location_.reset();
+  external_file_location_access_info_.reset();
+  external_file_pattern_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
 int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_ids,
-                                                 ObIArray<ObObjectID> &partition_ids) const
+                                                 ObIArray<ObObjectID> &partition_ids,
+                                                 ObIArray<ObObjectID> *first_level_part_ids) const
 {
   int ret = OB_SUCCESS;
   if (PARTITION_LEVEL_ZERO == get_part_level()) {
     OZ(tablet_ids.push_back(get_tablet_id()));
     OZ(partition_ids.push_back(get_object_id()));
+    OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(OB_INVALID_ID));
   } else if (OB_ISNULL(partition_array_) || partition_num_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("part_array is null or is empty", K(ret), KP_(partition_array), K_(partition_num));
@@ -2900,6 +2958,7 @@ int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_id
       } else {
         OZ(tablet_ids.push_back(partition_array_[i]->get_tablet_id()));
         OZ(partition_ids.push_back(partition_array_[i]->get_part_id()));
+        OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(OB_INVALID_ID));
       }
     }
   } else if (PARTITION_LEVEL_TWO == get_part_level()) {
@@ -2924,6 +2983,7 @@ int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_id
               partition_id = sub_part_array[j]->get_sub_part_id();
               OZ(partition_ids.push_back(partition_id));
               OZ(tablet_ids.push_back(sub_part_array[j]->get_tablet_id()));
+              OZ(first_level_part_ids != NULL && first_level_part_ids->push_back(partition_array_[i]->get_part_id()));
             }
           }
         }
@@ -3593,7 +3653,8 @@ int ObTableSchema::delete_column_internal(ObColumnSchemaV2 *column_schema, const
   } else if (table_id_ != column_schema->get_table_id()) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("The column schema does not belong to this table", K(ret));
-  } else if (!is_view_table() && !is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table() && !is_aux_vp_table()) {
+  } else if (!is_view_table() && !is_user_table() && !is_index_table() && !is_tmp_table()
+             && !is_sys_table() && !is_aux_vp_table() && !is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only NORMAL table and index table and SYSTEM table and view table are allowed", K(ret));
   } else if (!for_view && ((!is_heap_table() && column_cnt_ <= MIN_COLUMN_COUNT_WITH_PK_TABLE)
@@ -4222,6 +4283,8 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
   } else if (get_table_id() != src_column->get_table_id()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column does not belong to this table", K(ret));
+  } else if (is_external_table()) {
+    is_offline = false;
   } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
@@ -4399,6 +4462,8 @@ int ObTableSchema::check_column_can_be_altered_online(
   } else if (get_table_id() != src_schema->get_table_id()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column does not belong to this table", K(ret));
+  } else if (is_external_table()) {
+    // external table canbe altered
   } else if (!is_user_table() && !is_index_table() && !is_tmp_table() && !is_sys_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Only NORMAL table and INDEX table and SYSTEM table are allowed", K(ret));
@@ -4658,7 +4723,7 @@ int ObTableSchema::check_row_length(
     int64_t row_length = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       col = column_array_[i];
-      if ((is_table() || is_tmp_table()) && !col->is_column_stored_in_sstable()) {
+      if ((is_table() || is_tmp_table() || is_external_table()) && !col->is_column_stored_in_sstable()) {
         // The virtual column in the table does not actually store data, and does not count the length
       } else if (is_storage_index_table() && col->is_fulltext_column()) {
         // The full text column in the index only counts the length of one word segment
@@ -4687,7 +4752,7 @@ int ObTableSchema::check_row_length(
           SQL_RESV_LOG(WARN, "fail to get byte length of column", K(ret));
         } else {
           row_length -= src_byte_length;
-          if ((is_table() || is_tmp_table()) && !dst_schema->is_column_stored_in_sstable()) {
+          if ((is_table() || is_tmp_table() || is_external_table()) && !dst_schema->is_column_stored_in_sstable()) {
             // The virtual column in the table does not actually store data, and does not count the length
           } else if (is_storage_index_table() && dst_schema->is_fulltext_column()) {
             // The full text column in the index only counts the length of one word segment
@@ -5031,8 +5096,10 @@ int ObTableSchema::get_rowid_version(int64_t rowkey_cnt,
 {
   int ret = OB_SUCCESS;
 
-  if (is_heap_table()) {
+  if (is_heap_table() && !is_external_table()) {
     version = is_extended_rowid_mode() ? ObURowIDData::EXT_HEAP_TABLE_ROWID_VERSION : ObURowIDData::HEAP_TABLE_ROWID_VERSION;
+  } else if (is_heap_table() && is_external_table()) {
+    version = ObURowIDData::EXTERNAL_TABLE_ROWID_VERSION;
   } else {
     version = ObURowIDData::PK_ROWID_VERSION;
     if (rowkey_cnt != serialize_col_cnt) {
@@ -5236,6 +5303,66 @@ bool ObTableSchema::has_generated_and_partkey_column() const
   return result;
 }
 
+int ObTableSchema::check_functional_index_columns_depend(
+  const ObColumnSchemaV2 &data_column_schema,
+  ObSchemaGetterGuard &schema_guard,
+  bool &has_func_idx_col_deps) const
+{
+  int ret = OB_SUCCESS;
+  has_func_idx_col_deps = false;
+  const uint64_t tenant_id = get_tenant_id();
+  ObHashSet<ObString> deps_gen_columns; // generated columns depend on the data column.
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (!data_column_schema.has_generated_column_deps()) {
+  } else if (OB_FAIL(deps_gen_columns.create(OB_MAX_COLUMN_NUMBER/2))) {
+    LOG_WARN("create hashset failed", K(ret));
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple index infos failed", K(ret));
+  } else {
+    for (ObTableSchema::const_column_iterator iter = column_begin();
+        OB_SUCC(ret) && iter != column_end(); iter++) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret), KPC(this));
+      } else if (column->is_func_idx_column()) {
+        // prefix index columns are hidden generated column in data table.
+        if (column->has_cascaded_column_id(data_column_schema.get_column_id())
+          && OB_FAIL(deps_gen_columns.set_refactored(column->get_column_name()))) {
+          LOG_WARN("set refactored failed", K(ret));
+        }
+      } else {/* do nothing. */}
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !has_func_idx_col_deps && i < simple_index_infos.count(); i++) {
+      const ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table not exist", K(ret), K(tenant_id), "table_id", simple_index_infos.at(i).table_id_);
+      } else {
+        const ObIndexInfo &index_info = index_schema->get_index_info();
+        for (int j = 0; OB_SUCC(ret) && !has_func_idx_col_deps && j < index_info.get_size(); j++) {
+          const ObColumnSchemaV2 *index_col = nullptr;
+          if (OB_ISNULL(index_col = index_schema->get_column_schema(index_info.get_column(j)->column_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected err", K(ret), "column_id", index_info.get_column(j)->column_id_);
+          } else if (OB_FAIL(deps_gen_columns.exist_refactored(index_col->get_column_name()))) {
+            if (OB_HASH_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else if (OB_HASH_EXIST == ret) {
+              has_func_idx_col_deps = true;
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to check whether column has functional index dependancy", K(ret), K(index_col));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 int ObTableSchema::check_prefix_index_columns_depend(
     const ObColumnSchemaV2 &data_column_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -5721,6 +5848,13 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 rls_context_ids_);
   }
   LST_DO_CODE(OB_UNIS_ENCODE, object_status_, is_force_view_, truncate_version_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                external_file_location_,
+                external_file_location_access_info_,
+                external_file_format_,
+                external_file_pattern_);
+  }
   }();
   return ret;
 }
@@ -6058,6 +6192,13 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                 rls_group_ids_,
                 rls_context_ids_);
     LST_DO_CODE(OB_UNIS_DECODE, object_status_, is_force_view_, truncate_version_);
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  external_file_location_,
+                  external_file_location_access_info_,
+                  external_file_format_,
+                  external_file_pattern_);
+    }
   }
   }();
   return ret;
@@ -6192,6 +6333,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(object_status_);
   OB_UNIS_ADD_LEN(is_force_view_);
   OB_UNIS_ADD_LEN(truncate_version_);
+
+  OB_UNIS_ADD_LEN(external_file_location_);
+  OB_UNIS_ADD_LEN(external_file_location_access_info_);
+  OB_UNIS_ADD_LEN(external_file_format_);
+  OB_UNIS_ADD_LEN(external_file_pattern_);
   return len;
 }
 
@@ -6890,6 +7036,26 @@ int ObTableSchema::has_before_update_row_trigger(ObSchemaGetterGuard &schema_gua
   return ret;
 }
 
+int ObTableSchema::is_allow_parallel_of_trigger(ObSchemaGetterGuard &schema_guard,
+                                                 bool &is_forbid_parallel) const
+{
+  int ret = OB_SUCCESS;
+  const ObTriggerInfo *trigger_info = NULL;
+  is_forbid_parallel = false;
+  const uint64_t tenant_id = get_tenant_id();
+  for (int i = 0; OB_SUCC(ret) && !is_forbid_parallel && i < trigger_list_.count(); i++) {
+    OZ (schema_guard.get_trigger_info(tenant_id, trigger_list_.at(i), trigger_info), trigger_list_.at(i));
+    OV (OB_NOT_NULL(trigger_info), OB_ERR_UNEXPECTED, trigger_list_.at(i));
+    OX (is_forbid_parallel = trigger_info->is_reads_sql_data() ||
+                             trigger_info->is_modifies_sql_data() ||
+                             trigger_info->is_wps() ||
+                             trigger_info->is_rps() ||
+                             trigger_info->is_has_sequence() ||
+                             trigger_info->is_external_state());
+  }
+  return ret;
+}
+
 const ObColumnSchemaV2 *ObColumnIterByPrevNextID::get_first_column() const
 {
   ObColumnSchemaV2 *ret_col = NULL;
@@ -7190,7 +7356,8 @@ int ObTableSchema::alter_all_view_columns_type_undefined(bool &already_invalid)
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get column schema", K(ret));
-    } else if (ObObjType::ObExtendType == column_schema->get_data_type()) {
+    } else if (ObObjType::ObExtendType == column_schema->get_data_type()
+               && ObObjType::ObUserDefinedSQLType == column_schema->get_data_type()) {
       already_invalid = true;
       break;
     } else if (OB_FAIL(new_column_schema.assign(*column_schema))) {

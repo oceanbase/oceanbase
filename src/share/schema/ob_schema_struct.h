@@ -118,6 +118,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define USER_SPECIFIED_STORING_COLUMN_FLAG (INT64_C(1) << 17) // whether the storing column in index table is specified by user.
 #define PAD_WHEN_CALC_GENERATED_COLUMN_FLAG (INT64_C(1) << 19)
 #define GENERATED_COLUMN_UDF_EXPR (INT64_C(1) << 20)
+
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
 #define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
@@ -246,6 +247,7 @@ enum ObTableType
   AUX_VERTIAL_PARTITION_TABLE = 11,
   AUX_LOB_PIECE  = 12,
   AUX_LOB_META   = 13,
+  EXTERNAL_TABLE = 14,
   MAX_TABLE_TYPE
 };
 
@@ -1836,7 +1838,8 @@ public:
   virtual int add_related_tablet_id(common::ObTabletID src_tablet_id,
                                     common::ObTableID related_table_id,
                                     common::ObTabletID related_tablet_id,
-                                    common::ObObjectID related_part_id) = 0;
+                                    common::ObObjectID related_part_id,
+                                    common::ObObjectID related_first_level_part_id) = 0;
 };
 
 class ObSchemaGetterGuard;
@@ -2293,11 +2296,26 @@ public:
       common::ObTabletID &tablet_id,
       common::ObObjectID &object_id) const;
 
+  /**
+   * first_level_part_id represent the first level part id of subpartition,
+   * otherwise its value is OB_INVALID_ID
+   * e.g.
+   *  PARTITION_LEVEL_ZERO
+   *    - object_id = table_id
+   *    - first_level_part_id = OB_INVALID_ID
+   *  PARTITION_LEVEL_ONE
+   *    - object_id = part_id
+   *    - first_level_part_id = OB_INVALID_ID
+   * PARTITION_LEVEL_TWO
+   *    - object_id = sub_part_id
+   *    - first_level_part_id = part_id
+  */
   int get_tablet_and_object_id_by_index(
       const int64_t part_idx,
       const int64_t subpart_idx,
       ObTabletID &tablet_id,
-      ObObjectID &object_id) const;
+      ObObjectID &object_id,
+      ObObjectID &first_level_part_id) const;
 
   /** generate part name of hash partition, for resolver only
    * @name_type: Type of generated hash partition name:
@@ -3155,6 +3173,11 @@ public:
     return (0 == name_cmp.compare(column_name_, other.column_name_));
   }
   inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   common::ObString column_name_;
 };
 class ObColumnSchemaWrapper

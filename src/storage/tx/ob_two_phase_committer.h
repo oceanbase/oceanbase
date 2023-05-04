@@ -364,10 +364,10 @@ private:
   int decide_2pc_log_type_(bool &need_submit, ObTwoPhaseCommitLogType &log_type);
   int submit_2pc_log_();
 
+  int collect_downstream_(const int64_t participant);
+protected:
   // Means we collect all downstream responses
   bool all_downstream_collected_();
-  int collect_downstream_(const int64_t participant);
-
 protected:
   // colloected_ is the bit set for storing responses from participants
   //

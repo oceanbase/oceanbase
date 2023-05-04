@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprRandomBytes::ObExprRandomBytes(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM_BYTES, N_RANDOM_BYTES, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM_BYTES, N_RANDOM_BYTES, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

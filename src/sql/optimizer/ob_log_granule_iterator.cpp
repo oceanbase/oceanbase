@@ -104,7 +104,7 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
       get_join_filter_info().is_inited_ &&
       OB_INVALID_ID != get_join_filter_info().filter_id_) {
     BEGIN_BUF_PRINT;
-    if (OB_FAIL(BUF_PRINTF(":BF%04ld", get_join_filter_info().filter_id_))) {
+    if (OB_FAIL(BUF_PRINTF(":RF%04ld", get_join_filter_info().filter_id_))) {
       LOG_WARN("failed to print str", K(ret));
     }
     END_BUF_PRINT(plan_item.object_alias_,
@@ -195,6 +195,9 @@ int ObLogGranuleIterator::is_partition_gi(bool &partition_granule) const
     LOG_WARN("failed to get sys variable px partition scan threshold", K(ret));
   } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR__PX_MIN_GRANULES_PER_SLAVE, hash_partition_scan_hold))) {
     LOG_WARN("failed to get sys variable px min granule per slave", K(ret));
+  } else if (is_used_by_external_table()) {
+  //external table only support block iter
+    partition_granule = false;
   } else {
     partition_granule = ObGranuleUtil::is_partition_granule_flag(gi_attri_flag_)
         || ObGranuleUtil::is_partition_granule(partition_count_, parallel_, partition_scan_hold, hash_partition_scan_hold, hash_part_);

@@ -609,7 +609,7 @@ int ObRoleChangeService::switch_leader_to_follower_forcedly_(
 	// however, the flying callback may have not been pushed into apply service, and then, 'switch_to_follower' will be executed, for trans,
 	// if the callback be executed after 'switch_to_follower', will cause abort.
   if (OB_FAIL(apply_service_->wait_append_sync(ls_id))) {
-		 CLOG_LOG(ERROR, "wait_apply_sync failed", K(ret), K(ls_id));
+    CLOG_LOG(WARN, "wait_apply_sync failed", K(ret), K(ls_id));
   } else if (FALSE_IT(time_guard.click("apply_service->wait_apply_sync"))
       || OB_FAIL(apply_service_->switch_to_follower(ls_id))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id));

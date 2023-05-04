@@ -42,6 +42,7 @@ int ObMPPing::process()
 {
   int ret = OB_SUCCESS;
   sql::ObSQLSessionInfo *session = NULL;
+  bool need_response_error = true; //temporary placeholder
   const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
   if (OB_FAIL(get_session(session))) {
     LOG_WARN("get session fail", K(ret));
@@ -49,10 +50,8 @@ int ObMPPing::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql session info is null", K(ret));
   } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
-  } else if (pkt.get_extra_info().exist_sync_sess_info()
-                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
-                              pkt.get_extra_info().get_sync_sess_info()))) {
-    LOG_WARN("fail to update sess info", K(ret));
+  } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
+    LOG_WARN("fail get process extra info", K(ret));
   } else if (FALSE_IT(session->post_sync_session_info())) {
   } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));

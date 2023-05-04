@@ -52,7 +52,7 @@ int build_batch_packet(const ObAddr &sender, const uint32_t batch_type, const ui
       if (req.get_estimate_size() > (limit * 4 / 5) || is_retry) {
         // 多分配1024字节用于填充其他字段
         limit = req.get_req_size() + header_end_pos + 1024;
-        if (OB_ISNULL(pkt = (ObBatchPacket *)ob_malloc(limit, "RPC_BATCH_BUF"))) {
+        if (OB_ISNULL(pkt = (ObBatchPacket *)ob_malloc(limit, SET_USE_500("RPC_BATCH_BUF")))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
           is_dynamic_alloc = true;
@@ -177,7 +177,7 @@ int build_batch_packet(const ObAddr &sender, const uint32_t batch_type, const in
       if (req.get_estimate_size() > (limit * 4 / 5) || is_retry) {
         // 多分配1024字节用于填充其他字段
         limit = req.get_req_size() + header_end_pos + 1024;
-        if (OB_ISNULL(pkt = (ObBatchPacket *)ob_malloc(limit, "RPC_BATCH_BUF"))) {
+        if (OB_ISNULL(pkt = (ObBatchPacket *)ob_malloc(limit, SET_USE_500("RPC_BATCH_BUF")))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
           is_dynamic_alloc = true;
@@ -347,7 +347,7 @@ void ObBatchRpcBase::do_work()
 ObRpcBuffer* ObBatchRpcBase::create_buffer(const uint64_t tenant_id, const ObAddr& addr, const int64_t dst_cluster_id)
 {
   const int64_t alloc_size = get_batch_buffer_size(batch_type_) * BATCH_BUFFER_COUNT;
-  RpcBuffer* p = (RpcBuffer*)ob_malloc(alloc_size, ObModIds::OB_RPC_BUFFER);
+  RpcBuffer* p = (RpcBuffer*)ob_malloc(alloc_size, SET_USE_500(ObModIds::OB_RPC_BUFFER));
   const int64_t buf_size = (alloc_size - 1024) / BATCH_BUFFER_COUNT;
   return (NULL == p)? NULL: new(p)RpcBuffer(tenant_id, addr, dst_cluster_id, batch_type_, buf_size, BATCH_BUFFER_COUNT);
 }

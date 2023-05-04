@@ -467,10 +467,14 @@ public:
       min_cluster_version_ = curr_cluster_version;
     }
   }
+
   int set_logical_plan(ObLogicalPlanRawData &logical_plan);
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
   inline const ObLogicalPlanRawData& get_logical_plan()const { return logical_plan_; }
   int set_feedback_info(ObExecContext &ctx);
+
+  void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
+  bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -640,6 +644,8 @@ public:
   bool enable_append_; // for APPEND hint
   uint64_t append_table_id_;
   ObLogicalPlanRawData logical_plan_;
+  // for detecor manager
+  bool is_enable_px_fast_reclaim_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

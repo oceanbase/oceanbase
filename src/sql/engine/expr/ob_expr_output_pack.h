@@ -74,6 +74,10 @@ private:
   static int process_lob_locator_results(common::ObObj& value,
                                          common::ObIAllocator &alloc,
                                          const ObSQLSessionInfo &my_session);
+  static int process_sql_udt_results(common::ObObj& value,
+                                     common::ObIAllocator &alloc,
+                                     const ObSQLSessionInfo &my_session);
+
   static int convert_string_charset(const common::ObString &in_str,
                                     const ObCollationType in_cs_type,
                                     const ObCollationType out_cs_type,

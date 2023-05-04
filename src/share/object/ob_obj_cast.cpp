@@ -9029,6 +9029,73 @@ static int geometry_geometry(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+////////////////////////////////////////////////////////////
+// XXX -> UDT
+
+static int cast_to_udt_not_support(const ObObjType expect_type, ObObjCastParams &params,
+                                   const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+
+  if (out.is_xml_sql_type()) {
+    // only allow cast basic types to invalid CAST to a type that is not a nested table or VARRAY
+    ret = OB_ERR_INVALID_CAST_UDT;
+    LOG_WARN_RET(ret, "invalid CAST to a type that is not a nested table or VARRAY");
+  } else {
+    // other udts
+    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // currently other types to udt not supported
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
+  }
+  return ret;
+}
+
+
+static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &params,
+                             const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
+////////////////////////////////////////////////////////////
+// UDT -> XXX
+static int cast_udt_to_other_not_support(const ObObjType expect_type, ObObjCastParams &params,
+                                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (in.is_xml_sql_type()) {
+    // only allow cast basic types to invalid CAST to a type that is not a nested table or VARRAY
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN_RET(ret, "inconsistent datatypes", K(expect_type), K(in), K(out), K(cast_mode));
+  } else {
+    // other udts
+    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // currently other types to udt not supported
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
+  }
+  return ret;
+}
+
+static int udt_string(const ObObjType expect_type, ObObjCastParams &params,
+                      const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
 ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
 {
   {
@@ -9057,6 +9124,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_identity,/*lob*/
     cast_identity,/*json*/
     cast_identity,/*geometry*/
+    cast_not_expected,/*udt, mysql mode does not have udt*/
   },
   {
     /*int -> XXX*/
@@ -9084,6 +9152,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     int_lob,/*lob*/
     int_json,/*json*/
     int_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*uint -> XXX*/
@@ -9111,6 +9180,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     uint_lob,/*lob*/
     uint_json,/*json*/
     uint_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*float -> XXX*/
@@ -9138,6 +9208,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     float_lob,/*lob*/
     float_json,/*json*/
     float_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*double -> XXX*/
@@ -9165,6 +9236,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     double_lob,/*lob*/
     double_json,/*json*/
     double_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*number -> XXX*/
@@ -9192,6 +9264,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     number_lob,/*lob*/
     number_json,/*lob*/
     number_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*datetime -> XXX*/
@@ -9219,6 +9292,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     datetime_lob,/*lob*/
     datetime_json,/*json*/
     datetime_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*date -> XXX*/
@@ -9246,6 +9320,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     date_lob,/*lob*/
     date_json,/*json*/
     date_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*time -> XXX*/
@@ -9273,6 +9348,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_lob,/*lob*/
     time_json,/*json*/
     time_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*year -> XXX*/
@@ -9300,6 +9376,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_lob,/*lob*/
     year_json,/*json*/
     year_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*string -> XXX*/
@@ -9327,6 +9404,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_lob,/*lob*/
     string_json,/*json*/
     string_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*extend -> XXX*/
@@ -9354,6 +9432,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/
+    pl_extend_sql_udt,/*udt*/
   },
   {
     /*unknown -> XXX*/
@@ -9381,6 +9460,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*text -> XXX*/
@@ -9408,6 +9488,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     text_lob,/*lob*/
     text_json,/*json*/
     string_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*bit -> XXX*/
@@ -9435,6 +9516,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     bit_lob,/*lob*/
     bit_json,/*lob*/
     bit_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*enum -> XXX*/
@@ -9462,6 +9544,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -9489,6 +9572,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*otimestamp -> XXX*/
@@ -9516,6 +9600,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*raw -> XXX*/
@@ -9543,6 +9628,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*interval -> XXX*/
@@ -9570,6 +9656,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*rowid -> XXX*/
@@ -9597,6 +9684,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*lob -> XXX*/
@@ -9624,6 +9712,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     lob_lob,/*lob*/
     lob_json,/*json*/
     lob_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*json -> XXX*/
@@ -9651,6 +9740,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_lob,/*lob*/
     json_json,/*json*/
     json_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
   },
   {
     /*geometry -> XXX*/
@@ -9678,6 +9768,35 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     geometry_json,/*json*/
     geometry_geometry,/*geometry*/
+    cast_not_expected,/*udt*/
+  },
+  {
+    /*udt -> XXX*/
+    cast_not_expected,/*null*/
+    cast_not_expected,/*int*/
+    cast_not_expected,/*uint*/
+    cast_not_expected,/*float*/
+    cast_not_expected,/*double*/
+    cast_not_expected,/*number*/
+    cast_not_expected,/*datetime*/
+    cast_not_expected,/*date*/
+    cast_not_expected,/*time*/
+    cast_not_expected,/*year*/
+    cast_not_expected,/*string*/
+    cast_not_expected,/*extend*/
+    cast_not_expected,/*unknown*/
+    cast_not_expected,/*text*/
+    cast_not_expected,/*bit*/
+    cast_not_expected,/*enumset*/
+    cast_not_expected,/*enumset_inner*/
+    cast_not_expected,/*otimestamp*/
+    cast_not_expected,/*raw*/
+    cast_not_expected,/*interval*/
+    cast_not_expected,/*rowid*/
+    cast_not_expected,/*lob*/
+    cast_not_expected,/*json*/
+    cast_not_expected,/*geometry*/
+    cast_not_expected,/*udt*/
   },
 };
 
@@ -9709,6 +9828,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_identity,/*lob*/
     cast_identity,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*int -> XXX*/
@@ -9736,6 +9856,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json not support oracle yet*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*uint -> XXX*/
@@ -9763,6 +9884,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/* json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*float -> XXX*/
@@ -9790,6 +9912,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*double -> XXX*/
@@ -9817,6 +9940,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*number -> XXX*/
@@ -9844,6 +9968,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*datetime -> XXX*/
@@ -9871,6 +9996,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*date -> XXX*/
@@ -9898,6 +10024,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*time -> XXX*/
@@ -9925,6 +10052,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*year -> XXX*/
@@ -9952,6 +10080,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/* json */
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*string -> XXX*/
@@ -9979,6 +10108,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     string_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*extend -> XXX*/
@@ -10006,6 +10136,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    pl_extend_sql_udt,/*udt*/
   },
   {
     /*unknown -> XXX*/
@@ -10033,6 +10164,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*text -> XXX*/
@@ -10060,6 +10192,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     text_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*bit -> XXX*/
@@ -10087,6 +10220,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*enum -> XXX*/
@@ -10114,6 +10248,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -10141,6 +10276,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_not_expected,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*otimestamp -> XXX*/
@@ -10168,6 +10304,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*raw -> XXX*/
@@ -10195,6 +10332,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*interval -> XXX*/
@@ -10222,6 +10360,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*rowid -> XXX*/
@@ -10249,6 +10388,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*lob -> XXX*/
@@ -10276,6 +10416,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     lob_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*json -> XXX, not support oracle currently*/
@@ -10303,6 +10444,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     json_lob,/*lob*/
     json_json,/*json*/
     cast_not_support,/*geometry*/ // geometry not support oracle mode now
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*geometry -> XXX, not support oracle currently*/
@@ -10330,6 +10472,35 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/
+    cast_not_support,/*udt*/
+  },
+  {
+    /*udt -> XXX, not support oracle currently*/
+    cast_udt_to_other_not_support,/*null*/
+    cast_udt_to_other_not_support,/*int*/
+    cast_udt_to_other_not_support,/*uint*/
+    cast_udt_to_other_not_support,/*float*/
+    cast_udt_to_other_not_support,/*double*/
+    cast_udt_to_other_not_support,/*number*/
+    cast_udt_to_other_not_support,/*datetime*/
+    cast_udt_to_other_not_support,/*date*/
+    cast_udt_to_other_not_support,/*time*/
+    cast_udt_to_other_not_support,/*year*/
+    udt_string,/*string*/
+    sql_udt_pl_extend,/*extend*/
+    cast_udt_to_other_not_support,/*unknown*/
+    cast_udt_to_other_not_support,/*text*/
+    cast_udt_to_other_not_support,/*bit*/
+    cast_udt_to_other_not_support,/*enumset*/
+    cast_udt_to_other_not_support,/*enumset_inner*/
+    cast_udt_to_other_not_support,/*otimestamp*/
+    cast_udt_to_other_not_support,/*raw*/
+    cast_udt_to_other_not_support,/*interval*/
+    cast_udt_to_other_not_support,/*rowid*/
+    cast_udt_to_other_not_support,/*lob*/
+    cast_udt_to_other_not_support,/*json*/
+    cast_udt_to_other_not_support,/*geometry*/
+    cast_udt_to_other_not_support,/*udt*/
   },
 };
 
@@ -10341,6 +10512,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
  *    so this matrix allows cast from or to int / uint.
  * 3. we can't use ObObjOType as index of this matrix, because int / uint too.
  */
+
 ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
 {
   {
@@ -10369,6 +10541,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_identity,/*lob*/
     cast_identity,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*int -> XXX*/
@@ -10396,6 +10569,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*uint -> XXX*/
@@ -10423,6 +10597,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*float -> XXX*/
@@ -10450,6 +10625,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*double -> XXX*/
@@ -10477,6 +10653,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*number -> XXX*/
@@ -10504,6 +10681,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     number_lob,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*datetime -> XXX*/
@@ -10531,6 +10709,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*date -> XXX*/
@@ -10558,6 +10737,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*time -> XXX*/
@@ -10585,6 +10765,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*year -> XXX*/
@@ -10612,6 +10793,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*string -> XXX*/
@@ -10639,6 +10821,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_lob,/*lob*/
     string_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*extend -> XXX*/
@@ -10666,6 +10849,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_type_json_explicit,/*json*/
     cast_not_support,/*geometry*/
+    pl_extend_sql_udt,/*udt*/
   },
   {
     /*unknown -> XXX*/
@@ -10693,6 +10877,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*text -> XXX*/
@@ -10720,6 +10905,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     text_lob,/*lob*/
     text_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*bit -> XXX*/
@@ -10747,6 +10933,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*enum -> XXX*/
@@ -10774,6 +10961,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -10855,6 +11043,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     raw_lob,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*interval -> XXX*/
@@ -10882,6 +11071,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /* rowid -> XXX */
@@ -10909,6 +11099,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_inconsistent_types,/*lob*/
     cast_inconsistent_types_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*lob -> XXX*/
@@ -10936,6 +11127,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     lob_lob,/*lob*/
     lob_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*json -> XXX*/
@@ -10963,6 +11155,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     json_lob,/*lob*/
     json_json,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
   },
   {
     /*geoemtry -> XXX, not support oracle currently*/
@@ -10990,6 +11183,35 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*lob*/
     cast_not_support,/*json*/
     cast_not_support,/*geometry*/
+    cast_to_udt_not_support,/*udt*/
+  },
+  {
+    /*udt -> XXX*/
+    cast_udt_to_other_not_support,/*null*/
+    cast_udt_to_other_not_support,/*int*/
+    cast_udt_to_other_not_support,/*uint*/
+    cast_udt_to_other_not_support,/*float*/
+    cast_udt_to_other_not_support,/*double*/
+    cast_udt_to_other_not_support,/*number*/
+    cast_udt_to_other_not_support,/*datetime*/
+    cast_udt_to_other_not_support,/*date*/
+    cast_udt_to_other_not_support,/*time*/
+    cast_udt_to_other_not_support,/*year*/
+    udt_string,/*string*/
+    sql_udt_pl_extend,/*extend*/
+    cast_udt_to_other_not_support,/*unknown*/
+    cast_udt_to_other_not_support,/*text*/
+    cast_udt_to_other_not_support,/*bit*/
+    cast_udt_to_other_not_support,/*enumset*/
+    cast_udt_to_other_not_support,/*enumset_inner*/
+    cast_udt_to_other_not_support,/*otimestamp*/
+    cast_udt_to_other_not_support,/*raw*/
+    cast_udt_to_other_not_support,/*interval*/
+    cast_udt_to_other_not_support,/*rowid*/
+    cast_udt_to_other_not_support,/*lob*/
+    cast_udt_to_other_not_support,/*json*/
+    cast_udt_to_other_not_support,/*geometry*/
+    cast_udt_to_other_not_support,/*udt*/
   },
 };
 
@@ -12645,6 +12867,9 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
     LOG_WARN("urowid with default value not supported");
   } else if (expect_type == ObJsonType) {
     zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
+  } else if (ob_is_user_defined_sql_type(expect_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("default value of udt, should be it's default constructor");
   }
   if (OB_SUCC(ret)) {
     zero_obj.set_collation_type(expect_cs_type);
@@ -12844,66 +13069,16 @@ int ObObjCaster::is_order_consistent(const ObObjMeta &from,
       int64_t idx_from = get_idx_of_collate(from_cs_type);
       int64_t idx_to = get_idx_of_collate(to_cs_type);
       int64_t idx_res = get_idx_of_collate(res_cs_type);
-      if (OB_UNLIKELY(idx_from < 0 || idx_to < 0 || idx_res < 0
-        ||idx_from >= ObCharset::VALID_COLLATION_TYPES
-        ||idx_to >= ObCharset::VALID_COLLATION_TYPES
-        ||idx_res >= ObCharset::VALID_COLLATION_TYPES)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected collation type", K(ret), K(from), K(to));
-      } else {
+      if (idx_from >= 0 && idx_from < VALID_OC_COLLATION_TYPES &&
+          idx_to   >= 0 && idx_to   < VALID_OC_COLLATION_TYPES &&
+          idx_res  >= 0 && idx_res  < VALID_OC_COLLATION_TYPES) {
         result = ORDER_CONSISTENT_WITH_BOTH_STRING[idx_from][idx_to][idx_res];
+      } else {
+        result = (from_cs_type == to_cs_type) && (from_cs_type == res_cs_type);
       }
     }
   } else {
     result = ORDER_CONSISTENT[tc1][tc2];
-  }
-  return ret;
-}
-
-/* make sure that you have read the doc before you call these functions !
- *
- * doc:
- */
-
-int ObObjCaster::is_injection(const ObObjMeta &from,
-                                const ObObjMeta &to,
-                                bool &result)
-{
-  int ret = OB_SUCCESS;
-  result = false;
-  ObObjTypeClass tc1 = from.get_type_class();
-  ObObjTypeClass tc2 = to.get_type_class();
-  if (OB_UNLIKELY(ob_is_invalid_obj_tc(tc1) || ob_is_invalid_obj_tc(tc2))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected obj type class", K(ret), K(from), K(to));
-  } else if (from.is_string_or_lob_locator_type() && to.is_string_or_lob_locator_type()) {
-    ObCollationType res_cs_type = CS_TYPE_INVALID;
-    ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
-    ObCollationType from_cs_type = from.get_collation_type();
-    ObCollationType to_cs_type = to.get_collation_type();
-    if (OB_FAIL(ObCharset::aggregate_collation(from.get_collation_level(),
-                                               from_cs_type,
-                                               to.get_collation_level(),
-                                               to_cs_type,
-                                               res_cs_level,
-                                               res_cs_type))) {
-      LOG_WARN("fail to aggregate collation", K(ret), K(from), K(to));
-    } else {
-      int64_t idx_from = get_idx_of_collate(from_cs_type);
-      int64_t idx_to = get_idx_of_collate(to_cs_type);
-      int64_t idx_res = get_idx_of_collate(res_cs_type);
-      if (OB_UNLIKELY(idx_from < 0 || idx_to < 0 || idx_res < 0
-        ||idx_from >= ObCharset::VALID_COLLATION_TYPES
-        ||idx_to >= ObCharset::VALID_COLLATION_TYPES
-        ||idx_res >= ObCharset::VALID_COLLATION_TYPES)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected collation type", K(ret), K(from), K(to));
-      } else {
-        result = INJECTION_WITH_BOTH_STRING[idx_from][idx_to][idx_res];
-      }
-    }
-  } else {
-    result = INJECTION[tc1][tc2];
   }
   return ret;
 }
@@ -13022,6 +13197,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // int
   {
@@ -13048,6 +13225,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // uint
   {
@@ -13074,6 +13253,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // float
   {
@@ -13100,6 +13281,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // double
   {
@@ -13126,6 +13309,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // number
   {
@@ -13152,6 +13337,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  //lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // datetime
   {
@@ -13178,6 +13365,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   //lob
     true,   // json
+    false,  // gis
+    false,  // udt
   },
   // date
   {
@@ -13204,6 +13393,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   // lob
     true,   // json
+    false,  // gis
+    false,  // udt
   },
   // time
   {
@@ -13230,6 +13421,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   //lob
     true,   // json
+    false,  // gis
+    false,  // udt
   },
   // year
   {
@@ -13256,6 +13449,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   // lob
     true,   // json
+    false,  // gis
+    false,  // udt
   },
   // string
   {
@@ -13282,6 +13477,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     true,   // rowid
     true,   // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // extend
   {
@@ -13308,6 +13505,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // unknown
   {
@@ -13334,6 +13533,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // text
   {
@@ -13360,6 +13561,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
    // bit
   {
@@ -13386,6 +13589,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  //lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   //enumset
   {
@@ -13412,6 +13617,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   //enumsetinner
   {
@@ -13438,6 +13645,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // text
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // OTimestamp
   {
@@ -13464,6 +13673,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  //rowid
     true,   // lob
     true,   // json
+    false,  // gis
+    false,  // udt
   },
   // raw
   {
@@ -13490,6 +13701,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // interval
   {
@@ -13516,6 +13729,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // rowid
   {
@@ -13542,6 +13757,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     true,  // rowid
     false,  // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // lob
   {
@@ -13568,6 +13785,8 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     true,   // lob
     false,  // json
+    false,  // gis
+    false,  // udt
   },
   // json
   {
@@ -13594,6 +13813,64 @@ const bool ObObjCaster::CAST_MONOTONIC[ObMaxTC][ObMaxTC] =
     false,  // rowid
     false,  // lob
     true,   // json
+    false,  // gis
+    false,  // udt
+  },
+  // gis
+  {
+    false,  // null
+    false,  // int
+    false,  // uint
+    false,  // float
+    false,  // double
+    false,  // number
+    false,  // datetime
+    false,  // date
+    false,  // time
+    false,  // year
+    false,  // string
+    false,  // extend
+    false,  // unknown
+    false,  // text
+    false,  // bit
+    false,  // enumset
+    false,  // enumsetInner
+    false,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    false,  // json
+    true,   // gis
+    false,  // udt
+  },
+  // udt
+  {
+    false,  // null
+    false,  // int
+    false,  // uint
+    false,  // float
+    false,  // double
+    false,  // number
+    false,  // datetime
+    false,  // date
+    false,  // time
+    false,  // year
+    false,  // string
+    false,  // extend
+    false,  // unknown
+    false,  // text
+    false,  // bit
+    false,  // enumset
+    false,  // enumsetInner
+    false,  // OTimestamp
+    false,  // raw
+    false,  // interval
+    false,  // rowid
+    false,  // lob
+    false,  // json
+    false,  // gis
+    false,  // udt
   },
 };
 
@@ -14019,658 +14296,29 @@ const bool ObObjCaster::ORDER_CONSISTENT[ObMaxTC][ObMaxTC] =
   },
 };
 
-const bool ObObjCaster::ORDER_CONSISTENT_WITH_BOTH_STRING[ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES] =
+const bool ObObjCaster::ORDER_CONSISTENT_WITH_BOTH_STRING[ObObjCaster::VALID_OC_COLLATION_TYPES][ObObjCaster::VALID_OC_COLLATION_TYPES][ObObjCaster::VALID_OC_COLLATION_TYPES] =
 {
   //CS_TYPE_UTF8MB4_GENERAL_CI
   {
     //ci    //utf8bin //bin
-    {true, true, true, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
+    {true, true, true},
+    {false, false, false},
+    {false, false, false},
   },
   //CS_TYPE_UTF8MB4_BIN
   {
     //ci    //utf8bin //bin
-    {true, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
+    {true, true , true},
+    {false, true , true},
+    {false, true , true},
   },
   //CS_TYPE_BINARY
   {
     //ci    //utf8bin //bin
-    {true, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, true , true, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
+    {true, true , true},
+    {false, true , true},
+    {false, true , true},
   },
-  //CS_TYPE_GBKBIN
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  //CS_TYPE_CHINESE_CI
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-  {
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-    {false, false , false, false, false, false, false, false, false, false, false, false, false},
-  },
-};
-
-const bool ObObjCaster::INJECTION[ObMaxTC][ObMaxTC] =
-{
-  // null
-  {
-    false,  // null
-    false,  // int
-    false,  // uint
-    false,  // float
-    false,  // double
-    false,  // number
-    false,  // datetime
-    false,  // date
-    false,  // time
-    false,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,  // bit
-    false,  // enumset
-    false,  // enumsetInner
-    false,  // OTimestamp
-    false,  // raw
-  },
-  // int
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // uint
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // float
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    true,   // float
-    true,   // double
-    false,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // double
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    true,   // float
-    true,   // double
-    false,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // number
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // datetime
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    false,   // float
-    false,   // double
-    false,   // number //2010-01-01 12:34:56.12345 = 20100101123456.1234520  and 2010-01-01 12:34:56.12345 = 20100101123456.1234530
-    true,   // datetime
-    true,   // date
-    true,  // time
-    true,   // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // date
-  {
-    false,  // null
-    false,   // int //think about 0000-00-00
-    false,   // uint
-    false,   // float
-    false,   // double
-    false,   // number
-    true,   // datetime
-    true,   // date
-    true,  // time
-    true,   // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // time
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    false,   // float
-    false,   // double
-    false,   // number //think about time(5) = decimal(40,7)
-    true,   // datetime
-    true,  // date
-    true,   // time
-    true,  // year
-    false,  // string //00:12:34 = "00:12:34" and 00:12:34 = "00:12:34.000"
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // year //0000-9999
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    true,   // datetime //1999 = 1999-00-00 00:00:00
-    true,   // date //1999 = 1999-00-00
-    true,  // time
-    true ,  // year
-    false,   // string //1999 = "99" and 1999 = "1999"
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // string
-  {
-    false,  // null
-    true,  // int
-    true,  // uint
-    true,  // float
-    true,  // double
-    true,  // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // extend
-  {
-    false,  // null
-    false,  // int
-    false,  // uint
-    false,  // float
-    false,  // double
-    false,  // number
-    false,  // datetime
-    false,  // date
-    false,  // time
-    false,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    false,   //OTimestamp
-    false,  // raw
-  },
-  // unknown
-  {
-    false,  // null
-    false,  // int
-    false,  // uint
-    false,  // float
-    false,  // double
-    false,  // number
-    false,  // datetime
-    false,  // date
-    false,  // time
-    false,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    false,   //OTimestamp
-    false,  // raw
-  },
-  // lob
-  {
-    false,  // null
-    true,  // int
-    true,  // uint
-    true,  // float
-    true,  // double
-    true,  // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // bit
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  //setenum
-  {
-    false,  // null
-    true,   // int
-    true,   // uint
-    true,   // float
-    true,   // double
-    true,   // number
-    false,  // datetime
-    false,  // date
-    false,  // time
-    true,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    false,   //OTimestamp
-    false,  // raw
-  },
-  //setenumInner
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    false,   // float
-    false,   // double
-    false,   // number
-    false,  // datetime
-    false,  // date
-    false,  // time
-    false,  // year
-    false,  // string
-    false,  // extend
-    false,  // unknown
-    false,  // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    false,   //OTimestamp
-    false,  // raw
-  },
-  // OTimestamp
-  {
-    false,  // null
-    false,   // int
-    false,   // uint
-    false,   // float
-    false,   // double
-    false,   // number //2010-01-01 12:34:56.12345 = 20100101123456.1234520  and 2010-01-01 12:34:56.12345 = 20100101123456.1234530
-    true,   // datetime
-    true,   // date
-    true,  // time
-    true,   // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    false,   // bit
-    false,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-  // raw
-  {
-    false,  // null
-    true,  // int
-    true,  // uint
-    true,  // float
-    true,  // double
-    true,  // number
-    true,  // datetime
-    true,  // date
-    true,  // time
-    true,  // year
-    false,   // string
-    false,  // extend
-    false,  // unknown
-    false,   // lob
-    true,   // bit
-    true,   //enumset
-    false,   //enumsetInner
-    true,   //OTimestamp
-    false,  // raw
-  },
-};
-
-const bool ObObjCaster::INJECTION_WITH_BOTH_STRING[ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES][ObCharset::VALID_COLLATION_TYPES] =
-{
-  //CS_TYPE_UTF8MB4_GENERAL_CI
-  {
-      //ci    //utf8bin //bin
-      {true, true, true},//CS_TYPE_UTF8MB4_GENERAL_CI
-      {false, true , true},//CS_TYPE_UTF8MB4_BIN
-      {false, true , true},//CS_TYPE_BINARY
-  },
-  //CS_TYPE_UTF8MB4_BIN
-  {
-      //ci    //utf8bin //bin
-      {true, true , true},//CS_TYPE_UTF8MB4_GENERAL_CI
-      {false, true , true},//CS_TYPE_UTF8MB4_BIN
-      {false, true , true},//CS_TYPE_BINARY
-  },
-  //CS_TYPE_BINARY
-  {
-      //ci    //utf8bin //bin
-      {true, true , true},//CS_TYPE_UTF8MB4_GENERAL_CI
-      {false, true , true},//CS_TYPE_UTF8MB4_BIN
-      {false, true , true},//CS_TYPE_BINARY
-  }
 };
 
 int ObObjEvaluator::is_true(const ObObj &obj, ObCastMode cast_mode, bool &result)

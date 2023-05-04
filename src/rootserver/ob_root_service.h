@@ -60,6 +60,7 @@
 #include "rootserver/ob_disaster_recovery_task_executor.h"
 #include "rootserver/ob_empty_server_checker.h"
 #include "rootserver/ob_lost_replica_checker.h"
+#include "rootserver/ob_server_zone_op_service.h"
 
 namespace oceanbase
 {
@@ -455,9 +456,6 @@ public:
   int fetch_location(const obrpc::ObFetchLocationArg &arg,
                      obrpc::ObFetchLocationResult &res);
   int merge_finish(const obrpc::ObMergeFinishArg &arg);
-
-  int try_block_server(int rc, const common::ObAddr &server);
-
   // 4.0 backup
   // balance over
   int receive_backup_over(const obrpc::ObBackupTaskRes &res);
@@ -467,8 +465,6 @@ public:
   int check_dangling_replica_finish(const obrpc::ObCheckDanglingReplicaFinishArg &arg);
   int fetch_alive_server(const obrpc::ObFetchAliveServerArg &arg,
       obrpc::ObFetchAliveServerResult &result);
-  int fetch_active_server_status(const obrpc::ObFetchAliveServerArg &arg,
-      obrpc::ObFetchActiveServerAddrResult &result);
   int get_tenant_schema_versions(const obrpc::ObGetSchemaArg &arg,
                                  obrpc::ObTenantSchemaVersions &tenant_schema_versions);
 
@@ -650,18 +646,39 @@ public:
   //----End of functions for managing row level security----
 
   // server related
+  int load_server_manager();
+  ObStatusChangeCallback &get_status_change_cb() { return status_change_cb_; }
   int add_server(const obrpc::ObAdminServerArg &arg);
+  int add_server_for_bootstrap_in_version_smaller_than_4_2_0(
+      const common::ObAddr &server,
+      const common::ObZone &zone);
   int delete_server(const obrpc::ObAdminServerArg &arg);
   int cancel_delete_server(const obrpc::ObAdminServerArg &arg);
   int start_server(const obrpc::ObAdminServerArg &arg);
   int stop_server(const obrpc::ObAdminServerArg &arg);
-
+  // Check if all ls has leader
+  // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed".
+  int check_all_ls_has_leader(const char *print_str);
   // zone related
   int add_zone(const obrpc::ObAdminZoneArg &arg);
   int delete_zone(const obrpc::ObAdminZoneArg &arg);
   int start_zone(const obrpc::ObAdminZoneArg &arg);
   int stop_zone(const obrpc::ObAdminZoneArg &arg);
   int alter_zone(const obrpc::ObAdminZoneArg &arg);
+  int check_can_stop(
+      const common::ObZone &zone,
+      const common::ObIArray<common::ObAddr> &servers,
+      const bool is_stop_zone);
+  // Check if all ls has leader, enough member and if log is in sync.
+  // @param [in] to_stop_servers: server_list to be stopped.
+  // @param [in] skip_log_sync_check: whether skip log_sync check.
+  // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed".
+  // @return: OB_SUCCESS if all check is passed.
+  //          OB_OP_NOT_ALLOW if ls doesn't have leader/enough member or ls' log is not in sync.
+  int check_majority_and_log_in_sync(
+      const ObIArray<ObAddr> &to_stop_servers,
+      const bool skip_log_sync_check,
+      const char *print_str);
 
   // system admin command (alter system ...)
   int admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
@@ -760,8 +777,6 @@ public:
   int broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg);
   ObDDLService &get_ddl_service() { return ddl_service_; }
   ObDDLScheduler &get_ddl_scheduler() { return ddl_scheduler_; }
-
-  int check_merge_finish(const obrpc::ObCheckMergeFinishArg &arg);
   int get_recycle_schema_versions(
       const obrpc::ObGetRecycleSchemaVersionsArg &arg,
       obrpc::ObGetRecycleSchemaVersionsResult &result);
@@ -794,23 +809,15 @@ private:
   int refresh_server(const bool fast_recover, const bool need_retry);
   int refresh_schema(const bool fast_recover);
   int init_sequence_id();
-  int load_server_manager();
   int start_timer_tasks();
   int stop_timer_tasks();
   int request_heartbeats();
   int self_check();
   int update_all_server_and_rslist();
-  int check_zone_and_server(const ObIArray<ObAddr> &servers, bool &is_same_zone, bool &is_all_stopped);
-  int check_can_stop(const common::ObZone &zone,
-                     const common::ObIArray<common::ObAddr> &servers,
-                     const bool is_stop_zone);
-  bool have_other_stop_task(const ObZone &zone);
   int init_sys_admin_ctx(ObSystemAdminCtx &ctx);
   int set_cluster_version();
   bool is_replica_count_reach_rs_limit(int64_t replica_count) { return replica_count > OB_MAX_CLUSTER_REPLICA_COUNT; }
   int update_all_server_config();
-  int get_readwrite_servers(const common::ObIArray<common::ObAddr> &input_servers,
-                            common::ObIArray<common::ObAddr> &readwrite_servers);
   int generate_table_schema_in_tenant_space(
       const obrpc::ObCreateTableArg &arg,
       share::schema::ObTableSchema &table_schema);
@@ -856,26 +863,14 @@ private:
        const share::ObLeaseRequest &lease_request,
        share::ObLeaseResponse &lease_response,
        const share::ObServerStatus &server_status);
-
-  // Check if all ls has leader, enough member and if log is in sync.
-  // @param [in] to_stop_servers: server_list to be stopped.
-  // @param [in] skip_log_sync_check: whether skip log_sync check.
-  // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed".
-  // @return: OB_SUCCESS if all check is passed.
-  //          OB_OP_NOT_ALLOW if ls doesn't have leader/enough member or ls' log is not in sync.
-  int check_majority_and_log_in_sync_(
-      const ObIArray<ObAddr> &to_stop_servers,
-      const bool skip_log_sync_check,
-      const char *print_str);
-  // Check if all ls has leader
-  // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed".
-  int check_all_ls_has_leader_(const char *print_str);
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
+  int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 private:
-  int construct_rs_list_arg(obrpc::ObRsListArg &rs_list_arg);
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
-
+  int old_add_server(const obrpc::ObAdminServerArg &arg);
+  int old_delete_server(const obrpc::ObAdminServerArg &arg);
+  int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;
@@ -903,6 +898,7 @@ private:
   ObHeartbeatChecker hb_checker_;
   ObAllServerChecker server_checker_;
   RsListChangeCb rs_list_change_cb_;
+  ObServerZoneOpService server_zone_op_service_;
 
   // minor freeze
   ObRootMinorFreeze root_minor_freeze_;

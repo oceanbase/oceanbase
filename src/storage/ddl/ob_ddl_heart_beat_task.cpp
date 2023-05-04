@@ -67,10 +67,12 @@ ObDDLHeartBeatTaskContainer::~ObDDLHeartBeatTaskContainer()
 int ObDDLHeartBeatTaskContainer::init()
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "register_tasks");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDDLHeartBeatTaskContainer inited twice", K(ret));
-  } else if (OB_FAIL(register_tasks_.create(BUCKET_LOCK_BUCKET_CNT, "register_tasks", "register_tasks"))) {
+  } else if (OB_FAIL(register_tasks_.create(BUCKET_LOCK_BUCKET_CNT, attr, attr))) {
     LOG_WARN("failed to create register_tasks map", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(BUCKET_LOCK_BUCKET_CNT))) {
     LOG_WARN("failed to init bucket lock", K(ret));

@@ -117,6 +117,9 @@ private:
       const obrpc::ObPhysicalRestoreTenantArg &arg, 
       const ObIArray<ObString> &tenant_path_array, 
       share::ObPhysicalRestoreJob &job);
+  static int fill_encrypt_info_(
+      const obrpc::ObPhysicalRestoreTenantArg &arg,
+      share::ObPhysicalRestoreJob &job);
 
   DISALLOW_COPY_AND_ASSIGN(ObRestoreUtil);
 };

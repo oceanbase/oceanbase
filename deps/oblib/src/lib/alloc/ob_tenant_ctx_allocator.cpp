@@ -503,17 +503,27 @@ void ObTenantCtxAllocator::common_free(void *ptr)
     SANITY_POISON(obj->data_, obj->alloc_bytes_);
 
     get_mem_leak_checker().on_free(*obj);
-    ABlock *block = obj->block();
+    AChunk *chunk = AChunk::ptr2chunk(obj);
+    abort_unless(chunk->is_valid());
+    ABlock *block = chunk->ptr2blk(obj);
     abort_unless(block);
     abort_unless(block->is_valid());
     abort_unless(block->in_use_);
     abort_unless(block->obj_set_ != NULL);
 
     ObjectSet *os = block->obj_set_;
-    auto blk_mgr = os->get_block_mgr();
-    int64_t tenant_id = blk_mgr->get_tenant_id();
-    int64_t ctx_id = blk_mgr->get_ctx_id();
-    ObFreeLogPrinter::get_instance().print_free_log(tenant_id, ctx_id, obj);
-    os->free_object(obj);
+#ifdef ENABLE_500_FALLBACK
+    auto *ta = chunk->block_set_->get_tenant_ctx_allocator();
+    const bool do_free = OB_LIKELY(!ta->has_deleted()) || ta->get_tenant_id() <= OB_USER_TENANT_ID;
+#else
+    const bool do_free = true;
+#endif
+    if (do_free) {
+      auto blk_mgr = os->get_block_mgr();
+      int64_t tenant_id = blk_mgr->get_tenant_id();
+      int64_t ctx_id = blk_mgr->get_ctx_id();
+      ObFreeLogPrinter::get_instance().print_free_log(tenant_id, ctx_id, obj);
+      os->free_object(obj);
+    }
   }
 }

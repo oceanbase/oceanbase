@@ -103,6 +103,7 @@ public:
     TableKey();
 
     uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     void reset();
     OB_INLINE bool is_valid() const;
     OB_INLINE bool operator ==(const TableKey &table_key) const;

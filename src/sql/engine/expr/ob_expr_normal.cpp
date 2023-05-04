@@ -48,7 +48,7 @@ int ObExprNormal::ObExprNormalCtx::generate_next_value(int64_t seed, double &res
 }
 
 ObExprNormal::ObExprNormal(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_NORMAL, "normal", 3, NOT_ROW_DIMENSION)
+	: ObFuncExprOperator(alloc, T_FUN_SYS_NORMAL, "normal", 3, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

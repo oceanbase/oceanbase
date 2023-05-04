@@ -54,8 +54,11 @@ int ObRollupAdaptiveInfo::assign(const ObRollupAdaptiveInfo &info)
   rollup_status_ = info.rollup_status_;
   enable_encode_sort_ = info.enable_encode_sort_;
   sort_keys_.reset();
+  ecd_sort_keys_.reset();
   if (OB_FAIL(append(sort_keys_, info.sort_keys_))) {
     LOG_WARN("failed to assign distinct col idx", K(ret));
+  } else if (OB_FAIL(append(ecd_sort_keys_, info.ecd_sort_keys_))) {
+    LOG_WARN("failed to append sort keys", K(ret));
   }
   return ret;
 }
@@ -168,6 +171,11 @@ int ObLogGroupBy::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
         LOG_WARN("failed to push back distinct expr", K(ret));
       }
     }
+    for (int64_t i = 0; i < rollup_adaptive_info_.ecd_sort_keys_.count() && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(all_exprs.push_back(rollup_adaptive_info_.ecd_sort_keys_.at(i).expr_))) {
+        LOG_WARN("failed to push back distinct expr", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -229,9 +237,10 @@ int ObLogGroupBy::est_cost()
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
-  } else if (OB_FAIL(get_child_est_info(child_card, child_ndv, selectivity))) {
+  } else if (OB_FAIL(get_child_est_info(get_parallel(), child_card, child_ndv, selectivity))) {
     LOG_WARN("failed to get chidl est info", K(ret));
-  } else if (OB_FAIL(inner_est_cost(child_card,
+  } else if (OB_FAIL(inner_est_cost(get_parallel(),
+                                    child_card,
                                     child_ndv,
                                     distinct_per_dop_,
                                     group_cost))) {
@@ -245,18 +254,18 @@ int ObLogGroupBy::est_cost()
   return ret;
 }
 
-int ObLogGroupBy::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   double child_card = 0.0;
   double child_ndv = 0.0;
   double selectivity = 1.0;
-  double group_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
+  const int64_t parallel = param.need_parallel_;
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
-  } else if (OB_FAIL(get_child_est_info(child_card, child_ndv, selectivity))) {
+  } else if (OB_FAIL(get_child_est_info(parallel, child_card, child_ndv, selectivity))) {
     LOG_WARN("failed to get chidl est info", K(ret));
   } else {
     double child_cost = child->get_cost();
@@ -266,7 +275,7 @@ int ObLogGroupBy::re_est_cost(EstimateCostInfo &param, double &card, double &cos
         child_ndv > 0 &&
         param.need_row_count_ < child_ndv) {
       need_ndv = param.need_row_count_;
-      if (selectivity) {
+      if (selectivity > OB_DOUBLE_EPSINON) {
         need_ndv /= selectivity;
       }
       if (child_card > 0) {
@@ -274,43 +283,40 @@ int ObLogGroupBy::re_est_cost(EstimateCostInfo &param, double &card, double &cos
       } else {
         param.need_row_count_ = 0;
       }
+    } else {
+      param.need_row_count_ = -1;
     }
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est child cost", K(ret));
-    } else if (OB_FAIL(inner_est_cost(child_card,
+    } else if (OB_FAIL(inner_est_cost(parallel,
+                                      child_card,
                                       need_ndv,
                                       distinct_per_dop_,
-                                      group_cost))) {
+                                      op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
-      cost = child_cost + group_cost;
+      cost = child_cost + op_cost;
       card = need_ndv * selectivity;
-      if (param.override_) {
-        set_op_cost(group_cost);
-        set_cost(cost);
-        set_card(card);
-      }
     }
   }
   return ret;
 }
 
-int ObLogGroupBy::inner_est_cost(double child_card, double &child_ndv, double &per_dop_ndv, double &op_cost)
+int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &per_dop_ndv, double &op_cost)
 {
   int ret = OB_SUCCESS;
   double per_dop_card = 0.0;
   per_dop_ndv = 0.0;
-  int64_t parallel = 0;
   common::ObSEArray<ObRawExpr *, 8> group_rollup_exprs;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+  } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
   } else if (OB_FAIL(get_group_rollup_exprs(group_rollup_exprs))) {
@@ -320,7 +326,9 @@ int ObLogGroupBy::inner_est_cost(double child_card, double &child_ndv, double &p
     if (is_first_stage()) {
       per_dop_card = per_dop_card * three_stage_info_.distinct_aggr_count_;
     }
-    if (parallel > 1) {
+    if ((get_group_by_exprs().empty() && get_rollup_exprs().empty()) || SCALAR_AGGREGATE == algo_) {
+      per_dop_ndv = 1.0;
+    } else if (parallel > 1) {
       if (is_push_down()) {
         per_dop_ndv = ObOptSelectivity::scale_distinct(per_dop_card, child_card, child_ndv);
       } else {
@@ -356,21 +364,18 @@ int ObLogGroupBy::inner_est_cost(double child_card, double &child_ndv, double &p
   return ret;
 }
 
-int ObLogGroupBy::get_child_est_info(double &child_card, double &child_ndv, double &selectivity)
+int ObLogGroupBy::get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = 0;
-  common::ObSEArray<ObRawExpr *, 8> group_rollup_exprs;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(child) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+  } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
-  } else if (OB_FAIL(get_group_rollup_exprs(group_rollup_exprs))) {
-    LOG_WARN("failed to get group rollup exprs", K(ret));
-  } else if (group_rollup_exprs.empty() || SCALAR_AGGREGATE == algo_) {
+  } else if ((get_group_by_exprs().empty() && get_rollup_exprs().empty())
+             || SCALAR_AGGREGATE == algo_) {
     child_card = child->get_card();
     child_ndv = parallel;
   } else {
@@ -450,6 +455,12 @@ int ObLogGroupBy::inner_replace_op_exprs(
   } else {
     for(int64_t i = 0; OB_SUCC(ret) && i < rollup_adaptive_info_.sort_keys_.count(); ++i) {
       OrderItem &cur_order_item = rollup_adaptive_info_.sort_keys_.at(i);
+      if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
+        LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
+      } else { /* Do nothing */ }
+    }
+    for(int64_t i = 0; OB_SUCC(ret) && i < rollup_adaptive_info_.ecd_sort_keys_.count(); ++i) {
+      OrderItem &cur_order_item = rollup_adaptive_info_.ecd_sort_keys_.at(i);
       if (OB_FAIL(replace_expr_action(to_replace_exprs, cur_order_item.expr_))) {
         LOG_WARN("failed to resolve ref params in sort key ", K(cur_order_item), K(ret));
       } else { /* Do nothing */ }
@@ -730,6 +741,7 @@ int ObLogGroupBy::set_rollup_info(
   const ObRollupStatus rollup_status,
   ObRawExpr *rollup_id_expr,
   ObIArray<OrderItem> &sort_keys,
+  ObIArray<OrderItem> &ecd_sort_keys,
   bool enable_encode_sort)
 {
   int ret = OB_SUCCESS;
@@ -737,7 +749,10 @@ int ObLogGroupBy::set_rollup_info(
   rollup_adaptive_info_.rollup_status_ = rollup_status;
   rollup_adaptive_info_.enable_encode_sort_ = enable_encode_sort;
   rollup_adaptive_info_.sort_keys_.reset();
+  rollup_adaptive_info_.ecd_sort_keys_.reset();
   if (OB_FAIL(append(rollup_adaptive_info_.sort_keys_, sort_keys))) {
+    LOG_WARN("failed to append sort keys", K(ret));
+  } else if (OB_FAIL(append(rollup_adaptive_info_.ecd_sort_keys_, ecd_sort_keys))) {
     LOG_WARN("failed to append sort keys", K(ret));
   }
   return ret;
@@ -804,4 +819,18 @@ int ObLogGroupBy::set_third_stage_info(ObRawExpr *aggr_code_expr,
     three_stage_info_.distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
   }
   return ret;
+}
+
+int ObLogGroupBy::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    is_fixed = ObOptimizerUtil::find_item(aggr_exprs_, expr) ||
+        (T_FUN_SYS_REMOVE_CONST == expr->get_expr_type() && ObOptimizerUtil::find_item(rollup_exprs_, expr));
+  }
+  return OB_SUCCESS;
 }

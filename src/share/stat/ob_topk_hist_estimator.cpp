@@ -57,6 +57,10 @@ struct CopyableComparer
 int ObTopKFrequencyHistograms::create_topk_fre_items()
 {
   int ret = OB_SUCCESS;
+  topk_fre_items_.set_allocator(&topk_buf_);
+  if (OB_FAIL(topk_fre_items_.init(used_list_.count()))) {
+    LOG_WARN("failed to init fixed array", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < used_list_.count(); ++i) {
     if (OB_ISNULL(used_list_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -146,6 +150,8 @@ int ObTopKFrequencyHistograms::add_top_k_frequency_item(const ObObj &obj)
       const int64_t hashmap_size = 2 * (window_size_ + item_size_);
       if (OB_FAIL(topk_map_.create(hashmap_size, "TopkMap"))) {
         LOG_WARN("failed to create hash map", K(ret));
+      } else {
+        need_deep_copy_ = obj.need_deep_copy();
       }
     }
     if (OB_FAIL(ret)) {
@@ -201,7 +207,7 @@ int ObTopKFrequencyHistograms::add_entry(const ObObj &obj,
       LOG_WARN("failed to add item", K(ret));
     } else if (OB_FAIL(used_list_.push_back(item))) {
       LOG_WARN("failed to push back item", K(ret));
-    } else if (obj.need_deep_copy()) {
+    } else if (need_deep_copy_) {
       ++ copied_count_;
     }
   }
@@ -299,7 +305,7 @@ int ObTopKFrequencyHistograms::shrink_memory_usage()
     } else if (OB_FAIL(topk_map_.set_refactored(item->col_obj_,
                                                 reinterpret_cast<uint64_t>(item)))) {
       LOG_WARN("failed to add item", K(ret));
-    } else if (item->col_obj_.need_deep_copy()) {
+    } else if (need_deep_copy_) {
       ++copied_count_;
     }
   }
@@ -364,6 +370,10 @@ OB_DEF_DESERIALIZE(ObTopKFrequencyHistograms)
   int64_t items_count = 0;
   OB_UNIS_DECODE(N_);
   OB_UNIS_DECODE(items_count);
+  topk_fre_items_.set_allocator(&topk_buf_);
+  if (OB_FAIL(topk_fre_items_.init(items_count))) {
+    LOG_WARN("failed to init fixed array", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < items_count; ++i) {
     ObTopkItem top_k_fre_item;
     OB_UNIS_DECODE(top_k_fre_item.col_obj_);

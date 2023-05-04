@@ -449,6 +449,7 @@ public:
   bool operator==(const ObBitSet &other) const;
   bool equal(const ObBitSet &other) const;
 
+  void set_attr(const lib::ObMemAttr &attr) { bitset_word_array_.set_attr(attr); }
   int prepare_allocate(int64_t bits)
   {
     return bitset_word_array_.prepare_allocate((bits / PER_BITSETWORD_BITS) + 1);

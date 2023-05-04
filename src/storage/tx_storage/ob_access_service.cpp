@@ -1174,10 +1174,10 @@ int ObAccessService::audit_tablet_opt_dml_stat(
     const int64_t affected_rows)
 {
   int ret = OB_SUCCESS;
-  static __thread int64_t last_access_ts = 0;
-  if (!GCONF.enable_defensive_check() && ObClockGenerator::getClock() - last_access_ts < 1000000) {
+  //static __thread int64_t last_access_ts = 0;
+  //if (!GCONF.enable_defensive_check() && ObClockGenerator::getClock() - last_access_ts < 1000000) {
     // do nothing
-  } else if (OB_ISNULL(dml_param.table_param_)) {
+  if (OB_ISNULL(dml_param.table_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(dml_param.table_param_));
   } else if (dml_stat_type == ObOptDmlStatType::TABLET_OPT_INSERT_STAT ||
@@ -1199,7 +1199,7 @@ int ObAccessService::audit_tablet_opt_dml_stat(
     } else {
       LOG_TRACE("succeed to update dml stat local cache", K(dml_stat));
     }
-    last_access_ts = ObClockGenerator::getClock();
+    //last_access_ts = ObClockGenerator::getClock();
   }
   return ret;
 }

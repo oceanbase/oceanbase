@@ -56,7 +56,7 @@ public:
   void set_scn(const share::SCN scn);
   share::SCN get_scn() const;
   int before_append_cb(const bool is_replay);
-  int after_append_cb(const bool is_replay, const int ret_code);
+  void after_append_cb(const bool is_replay);
   // interface for redo log generator
   bool need_fill_redo() const { return need_fill_redo_; }
   bool need_submit_log() const { return need_submit_log_; }
@@ -67,7 +67,7 @@ public:
   int log_sync_fail_cb();
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
-  virtual int after_append(const bool is_replay, const int ret_code) { return common::OB_SUCCESS; }
+  virtual void after_append(const bool is_replay) {}
   virtual int log_submitted() { return common::OB_SUCCESS; }
   virtual int undo_log_submitted() { return common::OB_SUCCESS; }
   virtual int log_sync(const share::SCN scn)
@@ -87,7 +87,7 @@ public:
   ObITransCallback *get_prev() const { return ATOMIC_LOAD(&prev_); }
   void set_next(ObITransCallback *node) { ATOMIC_STORE(&next_, node); }
   void set_prev(ObITransCallback *node) { ATOMIC_STORE(&prev_, node); }
-  int append(ObITransCallback *node);
+  void append(ObITransCallback *node);
 
 public:
   // trans_commit is called when txn commit. And you need to let the data know
@@ -156,6 +156,8 @@ protected:
     bool need_submit_log_ : 1; // Identifies whether log has been submitted
   };
   share::SCN scn_;
+public:
+  int64_t owner_;
 private:
   ObITransCallback *prev_;
   ObITransCallback *next_;

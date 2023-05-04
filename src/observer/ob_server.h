@@ -70,6 +70,9 @@
 
 #include "share/table/ob_table_rpc_proxy.h"
 
+#include "sql/engine/table/ob_external_table_access_service.h"
+#include "share/external_table/ob_external_table_file_rpc_proxy.h"
+
 namespace oceanbase
 {
 namespace omt
@@ -98,7 +101,7 @@ class ObServer
 {
 public:
   static const int64_t DEFAULT_ETHERNET_SPEED = 1000 / 8 * 1024 * 1024; // default 125m/s  1000Mbit
-  static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 10L; // 60s
+  static const int64_t DISK_USAGE_REPORT_INTERVAL = 1000L * 1000L * 300L; // 5min
   static const uint64_t DEFAULT_CPU_FREQUENCY = 2500 * 1000; // 2500 * 1000 khz
   static ObServer &get_instance();
 
@@ -351,6 +354,7 @@ private:
   obrpc::ObInterruptRpcProxy interrupt_proxy_; // global interrupt
   obrpc::ObLoadDataRpcProxy load_data_proxy_;
   obrpc::ObTableRpcProxy table_rpc_proxy_;
+  obrpc::ObExtenralTableRpcProxy external_table_proxy_;
 
   // The OceanBase configuration relating to.
   common::ObServerConfig &config_;
@@ -404,6 +408,8 @@ private:
 
   // virtual table related
   ObVirtualDataAccessService vt_data_service_;
+  // external table
+  ObExternalTableAccessService et_access_service_;
 
   // Weakly Consistent Read Service
   transaction::ObWeakReadService  weak_read_service_;

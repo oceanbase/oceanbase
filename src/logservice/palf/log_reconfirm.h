@@ -74,6 +74,7 @@ private:
   int update_follower_end_lsn_(const common::ObAddr &server, const LSN &committed_end_lsn);
   int ack_log_with_end_lsn_();
   bool is_majority_catch_up_();
+  int purge_throttling_();
 private:
   enum State
   {

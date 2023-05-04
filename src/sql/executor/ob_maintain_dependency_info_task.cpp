@@ -194,9 +194,10 @@ int ObMaintainObjDepInfoTask::assign_view_schema(const ObTableSchema &view_schem
 int ObMaintainDepInfoTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size)
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500("DepInfoTaskQ");
   if (OB_FAIL(ObAsyncTaskQueue::init(thread_cnt, queue_size, "MaintainDepInfoTaskQueue"))) {
     LOG_WARN("failed to init base queue", K(ret));
-  } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE))) {
+  } else if (OB_FAIL(view_info_set_.create(INIT_BKT_SIZE, attr, attr))) {
     LOG_WARN("failed to init view set", K(ret));
   }
   return ret;

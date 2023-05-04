@@ -85,6 +85,7 @@ public:
   ObDstServerInfo dst_info_;
 };
 
+// TODO shanyan.g to be removed
 class ObServerBlacklist : public lib::TGRunnable
 {
 public:

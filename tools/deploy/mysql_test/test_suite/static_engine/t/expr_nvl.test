@@ -84,3 +84,9 @@ insert into t1 values(1, now());
 insert into t1 values(2, now(6));
 select nvl(null,b) from t1;
 drop table t1;
+
+--echo #bug:
+create table t1 as select nvl(cast(1 as decimal(10, 7)), cast(2 as decimal(12, 5))) as c from dual;
+desc t1;
+select * from t1;
+drop table t1;

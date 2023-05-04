@@ -2927,13 +2927,131 @@ static struct VarsInit{
     ObSysVars[222].alias_ = "OB_SV__SHOW_DDL_IN_COMPAT_MODE" ;
     }();
 
+    [&] (){
+      ObSysVars[223].info_ = "can control the behavior of set query, when true, set query will generate a serial plan, which ensure the output order of result set is ordered " ;
+      ObSysVars[223].name_ = "_force_order_preserve_set" ;
+      ObSysVars[223].data_type_ = ObIntType ;
+      ObSysVars[223].value_ = "0" ;
+      ObSysVars[223].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[223].id_ = SYS_VAR__FORCE_ORDER_PRESERVE_SET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_ORDER_PRESERVE_SET] = 223 ;
+    ObSysVars[223].alias_ = "OB_SV__FORCE_ORDER_PRESERVE_SET" ;
+    }();
+
+    [&] (){
+      ObSysVars[224].info_ = "specifies whether automatic degree of parallelism will be enabled" ;
+      ObSysVars[224].name_ = "parallel_degree_policy" ;
+      ObSysVars[224].data_type_ = ObIntType ;
+      ObSysVars[224].enum_names_ = "[u'MANUAL', u'AUTO']" ;
+      ObSysVars[224].value_ = "0" ;
+      ObSysVars[224].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[224].id_ = SYS_VAR_PARALLEL_DEGREE_POLICY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_POLICY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_DEGREE_POLICY] = 224 ;
+    ObSysVars[224].alias_ = "OB_SV_PARALLEL_DEGREE_POLICY" ;
+    }();
+
+    [&] (){
+      ObSysVars[225].info_ = "limits the degree of parallelism used by the optimizer when automatic degree of parallelism is enabled" ;
+      ObSysVars[225].name_ = "parallel_degree_limit" ;
+      ObSysVars[225].data_type_ = ObUInt64Type ;
+      ObSysVars[225].value_ = "0" ;
+      ObSysVars[225].min_val_ = "0" ;
+      ObSysVars[225].max_val_ = "9223372036854775807" ;
+      ObSysVars[225].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[225].id_ = SYS_VAR_PARALLEL_DEGREE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_DEGREE_LIMIT] = 225 ;
+    ObSysVars[225].alias_ = "OB_SV_PARALLEL_DEGREE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[226].info_ = "specifies the minimum execution time a table scan should have before it's considered for automatic degree of parallelism, variable unit is milliseconds" ;
+      ObSysVars[226].name_ = "parallel_min_scan_time_threshold" ;
+      ObSysVars[226].data_type_ = ObUInt64Type ;
+      ObSysVars[226].value_ = "1000" ;
+      ObSysVars[226].min_val_ = "10" ;
+      ObSysVars[226].max_val_ = "9223372036854775807" ;
+      ObSysVars[226].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[226].id_ = SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD] = 226 ;
+    ObSysVars[226].alias_ = "OB_SV_PARALLEL_MIN_SCAN_TIME_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[227].info_ = "control optimizer dynamic sample level" ;
+      ObSysVars[227].name_ = "optimizer_dynamic_sampling" ;
+      ObSysVars[227].data_type_ = ObUInt64Type ;
+      ObSysVars[227].value_ = "1" ;
+      ObSysVars[227].min_val_ = "0" ;
+      ObSysVars[227].max_val_ = "1" ;
+      ObSysVars[227].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[227].id_ = SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING] = 227 ;
+    ObSysVars[227].alias_ = "OB_SV_OPTIMIZER_DYNAMIC_SAMPLING" ;
+    }();
+
+    [&] (){
+      ObSysVars[228].info_ = "set runtime filter type, including the bloom_filter/range/in filter" ;
+      ObSysVars[228].name_ = "runtime_filter_type" ;
+      ObSysVars[228].data_type_ = ObVarcharType ;
+      ObSysVars[228].value_ = "BLOOM_FILTER,RANGE,IN" ;
+      ObSysVars[228].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[228].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid" ;
+      ObSysVars[228].id_ = SYS_VAR_RUNTIME_FILTER_TYPE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_TYPE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_TYPE] = 228 ;
+    ObSysVars[228].alias_ = "OB_SV_RUNTIME_FILTER_TYPE" ;
+    }();
+
+    [&] (){
+      ObSysVars[229].info_ = "set default wait time ms for runtime filter, default is 10ms" ;
+      ObSysVars[229].name_ = "runtime_filter_wait_time_ms" ;
+      ObSysVars[229].data_type_ = ObIntType ;
+      ObSysVars[229].value_ = "10" ;
+      ObSysVars[229].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[229].id_ = SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS] = 229 ;
+    ObSysVars[229].alias_ = "OB_SV_RUNTIME_FILTER_WAIT_TIME_MS" ;
+    }();
+
+    [&] (){
+      ObSysVars[230].info_ = "set max in number for runtime in filter, default is 1024" ;
+      ObSysVars[230].name_ = "runtime_filter_max_in_num" ;
+      ObSysVars[230].data_type_ = ObIntType ;
+      ObSysVars[230].value_ = "1024" ;
+      ObSysVars[230].min_val_ = "0" ;
+      ObSysVars[230].max_val_ = "10240" ;
+      ObSysVars[230].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[230].id_ = SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM] = 230 ;
+    ObSysVars[230].alias_ = "OB_SV_RUNTIME_FILTER_MAX_IN_NUM" ;
+    }();
+
+    [&] (){
+      ObSysVars[231].info_ = "set max size for single runtime bloom filter, default is 2GB" ;
+      ObSysVars[231].name_ = "runtime_bloom_filter_max_size" ;
+      ObSysVars[231].data_type_ = ObIntType ;
+      ObSysVars[231].value_ = "2147483648" ;
+      ObSysVars[231].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[231].id_ = SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE] = 231 ;
+    ObSysVars[231].alias_ = "OB_SV_RUNTIME_BLOOM_FILTER_MAX_SIZE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 223;
+static int64_t var_amount = 232;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

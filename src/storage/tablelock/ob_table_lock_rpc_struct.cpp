@@ -199,7 +199,8 @@ bool ObLockParam::is_valid() const
           (schema_version_ >= 0 ||
            (ObLockOBJType::OBJ_TYPE_COMMON_OBJ == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_TENANT == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_LS == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_LS == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH == lock_id_.obj_type_)));
 }
 
 void ObLockRequest::reset()

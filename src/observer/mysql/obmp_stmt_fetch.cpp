@@ -178,7 +178,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
     int64_t fetch_limit = OB_INVALID_COUNT == fetch_rows_ ? INT64_MAX : fetch_rows_;
     int64_t true_row_num = 0;
-    if (enable_sql_audit) {
+    if (enable_perf_event) {
       audit_record.exec_record_.record_start(di);
     }
     if (OB_ISNULL(gctx_.sql_engine_)) {
@@ -192,10 +192,8 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
       exec_start_timestamp_ = ObTimeUtility::current_time();
     }
     if (OB_SUCC(ret)) {
-      if (enable_perf_event) {
-        //监控项统计开始
-        exec_start_timestamp_ = ObTimeUtility::current_time();
-      }
+      //监控项统计开始
+      exec_start_timestamp_ = ObTimeUtility::current_time();
       // 本分支内如果出错，全部会在response_result内部处理妥当
       // 无需再额外处理回复错误包
       session.set_current_execution_id(execution_id);
@@ -215,17 +213,27 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
         ret = OB_SUCCESS;
       }
     }
+    //监控项统计结束
+    exec_end_timestamp_ = ObTimeUtility::current_time();
+
+    // some statistics must be recorded for plan stat, even though sql audit disabled
+    bool first_record = (1 == audit_record.try_cnt_);
+    ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+    audit_record.exec_timestamp_.update_stage_time();
+
     if (enable_perf_event) {
-      //监控项统计结束
-      exec_end_timestamp_ = ObTimeUtility::current_time();
+      audit_record.exec_record_.record_end(di);
       record_stat(stmt::T_EXECUTE, exec_end_timestamp_);
+      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.update_event_stage_state();
     }
+
     if (enable_sql_audit) {
       audit_record.affected_rows_ = fetch_limit;
       audit_record.return_rows_ = true_row_num;
-      audit_record.exec_record_.record_end(di);
       audit_record.ps_stmt_id_ = cursor_id_;
-      bool first_record = (1 == audit_record.try_cnt_);
+      audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       if (OB_NOT_NULL(cursor)
           && cursor->is_ps_cursor()) {
         ObPsStmtInfoGuard guard;
@@ -238,14 +246,9 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
           audit_record.sql_ = const_cast<char *>(ps_info->get_ps_sql().ptr());
           audit_record.sql_len_ = min(ps_info->get_ps_sql().length(), OB_MAX_SQL_LENGTH);
         } else {
-          LOG_INFO("get sql fail in fetch", K(ret), K(cursor_id_), K(cursor->get_id()));
+          LOG_WARN("get sql fail in fetch", K(ret), K(cursor_id_), K(cursor->get_id()));
         }
       }
-      ObExecStatUtils::record_exec_timestamp(*this,
-          (1 == audit_record.try_cnt_), // first_record
-          audit_record.exec_timestamp_);
-      //更新阶段累加时间
-      audit_record.update_stage_stat();
     }
     session.partition_hit().freeze();
     session.set_show_warnings_buf(ret); // TODO: 挪个地方性能会更好，减少部分wb拷贝
@@ -753,11 +756,8 @@ int ObMPStmtFetch::process()
                 OB_SYS_TENANT_ID, sys_version))) {
       LOG_WARN("fail get tenant broadcast version", K(ret));
     } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
-    } else if (pkt.get_extra_info().exist_sync_sess_info()
-                 && OB_FAIL(ObMPUtils::sync_session_info(session,
-                              pkt.get_extra_info().get_sync_sess_info()))) {
-      need_response_error = false;
-      LOG_WARN("fail to update sess info", K(ret));
+    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
     } else {
       need_disconnect = false;

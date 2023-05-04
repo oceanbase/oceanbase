@@ -57,7 +57,9 @@ int EventRecorder::report_event_(ElectionEventType type, const common::ObString 
   ObAddr self_addr = self_addr_;
   ObUniqueGuard<ObStringHolder> uniq_holder;
   #define PRINT_WRAPPER KR(ret), K(*this), K(type), K(info)
-  if (CLICK_FAIL(ob_make_unique(uniq_holder))) {
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "EventReHolder");
+  SET_USE_500(attr);
+  if (CLICK_FAIL(ob_make_unique(uniq_holder, attr))) {
     LOG_EVENT(WARN, "fail to make unique guard");
   } else if (CLICK_FAIL(uniq_holder->assign(info))) {
     LOG_EVENT(WARN, "fail to create unique ownership of string");

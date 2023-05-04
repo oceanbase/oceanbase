@@ -24,7 +24,6 @@
 #include "rootserver/ob_root_balancer.h"
 #include "rootserver/ob_root_service.h"
 #include "ob_rs_event_history_table_operator.h"
-#include "ob_server_manager.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
@@ -331,22 +330,6 @@ int ObDRTask::set_task_key(
   return ret;
 }
 
-int ObDRTask::update_with_partition(
-    const common::ObAddr &dst_server) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!dst_server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(dst_server));
-  } else if (OB_UNLIKELY(nullptr == GCTX.root_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("rootservice ptr is null", KR(ret));
-  } else if (OB_FAIL(GCTX.root_service_->get_server_mgr().set_with_partition(dst_server))) {
-    LOG_WARN("fail to set with partition", KR(ret), K(dst_server));
-  }
-  return ret;
-}
-
 void ObDRTask::set_schedule()
 {
   set_schedule_time(ObTimeUtility::current_time());
@@ -579,9 +562,6 @@ int ObMigrateLSReplicaTask::check_before_execute(
     LOG_WARN("fail to check paxos replica number", KR(ret), K(ls_info));
   } else if (OB_FAIL(check_online(ls_info, ret_comment))) {
     LOG_WARN("fail to check online", KR(ret), K(ls_info));
-  } else if (OB_FAIL(update_with_partition(dst_replica_.get_server()))) {
-    LOG_WARN("fail to update with partition", KR(ret),
-             "server", dst_replica_.get_server());
   }
   return ret;
 }
@@ -1032,9 +1012,6 @@ int ObAddLSReplicaTask::check_before_execute(
     LOG_WARN("fail to check online", KR(ret), K(ls_info));
   } else if (OB_FAIL(check_paxos_member(ls_info, ret_comment))) {
     LOG_WARN("fail to check paxos member", KR(ret), K(ls_info));
-  } else if (OB_FAIL(update_with_partition(dst_replica_.get_server()))) {
-    LOG_WARN("fail to update with partition", KR(ret),
-             "server", dst_replica_.get_server());
   }
   return ret;
 }
@@ -1505,9 +1482,6 @@ int ObLSTypeTransformTask::check_before_execute(
     LOG_WARN("fail to check online", KR(ret), K(ls_info));
   } else if (OB_FAIL(check_paxos_member(ls_info, ret_comment))) {
     LOG_WARN("fail to check paxos member", KR(ret), K(ls_info));
-  } else if (OB_FAIL(update_with_partition(dst_replica_.get_server()))) {
-    LOG_WARN("fail to update with partition", KR(ret),
-             "server", dst_replica_.get_server());
   }
   return ret;
 }

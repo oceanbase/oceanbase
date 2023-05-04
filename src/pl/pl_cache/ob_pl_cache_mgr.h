@@ -45,7 +45,8 @@ struct ObGetPLKVEntryOp : public sql::ObKVEntryTraverseOp
     if (ObLibCacheNameSpace::NS_PRCR == entry.first->namespace_ ||
         ObLibCacheNameSpace::NS_SFC == entry.first->namespace_ ||
         ObLibCacheNameSpace::NS_ANON == entry.first->namespace_ ||
-        ObLibCacheNameSpace::NS_PKG == entry.first->namespace_) {
+        ObLibCacheNameSpace::NS_PKG == entry.first->namespace_ ||
+        ObLibCacheNameSpace::NS_CALLSTMT == entry.first->namespace_) {
       is_match = true;
     }
     return ret;

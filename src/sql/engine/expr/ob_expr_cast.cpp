@@ -38,7 +38,7 @@ ObExprCast::ObExprCast(ObIAllocator &alloc)
     : ObFuncExprOperator::ObFuncExprOperator(alloc, T_FUN_SYS_CAST,
                                              N_CAST,
                                              2,
-                                             NOT_ROW_DIMENSION)
+                                             NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   extra_serialize_ = 0;
   disable_operand_auto_cast();
@@ -314,6 +314,8 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     LOG_WARN("invalid row_dimension_", K(row_dimension_), K(ret));
   } else if (OB_FAIL(get_cast_type(type2, cast_raw_expr->get_extra(), dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
+  } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type))) {
+     LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -363,6 +365,9 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         type.set_precision(float_precision);
         type.set_scale(float_scale);
       }
+    } else if (dst_type.is_user_defined_sql_type()) {
+      type.set_type(dst_type.get_type());
+      type.set_subschema_id(dst_type.get_subschema_id());
     } else {
       type.set_type(dst_type.get_type());
       type.set_collation_type(dst_type.get_collation_type());
@@ -480,6 +485,12 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
         ObExprResType dst_type_utf8;
         OZ(ObRawExprUtils::setup_extra_cast_utf8_type(dst_type, dst_type_utf8));
         OX(type1.set_calc_meta(dst_type_utf8.get_obj_meta()));
+      } else if (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML
+                 && dst_type.is_character_type() && is_called_in_sql()) {
+        // only when cast (pl xmltype variable as chartype) in pl
+        ObExprResType sql_xml_type;
+        sql_xml_type.set_sql_udt(ObXMLSqlType);
+        type1.set_calc_meta(sql_xml_type.get_obj_meta());
       } else {
         bool need_warp = false;
         if (ob_is_enumset_tc(type1.get_type())) {
@@ -595,6 +606,34 @@ int ObExprCast::get_cast_type(const ObExprResType param_type2,
       dst_type.set_scale(parse_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX]);
     }
     LOG_DEBUG("get_cast_type", K(dst_type), K(param_type2));
+  }
+  return ret;
+}
+
+int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type) const
+{
+  int ret = OB_SUCCESS;
+  if (src_type.is_ext()) {
+    if (dst_type.is_user_defined_sql_type()) {
+      if (src_type.get_udt_id() == T_OBJ_XML) {
+        dst_type.set_sql_udt(ObXMLSqlType);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cast unsupported pl udt type to sql udt type", K(ret), K(src_type), K(dst_type));
+      }
+    } else if (dst_type.is_character_type() && !is_called_in_sql()) {
+      ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+      LOG_WARN("PLS-00382: expression is of wrong type", K(ret), K(src_type), K(dst_type));
+    }
+  } else if (src_type.is_user_defined_sql_type()) {
+    if (dst_type.is_ext()) {
+      if (src_type.is_xml_sql_type()) {
+        dst_type.set_udt_id(T_OBJ_XML);
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cast unsupported sql udt type to pl udt type", K(ret), K(src_type), K(dst_type));
+      }
+    }
   }
   return ret;
 }
@@ -803,6 +842,33 @@ int ObExprCast::do_implicit_cast(ObExprCtx &expr_ctx,
     dst_obj = *obj_ptr;
   }
   LOG_DEBUG("do_implicit_cast done", K(ret), K(dst_obj), K(src_obj), K(dst_type), K(cast_mode));
+  return ret;
+}
+
+int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  if (exprs.count() != 2) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
+  } else if (OB_ISNULL(exprs.at(0)) || OB_ISNULL(exprs.at(1)) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
+  } else {
+    ObObjType src = exprs.at(0)->get_result_type().get_type();
+    ObObjType dst = expr->get_result_type().get_type();
+    is_valid = true;
+    if (is_oracle_mode()) {
+      if ((ob_is_oracle_temporal_type(src) && ob_is_string_type(dst))
+          || (ob_is_oracle_temporal_type(dst) && ob_is_string_type(src))) {
+        is_valid = false;
+      } else if ((ob_is_timestamp_tz(dst) || ob_is_timestamp_ltz(dst))
+                 && (ob_is_timestamp_nano(src) || ob_is_datetime(src))) {
+        is_valid = false;
+      }
+    } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
+      is_valid = false;
+    }
+  }
   return ret;
 }
 

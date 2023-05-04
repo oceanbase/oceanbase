@@ -367,14 +367,6 @@ public:
                               const common::ObArray<ObAddr>* alive_server_list = nullptr);
   int clear_autoinc_cache(const obrpc::ObAutoincSyncArg &arg);
 
-  static int calc_next_value(const uint64_t last_next_value,
-                             const uint64_t offset,
-                             const uint64_t increment,
-                             uint64_t &new_next_value);
-  static int calc_prev_value(const uint64_t last_next_value,
-                             const uint64_t offset,
-                             const uint64_t increment,
-                             uint64_t &prev_value);
   int get_sequence_value(const uint64_t tenant_id,
                          const uint64_t table_id,
                          const uint64_t column_id,
@@ -397,6 +389,21 @@ public:
                         const uint64_t &table_id,
                         const uint64_t &column_id,
                         common::ObMySQLTransaction &trans);
+  static int calc_next_value(const uint64_t last_next_value,
+                             const uint64_t offset,
+                             const uint64_t increment,
+                             uint64_t &new_next_value);
+  static int calc_prev_value(const uint64_t last_next_value,
+                             const uint64_t offset,
+                             const uint64_t increment,
+                             uint64_t &prev_value);
+private:
+  int get_handle_order(AutoincParam &param, CacheHandle *&handle);
+  int get_handle_noorder(AutoincParam &param, CacheHandle *&handle);
+  int sync_insert_value_order(AutoincParam &param, CacheHandle *&cache_handle,
+                              const uint64_t value_to_sync);
+  int sync_insert_value_noorder(AutoincParam &param, CacheHandle *&cache_handle,
+                               const uint64_t value_to_sync);
 
 private:
   uint64_t get_max_value(const common::ObObjType type);
@@ -407,17 +414,12 @@ private:
   int fetch_global_sync(const uint64_t tenant_id,
                         const uint64_t table_id,
                         const uint64_t column_id,
-                        const bool is_order,
                         TableNode &table_node,
                         const bool sync_presync = false);
   int get_server_set(const uint64_t tenant_id,
                      const uint64_t table_id,
                      common::hash::ObHashSet<common::ObAddr> &server_set,
                      const bool get_follower = false);
-
-  int get_auto_increment(const uint64_t tenant_id,
-                         const uint64_t table_id,
-                         uint64_t &auto_increment);
   int sync_value_to_other_servers(
       AutoincParam &param,
       uint64_t insert_value);
@@ -426,7 +428,6 @@ private:
       uint64_t tenant_id,
       uint64_t table_id,
       uint64_t column_id,
-      const bool is_order,
       TableNode &table_node);
 
   // align insert value to next cache boundary (end)
@@ -434,30 +435,8 @@ private:
       uint64_t insert_value,
       uint64_t cache_size,
       uint64_t max_value);
-
-  int sync_insert_value(AutoincParam &param,
-                        CacheHandle *&cache_handle,
-                        const uint64_t value_to_sync);
   // for prefetch or presync
   int set_pre_op_timeout(common::ObTimeoutCtx &ctx);
-  template<typename SchemaType>
-  int get_schema(share::schema::ObSchemaGetterGuard &schema_guard,
-                 const uint64_t tenant_id,
-                 const uint64_t schema_id,
-                 const std::function<int(const uint64_t, const uint64_t, const SchemaType *&)> get_schema_func,
-                 const SchemaType *&schema);
-
-  inline ObIGlobalAutoIncrementService *get_global_autoinc_service(const bool is_order)
-  {
-    ObIGlobalAutoIncrementService *service = nullptr;
-    if (is_order) {
-      service = &global_autoinc_service_;
-    } else {
-      service = &distributed_autoinc_service_;
-    }
-    return service;
-  }
-
   int alloc_autoinc_try_lock(lib::ObMutex &alloc_mutex);
 
 private:

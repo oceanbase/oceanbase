@@ -39053,16 +39053,30 @@ ObTZNameKey::ObTZNameKey(const ObTZNameKey &key)
   }
 }
 
-uint64_t ObTZNameKey::hash(uint64_t seed) const
+uint64_t ObTZNameKey::hash() const
 {
   uint64_t seed_ret = 0;
   int32_t str_len = static_cast<int32_t>(strlen(tz_name_));
   if (OB_ISNULL(tz_name_) || OB_UNLIKELY(str_len > OB_MAX_TZ_NAME_LEN)) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid tz_name", K(str_len));
   } else {
-    seed_ret = murmurhash(tz_name_, str_len, seed);
+    seed_ret = murmurhash(tz_name_, str_len, 0);
   }
   return seed_ret;
+}
+
+int ObTZNameKey::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  int ret = OB_SUCCESS;
+  hash_val = 0;
+  int32_t str_len = static_cast<int32_t>(strlen(tz_name_));
+  if (OB_ISNULL(tz_name_) || OB_UNLIKELY(str_len > OB_MAX_TZ_NAME_LEN)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tz_name", K(ret), K(str_len));
+  } else {
+    hash_val = murmurhash(tz_name_, str_len, seed);
+  }
+  return ret;
 }
 
 void ObTZMapWrap::set_tz_map(const common::ObTZInfoMap *timezone_info_map)
@@ -39388,8 +39402,8 @@ int ObTimeZoneInfoPos::compare_upgrade(const ObTimeZoneInfoPos &other, bool &is_
 {
   int ret = OB_SUCCESS;
   is_equal = false;
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &other_type = other.get_tz_tran_types();
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo> &other_type = other.get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = get_tz_tran_types();
 
   if (OB_UNLIKELY(tz_id_ != other.get_tz_id())
       || OB_UNLIKELY(0 != other.get_tz_name().compare(tz_name_))
@@ -39455,7 +39469,7 @@ int ObTimeZoneInfoPos::get_timezone_offset(int64_t value, int32_t &offset_sec,
     common::ObString &tz_abbr_str, int32_t &tran_type_id) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = get_tz_tran_types();
   int64_t type_cnt = tz_tran_types.count();
   int64_t type_idx = 0;
   if (OB_UNLIKELY(false == is_valid())) {
@@ -39508,7 +39522,7 @@ int ObTimeZoneInfoPos::get_timezone_offset(const int32_t tran_type_id,
     common::ObString &tz_abbr_str, int32_t &offset_sec) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = get_tz_tran_types();
   int64_t type_idx = 0;
   if (OB_UNLIKELY(false == is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -39534,7 +39548,7 @@ int ObTimeZoneInfoPos::get_timezone_sub_offset(int64_t value, const ObString &tz
     int32_t &offset_sec, int32_t &tz_id, int32_t &tran_type_id) const
 {
   int ret = OB_SUCCESS;
-  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &tz_revt_types = get_tz_revt_types();
+  const common::ObSArray<ObTZRevertTypeInfo> &tz_revt_types = get_tz_revt_types();
   tz_id = static_cast<int32_t>(tz_id_);
   int64_t type_idx = 0;
   const bool is_oracle_mode = lib::is_oracle_mode();
@@ -39595,10 +39609,10 @@ int ObTimeZoneInfoPos::calc_revt_types()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tz info is invalid", K(ret));
   } else {
-    common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &tz_revt_types =  tz_revt_types_[get_curr_idx() % 2];
+    common::ObSArray<ObTZRevertTypeInfo> &tz_revt_types =  tz_revt_types_[get_curr_idx() % 2];
     tz_revt_types.reset();
     ObTZRevertTypeInfo revt_type_info;
-    const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = get_tz_tran_types();
+    const common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = get_tz_tran_types();
 
     //add first revert type, type info is from default type
     revt_type_info.type_class_ = ObTZRevertTypeInfo::NORMAL;
@@ -39670,8 +39684,8 @@ OB_DEF_SERIALIZE(ObTimeZoneInfoPos)
 {
   int ret = OB_SUCCESS;
   ObString tz_name_str(static_cast<ObString::obstr_size_t>(strlen(tz_name_)), tz_name_);
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = get_tz_tran_types();
-  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &tz_revt_types = get_tz_revt_types();
+  const common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = get_tz_tran_types();
+  const common::ObSArray<ObTZRevertTypeInfo> &tz_revt_types = get_tz_revt_types();
   LST_DO_CODE(OB_UNIS_ENCODE, tz_id_, default_type_, tz_tran_types, tz_revt_types, tz_name_str);
   return ret;
 }
@@ -39681,8 +39695,8 @@ OB_DEF_DESERIALIZE(ObTimeZoneInfoPos)
   int ret = OB_SUCCESS;
   ObString tz_name_str;
   curr_idx_ = 0;
-  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &tz_tran_types = tz_tran_types_[0];
-  common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &tz_revt_types = tz_revt_types_[0];
+  common::ObSArray<ObTZTransitionTypeInfo> &tz_tran_types = tz_tran_types_[0];
+  common::ObSArray<ObTZRevertTypeInfo> &tz_revt_types = tz_revt_types_[0];
   LST_DO_CODE(OB_UNIS_DECODE, tz_id_, default_type_, tz_tran_types,
               tz_revt_types, tz_name_str);
   if(OB_FAIL(ret)) {
@@ -39756,15 +39770,15 @@ void ObTZNameIDAlloc::free_node(ObTZNameHashNode *node)
   }
 }
 
-int ObTZInfoMap::init(const lib::ObLabel &label)
+int ObTZInfoMap::init(const lib::ObMemAttr &attr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(id_map_.init(label))) {
+  } else if (OB_FAIL(id_map_.init(attr))) {
     LOG_WARN("fail to init id map", K(ret));
-  } else if (OB_FAIL(name_map_.init(label))) {
+  } else if (OB_FAIL(name_map_.init(attr))) {
     LOG_WARN("fail to init name map", K(ret));
   } else {
     inited_ = true;

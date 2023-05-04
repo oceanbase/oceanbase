@@ -27,7 +27,7 @@ using namespace common;
 namespace sql
 {
 ObRawExprPrinter::ObRawExprPrinter()
-    : buf_(NULL),
+  : buf_(NULL),
       buf_len_(0),
       pos_(NULL),
       scope_(T_NONE_SCOPE),
@@ -88,7 +88,6 @@ int ObRawExprPrinter::do_print(ObRawExpr *expr, ObStmtScope scope, bool only_col
 int ObRawExprPrinter::print(ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
@@ -119,6 +118,11 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       ObExecParamRawExpr *exec_expr = static_cast<ObExecParamRawExpr*>(expr);
       if (print_params_.for_dblink_) {
         bool print_ref = exec_expr->is_ref_same_dblink();
+        if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) == OB_SUCCESS) {
+          //do nothing
+        } else {
+          print_ref = true;
+        }
         if (OB_ISNULL(exec_expr->get_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
@@ -237,7 +241,29 @@ int ObRawExprPrinter::print(ObConstRawExpr *expr)
   } else if (OB_NOT_NULL(param_store_) && T_QUESTIONMARK == expr->get_expr_type()) {
     int64_t idx = expr->get_value().get_unknown();
     CK (0 <= idx && idx < param_store_->count());
-    OZ (param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_));
+    if (OB_FAIL(ret)) {
+    } else if (param_store_->at(idx).is_datetime()) {
+      int32_t tmp_date = 0;
+      if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "%s '", LITERAL_PREFIX_DATE))) {
+        LOG_WARN("fail to print literal prefix", K(ret));
+      } else if (OB_FAIL(ObTimeConverter::datetime_to_date(param_store_->at(idx).get_datetime(), NULL, tmp_date))) {
+        LOG_WARN("fail to datetime_to_date", "datetime", param_store_->at(idx).get_datetime(), K(ret));
+      } else if (OB_FAIL(ObTimeConverter::date_to_str(tmp_date, buf_, buf_len_, *pos_))) {
+        LOG_WARN("fail to date_to_str", K(tmp_date), K(ret));
+      } else if (OB_FAIL(databuff_printf(buf_, buf_len_, *pos_, "'"))) {
+        LOG_WARN("fail to print single quote", K(ret));
+      }
+    } else {
+      //timestamp time zone type need print prefix.
+      if (param_store_->at(idx).is_timestamp_tz()) {
+        DATA_PRINTF(" timestamp ");
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(param_store_->at(idx).print_sql_literal(buf_, buf_len_, *pos_, print_params_))) {
+          LOG_WARN("failed to print sql literal", K(ret));
+        }
+      }
+    }
   } else if (expr->get_literal_prefix().empty()) {
     //for empty string in Oracle mode , we should use char/nchar-type obj to print
     if (expr->get_value().is_null() && (ObCharType == expr->get_expr_obj_meta().get_type()
@@ -319,7 +345,8 @@ int ObRawExprPrinter::print(ObQueryRefRawExpr *expr)
                                            pos_,
                                            static_cast<ObSelectStmt*>(stmt),
                                            schema_guard_,
-                                           print_params_);
+                                           print_params_,
+                                           param_store_);
           if (print_cte_) {
             stmt_printer.enable_print_temp_table_as_cte();
           }
@@ -364,14 +391,22 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
     } else if (print_params_.for_dblink_) {
       if (!expr->is_cte_generated_column() &&
           !expr->get_database_name().empty()) {
-        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(expr->get_database_name()));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(expr->get_database_name()));
+        PRINT_QUOT;
+        DATA_PRINTF(".");
       }
       if (!expr->get_table_name().empty()) {
         ObString table_name = expr->get_table_name();
         CONVERT_CHARSET_FOR_RPINT(allocator, table_name);
-        DATA_PRINTF("\"%.*s\".", LEN_AND_PTR(table_name));
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(table_name));
+        PRINT_QUOT;
+        DATA_PRINTF(".");
       }
-      DATA_PRINTF("\"%.*s\"", LEN_AND_PTR(col_name));
+      PRINT_QUOT;
+      DATA_PRINTF("%.*s", LEN_AND_PTR(col_name));
+      PRINT_QUOT;
     } else if (expr->is_cte_generated_column()) {
       ObString table_name = expr->get_synonym_name().empty() ?
                                                   expr->get_table_name() : expr->get_synonym_name();
@@ -457,14 +492,18 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("prior");
     case T_OP_CONNECT_BY_ROOT :
       SET_SYMBOL_IF_EMPTY("connect_by_root");
-    case T_OP_NOT:
-      SET_SYMBOL_IF_EMPTY("not");
     case T_OP_NOT_EXISTS:
       SET_SYMBOL_IF_EMPTY("not exists");
     case T_OP_BIT_NEG:
       SET_SYMBOL_IF_EMPTY("~");
-    case T_OP_EXISTS: {
+    case T_OP_EXISTS:
       SET_SYMBOL_IF_EMPTY("exists");
+    case T_OP_NOT: {
+      if (lib::is_mysql_mode()) {
+        SET_SYMBOL_IF_EMPTY("(not");
+      } else {
+        SET_SYMBOL_IF_EMPTY("not");
+      }
       if (1 != expr->get_param_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr param count should be equal 1 ", K(ret), K(expr->get_param_count()));
@@ -472,6 +511,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
         DATA_PRINTF("%.*s", LEN_AND_PTR(symbol));
         DATA_PRINTF("(");
         PRINT_EXPR(expr->get_param_expr(0));
+        DATA_PRINTF(")");
+      }
+      if (type == T_OP_NOT && lib::is_mysql_mode()) {
         DATA_PRINTF(")");
       }
       break;
@@ -572,9 +614,9 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       }
     case T_OP_BIT_AND:
       SET_SYMBOL_IF_EMPTY("&");
-    case T_OP_REGEXP: {
+    case T_OP_REGEXP:
       SET_SYMBOL_IF_EMPTY("regexp");
-    case T_OP_CNN:
+    case T_OP_CNN: {
       SET_SYMBOL_IF_EMPTY("||");
       //case T_OP_DATE_ADD: {
       if (OB_UNLIKELY(2 != expr->get_param_count())) {
@@ -1059,6 +1101,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
+    case T_FUN_ORA_XMLAGG:
+      SET_SYMBOL_IF_EMPTY("xmlagg");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -1072,7 +1116,7 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
         }
       }
       if (OB_SUCC(ret)) {
-        if (!print_params_.for_dblink_ && !database_name.empty()) {
+        if (!database_name.empty()) {
           DATA_PRINTF("%.*s.", LEN_AND_PTR(database_name));
         }
         if (!package_name.empty()) {
@@ -2485,6 +2529,7 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_XMLCAST:
       case T_FUN_SYS_TREAT:
       case T_FUN_SYS_CAST: {
         if (2 != expr->get_param_count()) {
@@ -2493,10 +2538,11 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         } else if (expr->has_flag(IS_INNER_ADDED_EXPR)) {
           PRINT_EXPR(expr->get_param_expr(0));
         } else {
-          bool is_treat = T_FUN_SYS_TREAT == expr_type;
           if (OB_SUCC(ret)) {
-            if (is_treat) {
+            if (T_FUN_SYS_TREAT == expr_type) {
               DATA_PRINTF("treat(");
+            } else if (T_FUN_SYS_XMLCAST == expr_type) {
+              DATA_PRINTF("xmlcast(");
             } else {
               DATA_PRINTF("cast(");
             }
@@ -3029,6 +3075,66 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_XMLPARSE : {
+        if (OB_FAIL(print_xml_parse_expr(expr))) {
+          LOG_WARN("print xml_parse expr failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_XML_ELEMENT : {
+        if (OB_FAIL(print_xml_element_expr(expr))) {
+          LOG_WARN("print xml_element expr failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_XML_ATTRIBUTES : {
+        if (OB_FAIL(print_xml_attributes_expr(expr))) {
+          LOG_WARN("print xml_attributes expr failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_ORA_XMLAGG: {
+        if (OB_FAIL(print_xml_agg_expr(expr))) {
+          LOG_WARN("print xml_parse expr failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_XML_SERIALIZE: {
+        if (OB_FAIL(print_xml_serialize_expr(expr))) {
+          LOG_WARN("print xmlserialize expr failed", K(ret));
+        }
+        break;
+      }
+      case T_FUN_SYS_REGEXP_LIKE: {
+        if (OB_UNLIKELY(expr->get_param_count() < 2 || expr->get_param_count() > 3)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr param count should be equal 2 or 3", "count", expr->get_param_count(), K(ret));
+        } else {
+          DATA_PRINTF("(");
+          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
+          PRINT_EXPR(expr->get_param_expr(0));
+          DATA_PRINTF(",");
+          PRINT_EXPR(expr->get_param_expr(1));
+          if (OB_SUCC(ret) && expr->get_param_count() == 3) {
+            DATA_PRINTF(",");
+            PRINT_EXPR(expr->get_param_expr(2));
+          }
+          DATA_PRINTF("))");
+        }
+        break;
+      }
+      case T_FUN_ENUM_TO_STR:
+      case T_FUN_SET_TO_STR:
+      case T_FUN_ENUM_TO_INNER_TYPE:
+      case T_FUN_SET_TO_INNER_TYPE: {
+        if (expr->get_param_count() < 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param count should be greater than 1", K(ret), K(*expr));
+        } else {
+          PRINT_EXPR(expr->get_param_expr(1));
+        }
+        break;
+      }
       default: {
         // substr
         // date, month
@@ -3043,6 +3149,9 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
           } else {
             func_name = "ora_decode";
           }
+        }
+        if (T_FUN_SYS_XML_EXTRACT == expr->get_expr_type()) {
+          func_name = "extract";
         }
         if (T_FUN_UDF == expr->get_expr_type()) {
           PRINT_QUOT;
@@ -3643,6 +3752,14 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
         }
         break;
       }
+      case T_PSEUDO_EXTERNAL_FILE_COL: {
+        if (!expr->get_table_name().empty()) {
+          PRINT_IDENT(expr->get_table_name());
+          DATA_PRINTF(".");
+        }
+        PRINT_IDENT(expr->get_expr_name());
+        break;
+      }
       default : {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected pseudo column type", K(type));
@@ -4156,8 +4273,9 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         } else if (OB_FAIL(schema_guard_->get_udt_info(dest_tenant_id, udt_id, dest_info))) {
           LOG_WARN("failed to get udt info", K(ret));
         } else {
-          DATA_PRINTF(lib::is_oracle_mode() ? "\"%.*s\"" : "`%.*s`",
-                LEN_AND_PTR(dest_info->get_type_name()));
+          PRINT_QUOT;
+          DATA_PRINTF("%.*s", LEN_AND_PTR(dest_info->get_type_name()));
+          PRINT_QUOT;
         }
         break;
       }
@@ -4172,5 +4290,325 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
 
   return ret;
 }
+
+int ObRawExprPrinter::print_xml_parse_expr(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(4 != expr->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr to type", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlparse(");
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("doc type value isn't int value");
+    } else {
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int();
+      switch (type) {
+        case 0:
+          DATA_PRINTF("DOCUMENT ");
+          break;
+        case 1:
+          DATA_PRINTF("CONTENT ");
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid doc type value", K(type), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      PRINT_EXPR(expr->get_param_expr(1));
+      if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(2))->get_value().is_int()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("doc type value isn't int value");
+      } else {
+        int64_t format_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(2))->get_value().get_int();
+        switch (format_type) {
+          case 0:
+            // do nothing
+            break;
+          case 1:
+            DATA_PRINTF(" WELLFORMED");
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid format type value", K(format_type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        DATA_PRINTF(")");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_xml_serialize_expr(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(10 != expr->get_param_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlserialize(");
+    // doc_type
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("doc type value isn't int value");
+    } else {
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int();
+      switch (type) {
+        case 0:
+          DATA_PRINTF("DOCUMENT ");
+          break;
+        case 1:
+          DATA_PRINTF("CONTENT ");
+          break;
+        default:
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid doc type value", K(type), K(ret));
+      }
+    }
+    // value_expr
+    PRINT_EXPR(expr->get_param_expr(1));
+    // [as datatype]
+    if (OB_SUCC(ret)) {
+      DATA_PRINTF(" as ");
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(print_cast_type(expr->get_param_expr(2)))) {
+          LOG_WARN("fail to print cast_type", K(ret));
+        }
+      }
+    }
+    // [encoding charset]
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType expr_type = expr->get_param_expr(3)->get_expr_type();
+      int64_t encoding_opt = static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().get_int();
+      if (expr_type == T_INT) {
+        if (encoding_opt == 0) {
+        } else if (encoding_opt == 1) {
+          DATA_PRINTF(" encoding ");
+          PRINT_EXPR(expr->get_param_expr(4));
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid encoding opt value", K(encoding_opt), K(ret));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid expr type", K(ret), K(expr_type), K(encoding_opt));
+      }
+    }
+    // [version string literal]
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType expr_type = expr->get_param_expr(5)->get_expr_type();
+      int64_t version_opt = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
+      if (expr_type == T_INT) {
+        if (version_opt == 0) {
+        } else if (version_opt == 1) {
+          DATA_PRINTF(" version ");
+          PRINT_EXPR(expr->get_param_expr(6));
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid version opt value", K(version_opt), K(ret));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid expr type", K(ret), K(expr_type), K(version_opt));
+      }
+    }
+    // [indent]
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType expr_type_1 = expr->get_param_expr(7)->get_expr_type();
+      ObExprOperatorType expr_type_2 = expr->get_param_expr(8)->get_expr_type();
+      int64_t indent_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
+      int64_t value = static_cast<ObConstRawExpr*>(expr->get_param_expr(6))->get_value().get_int();
+      if (expr_type_1 == T_INT && expr_type_2 == T_INT) {
+        if (indent_type == 0) {
+        } else if (indent_type == 1) {
+          DATA_PRINTF(" no indent ");
+        } else if (indent_type == 2) {
+          DATA_PRINTF(" indent ");
+        } else if (indent_type == 3) {
+          DATA_PRINTF(" indent size = %ld", value);
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid indent value", K(value), K(ret));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid indent type", K(ret), K(expr_type_1), K(expr_type_2));
+      }
+    }
+
+    // [hide|show] defaults
+    if (OB_SUCC(ret)) {
+      ObExprOperatorType expr_type = expr->get_param_expr(9)->get_expr_type();
+      int64_t value = static_cast<ObConstRawExpr*>(expr->get_param_expr(9))->get_value().get_int();
+      if (expr_type == T_INT) {
+        if (value == 0) {
+        } else if (value == 1) {
+          DATA_PRINTF(" hide defaults ");
+        } else if (value == 2) {
+          DATA_PRINTF(" show defaults ");
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid indent value", K(value), K(ret));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid expr type", K(expr_type), K(ret));
+      }
+    }
+    DATA_PRINTF(")");
+  }
+
+  return ret;
+}
+
+
+int ObRawExprPrinter::print_xml_element_expr(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(3 > expr->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlelement(");
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("doc type value isn't int value");
+    } else {
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int();
+      switch (type) {
+        case 0:
+          DATA_PRINTF("NOENTITYESCAPING ");
+          break;
+        case 1:
+          DATA_PRINTF("ENTITYESCAPING ");
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid doc type value", K(type), K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      int64_t format_type = 0;
+      if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("doc type value isn't int value");
+      } else {
+        format_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+        switch (format_type) {
+          case 0:
+            DATA_PRINTF("NAME ");
+            break;
+          case 1:
+            DATA_PRINTF("EVALNAME ");
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid format type value", K(format_type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        int64_t cur_pos = *pos_;
+        PRINT_EXPR(expr->get_param_expr(2));
+        int64_t new_pos = *pos_;
+
+        if (OB_SUCC(ret) && format_type == 0) {
+          if (buf_[cur_pos] == '\'') {
+             buf_[cur_pos] = ' ';
+          }
+          if (buf_[new_pos - 1] == '\'') {
+             buf_[new_pos - 1] = ' ';
+          }
+        }
+
+        for (int i = 3; i < expr->get_param_count() && OB_SUCC(ret); i++) {
+          DATA_PRINTF(",");
+          PRINT_EXPR(expr->get_param_expr(i));
+        }
+        DATA_PRINTF(")");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_xml_agg_expr(ObSysFunRawExpr *expr)
+{
+  UNUSED(expr);
+  int ret = OB_NOT_IMPLEMENT; // ToDo: @gehao, implement soom later
+  return ret;
+}
+
+int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(3 > expr->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (OB_UNLIKELY(expr->get_param_count() % 2 != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlattributes(");
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().is_int()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("doc type value isn't int value");
+    } else {
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int();
+      switch (type) {
+        case 0:
+          DATA_PRINTF("NOENTITYESCAPING ");
+          break;
+        case 1:
+          DATA_PRINTF("ENTITYESCAPING ");
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid doc type value", K(type), K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("doc type value isn't int value");
+      } else {
+        int64_t format_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+        switch (format_type) {
+          case 0:
+            DATA_PRINTF("NOSCHEMACHECK ");
+            break;
+          case 1:
+            DATA_PRINTF("SCHEMACHECK ");
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid format type value", K(format_type), K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        for (int i = 2; i < expr->get_param_count() && OB_SUCC(ret); i += 2) {
+          if (i > 2) {
+            DATA_PRINTF(",");
+          }
+          PRINT_EXPR(expr->get_param_expr(i));
+          ObString attr_key = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 1))->get_value().get_string();
+          if (!attr_key.empty()) {
+            // While the result obtained during anti-spelling has been parsed,
+            // so adding all double quotes can achieve the desired result
+            DATA_PRINTF(" as \"%.*s\"", LEN_AND_PTR(attr_key));
+          }
+        }
+        DATA_PRINTF(")");
+      }
+    }
+  }
+  return ret;
+}
+
 } //end of namespace sql
 } //end of namespace oceanbase

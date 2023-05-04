@@ -28,18 +28,18 @@ using namespace common::hash;
 
 ObKeystoreMgr::ObKeystoreMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      keystore_infos_(0, NULL, ObModIds::OB_SCHEMA_KEYSTORE),
-      keystore_map_(ObModIds::OB_SCHEMA_KEYSTORE)
+      keystore_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_KEYSTORE)),
+      keystore_map_(SET_USE_500(ObModIds::OB_SCHEMA_KEYSTORE))
 {
 }
 ObKeystoreMgr::ObKeystoreMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      keystore_infos_(0, NULL, ObModIds::OB_SCHEMA_KEYSTORE),
-      keystore_map_(ObModIds::OB_SCHEMA_KEYSTORE)
+      keystore_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_KEYSTORE)),
+      keystore_map_(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_SCHEMA_KEYSTORE)))
 {
 }
 ObKeystoreMgr::~ObKeystoreMgr()
@@ -366,4 +366,3 @@ int ObKeystoreMgr::get_schema_statistics(ObSchemaStatisticsInfo &schema_info) co
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase
-

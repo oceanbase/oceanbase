@@ -326,11 +326,12 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           LOG_WARN("fail to get expr", K(ret), K(i), K(size));
         }
         if (OB_SUCC(ret)) {
-          ObCollationType charsetnr;
-          if (OB_FAIL(ObCharset::get_default_collation(expr->get_collation_type(), charsetnr))) {
-            LOG_WARN("fail to get table item charset collation", K(expr->get_collation_type()), K(i), K(ret));
+          if (ob_is_string_or_lob_type(expr->get_data_type())
+              && CS_TYPE_BINARY != expr->get_collation_type()
+              && ObCharset::is_valid_collation(collation_type)) {
+            field.charsetnr_ = static_cast<uint16_t>(collation_type);
           } else {
-            field.charsetnr_ = static_cast<uint16_t>(charsetnr);
+            field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
           }
         }
         if (OB_SUCC(ret)) {
@@ -433,115 +434,119 @@ int ObSql::fill_result_set(ObResultSet &result_set,
     case stmt::T_CALL_PROCEDURE: {
       ObCallProcedureStmt &call_stmt = static_cast<ObCallProcedureStmt&>(basic_stmt);
       ObString tname = ObString::make_string("procedure");
+      if (NULL == call_stmt.get_call_proc_info()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("call proc info is null", K(ret));
+      } else {
+        int64_t size = call_stmt.get_call_proc_info()->get_output_count();
+        field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
 
-      int64_t size = call_stmt.get_output_count();
-      field.charsetnr_ = CS_TYPE_UTF8MB4_GENERAL_CI;
+        if (0 == size) {
+          break;
+        }
 
-      if (0 == call_stmt.get_output_count()) {
+        if (OB_SUCC(ret) && OB_FAIL(result_set.reserve_field_columns(size))) {
+          LOG_WARN("reserve field columns failed", K(ret), K(size));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
+          ObCollationType charsetnr;
+          ObDataType *type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_data_type();
+          ObObjType out_obj_type = call_stmt.get_call_proc_info()->get_out_type().at(i).get_obj_type();
+          if (ObUnknownType == out_obj_type
+            || ObExtendType == out_obj_type) {
+            // do nothing ...
+          } else if (OB_NOT_NULL(type)) {
+            if (ob_is_string_or_lob_type(out_obj_type)
+                  && CS_TYPE_ANY == type->get_collation_type()) {
+              charsetnr = ObCharset::is_valid_collation(collation_type)
+                            ? collation_type
+                            : CS_TYPE_UTF8MB4_BIN;
+            } else {
+              OZ (ObCharset::get_default_collation(type->get_collation_type(), charsetnr));
+            }
+            OX (field.charsetnr_ = static_cast<uint16_t>(charsetnr));
+          }
+          if (OB_SUCC(ret)) {
+            field.type_.set_type(out_obj_type);
+            if (OB_NOT_NULL(type)) {
+              field.accuracy_ = type->get_accuracy();
+              // Setup Collation and Collation levl
+              if (ob_is_string_or_lob_type(out_obj_type)
+                  || ob_is_raw(out_obj_type)
+                  || ob_is_enum_or_set_type(out_obj_type)) {
+                field.type_.set_collation_type(type->get_collation_type());
+                field.type_.set_collation_level(type->get_collation_level());
+              }
+            }
+            if (ObExtendType == out_obj_type) {
+              field.length_ = field.accuracy_.get_length();
+            } else if (ObCharType == out_obj_type
+                      || ObVarcharType == out_obj_type
+                      || ob_is_nstring_type(out_obj_type)) {
+              if (-1 == field.accuracy_.get_length()) {
+                field.length_ = ObCharType == out_obj_type ?
+                  OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_VARCHAR_LENGTH;
+              } else {
+                field.length_ = field.accuracy_.get_length();
+              }
+            } else if (ob_is_enum_or_set_type(out_obj_type)) {
+              CK (OB_NOT_NULL(type));
+              OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
+                                                      field.accuracy_,
+                                                      type->get_collation_type(),
+                                                      field.length_));
+              OX (field.type_.set_type(ObVarcharType));
+            } else {
+              OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
+                                                      field.accuracy_,
+                                                      common::CS_TYPE_INVALID,
+                                                      field.length_));
+            }
+            // Setup Scale
+            if (OB_SUCC(ret)) {
+              if (ObVarcharType == field.type_.get_type()) {
+                field.type_.set_varchar(type_name);
+              } else if (ObNumberType == field.type_.get_type()) {
+                field.type_.set_number(number);
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ob_write_string(alloc, tname, field.tname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, tname, field.org_tname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_name().at(i), field.cname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_name().at(i), field.org_cname_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_type_name().at(i), field.type_name_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_type_name().at(i)), K(ret));
+            } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_call_proc_info()->get_out_type_owner().at(i), field.type_owner_))) {
+              LOG_WARN("fail to alloc string", K(call_stmt.get_call_proc_info()->get_out_type_owner().at(i)), K(ret));
+            } else { /*do nothing*/ }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(result_set.add_field_column(field))) {
+              LOG_WARN("fail to add field column to result_set.", K(ret));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            field.cname_.assign(NULL, 0);
+            field.org_cname_.assign(NULL, 0);
+            field.dname_.assign(NULL, 0);
+            field.tname_.assign(NULL, 0);
+            field.org_tname_.assign(NULL, 0);
+            field.type_.reset();
+            field.type_.set_type(ObExtendType);
+            field.type_name_.assign(NULL, 0);
+            field.type_owner_.assign(NULL, 0);
+          }
+        }
         break;
       }
-
-      if (OB_SUCC(ret) && OB_FAIL(result_set.reserve_field_columns(size))) {
-        LOG_WARN("reserve field columns failed", K(ret), K(size));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-        ObCollationType charsetnr;
-        ObDataType *type = call_stmt.get_out_type().at(i).get_data_type();
-        ObObjType out_obj_type = call_stmt.get_out_type().at(i).get_obj_type();
-        if (ObUnknownType == out_obj_type
-          || ObExtendType == out_obj_type) {
-          // do nothing ...
-        } else if (OB_NOT_NULL(type)) {
-          if (ob_is_string_or_lob_type(out_obj_type)
-                && CS_TYPE_ANY == type->get_collation_type()) {
-            charsetnr = ObCharset::is_valid_collation(collation_type)
-                          ? collation_type
-                          : CS_TYPE_UTF8MB4_BIN;
-          } else {
-            OZ (ObCharset::get_default_collation(type->get_collation_type(), charsetnr));
-          }
-          OX (field.charsetnr_ = static_cast<uint16_t>(charsetnr));
-        }
-        if (OB_SUCC(ret)) {
-          field.type_.set_type(out_obj_type);
-          if (OB_NOT_NULL(type)) {
-            field.accuracy_ = type->get_accuracy();
-            // Setup Collation and Collation levl
-            if (ob_is_string_or_lob_type(out_obj_type)
-                || ob_is_raw(out_obj_type)
-                || ob_is_enum_or_set_type(out_obj_type)) {
-              field.type_.set_collation_type(type->get_collation_type());
-              field.type_.set_collation_level(type->get_collation_level());
-            }
-          }
-          if (ObExtendType == out_obj_type) {
-            field.length_ = field.accuracy_.get_length();
-          } else if (ObCharType == out_obj_type
-                     || ObVarcharType == out_obj_type
-                     || ob_is_nstring_type(out_obj_type)) {
-            if (-1 == field.accuracy_.get_length()) {
-              field.length_ = ObCharType == out_obj_type ?
-                OB_MAX_ORACLE_CHAR_LENGTH_BYTE : OB_MAX_ORACLE_VARCHAR_LENGTH;
-            } else {
-              field.length_ = field.accuracy_.get_length();
-            }
-          } else if (ob_is_enum_or_set_type(out_obj_type)) {
-            CK (OB_NOT_NULL(type));
-            OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
-                                                     field.accuracy_,
-                                                     type->get_collation_type(),
-                                                     field.length_));
-            OX (field.type_.set_type(ObVarcharType));
-          } else {
-            OZ (common::ObField::get_field_mb_length(field.type_.get_type(),
-                                                     field.accuracy_,
-                                                     common::CS_TYPE_INVALID,
-                                                     field.length_));
-          }
-          // Setup Scale
-          if (OB_SUCC(ret)) {
-            if (ObVarcharType == field.type_.get_type()) {
-              field.type_.set_varchar(type_name);
-            } else if (ObNumberType == field.type_.get_type()) {
-              field.type_.set_number(number);
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(ob_write_string(alloc, tname, field.tname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, tname, field.org_tname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_name().at(i), field.cname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_name().at(i), field.org_cname_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_type_name().at(i), field.type_name_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_type_name().at(i)), K(ret));
-          } else if (OB_FAIL(ob_write_string(alloc, call_stmt.get_out_type_owner().at(i), field.type_owner_))) {
-            LOG_WARN("fail to alloc string", K(call_stmt.get_out_type_owner().at(i)), K(ret));
-          } else { /*do nothing*/ }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(result_set.add_field_column(field))) {
-            LOG_WARN("fail to add field column to result_set.", K(ret));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          field.cname_.assign(NULL, 0);
-          field.org_cname_.assign(NULL, 0);
-          field.dname_.assign(NULL, 0);
-          field.tname_.assign(NULL, 0);
-          field.org_tname_.assign(NULL, 0);
-          field.type_.reset();
-          field.type_.set_type(ObExtendType);
-          field.type_name_.assign(NULL, 0);
-          field.type_owner_.assign(NULL, 0);
-        }
-      }
-      break;
     }
     default:
       break;
@@ -573,7 +578,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
           OZ (result_set.add_field_column(column_field),
               K(i), K(question_marks_count), K(column_field));
-        } else if (OB_NOT_NULL(call_stmt) && call_stmt->is_out_param(i)) {
+        } else if (OB_NOT_NULL(call_stmt) && call_stmt->get_call_proc_info()->is_out_param(i)) {
           OX (param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT);
         }
         OZ (result_set.add_param_column(param_field),
@@ -643,6 +648,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if (OB_FAIL(ob_write_string(alloc, "SYS_REFCURSOR", field.type_name_))) {
             LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
           }
+        } else if (lib::is_oracle_mode() && expr->is_column_ref_expr() &&
+                   static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
+          // xmltype is supported, do nothing
         } else if (NULL == context->secondary_namespace_ // pl resolve
                     && NULL == context->session_info_->get_pl_context()) { // pl execute
           ret = OB_NOT_SUPPORTED;
@@ -655,7 +663,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         field.type_.set_type(expr->get_data_type());
         field.accuracy_ = expr->get_accuracy();
         field.flags_ = static_cast<uint16_t>(expr->get_result_flag());
-        // Setup Collation and Collation levl
+        // Setup Collation and Collation level
         if (ob_is_string_or_lob_type(static_cast<ObObjType>(expr->get_data_type()))
             || ob_is_raw(static_cast<ObObjType>(expr->get_data_type()))
             || ob_is_enum_or_set_type(static_cast<ObObjType>(expr->get_data_type()))) {
@@ -668,7 +676,18 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
+        if (expr->get_result_type().is_user_defined_sql_type()) {
+          if (expr->get_result_type().is_xml_sql_type()) {
+            // ToDo : @gehao， need record sub schemid on ObField？
+            field.type_.set_collation_type(CS_TYPE_BINARY);
+            field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
+            field.charsetnr_ = CS_TYPE_BINARY;
+            field.length_ = OB_MAX_LONGTEXT_LENGTH; // set MAX_ACCURACY?
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("udt type not supported", K(ret), "subschema id",expr->get_result_type().get_subschema_id());
+          }
+        } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
       }
@@ -1500,7 +1519,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
 // open_cursors is 0 to indicate a special state, no limit is set
 #define NEED_CHECK_SESS_MAX_PS_HANDLE_LIMIT(v) (0 == v ? false : true)
   int ret = OB_SUCCESS;
-  ObString cur_query;
   // trimed_stmt仅用于query empty检查, prepare语句需要用原始语句, 避免checksum不一致
   ObString trimed_stmt = const_cast<ObString &>(stmt).trim();
   if (trimed_stmt.empty()) {
@@ -1514,7 +1532,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ObSQLSessionInfo &session = result.get_session();
     ObPsCache *ps_cache = session.get_ps_cache();
     ObExecContext &ectx = result.get_exec_context();
-    ObIAllocator &allocator = result.get_mem_pool();
     ObPhysicalPlanCtx *pctx = ectx.get_physical_plan_ctx();
     ObSchemaGetterGuard *schema_guard = context.schema_guard_;
     ectx.set_is_ps_prepare_stage(true);
@@ -1528,8 +1545,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("physical plan context or ps plan cache is NULL or schema_guard is null",
                 K(ret), K(pctx), K(ps_cache));
-    } else if (OB_FAIL(ob_write_string(allocator, session.get_current_query_string(), cur_query))) {
-      LOG_WARN("failed to write string", K(ret));
     } else if (OB_FAIL(session.store_query_string(trimed_stmt))) {
       LOG_WARN("store query string fail", K(ret));
     } else {
@@ -1645,7 +1660,6 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
         }
       }
     }
-    OZ (session.store_query_string(cur_query));
   }
   return ret;
 }
@@ -2074,6 +2088,9 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           // call procedure stmt call always parse as dynamic sql
           context.is_dynamic_sql_ = true;
         }
+        if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_execute_call_stmt_) {
+          context.is_execute_call_stmt_ = true;
+        }
         ObParser parser(allocator, session.get_sql_mode(),
                         session.get_local_collation_connection());
         ParseResult parse_result;
@@ -2424,9 +2441,8 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
              || !ObStmt::is_dml_stmt(result.get_stmt_type())) {
     ret = (tmp_ret == OB_PC_LOCK_CONFLICT) ? OB_SUCCESS : tmp_ret;
   } else {
-    const int64_t curr_time = ObTimeUtility::current_time();
     const int64_t lqt = GCONF.large_query_threshold;
-    int64_t elapsed_time = curr_time - THIS_THWORKER.get_query_start_time();
+    int64_t elapsed_time = ObClockGenerator::getClock() - THIS_THWORKER.get_query_start_time();
     bool is_large_query = false;
     bool lq_from_plan = true;
     int64_t total_process_time = 0;
@@ -2913,18 +2929,6 @@ int ObSql::generate_plan(ParseResult &parse_result,
     pctx->set_is_ps_protocol(result.is_ps_protocol());
     bool is_restore = false;
     uint64_t effective_tid = result.get_session().get_effective_tenant_id();
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(sql_ctx.schema_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema guard is null", K(ret));
-    } else if (OB_FAIL(sql_ctx.schema_guard_->check_tenant_is_restore(
-                        effective_tid, is_restore))) {
-      LOG_WARN("fail to check if tenant is restore", K(ret), K(effective_tid));
-    } else if (is_restore) {
-      // 为避免物理恢复阶段系统表恢复过程中，SQL依赖需要恢复的统计信息表，
-      // 对恢复中租户，仅需获取缺省统计信息即可
-      optctx.set_use_default_stat();
-    }
     ObOptimizer optimizer(optctx);
     bool use_jit = false;
     bool turn_on_jit = sql_ctx.need_late_compile_;
@@ -3001,6 +3005,12 @@ int ObSql::generate_plan(ParseResult &parse_result,
                                       result.get_exec_context(),
                                       stmt))) { //rewrite stmt
       LOG_WARN("Failed to transform stmt", K(ret));
+    } else if (OB_FAIL(generate_stmt_with_reconstruct_sql(stmt,
+                                                          pc_ctx,
+                                                          sql_ctx,
+                                                          result,
+                                                          phy_plan))) {
+      LOG_WARN("failed to reconstruct sql", K(ret));
     } else if (OB_FALSE_IT(optctx.set_root_stmt(stmt))) {
     } else if (OB_FAIL(optimize_stmt(optimizer, *(sql_ctx.session_info_),
                                       *stmt, logical_plan))) { //gen logical plan
@@ -3054,6 +3064,81 @@ int ObSql::generate_plan(ParseResult &parse_result,
     } else {
       result.get_exec_context().reference_my_plan(phy_plan);
     }
+  }
+  return ret;
+}
+
+int ObSql::generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
+                                              ObPlanCacheCtx *pc_ctx,
+                                              ObSqlCtx &sql_ctx,
+                                              ObResultSet &result,
+                                              ObPhysicalPlan *phy_plan)
+{
+  int ret = OB_SUCCESS;
+  ObString sql;
+  bool has_dblink = false;
+  ObObjPrintParams print_param;
+  print_param.for_dblink_ = 1;
+  ObSQLSessionInfo *session = sql_ctx.session_info_;
+  ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(session) || OB_ISNULL(pc_ctx) ||
+      OB_ISNULL(stmt) || (OB_ISNULL(stmt->get_query_ctx())) ||
+      OB_ISNULL(phy_plan_ctx=pc_ctx->exec_ctx_.get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null param", K(ret));
+  } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) == OB_SUCCESS) {
+    //do nothing
+  } else if (!session->is_user_session()) {
+    //do nothing
+  } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_dblink, true))) {
+    LOG_WARN("failed to check has dblink", K(ret));
+  } else if (has_dblink) {
+    //do nothing
+  } else if (OB_FAIL(ObSQLUtils::reconstruct_sql(pc_ctx->allocator_,
+                                                stmt,
+                                                sql,
+                                                sql_ctx.schema_guard_,
+                                                print_param,
+                                                &phy_plan_ctx->get_param_store()))) {
+    LOG_WARN("failed to reconstruct sql", K(ret));
+  } else {
+    LOG_TRACE("origin sql:", K(sql_ctx.cur_sql_));
+    LOG_TRACE("stmt:", KPC(stmt));
+    ObStmt *basic_stmt = NULL;
+    ParseResult parse_result;
+    ObParser parser(pc_ctx->allocator_,
+                    session->get_sql_mode(),
+                    session->get_local_collation_connection(),
+                    pc_ctx->def_name_ctx_);
+    stmt->get_query_ctx()->global_dependency_tables_.reuse();
+    if (OB_FAIL(parser.parse(sql, parse_result))) {
+      LOG_WARN("failed to parser sql", K(ret));
+    } else if (OB_FAIL(generate_stmt(parse_result,
+                                    pc_ctx,
+                                    sql_ctx,
+                                    result.get_mem_pool(),
+                                    result,
+                                    basic_stmt,
+                                    NULL))) {
+      LOG_WARN("Failed to generate stmt", K(ret));
+    } else if (OB_ISNULL(basic_stmt) || !basic_stmt->is_dml_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Generate stmt success, but stmt is NULL", K(ret));
+    } else if (OB_FALSE_IT(stmt = static_cast<ObDMLStmt*>(basic_stmt))) {
+    } else if (OB_FAIL(transform_stmt(&stmt->get_query_ctx()->sql_schema_guard_,
+                                      opt_stat_mgr_,
+                                      &self_addr_,
+                                      phy_plan,
+                                      result.get_exec_context(),
+                                      stmt,
+                                      true))) { //rewrite stmt
+      LOG_WARN("Failed to transform stmt", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_USER_ERROR(OB_SYNC_DDL_ERROR, sql.length(), sql.ptr());
+      ret = OB_SYNC_DDL_ERROR;
+    }
+    LOG_TRACE("reconstruct sql:", K(sql));
   }
   return ret;
 }
@@ -3158,7 +3243,8 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
                           common::ObAddr *self_addr,
                           ObPhysicalPlan *phy_plan,
                           ObExecContext &exec_ctx,
-                          ObDMLStmt *&stmt)
+                          ObDMLStmt *&stmt,
+                          bool ignore_trace_event)
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(rewrite);
@@ -3205,7 +3291,15 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
 
   NG_TRACE(transform_begin);
   OPT_TRACE_TITLE("START TRANSFORM");
-  if (OB_SUCC(ret) && transform_stmt->is_valid_transform_stmt()) {
+  bool need_transform = transform_stmt->is_valid_transform_stmt();
+  if (ignore_trace_event) {
+    //do nothing
+  } else if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL)OB_SUCCESS) != OB_SUCCESS) {
+    if (transform_stmt->is_dml_write_stmt()) {
+      need_transform = false;
+    }
+  }
+  if (OB_SUCC(ret) && need_transform) {
     ObTransformerImpl transformer(&trans_ctx);
     if (OB_FAIL(transformer.transform(transform_stmt))) {
       LOG_WARN("failed to transform statement", K(ret));
@@ -3655,6 +3749,13 @@ int ObSql::get_outline_data(ObSqlCtx &context,
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null session info", K(ret));
+  } else if (0 != context.first_plan_hash_) {
+    outline_content = context.first_outline_data_;
+  } else if (OB_INVALID_ID == context.spm_ctx_.bl_key_.db_id_
+             || context.multi_stmt_item_.is_batched_multi_stmt()) {
+    //no outline is available when database name of session is not specified, just keep the stmt
+  } else if (pc_ctx.is_begin_commit_stmt()) {
+    /* do nothing */
   } else if (OB_FAIL(get_outline_data(pc_ctx, signature_sql, outline_state, outline_content))) {
     LOG_WARN("failed to get outline data", K(ret));
   }
@@ -3827,7 +3928,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                          || OB_ERR_CONSTRUCT_MUST_RETURN_SELF == ret
                          || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
                          || OB_ERR_NO_ATTR_FOUND == ret
-                         || OB_ERR_NON_INT_LITERAL == ret)) {
+                         || OB_ERR_NON_INT_LITERAL == ret
+                         || OB_ERR_PARSER_INIT == ret)) {
       // parser返回已知的错误码，不需要断掉与客户端的连接
       exec_ctx.set_need_disconnect(false);
       //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
@@ -3975,7 +4077,17 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                                                                   parse_result.result_tree_,
                                                                   pctx->get_param_store_for_update(),
                                                                   session->get_local_collation_connection()))) {
-        if (is_transform_outline) {
+        bool need_retry_param = true;
+        int tmp_ret = OB_SUCCESS;
+        tmp_ret = OB_E(EventTable::EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR) OB_SUCCESS;
+        if (OB_SUCCESS != tmp_ret) {
+          if (OB_NOT_SUPPORTED == ret) {
+            need_retry_param = false;
+          }
+        }
+        if (!need_retry_param) {
+          // do nothing
+        } else if (is_transform_outline) {
           LOG_WARN("fail to parameterize syntax tree", K(ret));
         } else {
           //如果是因为参数化出错, 则需要重新进行parser, 生成新的parser tree, 之前的parser tree可能部分已参数化,

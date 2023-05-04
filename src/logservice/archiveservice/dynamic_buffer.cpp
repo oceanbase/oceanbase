@@ -24,13 +24,7 @@ namespace oceanbase
 namespace archive
 {
 DynamicBuffer::DynamicBuffer(const int64_t MAX_SIZE) :
-  buf_size_(0),
-  buf_(NULL),
-  ref_(0),
-  buf_limit_(MAX_SIZE),
-  buf_gen_timestamp_(OB_INVALID_TIMESTAMP),
-  buf_size_usage_(),
-  label_("DynamicBuffer")
+  DynamicBuffer("DynamicBuffer", MAX_SIZE)
 {}
 
 DynamicBuffer::DynamicBuffer(const char *label, const int64_t MAX_SIZE) :
@@ -41,7 +35,9 @@ DynamicBuffer::DynamicBuffer(const char *label, const int64_t MAX_SIZE) :
   buf_gen_timestamp_(OB_INVALID_TIMESTAMP),
   buf_size_usage_(),
   label_(label)
-{}
+{
+  buf_size_usage_.set_attr(SET_USE_500(label));
+}
 
 DynamicBuffer::~DynamicBuffer()
 {

@@ -73,7 +73,7 @@ int ObLogCount::est_width()
 }
 
 
-int ObLogCount::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogCount::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   double sel = 1.0;
@@ -91,8 +91,7 @@ int ObLogCount::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
   } else {
     double child_card = child->get_card();
     double child_cost = child->get_cost();
-    double op_cost = 0.0;
-    if (param.need_row_count_ >= 0 && param.need_row_count_ <= get_card()) {
+    if (param.need_row_count_ >= 0 && param.need_row_count_ < get_card()) {
       //child need row count
       if (sel > OB_DOUBLE_EPSINON) {
         param.need_row_count_ /= sel;
@@ -105,11 +104,6 @@ int ObLogCount::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     } else {
       cost = op_cost + child_cost;
       card = child_card * sel;
-      if (param.override_) {
-        set_op_cost(op_cost);
-        set_cost(cost);
-        set_card(card);
-      }
     }
   }
   return ret;
@@ -193,6 +187,25 @@ int ObLogCount::inner_replace_op_exprs(
   if (NULL != rownum_limit_expr_ &&
       OB_FAIL(replace_expr_action(to_replace_exprs, rownum_limit_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
+  }
+  return ret;
+}
+
+int ObLogCount::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  ObRawExpr *rownum_expr = NULL;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()));
+  } else if (OB_FAIL(get_stmt()->get_rownum_expr(rownum_expr))) {
+    LOG_WARN("failed to get rownum expr", K(ret));
+  } else if (OB_ISNULL(rownum_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr == rownum_expr) {
+    is_fixed = true;
   }
   return ret;
 }

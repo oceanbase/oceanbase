@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprDayOfMonth::ObExprDayOfMonth(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY_OF_MONTH, N_DAY_OF_MONTH) {};
+    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY_OF_MONTH, N_DAY_OF_MONTH, NOT_VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfMonth::~ObExprDayOfMonth() {}
 
@@ -38,12 +38,12 @@ int ObExprDayOfMonth::calc_dayofmonth(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 }
 
 ObExprDay::ObExprDay(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY, N_DAY) {};
+    : ObExprTimeBase(alloc, DT_MDAY, T_FUN_SYS_DAY, N_DAY, NOT_VALID_FOR_GENERATED_COL) {};
 
 ObExprDay::~ObExprDay() {}
 
 ObExprDayOfWeek::ObExprDayOfWeek(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_OF_WEEK, N_DAY_OF_WEEK) {};
+    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_OF_WEEK, N_DAY_OF_WEEK, NOT_VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfWeek::~ObExprDayOfWeek() {}
 
@@ -59,7 +59,7 @@ int ObExprDayOfWeek::calc_dayofweek(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprDayOfYear::ObExprDayOfYear(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_YDAY, T_FUN_SYS_DAY_OF_YEAR, N_DAY_OF_YEAR) {};
+    : ObExprTimeBase(alloc, DT_YDAY, T_FUN_SYS_DAY_OF_YEAR, N_DAY_OF_YEAR, NOT_VALID_FOR_GENERATED_COL) {};
 
 ObExprDayOfYear::~ObExprDayOfYear() { }
 
@@ -69,7 +69,7 @@ int ObExprDayOfYear::calc_dayofyear(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprToSeconds::ObExprToSeconds(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_SECONDS, N_TO_SECONDS, 1, NOT_ROW_DIMENSION) {};
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_SECONDS, N_TO_SECONDS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 
 ObExprToSeconds::~ObExprToSeconds() {}
 
@@ -135,7 +135,7 @@ int ObExprToSeconds::calc_toseconds(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprSecToTime::ObExprSecToTime(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SEC_TO_TIME, N_SEC_TO_TIME, 1, NOT_ROW_DIMENSION) {};
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SEC_TO_TIME, N_SEC_TO_TIME, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 
 ObExprSecToTime::~ObExprSecToTime() {}
 
@@ -215,7 +215,7 @@ int ObExprSecToTime::calc_sectotime(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprTimeToSec::ObExprTimeToSec(ObIAllocator &alloc)
-   : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_SEC, N_TIME_TO_SEC, 1, NOT_ROW_DIMENSION) {};
+   : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_TO_SEC, N_TIME_TO_SEC, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 ObExprTimeToSec::~ObExprTimeToSec() {}
 
 int ObExprTimeToSec::cg_expr(ObExprCGCtx &op_cg_ctx,
@@ -258,8 +258,9 @@ int ObExprTimeToSec::calc_timetosec(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 }
 
 ObExprSubAddtime::ObExprSubAddtime(ObIAllocator &alloc, ObExprOperatorType type, const char *name, int32_t param_num, int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, 2, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, type, name, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprSubtime::ObExprSubtime(ObIAllocator &alloc)
     : ObExprSubAddtime(alloc, T_FUN_SYS_SUBTIME, N_SUB_TIME, 2, NOT_ROW_DIMENSION)
@@ -624,7 +625,7 @@ int ObExprSubAddtime::subaddtime_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObD
 }
 
 ObExprDayName::ObExprDayName(ObIAllocator &alloc)
-    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_NAME, N_DAY_NAME) {};
+    : ObExprTimeBase(alloc, DT_WDAY, T_FUN_SYS_DAY_NAME, N_DAY_NAME, NOT_VALID_FOR_GENERATED_COL) {};
 ObExprDayName::~ObExprDayName() {}
 
 int ObExprDayName::calc_dayname(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)

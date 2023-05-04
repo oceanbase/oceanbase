@@ -318,6 +318,8 @@ public:
   int get_backup_set_array(const common::ObString &passwd_array, const SCN &restore_scn,
       SCN &restore_start_scn, common::ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
   int get_max_sys_ls_retry_id(const share::ObBackupPath &backup_path, const ObLSID &ls_id, int64_t &retry_id);
+  int write_root_key_info(const uint64_t tenant_id);
+  int read_root_key_info(const uint64_t tenant_id);
 
   TO_STRING_KV(K_(backup_desc));
 

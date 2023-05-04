@@ -153,7 +153,8 @@ public:
   ObTriggerArg()
     : trigger_id_(common::OB_INVALID_ID),
       trigger_events_(),
-      timing_points_()
+      timing_points_(),
+      analyze_flag_(0)
   {}
   inline void reset()
   {
@@ -173,6 +174,23 @@ public:
   inline void set_timing_points(uint64_t timing_points)
   {
     timing_points_.set_value(timing_points);
+  }
+  inline void set_analyze_flag(uint64_t flag) { analyze_flag_ = flag; }
+
+  inline bool is_no_sql() const { return is_no_sql_; }
+  inline bool is_reads_sql_data() const { return is_reads_sql_data_; }
+  inline bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
+  inline bool is_contains_sql() const { return is_contains_sql_; }
+  inline bool is_wps() const { return is_wps_; }
+  inline bool is_rps() const { return is_rps_; }
+  inline bool is_has_sequence() const { return is_has_sequence_; }
+  inline bool is_has_out_param() const { return is_has_out_param_; }
+  inline bool is_external_state() const { return is_external_state_; }
+
+  inline bool is_execute_single_row() const
+  {
+    return (is_modifies_sql_data_ || is_wps_ || is_rps_ || is_has_sequence_ ||
+            is_reads_sql_data_ || is_external_state_);
   }
 
   inline uint64_t get_trigger_id() const { return trigger_id_; }
@@ -198,6 +216,21 @@ private:
   share::schema::ObTimingPoints timing_points_;
   common::ObString package_spec_;
   common::ObString package_body_;
+  union {
+    uint64_t analyze_flag_;
+    struct {
+      uint64_t is_no_sql_ : 1;            // it marks trigger do not contain sql stmt
+      uint64_t is_reads_sql_data_ : 1;    // it marks trigger contain read sql stmt, such as select stmt
+      uint64_t is_modifies_sql_data_ : 1; // it marks trigger contain write sql stmt
+      uint64_t is_contains_sql_ : 1;      // it marks trigger do not contain read and write sql, but contain other sql stmt, such as set stmt
+      uint64_t is_wps_ : 1;               // it marks trigger write package var
+      uint64_t is_rps_ : 1;               // it marks trigger read package var
+      uint64_t is_has_sequence_ : 1;      // it marks trigger used sequence
+      uint64_t is_has_out_param_ : 1;     // it marks trigger has out param
+      uint64_t is_external_state_ : 1;    // it marks trigger access other store routine or global var etc..
+      uint64_t reserved_:54;
+    };
+  };
 };
 typedef common::ObFixedArray<ObTriggerArg, common::ObIAllocator> ObTriggerArgArray;
 

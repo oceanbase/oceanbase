@@ -26,28 +26,28 @@ class ObIncrementalStatEstimator
 {
 public:
 
-  static int try_drive_global_stat(ObExecContext &ctx,
-                                   const ObTableStatParam &param,
-                                   ObExtraParam &extra,
-                                   ObIArray<ObOptStat> &approx_part_opt_stats,
-                                   ObIArray<ObOptStat> &opt_stats);
+  static int try_derive_global_stat(ObExecContext &ctx,
+                                    const ObTableStatParam &param,
+                                    ObExtraParam &extra,
+                                    ObIArray<ObOptStat> &approx_part_opt_stats,
+                                    ObIArray<ObOptStat> &opt_stats);
 
   static bool is_part_can_incremental_gather(const ObTableStatParam &param,
                                              int64_t part_id,
                                              int64_t subpart_cnt,
                                              bool is_gather_part);
 
-  static int drive_global_stat_by_direct_load(ObExecContext &ctx,
+  static int derive_global_stat_by_direct_load(ObExecContext &ctx,
                                               ObIArray<ObOptTableStat*> &part_tab_stats,
-                                              ObIArray<ObOptColumnStat*> &part_column_stats);
+                                              const ObIArray<ObOptColumnStat*> &part_column_stats);
 private:
 
-  static int drive_global_stat_from_part_stats(ObExecContext &ctx,
+  static int derive_global_stat_from_part_stats(ObExecContext &ctx,
                                                const ObTableStatParam &param,
                                                const ObIArray<ObOptStat> &approx_part_opt_stats,
                                                ObIArray<ObOptStat> &opt_stats);
 
-  static int drive_part_stats_from_subpart_stats(ObExecContext &ctx,
+  static int derive_part_stats_from_subpart_stats(ObExecContext &ctx,
                                                  const ObTableStatParam &param,
                                                  const ObIArray<ObOptStat> &gather_opt_stats,
                                                  ObIArray<ObOptStat> &approx_part_opt_stats);
@@ -71,12 +71,12 @@ private:
                                               ObIArray<uint64_t> &column_ids);
 
   static int generate_all_opt_stat(ObIArray<ObOptTableStat> &table_stats,
-                                   ObIArray<ObOptColumnStatHandle> &col_handles,
+                                   const ObIArray<ObOptColumnStatHandle> &col_handles,
                                    int64_t col_cnt,
                                    ObIArray<ObOptStat> &all_opt_stats);
 
   static int generate_all_opt_stat(ObIArray<ObOptTableStat*> &table_stats,
-                                   ObIArray<ObOptColumnStat*> &column_stats,
+                                   const ObIArray<ObOptColumnStat*> &column_stats,
                                    int64_t col_cnt,
                                    ObIArray<ObOptStat> &all_opt_stats);
 
@@ -84,7 +84,7 @@ private:
                                    ObIAllocator &alloc,
                                    const ObTableStatParam &param,
                                    ObIArray<ObOptStat> &part_opt_stats,
-                                   bool need_drive_hist,
+                                   bool need_derive_hist,
                                    const StatLevel &approx_level,
                                    const int64_t partition_id,
                                    bool &need_gather_hybrid_hist,
@@ -102,7 +102,7 @@ private:
                                     ObIAllocator &alloc,
                                     const ObTableStatParam &param,
                                     ObIArray<ObOptStat> &part_opt_stats,
-                                    bool need_drive_hist,
+                                    bool need_derive_hist,
                                     const StatLevel &approx_level,
                                     const int64_t partition_id,
                                     bool &need_gather_hybrid_hist,

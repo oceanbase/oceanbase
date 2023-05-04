@@ -52,7 +52,7 @@ int ObExprCollectionConstruct::ExtraInfo::deep_copy(common::ObIAllocator &alloca
 ObExprCollectionConstruct::ObExprCollectionConstruct(common::ObIAllocator &alloc)
     : ObFuncExprOperator(
         alloc, T_FUN_PL_COLLECTION_CONSTRUCT, N_PL_COLLECTION_CONSTRUCT,
-        PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION, false, INTERNAL_IN_ORACLE_MODE),
+        PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, false, INTERNAL_IN_ORACLE_MODE),
       type_(pl::ObPLType::PL_INVALID_TYPE),
       not_null_(false),
       elem_type_(),

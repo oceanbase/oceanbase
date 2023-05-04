@@ -23,7 +23,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonDepth::ObExprJsonDepth(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_DEPTH, N_JSON_DEPTH, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_DEPTH, N_JSON_DEPTH, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

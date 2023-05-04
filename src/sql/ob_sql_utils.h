@@ -32,6 +32,9 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 namespace oceanbase
 {
+namespace share {
+class ObBackupStorageInfo;
+}
 namespace sql
 {
 class RowDesc;
@@ -53,7 +56,6 @@ class ObStmtHint;
 struct ObTransformerCtx;
 struct ObPreCalcExprFrameInfo;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
-typedef common::ObSEArray<bool, 2, common::ModulePageAllocator, true> ObGetMethodArray;
 struct ObExprConstraint;
 typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
 class ObSelectStmt;
@@ -364,14 +366,16 @@ public:
 
   static int reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                              ObSchemaGetterGuard *schema_guard,
-                             ObObjPrintParams print_params = ObObjPrintParams());
+                             ObObjPrintParams print_params = ObObjPrintParams(),
+                             const ParamStore *param_store = NULL);
   static int print_sql(ObIAllocator &allocator,
                        char *buf,
                        int64_t buf_len,
                        const ObStmt *stmt,
                        ObString &sql,
                        ObSchemaGetterGuard *schema_guard,
-                       ObObjPrintParams print_params);
+                       ObObjPrintParams print_params,
+                       const ParamStore *param_store = NULL);
 
   static int wrap_expr_ctx(const stmt::StmtType &stmt_type,
                            ObExecContext &exec_ctx,
@@ -383,7 +387,6 @@ public:
                                      common::ObIAllocator &allocator,
                                      ObExecContext &exec_ctx,
                                      ObQueryRangeArray &key_ranges,
-                                     ObGetMethodArray get_method,
                                      const ObDataTypeCastParams &dtc_params);
 
   static int extract_equal_pre_query_range(const ObQueryRange &pre_query_range,
@@ -395,7 +398,6 @@ public:
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &key_ranges,
                                        ObMbrFilterArray &mbr_filters,
-                                       ObGetMethodArray get_method,
                                        const ObDataTypeCastParams &dtc_params);
 
   static bool is_same_type(const ObExprResType &type1, const ObExprResType &type2);
@@ -566,6 +568,11 @@ public:
   *  That is the time correctly set by the processor of the RPC
   ------------------------*/
   static void adjust_time_by_ntp_offset(int64_t &dst_timeout_ts);
+
+  static int split_remote_object_storage_url(common::ObString &url, share::ObBackupStorageInfo &storage_info);
+  static bool is_external_files_on_local_disk(const common::ObString &url);
+  static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
+
   static int async_recompile_view(const share::schema::ObTableSchema &old_view_schema,
                                   ObSelectStmt *select_stmt,
                                   bool reset_column_infos,
@@ -676,6 +683,18 @@ public:
   int add_expr(ObRawExpr *&expr);
 private:
   common::ObIArray<ObRawExpr**> &rel_array_;
+};
+
+class FastUdtExprChecker : public RelExprCheckerBase
+{
+public:
+  FastUdtExprChecker(common::ObIArray<ObRawExpr *> &rel_array);
+  virtual ~FastUdtExprChecker() {}
+  int add_expr(ObRawExpr *&expr);
+  int dedup();
+private:
+  common::ObIArray<ObRawExpr *> &rel_array_;
+  int64_t init_size_;
 };
 
 struct ObSqlTraits
@@ -888,7 +907,7 @@ public:
       output_row_alloc_(), init_alloc_(nullptr), inited_row_(false), convert_row_(), output_row_cast_ctx_(),
       base_table_id_(UINT64_MAX), cur_tenant_id_(UINT64_MAX), table_schema_(nullptr), output_column_ids_(nullptr),
       cols_schema_(), tenant_id_col_id_(UINT64_MAX), max_col_cnt_(INT64_MAX),
-      has_tenant_id_col_(false)
+      has_tenant_id_col_(false), tenant_id_col_idx_(-1)
   {}
   ~ObVirtualTableResultConverter() { destroy(); }
 
@@ -902,6 +921,7 @@ public:
       const share::schema::ObTableSchema *table_schema,
       const common::ObIArray<uint64_t> *output_column_ids,
       const bool has_tenant_id_col,
+      const int64_t tenant_id_col_idx,
       const int64_t max_col_cnt = INT64_MAX);
   int init_without_allocator(
     const common::ObIArray<const share::schema::ObColumnSchemaV2*> &col_schemas,
@@ -919,7 +939,8 @@ public:
       sql::ObSQLSessionInfo *session,
       const share::schema::ObTableSchema *table_schema,
       const common::ObIArray<ObObjMeta> *key_types,
-      const bool has_tenant_id_col);
+      const bool has_tenant_id_col,
+      const int64_t tenant_id_col_idx);
 private:
   int convert_key(const ObRowkey &src, ObRowkey &dst, bool is_start_key, int64_t pos);
   int get_all_columns_schema();
@@ -947,6 +968,7 @@ public:
   int64_t max_col_cnt_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   bool has_tenant_id_col_;
+  int64_t tenant_id_col_idx_;
 };
 
 class ObLinkStmtParam

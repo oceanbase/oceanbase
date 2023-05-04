@@ -43,8 +43,8 @@ namespace sql
     {}
     virtual int est_cost() override;
     virtual int est_width() override;
-    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-    int inner_est_cost(double child_card, double &topn_count, double &op_cost);
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+    int inner_est_cost(const int64_t parallel, double child_card, double &topn_count, double &op_cost);
     const OrderItem &get_hash_sortkey() const { return hash_sortkey_; }
     OrderItem &get_hash_sortkey() { return hash_sortkey_; }
     inline void set_hash_sortkey(const OrderItem &hash_sortkey) { hash_sortkey_ = hash_sortkey; }
@@ -83,6 +83,7 @@ namespace sql
     inline ObRawExpr *get_topk_offset_expr() { return topk_offset_expr_; }
     int set_sort_keys(const common::ObIArray<OrderItem> &order_keys);
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+    virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
     virtual uint64_t hash(uint64_t seed) const override;
     virtual const char *get_name() const;
     inline void set_minimal_row_count(int64_t minimum_row_count)

@@ -256,6 +256,9 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, locality);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, kms_encrypt);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, kms_info);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, encrypt_key);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, kms_dest);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, kms_encrypt_key);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compat_mode);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, compatible);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
@@ -496,6 +499,9 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(passwd_array, job);
     RETRIEVE_INT_VALUE(compatible, job);
     RETRIEVE_STR_VALUE(kms_info, job);
+    RETRIEVE_STR_VALUE(encrypt_key, job);
+    RETRIEVE_STR_VALUE(kms_dest, job);
+    RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
 
     if (OB_SUCC(ret)) {

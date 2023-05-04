@@ -41,19 +41,19 @@ namespace common
 
 TEST(ObDiagnoseSessionInfo, guard)
 {
-  EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
+  EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
   EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-  EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
+  EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
   {
     ObTenantStatEstGuard tenant_guard(2);
-    EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
+    EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
     EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-    EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
+    EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
     {
       ObTenantStatEstGuard tenant_guard(3);
-      EVENT_INC(ELECTION_CHANGE_LEAER_COUNT);
+      EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
       EXPECT_EQ(3, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-      EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::ELECTION_CHANGE_LEAER_COUNT));
+      EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
     }
     EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
   }

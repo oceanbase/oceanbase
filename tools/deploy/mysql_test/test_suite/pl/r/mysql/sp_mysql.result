@@ -1316,7 +1316,8 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 opp		CREATE DEFINER = admin@% PROCEDURE `test`.`opp`
 (
  IN `n` bigint(20) unsigned, OUT `pp` tinyint(1)
-) begin
+)
+READS SQL DATA begin
 declare r double;
 declare b, s bigint unsigned default 0;
 set r = sqrt(n);
@@ -1372,6 +1373,7 @@ bar		CREATE DEFINER = admin@% PROCEDURE `test`.`bar`
 (
  IN `x` char(16), IN `y` int(11)
 )
+MODIFIES SQL DATA
 COMMENT `111111111111`
  insert into test.t1 values (x, y)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show procedure status like 'bar'|
@@ -2241,6 +2243,7 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 bug2564_1		CREATE DEFINER = admin@% PROCEDURE `test`.`bug2564_1`
 ()
 
+MODIFIES SQL DATA
 COMMENT `Joe's procedure`
  insert into `t1` values ("foo", 1)	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 show create procedure bug2564_2|
@@ -6116,7 +6119,8 @@ show create procedure proc_25411_a;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_25411_a		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_a`
 ()
- begin
+
+READS SQL DATA begin
 /* real comment */
 select 1;
 /*! select 2; */
@@ -6140,7 +6144,8 @@ Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Da
 proc_25411_b		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_b`
 (
  IN `p1` int(11), IN `p2` int(11), IN `p3` int(11)
-) begin
+)
+READS SQL DATA begin
 select p1, p2;
 end	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select name, param_list, body from mysql.proc where name like "%25411%";
@@ -6169,7 +6174,8 @@ show create procedure proc_25411_c;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_25411_c		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_25411_c`
 ()
- begin
+
+READS SQL DATA begin
 select 1/*!,2*//*!00000,3*//*!99999,4*/;
 select 1/*! ,2*//*!00000 ,3*//*!99999 ,4*/;
 select 1/*!,2 *//*!00000,3 *//*!99999,4 */;
@@ -6197,7 +6203,8 @@ show create procedure proc_26302;
 Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
 proc_26302		CREATE DEFINER = admin@% PROCEDURE `test`.`proc_26302`
 ()
- select 1 /* testing */	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
+
+READS SQL DATA select 1 /* testing */	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 select ROUTINE_NAME, ROUTINE_DEFINITION from information_schema.ROUTINES
 where ROUTINE_NAME = "proc_26302";
 ROUTINE_NAME	ROUTINE_DEFINITION

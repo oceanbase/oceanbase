@@ -42,11 +42,13 @@ int ObResourceInnerSQLConnectionPool::init(ObMultiVersionSchemaService *schema_s
   int ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, ObLatchIds::INNER_CONN_POOL_LOCK);
 
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "IdConnMap");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObResourceInnerSQLConnectionPool has already been inited", K(ret));
   } else if (OB_FAIL(id_conn_map_.create(ObInnerSQLConnectionPool::WARNNING_CONNECTION_CNT,
-                                         lib::ObLabel("IdConnMap")))) {
+                                         attr, attr))) {
     LOG_WARN("fail to create id_conn_map_", K(ret));
   } else if (OB_FAIL(inner_sql_conn_pool_.init(schema_service,
                                                ob_sql,

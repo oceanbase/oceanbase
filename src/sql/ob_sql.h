@@ -194,7 +194,8 @@ public:
                             common::ObAddr *self_addr,
                             ObPhysicalPlan *phy_plan,
                             ObExecContext &exec_ctx,
-                            ObDMLStmt *&stmt);
+                            ObDMLStmt *&stmt,
+                            bool ignore_trace_event=false);
 
   //optimize stmt, generate logical_plan
   static int optimize_stmt(ObOptimizer &optimizer,
@@ -375,6 +376,12 @@ private:
                     ObStmt *basic_stmt,
                     ObStmtNeedPrivs &stmt_need_privs,
                     ObStmtOraNeedPrivs &stmt_ora_need_privs);
+
+  int generate_stmt_with_reconstruct_sql(ObDMLStmt* &stmt,
+                                        ObPlanCacheCtx *pc_ctx,
+                                        ObSqlCtx &context,
+                                        ObResultSet &result,
+                                        ObPhysicalPlan *phy_plan);
 
   //generate physical_plan
   static int code_generate(ObSqlCtx &sql_ctx,

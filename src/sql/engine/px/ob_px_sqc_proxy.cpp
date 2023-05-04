@@ -87,7 +87,8 @@ ObPxSQCProxy::ObPxSQCProxy(ObSqcCtx &sqc_ctx,
     first_buffer_cache_(nullptr),
     bf_send_ctx_array_(),
     sample_msg_(),
-    init_channel_msg_()
+    init_channel_msg_(),
+    p2p_dh_map_()
 {
 }
 
@@ -514,6 +515,21 @@ int ObPxSQCProxy::report(int end_ret) const
     }
   }
 
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    int64_t query_timeout = 0;
+    session->get_query_timeout(query_timeout);
+    if (OB_FAIL(OB_E(EventTable::EN_PX_SQC_NOT_REPORT_TO_QC, query_timeout) OB_SUCCESS)) {
+      static bool errsim = false;
+      errsim = !errsim;
+      if (errsim) {
+        LOG_WARN("sqc report to qc by design", K(ret), K(query_timeout));
+        return OB_SUCCESS;
+      }
+    }
+  }
+#endif
+
   ObDtlChannel *ch = sqc.get_sqc_channel();
   // overwrite ret
   if (OB_ISNULL(ch)) {
@@ -679,5 +695,49 @@ int ObPxSQCProxy::sync_wait_all(ObPxDatahubDataProvider &provider)
     }
   } while (OB_SUCC(ret) && provider.dh_msg_cnt_ < BREAK_TASK_CNT(task_cnt) * curr_rescan_cnt);
 
+  return ret;
+}
+
+int ObPxSQCProxy::construct_p2p_dh_map(ObP2PDhMapInfo &map_info)
+{
+  int ret = OB_SUCCESS;
+  int bucket_size = 2 * map_info.p2p_sequence_ids_.count();
+  if (0 == bucket_size) {
+  } else if (OB_FAIL(p2p_dh_map_.create(bucket_size,
+      "SQCDHMapKey",
+      "SQCDHMAPNode"))) {
+    LOG_WARN("create hash table failed", K(ret));
+  } else if (map_info.p2p_sequence_ids_.count() !=
+      map_info.target_addrs_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected map info count", K(ret));
+  } else {
+    for (int i = 0; OB_SUCC(ret) &&
+         i < map_info.p2p_sequence_ids_.count(); ++i) {
+      if (OB_FAIL(p2p_dh_map_.set_refactored(map_info.p2p_sequence_ids_.at(i),
+          &map_info.target_addrs_.at(i)))) {
+        LOG_WARN("fail to set p2p dh map", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxSQCProxy::check_is_local_dh(int64_t p2p_dh_id, bool &is_local, int64_t msg_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSArray<ObAddr> *target_addrs = nullptr;
+  if (OB_FAIL(p2p_dh_map_.get_refactored(p2p_dh_id, target_addrs))) {
+    LOG_WARN("fail to get dh map", K(ret));
+  } else if (OB_ISNULL(target_addrs) || target_addrs->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected target addrs", K(ret));
+  } else if (target_addrs->count() == 1 &&
+             GCTX.self_addr() == target_addrs->at(0) &&
+             1 == msg_cnt) {
+    is_local = true;
+  } else {
+    is_local = false;
+  }
   return ret;
 }

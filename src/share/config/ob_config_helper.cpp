@@ -25,6 +25,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
+#include "sql/optimizer/ob_log_join_filter.h"
 #include "share/ob_encryption_util.h"
 #include "share/ob_resource_limit.h"
 
@@ -701,6 +702,69 @@ bool ObAutoIncrementModeChecker::check(const ObConfigItem &t) const
   }
   return is_valid;
 }
+
+int64_t ObConfigRuntimeFilterChecker::get_runtime_filter_type(const char *str, int64_t len)
+{
+  int64_t rf_type = -1;
+  int64_t l = 0, r = len;
+  if (0 == len) {
+    rf_type = 0;
+  } else {
+    int64_t l = 0, r = len;
+    bool is_valid = true;
+    int flag[3] = {0, 0, 0};
+    auto fill_flag = [&] (ObString &p_str) {
+      bool valid = true;
+      ObString trim_str = p_str.trim();
+      if (0 == trim_str.case_compare("bloom_filter")) {
+        flag[0]++;
+      } else if (0 == trim_str.case_compare("range")) {
+        flag[1]++;
+      } else if (0 == trim_str.case_compare("in")) {
+        flag[2]++;
+      } else {
+        valid = false;
+      }
+      if (valid) {
+        if (flag[0] > 1 || flag[1] > 1 || flag[2] > 1) {
+          valid = false;
+        }
+      }
+      return valid;
+    };
+    for (int i = 0; i < len && is_valid; ++i) {
+      if (str[i] == ',') {
+        r = i;
+        ObString p_str(r - l, str + l);
+        is_valid = fill_flag(p_str);
+        l = i + 1;
+        continue;
+      }
+    }
+    if (is_valid) {
+      ObString p_str(len - l, str + l);
+      is_valid = fill_flag(p_str);
+    }
+    if (is_valid) {
+      rf_type = flag[0] << 1 |
+                flag[1] << 2 |
+                flag[2] << 3;
+    } else {
+      rf_type = -1;
+    }
+
+  }
+  return rf_type;
+}
+
+bool ObConfigRuntimeFilterChecker::check(const ObConfigItem &t) const
+{
+  int64_t len = strlen(t.str());
+  const char *p = t.str();
+  int64_t rf_type = get_runtime_filter_type(t.str(), len);
+  return rf_type >= 0;
+}
+
 
 } // end of namepace common
 } // end of namespace oceanbase

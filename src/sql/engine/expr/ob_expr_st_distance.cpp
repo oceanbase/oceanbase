@@ -124,7 +124,7 @@ static int ob_geo_find_unit(const ObGeoUnit *units, const ObString &name, double
 }
 
 ObExprSTDistance::ObExprSTDistance(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_DISTANCE, N_ST_DISTANCE, TWO_OR_THREE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_DISTANCE, N_ST_DISTANCE, TWO_OR_THREE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

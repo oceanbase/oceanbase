@@ -136,7 +136,7 @@ int ObLogDistinct::est_cost()
   } else if (OB_UNLIKELY(total_ndv_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected total ndv", K(total_ndv_), K(ret));
-  } else if (OB_FAIL(inner_est_cost(child->get_card(), total_ndv_, distinct_cost))) {
+  } else if (OB_FAIL(inner_est_cost(get_parallel(), child->get_card(), total_ndv_, distinct_cost))) {
     LOG_WARN("failed to est distinct cost", K(ret));
   } else {
     set_op_cost(distinct_cost);
@@ -146,10 +146,9 @@ int ObLogDistinct::est_cost()
   return ret;
 }
 
-int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogDistinct::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  double distinct_cost = 0.0;
   ObLogicalOperator *child = NULL;
   if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
@@ -161,6 +160,7 @@ int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &co
     double child_card = child->get_card();
     double child_cost = child->get_cost();
     double child_ndv = total_ndv_;
+    const int64_t parallel = param.need_parallel_;
     if (param.need_row_count_ >= 0 && 
         child_card > 0 &&
         total_ndv_ > 0 &&
@@ -168,18 +168,17 @@ int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &co
         param.need_row_count_ < total_ndv_) {
       child_ndv = param.need_row_count_;
       param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
+    } else {
+      param.need_row_count_ = -1;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est child cost", K(ret));
-    } else if (OB_FAIL(inner_est_cost(child_card, child_ndv, distinct_cost))) {
+    } else if (OB_FAIL(inner_est_cost(parallel, child_card, child_ndv, op_cost))) {
       LOG_WARN("failed to est distinct cost", K(ret));
     } else {
-      cost = child_cost + distinct_cost;
+      cost = child_cost + op_cost;
       card = child_ndv;
       if (param.override_) {
-        set_op_cost(distinct_cost);
-        set_cost(cost);
-        set_card(card);
         total_ndv_ = child_ndv;
       }
     }
@@ -187,10 +186,9 @@ int ObLogDistinct::re_est_cost(EstimateCostInfo &param, double &card, double &co
   return ret;
 }
 
-int ObLogDistinct::inner_est_cost(double child_card, double child_ndv, double &op_cost)
+int ObLogDistinct::inner_est_cost(const int64_t parallel, double child_card, double child_ndv, double &op_cost)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = get_parallel();
   double per_dop_card = 0.0;
   double per_dop_ndv = 0.0;
   ObLogicalOperator *child = NULL;

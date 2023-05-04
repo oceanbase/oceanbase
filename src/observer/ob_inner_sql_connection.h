@@ -300,6 +300,15 @@ public:
                             bool has_tenant_resource,
                             const ObString &ps_sql,
                             bool is_from_pl = false);
+  static int process_audit_record(sql::ObResultSet &result_set,
+                                  sql::ObSqlCtx &sql_ctx,
+                                  sql::ObSQLSessionInfo &session,
+                                  int last_ret,
+                                  int64_t execution_id,
+                                  int64_t ps_stmt_id,
+                                  bool has_tenant_resource,
+                                  const ObString &ps_sql,
+                                  bool is_from_pl = false);
   static void record_stat(sql::ObSQLSessionInfo &session,
                           const sql::stmt::StmtType type,
                           bool is_from_pl = false);
@@ -308,9 +317,6 @@ public:
                                const bool is_extern_session,
                                const bool is_oracle_mode,
                                const bool is_ddl);
-
-  static void record_execute_time(sql::ObSQLSessionInfo& session,
-                                  const sql::ObPhysicalPlan *plan);
 
   int64_t get_init_timestamp() const { return init_timestamp_; }
 

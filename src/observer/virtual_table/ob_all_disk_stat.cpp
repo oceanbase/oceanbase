@@ -14,6 +14,7 @@
 
 #include "storage/blocksstable/ob_block_manager.h"
 #include "observer/ob_server.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::common;
@@ -102,7 +103,16 @@ int ObInfoSchemaDiskStatTable::inner_get_next_row(ObNewRow *&row)
             cells[cell_idx].set_int(port_);
             break;
           }
-          case TOTAL_SIZE: {
+          case TOTAL_SIZE:{
+            int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+            if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+              SERVER_LOG(WARN, "fail to get reserved size", K(ret));
+            } else {
+              cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size());
+            }
+            break;
+          }
+          case ALLOCATED_SIZE: {
             cells[cell_idx].set_int(OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size());
             break;
           }

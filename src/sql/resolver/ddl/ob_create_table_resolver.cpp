@@ -37,6 +37,7 @@
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
+#include "lib/charset/ob_template_helper.h"
 
 
 namespace oceanbase
@@ -56,7 +57,8 @@ ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
       if_not_exist_(false),
       is_oracle_temp_table_(false),
       index_arg_(),
-      current_index_name_set_()
+      current_index_name_set_(),
+      cur_column_group_id_(0)
 {
 }
 
@@ -67,6 +69,11 @@ ObCreateTableResolver::~ObCreateTableResolver()
 uint64_t ObCreateTableResolver::gen_column_id()
 {
   return ++cur_column_id_;
+}
+
+uint64_t ObCreateTableResolver::gen_column_group_id()
+{
+  return ++cur_column_group_id_;
 }
 
 int64_t ObCreateTableResolver::get_primary_key_size() const
@@ -185,6 +192,109 @@ int ObCreateTableResolver::add_hidden_tablet_seq_col()
   } else {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "tablet seq expects to be the first primary key", K(stmt_), K(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_hidden_external_table_pk_col()
+{
+  int ret = OB_SUCCESS;
+  uint64_t COL_IDS[2] = {OB_HIDDEN_FILE_ID_COLUMN_ID, OB_HIDDEN_LINE_NUMBER_COLUMN_ID};
+  const char* COL_NAMES[2] = {OB_HIDDEN_FILE_ID_COLUMN_NAME, OB_HIDDEN_LINE_NUMBER_COLUMN_NAME};
+  if (OB_ISNULL(stmt_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "stmt is NULL", K(stmt_), K(ret));
+  } else {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+    for (int i = 0; OB_SUCC(ret) && i < array_elements(COL_IDS); i++) {
+      ObColumnSchemaV2 hidden_pk;
+      hidden_pk.reset();
+      hidden_pk.set_column_id(COL_IDS[i]);
+      hidden_pk.set_data_type(ObIntType);
+      hidden_pk.set_nullable(false);
+      hidden_pk.set_is_hidden(true);
+      hidden_pk.set_charset_type(CHARSET_BINARY);
+      hidden_pk.set_collation_type(CS_TYPE_BINARY);
+      if (OB_FAIL(hidden_pk.set_column_name(COL_NAMES[i]))) {
+        SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+      } else if (OB_FAIL(primary_keys_.push_back(COL_IDS[i]))) {
+        SQL_RESV_LOG(WARN, "failed to push_back column_id", K(ret));
+      } else {
+        hidden_pk.set_rowkey_position(primary_keys_.count());
+        if (OB_FAIL(table_schema.add_column(hidden_pk))) {
+          SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_pk));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                                               ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
+                                                               ObColumnSchemaV2 &udt_column)
+{
+  int ret = OB_SUCCESS;
+  if (udt_column.is_xmltype()) {
+    ObColumnSchemaV2 hidden_blob;
+    ObSEArray<ObString, 4> gen_col_expr_arr;
+    ObString tmp_str;
+    char col_name[128] = {0};
+    hidden_blob.reset();
+    hidden_blob.set_column_id(gen_column_id());
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(udt_column.is_nullable());
+    hidden_blob.set_udt_set_id(udt_column.get_udt_set_id());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    databuff_printf(col_name, 128, "SYS_NC%05lu$",cur_column_id_);
+    if (OB_FAIL(hidden_blob.set_column_name(col_name))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(check_default_value(udt_column.get_cur_default_value(),
+                                           session_info_->get_tz_info_wrap(),
+                                           &tmp_str,    // useless
+                                           *allocator_,
+                                           table_schema,
+                                           resolved_cols,
+                                           udt_column,
+                                           gen_col_expr_arr,  // useless
+                                           session_info_->get_sql_mode(),
+                                           session_info_,
+                                           true,
+                                           schema_checker_))) {
+      SQL_RESV_LOG(WARN, "check udt column default value failed", K(ret), K(hidden_blob));
+    } else if (OB_FAIL(resolved_cols.push_back(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                                               ObColumnSchemaV2 &udt_column)
+{
+  int ret = OB_SUCCESS;
+  if (udt_column.is_xmltype()) {
+    ObColumnSchemaV2 hidden_blob;
+    ObSEArray<ObString, 4> gen_col_expr_arr;
+    ObString tmp_str;
+    char col_name[128] = {0};
+    hidden_blob.reset();
+    hidden_blob.set_column_id(gen_column_id());
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(udt_column.is_nullable());
+    hidden_blob.set_udt_set_id(udt_column.get_udt_set_id());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    databuff_printf(col_name, 128, "SYS_NC%05lu$",cur_column_id_);
+    if (OB_FAIL(hidden_blob.set_column_name(col_name))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(table_schema.add_column(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
   }
   return ret;
 }
@@ -365,23 +475,36 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       create_table_stmt->set_allocator(*allocator_);
       stmt_ = create_table_stmt;
     }
-    //resolve temporary option
+    //resolve temporary option or external table option
     if (OB_SUCC(ret)) {
       if (NULL != create_table_node->children_[0]) {
-        if (T_TEMPORARY != create_table_node->children_[0]->type_) {
-          ret = OB_INVALID_ARGUMENT;
-          SQL_RESV_LOG(WARN, "invalid argument.",
-                       K(ret), K(create_table_node->children_[0]->type_));
-        } else if (create_table_node->children_[5] != NULL) { //临时表不支持分区
-          ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
-
-//        } else if (is_create_as_sel && is_mysql_mode) { //暂时不支持查询建mysql临时表
-//          ret = OB_NOT_SUPPORTED;
-//          LOG_USER_ERROR(OB_NOT_SUPPORTED, "View/Table's column refers to a temporary table");
-        } else {
-          is_temporary_table = true;
-          is_oracle_temp_table_ = (is_mysql_mode == false);
-        }
+          switch (create_table_node->children_[0]->type_) {
+            case T_TEMPORARY:
+              if (create_table_node->children_[5] != NULL) { //临时表不支持分区
+                ret = OB_ERR_TEMPORARY_TABLE_WITH_PARTITION;
+              } else {
+                is_temporary_table = true;
+                is_oracle_temp_table_ = (is_mysql_mode == false);
+              }
+              break;
+            case T_EXTERNAL: {
+              uint64_t tenant_version = 0;
+              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+                LOG_WARN("failed to get data version", K(ret));
+              } else if (tenant_version < DATA_VERSION_4_2_0_0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, external table");
+              } else {
+                create_table_stmt->get_create_table_arg().schema_.set_table_type(EXTERNAL_TABLE);
+                is_external_table_ = true;
+              }
+              break;
+            }
+            default:
+              ret = OB_INVALID_ARGUMENT;
+              SQL_RESV_LOG(WARN, "invalid argument.",
+                           K(ret), K(create_table_node->children_[0]->type_));
+            }
       }
     }
     //resolve if_not_exists
@@ -557,6 +680,19 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           }
         }
 
+        if (OB_SUCC(ret) && is_external_table_) {
+          //external table support check
+          ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+          if (index_node_position_list.count() > 0
+              || foreign_key_node_position_list.count() > 0
+              || table_level_constraint_list.count() > 0
+              || table_schema.get_constraint_count() > 0
+              || is_create_as_sel) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
+          }
+        }
+
         // !!Attention!! resolve_partition_option should always call after resolve_table_options
         if (OB_SUCC(ret)) {
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
@@ -564,6 +700,12 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
                       create_table_node->children_[5], table_schema,
                       (is_mysql_mode && 1 == create_table_node->reserved_) ? false : true))) {
             SQL_RESV_LOG(WARN, "resolve partition option failed", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret) && create_table_stmt->get_create_table_arg().schema_.is_external_table()) {
+          if (OB_FAIL(add_hidden_external_table_pk_col())) {
+            LOG_WARN("fail to add hidden pk col for external table", K(ret));
           }
         }
 
@@ -937,6 +1079,9 @@ int ObCreateTableResolver::resolve_primary_key_node(const ParseNode &pk_node,
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "the num_child of primary_node is wrong.",
                  K(ret), K(pk_node.num_child_), K(pk_node.children_));
+  } else if (is_external_table_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Primary key constraint on external table");
   } else {
     ParseNode *column_list_node = pk_node.children_[0];
     if (OB_ISNULL(column_list_node)) {
@@ -1084,12 +1229,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       ParseNode *element = node->children_[i];
       CK (OB_NOT_NULL(element));
       if (OB_FAIL(ret)) {
-      } else if (RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_) {
-        continue;
-      } else if (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_) {
-        continue;
-      }
-      if (OB_FAIL(ret)) {
+      } else if ((RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_)
+                 || (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_)) {
+        //continue
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         ObColumnSchemaV2 column;
         column.set_tenant_id(tenant_id);
@@ -1109,22 +1251,20 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       }
     }
 
+    int64_t resolved_cols_count = resolved_cols.count();
     // 第二遍遍历，利用 resolved_cols 解析出全部 column schema 并保存到 table_schema 中
     // 并解析 index 等
     for (int32_t i = 0, ele_pos = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
       ParseNode *element = node->children_[i];
       CK (OB_NOT_NULL(element));
       if (OB_FAIL(ret)) {
-      } else if (RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_) {
+      } else if ((RESOLVE_NON_COL == resolve_rule && T_COLUMN_DEFINITION == element->type_)
+                 || (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_)) {
         continue;
-      } else if (RESOLVE_COL_ONLY == resolve_rule && T_COLUMN_DEFINITION != element->type_) {
-        continue;
-      }
-      if (OB_FAIL(ret)) {
       } else if (OB_LIKELY(T_COLUMN_DEFINITION == element->type_)) {
         bool is_modify_column_visibility = false;
         const bool is_create_table_as = (RESOLVE_COL_ONLY == resolve_rule);
-        CK (ele_pos >= 0 && ele_pos < resolved_cols.count());
+        CK (ele_pos >= 0 && ele_pos < resolved_cols_count);
         if (OB_SUCC(ret)) {
           ObColumnSchemaV2 &column = resolved_cols.at(ele_pos);
           ObColumnResolveStat stat;
@@ -1139,9 +1279,11 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                                 is_modify_column_visibility,
                                                 pk_name,
                                                 is_oracle_temp_table_,
-                                                is_create_table_as))) {
+                                                is_create_table_as,
+                                                table_schema.is_external_table()))) {
             SQL_RESV_LOG(WARN, "resolve column definition failed", K(ret));
-          } else if (OB_FAIL(check_default_value(column.get_cur_default_value(),
+          } else if (!column.is_xmltype() && // xmltype will check after hidden column generated
+                     OB_FAIL(check_default_value(column.get_cur_default_value(),
                                           session_info_->get_tz_info_wrap(),
                                           tmp_str,
                                           *allocator_,
@@ -1267,6 +1409,10 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
             }
           }
 
+          if (OB_SUCC(ret) && column.is_xmltype()) {
+            column.set_udt_set_id(gen_column_group_id());
+          }
+
           if (OB_SUCC(ret)) {
             ObColumnSchemaV2 *tmp_col = NULL;
             LOG_DEBUG("resolve table elements mid2", K(i), K(column));
@@ -1288,6 +1434,10 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
             if (!column.is_invisible_column()) {
               has_visible_col = true;
+            }
+            // column from resolved_cols may be invalid
+            if (OB_FAIL(add_generated_hidden_column_for_udt(table_schema, resolved_cols, column))) {
+              LOG_WARN("generate hidden column for udt failed");
             }
           }
 
@@ -1351,6 +1501,20 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
     }
 
     if (OB_SUCC(ret)) {
+      for (int32_t i = resolved_cols_count; i < resolved_cols.count() && OB_SUCC(ret); i++) {
+        ObColumnSchemaV2 &hidden_col = resolved_cols.at(i);
+        if (OB_FAIL(table_schema.add_column(hidden_col))) {
+          SQL_RESV_LOG(WARN, "add udt hidden column to table_schema failed", K(ret), K(hidden_col));
+        } else {
+          ObColumnNameHashWrapper name_key(hidden_col.get_column_name_str());
+          if (OB_FAIL(column_name_set_.set_refactored(name_key))) {
+            SQL_RESV_LOG(WARN, "add column name to map failed", K(ret));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       int64_t identity_column_count = 0;
       if (OB_FAIL(get_identity_column_count(table_schema, identity_column_count))) {
         SQL_RESV_LOG(WARN, "get identity column count fail", K(ret));
@@ -1369,7 +1533,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
     }
 
     // Oracle 模式下，一个表至少有一个列为非 generated 列
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && !table_schema.is_external_table()) {
       bool has_non_virtual_column = false;
       for (int64_t i = 0;
            OB_SUCC(ret) && !has_non_virtual_column && i < table_schema.get_column_count();
@@ -1383,6 +1547,22 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
       if (OB_SUCC(ret) && !has_non_virtual_column) {
         ret = OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL;
         SQL_RESV_LOG(WARN, "table must have at least one column that is not virtual", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      bool all_virtual_column = true;
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column = table_schema.get_column_schema_by_idx(i);
+        CK (OB_NOT_NULL(column));
+        if (OB_SUCC(ret) && !column->is_generated_column()) {
+          all_virtual_column = false;
+          break;
+        }
+      }
+      if (OB_SUCC(ret) && !all_virtual_column) {
+        ret = OB_NOT_SUPPORTED; //[TODO EXTERNAL-TABLE]
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "normal columns");
       }
     }
 
@@ -1650,6 +1830,20 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             //can not create a column which meta type is tinyint in oracle mode
             ret = OB_ERR_INVALID_DATATYPE;
             LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
+          } else if (lib::is_oracle_mode() && expr->get_result_type().is_user_defined_sql_type()) {
+            if (expr->get_result_type().get_subschema_id() == ObXMLSqlType) {
+              ObObjMeta xml_meta;
+              xml_meta.set_type(ObUserDefinedSQLType);
+              xml_meta.set_collation_type(CS_TYPE_BINARY);
+              column.set_meta_type(xml_meta);
+              column.set_sub_data_type(T_OBJ_XML);
+              // udt column is varbinary used for null bitmap
+              column.set_udt_set_id(gen_column_group_id());
+            } else {
+              ret = OB_ERR_INVALID_DATATYPE;
+              LOG_WARN("invalid data type", K(ret), K(*expr));
+              LOG_USER_ERROR(OB_ERR_INVALID_DATATYPE);
+            }
           } else {
             ObObjMeta column_meta = expr->get_result_type().get_obj_meta();
             if (column_meta.is_lob_locator()) {
@@ -1768,6 +1962,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 //do nothing ...
               } else if (OB_FAIL(table_schema.add_column(column))) {
                 LOG_WARN("add column to table_schema failed", K(ret), K(column));
+              } else if (is_oracle_mode() && column.is_xmltype() &&
+                         OB_FAIL(add_generated_hidden_column_for_udt(table_schema, column))) {
+                LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
               }
             }
             LOG_DEBUG("ctas mysql mode, create_table_column_count = 0,end", K(column));
@@ -2140,6 +2337,13 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
         SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
       }
     }
+
+    if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      if (table_schema.get_external_file_format().empty()
+          || table_schema.get_external_file_location().empty())
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
+    }
   }
   return ret;
 }
@@ -2263,6 +2467,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
         if (OB_SUCC(ret) && OB_FAIL(add_new_indexkey_for_oracle_temp_table(index_column_list_node->num_child_))) {
           SQL_RESV_LOG(WARN, "add session id key failed", K(ret));
         }
+        bool cnt_func_index_mysql = false;
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
           if (NULL == index_column_list_node->children_[i]
@@ -2283,6 +2488,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               //column_name
               if (index_column_node->children_[0]->type_ != T_IDENT) {
                 sort_item.is_func_index_ = true;
+                cnt_func_index_mysql = true;
               } else {
                 sort_item.is_func_index_ = false;
               }
@@ -2309,25 +2515,36 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                                       *session_info_,
                                                                       tbl_schema,
                                                                       expr,
-                                                                      schema_checker_))) {
+                                                                      schema_checker_,
+                                                                      ObResolverUtils::CHECK_FOR_FUNCTION_INDEX))) {
                 LOG_WARN("build generated column expr failed", K(ret));
               } else if (!expr->is_column_ref_expr()) {
                 //real index expr, so generate hidden generated column in data table schema
-                if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
+                if (ob_is_geometry(expr->get_data_type()) || static_cast<int64_t>(INDEX_KEYNAME::SPATIAL_KEY) == node->value_) {
+                  ret = OB_ERR_SPATIAL_FUNCTIONAL_INDEX;
+                  LOG_WARN("Spatial functional index is not supported.", K(ret), K(column_name));
+                } else if (OB_FAIL(ObIndexBuilderUtil::generate_ordinary_generated_column(*expr,
                                                                                    session_info_->get_sql_mode(),
                                                                                    tbl_schema,
                                                                                    column_schema,
                                                                                    schema_checker_->get_schema_guard()))) {
                   LOG_WARN("generate ordinary generated column failed", K(ret));
                 } else {
+                  ObColumnNameHashWrapper column_name_key(column_schema->get_column_name_str());
                   sort_item.column_name_ = column_schema->get_column_name_str();
                   sort_item.is_func_index_ = false;
+                  if (OB_FAIL(column_name_set_.set_refactored(column_name_key))) {
+                    LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                  }
                 }
-              } else {
+              } else if (is_oracle_mode) {
                 const ObColumnRefRawExpr *ref_expr = static_cast<const ObColumnRefRawExpr*>(expr);
                 sort_item.column_name_ = ref_expr->get_column_name();
                 sort_item.is_func_index_ = false;
                 column_schema = tbl_schema.get_column_schema(ref_expr->get_column_id());
+              } else {
+                ret = OB_ERR_FUNCTIONAL_INDEX_ON_FIELD;
+                LOG_WARN("Functional index on a column is not supported.", K(ret), K(*expr));
               }
             } else {
               if (NULL == (column_schema = tbl_schema.get_column_schema(column_name))) {
@@ -2343,7 +2560,11 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 ret = OB_WRONG_SUB_KEY;
                 SQL_RESV_LOG(WARN, "prefix length is longer than column length", K(sort_item), K(column_schema->get_data_length()), K(ret));
               } else if (ob_is_text_tc(column_schema->get_data_type())) {
-                if(sort_item.prefix_len_ <= 0) {
+                if (column_schema->is_hidden()) {
+                  //functional index in mysql mode
+                  ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
+                  LOG_WARN("Cannot create a functional index on an expression that returns a BLOB or TEXT.", K(ret));
+                } else if(sort_item.prefix_len_ <= 0) {
                   ret = OB_ERR_WRONG_KEY_COLUMN;
                   LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
                 }
@@ -2413,6 +2634,24 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               }
             }
           }
+        }
+
+        if (OB_SUCC(ret) && cnt_func_index_mysql) {
+          uint64_t tenant_data_version = 0;
+          if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+            LOG_WARN("get tenant data version failed", K(ret));
+          } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
+          }
+        }
+
+        if (OB_SUCC(ret) && cnt_func_index_mysql) {
+          first_column_name = ObString::make_string("functional_index");
         }
       }
     } else {

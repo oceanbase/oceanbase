@@ -832,6 +832,10 @@ int ObTransformSimplifyExpr::do_check_like_condition(ObRawExpr *&expr,
         }
       }
       if (OB_SUCC(ret)) {
+        if (text_expr->get_expr_type() == T_FUN_SYS_CAST &&
+            text_expr->has_flag(IS_INNER_ADDED_EXPR)) {//avoid reconstuct sql is wrong.
+          text_expr->clear_flag(IS_INNER_ADDED_EXPR);
+        }
         if (OB_FAIL(ObRawExprUtils::create_equal_expr(*ctx_->expr_factory_,
                                                       ctx_->session_info_,
                                                       pattern_expr,
@@ -1896,7 +1900,7 @@ int ObTransformSimplifyExpr::do_remove_subquery(ObDMLStmt* stmt, ObRawExpr*& exp
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameters have null", K(ret), K(stmt), K(expr));
-  } else if (expr->is_query_ref_expr()) {
+  } else if (expr->is_query_ref_expr() && !expr->is_multiset_expr()) {
     ObQueryRefRawExpr* query_ref = static_cast<ObQueryRefRawExpr*>(expr);
     ObSelectStmt* sub_stmt = query_ref->get_ref_stmt();
     if (OB_ISNULL(sub_stmt)) {

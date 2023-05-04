@@ -36,7 +36,6 @@ class ObLSReplica;
 namespace rootserver
 {
 class ObUnitManager;
-class ObServerManager;
 class ObZoneManager;
 class ObDRTaskMgr;
 class DRLSInfo;
@@ -111,14 +110,12 @@ public:
       common::ObAddr &self_addr,
       common::ObServerConfig &cfg,
       ObUnitManager &unit_mgr,
-      ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
       ObDRTaskMgr &task_mgr,
       share::ObLSTableOperator &lst_operator,
       share::schema::ObMultiVersionSchemaService &schema_service,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       common::ObMySQLProxy &sql_proxy);
-
   int try_disaster_recovery();
   int try_tenant_disaster_recovery(
       const uint64_t tenant_id,
@@ -127,7 +124,6 @@ public:
   static int check_tenant_locality_match(
       const uint64_t tenant_id,
       ObUnitManager &unit_mgr,
-      ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
@@ -172,7 +168,6 @@ private:
 
   static int choose_disaster_recovery_data_source(
       ObZoneManager *zone_mgr,
-      ObServerManager *server_mgr,
       DRLSInfo &dr_ls_info,
       const ObReplicaMember &dst_member,
       const ObReplicaMember &src_member,
@@ -556,12 +551,8 @@ private:
       : inited_(false),
         tenant_id_(OB_INVALID_ID),
         unit_mgr_(nullptr),
-        server_mgr_(nullptr),
         unit_set_(unit_set) {}
-    int init(
-        const uint64_t tenant_id,
-        ObUnitManager *unit_mgr,
-        ObServerManager *server_mgr);
+    int init(const uint64_t tenant_id, ObUnitManager *unit_mgr);
     int get_unit(
         const common::ObZone &zone,
         const uint64_t unit_group_id,
@@ -570,7 +561,6 @@ private:
     bool inited_;
     uint64_t tenant_id_;
     ObUnitManager *unit_mgr_;
-    ObServerManager *server_mgr_;
     common::hash::ObHashSet<int64_t> &unit_set_;
   };
 
@@ -583,10 +573,7 @@ private:
   class LocalityAlignment
   {
   public:
-    LocalityAlignment(ObUnitManager *unit_mgr,
-                      ObServerManager *server_mgr,
-                      ObZoneManager *zone_mgr,
-                      DRLSInfo &dr_ls_info);
+    LocalityAlignment(ObUnitManager *unit_mgr, ObZoneManager *zone_mgr, DRLSInfo &dr_ls_info);
     virtual ~LocalityAlignment();
     int build();
     int get_next_locality_alignment_task(
@@ -678,7 +665,6 @@ private:
     int64_t task_idx_;
     AddReplicaLATask add_replica_task_;
     ObUnitManager *unit_mgr_;
-    ObServerManager *server_mgr_;
     ObZoneManager *zone_mgr_;
     DRLSInfo &dr_ls_info_;
     common::ObArray<LATask *> task_array_;
@@ -696,7 +682,6 @@ private:
   static int check_ls_locality_match_(
       DRLSInfo &dr_ls_info,
       ObUnitManager &unit_mgr,
-      ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
@@ -960,7 +945,6 @@ private:
   common::ObAddr self_addr_;
   common::ObServerConfig *config_;
   ObUnitManager *unit_mgr_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObDRTaskMgr *disaster_recovery_task_mgr_;
   share::ObLSTableOperator *lst_operator_;

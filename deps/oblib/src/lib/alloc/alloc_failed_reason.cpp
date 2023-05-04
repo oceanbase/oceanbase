@@ -66,6 +66,12 @@ char *alloc_failed_msg()
   char *msg = (&buf)->v_;
   auto &afc = g_alloc_failed_ctx();
   switch (afc.reason_) {
+  case UNKNOWN: {
+      snprintf(msg, len,
+               "unknown(alloc_size: %ld)",
+               afc.alloc_size_);
+      break;
+    }
   case SINGLE_ALLOC_SIZE_OVERFLOW: {
       snprintf(msg, len,
                "single alloc size large than 4G is not allowed(alloc_size: %ld)",

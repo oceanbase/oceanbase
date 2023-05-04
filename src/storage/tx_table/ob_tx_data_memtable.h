@@ -291,7 +291,8 @@ public: /* derived from ObIMemtable */
                   const uint64_t table_id,
                   const storage::ObTableReadInfo &read_info,
                   const common::ObIArray<share::schema::ObColDesc> &columns,
-                  const storage::ObStoreRow &row) override;
+                  const storage::ObStoreRow &row,
+                  const share::ObEncryptMeta *encrypt_meta) override;
   // not supported
   virtual int lock(storage::ObStoreCtx &ctx,
                    const uint64_t table_id,

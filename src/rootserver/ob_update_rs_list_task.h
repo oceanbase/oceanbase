@@ -29,7 +29,6 @@ class ObLSTableOperator;
 namespace rootserver
 {
 class ObRootService;
-class ObServerManager;
 class ObZoneManager;
 class ObUpdateRsListTask : public share::ObAsyncTask
 {
@@ -39,7 +38,6 @@ public:
 
   int init(share::ObLSTableOperator &lst_operator,
            share::ObRootAddrAgent *addr_agent_,
-           ObServerManager &server_mgr,
            ObZoneManager &zone_mgr,
            common::SpinRWLock &lock,
            const bool force_update,
@@ -49,7 +47,6 @@ public:
   int64_t get_deep_copy_size() const;
   share::ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const;
   static int get_rs_list(share::ObLSTableOperator &lst,
-                         ObServerManager &server_mgr,
                          const common::ObAddr &self_addr,
                          share::ObIAddrList &rs_list,
                          share::ObIAddrList &readonly_rs_list,
@@ -81,7 +78,6 @@ private:
   bool inited_;
   share::ObLSTableOperator *lst_operator_;
   share::ObRootAddrAgent *root_addr_agent_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   common::SpinRWLock *lock_;
   bool force_update_;

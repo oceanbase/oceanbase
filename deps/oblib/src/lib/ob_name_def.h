@@ -1045,5 +1045,18 @@
 #define N_ST_CONTAINS                       "st_contains"
 #define N_ST_WITHIN                         "st_within"
 #define N_SQL_MODE_CONVERT                  "sql_mode_convert"
+#define N_EXTERNAL_FILE_COLUMN_PREFIX       "metadata$filecol"
 
+#define N_PREFIX_PATTERN                    "prefix_pattern"
+#define N_PRIV_XML_BINARY                   "_make_xml_binary"
+#define N_SYS_MAKEXML                       "sys_makexml"
+#define N_XMLPARSE                          "xmlparse"
+#define N_XMLAGG                            "xmlagg"
+#define N_XML_ELEMENT                       "xmlelement"
+#define N_XML_ATTRIBUTES                    "xmlattributes"
+#define N_EXTRACTVALUE                      "extractvalue"
+#define N_EXTRACT_XML                       "extract_xml"
+#define N_XMLSERIALIZE                      "xmlserialize"
+#define N_XMLCAST                           "xmlcast"
+#define N_UPDATEXML                         "updatexml"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

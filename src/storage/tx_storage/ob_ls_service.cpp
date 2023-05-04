@@ -1183,6 +1183,19 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
   return ret;
 }
 
+int ObLSService::get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array)
+{
+  int ret = OB_SUCCESS;
+  ls_id_array.reuse();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ls_map_.get_all_ls_id(ls_id_array))) {
+    LOG_WARN("failed to get all ls id", K(ret));
+  }
+  return ret;
+}
+
 int ObLSService::create_tablet(const obrpc::ObBatchCreateTabletArg &batch_arg,
                                obrpc::ObCreateTabletBatchRes &result)
 {

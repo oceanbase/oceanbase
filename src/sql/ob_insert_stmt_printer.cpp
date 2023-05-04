@@ -32,7 +32,12 @@ int ObInsertStmtPrinter::do_print()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else {
-    expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_);
+    expr_printer_.init(buf_,
+                       buf_len_,
+                       pos_,
+                       schema_guard_,
+                       print_params_,
+                       param_store_);
     if (OB_FAIL(print())) {
       LOG_WARN("fail to print stmt", K(ret));
     }
@@ -190,6 +195,9 @@ int ObInsertStmtPrinter::print_values()
                        || column->get_column_id() == OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID) {
               // 临时表的隐藏列，不需要print。TODO 将临时表insert改写由resolver转移到改写阶段后，可以去掉本分支
               LOG_DEBUG("do not print column", K(*column));
+            } else if (i * column_count + j >= insert_stmt->get_values_vector().count()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpect values vector", K(ret));
             } else if (OB_FAIL(expr_printer_.do_print(insert_stmt->get_values_vector().at(i * column_count + j), T_INSERT_SCOPE))) {
               LOG_WARN("fail to print where expr", K(ret));
             } else {

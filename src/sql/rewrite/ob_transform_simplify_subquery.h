@@ -14,6 +14,7 @@
 #define OB_TRANSFORM_SIMPILFY_SUBQUERY_H
 
 #include "sql/rewrite/ob_transform_rule.h"
+#include "sql/rewrite/ob_transform_utils.h"
 
 namespace oceanbase {
 namespace sql {
@@ -41,6 +42,7 @@ private:
   int is_subquery_to_expr_valid(const ObSelectStmt *stmt,
                                 bool &is_valid);
   int transform_not_expr(ObDMLStmt *stmt, bool &trans_happened);
+  int do_transform_not_expr(ObRawExpr *&expr, bool &trans_happened);
   int remove_redundant_select(ObDMLStmt *&stmt, bool &trans_happened);
   int try_remove_redundant_select(ObSelectStmt &stmt, ObSelectStmt *&new_stmt);
   int check_subquery_valid(ObSelectStmt &stmt, bool &is_valid);
@@ -110,7 +112,7 @@ private:
 
   int transform_exists_query(ObDMLStmt *stmt, bool &trans_happened);
 
-  int transform_one_expr(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened);
+  int try_eliminate_subquery(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened);
   
     /**
    * Simplify subuqery in exists, any, all (subq)
@@ -178,6 +180,7 @@ private:
                                   const ObItemType op_type,
                                   ObSelectStmt *&subquery,
                                   bool &trans_happened);
+  int eliminate_groupby_distinct_in_any_all(ObRawExpr *expr, bool &trans_happened);
   int eliminate_groupby_in_any_all(ObSelectStmt *&stmt, bool &trans_happened);
   int eliminate_distinct_in_any_all(ObSelectStmt *subquery,bool &trans_happened);
   int check_need_add_limit(ObSelectStmt *subquery, bool &need_add_limit);
@@ -192,6 +195,28 @@ private:
                                JoinedTable *join_table,
                                ObIArray<ObRawExpr *> &join_conds,
                                ObIArray<ObRawExpr *> &push_down_conds);
+  int try_trans_any_all_as_exists(ObDMLStmt *stmt,
+                                  ObRawExpr *&expr,
+                                  ObNotNullContext *not_null_ctx,
+                                  bool is_bool_expr,
+                                  bool &trans_happened);
+  int do_trans_any_all_as_exists(ObRawExpr *&expr,
+                                 ObNotNullContext *not_null_ctx,
+                                 bool &trans_happened);
+  int check_can_trans_as_exists(ObRawExpr* expr, bool is_bool_expr, bool &is_valid);
+  int check_stmt_can_trans_as_exists(ObSelectStmt *stmt, bool is_correlated, bool &is_valid);
+  int query_cmp_to_exists_value_cmp(ObItemType type, bool is_with_all, ObItemType& new_type);
+  int add_limit_for_any_all_subquery(ObRawExpr *stmt,bool &trans_happened);
+  int prepare_trans_any_all_as_exists(ObQueryRefRawExpr* expr, ObSelectStmt *&trans_stmt);
+  int transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened);
+  int transform_any_all_as_exists_joined_table(ObDMLStmt* stmt,
+                                               TableItem *table,
+                                               bool &trans_happened);
+  int try_trans_any_all_as_exists(ObDMLStmt *stmt,
+                                  ObIArray<ObRawExpr* > &exprs,
+                                  ObNotNullContext *not_null_cxt,
+                                  bool is_bool_expr,
+                                  bool &trans_happened);
 };
 
 }

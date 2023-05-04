@@ -15,6 +15,7 @@
 
 #include "easy_define.h"
 
+extern int ob_backtrace_c(void **buffer, int size);
 const char* easy_lbt();
 const char* easy_lbt_str();
 const char* easy_get_func_name(void *addr);

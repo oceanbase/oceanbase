@@ -614,10 +614,11 @@ ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
 int ObTmpTenantMacroBlockManager::init(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has been inited", K(ret));
-  } else if (OB_FAIL(blocks_.create(MBLK_HASH_BUCKET_NUM, ObModIds::OB_TMP_BLOCK_MAP))) {
+  } else if (OB_FAIL(blocks_.create(MBLK_HASH_BUCKET_NUM, attr, attr))) {
     STORAGE_LOG(WARN, "Fail to create tmp macro block map, ", K(ret));
   } else {
     allocator_ = &allocator;
@@ -814,6 +815,8 @@ int64_t ObTmpTenantFileStore::dec_ref()
 
 int ObTmpTenantFileStore::init(const uint64_t tenant_id)
 {
+  auto allocator_attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MANAGER);
+  auto io_allocator_attr = SET_USE_500(ObModIds::OB_TMP_PAGE_CACHE);
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -822,6 +825,8 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else if (OB_FAIL(io_allocator_.init(OB_MALLOC_BIG_BLOCK_SIZE, ObModIds::OB_TMP_PAGE_CACHE, tenant_id, IO_LIMIT))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
+  } else if (FALSE_IT(allocator_.set_attr(allocator_attr))) {
+  } else if (FALSE_IT(io_allocator_.set_attr(io_allocator_attr))) {
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));
@@ -1399,6 +1404,7 @@ ObTmpFileStore::~ObTmpFileStore()
 int ObTmpFileStore::init()
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500(ObModIds::OB_TMP_FILE_STORE_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret));
@@ -1411,10 +1417,10 @@ int ObTmpFileStore::init()
       TMP_FILE_BLOCK_CACHE_PRIORITY))) {
     STORAGE_LOG(WARN, "Fail to init tmp tenant block cache, ", K(ret));
   } else if (OB_FAIL(tenant_file_stores_.create(STORE_HASH_BUCKET_NUM,
-      ObModIds::OB_TMP_FILE_STORE_MAP))) {
+      attr, attr))) {
     STORAGE_LOG(WARN, "Fail to create tmp tenant file store map, ", K(ret));
   } else {
-    allocator_.set_label(ObModIds::OB_TMP_FILE_STORE_MAP);
+    allocator_.set_attr(attr);
     is_inited_ = true;
   }
   if (!is_inited_) {

@@ -22,6 +22,7 @@
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_dbms_stats_executor.h"
+#include "pl/sys_package/ob_dbms_stats.h"
 
 namespace oceanbase
 {
@@ -81,7 +82,7 @@ ObOptimizerStatsGatheringOp::ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx
   : ObOperator(exec_ctx, spec, input),
     tenant_id_(OB_INVALID_ID),
     table_stats_map_(),
-    column_stats_map_(),
+    osg_col_stats_map_(),
     part_map_(),
     piece_msg_(),
     arena_("ObOptStatGather")
@@ -96,28 +97,28 @@ void ObOptimizerStatsGatheringOp::destroy()
 
 void ObOptimizerStatsGatheringOp::reset()
 {
-  FOREACH(it, column_stats_map_) {
+  FOREACH(it, osg_col_stats_map_) {
     if (OB_NOT_NULL(it->second)) {
-      it->second->~ObOptColumnStat();
+      it->second->~ObOptOSGColumnStat();
       it->second = NULL;
     }
   }
   table_stats_map_.destroy();
-  column_stats_map_.destroy();
+  osg_col_stats_map_.destroy();
   part_map_.destroy();
   arena_.reset();
 }
 
 void ObOptimizerStatsGatheringOp::reuse_stats()
 {
-  FOREACH(it, column_stats_map_) {
+  FOREACH(it, osg_col_stats_map_) {
     if (OB_NOT_NULL(it->second)) {
       it->second->reset();
       it->second = NULL;
     }
   }
   table_stats_map_.reuse();
-  column_stats_map_.reuse();
+  osg_col_stats_map_.reuse();
   part_map_.reuse();
   arena_.reset();
 }
@@ -125,18 +126,25 @@ void ObOptimizerStatsGatheringOp::reuse_stats()
 int ObOptimizerStatsGatheringOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(child_) || OB_ISNULL(ctx_.get_my_session())) {
+  const ObTableSchema *tab_schema = nullptr;
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_virtual_table_ctx().schema_guard_;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status: null pointer", K(ret));
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(tenant_id_ = ctx_.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, MY_SPEC.table_id_, tab_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_));
+  } else if (OB_ISNULL(tab_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get table schema", K(ret));
   } else {
-    tenant_id_ = ctx_.get_my_session()->get_effective_tenant_id();
     arena_.set_tenant_id(tenant_id_);
     piece_msg_.set_tenant_id(tenant_id_);
     if (OB_FAIL(table_stats_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
         "TabStatBucket",
         "TabStatNode"))) {
       LOG_WARN("fail to create table stats map", K(ret));
-    } else if (OB_FAIL(column_stats_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
+    } else if (OB_FAIL(osg_col_stats_map_.create(DEFAULT_HASH_MAP_BUCKETS_COUNT,
         "ColStatBucket",
         "ColStatNode"))) {
       LOG_WARN("fail to create column stats map", K(ret));
@@ -144,36 +152,11 @@ int ObOptimizerStatsGatheringOp::inner_open()
         "PartMapBucket",
         "PartMapNode"))) {
       LOG_WARN("fail to create part map", K(ret));
-    } else if (OB_FAIL(init_part_map())) {
+    } else if (MY_SPEC.is_part_table() &&
+               OB_FAIL(pl::ObDbmsStats::get_table_partition_map(*tab_schema, part_map_))) {
       LOG_WARN("fail to init part map", K(ret));
-    } else {
-      // do nothing yet
     }
   }
-  return ret;
-}
-
-int ObOptimizerStatsGatheringOp::init_part_map()
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *tab_schema = nullptr;
-  share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_virtual_table_ctx().schema_guard_;
-  if (OB_ISNULL(schema_guard)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, MY_SPEC.table_id_, tab_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_));
-  } else if (OB_ISNULL(tab_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get table schema", K(ret));
-  } else {
-    if (MY_SPEC.is_part_table()) {
-      if (OB_FAIL(pl::ObDbmsStats::get_table_partition_map(*tab_schema, part_map_))) {
-        LOG_WARN("fail to get part map", K(ret));
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -303,7 +286,10 @@ int ObOptimizerStatsGatheringOp::generate_part_ids(PartIds &part_ids)
   if (MY_SPEC.is_part_table()) {
     ObObjectID partition_id = OB_INVALID_ID;
     ObTabletID tablet_id;
-    if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(MY_SPEC.calc_part_id_expr_, eval_ctx_, partition_id, tablet_id))) {
+    if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(MY_SPEC.calc_part_id_expr_,
+                                                                 eval_ctx_,
+                                                                 partition_id,
+                                                                 tablet_id))) {
       LOG_WARN("calc part and tablet id by expr failed", K(ret));
     } else {
       OSGPartInfo part_info;
@@ -319,6 +305,8 @@ int ObOptimizerStatsGatheringOp::generate_part_ids(PartIds &part_ids)
       } else {
         part_ids.first_part_id_ = part_info.part_id_;
       }
+      LOG_TRACE("succeed to generate part ids", K(part_ids),
+                K(MY_SPEC.is_two_level_part()), K(partition_id), K(tablet_id));
     }
   } else {
     part_ids.part_id_ = (int64_t)MY_SPEC.table_id_;
@@ -333,17 +321,20 @@ int ObOptimizerStatsGatheringOp::get_tab_stat_by_key(ObOptTableStat::Key &key, O
   int ret = OB_SUCCESS;
   void *ptr = nullptr;
   if (OB_FAIL(table_stats_map_.get_refactored(key, tab_stat))) {
-    if (OB_HASH_NOT_EXIST != ret) {
+    if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
       LOG_WARN("failed to find in hashmap", K(ret));
-    } else if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptTableStat)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
-      tab_stat = new (ptr) ObOptTableStat();
-      tab_stat->set_table_id(MY_SPEC.table_id_);
-      tab_stat->set_partition_id(key.partition_id_);
-      if (OB_FAIL(table_stats_map_.set_refactored(key, tab_stat))) {
-        LOG_WARN("fail to insert into hash map", K(key), KPC(tab_stat));
+      ret = OB_SUCCESS;
+      if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptTableStat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("memory is not enough", K(ret), K(ptr));
+      } else {
+        tab_stat = new (ptr) ObOptTableStat();
+        tab_stat->set_table_id(MY_SPEC.table_id_);
+        tab_stat->set_partition_id(key.partition_id_);
+        if (OB_FAIL(table_stats_map_.set_refactored(key, tab_stat))) {
+          LOG_WARN("fail to insert into hash map", K(key), KPC(tab_stat));
+        }
       }
     }
   }
@@ -353,28 +344,30 @@ int ObOptimizerStatsGatheringOp::get_tab_stat_by_key(ObOptTableStat::Key &key, O
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::get_col_stat_by_key(ObOptColumnStat::Key &key, ObOptColumnStat *&col_stat)
+int ObOptimizerStatsGatheringOp::get_col_stat_by_key(ObOptColumnStat::Key &key, ObOptOSGColumnStat *&osg_col_stat)
 {
   int ret = OB_SUCCESS;
-  void *ptr = nullptr;
-  if(OB_FAIL(column_stats_map_.get_refactored(key, col_stat))) {
-    if (OB_HASH_NOT_EXIST != ret) {
+  if(OB_FAIL(osg_col_stats_map_.get_refactored(key, osg_col_stat))) {
+    if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
       LOG_WARN("failed to find in hashmap", K(ret));
-    } else if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptColumnStat)))){
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(ptr));
     } else {
-      col_stat = new (ptr) ObOptColumnStat(arena_);
-      col_stat->set_table_id(MY_SPEC.table_id_);
-      col_stat->set_partition_id(key.partition_id_);
-      col_stat->set_column_id(key.column_id_);
-      if (OB_FAIL(column_stats_map_.set_refactored(key, col_stat))) {
-        LOG_WARN("fail to insert into hash map", K(ret));
+      ret = OB_SUCCESS;
+      if (OB_ISNULL(osg_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(arena_)) ||
+                OB_ISNULL(osg_col_stat->col_stat_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create new col stat");
+      } else {
+        osg_col_stat->col_stat_->set_table_id(MY_SPEC.table_id_);
+        osg_col_stat->col_stat_->set_partition_id(key.partition_id_);
+        osg_col_stat->col_stat_->set_column_id(key.column_id_);
+        if (OB_FAIL(osg_col_stats_map_.set_refactored(key, osg_col_stat))) {
+          LOG_WARN("fail to insert into hash map", K(ret));
+        }
       }
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_DEBUG("GET col_stat", KPC(col_stat));
+    LOG_DEBUG("GET col_stat", K(key), KPC(osg_col_stat));
   }
   return ret;
 }
@@ -387,8 +380,8 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
 {
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
-  ObObj res_obj;
-  if (OB_ISNULL(expr)) {
+  int64_t col_len  = 0;
+  if (OB_ISNULL(expr) || OB_ISNULL(expr->basic_funcs_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (OB_FAIL(get_col_stats_by_partinfo(part_ids, column_id, all_stats))) {
@@ -396,23 +389,20 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
   } else if (!ObColumnStatParam::is_valid_histogram_type(expr->obj_meta_.get_type())) {
     // do nothing yet, shoul use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
-    LOG_WARN("eval expr failed", K(ret));
-  } else if (OB_FAIL(datum->to_obj(res_obj, expr->obj_meta_))) {
-    LOG_WARN("to obj failed", K(ret));
+    LOG_WARN("failed to eval expr", K(*expr));
+  } else if (OB_ISNULL(datum) ) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
+    LOG_WARN("fail to calc sys op opnsize", K(ret));
+  } else if (OB_FAIL(set_col_stats(all_stats,
+                                   datum,
+                                   expr->obj_meta_,
+                                   expr->basic_funcs_->null_first_cmp_))) {
+    LOG_WARN("failed to set col stats");
   } else {
-    int64_t col_len  = 0;
-    // we set avg_len outer size the set_col_stats function
-    // since derive avg_len from obj is inaccurate.
-    // and we need to calc avg_len before num_not_null/num_null.
-    if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
-      LOG_WARN("fail to calc sys op opnsize", K(ret));
-    } else if (FALSE_IT(set_col_stats_avg_len(all_stats, col_len))) {
-      LOG_WARN("fail to set col_stats_avg_len", K(ret), K(col_len));
-    } else if (OB_FAIL(set_col_stats(all_stats, res_obj))) {
-      LOG_WARN("fail to set col stats", K(ret));
-    } else {
-      row_len += col_len;
-    }
+    row_len += col_len;
+    LOG_TRACE("succed to calc column stat", K(*expr), K(row_len), K(*datum));
   }
   return ret;
 }
@@ -484,44 +474,42 @@ int ObOptimizerStatsGatheringOp::get_col_stats_by_partinfo(PartIds &part_ids, ui
   return ret;
 }
 
-void ObOptimizerStatsGatheringOp::set_col_stats_avg_len(StatItems &all_stats, int64_t avg_len)
-{
-  all_stats.global_col_stat_->merge_avg_len(avg_len);
-  if (MY_SPEC.is_part_table()) {
-    all_stats.part_col_stat_->merge_avg_len(avg_len);
-  }
-  if (MY_SPEC.is_two_level_part()) {
-    all_stats.first_part_col_stat_->merge_avg_len(avg_len);
-  }
-}
-
-int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
+int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats,
+                                               ObDatum *datum,
+                                               const ObObjMeta &meta,
+                                               const ObDatumCmpFuncType cmp_func)
 {
   int ret = OB_SUCCESS;
-  const ObObj *tmp_obj;
-  if (OB_FAIL(ObOptimizerUtil::truncate_string_for_opt_stats(&obj, arena_, tmp_obj))) {
-    LOG_WARN("fail to truncate string", K(ret));
+  if (OB_ISNULL(datum) || OB_ISNULL(all_stats.global_col_stat_) || OB_ISNULL(all_stats.global_col_stat_->col_stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(all_stats.global_col_stat_), K(datum));
   } else {
-    obj = *tmp_obj;
-  }
-
-  all_stats.global_col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {
-      LOG_WARN("fail to set global column stat", K(ret), K(obj));
+    all_stats.global_col_stat_->col_stat_->set_stat_level(StatLevel::TABLE_LEVEL);
+    if (OB_FAIL(all_stats.global_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
+      LOG_WARN("fail to set global column stat", K(ret));
     }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
-    all_stats.part_col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
-    if (OB_FAIL(all_stats.part_col_stat_->merge_obj(obj))) {
-      LOG_WARN("fail to set part column stat", K(ret), K(obj));
+    if (OB_ISNULL(all_stats.part_col_stat_) || OB_ISNULL(all_stats.part_col_stat_->col_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(all_stats.part_col_stat_));
+    } else {
+      all_stats.part_col_stat_->col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
+      if (OB_FAIL(all_stats.part_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
+        LOG_WARN("fail to set part column stat", K(ret));
+      }
     }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_two_level_part()) {
-    all_stats.first_part_col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
-    all_stats.part_col_stat_->set_stat_level(StatLevel::SUBPARTITION_LEVEL);
-    if (OB_FAIL(all_stats.first_part_col_stat_->merge_obj(obj))) {
-      LOG_WARN("fail to set first part column stat", K(ret), K(obj));
+    if (OB_ISNULL(all_stats.first_part_col_stat_) || OB_ISNULL(all_stats.first_part_col_stat_->col_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(all_stats.first_part_col_stat_));
+    } else {
+      all_stats.first_part_col_stat_->col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
+      all_stats.part_col_stat_->col_stat_->set_stat_level(StatLevel::SUBPARTITION_LEVEL);
+      if (OB_FAIL(all_stats.first_part_col_stat_->update_column_stat_info(datum, meta, cmp_func))) {
+        LOG_WARN("fail to set first part column stat", K(ret));
+      }
     }
   }
   return ret;
@@ -530,19 +518,34 @@ int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
 int ObOptimizerStatsGatheringOp::set_tab_stats(StatItems &all_stats, int64_t row_len)
 {
   int ret = OB_SUCCESS;
-  all_stats.global_tab_stat_->add_avg_row_size(row_len);
-  all_stats.global_tab_stat_->add_row_count(1);
-  all_stats.global_tab_stat_->set_object_type(StatLevel::TABLE_LEVEL);
-  if (MY_SPEC.is_part_table()) {
-    all_stats.part_tab_stat_->add_avg_row_size(row_len);
-    all_stats.part_tab_stat_->add_row_count(1);
-    all_stats.part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
+  if (OB_ISNULL(all_stats.global_tab_stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else {
+    all_stats.global_tab_stat_->add_avg_row_size(row_len);
+    all_stats.global_tab_stat_->add_row_count(1);
+    all_stats.global_tab_stat_->set_object_type(StatLevel::TABLE_LEVEL);
   }
-  if (MY_SPEC.is_two_level_part()) {
-    all_stats.first_part_tab_stat_->add_avg_row_size(row_len);
-    all_stats.first_part_tab_stat_->add_row_count(1);
-    all_stats.first_part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
-    all_stats.part_tab_stat_->set_object_type(StatLevel::SUBPARTITION_LEVEL);
+  if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
+    if (OB_ISNULL(all_stats.part_tab_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null");
+    } else {
+      all_stats.part_tab_stat_->add_avg_row_size(row_len);
+      all_stats.part_tab_stat_->add_row_count(1);
+      all_stats.part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
+    }
+  }
+  if (OB_SUCC(ret) && MY_SPEC.is_two_level_part()) {
+    if (OB_ISNULL(all_stats.first_part_tab_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null");
+    } else {
+      all_stats.first_part_tab_stat_->add_avg_row_size(row_len);
+      all_stats.first_part_tab_stat_->add_row_count(1);
+      all_stats.first_part_tab_stat_->set_object_type(StatLevel::PARTITION_LEVEL);
+      all_stats.part_tab_stat_->set_object_type(StatLevel::SUBPARTITION_LEVEL);
+    }
   }
   return ret;
 }
@@ -550,28 +553,34 @@ int ObOptimizerStatsGatheringOp::set_tab_stats(StatItems &all_stats, int64_t row
 int ObOptimizerStatsGatheringOp::merge_tab_stat(ObOptTableStat *src_tab_stat)
 {
   int ret = OB_SUCCESS;
-  void *ptr = NULL;
-  ObOptTableStat *tab_stat;
-  ObOptTableStat::Key stat_key(tenant_id_, src_tab_stat->get_table_id(), src_tab_stat->get_partition_id());
-  if (OB_FAIL(table_stats_map_.get_refactored(stat_key, tab_stat))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to find in hashmap", K(ret));
-    } else if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptTableStat)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(ptr));
-    } else {
-      if (OB_FAIL(src_tab_stat->deep_copy((char*)ptr, sizeof(ObOptTableStat), tab_stat))) {
-        LOG_WARN("fail to copy tab_stat", K(ret));
-      } else if (OB_ISNULL(tab_stat)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to copy tab_stat", K(ret));
-      } else if (OB_FAIL(table_stats_map_.set_refactored(stat_key, tab_stat))) {
-        LOG_WARN("fail to insert stats idx to map", K(ret));
-      }
-    }
+  ObOptTableStat *tab_stat = NULL;
+  if (OB_ISNULL(src_tab_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
   } else {
-    if (OB_FAIL(tab_stat->merge_table_stat(*src_tab_stat))) {
-      LOG_WARN("fail to merge two table stats", K(ret), K(tab_stat), K(src_tab_stat));
+    ObOptTableStat::Key stat_key(tenant_id_, src_tab_stat->get_table_id(), src_tab_stat->get_partition_id());
+    if (OB_FAIL(table_stats_map_.get_refactored(stat_key, tab_stat))) {
+      void *ptr = NULL;
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("failed to find in hashmap", K(ret));
+      } else {
+        ret = OB_SUCCESS;
+        if (OB_ISNULL(ptr = arena_.alloc(sizeof(ObOptTableStat)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("memory is not enough", K(ret), K(ptr));
+        } else if (OB_FAIL(src_tab_stat->deep_copy((char*)ptr, sizeof(ObOptTableStat), tab_stat))) {
+          LOG_WARN("fail to copy tab_stat", K(ret));
+        } else if (OB_ISNULL(tab_stat)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to copy tab_stat", K(ret));
+        } else if (OB_FAIL(table_stats_map_.set_refactored(stat_key, tab_stat))) {
+          LOG_WARN("fail to insert stats idx to map", K(ret));
+        }
+      }
+    } else {
+      if (OB_FAIL(tab_stat->merge_table_stat(*src_tab_stat))) {
+        LOG_WARN("fail to merge two table stats", K(ret), K(tab_stat), K(src_tab_stat));
+      }
     }
   }
   return ret;
@@ -580,33 +589,40 @@ int ObOptimizerStatsGatheringOp::merge_tab_stat(ObOptTableStat *src_tab_stat)
 int ObOptimizerStatsGatheringOp::merge_col_stat(ObOptColumnStat *src_col_stat)
 {
   int ret = OB_SUCCESS;
-  void *ptr = NULL;
-  ObOptColumnStat *col_stat;
-  ObOptColumnStat::Key stat_key(tenant_id_, src_col_stat->get_table_id(),
-                                src_col_stat->get_partition_id(), src_col_stat->get_column_id());
-  if (OB_FAIL(column_stats_map_.get_refactored(stat_key, col_stat))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to find in hashmap", K(ret));
-    } else if (OB_ISNULL(ptr = arena_.alloc(src_col_stat->size()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memory is not enough", K(ret), K(ptr));
-    } else {
-      if (OB_FAIL(src_col_stat->deep_copy((char*)ptr, src_col_stat->size(), col_stat))) {
-        LOG_WARN("fail to copy tab_stat", K(ret));
-      } else if (OB_ISNULL(col_stat)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to copy tab_stat", K(ret));
-      } else if (OB_FAIL(column_stats_map_.set_refactored(stat_key, col_stat))) {
-        LOG_WARN("fail to insert stats idx to map", K(ret));
+  if (OB_ISNULL(src_col_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else {
+    ObOptColumnStat *col_stat = NULL;
+    ObOptOSGColumnStat *osg_col_stat = NULL;
+    ObOptColumnStat::Key stat_key(tenant_id_,
+                                  src_col_stat->get_table_id(),
+                                  src_col_stat->get_partition_id(),
+                                  src_col_stat->get_column_id());
+    if (OB_FAIL(osg_col_stats_map_.get_refactored(stat_key, osg_col_stat))) {
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("failed to find in hashmap", K(ret));
       } else {
+        ret = OB_SUCCESS;
+        if (OB_ISNULL(osg_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(arena_)) ||
+            OB_ISNULL(osg_col_stat->col_stat_)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to create osg col stat");
+        } else if (OB_FAIL(osg_col_stat->col_stat_->deep_copy(*src_col_stat))) {
+          LOG_WARN("fail to copy tab_stat", K(ret));
+        } else if (OB_FAIL(osg_col_stats_map_.set_refactored(stat_key, osg_col_stat))) {
+          LOG_WARN("fail to insert stats idx to map", K(ret));
+        }
       }
+    } else if (OB_ISNULL(osg_col_stat) || OB_ISNULL(osg_col_stat->col_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Get unexpected null");
+    } else if (OB_FAIL(osg_col_stat->col_stat_->merge_column_stat(*src_col_stat))) {
+      LOG_WARN("failed to merge column stat");
     }
-  } else if (OB_FAIL(col_stat->merge_column_stat(*src_col_stat))) {
-    LOG_WARN("fail to merge two table stats", K(ret), K(col_stat), K(src_col_stat));
   }
   return ret;
 }
-
 
 int ObOptimizerStatsGatheringOp::on_piece_msg(const ObOptStatsGatherPieceMsg &piece_msg)
 {
@@ -629,6 +645,7 @@ int ObOptimizerStatsGatheringOp::on_piece_msg(const ObOptStatsGatherPieceMsg &pi
     }
     if (OB_SUCC(ret)) {
       LOG_DEBUG("OSG merge piece msg", K(piece_msg));
+      // why reset piece_msg_?
       piece_msg_.reset();
     }
   }
@@ -644,20 +661,48 @@ int ObOptimizerStatsGatheringOp::msg_end()
   } else {
     share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
     ObTableStatParam param;
+    ColStatIndMap col_stat_map;
     if (OB_ISNULL(schema_guard = ctx_.get_virtual_table_ctx().schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null pointer", K(ret));
     } else if (OB_FAIL(generate_stat_param(param)))  {
       LOG_WARN("fail to generate param", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsExecutor::update_stat_online(ctx_,
+    } else if (OB_FAIL(get_col_stat_map(col_stat_map))) {
+      LOG_WARN("failed to get col stat map");
+    } else if (OB_FAIL(ObDbmsStatsExecutor::update_online_stat(ctx_,
                                                               param,
                                                               schema_guard,
                                                               get_tab_stat_map(),
-                                                              get_col_stat_map()))) {
+                                                              col_stat_map))) {
       LOG_WARN("fail to update tab/col stats", K(ret));
-    } else {}
+    }
   }
+  return ret;
+}
 
+int ObOptimizerStatsGatheringOp::get_col_stat_map(ColStatIndMap &col_stat_map)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(col_stat_map.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("has been created");
+  } else if (OB_FAIL(col_stat_map.create(osg_col_stats_map_.size() == 0 ?
+                                         1 : osg_col_stats_map_.size(),
+                                         "ColStatMap"))) {
+    LOG_WARN("failed to create col stat map");
+  } else {
+    FOREACH_X(it, osg_col_stats_map_, OB_SUCC(ret)) {
+      ObOptOSGColumnStat *osg_col_stat = NULL;
+      if (OB_ISNULL(osg_col_stat = it->second) || OB_ISNULL(osg_col_stat->col_stat_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null");
+      } else if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+        LOG_WARN("failed to persistence min max");
+      } else if (OB_FAIL(col_stat_map.set_refactored(it->first, osg_col_stat->col_stat_))) {
+        LOG_WARN("failed to set col stat");
+      }
+    }
+  }
   return ret;
 }
 
@@ -734,12 +779,15 @@ int ObOptimizerStatsGatheringOp::generate_stat_param(ObTableStatParam &param)
 int ObOptimizerStatsGatheringOp::get_col_stats(common::ObIArray<ObOptColumnStat*>& col_stats)
 {
   int ret = OB_SUCCESS;
-  FOREACH_X(it, column_stats_map_, OB_SUCC(ret)) {
-    if (OB_ISNULL(it->second)) {
+  FOREACH_X(it, osg_col_stats_map_, OB_SUCC(ret)) {
+    ObOptOSGColumnStat *osg_col_stat = NULL;
+    if (OB_ISNULL(osg_col_stat = it->second) || OB_ISNULL(osg_col_stat->col_stat_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null pointer", K(ret));
-    } else if (OB_FAIL(col_stats.push_back(it->second))) {
-      LOG_WARN("fail to push back col stats", K(ret));
+      LOG_WARN("get unexpected null");
+    } else if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+      LOG_WARN("failed to persistence min max");
+    } else if (OB_FAIL(col_stats.push_back(osg_col_stat->col_stat_))) {
+      LOG_WARN("failed to push back col stat");
     }
   }
   return ret;

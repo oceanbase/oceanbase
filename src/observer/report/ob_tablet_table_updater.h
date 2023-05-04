@@ -97,6 +97,7 @@ public:
   bool need_process_alone() const { return false; }
   uint64_t get_group_id() const { return tenant_id_; }
   int64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   bool compare_without_version(
       const ObTabletTableUpdateTask &other) const;
   inline bool need_assign_when_equal() const { return false; }

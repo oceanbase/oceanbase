@@ -25,7 +25,6 @@ class ObISQLClient;
 }
 namespace rootserver 
 {
-class ObServerManager;
 class ObIBackupDeleteMgr;
 class ObBackupCleanScheduler : public ObIBackupJobScheduler
 {
@@ -43,7 +42,6 @@ public:
   virtual int get_need_reload_task(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override; // reload tasks after switch master happend
 public:
   int init(
-      ObServerManager &server_mgr,
       common::ObMySQLProxy &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
@@ -94,7 +92,6 @@ private:
   int handle_failed_job_(const uint64_t tenant_id, const int64_t result, ObIBackupDeleteMgr &job_mgr, share::ObBackupCleanJobAttr &job_attr);
 private:
   bool is_inited_;
-  ObServerManager                            *server_mgr_;
   common::ObMySQLProxy                       *sql_proxy_;
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
@@ -259,7 +256,6 @@ public:
   virtual int process() override;
 public:
   int init(
-      ObServerManager &server_mgr,
       common::ObMySQLProxy &sql_proxy,
       obrpc::ObSrvRpcProxy &rpc_proxy,
       share::schema::ObMultiVersionSchemaService &schema_service,
@@ -274,7 +270,6 @@ private:
   int parse_time_interval_(const char *str, int64_t &val);
 private:
   bool is_inited_;
-  ObServerManager                            *server_mgr_;
   common::ObMySQLProxy                       *sql_proxy_;
   obrpc::ObSrvRpcProxy                       *rpc_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

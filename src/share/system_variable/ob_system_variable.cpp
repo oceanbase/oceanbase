@@ -2342,6 +2342,30 @@ int ObSysVarOnCheckFuncs::get_string(const ObObj &val, ObString &str)
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid(
+    sql::ObExecContext &ctx,
+    const ObSetVar &set_var,
+    const ObBasicSysVar &sys_var,
+    const common::ObObj &in_val,
+    common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  ObString str_val;
+  if (OB_FAIL(in_val.get_varchar(str_val))) {
+    LOG_WARN("fail to get varchar", K(ret), K(in_val));
+  } else {
+    int64_t rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
+        str_val.length());
+    if (rf_type >= 0) {
+      out_val = in_val;
+    } else {
+      ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+      LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, str_val.length(), str_val.ptr(), str_val.length(), str_val.ptr());
+    }
+  }
+  return ret;
+}
+
 int ObSysVarOnUpdateFuncs::update_tx_isolation(ObExecContext &ctx,
                                                const ObSetVar &set_var,
                                                const ObBasicSysVar &sys_var,

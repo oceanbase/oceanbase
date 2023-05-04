@@ -16,6 +16,7 @@
 #include "share/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log_module.h"
+#include "pl/ob_pl.h"
 
 namespace oceanbase
 {
@@ -24,23 +25,66 @@ using namespace common;
 
 namespace pl
 {
-
 struct ObPLInterface {
   const char* name;
-  void* entry;
+  PL_C_INTERFACE_t entry;
+};
+
+template <typename U, U func>
+struct interface_checker {
+  // only these types are allowed for PL C interfaces.
+  // T3, T4 is for compatibility and deprecated.
+  // using T_INTERFACE as interface signature is encouraged.
+  // any other signature will yield a compile-time error.
+  using T3 = int(&)(ObExecContext &, ParamStore &, ObObj &);
+  using T4 = int(&)(ObExecContext &, ParamStore &, ObObj &, ObPLExecCtx &);
+  using T_INTERFACE = int(&)(ObPLExecCtx &, ParamStore &, ObObj&);
+
+  template <typename T, T v>
+  struct interface_checker_helper {}; // dummy type
+
+  template <T3 v>
+  struct interface_checker_helper<T3, v> {
+    static int value(ObPLExecCtx &pl_exec_ctx, ParamStore &param, ObObj &obj) {
+      return v(*pl_exec_ctx.exec_ctx_, param, obj);
+    }
+  };
+
+  template <T4 v>
+  struct interface_checker_helper<T4, v> {
+    static int value(ObPLExecCtx &pl_exec_ctx, ParamStore &param, ObObj &obj) {
+      return v(*pl_exec_ctx.exec_ctx_, param, obj, pl_exec_ctx);
+    }
+  };
+
+  template <T_INTERFACE v>
+  struct interface_checker_helper<T_INTERFACE, v>{
+    static_assert(std::is_same<decltype(&v),PL_C_INTERFACE_t>::value, "T_INTERFACE and PL_C_INTERFACE_t do not match");
+    static int value(ObPLExecCtx &pl_exec_ctx, ParamStore &param, ObObj &obj) {
+      return v(pl_exec_ctx, param, obj);
+    }
+  };
+
+  // for nullptr interface compatibility
+  template <nullptr_t v>
+  struct interface_checker_helper<nullptr_t, v> {
+    static constexpr PL_C_INTERFACE_t value = nullptr;
+  };
+
+  static constexpr PL_C_INTERFACE_t value = interface_checker_helper<U, func>::value;
 };
 
 static const ObPLInterface OB_PL_INTERFACE[INTERFACE_END +1] =
 {
-#define INTERFACE_DEF(type, name, entry) {name, entry},
+#define INTERFACE_DEF(type, name, entry) {name, interface_checker<decltype(entry), entry>::value},
 #include "pl/ob_pl_interface_pragma.h"
 #undef INTERFACE_DEF
 };
 
-void *ObPLInterfaceService::get_entry(ObString &name) const
+PL_C_INTERFACE_t ObPLInterfaceService::get_entry(ObString &name) const
 {
   int64_t idx = get_type(name);
-  void *entry_res = NULL;
+  PL_C_INTERFACE_t entry_res = nullptr;
   if (idx >= 0 && idx < sizeof(OB_PL_INTERFACE)/sizeof(ObPLInterface)) {
     entry_res = OB_PL_INTERFACE[idx].entry;
   }

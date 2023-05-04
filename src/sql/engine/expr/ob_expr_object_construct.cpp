@@ -31,7 +31,7 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObExprObjectConstruct, ObFuncExprOperator), rowsize_, elem_types_, udt_id_);
 
 ObExprObjectConstruct::ObExprObjectConstruct(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_PL_OBJECT_CONSTRUCT, N_PL_OBJECT_CONSTRUCT, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_PL_OBJECT_CONSTRUCT, N_PL_OBJECT_CONSTRUCT, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE),
       rowsize_(0),
       udt_id_(OB_INVALID_ID),
@@ -48,9 +48,16 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
   UNUSED (type_ctx);
   CK (param_num == elem_types_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
-    types[i].set_calc_accuracy(elem_types_.at(i).get_accuracy());
-    types[i].set_calc_meta(elem_types_.at(i).get_obj_meta());
-    types[i].set_calc_type(elem_types_.at(i).get_type());
+    if ((ObExtendType == elem_types_.at(i).get_type()
+          && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType)
+        ||(ObExtendType == types[i].get_type() && elem_types_.at(i).get_type() != ObExtendType)) {
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+    } else {
+      types[i].set_calc_accuracy(elem_types_.at(i).get_accuracy());
+      types[i].set_calc_meta(elem_types_.at(i).get_obj_meta());
+      types[i].set_calc_type(elem_types_.at(i).get_type());
+    }
   }
   OX (type.set_type(ObExtendType));
   OX (type.set_udt_id(udt_id_));
@@ -67,7 +74,10 @@ int ObExprObjectConstruct::check_types(const ObObj *objs_stack,
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
     if (!objs_stack[i].is_null()) {
       TYPE_CHECK(objs_stack[i], elem_types.at(i).get_type());
-      if (objs_stack[i].is_pl_extend()) {
+      if (objs_stack[i].is_pl_extend()
+        && objs_stack[i].get_meta().get_extend_type() != pl::PL_OPAQUE_TYPE
+        && objs_stack[i].get_meta().get_extend_type() != pl::PL_CURSOR_TYPE
+        && objs_stack[i].get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
         pl::ObPLComposite *composite = reinterpret_cast<pl::ObPLComposite*>(objs_stack[i].get_ext());
         CK (OB_NOT_NULL(composite));
         if (OB_SUCC(ret) && composite->get_id() != elem_types.at(i).get_udt_id()) {

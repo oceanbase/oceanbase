@@ -236,23 +236,26 @@ int ObMetaPointerMap<Key, T>::erase(const Key &key)
 {
   int ret = common::OB_SUCCESS;
   ObResourceValueStore<ObMetaPointer<T>> *ptr = NULL;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-     if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
-       STORAGE_LOG(WARN, "fail to get from map", K(ret));
-     } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
-       STORAGE_LOG(WARN, "fail to erase from map", K(ret));
-     } else {
-       ObMetaPointer<T> *value = ptr->get_value_ptr();
-       value->reset_obj();
-       if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
-         STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
-       }
-     }
-   }
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::map_.get_refactored(key, ptr))) {
+      STORAGE_LOG(WARN, "fail to get from map", K(ret));
+    } else if (OB_FAIL(ResourceMap::map_.erase_refactored(key))) {
+      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+    } else {
+      ObMetaPointer<T> *value = ptr->get_value_ptr();
+      value->reset_obj();
+      if (OB_FAIL(ResourceMap::dec_handle_ref(ptr))) {
+        STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -263,14 +266,17 @@ int ObMetaPointerMap<Key, T>::exist(const Key &key, bool &is_exist)
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   is_exist = false;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!ResourceMap::is_inited_)) {
     ret = common::OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
   } else if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = common::OB_SUCCESS;
@@ -294,14 +300,17 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj_and_addr(
     ObMetaObjGuard<T> &guard)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   guard.reset();
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else { // read lock
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
@@ -325,6 +334,7 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj(
     ObMetaObjGuard<T> &guard)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   guard.reset();
@@ -333,8 +343,10 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else { // read lock
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));
@@ -361,22 +373,27 @@ int ObMetaPointerMap<Key, T>::try_get_in_memory_meta_obj(
     bool &is_in_memory)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointer<T> *t_ptr = nullptr;
-  common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
-  if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
-    if (common::OB_ENTRY_NOT_EXIST != ret) {
-      STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
-    }
-  } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
-    ret = common::OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
-  } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
-    ret = OB_ITEM_NOT_SETTED;
-    STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+  if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    is_in_memory = t_ptr->is_in_memory();
-    if (is_in_memory && OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
-      STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr), K(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
+    if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
+      if (common::OB_ENTRY_NOT_EXIST != ret) {
+        STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
+      }
+    } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
+      ret = common::OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "fail to get meta pointer", K(ret), KP(t_ptr), K(key));
+    } else if (OB_UNLIKELY(t_ptr->get_addr().is_none())) {
+      ret = OB_ITEM_NOT_SETTED;
+      STORAGE_LOG(DEBUG, "pointer addr is none, no object to be got", K(ret), K(key), KPC(t_ptr));
+    } else {
+      is_in_memory = t_ptr->is_in_memory();
+      if (is_in_memory && OB_FAIL(t_ptr->get_in_memory_obj(guard))) {
+        STORAGE_LOG(WARN, "fail to get meta object", K(ret), KP(t_ptr), K(key));
+      }
     }
   }
   return ret;
@@ -417,6 +434,7 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
     ObMetaObjGuard<T> &guard)
 {
   int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaDiskAddr disk_addr;
   ObMetaPointer<T> *meta_pointer = ptr_hdl.get_resource_ptr();
   do {
@@ -425,9 +443,11 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
     // wash obj may acquire the bucket lock again, which cause dead lock.
     if (OB_FAIL(load_meta_obj(key, meta_pointer, allocator, disk_addr, t))) {
       STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(meta_pointer), K(lbt()));
+    } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+      STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
     } else {
       ObMetaPointerHandle<Key, T> tmp_ptr_hdl(*this);
-      common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+      common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
       if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
@@ -443,14 +463,21 @@ int ObMetaPointerMap<Key, T>::load_and_hook_meta_obj(
           STORAGE_LOG(ERROR, "fail to release object", K(ret), KP(meta_pointer));
         }
       } else if (OB_UNLIKELY(disk_addr != meta_pointer->get_addr()
+          || meta_pointer != tmp_ptr_hdl.get_resource_ptr()
           || meta_pointer->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
         ret = OB_ITEM_NOT_MATCH;
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = meta_pointer->release_obj(t))) {
           STORAGE_LOG(ERROR, "fail to release object", K(ret), K(tmp_ret), KP(meta_pointer));
         } else {
+          if (meta_pointer != tmp_ptr_hdl.get_resource_ptr()) {
+            meta_pointer = tmp_ptr_hdl.get_resource_ptr();
+            if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+              STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+            }
+          }
           if (REACH_TIME_INTERVAL(1000000)) {
-            STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(meta_pointer));
+            STORAGE_LOG(WARN, "disk address or pointer change", K(ret), K(disk_addr), KPC(meta_pointer));
           }
         }
       } else {
@@ -475,18 +502,21 @@ int ObMetaPointerMap<Key, T>::load_meta_obj(
     const bool using_obj_pool)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   if (OB_UNLIKELY(!key.is_valid()) || OB_ISNULL(meta_pointer)) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), KP(meta_pointer), K(using_obj_pool));
   } else if (using_obj_pool && OB_FAIL(meta_pointer->acquire_obj(t))) {
     STORAGE_LOG(WARN, "fail to acquire object", K(ret), K(key), KPC(meta_pointer));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
     common::ObArenaAllocator arena_allocator;
     char *buf = nullptr;
     int64_t buf_len = 0;
     do {
       { // write lock
-        common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+        common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
         load_addr = meta_pointer->get_addr();
         if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len))) {
           if (OB_SEARCH_NOT_FOUND != ret) {
@@ -522,6 +552,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
     const bool force_alloc_new)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   bool is_in_memory = false;
@@ -529,8 +560,10 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else if (force_alloc_new) {
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       if (common::OB_ENTRY_NOT_EXIST != ret) {
         STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
@@ -560,7 +593,7 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
           STORAGE_LOG(WARN, "load obj from disk fail", K(ret), K(key), KPC(t_ptr), K(lbt()));
         } else {
           ObMetaPointerHandle<Key, T> tmp_ptr_hdl(*this);
-          common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+          common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
           // some other thread finish loading
           if (OB_FAIL(ResourceMap::get_without_lock(key, tmp_ptr_hdl))) {
             if (OB_ENTRY_NOT_EXIST != ret) {
@@ -573,8 +606,16 @@ int ObMetaPointerMap<Key, T>::get_meta_obj_with_external_memory(
               need_free_obj = true;
             }
           } else if (OB_UNLIKELY(disk_addr != t_ptr->get_addr()
+              || t_ptr != tmp_ptr_hdl.get_resource_ptr()
               || t_ptr->get_addr() != tmp_ptr_hdl.get_resource_ptr()->get_addr())) {
             ret = OB_ITEM_NOT_MATCH;
+            if (t_ptr != tmp_ptr_hdl.get_resource_ptr()) {
+              t_ptr = tmp_ptr_hdl.get_resource_ptr();
+              int tmp_ret = OB_SUCCESS;
+              if (OB_TMP_FAIL(ptr_hdl.assign(tmp_ptr_hdl))) {
+                STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ret), K(ptr_hdl), K(tmp_ptr_hdl));
+              }
+            }
             if (REACH_TIME_INTERVAL(1000000)) {
               STORAGE_LOG(WARN, "disk address change", K(ret), K(disk_addr), KPC(t_ptr));
             }
@@ -601,14 +642,17 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::get_meta_addr(const Key &key, ObMetaDiskAddr &addr)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
 
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else { // read lock
-    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashRLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
     } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
@@ -625,13 +669,16 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::set_meta_obj(const Key &key, ObMetaObjGuard<T> &guard)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   if (OB_UNLIKELY(!key.is_valid() || !guard.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(guard));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
     } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
@@ -648,13 +695,16 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::set_attr_for_obj(const Key &key, ObMetaObjGuard<T> &guard)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   if (OB_UNLIKELY(!key.is_valid() || !guard.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(guard));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
     } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
@@ -675,6 +725,7 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_and_object(
     ObMetaObjGuard<T> &new_guard)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaObjGuard<T> guard;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
@@ -685,8 +736,10 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_and_object(
                || !new_guard.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(addr), K(old_guard), K(new_guard));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
     } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
@@ -722,6 +775,7 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_without_object(
     const ObMetaDiskAddr &new_addr)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
   if (OB_UNLIKELY(!key.is_valid()
@@ -730,8 +784,10 @@ int ObMetaPointerMap<Key, T>::compare_and_swap_address_without_object(
                || new_addr.is_none())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(old_addr), K(new_addr));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       STORAGE_LOG(WARN, "fail to get pointer handle", K(ret));
     } else if (OB_ISNULL(t_ptr = ptr_hdl.get_resource_ptr())) {
@@ -781,6 +837,7 @@ template <typename Key, typename T>
 int ObMetaPointerMap<Key, T>::wash_meta_obj(const Key &key, bool &is_washed)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   is_washed = false;
   ObMetaPointerHandle<Key, T> ptr_hdl(*this);
   ObMetaPointer<T> *t_ptr = nullptr;
@@ -791,8 +848,10 @@ int ObMetaPointerMap<Key, T>::wash_meta_obj(const Key &key, bool &is_washed)
   } else if (OB_UNLIKELY(!key.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
   } else {
-    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+    common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
     if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
       if (common::OB_ENTRY_NOT_EXIST == ret) {
         ret = common::OB_SUCCESS;
@@ -819,15 +878,18 @@ int ObMetaPointerMap<Key, T>::wash_meta_obj_with_func(
     bool &is_washed)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
    if (OB_UNLIKELY(!key.is_valid() || !old_addr.is_valid() || !old_addr.is_memory())) {
      ret = common::OB_INVALID_ARGUMENT;
      STORAGE_LOG(WARN, "invalid argument", K(ret), K(key), K(old_addr));
+   } else if (OB_FAIL(ResourceMap::hash_func_(key, hash_val))) {
+     STORAGE_LOG(WARN, "fail to calc hash", K(ret), K(key));
    } else {
      ObMetaPointerHandle<Key, T> ptr_hdl(*this);
      ObMetaPointer<T> *t_ptr = nullptr;
      ObMetaObjGuard<T> guard;
      ObMetaDiskAddr new_addr;
-     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, ResourceMap::hash_func_(key));
+     common::ObBucketHashWLockGuard lock_guard(ResourceMap::bucket_lock_, hash_val);
      if (OB_FAIL(ResourceMap::get_without_lock(key, ptr_hdl))) {
        if (common::OB_ENTRY_NOT_EXIST != ret) {
          STORAGE_LOG(WARN, "fail to get pointer handle", K(ret), K(key));

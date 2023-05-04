@@ -44,7 +44,6 @@ class ObSrvRpcProxy;
 
 namespace rootserver
 {
-class ObServerManager;
 class ObZoneManager;
 class ObDDLService;
 class ObDDLTaskRecord;

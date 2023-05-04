@@ -28,21 +28,21 @@ const char *ObDirectoryMgr::DIRECTORY_MGR = "DIRECTORY_MGR";
 
 ObDirectoryMgr::ObDirectoryMgr()
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    directory_infos_(0, NULL, DIRECTORY_MGR),
-    directory_name_map_(DIRECTORY_MGR),
-    directory_id_map_(DIRECTORY_MGR)
+    directory_infos_(0, NULL, SET_USE_500(DIRECTORY_MGR)),
+    directory_name_map_(SET_USE_500(DIRECTORY_MGR)),
+    directory_id_map_(SET_USE_500(DIRECTORY_MGR))
 {
 }
 
 ObDirectoryMgr::ObDirectoryMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    directory_infos_(0, NULL, DIRECTORY_MGR),
-    directory_name_map_(DIRECTORY_MGR),
-    directory_id_map_(DIRECTORY_MGR)
+    directory_infos_(0, NULL, SET_USE_500(DIRECTORY_MGR)),
+    directory_name_map_(SET_USE_500(DIRECTORY_MGR)),
+    directory_id_map_(SET_USE_500(DIRECTORY_MGR))
 {
 }
 

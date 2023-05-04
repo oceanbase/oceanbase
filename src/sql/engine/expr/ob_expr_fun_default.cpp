@@ -20,7 +20,7 @@ namespace sql
 {
 
 ObExprFunDefault::ObExprFunDefault(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_DEFAULT, N_DEFAULT, 5, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_DEFAULT, N_DEFAULT, 5, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   disable_operand_auto_cast();
 }

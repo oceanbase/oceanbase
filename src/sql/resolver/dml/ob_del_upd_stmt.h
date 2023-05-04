@@ -55,6 +55,12 @@ struct ObAssignment
     return seed;
   }
 
+  int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
+  }
+
   TO_STRING_KV(N_COLUMN, column_expr_,
                N_EXPR, expr_,
                K_(is_predicate_column));

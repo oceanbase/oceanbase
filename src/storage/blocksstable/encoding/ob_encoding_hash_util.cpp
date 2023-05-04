@@ -138,7 +138,12 @@ int ObEncodingHashTableBuilder::build(const ObColDatums &col_datums, const ObCol
         STORAGE_LOG(WARN, "not supported extend object type",
             K(ret), K(row_id), K(datum), K(*datum.extend_obj_));
       } else {
-        int64_t pos = hash(datum, hash_func, need_binary_hash) & mask;
+        uint64_t pos = 0;
+        if (OB_FAIL(hash(datum, hash_func, need_binary_hash, pos))) {
+          STORAGE_LOG(WARN, "hash failed", K(ret));
+        } else {
+          pos = pos & mask;
+        }
         NodeList *list = buckets_[pos];
         while (OB_SUCC(ret) && nullptr != list) {
           bool is_equal = false;
@@ -201,17 +206,18 @@ int ObEncodingHashTableBuilder::equal(
   return ret;
 }
 
-uint64_t ObEncodingHashTableBuilder::hash(
+int ObEncodingHashTableBuilder::hash(
     const ObDatum &datum,
     const ObHashFunc &hash_func,
-    const bool need_binary)
+    const bool need_binary,
+    uint64_t &res)
 {
   const int64_t seed = 0;
-  uint64_t ret = 0;
+  int ret = OB_SUCCESS;
   if (need_binary) {
-    ret = xxhash64(datum.ptr_, datum.len_, seed);
+    res = xxhash64(datum.ptr_, datum.len_, seed);
   } else {
-    ret = hash_func.hash_func_(datum, seed);
+    ret = hash_func.hash_func_(datum, seed, res);
   }
   return ret;
 }

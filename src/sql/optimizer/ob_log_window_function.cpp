@@ -261,22 +261,18 @@ int ObLogWindowFunction::est_cost()
   return ret;
 }
 
-int ObLogWindowFunction::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = 0;
+  const int64_t parallel = param.need_parallel_;
   ObLogicalOperator *child = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else {
     double child_card = child->get_card();
     double child_cost = child->get_cost();
-    double op_cost = 0.0;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
@@ -292,11 +288,6 @@ int ObLogWindowFunction::re_est_cost(EstimateCostInfo &param, double &card, doub
     } else {
       cost = child_cost + op_cost;
       card = child_card;
-      if (param.override_) {
-        set_op_cost(op_cost);
-        set_cost(cost);
-        set_card(card);
-      }
     }
   }
   return ret;
@@ -483,4 +474,10 @@ int ObLogWindowFunction::get_rd_sort_keys(common::ObIArray<OrderItem> &rd_sort_k
     }
   }
   return ret;
+}
+
+int ObLogWindowFunction::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(win_exprs_, expr);
+  return OB_SUCCESS;
 }

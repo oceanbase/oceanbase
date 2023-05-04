@@ -19,7 +19,7 @@ namespace sql
 
 ObExprAggParamList::ObExprAggParamList(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_OP_AGG_PARAM_LIST, N_AGG_PARAM_LIST,
-                         1, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE,
+                         1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE,
                          INTERNAL_IN_ORACLE_MODE)
 {
 }

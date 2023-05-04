@@ -294,55 +294,20 @@ call dbms_stats.gather_table_stats('test','t_p');
 call dbms_stats.gather_table_stats('test','t_p4');
 explain basic delete /*+no_use_px, use_nl(t_p,t_p4), parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
 Query Plan
-=============================================
-|ID|OPERATOR                       |NAME    |
----------------------------------------------
-|0 |PX COORDINATOR                 |        |
-|1 |└─EXCHANGE OUT DISTR           |:EX10000|
-|2 |  └─PX PARTITION ITERATOR      |        |
-|3 |    └─DELETE                   |        |
-|4 |      └─NESTED-LOOP JOIN       |        |
-|5 |        ├─TABLE RANGE SCAN     |t_p     |
-|6 |        └─DISTRIBUTED TABLE GET|t_p4    |
-=============================================
-Outputs & filters:
--------------------------------------
-  0 - output(nil), filter(nil), rowset=256
-  1 - output(nil), filter(nil), rowset=256
-      dop=10
-  2 - output(nil), filter(nil), rowset=256
-      partition wise, force partition granule
-  3 - output(nil), filter(nil)
-      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
-  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      conds(nil), nl_params_([t_p.c1(:0)]), use_batch=true
-  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
-      range_key([t_p.c1]), range[5 ; MAX),
-      range_cond([t_p.c1 >= 5])
-  6 - output(nil), filter(nil), rowset=256
-      access([GROUP_ID]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false,
-      range_key([t_p4.c1]), range(MIN ; MAX),
-      range_cond([:0 = t_p4.c1])
-explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
-Query Plan
-===================================================
-|ID|OPERATOR                             |NAME    |
----------------------------------------------------
-|0 |DISTRIBUTED DELETE                   |        |
-|1 |└─PX COORDINATOR                     |        |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10001|
-|3 |    └─HASH JOIN                      |        |
-|4 |      ├─PART JOIN FILTER CREATE      |:BF0000 |
-|5 |      │ └─EXCHANGE IN DISTR          |        |
-|6 |      │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|7 |      │     └─PX BLOCK ITERATOR      |        |
-|8 |      │       └─TABLE RANGE SCAN     |t_p4    |
-|9 |      └─PX PARTITION HASH JOIN-FILTER|:BF0000 |
-|10|        └─TABLE RANGE SCAN           |t_p     |
-===================================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |DISTRIBUTED DELETE                 |        |
+|1 |└─PX COORDINATOR                   |        |
+|2 |  └─EXCHANGE OUT DISTR             |:EX10001|
+|3 |    └─NESTED-LOOP JOIN             |        |
+|4 |      ├─EXCHANGE IN DISTR          |        |
+|5 |      │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
+|6 |      │   └─PX BLOCK ITERATOR      |        |
+|7 |      │     └─TABLE RANGE SCAN     |t_p     |
+|8 |      └─PX PARTITION ITERATOR      |        |
+|9 |        └─TABLE GET                |t_p4    |
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -351,11 +316,53 @@ Outputs & filters:
   2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       dop=4
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_([t_p.c1(:0)]), use_batch=false
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
+      (#keys=1, [t_p.c1]), dop=10
+  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_p.c1]), range[5 ; MAX),
+      range_cond([t_p.c1 >= 5])
+  8 - output(nil), filter(nil), rowset=256
+      affinitize
+  9 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p[0-3])
+      is_index_back=false, is_global_index=false,
+      range_key([t_p4.c1]), range(MIN ; MAX),
+      range_cond([:0 = t_p4.c1])
+explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c1 and t_p.c1 >= 5;
+Query Plan
+======================================================
+|ID|OPERATOR                                |NAME    |
+------------------------------------------------------
+|0 |DISTRIBUTED DELETE                      |        |
+|1 |└─PX COORDINATOR                        |        |
+|2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
+|3 |    └─SHARED HASH JOIN                  |        |
+|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|5 |      │ └─EXCHANGE IN DISTR             |        |
+|6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|7 |      │     └─PX BLOCK ITERATOR         |        |
+|8 |      │       └─TABLE RANGE SCAN        |t_p4    |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|10|        └─TABLE RANGE SCAN              |t_p     |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output(nil), filter(nil)
+      table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)})}])
+  1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
+      dop=10
+  3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c1]), other_conds(nil)
   4 - output([t_p4.c1]), filter(nil), rowset=256
   5 - output([t_p4.c1]), filter(nil), rowset=256
   6 - output([t_p4.c1]), filter(nil), rowset=256
-      (#keys=1, [t_p4.c1]), dop=10
+      dop=10
   7 - output([t_p4.c1]), filter(nil), rowset=256
   8 - output([t_p4.c1]), filter(nil), rowset=256
       access([t_p4.c1]), partitions(p[0-3])
@@ -363,7 +370,6 @@ Outputs & filters:
       range_key([t_p4.c1]), range[5 ; MAX),
       range_cond([t_p4.c1 >= 5])
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      affinitize
  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
@@ -385,41 +391,40 @@ insert into t_p(c1,c2) values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,
 call dbms_stats.gather_table_stats('test','t_p');
 explain basic delete /*+no_use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
 Query Plan
-===================================================
-|ID|OPERATOR                             |NAME    |
----------------------------------------------------
-|0 |DISTRIBUTED DELETE                   |        |
-|1 |└─PX COORDINATOR                     |        |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10001|
-|3 |    └─HASH JOIN                      |        |
-|4 |      ├─PART JOIN FILTER CREATE      |:BF0000 |
-|5 |      │ └─EXCHANGE IN DISTR          |        |
-|6 |      │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|7 |      │     └─PX BLOCK ITERATOR      |        |
-|8 |      │       └─TABLE FULL SCAN      |t_p4    |
-|9 |      └─PX PARTITION HASH JOIN-FILTER|:BF0000 |
-|10|        └─TABLE RANGE SCAN           |t_p     |
-===================================================
+======================================================
+|ID|OPERATOR                                |NAME    |
+------------------------------------------------------
+|0 |DISTRIBUTED DELETE                      |        |
+|1 |└─PX COORDINATOR                        |        |
+|2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
+|3 |    └─SHARED HASH JOIN                  |        |
+|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|5 |      │ └─EXCHANGE IN DISTR             |        |
+|6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|7 |      │     └─PX BLOCK ITERATOR         |        |
+|8 |      │       └─TABLE FULL SCAN         |t_p4    |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|10|        └─TABLE RANGE SCAN              |t_p     |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      dop=4
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
-      (#keys=1, [t_p4.c2]), dop=10
+      dop=10
   7 - output([t_p4.c2]), filter(nil), rowset=256
   8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      affinitize
  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
@@ -427,41 +432,40 @@ Outputs & filters:
       range_cond([t_p.c1 >= 5])
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_p,t_p4 where t_p.c1 = t_p4.c2 and t_p.c1 >= 5;
 Query Plan
-===================================================
-|ID|OPERATOR                             |NAME    |
----------------------------------------------------
-|0 |DISTRIBUTED DELETE                   |        |
-|1 |└─PX COORDINATOR                     |        |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10001|
-|3 |    └─HASH JOIN                      |        |
-|4 |      ├─PART JOIN FILTER CREATE      |:BF0000 |
-|5 |      │ └─EXCHANGE IN DISTR          |        |
-|6 |      │   └─EXCHANGE OUT DISTR (PKEY)|:EX10000|
-|7 |      │     └─PX BLOCK ITERATOR      |        |
-|8 |      │       └─TABLE FULL SCAN      |t_p4    |
-|9 |      └─PX PARTITION HASH JOIN-FILTER|:BF0000 |
-|10|        └─TABLE RANGE SCAN           |t_p     |
-===================================================
+======================================================
+|ID|OPERATOR                                |NAME    |
+------------------------------------------------------
+|0 |DISTRIBUTED DELETE                      |        |
+|1 |└─PX COORDINATOR                        |        |
+|2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
+|3 |    └─SHARED HASH JOIN                  |        |
+|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|5 |      │ └─EXCHANGE IN DISTR             |        |
+|6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
+|7 |      │     └─PX BLOCK ITERATOR         |        |
+|8 |      │       └─TABLE FULL SCAN         |t_p4    |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|10|        └─TABLE RANGE SCAN              |t_p     |
+======================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
   2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      dop=4
+      dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
-      (#keys=1, [t_p4.c2]), dop=10
+      dop=10
   7 - output([t_p4.c2]), filter(nil), rowset=256
   8 - output([t_p4.c2]), filter([t_p4.c2 >= 5]), rowset=256
       access([t_p4.c2]), partitions(p[0-3])
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([t_p4.c1]), range(MIN ; MAX)always true
   9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
-      affinitize
  10 - output([t_p.c1], [t_p.c2], [t_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
@@ -1898,23 +1902,22 @@ delete from t_p;
 call dbms_stats.gather_table_stats('test','t_p');
 explain basic insert /*+no_use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
 Query Plan
-==========================================================
-|ID|OPERATOR                             |NAME           |
-----------------------------------------------------------
-|0 |DISTRIBUTED INSERT                   |               |
-|1 |└─PX COORDINATOR                     |               |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10002       |
-|3 |    └─SUBPLAN SCAN                   |ANONYMOUS_VIEW1|
-|4 |      └─HASH JOIN                    |               |
-|5 |        ├─EXCHANGE IN DISTR          |               |
-|6 |        │ └─EXCHANGE OUT DISTR (HASH)|:EX10000       |
-|7 |        │   └─PX BLOCK ITERATOR      |               |
-|8 |        │     └─TABLE FULL SCAN      |t_temp_p5      |
-|9 |        └─EXCHANGE IN DISTR          |               |
-|10|          └─EXCHANGE OUT DISTR (HASH)|:EX10001       |
-|11|            └─PX BLOCK ITERATOR      |               |
-|12|              └─TABLE FULL SCAN      |t_temp_p       |
-==========================================================
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |DISTRIBUTED INSERT                        |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
+|4 |      └─SHARED HASH JOIN                  |               |
+|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|6 |        │ └─EXCHANGE IN DISTR             |               |
+|7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
+|8 |        │     └─PX BLOCK ITERATOR         |               |
+|9 |        │       └─TABLE FULL SCAN         |t_temp_p5      |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|11|          └─TABLE FULL SCAN               |t_temp_p       |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -1930,39 +1933,36 @@ Outputs & filters:
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p5.c1]), dop=10
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      dop=10
   8 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  9 - output([t_temp_p5.c1]), filter(nil), rowset=256
       access([t_temp_p5.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p.c1]), dop=10
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
 explain basic insert /*+use_px, parallel(10)*/ into t_p select t_temp_p.c1,t_temp_p.c2,t_temp_p.c3 from t_temp_p,t_temp_p5 where t_temp_p.c1 = t_temp_p5.c1;
 Query Plan
-==========================================================
-|ID|OPERATOR                             |NAME           |
-----------------------------------------------------------
-|0 |DISTRIBUTED INSERT                   |               |
-|1 |└─PX COORDINATOR                     |               |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10002       |
-|3 |    └─SUBPLAN SCAN                   |ANONYMOUS_VIEW1|
-|4 |      └─HASH JOIN                    |               |
-|5 |        ├─EXCHANGE IN DISTR          |               |
-|6 |        │ └─EXCHANGE OUT DISTR (HASH)|:EX10000       |
-|7 |        │   └─PX BLOCK ITERATOR      |               |
-|8 |        │     └─TABLE FULL SCAN      |t_temp_p5      |
-|9 |        └─EXCHANGE IN DISTR          |               |
-|10|          └─EXCHANGE OUT DISTR (HASH)|:EX10001       |
-|11|            └─PX BLOCK ITERATOR      |               |
-|12|              └─TABLE FULL SCAN      |t_temp_p       |
-==========================================================
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |DISTRIBUTED INSERT                        |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
+|4 |      └─SHARED HASH JOIN                  |               |
+|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|6 |        │ └─EXCHANGE IN DISTR             |               |
+|7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
+|8 |        │     └─PX BLOCK ITERATOR         |               |
+|9 |        │       └─TABLE FULL SCAN         |t_temp_p5      |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|11|          └─TABLE FULL SCAN               |t_temp_p       |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -1978,17 +1978,15 @@ Outputs & filters:
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p5.c1]), dop=10
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      dop=10
   8 - output([t_temp_p5.c1]), filter(nil), rowset=256
+  9 - output([t_temp_p5.c1]), filter(nil), rowset=256
       access([t_temp_p5.c1]), partitions(p[0-4])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p5.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p.c1]), dop=10
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true
@@ -2068,23 +2066,22 @@ delete from t_p;
 call dbms_stats.gather_table_stats('test','t_p');
 explain basic insert /*+use_px, parallel(10)*/ into t_p select  t_temp_p.c1, t_temp_p.c2, t_temp_p.c3 from t_temp_p, t_temp_p4 where t_temp_p.c1 = t_temp_p4.c1;
 Query Plan
-==========================================================
-|ID|OPERATOR                             |NAME           |
-----------------------------------------------------------
-|0 |DISTRIBUTED INSERT                   |               |
-|1 |└─PX COORDINATOR                     |               |
-|2 |  └─EXCHANGE OUT DISTR               |:EX10002       |
-|3 |    └─SUBPLAN SCAN                   |ANONYMOUS_VIEW1|
-|4 |      └─HASH JOIN                    |               |
-|5 |        ├─EXCHANGE IN DISTR          |               |
-|6 |        │ └─EXCHANGE OUT DISTR (HASH)|:EX10000       |
-|7 |        │   └─PX BLOCK ITERATOR      |               |
-|8 |        │     └─TABLE FULL SCAN      |t_temp_p4      |
-|9 |        └─EXCHANGE IN DISTR          |               |
-|10|          └─EXCHANGE OUT DISTR (HASH)|:EX10001       |
-|11|            └─PX BLOCK ITERATOR      |               |
-|12|              └─TABLE FULL SCAN      |t_temp_p       |
-==========================================================
+===============================================================
+|ID|OPERATOR                                  |NAME           |
+---------------------------------------------------------------
+|0 |DISTRIBUTED INSERT                        |               |
+|1 |└─PX COORDINATOR                          |               |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
+|3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
+|4 |      └─SHARED HASH JOIN                  |               |
+|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|6 |        │ └─EXCHANGE IN DISTR             |               |
+|7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
+|8 |        │     └─PX BLOCK ITERATOR         |               |
+|9 |        │       └─TABLE FULL SCAN         |t_temp_p4      |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|11|          └─TABLE FULL SCAN               |t_temp_p       |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -2100,17 +2097,15 @@ Outputs & filters:
       equal_conds([t_temp_p.c1 = t_temp_p4.c1]), other_conds(nil)
   5 - output([t_temp_p4.c1]), filter(nil), rowset=256
   6 - output([t_temp_p4.c1]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p4.c1]), dop=10
   7 - output([t_temp_p4.c1]), filter(nil), rowset=256
+      dop=10
   8 - output([t_temp_p4.c1]), filter(nil), rowset=256
+  9 - output([t_temp_p4.c1]), filter(nil), rowset=256
       access([t_temp_p4.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p4.__pk_increment]), range(MIN ; MAX)always true
-  9 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
  10 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
-      (#keys=1, [t_temp_p.c1]), dop=10
- 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
- 12 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
+ 11 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3], [PARTITION_ID]), filter(nil), rowset=256
       access([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_temp_p.__pk_increment]), range(MIN ; MAX)always true

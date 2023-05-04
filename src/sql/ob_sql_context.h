@@ -523,6 +523,9 @@ public:
   int64_t res_map_rule_param_idx_;
   uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;
+  uint64_t first_plan_hash_;
+  common::ObString first_outline_data_;
+  bool is_bulk_;
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
 };
@@ -547,7 +550,7 @@ public:
       anonymous_view_count_(0),
       all_user_variable_(),
       has_udf_(false),
-      has_pl_udf_(false),
+      disable_udf_parallel_(false),
       has_is_table_(false),
       reference_obj_tables_(),
       is_table_gen_col_with_udf_(false),
@@ -584,7 +587,7 @@ public:
     anonymous_view_count_ = 0;
     all_user_variable_.reset();
     has_udf_ = false;
-    has_pl_udf_ = false;
+    disable_udf_parallel_ = false;
     has_is_table_ = false;
     sql_schema_guard_.reset();
     reference_obj_tables_.reset();
@@ -657,7 +660,7 @@ public:
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool has_udf_;
-  bool has_pl_udf_; //used to mark query has pl udf
+  bool disable_udf_parallel_; //used to deterministic pl udf parallel execute
   bool has_is_table_; // used to mark query has information schema table
   ObSqlSchemaGuard sql_schema_guard_;
   share::schema::ObReferenceObjTable reference_obj_tables_;

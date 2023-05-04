@@ -64,7 +64,7 @@ const char *ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
     ") tz_info WHERE tz_info.tran_row_number = 1 "
     "ORDER BY tz_info.time_zone_id, tz_info.transition_time ";
 
-const char *ObTimeZoneInfoManager::FETCH_LATEST_TZ_VERSION_SQL = 
+const char *ObTimeZoneInfoManager::FETCH_LATEST_TZ_VERSION_SQL =
   "SELECT value from oceanbase.__all_sys_stat where name = 'current_timezone_version'";
 
 int ObTimeZoneInfoManager::init()
@@ -253,8 +253,8 @@ int ObTimeZoneInfoManager::set_tz_info_map(ObTimeZoneInfoPos *&stored_tz_info,
     //do nothing
   } else {
     LOG_INFO("need to upgrade transition time", KPC(stored_tz_info), K(new_tz_info));
-    common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
-    common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
+    common::ObSArray<ObTZTransitionTypeInfo> &next_tz_tran_types = stored_tz_info->get_next_tz_tran_types();
+    common::ObSArray<ObTZRevertTypeInfo> &next_tz_revt_types = stored_tz_info->get_next_tz_revt_types();
     if (OB_FAIL(next_tz_tran_types.assign(new_tz_info.get_tz_tran_types()))) {
       LOG_WARN("fail to assign next_tz_tran_types", K(new_tz_info.get_tz_tran_types()), K(ret));
     } else if (OB_FAIL(next_tz_revt_types.assign(new_tz_info.get_tz_revt_types()))) {
@@ -445,7 +445,7 @@ int ObTimeZoneInfoManager::fill_tz_info_map(ObRequestTZInfoResult &tz_result)
   for(int64_t i = 0 ; OB_SUCC(ret) && i < tz_result.tz_array_.count(); ++i) {
     if (NULL != stored_tz_info) {
       tz_info_map_.id_map_.revert(stored_tz_info);
-      stored_tz_info = NULL; 
+      stored_tz_info = NULL;
     }
     ObTimeZoneInfoPos &new_tz_info = tz_result.tz_array_.at(i);
     if (OB_FAIL(tz_info_map_.id_map_.get(new_tz_info.get_tz_id(), stored_tz_info))) {

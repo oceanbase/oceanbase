@@ -132,8 +132,7 @@ int ObPLParser::parse(const ObString &stmt_block,
                               parse_result.is_for_trigger_,
                               parse_result.is_dynamic_sql_,
                               is_inner_parse,
-                              is_include_old_new_in_trigger,
-                              parse_result.mysql_compatible_comment_))) {
+                              is_include_old_new_in_trigger))) {
     LOG_WARN("parse stmt block failed", K(ret), K(stmt_block), K(orig_stmt_block));
   } else if (OB_ISNULL(parse_result.result_tree_)) {
     ret = OB_ERR_PARSE_SQL;
@@ -158,8 +157,7 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
                                 bool is_for_trigger,
                                 bool is_dynamic,
                                 bool is_inner_parse,
-                                bool &is_include_old_new_in_trigger,
-                                bool mysql_compatible_comment)
+                                bool &is_include_old_new_in_trigger)
 {
   int ret = OB_SUCCESS;
   ObParseCtx parse_ctx;
@@ -178,7 +176,6 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
   parse_ctx.is_not_utf8_connection_ = ObCharset::is_valid_collation(connection_collation_) ?
         (ObCharset::charset_type_by_coll(connection_collation_) != CHARSET_UTF8MB4) : false;
   parse_ctx.connection_collation_ = connection_collation_;
-  parse_ctx.mysql_compatible_comment_ = mysql_compatible_comment;
 
   ret = parse_stmt_block(parse_ctx, multi_stmt);
   if (OB_ERR_PARSE_SQL == ret) {
@@ -198,6 +195,9 @@ int ObPLParser::parse_procedure(const ObString &stmt_block,
              K(ret), K(err_line), K(global_errmsg), K(stmt));
     LOG_USER_ERROR(OB_ERR_PARSE_SQL, ob_errpkt_strerror(OB_ERR_PARSER_SYNTAX, false),
                    err_len, err_str, err_line);
+  } else if (parse_ctx.mysql_compatible_comment_) {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("the sql is invalid", K(ret), K(stmt_block));
   } else {
     question_mark_ctx = parse_ctx.question_mark_ctx_;
     is_include_old_new_in_trigger = parse_ctx.is_include_old_new_in_trigger_;

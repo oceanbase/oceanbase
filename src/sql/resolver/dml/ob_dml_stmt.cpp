@@ -249,6 +249,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   is_system_table_ = other.is_system_table_;
   is_index_table_ = other.is_index_table_;
   is_view_table_ = other.is_view_table_;
+  table_type_ = other.table_type_;
   is_recursive_union_fake_table_ = other.is_recursive_union_fake_table_;
   cte_type_ = other.cte_type_;
   database_name_ = other.database_name_;
@@ -1633,8 +1634,6 @@ int ObDMLStmt::formalize_stmt(ObSQLSessionInfo *session_info)
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(formalize_relation_exprs(session_info))) {
     LOG_WARN("failed to formalize relation exprs", K(ret));
-  } else if (OB_FAIL(adjust_subquery_exec_params(session_info))) {
-    LOG_WARN("failed to adjust subquery exec params", K(ret));
   } else if (OB_FAIL(get_from_subquery_stmts(view_stmts))) {
     LOG_WARN("get from subquery stmts failed", K(ret));
   } else {
@@ -1693,136 +1692,6 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         // zhanyue todo: adjust this.
         // Add IS_JOIN_COND flag need use expr relation_ids, here call extract_info() again.
         LOG_WARN("failed to extract info", K(*expr));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::adjust_subquery_exec_params(ObSQLSessionInfo *session_info)
-{
-  int ret = OB_SUCCESS;
-  bool is_happened = false;
-  if (OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); ++i) {
-      ObQueryRefRawExpr *query_expr = subquery_exprs_.at(i);
-      ObSelectStmt *subquery = NULL;
-      if (OB_ISNULL(query_expr) || OB_ISNULL(subquery = query_expr->get_ref_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(query_expr));
-      } else if (OB_FAIL(remove_const_exec_param(subquery, session_info, is_happened))) {
-        LOG_WARN("failed to remove const exec param", K(ret));
-      } else if (is_happened) {
-        ObSEArray<ObExecParamRawExpr *, 4> non_const_params;
-        bool has_const_exec_param = false;
-        for (int64_t j = 0; OB_SUCC(ret) && j < query_expr->get_exec_params().count(); ++j) {
-          ObExecParamRawExpr *param_expr = query_expr->get_exec_param(j);
-          if (OB_ISNULL(param_expr) || OB_ISNULL(param_expr->get_ref_expr())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(param_expr));
-          } else if (param_expr->get_ref_expr()->is_const_expr()) {
-            has_const_exec_param = true;
-          } else if (OB_FAIL(non_const_params.push_back(param_expr))) {
-            LOG_WARN("failed to add removed params", K(ret));
-          }
-        }
-        if (OB_SUCC(ret) && has_const_exec_param &&
-            OB_FAIL(query_expr->get_exec_params().assign(non_const_params))) {
-          LOG_WARN("failed to assign new params", K(ret));
-        }
-    }
-    }
-  }
-  return ret;
-}
-
-// todo link.zt try to refine the function
-int ObDMLStmt::remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *session_info, bool &is_happened)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObRawExprPointer, 4> exprs;
-  ObSEArray<ObSelectStmt*, 4> child_stmts;
-  is_happened = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stmt is null", K(ret), K(stmt));
-  } else if (OB_FAIL(stmt->get_relation_exprs(exprs))) {
-    LOG_WARN("failed to get exprs", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
-    bool tmp_happened = false;
-    ObRawExprPointer &expr_ptr = exprs.at(i);
-    ObRawExpr *expr = NULL;
-    if (OB_FAIL(expr_ptr.get(expr))) {
-      LOG_WARN("failed to get expr", K(ret));
-    } else if (OB_FAIL(do_remove_const_exec_param(expr, tmp_happened))) {
-      LOG_WARN("failed to remove const exec param", K(ret));
-    } else if (!tmp_happened) {
-      // do nothing
-    } else if (expr->formalize(session_info)) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    } else if (OB_FAIL(expr_ptr.set(expr))) {
-      LOG_WARN("failed to update expr", K(ret));
-    } else {
-      is_happened = true;
-      LOG_TRACE("succeed to remove const exec param", K(ret), K(tmp_happened), K(*expr));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
-    LOG_WARN("failed to get child stmts", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-      bool tmp_happened = false;
-      ObSelectStmt* child_stmt = NULL;
-      if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("stmt is null", K(ret), K(child_stmt));
-      } else if (OB_FAIL(SMART_CALL(remove_const_exec_param(child_stmt,
-                                                            session_info,
-                                                            tmp_happened)))) {
-        LOG_WARN("failed to remove const exec param", K(ret));
-      } else {
-        is_happened |= tmp_happened;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObDMLStmt::do_remove_const_exec_param(ObRawExpr *&expr, bool &is_happened)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret), K(expr));
-  } else if (expr->is_exec_param_expr()) {
-    ObExecParamRawExpr *exec_param = static_cast<ObExecParamRawExpr *>(expr);
-    ObRawExpr *ref_expr = exec_param->get_ref_expr();
-    if (OB_ISNULL(ref_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ref expr is null", K(ret));
-    } else if (ref_expr->is_const_expr() &&
-               !ref_expr->has_flag(CNT_ONETIME)) {
-      // if the ref expr is a const expr but is also a onetime expr
-      // then it is no need to remove it
-      expr = ref_expr;
-      is_happened = true;
-      if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
-        if (OB_FAIL(SMART_CALL(do_remove_const_exec_param(expr, is_happened)))) {
-          LOG_WARN("failed to remove const exec param", K(ret));
-        }
-      }
-    }
-  } else if (expr->has_flag(CNT_DYNAMIC_PARAM)) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(do_remove_const_exec_param(expr->get_param_expr(i),
-                                                        is_happened)))) {
-        LOG_WARN("failed to remove const exec param", K(ret));
       }
     }
   }
@@ -1891,11 +1760,6 @@ int ObDMLStmt::formalize_child_stmt_expr_reference()
     } else if (OB_FAIL(SMART_CALL(stmt->formalize_stmt_expr_reference()))) {
       LOG_WARN("failed to formalize stmt reference", K(ret));
     } else { /*do nothing*/ }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(remove_useless_exec_param())) {
-      LOG_WARN("failed to remove useless exec param expr", K(ret));
-    }
   }
   return ret;
 }
@@ -2082,42 +1946,6 @@ int ObDMLStmt::remove_useless_sharable_expr()
       LOG_WARN("failed to remove pseudo column like exprs", K(ret));
     } else {
       LOG_TRACE("succeed to remove pseudo column like exprs", K(*expr));
-    }
-  }
-  return ret;
-}
-
-int ObDMLStmt::remove_useless_exec_param()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); ++i) {
-    ObQueryRefRawExpr *query_ref = subquery_exprs_.at(i);
-    bool is_updated = false;
-    if (OB_ISNULL(query_ref)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query ref expr is null", K(ret));
-    } else {
-      for (int64_t j = query_ref->get_exec_params().count() - 1; OB_SUCC(ret) && j >= 0; --j) {
-        ObExecParamRawExpr *exec_param = query_ref->get_exec_params().at(j);
-        if (OB_ISNULL(exec_param)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("exec param is null", K(ret), K(exec_param));
-        } else if (exec_param->is_explicited_reference()) {
-          // do nothing
-        } else if (OB_FAIL(query_ref->get_exec_params().remove(j))) {
-          LOG_WARN("failed to remove exec param for subquery ref", K(ret));
-        } else {
-          is_updated = true;
-          LOG_TRACE("succeed to remove exec param expr", K(*exec_param));
-        }
-      }
-      if (OB_SUCC(ret) && is_updated) {
-        if (OB_FAIL(query_ref->pull_relation_id())) {
-          LOG_WARN("failed to pull relation id", K(ret));
-        } else if (OB_FAIL(query_ref->extract_info())) {
-          LOG_WARN("failed to extract info", K(ret));
-        }
-      }
     }
   }
   return ret;
@@ -4507,6 +4335,159 @@ bool ObDMLStmt::is_set_stmt() const
   return is_select_stmt() ? (static_cast<const ObSelectStmt*>(this)->is_set_stmt()) : false;
 }
 
+int ObDMLStmt::disable_writing_external_table()
+{
+  int ret = OB_SUCCESS;
+  bool disable_write_table = false;
+  const TableItem *table_item = NULL;
+  if (stmt::T_SELECT == get_stmt_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !disable_write_table && i < table_items_.count(); ++i) {
+      if (OB_ISNULL(table_item = table_items_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (table_item->for_update_ && schema::EXTERNAL_TABLE == table_item->table_type_) {
+        disable_write_table = true;
+      }
+    }
+  } else if (is_dml_write_stmt()) {
+    ObSEArray<ObDmlTableInfo*, 4> dml_table_infos;
+    if (OB_FAIL(static_cast<ObDelUpdStmt*>(this)->get_dml_table_infos(dml_table_infos))) {
+      LOG_WARN("failed to get dml table infos");
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !disable_write_table && i < dml_table_infos.count(); ++i) {
+      if (OB_ISNULL(dml_table_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (OB_ISNULL(table_item = get_table_item_by_id(dml_table_infos.at(i)->table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected NULL ptr", K(ret));
+      } else if (schema::EXTERNAL_TABLE == table_item->table_type_) {
+        disable_write_table = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObSelectStmt*, 4> child_stmts;
+    if (disable_write_table) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on External Table");
+    } else if (OB_FAIL(get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get stmt's child_stmts", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+        OZ( child_stmts.at(i)->disable_writing_external_table() );
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::formalize_query_ref_exprs()
+{
+  int ret = OB_SUCCESS;
+  ObStmtExecParamFormatter formatter;
+  formatter.set_relation_scope();
+  if (OB_FAIL(formalize_query_ref_exec_params(formatter, false))) {
+    LOG_WARN("failed formalize subquery exec params", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::do_formalize_query_ref_exprs_pre()
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *ref_query = NULL;
+  ObExecParamRawExpr *exec_param = NULL;
+  ObSEArray<ObRawExpr*, 8> ref_exprs;
+  for (int64_t j = 0; OB_SUCC(ret) && j < subquery_exprs_.count(); ++j) {
+    ref_exprs.reuse();
+    if (OB_ISNULL(ref_query = subquery_exprs_.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ref_query->get_exec_params().count(); ++i) {
+      bool is_happened = false;
+      int64_t idx = -1;
+      if (OB_ISNULL(exec_param = ref_query->get_exec_param(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FALSE_IT(exec_param->clear_explicited_referece())) {
+      } else if (ObOptimizerUtil::find_item(ref_exprs,
+                                            exec_param->get_ref_expr(),
+                                            &idx)) {
+        exec_param->set_ref_expr(ref_query->get_exec_param(idx));
+      } else if (OB_FAIL(ref_exprs.push_back(exec_param->get_ref_expr()))) {
+        LOG_WARN("failed to push back ref exprs");
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObDMLStmt::do_formalize_query_ref_exprs_post()
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *ref_query = NULL;
+  ObRawExpr *exec_param = NULL;
+  bool is_updated = false;
+  for (int64_t j = 0; OB_SUCC(ret) && j < subquery_exprs_.count(); ++j) {
+    is_updated = false;
+    if (OB_ISNULL(ref_query = subquery_exprs_.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    }
+    for (int64_t i = ref_query->get_exec_params().count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      uint64_t count = 0;
+      if (OB_ISNULL(exec_param = ref_query->get_exec_param(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (exec_param->is_explicited_reference()) {
+        // do nothing
+      } else if (OB_FAIL(ref_query->get_exec_params().remove(i))) {
+        LOG_WARN("failed to remove exec param", K(ret));
+      } else {
+        is_updated = true;
+        LOG_TRACE("succeed to remove exec param expr", K(*exec_param));
+      }
+    }
+    if (OB_SUCC(ret) && is_updated) {
+      if (OB_FAIL(ref_query->pull_relation_id())) {
+        LOG_WARN("failed to pull relation id", K(ret));
+      } else if (OB_FAIL(ref_query->extract_info())) {
+        LOG_WARN("failed to extract info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,
+                                              bool need_replace)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *ref_query = NULL;
+  ObSEArray<ObSelectStmt*, 8> subquerys;
+  if (need_replace && OB_FAIL(iterate_stmt_expr(formatter))) {
+    LOG_WARN("failed to iterate stmt expr");
+  } else if (OB_FAIL(get_child_stmts(subquerys))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else if (OB_FAIL(do_formalize_query_ref_exprs_pre())) {
+    LOG_WARN("failed to do formalize query ref exprs pre", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < subquerys.count(); ++i) {
+    if (OB_ISNULL(subquerys.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(subquerys.at(i)->formalize_query_ref_exec_params(formatter, true)))) {
+      LOG_WARN("failed to formalize subquery exec params", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(do_formalize_query_ref_exprs_post())) {
+    LOG_WARN("failed to do formalize query ref exprs post", K(ret));
+  }
+  return ret;
+}
 
 ObJtColBaseInfo::ObJtColBaseInfo()
   : col_type_(0),

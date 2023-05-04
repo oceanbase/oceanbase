@@ -34,7 +34,7 @@ public:
   int append_log_buf(const char *buf, const int64_t buf_len, const int64_t pos); // without log_base_header
   int next_dict_header(ObDictMetaHeader &meta_header);
   template<class DICT_ENTRY>
-  int next_dict_entry(DICT_ENTRY &dict_entry);
+  int next_dict_entry(const ObDictMetaHeader &header, DICT_ENTRY &dict_entry);
 private:
   OB_INLINE void release_palf_buf_()
   {

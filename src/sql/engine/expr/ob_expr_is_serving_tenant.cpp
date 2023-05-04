@@ -26,7 +26,7 @@ namespace sql
 
 
 ObExprIsServingTenant::ObExprIsServingTenant(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_IS_SERVING_TENANT, N_IS_SERVING_TENANT, 3, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_IS_SERVING_TENANT, N_IS_SERVING_TENANT, 3, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

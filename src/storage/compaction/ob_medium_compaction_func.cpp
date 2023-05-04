@@ -126,7 +126,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
     } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
         tablet, freeze_info.schema_version, allocator, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret) {
-        // do nothing
+        // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
         if (freeze_info.freeze_version <= scheduler_frozen_version) {
           FLOG_INFO("table schema may recycled, use newer freeze info instead", K(ret), KPC(last_major), K(freeze_info),
@@ -395,8 +395,13 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
         LOG_INFO("errsim", K(ret), KPC(this));
         if (OB_FAIL(ret)) {
-          FLOG_INFO("set schedule medium with errsim", KPC(this));
-          ret = OB_SUCCESS;
+          const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
+          const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
+          medium_info.medium_snapshot_ = MAX(MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
+          if (medium_info.medium_snapshot_ > max_sync_medium_scn) {
+            FLOG_INFO("set schedule medium with errsim", KPC(this));
+            ret = OB_SUCCESS;
+          }
         }
       }
     }

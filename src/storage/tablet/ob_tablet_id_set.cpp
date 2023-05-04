@@ -36,15 +36,15 @@ ObTabletIDSet::~ObTabletIDSet()
 int ObTabletIDSet::init(const uint64_t bucket_lock_bucket_cnt, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  const int64_t bucket_num = common::hash::cal_next_prime(bucket_lock_bucket_cnt);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K_(is_inited));
-  } else if (OB_FAIL(id_set_.create(ObTabletCommon::TABLET_ID_SET_BUCKET_CNT, "TabletIDSetBkt",
-      "TabletIDSetNode", tenant_id))) {
+  } else if (OB_FAIL(id_set_.create(bucket_num, "TabletIDSetBkt", "TabletIDSetNode", tenant_id))) {
     LOG_WARN("fail to create tablet id set", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(bucket_lock_bucket_cnt, ObLatchIds::TABLET_BUCKET_LOCK,
+  } else if (OB_FAIL(bucket_lock_.init(bucket_num, ObLatchIds::TABLET_BUCKET_LOCK,
       "TabletIDSetBkt", tenant_id))) {
-    LOG_WARN("fail to init bucket lock", K(ret), K(bucket_lock_bucket_cnt));
+    LOG_WARN("fail to init bucket lock", K(ret), K(bucket_num));
   } else {
     is_inited_ = true;
   }

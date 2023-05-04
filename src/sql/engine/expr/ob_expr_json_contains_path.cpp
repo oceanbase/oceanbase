@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprJsonContainsPath::ObExprJsonContainsPath(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_CONTAINS_PATH, N_JSON_CONTAINS_PATH, MORE_THAN_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_CONTAINS_PATH, N_JSON_CONTAINS_PATH, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

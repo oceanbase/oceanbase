@@ -20,7 +20,7 @@ namespace sql
 {
 
 ObExprAnyValue::ObExprAnyValue(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_ANY_VALUE, N_ANY_VAL, 1, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ANY_VALUE, N_ANY_VAL, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

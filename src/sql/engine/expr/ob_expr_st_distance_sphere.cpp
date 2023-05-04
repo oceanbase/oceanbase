@@ -29,9 +29,9 @@ ObExprSTDistanceSphere::ObExprSTDistanceSphere(common::ObIAllocator &alloc)
                          T_FUN_SYS_ST_DISTANCE_SPHERE,
                          N_ST_DISTANCE_SPHERE,
                          TWO_OR_THREE,
+                         VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
-
 }
 
 ObExprSTDistanceSphere::~ObExprSTDistanceSphere()

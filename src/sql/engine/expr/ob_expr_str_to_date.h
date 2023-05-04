@@ -41,7 +41,8 @@ class ObExprOracleToDate : public ObExprToTemporalBase
 public:
   explicit ObExprOracleToDate(common::ObIAllocator &alloc) :
     ObExprToTemporalBase(alloc, T_FUN_SYS_TO_DATE, N_TO_DATE)
-  {}
+  {
+  }
   virtual ~ObExprOracleToDate() {}
 
   int set_my_result_from_ob_time(common::ObExprCtx &expr_ctx,

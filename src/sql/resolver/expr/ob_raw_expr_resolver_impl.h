@@ -200,6 +200,10 @@ private:
   int process_odbc_time_literals(const ObItemType dst_time_type,
                                  const ParseNode *expr_node,
                                  ObRawExpr *&expr);
+  int process_xml_element_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xml_attributes_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_xmlparse_node(const ParseNode *node, ObRawExpr *&expr);
 private:
   int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);

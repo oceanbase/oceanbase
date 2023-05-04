@@ -92,7 +92,8 @@ int easy_socket_listen(int udp, easy_addr_t *address, int *flags, int backlog)
         if (easy_socket_set_opt(fd, SO_REUSEPORT, 1) == 0) {
             easy_ignore(easy_socket_set_opt(fd, SO_REUSEPORT, 0));
             if (flags) {
-                if (address->family == AF_INET && (*flags & EASY_FLAGS_NOLISTEN)) {
+                if ((AF_INET == address->family || AF_INET6 == address->family) &&
+                    (*flags & EASY_FLAGS_NOLISTEN)) {
                     udp = 2;
                     *flags = EASY_FLAGS_REUSEPORT;
                 }

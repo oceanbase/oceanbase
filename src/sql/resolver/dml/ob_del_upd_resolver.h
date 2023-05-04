@@ -181,6 +181,9 @@ protected:
 
   int build_column_conv_function_with_default_expr(ObInsertTableInfo& table_info, const int64_t idx);
 
+  int build_column_conv_function_for_udt_column(ObInsertTableInfo& table_info,
+                                                const int64_t idx,
+                                                ObRawExpr *column_ref);
   int generate_autoinc_params(ObInsertTableInfo &table_info);
   int get_value_row_size(uint64_t &count);
 
@@ -220,6 +223,7 @@ protected:
   int create_session_row_label_expr(ObDmlTableInfo& table_info, uint64_t column_id, ObRawExpr *&expr);
   int add_select_items(ObSelectStmt &select_stmt, const ObIArray<SelectItem>& select_items);
   int add_select_list_for_set_stmt(ObSelectStmt &select_stmt);
+  int add_all_lob_columns_to_stmt(const TableItem &table_item, ObIArray<ObColumnRefRawExpr*> &column_exprs);
 protected:
   int generate_insert_table_info(const TableItem &table_item,
                                  ObInsertTableInfo &table_info,

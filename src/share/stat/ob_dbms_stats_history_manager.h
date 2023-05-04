@@ -17,7 +17,6 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_item.h"
 #include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_column_stat.h"
 #include "share/stat/ob_opt_column_stat_cache.h"
 
 namespace oceanbase {

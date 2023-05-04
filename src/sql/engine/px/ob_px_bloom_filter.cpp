@@ -46,8 +46,9 @@ ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), bits_count_(0), fpp_(0.0),
 int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, double fpp /*= 0.01 */)
 {
   int ret = OB_SUCCESS;
-  if (data_length <= 0 || fpp <= 0) {
-    ret = OB_INVALID_ARGUMENT;
+  data_length = max(data_length, 1);
+  if (fpp <= 0) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to init px bloom filter", K(ret), K(data_length), K(fpp));
   } else {
     data_length_ = data_length;
@@ -77,7 +78,31 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, double f
   return ret;
 }
 
-int ObPxBloomFilter::init(ObPxBloomFilter *filter)
+int ObPxBloomFilter::assign(const ObPxBloomFilter &filter)
+{
+  int ret = OB_SUCCESS;
+  data_length_ = filter.data_length_;
+  bits_count_ = filter.bits_count_;
+  fpp_ = filter.fpp_;
+  hash_func_count_ = filter.hash_func_count_;
+  is_inited_ = filter.is_inited_;
+  bits_array_length_ = filter.bits_array_length_;
+  true_count_ = filter.true_count_;
+  might_contain_ = filter.might_contain_;
+  void *bits_array_buf = NULL;
+  if (OB_ISNULL(bits_array_buf = allocator_.alloc((bits_array_length_ + CACHE_LINE_SIZE)* sizeof(int64_t)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc filter", K(bits_array_length_), K(begin_idx_), K(end_idx_), K(ret));
+  } else {
+    int64_t align_addr = ((reinterpret_cast<int64_t>(bits_array_buf)
+                          + CACHE_LINE_SIZE - 1) >> LOG_CACHE_LINE_SIZE) << LOG_CACHE_LINE_SIZE;
+    bits_array_ = reinterpret_cast<int64_t *>(align_addr);
+    MEMCPY(bits_array_, filter.bits_array_, sizeof(int64_t) * bits_array_length_);
+  }
+  return ret;
+}
+
+int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(filter)) {
@@ -273,14 +298,13 @@ int ObPxBloomFilter::process_first_phase_recieve_count(int64_t whole_expect_size
   return ret;
 }
 
-int ObPxBloomFilter::generate_receive_count_array()
+int ObPxBloomFilter::generate_receive_count_array(int64_t piece_size)
 {
   int ret = OB_SUCCESS;
-  int64_t send_size = GCONF._send_bloom_filter_size * 125;
-  int64_t count = ceil(bits_array_length_ / (double)send_size);
+  int64_t count = ceil(bits_array_length_ / (double)piece_size);
   int64_t begin_idx = 0;
   for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
-    begin_idx = i * send_size;
+    begin_idx = i * piece_size;
     if (begin_idx >= bits_array_length_) {
       begin_idx = bits_array_length_ - 1;
     }
@@ -386,7 +410,9 @@ OB_DEF_SERIALIZE_SIZE(ObPxBloomFilter)
  }
 //-------------------------------------分割线----------------------------
 int ObPxBFStaticInfo::init(int64_t tenant_id, int64_t filter_id,
-                           int64_t server_id, bool is_shared, bool skip_subpart)
+    int64_t server_id, bool is_shared,
+    bool skip_subpart, int64_t p2p_dh_id,
+    bool is_shuffle)
 {
   int ret = OB_SUCCESS;
   if (is_inited_){
@@ -398,6 +424,8 @@ int ObPxBFStaticInfo::init(int64_t tenant_id, int64_t filter_id,
     server_id_ = server_id;
     is_shared_ = is_shared;
     skip_subpart_ = skip_subpart;
+    p2p_dh_id_ = p2p_dh_id;
+    is_shuffle_ = is_shuffle;
     is_inited_ = true;
   }
   return ret;
@@ -514,7 +542,7 @@ int ObPxBloomFilterManager::get_px_bf_for_merge_filter(ObPXBloomFilterHashWrappe
 }
 
 OB_SERIALIZE_MEMBER(ObPxBFStaticInfo, is_inited_, tenant_id_, filter_id_,
-    server_id_, is_shared_, skip_subpart_);
+    server_id_, is_shared_, skip_subpart_, p2p_dh_id_, is_shuffle_);
 OB_SERIALIZE_MEMBER(ObPXBloomFilterHashWrapper, tenant_id_, filter_id_,
     server_id_, px_sequence_id_, task_id_)
 OB_SERIALIZE_MEMBER(ObPxBFSendBloomFilterArgs, bf_key_, bloom_filter_,

@@ -54,11 +54,13 @@ private:
   Obp20Decoder* svr_decoders_[OBP20_SVR_END-OBP20_PROXY_MAX_TYPE] = {
                               &trace_info_dcd_,
                               &sess_info_dcd_,
-                              &full_trc_dcd_
+                              &full_trc_dcd_,
+                              &sess_info_veri_dcd_
                             };
   Obp20TaceInfoDecoder trace_info_dcd_;
   Obp20SessInfoDecoder sess_info_dcd_;
   Obp20FullTrcDecoder full_trc_dcd_;
+  Obp20SessInfoVeriDecoder sess_info_veri_dcd_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(Ob20ProtocolProcessor);

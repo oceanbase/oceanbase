@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprBitLength::ObExprBitLength(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_BIT_LENGTH, N_BIT_LENGTH, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_BIT_LENGTH, N_BIT_LENGTH, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

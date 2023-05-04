@@ -325,9 +325,7 @@ TEST_F(TestObTxLog, tx_log_body_redo)
 
   ObString TEST_MUTATOR_BUF("FFF");
   int64_t mutator_pos = 0;
-  ObCLogEncryptInfo TEST_CLOG_ENCRYPT_INFO;
-  TEST_CLOG_ENCRYPT_INFO.init();
-  ObTxRedoLog fill_redo(TEST_CLOG_ENCRYPT_INFO, TEST_LOG_NO, TEST_CLUSTER_VERSION);
+  ObTxRedoLog fill_redo(TEST_LOG_NO, TEST_CLUSTER_VERSION);
   ASSERT_EQ(OB_SUCCESS, fill_block.prepare_mutator_buf(fill_redo));
   ASSERT_EQ(OB_SUCCESS,
             serialization::encode(fill_redo.get_mutator_buf(),

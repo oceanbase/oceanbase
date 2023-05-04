@@ -14,7 +14,6 @@
 #define OCEANBASE_ROOTSERVER_OB_DISASTER_RECOVERY_TASK_EXECUTOR_H_
 
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
-#include "rootserver/ob_server_manager.h"
 
 namespace oceanbase
 {
@@ -35,7 +34,6 @@ class ObMultiVersionSchemaService;
 
 namespace rootserver
 {
-class ObServerManager;
 class ObDRTask;
 
 class ObDRTaskExecutor
@@ -44,18 +42,15 @@ public:
   ObDRTaskExecutor()
     : inited_(false),
       lst_operator_(nullptr),
-      rpc_proxy_(nullptr),
-      server_mgr_(nullptr) {}
+      rpc_proxy_(nullptr) {}
   virtual ~ObDRTaskExecutor() {}
 public:
   // init a ObDRTaskExecutor
   // param [in] lst_operator, to check task
   // param [in] rpc_proxy, to send task execution to dst server
-  // param [in] server_mgr, to check whether dst server alive
   int init(
       share::ObLSTableOperator &lst_operator,
-      obrpc::ObSrvRpcProxy &rpc_proxy,
-      ObServerManager &server_mgr);
+      obrpc::ObSrvRpcProxy &rpc_proxy);
 
   // do previous check and execute a task
   // @param [in] task, the task to execute
@@ -68,7 +63,6 @@ private:
   bool inited_;
   share::ObLSTableOperator *lst_operator_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObServerManager *server_mgr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDRTaskExecutor);
 };

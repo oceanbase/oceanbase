@@ -32,9 +32,10 @@ namespace sql
 {
 
 ObExprNullif::ObExprNullif(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_NULLIF, N_NULLIF, 2, NOT_ROW_DIMENSION),
+  : ObFuncExprOperator(alloc, T_FUN_SYS_NULLIF, N_NULLIF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
   first_param_can_be_null_(true)
-{}
+{
+}
 
 // in engine 3.0, we have 3 copy of params
 // eg:
@@ -321,8 +322,17 @@ int ObExprNullif::eval_nullif(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
   } else if (ObNullType == cast_info->cmp_meta_.type_) {
     // can compare directly.
     DatumCmpFunc cmp_func = reinterpret_cast<DatumCmpFunc>(expr.inner_functions_[0]);
-    bool equal = cmp_e1->is_null() ? false : (0 == cmp_func(*cmp_e0, *cmp_e1));
-    if (equal) {
+    int cmp_ret = 0;
+    bool equal = false;
+    if (!cmp_e1->is_null()) {
+      if (OB_FAIL(cmp_func(*cmp_e0, *cmp_e1, cmp_ret))) {
+        LOG_WARN("cmp failed", K(ret));
+      } else {
+        equal = (0 == cmp_ret);
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (equal) {
       res.set_null();
     } else if (OB_FAIL(cast_result(*expr.args_[0], expr, ctx, cast_info->cm_, res))) {
       LOG_WARN("cast result failed", K(ret));
@@ -344,8 +354,10 @@ int ObExprNullif::eval_nullif(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                              tmp_alloc_guard.get_allocator(), datum2))) {
       LOG_WARN("cast param failed", K(ret));
     } else {
-      bool equal = (0 == cmp_func(datum1, datum2));
-      if (equal) {
+      int cmp_ret = 0;
+      if (OB_FAIL(cmp_func(datum1, datum2, cmp_ret))) {
+        LOG_WARN("cmp failed", K(ret));
+      } else if (cmp_ret == 0) {
         res.set_null();
       } else if (OB_FAIL(cast_result(*expr.args_[0], expr, ctx, cast_info->cm_, res))) {
         LOG_WARN("cast result failed", K(ret));

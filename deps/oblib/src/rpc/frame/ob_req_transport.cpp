@@ -76,6 +76,7 @@ int async_cb(easy_request_t *r)
     typedef ObReqTransport::AsyncCB ACB;
     ACB *cb = reinterpret_cast<ACB*>(r->user_data);
     cb->record_stat(r->ipacket == NULL);
+    pcode = cb->get_pcode();
 
     if (!r->ipacket) {
       // 1. destination doesn't response
@@ -96,9 +97,9 @@ int async_cb(easy_request_t *r)
       ret = OB_LIBEASY_ERROR;
     } else if (OB_FAIL(cb->decode(r->ipacket))) {
       cb->on_invalid();
-      LOG_DEBUG("decode failed", K(ret));
+      LOG_WARN("decode failed", K(ret), K(pcode));
     } else if (OB_PACKET_CLUSTER_ID_NOT_MATCH == cb->get_rcode()) {
-      LOG_WARN("wrong cluster id", K(ret), K(easy_connection_str(r->ms->c)));
+      LOG_WARN("wrong cluster id", K(ret), K(easy_connection_str(r->ms->c)), K(pcode));
       cb->set_error(EASY_CLUSTER_ID_MISMATCH);
       ret = cb->on_error(EASY_CLUSTER_ID_MISMATCH);
       if (OB_ERROR == ret) {
@@ -119,7 +120,7 @@ int async_cb(easy_request_t *r)
                 pkt->get_clen() + pkt->get_header_size() + OB_NET_HEADER_LENGTH);
 
       if (OB_FAIL(cb->process())) {
-        LOG_DEBUG("process failed", K(ret));
+        LOG_WARN("process failed", K(ret), K(pcode));
       }
 
       if (cb_cloned) {
@@ -140,7 +141,7 @@ int async_cb(easy_request_t *r)
   }
 
   if (!OB_SUCC(ret)) {
-    LOG_DEBUG("process async request fail", K(r), K(ret));
+    LOG_WARN("process async request fail", K(r), K(ret), K(pcode));
   }
 
   const int64_t cur_time = ObTimeUtility::current_time();
@@ -150,7 +151,7 @@ int async_cb(easy_request_t *r)
   const int64_t session_destroy_time = cur_time - after_process_time;
   if (total_time > OB_EASY_HANDLER_COST_TIME) {
     LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "async_cb handler cost too much time", K(total_time), K(decode_time),
-        K(process_time), K(session_destroy_time), K(pcode));
+        K(process_time), K(session_destroy_time), K(ret), K(pcode));
   }
 
   return EASY_OK;

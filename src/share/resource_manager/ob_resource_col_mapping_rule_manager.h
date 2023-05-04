@@ -82,12 +82,12 @@ private:
     {
     }
     ~ColumnNameHashWrapper() {}
-    inline uint64_t hash(uint64_t seed = 0) const
+    inline int hash(uint64_t &hash_val, uint64_t seed = 0) const
     {
-      uint64_t hash_ret = seed;
+      hash_val = seed;
       //case insensitive
-      hash_ret = common::ObCharset::hash(common::CS_TYPE_UTF8MB4_GENERAL_CI, column_name_, hash_ret);
-      return hash_ret;
+      hash_val = common::ObCharset::hash(common::CS_TYPE_UTF8MB4_GENERAL_CI, column_name_, hash_val);
+      return OB_SUCCESS;
     }
     bool operator ==(const ColumnNameHashWrapper &other) const
     {
@@ -115,9 +115,10 @@ private:
     {
       uint64_t hash_val = database_id_;
       hash_val = table_name_.hash(hash_val);
-      hash_val = column_name_.hash(hash_val);
+      column_name_.hash(hash_val, hash_val);
       return hash_val;
     }
+    inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     inline bool operator==(const ColumnNameKey& key) const
     {
       return database_id_ == key.database_id_
@@ -144,6 +145,7 @@ private:
       hash_val = common::murmurhash(literal_value_.ptr(), literal_value_.length(), hash_val);
       return hash_val;
     }
+    inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     inline bool operator==(const RuleValueKey& key) const
     {
       return rule_id_ == key.rule_id_

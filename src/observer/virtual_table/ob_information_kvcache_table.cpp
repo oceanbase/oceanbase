@@ -199,6 +199,9 @@ int ObInfoSchemaKvCacheTable::set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseT
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"opt_column_stat_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_COLUMN_STAT_CACHE_MISS);
     inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::OPT_COLUMN_STAT_CACHE_HIT));
+  } else if (0 == strcmp(inst->status_.config_->cache_name_,"opt_ds_stat_cache")) {
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::OPT_DS_STAT_CACHE_MISS);
+    inst->status_.total_hit_cnt_.set(GLOBAL_EVENT_GET(ObStatEventIds::OPT_DS_STAT_CACHE_HIT));
   }
 
   return ret;

@@ -482,6 +482,12 @@ public:
                                        ObRawExpr *first_expr,
                                        ObRawExpr *second_expr,
                                        ObOpRawExpr *&out_expr);
+  static int create_prefix_pattern_expr(ObRawExprFactory &expr_factory,
+                                        ObSQLSessionInfo *session_info,
+                                        ObRawExpr *first_expr,
+                                        ObRawExpr *second_expr,
+                                        ObRawExpr *third_expr,
+                                        ObSysFunRawExpr *&out_expr);
   static int create_type_to_str_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *src_expr,
                                      ObSysFunRawExpr *&out_expr,
@@ -761,6 +767,7 @@ public:
   /* 计算基本列的flag */
   static uint32_t calc_column_result_flag(const share::schema::ObColumnSchemaV2 &column_schema);
   static int expr_is_order_consistent(const ObRawExpr *from, const ObRawExpr *to, bool &is_consistent);
+  static int is_expr_comparable(const ObRawExpr *expr, bool &can_be);
   static int exprs_contain_subquery(const common::ObIArray<ObRawExpr*> &exprs, bool &cnt_subquery);
   static int function_alias(ObRawExprFactory &expr_factory, ObSysFunRawExpr *&expr);
   //extract from const value
@@ -994,6 +1001,18 @@ public:
                              ObRawExpr *&pack_expr);
 
   static int set_call_in_pl(ObRawExpr *&raw_expr);
+
+
+  static int transform_query_udt_column_expr(const ObSQLSessionInfo& session,
+                                              ObRawExprFactory &expr_factory,
+                                              ObRawExpr *hidden_blob_expr,
+                                              ObRawExpr *&new_expr);
+  static int try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLSessionInfo &session,
+                                                             const ObTableSchema &table_schema,
+                                                             ObIArray<ObColumnSchemaV2 *> &resolved_cols,
+                                                             ObRawExprFactory &expr_factory,
+                                                             ObRawExpr *&expr);
+
   static int try_modify_expr_for_gen_col_recursively(const ObSQLSessionInfo &session,
                                                  const obrpc::ObCreateIndexArg *arg,
                                                  ObRawExprFactory &expr_factory,
@@ -1061,6 +1080,12 @@ public:
                                                    const share::schema::ObTableSchema &table_schema,
                                                    const uint64_t logical_table_id,
                                                    ObSysFunRawExpr *&calc_rowid_expr);
+  static int add_calc_partition_id_on_calc_rowid_expr(const ObDMLStmt *dml_stmt,
+                                                  ObRawExprFactory &expr_factory,
+                                                  const ObSQLSessionInfo &session_info,
+                                                  const share::schema::ObTableSchema &table_schema,
+                                                  const uint64_t logical_table_id,
+                                                  ObSysFunRawExpr *&calc_rowid_expr);
   static int get_col_ref_expr_recursively(ObRawExpr *expr,
                                           ObColumnRefRawExpr *&column_expr);
 
@@ -1072,11 +1097,14 @@ public:
                                   const share::schema::ObTableSchema &index_schema,
                                   ObColumnRefRawExpr *&spk_expr);
   static int check_contain_case_when_exprs(const ObRawExpr *raw_expr, bool &contain);
+  static int transform_udt_column_value_expr(ObRawExprFactory &expr_factory, ObRawExpr *old_expr, ObRawExpr *&new_expr);
 
   static int create_type_expr(ObRawExprFactory &expr_factory,
                               ObConstRawExpr *&type_expr,
                               const ObExprResType &dst_type,
                               bool avoid_zero_len = false);
+
+  static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
 private :
 

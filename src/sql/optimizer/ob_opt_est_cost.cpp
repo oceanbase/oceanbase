@@ -298,7 +298,7 @@ double ObOptEstCost::cost_quals(double rows,
   return get_model(model_type).cost_quals(rows, quals, need_scale);
 }
 
-int ObOptEstCost::cost_table(ObCostTableScanInfo &est_cost_info,
+int ObOptEstCost::cost_table(const ObCostTableScanInfo &est_cost_info,
                              int64_t parallel,
                              double query_range_row_count,
                              double phy_query_range_row_count,
@@ -314,6 +314,28 @@ int ObOptEstCost::cost_table(ObCostTableScanInfo &est_cost_info,
                                                cost,
                                                index_back_cost))) {
     LOG_WARN("failed to est cost for table scan", K(model_type), K(ret));
+  }
+  return ret;
+}
+
+int ObOptEstCost::cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
+                                          const int64_t parallel,
+                                          const double part_cnt_per_dop,
+                                          double query_range_row_count,
+                                          double phy_query_range_row_count,
+                                          double &px_cost,
+                                          double &cost,
+                                          MODEL_TYPE model_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_model(model_type).cost_table_for_parallel(est_cost_info,
+                                                            parallel,
+                                                            part_cnt_per_dop,
+                                                            query_range_row_count,
+                                                            phy_query_range_row_count,
+                                                            px_cost,
+                                                            cost))) {
+    LOG_WARN("failed to est cost for table scan parallel", K(model_type), K(ret));
   }
   return ret;
 }

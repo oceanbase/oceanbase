@@ -601,11 +601,22 @@ class EventTable
       EN_DDL_REPORT_REPLICA_BUILD_STATUS_FAIL = 516,
       EN_DDL_DIRECT_LOAD_WAIT_TABLE_LOCK_FAIL = 517,
 
+      // SQL Optimizer related 551-599
+      EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE = 551,
+      EN_ENABLE_AUTO_DOP_FORCE_PARALLEL_PLAN = 552,
+      EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL = 553,
+
       // 600-700 For PX use
       EN_PX_SQC_EXECUTE_FAILED = 600,
       EN_PX_SQC_INIT_FAILED = 601,
       EN_PX_SQC_INIT_PROCESS_FAILED = 602,
       EN_PX_PRINT_TARGET_MONITOR_LOG = 603,
+      EN_PX_SQC_NOT_REPORT_TO_QC = 604,
+      EN_PX_QC_EARLY_TERMINATE = 605,
+      EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT = 606,
+      EN_PX_TEMP_TABLE_NOT_DESTROY_REMOTE_INTERM_RESULT = 607,
+      EN_PX_NOT_ERASE_P2P_DH_MSG = 608,
+      EN_PX_SLOW_PROCESS_SQC_FINISH_MSG = 609,
       // please add new trace point after 700 or before 600
 
       // Compaction Related 700-750
@@ -673,6 +684,18 @@ class EventTable
       EN_FETCH_TABLE_INFO_RPC = 1112,
       // END OF STORAGE HA - 1101 - 2000
 
+      // sql parameterization 1170-1180
+      EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR = 1170,
+      // END OF sql parameterization 1170-1180
+
+      // session info verification
+      // The types are used for error verification
+      EN_SESS_INFO_VERI_SYS_VAR_ERROR = 1180,
+      EN_SESS_INFO_VERI_APP_INFO_ERROR = 1181,
+      EN_SESS_INFO_VERI_APP_CTX_ERROR = 1182,
+      EN_SESS_INFO_VERI_CLIENT_ID_ERROR = 1183,
+      EN_SESS_INFO_VERI_CONTROL_INFO_ERROR = 1184,
+      EN_SESS_INFO_VERI_TXN_EXTRA_INFO_ERROR = 1185,
       EN_ENABLE_NEWSORT_FORCE = 1200,
 
       // Transaction // 2001 - 2100
@@ -683,6 +706,8 @@ class EventTable
       // Transaction common
       EN_TX_RESULT_INCOMPLETE = 2011,
       EN_THREAD_HANG = 2022,
+
+      EN_ENABLE_SET_TRACE_CONTROL_INFO = 2100,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

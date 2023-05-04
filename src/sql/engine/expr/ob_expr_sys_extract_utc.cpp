@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprSysExtractUtc::ObExprSysExtractUtc(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_SYS_EXTRACT_UTC, N_SYS_EXTRACT_UTC, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_SYS_EXTRACT_UTC, N_SYS_EXTRACT_UTC, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -123,6 +123,7 @@ public:
     int64_t get_send_ts() { return send_ts_; }
     void set_payload(const int64_t payload) { payload_ = payload; }
     int64_t get_payload() { return payload_; }
+    obrpc::ObRpcPacketCode get_pcode() const { return static_cast<obrpc::ObRpcPacketCode>(pcode_); }
 
     void* low_level_cb_;
   private:

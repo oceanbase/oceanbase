@@ -68,7 +68,7 @@ int ObTxBaseLogCb::set_lsn(const LSN &lsn)
 }
 
 int ObTxLogCb::init(const ObLSID &key,
-    const ObTransID &trans_id, ObTransCtx *ctx)
+    const ObTransID &trans_id, ObTransCtx *ctx, const bool is_dynamic)
 {
   int ret = OB_SUCCESS;
 
@@ -85,6 +85,7 @@ int ObTxLogCb::init(const ObLSID &key,
     ctx_ = ctx;
     tx_data_guard_.reset();
     is_callbacked_ = false;
+    is_dynamic_ = is_dynamic;
   }
 
   return ret;
@@ -101,6 +102,7 @@ void ObTxLogCb::reset()
   tx_data_guard_.reset();
   callbacks_.reset();
   is_callbacked_ = false;
+  is_dynamic_ = false;
   cb_arg_array_.reset();
   mds_range_.reset();
   //is_callbacking_ = false;

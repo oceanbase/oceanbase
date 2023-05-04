@@ -84,6 +84,12 @@ private:
       return static_cast<int64_t>(table_id_);
     }
 
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
+
     bool operator== (const TableID &other) const
     {
       return table_id_ == other.table_id_;

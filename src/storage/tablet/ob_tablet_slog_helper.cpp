@@ -39,6 +39,8 @@ int ObTabletSlogHelper::write_create_tablet_slog(
   if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) { // make sure that all data or meta written on the macro block is flushed
+    LOG_WARN("fail to fsync_block", K(ret));
   } else {
     ObCreateTabletLog slog_entry(tablet_handle.get_obj());
     ObStorageLogParam log_param;
@@ -95,6 +97,8 @@ int ObTabletSlogHelper::write_create_tablet_slog(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(THE_IO_DEVICE->fsync_block())) { // make sure that all data or meta written on the macro block is flushed
+    LOG_WARN("fail to fsync_block", K(ret));
   } else if (OB_FAIL(MTL(ObStorageLogger*)->write_log(param_array))) {
     LOG_WARN("fail to write slog for batch creating tablet", K(ret), K(param_array));
   } else {

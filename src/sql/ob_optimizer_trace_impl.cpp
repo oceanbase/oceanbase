@@ -491,6 +491,9 @@ int ObOptimizerTraceImpl::append(const Path *path)
           ",width:", path->parent_->get_output_row_size());
     new_line();
     append("parallel:", path->parallel_, ",server count:", path->server_cnt_);
+    if (NULL != path->get_sharding()) {
+      append(",part count:", path->get_sharding()->get_part_cnt());
+    }
     decrease_section();
   }
   return ret;
@@ -526,6 +529,9 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
             ",width:", join_path->left_path_->parent_->get_output_row_size());
       new_line();
       append("parallel:", join_path->left_path_->parallel_, ",server count:", join_path->left_path_->server_cnt_);
+      if (NULL != join_path->left_path_->get_sharding()) {
+        append(",part count:", join_path->left_path_->get_sharding()->get_part_cnt());
+      }
       decrease_section();
     }
     new_line();
@@ -539,6 +545,9 @@ int ObOptimizerTraceImpl::append(const JoinPath* join_path)
             ",width:", join_path->right_path_->parent_->get_output_row_size());
       new_line();
       append("parallel:", join_path->right_path_->parallel_, ",server count:", join_path->right_path_->server_cnt_);
+      if (NULL != join_path->right_path_->get_sharding()) {
+        append(",part count:", join_path->right_path_->get_sharding()->get_part_cnt());
+      }
       decrease_section();
     }
     decrease_section();

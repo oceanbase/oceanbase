@@ -148,7 +148,6 @@ public:
   int is_replay_done(const share::ObLSID &id,
                      const palf::LSN &end_lsn,
                      bool &is_done);
-  int flashback(const share::ObLSID &id);
   int get_max_replayed_scn(const share::ObLSID &id, share::SCN &scn);
   int submit_task(ObReplayServiceTask *task);
   int update_replayable_point(const share::SCN &replayable_scn);

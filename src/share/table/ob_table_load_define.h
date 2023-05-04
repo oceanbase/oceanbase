@@ -12,6 +12,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 
 namespace oceanbase
 {
@@ -287,6 +288,11 @@ public:
     hash_val = common::murmurhash(&trans_gid_, sizeof(trans_gid_), hash_val);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const ObTableLoadTransId &other) const
   {
     return (segment_id_ != other.segment_id_ ? segment_id_.compare(other.segment_id_)
@@ -408,9 +414,9 @@ public:
   ~ObTableLoadSqlStatistics() { reset();}
   void reset() {
     for (int64_t i = 0; i < col_stat_array_.count(); ++i) {
-      ObOptColumnStat *col_stat = col_stat_array_.at(i);
+      ObOptOSGColumnStat *col_stat = col_stat_array_.at(i);
       if (col_stat != nullptr) {
-        col_stat->~ObOptColumnStat();
+        col_stat->~ObOptOSGColumnStat();
       }
     }
     col_stat_array_.reset();
@@ -448,23 +454,23 @@ public:
     }
     return ret;
   }
-  int allocate_col_stat(ObOptColumnStat *&col_stat)
+  int allocate_col_stat(ObOptOSGColumnStat *&col_stat)
   {
     int ret = OB_SUCCESS;
-    ObOptColumnStat *new_col_stat = OB_NEWx(ObOptColumnStat, (&allocator_), allocator_);
-    if (OB_ISNULL(new_col_stat)) {
+    ObOptOSGColumnStat *new_osg_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_);
+    if (OB_ISNULL(new_osg_col_stat) || OB_ISNULL(new_osg_col_stat->col_stat_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(WARN, "fail to allocate buffer", KR(ret));
-    } else if (OB_FAIL(col_stat_array_.push_back(new_col_stat))) {
+    } else if (OB_FAIL(col_stat_array_.push_back(new_osg_col_stat))) {
       OB_LOG(WARN, "fail to push back", KR(ret));
     } else {
-      col_stat = new_col_stat;
+      col_stat = new_osg_col_stat;
     }
     if (OB_FAIL(ret)) {
-      if (new_col_stat != nullptr) {
-        new_col_stat->~ObOptColumnStat();
-        allocator_.free(new_col_stat);
-        new_col_stat = nullptr;
+      if (new_osg_col_stat != nullptr) {
+        new_osg_col_stat->~ObOptOSGColumnStat();
+        allocator_.free(new_osg_col_stat);
+        new_osg_col_stat = nullptr;
       }
     }
     return ret;
@@ -499,29 +505,40 @@ public:
       }
     }
     for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
-      ObOptColumnStat *col_stat = other.col_stat_array_.at(i);
-      if (col_stat != nullptr) {
-        ObOptColumnStat *copied_col_stat = nullptr;
-        int64_t size = col_stat->size();
-        char *new_buf = nullptr;;
-        if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          OB_LOG(WARN, "fail to allocate buffer", KR(ret), K(size));
-        } else if (OB_FAIL(col_stat->deep_copy(new_buf, size, copied_col_stat))) {
-          OB_LOG(WARN, "fail to copy col stat", KR(ret));
-        } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
-          OB_LOG(WARN, "fail to add col stat", KR(ret));
+      ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
+      ObOptOSGColumnStat *copied_col_stat = nullptr;
+      if (OB_ISNULL(col_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "get unexpected null");
+      } else if (OB_ISNULL(copied_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "failed to create new col stat");
+      } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
+        OB_LOG(WARN, "fail to copy col stat", KR(ret));
+      } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
+        OB_LOG(WARN, "fail to add col stat", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (copied_col_stat != nullptr) {
+          copied_col_stat->~ObOptOSGColumnStat();
+          copied_col_stat = nullptr;
         }
-        if (OB_FAIL(ret)) {
-          if (copied_col_stat != nullptr) {
-            copied_col_stat->~ObOptColumnStat();
-            copied_col_stat = nullptr;
-          }
-          if (new_buf != nullptr) {
-            allocator_.free(new_buf);
-            new_buf = nullptr;
-          }
-        }
+      }
+    }
+    return ret;
+  }
+
+  int get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {
+      if (OB_ISNULL(col_stat_array_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "get unexpected null");
+      } else if (OB_FAIL(col_stat_array_.at(i)->set_min_max_datum_to_obj())) {
+        OB_LOG(WARN, "failed to persistence min max");
+      } else if (OB_FAIL(col_stat_array.push_back(col_stat_array_.at(i)->col_stat_))) {
+        OB_LOG(WARN, "failed to push back col stat");
       }
     }
     return ret;
@@ -529,7 +546,7 @@ public:
   TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 public:
   common::ObSEArray<ObOptTableStat *, 64> table_stat_array_;
-  common::ObSEArray<ObOptColumnStat *, 64> col_stat_array_;
+  common::ObSEArray<ObOptOSGColumnStat *, 64> col_stat_array_;
   common::ObArenaAllocator allocator_;
 };
 

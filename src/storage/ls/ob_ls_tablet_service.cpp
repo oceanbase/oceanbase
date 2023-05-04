@@ -3821,7 +3821,7 @@ int ObLSTabletService::insert_tablet_rows(
           && OB_FAIL(check_new_row_legitimacy(run_ctx, tbl_row.row_val_))) {
         LOG_WARN("check new row legitimacy failed", K(ret), K(tbl_row.row_val_));
     } else if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(table, run_ctx.store_ctx_,
-        *run_ctx.col_descs_, tbl_row))) {
+        *run_ctx.col_descs_, tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("fail to insert row to data tablet", K(ret), K(tbl_row));
       }
@@ -4504,7 +4504,7 @@ int ObLSTabletService::process_old_row(
       del_row.flag_.set_flag(ObDmlFlag::DF_DELETE);
       if (!is_delete_total_quantity_log) {
         if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-            run_ctx.store_ctx_, col_descs, del_row))) {
+            run_ctx.store_ctx_, col_descs, del_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to write data tablet row", K(ret), K(del_row));
           }
@@ -4516,7 +4516,7 @@ int ObLSTabletService::process_old_row(
         del_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
         ObSEArray<int64_t, 8> update_idx;
         if (OB_FAIL(tablet_handle.get_obj()->update_row(relative_table,
-            run_ctx.store_ctx_, col_descs, update_idx, del_row, new_tbl_row))) {
+            run_ctx.store_ctx_, col_descs, update_idx, del_row, new_tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to write data tablet row", K(ret), K(del_row), K(new_tbl_row));
           }
@@ -4629,14 +4629,14 @@ int ObLSTabletService::process_data_table_row(
         old_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
         old_row.row_val_ = old_tbl_row.row_val_;
         if (OB_FAIL(data_tablet.get_obj()->update_row(relative_table,
-            ctx, col_descs, update_idx, old_row, new_row))) {
+            ctx, col_descs, update_idx, old_row, new_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to update to row", K(ret), K(old_row), K(new_row));
           }
         }
       } else {
         if (OB_FAIL(data_tablet.get_obj()->insert_row_without_rowkey_check(relative_table,
-            ctx, col_descs, new_row))) {
+            ctx, col_descs, new_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to update to row", K(ret), K(new_row));
           }
@@ -5055,7 +5055,8 @@ int ObLSTabletService::insert_row_to_tablet(
                                                 relative_table,
                                                 store_ctx,
                                                 col_descs,
-                                                tbl_row))) {
+                                                tbl_row,
+                                                run_ctx.dml_param_.encrypt_meta_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
         LOG_WARN("failed to write table row", K(ret),
             "table id", relative_table.get_table_id(),
@@ -5220,7 +5221,7 @@ int ObLSTabletService::delete_row_in_tablet(
     LOG_WARN("failed to process old row lob col", K(ret), K(tbl_row));
   } else if (!dml_param.is_total_quantity_log_) {
     if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-        ctx, *run_ctx.col_descs_, tbl_row))) {
+        ctx, *run_ctx.col_descs_, tbl_row, dml_param.encrypt_meta_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
         LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(tbl_row));
       }
@@ -5234,7 +5235,7 @@ int ObLSTabletService::delete_row_in_tablet(
     new_tbl_row.row_val_ = tbl_row.row_val_;
     tbl_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
     if (OB_FAIL(tablet_handle.get_obj()->update_row(relative_table, ctx,
-        *run_ctx.col_descs_, update_idx, tbl_row, new_tbl_row))) {
+        *run_ctx.col_descs_, update_idx, tbl_row, new_tbl_row, dml_param.encrypt_meta_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
         LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(tbl_row), K(new_tbl_row));
       }

@@ -161,6 +161,8 @@ typedef int (*ob_charset_conv_wc_mb)(const struct ObCharsetInfo *, ob_wc_t,
 typedef size_t (*ob_charset_conv_case)(const struct ObCharsetInfo *,
                                        char *, size_t, char *, size_t);
 
+int init_gb18030_2022();
+
 extern ObUCAInfo ob_uca_v400;
 extern uchar ob_uca520_length[4352];
 extern uint16 *ob_uca520_weight[4352];
@@ -429,6 +431,13 @@ extern ObCharsetInfo ob_charset_utf16_bin;
 extern ObCharsetInfo ob_charset_gb18030_chinese_ci;
 extern ObCharsetInfo ob_charset_gb18030_chinese_cs;
 extern ObCharsetInfo ob_charset_gb18030_bin;
+extern ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci;
+extern ObCharsetInfo ob_charset_gb18030_2022_pinyin_cs;
+extern ObCharsetInfo ob_charset_gb18030_2022_radical_ci;
+extern ObCharsetInfo ob_charset_gb18030_2022_radical_cs;
+extern ObCharsetInfo ob_charset_gb18030_2022_stroke_ci;
+extern ObCharsetInfo ob_charset_gb18030_2022_stroke_cs;
+extern ObCharsetInfo ob_charset_gb18030_2022_bin;
 
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;

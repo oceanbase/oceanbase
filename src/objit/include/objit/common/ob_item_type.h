@@ -80,6 +80,7 @@ typedef enum ObItemType
   T_LOB         = 46,
   T_JSON        = 47,
   T_GEOMETRY    = 48,
+  T_UDT_SQL     = 49,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
@@ -202,7 +203,7 @@ typedef enum ObItemType
   T_OP_COLL_PRED = 177, // collection predicate, such as: xx is member of collection
   T_OP_BOOL = 178,
   T_OP_STACK_OVERFLOW_CHECK = 179,  // stack over flow check expr.
-  T_OP_JOIN_BLOOM_FILTER = 180,
+  T_OP_RUNTIME_FILTER = 180,
   T_OP_TO_OUTFILE_ROW = 181,
   // The aggregation version arithmetic operator is used to ignore the double overflow error,
   // because mysql do not check overflow for double in aggregation.
@@ -418,6 +419,7 @@ typedef enum ObItemType
   //following T_FUN_SYS_PART_HASH_V2 has been removed, it's useless now.
   T_FUN_SYS_PART_HASH_V2 = 697,
   T_FUN_SYS_SQL_MODE_CONVERT = 698,
+  T_FUN_SYS_PREFIX_PATTERN = 699,
 
   ///< @note add new mysql/oracle function type before this line
   T_COMMON_FUN_SYS_END = 700,
@@ -793,7 +795,20 @@ typedef enum ObItemType
   T_FUN_SYS_TREAT = 1687,
   T_NULLX_CLAUSE = 1688,   // null clause on json expr
   T_WEIGHT_STRING_LEVEL_PARAM = 1689, // `level 1-2` and `level 1,2,3` clause on json expr
+  T_FUN_SYS_NLS_INITCAP = 1690,
 
+  T_FUN_SYS_MAKEXML = 1691,
+  T_FUN_SYS_XML_ELEMENT = 1692,
+  T_FUN_SYS_XMLPARSE = 1693,
+  T_FUN_ORA_XMLAGG = 1694,
+  T_FUN_SYS_XML_ATTRIBUTES = 1695,
+  T_FUN_SYS_XML_EXTRACTVALUE = 1696,
+  T_FUN_SYS_XML_EXTRACT = 1697,
+  T_FUN_SYS_XML_SERIALIZE = 1698,
+  T_FUN_SYS_XMLCAST = 1699,
+  T_FUN_SYS_XML_ATTRIBUTES_VALUES = 1700,
+  T_FUN_SYS_UPDATE_XML = 1701,
+  T_FUN_SYS_PRIV_MAKE_XML_BINARY = 1702,  // add only for xml dml rewrite
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -819,6 +834,7 @@ typedef enum ObItemType
   T_PSEUDO_RANDOM = 3010,
   T_INNER_WF_AGGR_STAUTS = 3011,
   T_PSEUDO_GROUP_PARAM = 3040,
+  T_PSEUDO_EXTERNAL_FILE_COL = 3041,
 
   ///< @note values of the following symbols are insiginificant
   T_DEFAULT,
@@ -2005,6 +2021,7 @@ typedef enum ObItemType
   T_BACKUP_MANAGE,
   T_BACKUP_CLEAN,
   T_DELETE_POLICY,
+  T_BACKUP_KEY,
   T_RESTORE_TENANT_2,
   T_GEN_ROWS,
   T_LOAD_BATCH_SIZE,
@@ -2203,18 +2220,22 @@ typedef enum ObItemType
   T_TRACE_FORMAT,
   T_TG_ALTER_OPTIONS,
 
+  //for external table
   T_EXTERNAL_FILE_LOCATION,
   T_EXTERNAL_FILE_FORMAT,
   T_EXTERNAL_FILE_FORMAT_TYPE,
   T_EXTERNAL,
   T_ALTER_REFRESH_EXTERNAL_TABLE,
-
   T_SKIP_HEADER,
   T_SKIP_BLANK_LINE,
   T_TRIM_SPACE,
   T_NULL_IF_EXETERNAL,
   T_EMPTY_FIELD_AS_NULL,
+  T_EXTERNAL_FILE_PATTERN,
+
   T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
+  T_DYNAMIC_SAMPLING,
+  T_TABLE_DYNAMIC_SAMPLING,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2350,6 +2371,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_JSON_ARRAYAGG || (op) == T_FUN_JSON_OBJECTAGG ||\
                          (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
+                         (op) == T_FUN_ORA_XMLAGG || \
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR))
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \

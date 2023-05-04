@@ -404,6 +404,10 @@ public:
   inline bool is_object_type() const {
     return (is_record_type() || is_opaque_type()) && is_udt_type();
   }
+  //存储过程内部通过type定义的record
+  inline bool is_type_record() const {
+    return is_record_type() && !is_udt_type();
+  }
   inline bool is_lob_type() const {
     return PL_OBJ_TYPE == type_ && obj_type_.get_meta_type().is_lob_locator();
   }
@@ -739,6 +743,7 @@ enum ObPLCursorFlag {
   SESSION_CURSOR = 2, // this cursor is alloc in session memory
   TRANSFERING_RESOURCE = 4, // this cursor is returned by a udf
   SYNC_CURSOR = 8, // this cursor from package cursor sync, can not used by this server.
+  INVALID_CURSOR = 16, // this cursor is convert to a dbms cursor, invalid for dynamic cursor op.
 };
 class ObPLCursorInfo
 {
@@ -953,6 +958,9 @@ public:
 
   inline void set_sync_cursor() { set_flag_bit(SYNC_CURSOR); }
   inline bool is_sync_cursor() { return test_flag_bit(SYNC_CURSOR); }
+
+  inline void set_invalid_cursor() { set_flag_bit(INVALID_CURSOR); }
+  inline bool is_invalid_cursor() { return test_flag_bit(INVALID_CURSOR); }
 
   static int prepare_entity(sql::ObSQLSessionInfo &session, 
                             lib::MemoryContext &entity);

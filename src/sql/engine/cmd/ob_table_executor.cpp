@@ -44,6 +44,15 @@
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "lib/worker.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/external_table/ob_external_table_file_task.h"
+#include "share/external_table/ob_external_table_file_rpc_proxy.h"
+#include "observer/ob_srv_network_frame.h"
+#include "observer/dbms_job/ob_dbms_job_master.h"
+#include "observer/ob_inner_sql_connection_pool.h"
+#include "share/backup/ob_backup_io_adapter.h"
+#include "share/external_table/ob_external_table_file_rpc_processor.h"
+#include "share/external_table/ob_external_table_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -155,7 +164,8 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null column schema", K(ret));
-      } else if (column_schema->get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM) {
+      } else if (column_schema->get_column_id() < OB_END_RESERVED_COLUMN_ID_NUM ||
+                 column_schema->is_udt_hidden_column()) {
         // do nothing
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1, (0 == used_column_count)? "(": ", "))) {
         LOG_WARN("failed to print insert into string", K(ret), K(i));
@@ -468,7 +478,8 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
       ret = OB_NOT_INIT;
       LOG_WARN("get task executor context failed", K(ret));
-    } else if (OB_FAIL(ObPartitionExecutorUtils::calc_values_exprs(ctx, stmt))) {
+    } else if (!table_schema.is_external_table() //external table can not define partitions by create table stmt
+               && OB_FAIL(ObPartitionExecutorUtils::calc_values_exprs(ctx, stmt))) {
       LOG_WARN("compare range parition expr fail", K(ret));
     } else if (OB_FAIL(set_index_arg_list(ctx, stmt))) {
       LOG_WARN("fail to set index_arg_list", K(ret));
@@ -482,9 +493,24 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         LOG_WARN("schema_guard reset failed", K(ret));
       } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, res))) {
         LOG_WARN("rpc proxy create table failed", K(ret), "dst", common_rpc_proxy->get_server());
-      } else { /* do nothing */ }
-    } else if (OB_FAIL(execute_ctas(ctx, stmt, common_rpc_proxy))){  // 查询建表的处理
-      LOG_WARN("execute create table as select failed", K(ret));
+      } else {
+        if (table_schema.is_external_table()) {
+          //auto refresh after create external table
+          OZ (ObAlterTableExecutor::update_external_file_list(
+                table_schema.get_tenant_id(), res.table_id_,
+                table_schema.get_external_file_location(),
+                table_schema.get_external_file_location_access_info(),
+                table_schema.get_external_file_pattern(),
+                ctx));
+        }
+      }
+    } else {
+      if (table_schema.is_external_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create external table as select");
+      } else if (OB_FAIL(execute_ctas(ctx, stmt, common_rpc_proxy))){  // 查询建表的处理
+        LOG_WARN("execute create table as select failed", K(ret));
+      }
     }
 
     // only CTAS or create temperary table will make session_id != 0. If such table detected, set
@@ -742,6 +768,311 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   return ret;
 }
 
+int ObAlterTableExecutor::get_external_file_list(const ObString &location,
+                                                 ObIArray<ObString> &file_urls,
+                                                 ObIArray<int64_t> &file_sizes,
+                                                 const ObString &access_info,
+                                                 ObIAllocator &allocator,
+                                                 common::ObStorageType &storage_type)
+{
+  int ret = OB_SUCCESS;
+  ObExternalDataAccessDriver driver;
+  if (OB_FAIL(driver.init(location, access_info))) {
+    LOG_WARN("init external data access driver failed", K(ret));
+  } else if (OB_FAIL(driver.get_file_list(location, file_urls, allocator))) {
+    LOG_WARN("get file urls failed", K(ret));
+  } else if (OB_FAIL(driver.get_file_sizes(location, file_urls, file_sizes))) {
+    LOG_WARN("get file sizes failed", K(ret));
+  }
+  if (driver.is_opened()) {
+    storage_type = driver.get_storage_type();
+    driver.close();
+  }
+
+  LOG_DEBUG("show external table files", K(file_urls), K(storage_type), K(access_info));
+  return ret;
+}
+
+int ObAlterTableExecutor::filter_and_sort_external_files(const ObString &pattern,
+                                                         ObExecContext &exec_ctx,
+                                                         ObIArray<ObString> &file_urls,
+                                                         ObIArray<int64_t> &file_sizes) {
+  int ret = OB_SUCCESS;
+  const int64_t count = file_urls.count();
+  ObSEArray<int64_t, 8> tmp_file_sizes;
+  hash::ObHashMap<ObString, int64_t> file_map;
+  if (0 == count) {
+    /* do nothing */
+  } else if (OB_UNLIKELY(count != file_sizes.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("array size error", K(ret));
+  } else if (OB_FAIL(file_map.create(count, "ExtFileMap", "ExtFileMap"))) {
+      LOG_WARN("fail to init hashmap", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      if (OB_FAIL(file_map.set_refactored(file_urls.at(i), file_sizes.at(i)))) {
+        LOG_WARN("failed to set refactored to file_map", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObExternalTableUtils::filter_external_table_files(pattern, exec_ctx, file_urls))) {
+        LOG_WARN("failed to filter external table files");
+      }
+    }
+    if (OB_SUCC(ret)) {
+      std::sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
+        int64_t file_size = 0;
+        if (OB_FAIL(file_map.get_refactored(file_urls.at(i), file_size))) {
+          if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+          LOG_WARN("failed to get key meta", K(ret));
+        } else if (OB_FAIL(tmp_file_sizes.push_back(file_size))) {
+          LOG_WARN("failed to push back into tmp_file_sizes", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(file_sizes.assign(tmp_file_sizes))) {
+        LOG_WARN("failed to assign file_sizes", K(ret));
+      } else if (OB_FAIL(file_map.destroy())) {
+        LOG_WARN("failed to destory file_map");
+      }
+    }
+  }
+  LOG_TRACE("after filter external table files", K(ret), K(file_urls));
+  return ret;
+}
+
+int ObAlterTableExecutor::flush_external_file_cache(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObIArray<ObAddr> &all_servers)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator;
+  ObAsyncRpcTaskWaitContext<ObRpcAsyncFlushExternalTableKVCacheCallBack> context;
+  int64_t send_task_count = 0;
+  OZ (context.init());
+  OZ (context.get_cb_list().reserve(all_servers.count()));
+  for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); i++) {
+    ObFlushExternalTableFileCacheReq req;
+    int64_t timeout = ObExternalTableFileManager::CACHE_EXPIRE_TIME;
+    req.tenant_id_ = tenant_id;
+    req.table_id_ = table_id;
+    req.partition_id_ = 0;
+    ObRpcAsyncFlushExternalTableKVCacheCallBack* async_cb = nullptr;
+    if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncFlushExternalTableKVCacheCallBack, (&allocator), (&context)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate async cb memory", K(ret));
+    }
+    OZ (context.get_cb_list().push_back(async_cb));
+    OZ (GCTX.external_table_proxy_->to(all_servers.at(i))
+                                            .by(tenant_id)
+                                            .timeout(timeout)
+                                            .flush_file_kvcahce(req, async_cb));
+    if (OB_SUCC(ret)) {
+      send_task_count++;
+    }
+  }
+
+  context.set_task_count(send_task_count);
+
+  do {
+    int temp_ret = context.wait_executing_tasks();
+    if (OB_SUCCESS != temp_ret) {
+      LOG_WARN("fail to wait executing task", K(temp_ret));
+      if (OB_SUCC(ret)) {
+        ret = temp_ret;
+      }
+    }
+  } while(0);
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < context.get_cb_list().count(); i++) {
+    ret = context.get_cb_list().at(i)->get_task_resp().rcode_.rcode_;
+    if (OB_FAIL(ret)) {
+      if (OB_TIMEOUT == ret) {
+        // flush timeout is OK, because the file cache has already expire
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("async flush kvcache process failed", K(ret));
+      }
+    }
+  }
+  for (int64_t i = 0; i < context.get_cb_list().count(); i++) {
+    context.get_cb_list().at(i)->~ObRpcAsyncFlushExternalTableKVCacheCallBack();
+  }
+  return ret;
+}
+
+int ObAlterTableExecutor::collect_local_files_on_servers(
+    const uint64_t tenant_id,
+    const ObString &location,
+    ObIArray<ObAddr> &all_servers,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> target_servers;
+  ObArray<ObString> server_ip_port;
+
+  bool is_absolute_path = false;
+  const int64_t PREFIX_LEN = STRLEN(OB_FILE_PREFIX);
+  if (location.length() <= PREFIX_LEN) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid location", K(ret), K(location));
+  } else {
+    is_absolute_path = ('/' == location.ptr()[PREFIX_LEN]);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (is_absolute_path) {
+      std::sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
+                [](const ObAddr &l, const ObAddr &r) -> bool { return l < r; });
+      ObAddr pre_addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); i++) {
+        ObAddr &cur_addr = all_servers.at(i);
+        if (!cur_addr.is_equal_except_port(pre_addr)) {
+          pre_addr = cur_addr;
+          OZ(target_servers.push_back(cur_addr));
+        }
+      }
+    } else {
+      OZ (target_servers.assign(all_servers));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObAsyncRpcTaskWaitContext<ObRpcAsyncLoadExternalTableFileCallBack> context;
+    int64_t send_task_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_servers.count(); i++) {
+      const int64_t ip_len = 64;
+      char *ip_port_buffer = nullptr;
+      if (OB_ISNULL(ip_port_buffer = (char*)(allocator.alloc(ip_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate ip memory", K(ret));
+      }
+      OZ (target_servers.at(i).ip_port_to_string(ip_port_buffer, ip_len));
+      OZ (server_ip_port.push_back(ObString(ip_port_buffer)));
+    }
+    OZ (context.init());
+    OZ (context.get_cb_list().reserve(target_servers.count()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_servers.count(); i++) {
+      const int64_t timeout = 10 * 1000000L; //10s
+      ObRpcAsyncLoadExternalTableFileCallBack* async_cb = nullptr;
+      ObLoadExternalFileListReq req;
+      req.location_ = location;
+
+      if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncLoadExternalTableFileCallBack, (&allocator), (&context)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate async cb memory", K(ret));
+      }
+      OZ (context.get_cb_list().push_back(async_cb));
+      OZ (GCTX.external_table_proxy_->to(target_servers.at(i))
+                                        .by(tenant_id)
+                                        .timeout(timeout)
+                                        .load_external_file_list(req, async_cb));
+      if (OB_SUCC(ret)) {
+        send_task_count++;
+      }
+    }
+
+    context.set_task_count(send_task_count);
+
+    do {
+      int temp_ret = context.wait_executing_tasks();
+      if (OB_SUCCESS != temp_ret) {
+        LOG_WARN("fail to wait executing task", K(temp_ret));
+        if (OB_SUCC(ret)) {
+          ret = temp_ret;
+        }
+      }
+    } while(0);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < context.get_cb_list().count(); i++) {
+      if (OB_FAIL(context.get_cb_list().at(i)->get_task_resp().rcode_.rcode_)) {
+        LOG_WARN("async load files process failed", K(ret));
+      } else {
+        const ObIArray<ObString> &resp_array = context.get_cb_list().at(i)->get_task_resp().file_urls_;
+        OZ (append(file_sizes, context.get_cb_list().at(i)->get_task_resp().file_sizes_));
+        for (int64_t j = 0; OB_SUCC(ret) && j < resp_array.count(); j++) {
+          ObSqlString tmp_file_url;
+          ObString file_url;
+          OZ (tmp_file_url.append(server_ip_port.at(i)));
+          OZ (tmp_file_url.append("%"));
+          OZ (tmp_file_url.append(resp_array.at(j)));
+          OZ (ob_write_string(allocator, tmp_file_url.string(), file_url));
+          OZ (file_urls.push_back(file_url));
+        }
+      }
+      LOG_DEBUG("get external table file", K(context.get_cb_list().at(i)->get_task_resp().file_urls_));
+    }
+
+    for (int64_t i = 0; i < context.get_cb_list().count(); i++) {
+      context.get_cb_list().at(i)->~ObRpcAsyncLoadExternalTableFileCallBack();
+    }
+  }
+  LOG_DEBUG("update external table file list", K(ret), K(file_urls));
+  return ret;
+}
+
+int ObAlterTableExecutor::update_external_file_list(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObString &location,
+    const ObString &access_info,
+    const ObString &pattern,
+    ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObString, 8> file_urls;
+  ObSEArray<int64_t, 8> file_sizes;
+  ObArenaAllocator allocator;
+  ObSEArray<ObAddr, 8> all_servers;
+  OZ (GCTX.location_service_->external_table_get(tenant_id, table_id, all_servers));
+
+  if (ObSQLUtils::is_external_files_on_local_disk(location)) {
+    OZ (collect_local_files_on_servers(tenant_id, location, all_servers, file_urls, file_sizes, allocator));
+  } else {
+    OZ (ObExternalTableFileManager::get_instance().get_external_file_list_on_device(
+          location, file_urls, file_sizes, access_info, allocator));
+  }
+
+  OZ (filter_and_sort_external_files(pattern, exec_ctx, file_urls, file_sizes));
+
+  //TODO [External Table] opt performance
+  OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(tenant_id, table_id, file_urls, file_sizes));
+
+  OZ (flush_external_file_cache(tenant_id, table_id, all_servers));
+  return ret;
+}
+
+int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlterTableStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObAlterTableArg &arg = stmt.get_alter_table_arg();
+  int64_t option = stmt.get_alter_external_table_type();
+  switch (option) {
+    case T_ALTER_REFRESH_EXTERNAL_TABLE: {
+      OZ (update_external_file_list(stmt.get_tenant_id(),
+                                  arg.alter_table_schema_.get_table_id(),
+                                  arg.alter_table_schema_.get_external_file_location(),
+                                  arg.alter_table_schema_.get_external_file_location_access_info(),
+                                  arg.alter_table_schema_.get_external_file_pattern(),
+                                  ctx));
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected option", K(ret), K(option));
+    }
+
+  }
+  return ret;
+}
+
 int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -763,6 +1094,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       stmt.get_tg_arg().ddl_stmt_str_ = first_stmt;
       OZ (common_rpc_proxy->alter_trigger(stmt.get_tg_arg()), common_rpc_proxy->get_server());
     }
+  } else if (alter_table_arg.alter_table_schema_.is_external_table()) {
+    OZ (execute_alter_external_table(ctx, stmt));
   } else {
     ObSQLSessionInfo *my_session = NULL;
     obrpc::ObAlterTableRes res;
@@ -1625,6 +1958,8 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
       LOG_WARN("rpc proxy drop table failed", K(ret), "dst", common_rpc_proxy->get_server());
     } else if (res.is_valid() && OB_FAIL(ObDDLExecutorUtil::wait_ddl_retry_task_finish(res.tenant_id_, res.task_id_, *my_session, common_rpc_proxy, affected_rows))) {
       LOG_WARN("wait ddl finish failed", K(ret), K(res.tenant_id_), K(res.task_id_));
+    } else {
+      //do nothing
     }
   }
   return ret;

@@ -67,10 +67,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTableResolver);
   // function members
   uint64_t gen_column_id();
+  uint64_t gen_column_group_id();
   int64_t get_primary_key_size() const;
   int add_primary_key_part(const common::ObString &column_name, common::ObArray<ObColumnResolveStat> &stats, int64_t &pk_data_length);
   int add_hidden_tablet_seq_col();
+  int add_hidden_external_table_pk_col();
 
+  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                          ObSEArray<ObColumnSchemaV2, SEARRAY_INIT_NUM> &resolved_cols,
+                                          ObColumnSchemaV2 &udt_column);
+  int add_generated_hidden_column_for_udt(ObTableSchema &table_schema,
+                                          ObColumnSchemaV2 &udt_column);
   int check_column_name_duplicate(const ParseNode *node);
   int resolve_primary_key_node(const ParseNode &pk_node, common::ObArray<ObColumnResolveStat> &stats);
   int resolve_table_elements(const ParseNode *node,
@@ -141,6 +148,8 @@ private:
 
   common::ObSEArray<GenColExpr, 5> gen_col_exprs_;//store generated column and dependent exprs
   common::ObSEArray<ObRawExpr *, 5> constraint_exprs_;//store constraint exprs
+
+  uint64_t cur_column_group_id_;
 };
 
 } // end namespace sql

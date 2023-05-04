@@ -225,6 +225,7 @@ ob_set_subtarget(oblib_lib utility
   utility/ob_tracepoint.cpp
   utility/ob_utility.cpp
   utility/utility.cpp
+  utility/ob_backtrace.cpp
   utility/ob_proto_trans_util.cpp
 )
 

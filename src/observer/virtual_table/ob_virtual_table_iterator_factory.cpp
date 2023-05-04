@@ -196,7 +196,9 @@
 #include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
+#include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
+#include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 
 namespace oceanbase
 {
@@ -1886,6 +1888,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_PX_P2P_DATAHUB_TID: {
+            ObAllPxP2PDatahubTable *px_p2p_datahub = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllPxP2PDatahubTable, px_p2p_datahub))) {
+              px_p2p_datahub->set_allocator(&allocator);
+              px_p2p_datahub->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(px_p2p_datahub);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_TABLET_STORE_STAT_TID: {
             ObAllVirtualTabletStoreStat *part_table_store_stat = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTabletStoreStat, part_table_store_stat))) {
@@ -2321,6 +2332,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualThread *all_virtual_thread = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualThread, all_virtual_thread))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_thread);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TID: {
+            ObAllVirtualOptStatGatherMonitor *opt_stats_gather_stat = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualOptStatGatherMonitor, opt_stats_gather_stat))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualOptStatGatherMonitor", K(ret));
+            } else {
+              opt_stats_gather_stat->set_allocator(&allocator);
+              opt_stats_gather_stat->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(opt_stats_gather_stat);
             }
             break;
           }

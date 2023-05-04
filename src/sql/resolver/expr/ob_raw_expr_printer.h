@@ -141,6 +141,11 @@ private:
   int print_partition_exprs(ObWinFunRawExpr *expr);
   int print_order_items(ObWinFunRawExpr *expr);
   int print_window_clause(ObWinFunRawExpr *expr);
+  int print_xml_parse_expr(ObSysFunRawExpr *expr);
+  int print_xml_element_expr(ObSysFunRawExpr *expr);
+  int print_xml_attributes_expr(ObSysFunRawExpr *expr);
+  int print_xml_agg_expr(ObSysFunRawExpr *expr);
+  int print_xml_serialize_expr(ObSysFunRawExpr *expr);
 
   int print_type(const ObExprResType &dst_type);
 

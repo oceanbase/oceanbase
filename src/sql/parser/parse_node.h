@@ -160,7 +160,10 @@ typedef struct _ParseNode
   };
   const char *str_value_;
   int64_t str_len_;
-  int64_t str_off_; // 记录str在原始字符串中的起始偏移
+  union {
+    int64_t pl_str_off_; // pl层, 记录str在原始字符串中的起始偏移
+    int64_t sql_str_off_; // sql层, 记录str在原始字符串中的起始偏移
+  };
 
   /* 用于存放在词法阶段被特殊处理后丢失的文本串 eg: NULL, Date '2010-10-11',
    * 该文本串在fast parse参数化后，如果该参数作为plan cache中stmtkey的一部分，

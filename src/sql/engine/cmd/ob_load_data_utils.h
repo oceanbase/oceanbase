@@ -295,6 +295,7 @@ struct ObLoadDataGID
   void reset() { id = -1; }
   bool is_valid() const { return id  > 0; }
   uint64_t hash() const { return common::murmurhash(&id, sizeof(id), 0); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObLoadDataGID &other) const { return id == other.id; }
   void operator=(const ObLoadDataGID &other) { id = other.id; }
   int64_t id;

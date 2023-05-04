@@ -32,7 +32,7 @@ namespace sql
 {
 
 ObExprRegexpReplace::ObExprRegexpReplace(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_SYS_REGEXP_REPLACE, N_REGEXP_REPLACE, MORE_THAN_ONE)
+  : ObStringExprOperator(alloc, T_FUN_SYS_REGEXP_REPLACE, N_REGEXP_REPLACE, MORE_THAN_ONE, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

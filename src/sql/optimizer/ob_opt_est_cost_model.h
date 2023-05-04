@@ -19,6 +19,7 @@
 #include "sql/rewrite/ob_query_range_provider.h"
 #include "sql/optimizer/ob_opt_default_stat.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "share/stat/ob_opt_ds_stat.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ enum RowCountEstMethod
   DEFAULT_STAT,
   BASIC_STAT,    //use min/max/ndv to estimate row count
   STORAGE_STAT, //use storage layer to estimate row count
+  DYNAMIC_SAMPLING_STAT //use dynamic sampling to estimate row count
 };
 
 // all the table meta info need to compute cost
@@ -52,10 +54,9 @@ struct ObTableMetaInfo
       part_size_(0),
       average_row_size_(0),
       row_count_(0),
-      cost_est_type_(ObEstimateType::OB_CURRENT_STAT_EST),
       has_opt_stat_(false),
-      is_empty_table_(false),
-      micro_block_count_(-1)
+      micro_block_count_(-1),
+      table_type_(share::schema::MAX_TABLE_TYPE)
   { }
   virtual ~ObTableMetaInfo()
   { }
@@ -65,8 +66,7 @@ struct ObTableMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(part_count), K_(micro_block_size),
                K_(part_size), K_(average_row_size), K_(table_column_count),
                K_(table_rowkey_count), K_(table_row_count), K_(row_count),
-               K_(cost_est_type), K_(has_opt_stat),
-               K_(is_empty_table), K_(micro_block_count));
+               K_(micro_block_count), K_(table_type));
 
   /// the following fields come from schema info
   uint64_t ref_table_id_; //ref table id
@@ -82,10 +82,9 @@ struct ObTableMetaInfo
   double average_row_size_; //main table best partition average row size
 
   double row_count_;  // row count after filters, estimated by stat manager
-  ObEstimateType cost_est_type_; // cost estimation type
   bool has_opt_stat_;
-  bool is_empty_table_;
   int64_t micro_block_count_;  // main table micro block count
+  share::schema::ObTableType table_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableMetaInfo);
 };
@@ -924,13 +923,22 @@ public:
 	  /*
    * entry point for estimating table access cost
    */
-  int cost_table(ObCostTableScanInfo &est_cost_info,
+  int cost_table(const ObCostTableScanInfo &est_cost_info,
 								int64_t parallel,
 								double query_range_row_count,
 								double phy_query_range_row_count,
 								double &cost,
 								double &index_back_cost);
 
+  int cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
+                              const int64_t parallel,
+                              const double part_cnt_per_dop,
+                              double query_range_row_count,
+                              double phy_query_range_row_count,
+                              double &px_cost,
+                              double &cost);
+
+  int cost_px(int64_t parallel, double &px_cost);
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,
 								const common::ObIArray<ObExprResType> &order_col_types,
@@ -969,7 +977,7 @@ protected:
 																	double &cost);
 
   // estimate cost for non-virtual table
-  int cost_normal_table(ObCostTableScanInfo &est_cost_info,
+  int cost_normal_table(const ObCostTableScanInfo &est_cost_info,
 												int64_t parallel,
 												const double query_range_row_count,
 												const double phy_query_range_row_count,
@@ -978,7 +986,7 @@ protected:
 
   //estimate one batch
   int cost_table_one_batch(const ObCostTableScanInfo &est_cost_info,
-													const int64_t parallel,
+                          const double part_cnt_per_dop,
 													const common::ObSimpleBatch::ObBatchType &type,
 													const double logical_output_row_count,
 													const double physical_output_row_count,
@@ -1021,6 +1029,13 @@ protected:
                                               const ObCostTableScanInfo &est_cost_info,
                                               bool is_scan_index,
                                               double &res);
+  int cost_table_scan_one_batch_io_cost(double row_count,
+                                        const ObCostTableScanInfo &est_cost_info,
+                                        double &io_cost);
+  int cost_table_get_one_batch_io_cost(const double row_count,
+                                       const ObCostTableScanInfo &est_cost_info,
+																			 bool is_scan_index,
+                                       double &io_cost);
 
   int cost_skip_scan_prefix_scan_one_row(const ObCostTableScanInfo &est_cost_info,
                                          double &cost);

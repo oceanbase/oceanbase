@@ -138,6 +138,17 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
     first_row_fetched_ = true; // 控制不再主动调用 startup_msg_loop，后继 loop 都消息触发
   }
 
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout) OB_SUCCESS)) {
+    LOG_WARN("fifo qc not interrupt qc by design", K(ret), K(query_timeout));
+    sleep(14);
+    return ret;
+  }
+#endif
+
   while (OB_SUCC(ret)) {
     // rows must received by coord op instead of receive op, otherwise we will
     // trap in receive op and lose control.

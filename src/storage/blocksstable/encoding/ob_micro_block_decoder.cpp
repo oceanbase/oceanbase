@@ -126,7 +126,7 @@ ObColumnDecoderCtx ObMicroBlockDecoder::none_exist_column_decoder_ctx_;
 class ObTLDecoderCtxArray
 {
 public:
-  ObTLDecoderCtxArray(): ctxs_array_(), allocator_("TLDecoderCtx") {}
+  ObTLDecoderCtxArray(): ctxs_array_(), allocator_(SET_USE_500("TLDecoderCtx")) {}
 
   virtual ~ObTLDecoderCtxArray()
   {
@@ -877,8 +877,8 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     allocator_(nullptr),
     ctx_array_(nullptr),
     ctxs_(nullptr),
-    decoder_allocator_(ObModIds::OB_DECODER_CTX),
-    buf_allocator_("OB_MICB_DECODER")
+    decoder_allocator_(SET_USE_500(ObModIds::OB_DECODER_CTX)),
+    buf_allocator_(SET_USE_500("OB_MICB_DECODER"))
 {
   need_release_decoders_.set_allocator(&buf_allocator_);
 }
@@ -2101,8 +2101,9 @@ int ObMicroBlockDecoder::get_min_or_max(
       if (datum_buf[i].is_nop()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected datum, can not process in batch", K(ret), K(i));
+      } else if (OB_FAIL(agg_info.update_min_or_max(datum_buf[i]))) {
+        LOG_WARN("fail to update_min_or_max", K(ret), K(i), K(datum_buf[i]), K(agg_info));
       } else {
-        agg_info.update_min_or_max(datum_buf[i]);
         LOG_DEBUG("update min/max", K(i), K(datum_buf[i]), K(agg_info));
       }
     }

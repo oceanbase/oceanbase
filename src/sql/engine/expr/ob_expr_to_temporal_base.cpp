@@ -181,8 +181,9 @@ int calc_to_temporal_expr(const ObExpr &expr,
 ObExprToTemporalBase::ObExprToTemporalBase(ObIAllocator &alloc,
                                              ObExprOperatorType type,
                                              const char *name)
-    : ObFuncExprOperator(alloc, type, name, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, type, name, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprToTemporalBase::calc_result_typeN(ObExprResType &type,
                                              ObExprResType *types_array,

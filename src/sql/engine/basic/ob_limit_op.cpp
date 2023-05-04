@@ -409,6 +409,7 @@ int ObLimitOp::inner_get_next_batch(const int64_t max_row_cnt)
 int ObLimitOp::is_row_order_by_item_value_equal(bool &is_equal)
 {
   int ret = OB_SUCCESS;
+  int cmp_ret = 0;
   if (MY_SPEC.sort_columns_.empty()) {
     // %sort_columns_ is empty if order by const value, set is_equal to true directly.
     // pre_sort_columns_.store_row_ is NULL here.
@@ -422,9 +423,11 @@ int ObLimitOp::is_row_order_by_item_value_equal(bool &is_equal)
       ObDatum *datum = NULL;
       if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
         LOG_WARN("expression evaluate failed", K(ret));
+      } else if (expr->basic_funcs_->null_first_cmp_(
+                 pre_sort_columns_.store_row_->cells()[i], *datum, cmp_ret)) {
+        LOG_WARN("compare failed", K(ret));
       } else {
-        is_equal = 0 == expr->basic_funcs_->null_first_cmp_(
-            pre_sort_columns_.store_row_->cells()[i], *datum);
+        is_equal = 0 == cmp_ret;
       }
     }
   }
@@ -464,8 +467,14 @@ int ObLimitOp::compare_value_in_batch(bool &keep_iterating,
       for (int64_t col_idx = 0; OB_SUCC(ret) && keep_iterating && col_idx < datum_vectors.count();
                    ++col_idx) {
         ObExpr *expr = MY_SPEC.sort_columns_.at(col_idx);
-        keep_iterating = (0 == expr->basic_funcs_->null_first_cmp_(
-                pre_sort_columns_.store_row_->cells()[col_idx], *(datum_vectors[col_idx].at(row_idx))));
+        int cmp_ret = 0;
+        if (OB_FAIL(expr->basic_funcs_->null_first_cmp_(
+                    pre_sort_columns_.store_row_->cells()[col_idx],
+                    *(datum_vectors[col_idx].at(row_idx)), cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else {
+          keep_iterating = (0 == cmp_ret);
+        }
       }
       if (keep_iterating) {
           row_count_matched++;

@@ -353,5 +353,27 @@ int ObPLPackageState::convert_changed_info_to_string_kvs(ObPLExecCtx &pl_ctx, Ob
   return ret;
 }
 
+int ObPLPackageState::remove_user_variables_for_package_state(ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t var_count = vars_.count();
+  ObArenaAllocator allocator(ObModIds::OB_PL_TEMP);
+  ObString key;
+  for (int64_t var_idx = 0; var_idx < var_count; var_idx++) {
+    // ignore error code, reset all variables
+    key.reset();
+    if (OB_FAIL(make_pkg_var_kv_key(allocator, var_idx, VARIABLE, key))) {
+      LOG_WARN("make package var name failed", K(ret), K(package_id_), K(var_idx));
+    } else if (session.user_variable_exists(key)) {
+      if (OB_FAIL(session.remove_user_variable(key))) {
+        LOG_WARN("fail to remove user var", K(ret), K(key), K(package_id_), K(var_idx));
+      } else if (OB_FAIL(session.remove_changed_user_var(key))) {
+        LOG_WARN("fail to remove change user var", K(ret), K(key), K(package_id_), K(var_idx));
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace pl
 } // end namespace oceanbase

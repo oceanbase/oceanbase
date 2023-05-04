@@ -41,7 +41,7 @@ using InvokeFunc = std::function<int (const ObTenantMemoryMgr*)>;
 public:
   explicit ObTenantCtxAllocator(uint64_t tenant_id, uint64_t ctx_id = 0)
     : resource_handle_(), ref_cnt_(0), tenant_id_(tenant_id),
-      ctx_id_(ctx_id), obj_mgr_(*this, tenant_id_, ctx_id_),
+      ctx_id_(ctx_id), deleted_(false), obj_mgr_(*this, tenant_id_, ctx_id_),
       idle_size_(0), head_chunk_(), chunk_cnt_(0),
       chunk_freelist_mutex_(common::ObLatchIds::CHUNK_FREE_LIST_LOCK),
       using_list_mutex_(common::ObLatchIds::CHUNK_USING_LIST_LOCK),
@@ -81,6 +81,8 @@ public:
   {
     return reinterpret_cast<ObTenantCtxAllocator*&>(next_);
   }
+  void set_deleted(bool deleted) { deleted_ = deleted; }
+  bool has_deleted() const { return deleted_; }
 
   // will delete it
   virtual void *alloc(const int64_t size)
@@ -202,6 +204,7 @@ private:
   int64_t ref_cnt_;
   uint64_t tenant_id_;
   uint64_t ctx_id_;
+  bool deleted_;
   ObjectMgr obj_mgr_;
   int64_t idle_size_;
   AChunk head_chunk_;

@@ -25,6 +25,7 @@
 #include "rootserver/ob_locality_util.h"
 #include "rootserver/ob_zone_manager.h"
 #include "share/ob_cluster_role.h"
+#include "share/ob_rpc_struct.h"
 namespace oceanbase
 {
 namespace share
@@ -45,7 +46,6 @@ namespace rootserver
 {
 class ObDDLService;
 class ObUnitManager;
-class ObServerManager;
 class ObZoneManager;
 class ObLocalityDistribution;
 template <typename T>
@@ -603,14 +603,34 @@ public:
   virtual ~ObRootUtils() {}
 
   static int get_rs_default_timeout_ctx(ObTimeoutCtx &ctx);
-  static int get_invalid_server_list(const ObZoneManager &zone_mgr,
-                                     const ObServerManager &server_mgr,
-                                     common::ObIArray<common::ObAddr> &invalid_server_list);
-
-  static int get_stopped_zone_list(const ObZoneManager &zone_mgr,
-                                   const ObServerManager &server_mgr,
-                                   common::ObIArray<common::ObZone> &stopped_zone_list,
+  static int get_invalid_server_list(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    common::ObIArray<common::ObAddr> &invalid_server_list);
+  static int find_server_info(
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
+      const common::ObAddr &server,
+      share::ObServerInfoInTable &server_info);
+  static int get_servers_of_zone(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    const common::ObZone &zone,
+    ObIArray<common::ObAddr> &servers,
+    bool only_active_servers = false);
+  static int get_server_count(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    const ObZone &zone,
+    int64_t &alive_count,
+    int64_t &not_alive_count);
+  static int check_server_alive(
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
+      const common::ObAddr &server,
+      bool &is_alive);
+  static int get_server_resource_info(
+      const ObIArray<obrpc::ObGetServerResourceInfoResult> &server_resources_info,
+      const ObAddr &server,
+      share::ObServerResourceInfo &resource_info);
+  static int get_stopped_zone_list(common::ObIArray<common::ObZone> &stopped_zone_list,
                                    common::ObIArray<common::ObAddr> &stopped_server_list);
+  static bool have_other_stop_task(const ObZone &zone);
   static int check_primary_region_in_zonelist(share::schema::ObMultiVersionSchemaService *schema_service,
                                               ObDDLService *ddl_service,
                                               ObUnitManager &unit_mgr,
@@ -642,6 +662,17 @@ public:
                                      common::ObIArray<common::ObAddr> &this_server_list,
                                      common::ObIArray<common::ObAddr> &other_server_list,
                                      common::ObIArray<uint64_t> &tenant_ids);
+  static int get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role);
+
+  static int notify_switch_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const uint64_t tenant_id,
+      const obrpc::ObNotifySwitchLeaderArg &arg,
+      const ObIArray<common::ObAddr> &addr_list);
+  static int try_notify_switch_ls_leader(
+      obrpc::ObSrvRpcProxy *rpc_proxy,
+      const share::ObLSInfo &ls_info,
+      const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
 };
 

@@ -106,6 +106,8 @@ private:
                              const ObSqlString &pool_list,
                              obrpc::ObCreateTenantArg &arg);
   int convert_parameters(const share::ObPhysicalRestoreJob &job_info);
+  int restore_root_key(const share::ObPhysicalRestoreJob &job_info);
+  int restore_keystore(const share::ObPhysicalRestoreJob &job_info);
 
   int check_locality_valid(const share::schema::ZoneLocalityIArray &locality);
   int try_update_job_status(

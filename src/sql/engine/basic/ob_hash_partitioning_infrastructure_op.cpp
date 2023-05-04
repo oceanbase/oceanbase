@@ -17,12 +17,14 @@
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
-bool ObHashPartCols::equal(
+int ObHashPartCols::equal(
   const ObHashPartCols &other,
   const ObIArray<ObSortFieldCollation> *sort_collations,
-  const ObIArray<ObCmpFunc> *cmp_funcs) const
+  const ObIArray<ObCmpFunc> *cmp_funcs,
+  bool &result) const
 {
-  bool result = true;
+  int ret = OB_SUCCESS;
+  result = true;
   if (OB_ISNULL(sort_collations) || OB_ISNULL(cmp_funcs)) {
     result = false;
   } else if (use_expr_ || other.use_expr_) {
@@ -31,13 +33,15 @@ bool ObHashPartCols::equal(
     int cmp_result = 0;
     ObDatum *l_cells = store_row_->cells();
     ObDatum *r_cells = other.store_row_->cells();
-    for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
-      cmp_result = cmp_funcs->at(i).cmp_func_(l_cells[idx], r_cells[idx]);
+      if (OB_FAIL(cmp_funcs->at(i).cmp_func_(l_cells[idx], r_cells[idx], cmp_result))) {
+        LOG_WARN("do cmp failed", K(ret));
+      }
     }
     result = (0 == cmp_result);
   }
-  return result;
+  return ret;
 }
 
 int ObHashPartCols::equal_distinct(
@@ -63,14 +67,16 @@ int ObHashPartCols::equal_distinct(
     ObDatum *r_cell = nullptr;
     const int64_t right_batch_idx = eval_ctx->get_batch_idx();
     const int64_t left_batch_idx = batch_idx_;
-    for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
       batch_info_guard.set_batch_idx(left_batch_idx);
       //be careful left && right exprs are evaled in calc_hash_values
       l_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
       batch_info_guard.set_batch_idx(right_batch_idx);
       r_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
-      cmp_result = cmp_funcs->at(i).cmp_func_(*l_cell, *r_cell);
+      if (OB_FAIL(cmp_funcs->at(i).cmp_func_(*l_cell, *r_cell, cmp_result))) {
+        LOG_WARN("do cmp failed", K(ret));
+      }
     }
     //reset batch_idx before return 
     batch_info_guard.set_batch_idx(right_batch_idx);
@@ -79,10 +85,12 @@ int ObHashPartCols::equal_distinct(
     ObDatum *l_cells = store_row_->cells();
     ObDatum *r_cell = nullptr;
     // must evaled in calc_hash_values
-    for (int64_t i = 0; i < sort_collations->count() && 0 == cmp_result; ++i) {
+    for (int64_t i = 0; i < OB_SUCC(ret) && sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
       r_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
-      cmp_result = cmp_funcs->at(i).cmp_func_(l_cells[idx], *r_cell);
+      if (OB_FAIL(cmp_funcs->at(i).cmp_func_(l_cells[idx], *r_cell, cmp_result))) {
+        LOG_WARN("do cmp failed", K(ret));
+      }
     }
     result = (0 == cmp_result);
   }

@@ -124,7 +124,12 @@ public:
     allocer_.set_attr(node_attr);
     bucket_allocer_.set_attr(bucket_attr);
     return ht_.create(cal_next_prime(bucket_num), &allocer_, &bucket_allocer_);
-  };
+  }
+  int create(int64_t bucket_num,
+             const ObMemAttr &bucket_attr)
+  {
+    return create(bucket_num, bucket_attr, bucket_attr);
+  }
   int create(int64_t bucket_num, const lib::ObLabel &bucket_label,
              const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE, uint64_t tenant_id = OB_SERVER_TENANT_ID,
              uint64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID)
@@ -239,6 +244,29 @@ public:
     }
     return ret;
   };
+
+  // erase key value pair if pred is met
+  // thread safe erase, will add write lock to the bucket
+  // return value:
+  //   OB_SUCCESS for success
+  //   OB_HASH_NOT_EXIST for node not exists
+  //   others for error
+  template<class _pred>
+  int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL)
+  {
+    int ret = OB_SUCCESS;
+    pair_type pair;
+    if (NULL != value) {
+      if (OB_FAIL(ht_.erase_if(key, pred, is_erased, &pair))) {
+      } else if (is_erased && OB_FAIL(copy_assign(*value, pair.second))) {
+        HASH_WRITE_LOG(HASH_FATAL, "copy assign failed, ret=%d", ret);
+      }
+    } else {
+      ret = ht_.erase_if(key, pred, is_erased);
+    }
+    return ret;
+  }
+
   template <class _archive>
   int serialization(_archive &archive)
   {

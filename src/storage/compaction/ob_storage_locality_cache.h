@@ -102,7 +102,7 @@ private:
   ObMySQLProxy *sql_proxy_;
   void *alloc_buf_;
   common::DefaultPageAllocator allocator_;
-  common::ObArray<ObLSLocalityInCache, DefaultPageAllocator> ls_locality_array_;
+  common::ObArray<ObLSLocalityInCache> ls_locality_array_;
 };
 
 } // namespace compaction

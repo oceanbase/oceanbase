@@ -103,6 +103,7 @@ struct ObTxnFreeRouteCtx {
   void inc_global_version() { ++global_version_; }
   void reset_audit_record() { audit_record_.reset(); }
   uint64_t get_audit_record() const { return audit_record_.v_; }
+  int state_update_verify_by_version(const int64_t version) const;
 private:
   void reset_changed_() {
     _changed_ = false;

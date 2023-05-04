@@ -68,12 +68,20 @@ enum ObAllocPrio
 struct ObLabel
 {
   ObLabel()
-    : ObLabel(nullptr)
+    : str_(nullptr)
   {}
-  template<typename T>
-  ObLabel(const T &t)
+  template<std::size_t N>
+  ObLabel(const char (&str)[N])
   {
-    *this = t;
+    STATIC_ASSERT(N - 1 <= AOBJECT_LABEL_SIZE,
+        "label length longer than 15 is not allowed!");
+    str_ = str;
+  }
+  template <typename T, typename DUMP_T=
+            typename std::enable_if<std::is_convertible<T, const char*>::value>::type>
+  ObLabel(T str)
+  {
+    str_ = str;
   }
   // The caller needs to ensure that it ends with'\0'
   template<std::size_t N>
@@ -111,6 +119,7 @@ struct ObLabel
 
 struct ObMemAttr
 {
+  friend ObMemAttr DoNotUseMe(ObMemAttr &attr);
   uint64_t tenant_id_;
   ObLabel label_;
   uint64_t ctx_id_;
@@ -126,7 +135,32 @@ struct ObMemAttr
         ctx_id_(ctx_id),
         prio_(prio) {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
+  bool use_500() const { return use_500_; }
+private:
+  bool use_500_ = false;
 };
+
+inline ObMemAttr DoNotUseMe(ObMemAttr &attr)
+{
+#ifdef ENABLE_500_FALLBACK
+  attr.use_500_ = true;
+#endif
+  return attr;
+}
+
+inline ObMemAttr DoNotUseMe(const ObMemAttr &&attr)
+{
+  ObMemAttr attr_cpy = attr;
+  return DoNotUseMe(attr_cpy);
+}
+
+inline ObMemAttr DoNotUseMe(const ObLabel &label)
+{
+  ObMemAttr attr(OB_SERVER_TENANT_ID, label);
+  return DoNotUseMe(attr);
+}
+
+#define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args)
 
 struct AllocHelper
 {

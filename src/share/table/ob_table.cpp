@@ -299,11 +299,11 @@ int ObTableEntity::set_rowkey(const ObITableEntity &other)
 
 int64_t ObTableEntity::hash_rowkey() const
 {
-  int64_t hash_value = 0;
+  uint64_t hash_value = 0;
   const int64_t N = rowkey_.count();
   for (int64_t i = 0; i < N; ++i)
   {
-    hash_value = rowkey_.at(i).hash(hash_value);
+    rowkey_.at(i).hash(hash_value, hash_value);
   } // end for
   return hash_value;
 }
@@ -1641,12 +1641,12 @@ ObTableApiCredential::~ObTableApiCredential()
 
 }
 
-uint64_t ObTableApiCredential::hash(uint64_t seed /*= 0*/) const
+int ObTableApiCredential::hash(uint64_t &hash_val, uint64_t seed /*= 0*/) const
 {
-  uint64_t hash_val = murmurhash(&cluster_id_, sizeof(cluster_id_), seed);
+  hash_val = murmurhash(&cluster_id_, sizeof(cluster_id_), seed);
   hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
   hash_val = murmurhash(&user_id_, sizeof(user_id_), hash_val);
   hash_val = murmurhash(&database_id_, sizeof(database_id_), hash_val);
   hash_val = murmurhash(&expire_ts_, sizeof(expire_ts_), hash_val);
-  return hash_val;
+  return OB_SUCCESS;
 }

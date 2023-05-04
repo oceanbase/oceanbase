@@ -22,6 +22,7 @@
 #include "lib/thread/thread_mgr.h"
 #include "lib/utility/ob_print_utils.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -29,11 +30,18 @@ using namespace lib;
 
 namespace common
 {
-void __attribute__((weak)) get_tenant_ids(uint64_t *ids, int cap, int &cnt)
+
+void get_tenant_ids(uint64_t *ids, int cap, int &cnt)
 {
+  auto *instance = ObMallocAllocator::get_instance();
   cnt = 0;
-  if (cap > 0) {
-    ids[cnt++] = OB_SERVER_TENANT_ID;
+  for (uint64_t tenant_id = 1; tenant_id <= instance->get_max_used_tenant_id() && cnt < cap; ++tenant_id) {
+    if (nullptr != instance->get_tenant_ctx_allocator(tenant_id,
+                                                      ObCtxIds::DEFAULT_CTX_ID) ||
+        nullptr != instance->get_tenant_ctx_allocator_unrecycled(tenant_id,
+                                                                 ObCtxIds::DEFAULT_CTX_ID)) {
+      ids[cnt++] = tenant_id;
+    }
   }
 }
 
@@ -170,14 +178,10 @@ void ObMemoryDump::destroy()
 int ObMemoryDump::push(void *task)
 {
   int ret = OB_SUCCESS;
-  const bool enable_dump = lib::is_trace_log_enabled();
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (NULL == task) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (!enable_dump) {
-    // do nothing
-    free_task(task);
   } else {
     ret = queue_.push(task);
     if (OB_SIZE_OVERFLOW == ret) {
@@ -203,14 +207,13 @@ void ObMemoryDump::run1()
   SANITY_DISABLE_CHECK_RANGE(); // prevent sanity_check_range
   int ret = OB_SUCCESS;
   lib::set_thread_name("MemoryDump");
-  static int64_t last_dump_ts = ObTimeUtility::current_time();
-  const bool enable_dump = lib::is_trace_log_enabled();
-  while (!has_set_stop() && enable_dump) {
+  static int64_t last_dump_ts = common::ObClockGenerator::getClock();
+  while (!has_set_stop()) {
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, 100 * 1000))) {
       handle(task);
     } else if (OB_ENTRY_NOT_EXIST == ret) {
-      int64_t current_ts = ObTimeUtility::current_time();
+      int64_t current_ts = common::ObClockGenerator::getClock();
       if (current_ts - last_dump_ts > STAT_LABEL_INTERVAL) {
         auto *task = alloc_task();
         if (OB_ISNULL(task)) {
@@ -223,6 +226,8 @@ void ObMemoryDump::run1()
           }
         }
         last_dump_ts = current_ts;
+      } else {
+        ob_usleep(current_ts - last_dump_ts);
       }
     }
   }
@@ -377,13 +382,9 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     } else {
       hold = align_up2(chunk->alloc_bytes_ + ACHUNK_HEADER_SIZE, get_page_size());
     }
-    char label[AOBJECT_LABEL_SIZE + 1];
-    STRNCPY(label, object->label_, sizeof(label));
-    label[sizeof(label) - 1] = '\0';
-    int len = strlen(label);
-    ObString str(len, label);
     LabelItem *litem = nullptr;
-    LabelInfoItem *linfoitem = lmap.get(str);
+    auto key = std::make_pair(*(uint64_t*)object->label_, *((uint64_t*)object->label_ + 1));
+    LabelInfoItem *linfoitem = lmap.get(key);
     int64_t bt_size = object->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0;
     if (NULL != linfoitem) {
       // exist
@@ -405,15 +406,15 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         LOG_WARN("label cnt too large", K(ret), K(item_cap), K(item_used));
       } else {
         litem = &items[item_used++];
-        MEMCPY(litem->str_, label, len);
-        litem->str_[len] = '\0';
-        litem->str_len_ = len;
+        STRNCPY(litem->str_, object->label_, sizeof(litem->str_));
+        litem->str_[sizeof(litem->str_) - 1] = '\0';
+        litem->str_len_ = strlen(litem->str_);
         litem->hold_ = hold;
         litem->used_ = (object->alloc_bytes_ - bt_size);
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
-        ret = lmap.set_refactored(ObString(litem->str_len_, litem->str_), LabelInfoItem(litem, chunk, block));
+        ret = lmap.set_refactored(key, LabelInfoItem(litem, chunk, block));
       }
     }
   }

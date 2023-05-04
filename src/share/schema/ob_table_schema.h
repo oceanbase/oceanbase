@@ -606,10 +606,25 @@ public:
       const ObTabletID &tablet_id,
       int64_t &part_id,
       int64_t &subpart_id) const;
+  /**
+   * first_level_part_id represent the first level part id of subpartition,
+   * otherwise its value is OB_INVALID_ID
+   * e.g.
+   *  PARTITION_LEVEL_ZERO
+   *    - object_id = table_id
+   *    - first_level_part_id = OB_INVALID_ID
+   *  PARTITION_LEVEL_ONE
+   *    - object_id = part_id
+   *    - first_level_part_id = OB_INVALID_ID
+   * PARTITION_LEVEL_TWO
+   *    - object_id = sub_part_id
+   *    - first_level_part_id = part_id
+  */
   int get_part_id_and_tablet_id_by_idx(
       const int64_t part_idx,
       const int64_t subpart_idx,
       common::ObObjectID &object_id,
+      common::ObObjectID &first_level_part_id,
       common::ObTabletID &tablet_id) const;
   int get_part_by_idx(
       const int64_t part_id,
@@ -721,6 +736,7 @@ public:
   { return MATERIALIZED_VIEW == table_type; }
   inline bool is_in_recyclebin() const
   { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
+  inline bool is_external_table() const { return EXTERNAL_TABLE == table_type_; }
   inline ObTenantTableId get_tenant_table_id() const
   { return ObTenantTableId(tenant_id_, table_id_); }
   inline ObTenantTableId get_tenant_data_table_id() const
@@ -964,6 +980,10 @@ public:
   int set_compress_func_name(const char *compressor);
   int set_compress_func_name(const common::ObString &compressor);
   inline void set_dop(int64_t table_dop) { table_dop_ = table_dop; }
+  int set_external_file_location(const common::ObString &location) { return deep_copy_str(location, external_file_location_); }
+  int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
+  int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
+  int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   template<typename ColumnType>
   int add_column(const ColumnType &column);
   int delete_column(const common::ObString &column_name);
@@ -1086,6 +1106,10 @@ public:
 
   inline uint64_t get_index_attributes_set() const { return index_attributes_set_; }
   inline int64_t get_dop() const  { return table_dop_; }
+  const ObString &get_external_file_location() const { return external_file_location_; }
+  const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
+  const ObString &get_external_file_format() const { return external_file_format_; }
+  const ObString &get_external_file_pattern() const { return external_file_pattern_; }
   inline bool is_index_visible() const
   {
     return 0 == (index_attributes_set_ & ((uint64_t)(1) << INDEX_VISIBILITY));
@@ -1137,6 +1161,7 @@ public:
   bool has_generated_and_partkey_column() const;
   // Check whether the data table column has prefix index column deps.
   int check_prefix_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
+  int check_functional_index_columns_depend(const ObColumnSchemaV2 &data_column_schema, ObSchemaGetterGuard &schema_guard, bool &has_prefix_idx_col_deps) const;
   int add_base_table_id(uint64_t base_table_id) { return base_table_ids_.push_back(base_table_id); }
   int add_depend_table_id(uint64_t depend_table_id) { return depend_table_ids_.push_back(depend_table_id); }
   int add_depend_mock_fk_parent_table_id(uint64_t depend_table_id) { return depend_mock_fk_parent_table_ids_.push_back(depend_table_id); }
@@ -1219,10 +1244,26 @@ public:
   virtual int deserialize_columns(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize_constraints(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_constraints(const char *buf, const int64_t data_len, int64_t &pos);
-  // FIXME: move to ObPartitionSchema
-  // this function won't reset tablet_ids/partition_ids first, should be careful
+  /**
+   * FIXME: move to ObPartitionSchema
+   * this function won't reset tablet_ids/partition_ids first, should be careful!!!
+   *
+   * first_level_part_ids represent the first level part id of subpartition,
+   * otherwise its value is OB_INVALID_ID
+   * e.g.
+   *  PARTITION_LEVEL_ZERO
+   *    - partition_id = table_id
+   *    - first_level_part_id = OB_INVALID_ID
+   *  PARTITION_LEVEL_ONE
+   *    - partition_id = part_id
+   *    - first_level_part_id = OB_INVALID_ID
+   * PARTITION_LEVEL_TWO
+   *    - partition_id = sub_part_id
+   *    - first_level_part_id = part_id
+  */
   int get_all_tablet_and_object_ids(common::ObIArray<ObTabletID> &tablet_ids,
-                                    common::ObIArray<ObObjectID> &partition_ids) const;
+                                    common::ObIArray<ObObjectID> &partition_ids,
+                                    ObIArray<ObObjectID> *first_level_part_ids = NULL) const;
 
   virtual int alloc_partition(const ObPartition *&partition);
   virtual int alloc_partition(const ObSubPartition *&subpartition);
@@ -1284,6 +1325,8 @@ public:
                                     bool &trigger_exist) const;
   int has_before_update_row_trigger(ObSchemaGetterGuard &schema_guard,
                                     bool &trigger_exist) const;
+  int is_allow_parallel_of_trigger(ObSchemaGetterGuard &schema_guard,
+                                    bool &is_forbid_parallel) const;
 
   //label security
   inline bool has_label_se_column() const { return label_se_column_ids_.count() > 0; }
@@ -1341,6 +1384,11 @@ public:
                               const int32_t dst_col_byte_len,
                               const bool is_oracle_mode,
                               bool &is_offline) const;
+
+
+  int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
+                                          common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const;
+  ObColumnSchemaV2* get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const;
   bool is_same_type_category(const ObColumnSchemaV2 &src_column,
                              const ObColumnSchemaV2 &dst_column) const;
   int check_has_trigger_on_table(ObSchemaGetterGuard &schema_guard,
@@ -1553,6 +1601,12 @@ protected:
   common::ObSArray<uint64_t> rls_policy_ids_;
   common::ObSArray<uint64_t> rls_group_ids_;
   common::ObSArray<uint64_t> rls_context_ids_;
+
+  //external table
+  common::ObString external_file_format_;
+  common::ObString external_file_location_;
+  common::ObString external_file_location_access_info_;
+  common::ObString external_file_pattern_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

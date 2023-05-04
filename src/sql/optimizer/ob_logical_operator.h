@@ -259,6 +259,10 @@ struct partition_location
 #define IS_EXPR_PASSBY_OPER(type) (log_op_def::LOG_GRANULE_ITERATOR == (type)    \
                                    || log_op_def::LOG_MONITORING_DUMP == (type)) \
 
+/**
+ * these operator never generate expr except for its fixed expr
+ */
+#define IS_OUTPUT_EXPR_PASSBY_OPER(type) (log_op_def::LOG_SORT == (type))
 
 struct FilterCompare
 {
@@ -451,7 +455,10 @@ struct ObExchangeInfo
     wf_hybrid_aggr_status_expr_(NULL),
     wf_hybrid_pby_exprs_cnt_array_(),
     may_add_interval_part_(MayAddIntervalPart::NO),
-    sample_type_(NOT_INIT_SAMPLE_TYPE)
+    sample_type_(NOT_INIT_SAMPLE_TYPE),
+    parallel_(ObGlobalHint::UNSET_PARALLEL),
+    server_cnt_(0),
+    server_list_()
   {
     repartition_table_id_ = 0;
   }
@@ -511,6 +518,9 @@ struct ObExchangeInfo
   MayAddIntervalPart may_add_interval_part_;
   // sample type for range distribution or partition range distribution
   ObPxSampleType sample_type_;
+  int64_t parallel_;
+  int64_t server_cnt_;
+  common::ObSEArray<common::ObAddr, 4> server_list_;
 
   TO_STRING_KV(K_(is_remote),
                K_(is_task_order),
@@ -534,7 +544,10 @@ struct ObExchangeInfo
                K_(is_wf_hybrid),
                K_(wf_hybrid_pby_exprs_cnt_array),
                K_(may_add_interval_part),
-               K_(sample_type));
+               K_(sample_type),
+               K_(parallel),
+               K_(server_cnt),
+               K_(server_list));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };
@@ -549,16 +562,14 @@ public:
       : expr_(NULL),
       producer_branch_(common::OB_INVALID_ID),
       consumer_id_(common::OB_INVALID_ID),
-      producer_id_(common::OB_INVALID_ID),
-      is_shared_(false)
+      producer_id_(common::OB_INVALID_ID)
   {
   }
   ExprProducer(ObRawExpr* expr, int64_t consumer_id)
       : expr_(expr),
       producer_branch_(common::OB_INVALID_ID),
       consumer_id_(consumer_id),
-      producer_id_(common::OB_INVALID_ID),
-      is_shared_(false)
+      producer_id_(common::OB_INVALID_ID)
   {
   }
 
@@ -568,8 +579,7 @@ public:
       : expr_(expr),
         producer_branch_(common::OB_INVALID_ID),
         consumer_id_(consumer_id),
-        producer_id_(producer_id),
-        is_shared_(false)
+        producer_id_(producer_id)
   {
   }
 
@@ -577,8 +587,7 @@ public:
       : expr_(other.expr_),
       producer_branch_(other.producer_branch_),
       consumer_id_(other.consumer_id_),
-      producer_id_(other.producer_id_),
-      is_shared_(other.is_shared_)
+      producer_id_(other.producer_id_)
   {
   }
 
@@ -588,10 +597,9 @@ public:
     producer_branch_ = other.producer_branch_;
     consumer_id_ = other.consumer_id_;
     producer_id_ = other.producer_id_;
-    is_shared_ = other.is_shared_;
     return *this;
   }
-  TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), K(is_shared_), K(expr_), KPC_(expr));
+  TO_STRING_KV(K_(consumer_id), K_(producer_id), K_(producer_branch), KPC_(expr));
 
   ObRawExpr *expr_;
   // 一般情况下可以忽略这个变量，简单把它理解成一个 bool 变量，
@@ -617,8 +625,6 @@ public:
   // 如果看完还不明白，请直接 @溪峰
   uint64_t consumer_id_;
   uint64_t producer_id_;
-
-  bool is_shared_;
 };
 
 struct ObAllocExprContext
@@ -1183,8 +1189,14 @@ public:
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs);
 
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed);
+
+  int contain_my_fixed_expr(const ObRawExpr *expr, bool &is_contain);
   int get_next_producer_id(ObLogicalOperator *node,
                            uint64_t &producer_id);
+  int add_exprs_to_op_and_ctx(ObAllocExprContext &ctx,
+                              const ObIArray<ObRawExpr*> &exprs);
+  int add_exprs_to_op(const ObIArray<ObRawExpr*> &exprs);
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs);
   int build_and_put_pack_expr(ObIArray<ObRawExpr*> &output_exprs);
@@ -1194,11 +1206,19 @@ public:
   int add_exprs_to_ctx(ObAllocExprContext &ctx,
                        const ObIArray<ObRawExpr*> &exprs,
                        uint64_t producer_id);
+  int add_expr_to_ctx(ObAllocExprContext &ctx,
+                      ObRawExpr* epxr,
+                      uint64_t producer_id);
 
   bool can_update_producer_id_for_shared_expr(const ObRawExpr *expr);
 
   int extract_non_const_exprs(const ObIArray<ObRawExpr*> &input_exprs,
                               ObIArray<ObRawExpr*> &non_const_exprs);
+  int check_need_pushdown_expr(const bool producer_id,
+                               bool &need_pushdown);
+  int check_can_pushdown_expr(const ObRawExpr *expr, bool &can_pushdown);
+  int get_pushdown_producer_id(const ObRawExpr *expr, uint64_t &producer_id);
+
   int force_pushdown_exprs(ObAllocExprContext &ctx);
   int get_pushdown_producer_id(uint64_t &producer_id);
 
@@ -1213,6 +1233,8 @@ public:
   int find_consumer_id_for_shared_expr(const ObIArray<ExprProducer> *ctx,
                                        const ObRawExpr *expr,
                                        uint64_t &consumer_id);
+  int find_producer_id_for_shared_expr(const ObRawExpr *expr,
+                                       uint64_t &producer_id);
   /**
    *  Allocate output expr post-traverse
    *
@@ -1263,7 +1285,8 @@ public:
   virtual int est_cost()
   { return OB_SUCCESS; }
 
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost);
+  int re_est_cost(EstimateCostInfo &param, double &card, double &cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost);
 
   /**
    * @brief compute_property
@@ -1279,6 +1302,16 @@ public:
    * 4. est_sel_info, 5. cost, card, width
    */
   virtual int compute_property();
+
+  int check_property_valid() const;
+  int compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise);
+  int set_parallel_and_server_info_for_match_all();
+  int get_limit_offset_value(ObRawExpr *percent_expr,
+                             ObRawExpr *limit_expr,
+                             ObRawExpr *offset_expr,
+                             double &limit_percent,
+                             int64_t &limit_count,
+                             int64_t &offset_count);
 
   /**
    *  Pre-traverse function for allocating granule iterator
@@ -1334,9 +1367,9 @@ public:
    */
   int check_has_exchange_below(bool &has_exchange) const;
   /**
-   * Allocate bloom filter operator.
+   * Allocate runtime filter operator.
    */
-  int allocate_bf_node_for_hash_join(AllocBloomFilterContext &ctx);
+  int allocate_runtime_filter_for_hash_join(AllocBloomFilterContext &ctx);
 
   static int check_is_table_scan(const ObLogicalOperator &op,
                                  bool &is_table_scan);
@@ -1467,7 +1500,7 @@ public:
     inherit_sharding_index_ = inherit_sharding_index;
   }
 
-  inline bool get_allocated_osg() const { return allocated_osg_; }
+  inline bool has_allocated_osg() const { return allocated_osg_; }
   inline void set_allocated_osg(bool allocated_osg)
   {
     allocated_osg_ = allocated_osg;
@@ -1559,6 +1592,10 @@ public:
                             ObIArray<ObRawExpr *> &part_cols) const;
   inline void set_parallel(int64_t parallel) { parallel_ = parallel; }
   inline int64_t get_parallel() const { return parallel_; }
+  inline void set_op_parallel_rule(OpParallelRule op_parallel_rule) { op_parallel_rule_ = op_parallel_rule; }
+  inline OpParallelRule get_op_parallel_rule() const { return op_parallel_rule_; }
+  inline int64_t get_available_parallel() const { return available_parallel_; }
+  inline void set_available_parallel(int64_t available_parallel) { available_parallel_ = available_parallel; }
   inline void set_server_cnt(int64_t count) { server_cnt_ = count; }
   inline int64_t get_server_cnt() const { return server_cnt_; }
 
@@ -1622,6 +1659,8 @@ public:
                                const ObIArray<ObExecParamRawExpr*> &exec_params,
                                ObIArray<ObExecParamRawExpr *> &left_above_params,
                                ObIArray<ObExecParamRawExpr *> &right_above_params);
+  // 生成 partition id 表达式
+  int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1662,8 +1701,6 @@ protected:
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
 protected:
-  // 生成 partition id 表达式
-  int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
     flags |= method;
@@ -1741,9 +1778,27 @@ private:
                                      int64_t &filter_id);
   int allocate_normal_join_filter(const ObIArray<JoinFilterInfo> &infos,
                                   int64_t &filter_id);
-  int mark_bloom_filter_id_to_receive_op(ObLogicalOperator *filter_use, int64_t filter_id);
-  int push_down_bloom_filter_expr(ObLogicalOperator *op,
-      ObLogicalOperator *join_filter_op, double join_filter_rate);
+  int create_runtime_filter_info(
+      ObLogicalOperator *op,
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      double join_filter_rate);
+  int add_join_filter_info(
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      ObRawExpr *join_filter_expr,
+      RuntimeFilterType type);
+  int add_partition_join_filter_info(
+      ObLogicalOperator *join_filter_creare_op,
+      RuntimeFilterType type);
+  int generate_runtime_filter_expr(
+      ObLogicalOperator *op,
+      ObLogicalOperator *join_filter_creare_op,
+      ObLogicalOperator *join_filter_use_op,
+      double join_filter_rate,
+      RuntimeFilterType type);
+
+
   /* manual set dop for each dfo */
   int refine_dop_by_hint();
   int check_has_temp_table_access(ObLogicalOperator *cur, bool &has_temp_table_access);
@@ -1755,6 +1810,7 @@ private:
   int need_alloc_material_for_shared_hj(ObLogicalOperator &curr_op, bool &need_alloc);
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
+  int check_need_parallel_valid(int64_t need_parallel) const;
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator
@@ -1802,6 +1858,8 @@ protected:
   const ObRelIds &empty_table_set_;
   int64_t interesting_order_info_;  // 记录算子的序在stmt中的哪些地方用到 e.g. join, group by, order by
   int64_t parallel_;
+  OpParallelRule op_parallel_rule_;
+  int64_t available_parallel_;  // parallel degree used by serial op to enable parallel again
   int64_t server_cnt_;
   ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
   bool need_late_materialization_;

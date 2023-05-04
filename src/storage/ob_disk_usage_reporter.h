@@ -18,6 +18,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_disk_usage_table_operator.h"
 #include "observer/report/ob_i_disk_report.h"
+#include "lib/allocator/ob_fifo_allocator.h"
 
 namespace oceanbase
 {
@@ -39,6 +40,12 @@ struct ObDiskUsageReportKey
   {
     uint64_t hash_value = static_cast<uint64_t>(file_type_) * 10000L + tenant_id_;
     return hash_value;
+  }
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
   }
 
   bool operator ==(const ObDiskUsageReportKey report_key) const

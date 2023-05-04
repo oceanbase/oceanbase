@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprToDays::ObExprToDays(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DAYS, N_TO_DAYS, 1, NOT_ROW_DIMENSION) {};
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DAYS, N_TO_DAYS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 
 ObExprToDays::~ObExprToDays()
 {

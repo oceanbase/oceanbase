@@ -216,7 +216,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_ABS_EVAL, abs_funcs, ARRAYSIZEOF(abs_funcs));
 
 
 ObExprAbs::ObExprAbs(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_OP_ABS, N_ABS, 1, NOT_ROW_DIMENSION),
+    : ObExprOperator(alloc, T_OP_ABS, N_ABS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
       func_(NULL) {}
 
 int ObExprAbs::deserialize(const char *buf, const int64_t data_len, int64_t &pos)

@@ -60,8 +60,6 @@ int MockObTxCtx::init(const ObLSID &ls_id,
 // ======================= mock trans ctx end ========================
   } else if (OB_FAIL(init_log_cbs_(ls_id, trans_id))) {
     TRANS_LOG(WARN, "init log cbs failed", KR(ret), K(trans_id), K(ls_id));
-  } else if (OB_FAIL(clog_encrypt_info_.init())) {
-    TRANS_LOG(WARN, "init clog encrypt info failed", K(ret), KPC(this), K(trans_id));
   }
 
   if (OB_SUCC(ret)) {

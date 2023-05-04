@@ -26,7 +26,7 @@ namespace sql
 const double ObExprPi::mysql_pi_ = 3.14159265358979323846264338327950288;
 
 ObExprPi::ObExprPi(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PI, N_PI, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PI, N_PI, 0, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -27,6 +27,7 @@ public:
   ObILongopsKey();
   virtual ~ObILongopsKey() = default;
   virtual int64_t hash() const;
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   virtual bool is_valid() const;
   virtual int to_key_string() { return common::OB_NOT_SUPPORTED; }
   bool operator ==(const ObILongopsKey &other) const;

@@ -1152,7 +1152,7 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
                 common::str_to_hex(hex_str.ptr(), hex_str.length(), bitmap_buf, hex_str.length());
                 // decompress llc bitmap;
                 char *decomp_buf = NULL ;
-                int64_t decomp_size = ObColumnStat::NUM_LLC_BUCKET;
+                int64_t decomp_size = ObOptColumnStat::NUM_LLC_BUCKET;
                 const int64_t bitmap_size = hex_str.length() / 2;
                 if (OB_FAIL(ObOptStatSqlService::get_decompressed_llc_bitmap(*param.allocator_,
                                                                              bitmap_buf,

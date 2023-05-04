@@ -14,6 +14,7 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/string/ob_string.h"
+#include "lib/json/ob_json.h"
 
 #ifndef _OB_LOAD_DATA_PARSER_H_
 #define _OB_LOAD_DATA_PARSER_H_
@@ -26,18 +27,54 @@ class ObDataInFileStruct;
 
 struct ObCSVGeneralFormat {
   ObCSVGeneralFormat () :
+    line_start_str_(),
+    line_term_str_(),
+    field_term_str_(),
     field_escaped_char_(INT64_MAX),
     field_enclosed_char_(INT64_MAX),
     cs_type_(common::CHARSET_INVALID),
+    skip_header_lines_(0),
+    skip_blank_lines_(false),
+    trim_space_(false),
+    null_if_(),
+    empty_field_as_null_(false),
     file_column_nums_(0)
   {}
+  static constexpr const char *OPTION_NAMES[] = {
+    "LINE_DELIMITER",
+    "FIELD_DELIMITER",
+    "ESCAPE",
+    "FIELD_OPTIONALLY_ENCLOSED_BY",
+    "ENCODING",
+    "SKIP_HEADER",
+    "SKIP_BLANK_LINES",
+    "TRIM_SPACE",
+    "NULL_IF_EXETERNAL",
+    "EMPTY_FIELD_AS_NULL",
+  };
   common::ObString line_start_str_;
   common::ObString line_term_str_;
   common::ObString field_term_str_;
   int64_t field_escaped_char_;    // valid escaped char after stmt validation
   int64_t field_enclosed_char_;   // valid enclosed char after stmt validation
-  common::ObCharsetType cs_type_;
+  common::ObCharsetType cs_type_; // charset type of format strings
+  int64_t skip_header_lines_;
+  bool skip_blank_lines_;
+  bool trim_space_;
+  common::ObArrayWrap<common::ObString> null_if_;
+  bool empty_field_as_null_;
+
   int64_t file_column_nums_;
+
+  int init_format(const ObDataInFileStruct &format,
+                  int64_t file_column_nums,
+                  ObCollationType file_cs_type);
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+
+  TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
+               K(field_escaped_char_), K(field_term_str_), K(line_term_str_));
+  OB_UNIS_VERSION(1);
 };
 
 /**
@@ -84,20 +121,22 @@ public:
   };
 public:
   ObCSVGeneralParser() {}
+  int init(const ObCSVGeneralFormat &format);
+
   int init(const ObDataInFileStruct &format,
            int64_t file_column_nums,
            common::ObCollationType file_cs_type);
   const ObCSVGeneralFormat &get_format() { return format_; }
   const OptParams &get_opt_params() { return opt_param_; }
 
-  template<common::ObCharsetType cs_type, typename handle_func, bool DO_ESCAPE = false>
+  template<common::ObCharsetType cs_type, typename handle_func, bool NEED_ESCAPED_RESULT = false>
   int scan_proto(const char *&str, const char *end, int64_t &nrows,
                  char *escape_buf, char *escaped_buf_end,
                  handle_func &handle_one_line,
                  common::ObIArray<LineErrRec> &errors,
                  bool is_end_file);
 
-  template<typename handle_func, bool DO_ESCAPE = false>
+  template<typename handle_func, bool NEED_ESCAPED_RESULT = false>
   int scan(const char *&str, const char *end, int64_t &nrows,
            char *escape_buf, char *escaped_buf_end,
            handle_func &handle_one_line,
@@ -106,19 +145,20 @@ public:
     int ret = common::OB_SUCCESS;
     switch (format_.cs_type_) {
     case common::CHARSET_UTF8MB4:
-      ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, DO_ESCAPE>(
+      ret = scan_proto<common::CHARSET_UTF8MB4, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_GBK:
-      ret = scan_proto<common::CHARSET_GBK, handle_func, DO_ESCAPE>(
+      ret = scan_proto<common::CHARSET_GBK, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     case common::CHARSET_GB18030:
-      ret = scan_proto<common::CHARSET_GB18030, handle_func, DO_ESCAPE>(
+    case common::CHARSET_GB18030_2022:
+      ret = scan_proto<common::CHARSET_GB18030, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     default:
-      ret = scan_proto<common::CHARSET_BINARY, handle_func, DO_ESCAPE>(
+      ret = scan_proto<common::CHARSET_BINARY, handle_func, NEED_ESCAPED_RESULT>(
             str, end, nrows, escape_buf, escaped_buf_end, handle_one_line, errors, is_end_file);
       break;
     }
@@ -127,6 +167,7 @@ public:
   common::ObIArray<FieldValue>& get_fields_per_line() { return fields_per_line_; }
 
 private:
+  int init_opt_variables();
   template<common::ObCharsetType cs_type>
   inline int mbcharlen(const char *ptr, const char *end) {
     UNUSED(ptr);
@@ -156,27 +197,50 @@ private:
     return c;
   }
 
+
   inline
-  bool is_null_field(bool is_escaped, const char* field_begin, const char* field_end) {
-    return (is_escaped && field_end - field_begin == 1 && 'N' == *field_begin)
-        || (format_.field_enclosed_char_ != INT64_MAX
-            && field_end - field_begin == 4
-            && 0 == strncasecmp(field_begin, "NULL", 4)
-            && !is_escaped);
+  bool is_null_field(const char* ori_field_begin, int64_t ori_field_len,
+                     const char* final_field_begin, int64_t final_field_len) {
+    bool ret = false;
+
+    if ((2 == ori_field_len && format_.field_escaped_char_ == ori_field_begin[0] && 'N' == ori_field_begin[1])
+        || (format_.field_enclosed_char_ != INT64_MAX && 4 == ori_field_len && 0 == MEMCMP(ori_field_begin, "NULL", 4))
+        || (format_.empty_field_as_null_ && 0 == final_field_len)) {
+      ret = true;
+    } else {
+      for (int i = 0; i < format_.null_if_.count(); i++) {
+        if (format_.null_if_.at(i).length() == final_field_len
+            && 0 == MEMCMP(final_field_begin, format_.null_if_.at(i).ptr(), final_field_len)) {
+          ret = true;
+          break;
+        }
+      }
+    }
+    return ret;
   }
 
   inline
-  void gen_new_field(bool is_enclosed, bool is_escaped,
-                     const char *field_begin, const char *field_end, int field_idx) {
-    int32_t str_len = static_cast<int32_t>(field_end - field_begin);
+  void gen_new_field(const bool is_enclosed, const char *ori_field_begin, const char *ori_field_end,
+                     const char *field_begin, const char *field_end, const int field_idx) {
     FieldValue &new_field = fields_per_line_[field_idx - 1];
     new_field = FieldValue();
-    if (!is_enclosed && is_null_field(is_escaped, field_begin, field_end)) {
+    if (format_.trim_space_) {
+      while (field_begin < field_end && ' ' == *field_begin) field_begin++;
+      while (field_begin < field_end && ' ' == *(field_end - 1)) field_end--;
+    }
+    if (is_null_field(ori_field_begin, ori_field_end - ori_field_begin, field_begin, field_end - field_begin)) {
       new_field.is_null_ = 1;
     } else {
       new_field.ptr_ = const_cast<char*>(field_begin);
-      new_field.len_ = str_len;
+      new_field.len_ = static_cast<int32_t>(field_end - field_begin);
     }
+  }
+
+  inline bool is_escape_next(const bool is_enclosed, const char cur, const char next) {
+    // 1. the next char escaped by escape_char "A\tB" => A  B
+    // 2. enclosed char escaped by another enclosed char in enclosed field. E.g. "A""B" => A"B
+    return (format_.field_escaped_char_ == cur && !opt_param_.is_same_escape_enclosed_)
+           || (is_enclosed && format_.field_enclosed_char_ == cur && format_.field_enclosed_char_ == next);
   }
 
 protected:
@@ -229,7 +293,7 @@ inline int ObCSVGeneralParser::mbcharlen<common::CHARSET_GB18030>(const char *pt
   return mb_len;
 }
 
-template<common::ObCharsetType cs_type, typename handle_func, bool DO_ESCAPE>
+template<common::ObCharsetType cs_type, typename handle_func, bool NEED_ESCAPED_RESULT>
 int ObCSVGeneralParser::scan_proto(const char *&str,
                                    const char *end,
                                    int64_t &nrows,
@@ -240,18 +304,18 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
                                    bool is_end_file)
 {
   int ret = common::OB_SUCCESS;
-
   int line_no = 0;
+  int blank_line_cnt = 0;
   const char *line_begin = str;
+  char *escape_buf_pos = escape_buf;
 
-  if (DO_ESCAPE) {
+  if (NEED_ESCAPED_RESULT) {
     if (escape_buf_end - escape_buf < end - str) {
       ret = common::OB_BUF_NOT_ENOUGH;
     }
   }
 
-  while (OB_SUCC(ret) && str < end && line_no < nrows) {
-    char *escape_buf_pos = escape_buf;
+  while (OB_SUCC(ret) && str < end && line_no - blank_line_cnt < nrows) {
     bool find_new_line = false;
     int field_idx = 0;
 
@@ -275,6 +339,7 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
 
     while (str < end && !find_new_line) {
+      const char *ori_field_begin = str;
       const char *field_begin = str;
       bool is_enclosed = false;
       const char *last_end_enclosed = nullptr;
@@ -289,29 +354,23 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
       }
       while (str < end && !is_term) {
         const char *next = str + 1;
-        if (next < end && ((format_.field_escaped_char_ == *str && !opt_param_.is_same_escape_enclosed_)
-                           || (is_enclosed && format_.field_enclosed_char_ == *str && format_.field_enclosed_char_ == *next))) {
-          bool is_valid_escape = (1 == mbcharlen<cs_type>(next, end));
-          if (DO_ESCAPE) {
+        if (next < end && is_escape_next(is_enclosed, *str, *next)) {
+          if (NEED_ESCAPED_RESULT) {
             if (last_escaped_str == nullptr) {
               last_escaped_str = field_begin;
               field_begin = escape_buf_pos;
             }
-            int copy_len = str - last_escaped_str;
+            int64_t copy_len = str - last_escaped_str;
             //if (OB_UNLIKELY(escape_buf_pos + copy_len + 1 > escape_buf_end)) {
             //  ret = common::OB_SIZE_OVERFLOW; break;
             //} else {
               MEMCPY(escape_buf_pos, last_escaped_str, copy_len);
               escape_buf_pos+=copy_len;
-              if (is_valid_escape) {
-                *(escape_buf_pos++) = escape(*next);
-                last_escaped_str = next + 1;
-              } else {
-                last_escaped_str = next;
-              }
+              *(escape_buf_pos++) = escape(*next);
+              last_escaped_str = next + 1;
             //}
           }
-          str += (OB_LIKELY(is_valid_escape) ? 2 : 1);  
+          str += 2;
         } else if (format_.field_enclosed_char_ == *str) {
           last_end_enclosed = str;
           str++;
@@ -336,6 +395,7 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
       }
 
       if (OB_LIKELY(is_term) || is_end_file) {
+        const char *ori_field_end = str;
         const char *field_end = str;
         if (is_enclosed && field_end - 1 == last_end_enclosed) {
           field_begin++;
@@ -347,9 +407,9 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
           str = end;
         }
 
-        if (DO_ESCAPE) {
+        if (NEED_ESCAPED_RESULT) {
           if (last_escaped_str != nullptr) {
-            int copy_len = field_end - last_escaped_str;
+            int64_t copy_len = field_end - last_escaped_str;
             //if (OB_UNLIKELY(escape_buf_pos + copy_len > escape_buf_end)) {
             //  ret = common::OB_SIZE_OVERFLOW;
             //} else {
@@ -362,9 +422,10 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
           }
         }
 
-        if (is_field_term || field_end > field_begin || field_idx < format_.file_column_nums_) {
+        if (is_field_term || ori_field_end > ori_field_begin
+            || (field_idx < format_.file_column_nums_ && !format_.skip_blank_lines_)) {
           if (field_idx++ < format_.file_column_nums_) {
-            gen_new_field(is_enclosed, last_escaped_str != nullptr, field_begin, field_end, field_idx);
+            gen_new_field(is_enclosed, ori_field_begin, ori_field_end, field_begin, field_end, field_idx);
           }
         }
 
@@ -375,11 +436,17 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
       }
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
-      if (field_idx != format_.file_column_nums_) {
-        ret = handle_irregular_line(field_idx, line_no, errors);
-      }
-      if (OB_SUCC(ret)) {
-        ret = handle_one_line(fields_per_line_);
+      if (!format_.skip_blank_lines_ || field_idx > 0) {
+        if (field_idx != format_.file_column_nums_) {
+          ret = handle_irregular_line(field_idx, line_no, errors);
+        }
+        if (OB_SUCC(ret)) {
+          ret = handle_one_line(fields_per_line_);
+        }
+      } else {
+        if (format_.skip_blank_lines_) {
+          blank_line_cnt++;
+        }
       }
       line_no++;
       line_begin = str;
@@ -388,9 +455,60 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
 
   str = line_begin;
   nrows = line_no;
-
   return ret;
 }
+
+// user using to define create external table format
+struct ObOriginFileFormat
+{
+  int64_t to_json_kv_string(char *buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  TO_STRING_KV(K(origin_line_term_str_), K(origin_field_term_str_), K(origin_field_escaped_str_),
+                K(origin_field_enclosed_str_), K(origin_null_if_str_));
+
+  static constexpr const char *ORIGIN_FORMAT_STRING[] = {
+    "ORIGIN_LINE_DELIMITER",
+    "ORIGIN_FIELD_DELIMITER",
+    "ORIGIN_ESCAPE",
+    "ORIGIN_FIELD_OPTIONALLY_ENCLOSED_BY",
+    "ORIGIN_NULL_IF_EXETERNAL",
+  };
+
+  common::ObString origin_line_term_str_;
+  common::ObString origin_field_term_str_;
+  common::ObString origin_field_escaped_str_;
+  common::ObString origin_field_enclosed_str_;
+  common::ObString origin_null_if_str_;
+};
+
+struct ObExternalFileFormat
+{
+  struct StringData {
+    StringData(common::ObIAllocator &alloc) : allocator_(alloc) {}
+    int store_str(const ObString &str);
+    common::ObString str_;
+    common::ObIAllocator &allocator_;
+    TO_STRING_KV(K_(str));
+    OB_UNIS_VERSION(1);
+  };
+
+  enum FormatType {
+    INVALID_FORMAT = -1,
+    CSV_FORMAT,
+    MAX_FORMAT
+  };
+
+
+  ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
+
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+  int load_from_string(const common::ObString &str, ObIAllocator &allocator);
+
+  ObOriginFileFormat origin_file_format_str_;
+  FormatType format_type_;
+  sql::ObCSVGeneralFormat csv_format_;
+};
+
 
 }
 }

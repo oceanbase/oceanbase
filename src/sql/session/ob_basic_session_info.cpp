@@ -66,7 +66,6 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       sessid_(0),
       master_sessid_(INVALID_SESSID),
       proxy_sessid_(VALID_PROXY_SESSID),
-      variables_last_modify_time_(0),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
       tx_desc_(NULL),
@@ -90,6 +89,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       name_pool_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       trans_flags_(),
       sql_scope_flags_(),
+      need_reset_package_(false),
       base_sys_var_alloc_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       inc_sys_var_alloc1_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
       inc_sys_var_alloc2_(ObModIds::OB_SQL_SESSION, OB_MALLOC_NORMAL_BLOCK_SIZE),
@@ -145,6 +145,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       thread_id_(0),
       is_password_expired_(false),
       process_query_time_(0)
+
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -321,7 +322,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   sessid_ = 0;
   master_sessid_ = INVALID_SESSID;
   proxy_sessid_ = VALID_PROXY_SESSID;
-  variables_last_modify_time_ = 0;
   global_vars_version_ = 0;
 
   tx_result_.reset();
@@ -336,6 +336,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   package_info_allocator_.reset();
   trans_flags_.reset();
   sql_scope_flags_.reset();
+  need_reset_package_ = false;
 //bucket_allocator_wrapper_.reset();
   user_var_val_map_.reuse();
   if (!skip_sys_var) {
@@ -545,7 +546,7 @@ int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
       ret = OB_NOT_SUPPORTED;
       // only inner-SQL goes switch_tenant and may fall into such state
       // print out error to easy trouble-shot
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, 
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
                   "try to switch to another tenant without commit/rollback in a transaction");
       LOG_ERROR("try to switch another tenant while session has active txn,"
                 " you must commit/rollback first", K(ret),
@@ -923,6 +924,15 @@ const ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx) const
   return var;
 }
 
+ObBasicSysVar *ObBasicSessionInfo::get_sys_var(const int64_t idx)
+{
+  ObBasicSysVar *var = NULL;
+  if (idx >= 0 && idx < ObSysVarFactory::ALL_SYS_VARS_COUNT) {
+    var = sys_vars_[idx];
+  }
+  return var;
+}
+
 int ObBasicSessionInfo::init_system_variables(const bool print_info_log, const bool is_sys_tenant)
 {
   int ret = OB_SUCCESS;
@@ -1056,8 +1066,6 @@ int ObBasicSessionInfo::load_default_sys_variable(const bool print_info_log, con
     LOG_WARN("fail create all sys variables", K(ret));
   } else if (OB_FAIL(init_system_variables(print_info_log, is_sys_tenant))) {
     LOG_WARN("Init system variables failed !", K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -1276,8 +1284,6 @@ int ObBasicSessionInfo::load_sys_variable(ObIAllocator &calc_buf,
                                               false /*check_timezone_valid*/,
                                               false /*is_update_sys_var*/))) {
     LOG_WARN("process system variable error",  K(name), K(type), K(real_val), K(value), K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -1600,7 +1606,6 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
     if (OB_FAIL(track_sys_var(sys_var_id, sys_var->get_value()))) {
       LOG_WARN("failed to track sys var", K(ret), K(sys_var_id), K(val));
     } else {
-      variables_last_modify_time_ = ObTimeUtility::current_time();
       LOG_DEBUG("succ to track system variable",
                 K(ret), K(sys_var_id), K(val), K(sys_var->get_value()));
     }
@@ -2571,6 +2576,35 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_ob_max_read_stale_time(int_val));
       break;
     }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      ObString str;
+      if (OB_FAIL(val.get_string(str))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        int64_t run_time_filter_type = ObConfigRuntimeFilterChecker::
+            get_runtime_filter_type(str.ptr(), str.length());
+        sys_vars_cache_.set_runtime_filter_type(run_time_filter_type);
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_filter_wait_time_ms(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_filter_max_in_num(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_runtime_bloom_filter_max_size(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -2967,6 +3001,35 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       OX (sys_vars_cache.set_base_ob_max_read_stale_time(int_val));
       break;
     }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      ObString str;
+      if (OB_FAIL(val.get_string(str))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        int64_t run_time_filter_type = ObConfigRuntimeFilterChecker::
+            get_runtime_filter_type(str.ptr(), str.length());
+        sys_vars_cache.set_base_runtime_filter_type(run_time_filter_type);
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_filter_wait_time_ms(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_filter_max_in_num(int_val));
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_runtime_bloom_filter_max_size(int_val));
+      break;
+    }
     default: {
       //do nothing
     }
@@ -3327,6 +3390,18 @@ int ObBasicSessionInfo::is_transformation_enabled(bool &transformation_enabled) 
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_TRANSFORMATION, transformation_enabled);
 }
 
+int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const
+{
+  int ret = OB_SUCCESS;
+  force_set_order = false;
+  if (!is_oracle_mode) {
+    //do nothing
+  } else {
+    ret = get_bool_sys_var(SYS_VAR__FORCE_ORDER_PRESERVE_SET, force_set_order);
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) const
 {
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);
@@ -3430,9 +3505,6 @@ int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessi
         LOG_WARN("fail to track user var", K(var), K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
-      variables_last_modify_time_ = ObTimeUtility::current_time();
-    }
   }
   return ret;
 }
@@ -3446,8 +3518,6 @@ int ObBasicSessionInfo::remove_user_variable(const ObString &var)
   } else if (OB_SUCCESS != user_var_val_map_.erase_refactored(var)) {
     ret = OB_ERR_USER_VARIABLE_UNKNOWN;
     LOG_WARN("unknown variable", K(var), K(ret));
-  } else {
-    variables_last_modify_time_ = ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -3937,7 +4007,11 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   return ret;
 }
 
@@ -3963,7 +4037,11 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -3994,7 +4072,11 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               ob_trx_lock_timeout_,
               ob_trace_info_,
               ob_plsql_ccflags_,
-              ob_max_read_stale_time_);
+              ob_max_read_stale_time_,
+              runtime_filter_type_,
+              runtime_filter_wait_time_ms_,
+              runtime_filter_max_in_num_,
+              runtime_bloom_filter_max_size_);
   return len;
 }
 
@@ -4771,6 +4853,25 @@ int ObBasicSessionInfo::track_user_var(const common::ObString &user_var)
   return ret;
 }
 
+int ObBasicSessionInfo::remove_changed_user_var(const common::ObString &user_var)
+{
+  int ret = OB_SUCCESS;
+  if (user_var.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input value", K(user_var), K(ret));
+  } else {
+    bool found = false;
+    for (int64_t i = 0; !found && OB_SUCC(ret) && i < changed_user_vars_.count(); ++i) {
+      if (changed_user_vars_.at(i) == user_var) {
+        OZ (changed_user_vars_.remove(i));
+        OX (found = true);
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_var_id,
                                                    const ObObj &old_val,
                                                    ObObj &new_val,
@@ -5017,6 +5118,23 @@ int ObBasicSessionInfo::get_force_parallel_query_dop(uint64_t &v) const
   return ret;
 }
 
+int ObBasicSessionInfo::get_parallel_degree_policy_enable_auto_dop(bool &v) const
+{
+  int ret = OB_SUCCESS;
+  v = false;
+  if (exec_min_cluster_version_ >= CLUSTER_VERSION_4_2_0_0) {
+    int64_t value = 0;
+    if (OB_FAIL(get_int64_sys_var(SYS_VAR_PARALLEL_DEGREE_POLICY, value))) {
+      LOG_WARN("failed to update session_timeout", K(ret));
+    } else {
+      v = 1 == value;
+    }
+  } else {
+    v = false;
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::get_force_parallel_dml_dop(uint64_t &v) const
 {
   int ret = OB_SUCCESS;
@@ -5255,6 +5373,11 @@ int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
     thread_data_.cur_query_len_ = truncated_len;
   }
   return ret;
+}
+
+int ObBasicSessionInfo::get_opt_dynamic_sampling(uint64_t &v) const
+{
+  return get_uint64_sys_var(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING, v);
 }
 
 void ObBasicSessionInfo::reset_query_string()

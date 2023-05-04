@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprLeft::ObExprLeft(ObIAllocator &alloc)
-: ObStringExprOperator(alloc, T_FUN_SYS_LEFT, "left", 2)
+: ObStringExprOperator(alloc, T_FUN_SYS_LEFT, "left", 2, VALID_FOR_GENERATED_COL)
 {
 }
 

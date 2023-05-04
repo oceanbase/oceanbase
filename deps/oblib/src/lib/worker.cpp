@@ -17,6 +17,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/allocator/ob_malloc.h"
+#include "common/ob_clock_generator.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -95,5 +96,5 @@ int64_t Worker::get_timeout_remain() const
 
 bool Worker::is_timeout() const
 {
-  return ObTimeUtility::current_time() >= timeout_ts_;
+  return common::ObClockGenerator::getClock() >= timeout_ts_;
 }

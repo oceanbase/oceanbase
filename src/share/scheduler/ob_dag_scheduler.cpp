@@ -3017,7 +3017,7 @@ int ObTenantDagScheduler::create_worker()
 {
   int ret = OB_SUCCESS;
   // TODO add upper worker cnt limit, each tenant should have a max_worker_cnt
-  ObTenantDagWorker *worker = OB_NEW(ObTenantDagWorker, ObModIds::OB_SCHEDULER);
+  ObTenantDagWorker *worker = OB_NEW(ObTenantDagWorker, SET_USE_500(ObModIds::OB_SCHEDULER));
   if (OB_ISNULL(worker)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     COMMON_LOG(WARN, "failed to allocate ObTenantDagWorker", K(ret));

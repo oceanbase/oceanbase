@@ -105,7 +105,7 @@ int ObPLRouter::check_error_in_resolve(int code)
   return ret;
 }
 
-int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_info)
+int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_info, ObRoutineInfo &routine_info)
 {
   int ret = OB_SUCCESS;
   HEAP_VAR(ObPLFunctionAST, func_ast, inner_allocator_) {
@@ -127,6 +127,32 @@ int ObPLRouter::analyze(ObString &route_sql, ObIArray<ObDependencyInfo> &dep_inf
                                             dep_info,
                                             routine_info_.get_object_type(),
                                             0, dep_attr, dep_attr));
+    }
+    if (OB_SUCC(ret)) {
+      if (func_ast.is_modifies_sql_data()) {
+        routine_info.set_modifies_sql_data();
+      } else if (func_ast.is_reads_sql_data()) {
+        routine_info.set_reads_sql_data();
+      } else if (func_ast.is_contains_sql()) {
+        routine_info.set_contains_sql();
+      } else if (func_ast.is_no_sql()) {
+        routine_info.set_no_sql();
+      }
+      if (func_ast.is_wps()) {
+        routine_info.set_wps();
+      }
+      if (func_ast.is_rps()) {
+        routine_info.set_rps();
+      }
+      if (func_ast.is_has_sequence()) {
+        routine_info.set_has_sequence();
+      }
+      if (func_ast.is_has_out_param()) {
+        routine_info.set_has_out_param();
+      }
+      if (func_ast.is_external_state()) {
+        routine_info.set_external_state();
+      }
     }
   }
   return ret;

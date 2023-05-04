@@ -16,6 +16,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_stat_define.h"
+#include "share/stat/ob_opt_stat_gather_stat.h"
 namespace oceanbase {
 namespace common {
 namespace sqlclient
@@ -40,6 +41,7 @@ struct ObOptKeyInfo
   {
     return common::murmurhash(this, sizeof(ObOptKeyInfo), 0);
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObOptKeyInfo &other) const
   {
     return table_id_ == other.table_id_ &&
@@ -158,6 +160,9 @@ public:
                          const ObIArray<share::ObLSID> &all_ls_ids,
                          ObIArray<ObOptTableStat> &tstats);
 
+  int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
+  int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
+
 private:
   int get_table_stat_sql(const uint64_t tenant_id,
                          const ObOptTableStat &stat,
@@ -258,6 +263,12 @@ private:
                           const ObIArray<share::ObLSID> &all_ls_ids,
                           ObSqlString &tablet_list_str,
                           ObSqlString &tablet_ls_list_str);
+
+  int get_gather_stat_value(const ObOptStatGatherStat &gather_stat,
+                            ObSqlString &values_list);
+
+  int get_gather_stat_task_value(const ObOptStatTaskInfo &task_info,
+                                 ObSqlString &values_str);
 
   static const char *bitmap_compress_lib_name;
 

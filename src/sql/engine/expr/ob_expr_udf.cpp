@@ -21,6 +21,7 @@
 #include "pl/ob_pl.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "pl/ob_pl_user_type.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,7 @@ OB_SERIALIZE_MEMBER((ObExprUDF, ObFuncExprOperator),
                      nocopy_params_, subprogram_path_, call_in_sql_, loc_, is_udt_cons_);
 
 ObExprUDF::ObExprUDF(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_UDF, N_UDF, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_UDF, N_UDF, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE),
       udf_id_(OB_INVALID_ID),
       udf_package_id_(OB_INVALID_ID),
@@ -100,34 +101,43 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
   int ret = OB_SUCCESS;
   CK(param_num == params_type_.count());
   if (OB_SUCC(ret)) {
-    for (int64_t i = 0; i < param_num; i++) {
+    for (int64_t i = 0; i < param_num && OB_SUCC(ret); i++) {
       if (params_desc_.at(i).is_out()
           && params_desc_.at(i).is_obj_access_out()) {
         ObObjMeta meta;
         meta.set_ext();
         types[i].set_calc_meta(meta);
       } else {
-        types[i].set_calc_accuracy(params_type_.at(i).get_accuracy());
-        types[i].set_calc_meta(params_type_.at(i).get_obj_meta());
-        if (params_type_.at(i).get_collation_type() == CS_TYPE_ANY) {
-          if (types[i].is_string_or_lob_locator_type()) {
-            types[i].set_calc_collation_type(types[i].get_collation_type());
-          } else {
-            types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
+        if (udf_package_id_ == T_OBJ_XML
+            && types[i].is_xml_sql_type() && params_type_.at(i).is_string_type()) {
+            ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+                     K(i), K(udf_package_id_), K(udf_id_), K(types[i]), K(params_type_.at(i)));
+        } else {
+          types[i].set_calc_accuracy(params_type_.at(i).get_accuracy());
+          types[i].set_calc_meta(params_type_.at(i).get_obj_meta());
+          if (params_type_.at(i).get_collation_type() == CS_TYPE_ANY) {
+            if (types[i].is_string_or_lob_locator_type()) {
+              types[i].set_calc_collation_type(types[i].get_collation_type());
+            } else {
+              types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
+            }
           }
         }
       }
     }
-    type.set_accuracy(result_type_.get_accuracy());
-    type.set_meta(result_type_.get_obj_meta());
-    if (type.get_type() == ObRawType) {
-      type.set_collation_level(CS_LEVEL_NUMERIC);
-    }
-    if (!type.is_ext()) {
-      if (lib::is_oracle_mode()) {
-        type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
-      } else {
-        type.set_length(OB_MAX_VARCHAR_LENGTH);
+    if (OB_SUCC(ret)) {
+      type.set_accuracy(result_type_.get_accuracy());
+      type.set_meta(result_type_.get_obj_meta());
+      if (type.get_type() == ObRawType) {
+        type.set_collation_level(CS_LEVEL_NUMERIC);
+      }
+      if (!type.is_ext()) {
+        if (lib::is_oracle_mode()) {
+          type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
+        } else {
+          type.set_length(OB_MAX_VARCHAR_LENGTH);
+        }
       }
     }
   }
@@ -591,8 +601,6 @@ int ObExprUDF::fill_obj_stack(const ObExpr &expr, ObEvalCtx &ctx, ObObj *objs)
     }
   }
   return ret;
-
-
 }
 
 OB_DEF_SERIALIZE(ObExprUDFInfo)

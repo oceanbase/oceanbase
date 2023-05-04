@@ -19,6 +19,7 @@
 #include "share/config/ob_server_config.h"
 #include "share/ob_resource_limit.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 using namespace oceanbase::common;
 
@@ -173,6 +174,7 @@ int ObLocalDevice::init(const common::ObIODOpts &opts)
   if (OB_UNLIKELY(!is_inited_)) {
     destroy();
   }
+
   return ret;
 }
 
@@ -954,11 +956,6 @@ int ObLocalDevice::pwrite(
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(this->fsync_block())) {
-      SHARE_LOG(WARN, "fsync fail", K(ret), K(write_size), K(offset), K(size), KP(buf));
-    }
-  }
   return ret;
 }
 
@@ -1294,19 +1291,65 @@ int64_t ObLocalDevice::get_reserved_block_count() const
   return 2;// reserved only for supper block.
 }
 
+int64_t ObLocalDevice::get_max_block_count(int64_t reserved_size) const
+{
+  return block_size_ > 0 ? get_max_block_size(reserved_size) / block_size_ : 0;
+}
+
+int64_t ObLocalDevice::get_max_block_size(int64_t reserved_size) const
+{
+  int ret = OB_SUCCESS;
+  int64_t ret_size = 0;
+  struct statvfs svfs;
+
+  const int64_t config_max_file_size = GCONF.datafile_maxsize;
+  int64_t block_file_max_size = block_file_size_;
+
+  if (config_max_file_size < block_file_max_size) {
+    // auto extend is off
+  } else if (OB_ISNULL(sstable_dir_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "Failed to get max block size", K(ret), K(sstable_dir_));
+  } else if (OB_UNLIKELY(0 != statvfs(sstable_dir_, &svfs))) {
+    ret = convert_sys_errno();
+    SHARE_LOG(WARN, "Failed to get disk space", K(ret), K(sstable_dir_));
+  } else {
+    const int64_t free_space = std::max(0L, (int64_t)(svfs.f_bavail * svfs.f_bsize - reserved_size));
+    const int64_t max_file_size = block_file_size_ + free_space - reserved_size;
+    /* when datafile_maxsize is large than current datafile_size, we should return
+       the Maximun left space that can be extend. */
+    if (max_file_size > config_max_file_size) {
+      block_file_max_size = lower_align(config_max_file_size, block_size_);
+    } else {
+      block_file_max_size = lower_align(max_file_size, block_size_);
+    }
+  }
+  // still return current block file size when ret=fail
+  return block_file_max_size;
+}
+
 int ObLocalDevice::check_space_full(const int64_t required_size) const
 {
   int ret = OB_SUCCESS;
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
   if (OB_UNLIKELY(!is_marked_)) {
     ret = OB_NOT_INIT;
     SHARE_LOG(WARN, "The ObLocalDevice has not been marked", K(ret));
   } else if (OB_UNLIKELY(required_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_LOG(WARN, "invalid argument", K(ret), K(required_size));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    SHARE_LOG(WARN, "Fail to get reserved size", K(ret));
   } else {
+    int64_t max_block_cnt = get_max_block_count(reserved_size);
+    int64_t actual_free_block_cnt = free_block_cnt_;
+    if (max_block_cnt > total_block_cnt_) {  // auto extend is on
+      actual_free_block_cnt = max_block_cnt - total_block_cnt_ + free_block_cnt_;
+    }
     const int64_t NO_LIMIT_PERCENT = 100;
     const int64_t required_count = required_size / block_size_;
-    const int64_t free_count = free_block_cnt_ - required_count;
+    const int64_t free_count = actual_free_block_cnt - required_count;
     const int64_t used_percent = 100 - 100 * free_count / total_block_cnt_;
     if (GCONF.data_disk_usage_limit_percentage != NO_LIMIT_PERCENT
         && used_percent >= GCONF.data_disk_usage_limit_percentage) {

@@ -18,8 +18,9 @@ namespace sql
 {
 
 ObExprFormatBytes::ObExprFormatBytes(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_FORMAT_BYTES, N_FORMAT_BYTES, 1, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_FORMAT_BYTES, N_FORMAT_BYTES, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprFormatBytes::~ObExprFormatBytes()
 {}

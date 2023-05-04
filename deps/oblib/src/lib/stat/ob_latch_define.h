@@ -309,6 +309,9 @@ LATCH_DEF(SQL_WF_PARTICIPATOR_COND_LOCK, 296, "window function participator lock
 LATCH_DEF(ARB_SERVER_CONFIG_LOCK, 297, "arbserver config lock", LATCH_FIFO, 2000, 0, ARB_SERVER_CONFIG_WAIT, "arbserver config lock")
 LATCH_DEF(CDC_SERVICE_LS_CTX_LOCK, 298, "cdcservice clientlsctx lock", LATCH_FIFO, 2000, 0, CDC_SERVICE_LS_CTX_LOCK_WAIT, "cdcservice clientlsctx lock")
 LATCH_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK, 299, "major freeze diagnose lock", LATCH_READ_PREFER, 2000, 0, MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, "major freeze diagnose lock")
+LATCH_DEF(HB_RESPONSES_LOCK, 300, "hb responses lock", LATCH_READ_PREFER, 2000, 0, HB_RESPONSES_LOCK_WAIT, "hb responses lock")
+LATCH_DEF(ALL_SERVERS_INFO_IN_TABLE_LOCK, 301, "all servers info in table lock", LATCH_READ_PREFER, 2000, 0, ALL_SERVERS_INFO_IN_TABLE_LOCK_WAIT, "all servers info in table lock")
+LATCH_DEF(OPT_STAT_GATHER_STAT_LOCK, 302, "optimizer stat gather stat lock", LATCH_FIFO, 2000, 0, OPT_STAT_GATHER_STAT_LOCK_WAIT, "optimizer stat gather stat lock")
 
 LATCH_DEF(LATCH_END, 99999, "latch end", LATCH_FIFO, 2000, 0, WAIT_EVENT_END, "latch end")
 #endif

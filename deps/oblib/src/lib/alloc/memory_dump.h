@@ -104,7 +104,7 @@ struct LabelInfoItem
   void *block_;
 };
 
-typedef common::hash::ObHashMap<ObString, LabelInfoItem, hash::NoPthreadDefendMode> LabelMap;
+typedef common::hash::ObHashMap<std::pair<uint64_t, uint64_t>, LabelInfoItem, hash::NoPthreadDefendMode> LabelMap;
 
 using lib::AChunk;
 using lib::ABlock;
@@ -116,6 +116,7 @@ public:
 private:
 friend class observer::ObAllVirtualMemoryInfo;
 friend class lib::ObTenantCtxAllocator;
+friend class lib::ObMallocAllocator;
 
 static const int64_t TASK_NUM = 8;
 static const int PRINT_BUF_LEN = 1L << 20;

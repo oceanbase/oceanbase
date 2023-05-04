@@ -288,7 +288,7 @@ private:
       const ObDatum &lhs,
       const ObDatum &rhs,
       bool &is_equal);
-  static uint64_t hash(const ObDatum &datum, const ObHashFunc &hash_func, const bool need_binary);
+  static int hash(const ObDatum &datum, const ObHashFunc &hash_func, const bool need_binary, uint64_t &res);
 
   static void add_to_list(NodeList &list, HashNode &node, const ObDatum &datum);
 };

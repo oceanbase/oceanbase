@@ -20,6 +20,8 @@
 #include "rpc/obmysql/ob_2_0_protocol_utils.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "lib/container/ob_bit_set.h"
+#include "share/ob_rpc_struct.h"
+#include "sql/session/ob_sess_info_verify.h"
 namespace oceanbase
 {
 namespace observer
@@ -122,6 +124,7 @@ int ObMPUtils::add_changed_session_info(OMPKOK &ok_pkt, sql::ObSQLSessionInfo &s
   return ret;
 }
 
+
 int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObString &sess_infos)
 {
   int ret = OB_SUCCESS;
@@ -166,6 +169,7 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
     }
     if (OB_FAIL(ret)) {
       sess.post_sync_session_info();
+    } else {
     }
   }
 

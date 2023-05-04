@@ -6,6 +6,7 @@ ob_set_subtarget(ob_server ALONE
 ob_set_subtarget(ob_server common
   ob_dump_task_generator.cpp
   ob_heartbeat.cpp
+  ob_heartbeat_handler.cpp
   ob_inner_sql_rpc_proxy.cpp
   ob_inner_sql_rpc_processor.cpp
   ob_inner_sql_connection.cpp
@@ -250,6 +251,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ps_stat.cpp
   virtual_table/ob_all_virtual_px_target_monitor.cpp
   virtual_table/ob_all_virtual_px_worker_stat.cpp
+  virtual_table/ob_all_virtual_px_p2p_datahub.cpp
   virtual_table/ob_all_virtual_dtl_interm_result_monitor.cpp
   virtual_table/ob_all_virtual_raid_stat.cpp
   virtual_table/ob_all_virtual_ls_archive_stat.cpp
@@ -362,6 +364,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_span_info.cpp
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp
+  virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
 )
 

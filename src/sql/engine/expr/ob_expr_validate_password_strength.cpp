@@ -35,7 +35,7 @@ const ObValidatePasswordFunc ObExprValidatePasswordStrength::validate_funcs_[STR
 
 ObExprValidatePasswordStrength::ObExprValidatePasswordStrength(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_VALIDATE_PASSWORD_STRENGTH,
-                         N_VALIDATE_PASSWORD_STRENGTH, 1, NOT_ROW_DIMENSION)
+                         N_VALIDATE_PASSWORD_STRENGTH, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

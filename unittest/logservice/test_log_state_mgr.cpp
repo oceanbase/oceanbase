@@ -53,6 +53,7 @@ public:
   MockLogConfigMgr mock_config_mgr_;
   MockLogModeMgr mock_mode_mgr_;
   MockPalfRoleChangeCbWrapper mock_role_change_cb_;
+  LogPlugins plugins_;
   LogStateMgr state_mgr_;
 };
 
@@ -74,19 +75,19 @@ void TestLogStateMgr::TearDown()
 TEST_F(TestLogStateMgr, test_init)
 {
   EXPECT_EQ(OB_INVALID_ARGUMENT, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, NULL, &mock_sw_,
-        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_));
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
   EXPECT_EQ(OB_INVALID_ARGUMENT, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, NULL,
-        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_));
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
   EXPECT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,
-        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_));
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
   EXPECT_EQ(OB_INIT_TWICE, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,
-        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_));
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
 }
 
 TEST_F(TestLogStateMgr, replay_to_leader_active)
 {
   EXPECT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,
-        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_));
+        &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
   // set default config meta
   ObMemberList default_mlist;
   default_mlist.add_server(self_);

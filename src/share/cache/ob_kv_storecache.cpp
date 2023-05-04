@@ -150,6 +150,7 @@ ObKVGlobalCache::ObKVGlobalCache()
       map_once_clean_num_(0),
       map_replace_pos_(0),
       map_once_replace_num_(0),
+      map_replace_skip_count_(0),
       start_destory_(false),
       cache_wash_interval_(0)
 {
@@ -714,7 +715,18 @@ void ObKVGlobalCache::wash()
 void ObKVGlobalCache::replace_map()
 {
   if (inited_ && !start_destory_) {
-    map_.replace_fragment_node(map_replace_pos_, map_once_replace_num_);
+    int ret = OB_SUCCESS;
+    int64_t replace_node_count = 0;
+    if (map_replace_skip_count_ <= 0) {
+      if (OB_FAIL(map_.replace_fragment_node(map_replace_pos_, replace_node_count, map_once_replace_num_))) {
+      } else if (0 == replace_node_count) {
+        map_replace_skip_count_ = MAP_REPLACE_ONCE_SKIP_COUNT;
+      }
+    } else {
+      --map_replace_skip_count_;
+    }
+    COMMON_LOG(INFO, "replace map num details", K(ret), K(replace_node_count), K(map_once_replace_num_),
+                                                K(map_replace_skip_count_));
   }
 }
 
@@ -735,7 +747,9 @@ void ObKVGlobalCache::reload_priority()
         priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_column_stat_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
-      } else if (0 == STRNCMP(configs_[i].cache_name_, "tablet_ls_cache", MAX_CACHE_NAME_LENGTH)) {
+      } else if (0 == STRNCMP(configs_[i].cache_name_, "opt_ds_stat_cache", MAX_CACHE_NAME_LENGTH)) {
+        priority = common::ObServerConfig::get_instance().opt_tab_stat_cache_priority;
+      }else if (0 == STRNCMP(configs_[i].cache_name_, "tablet_ls_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().tablet_ls_cache_priority;
       } else if (0 == STRNCMP(configs_[i].cache_name_, "index_block_cache", MAX_CACHE_NAME_LENGTH)) {
         priority = common::ObServerConfig::get_instance().index_block_cache_priority;

@@ -24,6 +24,7 @@ namespace sql
 
 ObOptTabletLoc::ObOptTabletLoc()
     : partition_id_(OB_INVALID_INDEX),
+      first_level_part_id_(OB_INVALID_INDEX),
       replica_locations_(ObModIds::OB_SQL_OPTIMIZER_LOCATION_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
       renew_time_(0)
 {
@@ -36,6 +37,7 @@ ObOptTabletLoc::~ObOptTabletLoc()
 void ObOptTabletLoc::reset()
 {
   partition_id_ = OB_INVALID_INDEX;
+  first_level_part_id_ = OB_INVALID_INDEX;
   tablet_id_.reset();
   ls_id_.reset();
   replica_locations_.reset();
@@ -48,6 +50,7 @@ int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
   tablet_id_ = other.tablet_id_;
   ls_id_ = other.ls_id_;
   partition_id_ = other.partition_id_;
+  first_level_part_id_ = other.first_level_part_id_;
   renew_time_ = other.renew_time_;
   if (OB_FAIL(replica_locations_.assign(other.replica_locations_))) {
     LOG_WARN("Failed to assign replica locations", K(ret));
@@ -55,8 +58,8 @@ int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
   return ret;
 }
 
-int ObOptTabletLoc::assign_with_only_readable_replica(
-                                                      const ObObjectID &partition_id,
+int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partition_id,
+                                                      const ObObjectID &first_level_part_id,
                                                       const common::ObTabletID &tablet_id,
                                                       const ObLSLocation &ls_location,
                                                       const ObIArray<ObAddr> &invalid_servers)
@@ -64,6 +67,7 @@ int ObOptTabletLoc::assign_with_only_readable_replica(
   int ret = OB_SUCCESS;
   reset();
   partition_id_ = partition_id;
+  first_level_part_id_ = first_level_part_id;
   tablet_id_ = tablet_id;
   ls_id_ = ls_location.get_ls_id();
   renew_time_ = ls_location.get_renew_time();
@@ -330,6 +334,7 @@ int ObCandiTabletLoc::get_selected_replica(ObRoutePolicy::CandidateReplica &repl
 
 int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(
     const ObObjectID &partition_id,
+    const ObObjectID &first_level_part_id,
     const common::ObTabletID &tablet_id,
     const ObLSLocation &partition_location,
     const ObIArray<ObAddr> &invalid_servers)
@@ -340,7 +345,7 @@ int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(
     LOG_ERROR("partition location has not been set yet, but replica idx has been selected",
               K(ret), K(*this), K(partition_location));
   } else if (OB_FAIL(opt_tablet_loc_.assign_with_only_readable_replica(
-                                   partition_id, tablet_id,
+                                   partition_id, first_level_part_id, tablet_id,
                                    partition_location, invalid_servers))) {
     LOG_WARN("fail to assign partition location with only readable replica",
              K(ret), K(partition_location), K(invalid_servers));
@@ -593,7 +598,7 @@ int ObCandiTableLoc::replace_local_index_loc(DASRelatedTabletMap &map, ObTableID
     if (OB_FAIL(map.get_related_tablet_id(tablet_loc.get_tablet_id(), ref_table_id, rv))) {
       LOG_WARN("related tablet info is invalid", K(ret));
     } else {
-      tablet_loc.set_tablet_info(rv.first, rv.second);
+      tablet_loc.set_tablet_info(rv.tablet_id_, rv.part_id_, rv.first_level_part_id_);
     }
   }
   return ret;

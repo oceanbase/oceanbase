@@ -34,6 +34,7 @@
 #include "pl/ob_pl_interface_pragma.h"
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "pl/pl_cache/ob_pl_cache.h"
+#include "pl/pl_cache/ob_pl_cache_object.h"
 
 namespace test
 {
@@ -260,47 +261,23 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPLFunctionBase);
 };
 
-class ObPLCompileUnit : public sql::ObILibCacheObject
+class ObPLCompileUnit : public ObPLCacheObject
 {
   friend class ::test::MockCacheObjectFactory;
 public:
   ObPLCompileUnit(sql::ObLibCacheNameSpace ns, lib::MemoryContext &mem_context)
-  : ObILibCacheObject(ns, mem_context),
-    tenant_schema_version_(OB_INVALID_VERSION),
-    sys_schema_version_(OB_INVALID_VERSION),
-    dependency_tables_(allocator_),
-    params_info_( (ObWrapperAllocator(allocator_)) ),
+  : ObPLCacheObject(ns, mem_context),
     routine_table_(allocator_),
     type_table_(),
-    expr_factory_(allocator_),
     helper_(allocator_),
     di_helper_(allocator_),
-    sql_expression_factory_(allocator_),
-    expr_operator_factory_(allocator_),
-    expressions_(allocator_),
-    expr_op_size_(0),
-    can_cached_(true),
-    frame_info_(allocator_)
+    can_cached_(true)
   {
 #ifndef USE_MCJIT
     helper_.init();
 #endif
   }
   virtual ~ObPLCompileUnit();
-
-  inline int64_t get_dependency_table_size() const { return dependency_tables_.count(); }
-  inline const DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
-  inline void set_sys_schema_version(int64_t schema_version) { sys_schema_version_ = schema_version; }
-  inline void set_tenant_schema_version(int64_t schema_version) { tenant_schema_version_ = schema_version; }
-  inline int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
-  inline int64_t get_sys_schema_version() const { return sys_schema_version_; }
-  int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }
-  inline DependenyTableStore &get_dependency_table() { return dependency_tables_; }
-
-  int set_params_info(const ParamStore &params);
-  const common::Ob2DArray<ObParamInfo,
-                          common::OB_MALLOC_BIG_BLOCK_SIZE,
-                          common::ObWrapperAllocator, false> &get_params_info() const { return params_info_; }
 
   inline bool get_can_cached() { return can_cached_; }
   inline void set_can_cached(bool can_cached) { can_cached_ = can_cached; }
@@ -314,53 +291,28 @@ public:
   int get_routine(int64_t routine_idx, ObPLFunction *&routine) const;
   void init_routine_table(int64_t count) { routine_table_.set_capacity(static_cast<uint32_t>(count)); }
   inline const ObIArray<ObUserDefinedType *> &get_type_table() const { return type_table_; }
-  inline sql::ObRawExprFactory &get_expr_factory() { return expr_factory_; }
 
   inline jit::ObLLVMHelper &get_helper() { return helper_; }
   inline jit::ObLLVMDIHelper &get_di_helper() { return di_helper_; }
 
-  inline sql::ObSqlExpressionFactory &get_sql_expression_factory() { return sql_expression_factory_; }
-  inline sql::ObExprOperatorFactory &get_expr_operator_factory() { return expr_operator_factory_; }
-  inline const common::ObIArray<sql::ObSqlExpression*> &get_expressions() const { return expressions_; }
-  inline common::ObIArray<sql::ObSqlExpression*> &get_expressions() { return expressions_; }
-  inline int set_expressions(common::ObIArray<sql::ObSqlExpression*> &exprs) { return expressions_.assign(exprs); }
-  inline int64_t get_expr_op_size() const { return expr_op_size_; }
-  inline void set_expr_op_size(int64_t size) { expr_op_size_ = size; }
-  inline sql::ObExprFrameInfo &get_frame_info() { return frame_info_; }
   jit::ObDIRawData get_debug_info() const { return helper_.get_debug_info(); }
 
   virtual void reset();
   virtual void dump_deleted_log_info(const bool is_debug_log = true) const;
   virtual int check_need_add_cache_obj_stat(ObILibCacheCtx &ctx, bool &need_real_add);
 
-  TO_STRING_KV(K_(routine_table), K(expr_op_size_), K_(can_cached),
+  TO_STRING_KV(K_(routine_table), K_(can_cached),
                K_(tenant_schema_version), K_(sys_schema_version));
 
 protected:
-  int64_t tenant_schema_version_;
-  int64_t sys_schema_version_;
-  DependenyTableStore dependency_tables_;
-
-  //stored args information after paramalization
-  common::Ob2DArray<ObParamInfo,
-                    common::OB_MALLOC_BIG_BLOCK_SIZE,
-                    common::ObWrapperAllocator, false> params_info_;
 
   common::ObFixedArray<ObPLFunction*, common::ObIAllocator> routine_table_;
   common::ObArray<ObUserDefinedType *> type_table_;
-  sql::ObRawExprFactory expr_factory_;
 
   jit::ObLLVMHelper helper_;
   jit::ObLLVMDIHelper di_helper_;
 
-  sql::ObSqlExpressionFactory sql_expression_factory_;
-  sql::ObExprOperatorFactory expr_operator_factory_;
-  common::ObFixedArray<sql::ObSqlExpression*, common::ObIAllocator> expressions_;
-  int64_t expr_op_size_;
-
   bool can_cached_;
-
-  sql::ObExprFrameInfo frame_info_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnit);
 };

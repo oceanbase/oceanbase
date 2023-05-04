@@ -27,7 +27,9 @@
 #include "observer/ob_server_schema_updater.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "observer/ob_heartbeat_handler.h"
 #include "common/ob_timeout_ctx.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 namespace oceanbase
 {
@@ -83,38 +85,22 @@ int ObHeartBeatProcess::init()
 int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantNodeBalancer::ServerResource svr_res_assigned;
   common::ObArray<std::pair<uint64_t, uint64_t> > max_stored_versions;
 
-  int64_t clog_free_size_byte = 0;
-  int64_t clog_total_size_byte = 0;
-  logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
-
-  if (!inited_ || OB_ISNULL(log_block_mgr)) {
+  if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init or log_block_mgr is null", KR(ret), K(inited_), K(GCTX.log_block_mgr_));
-  } else if (OB_FAIL(omt::ObTenantNodeBalancer::get_instance().get_server_allocated_resource(svr_res_assigned))) {
-    LOG_WARN("fail to get server allocated resource", KR(ret));
-  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
-    LOG_WARN("Failed to get clog stat ", KR(ret));
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_ISNULL(GCTX.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.ob_service_ is null", KR(ret), KP(GCTX.ob_service_));
+  } else if (OB_FAIL((GCTX.ob_service_->get_server_resource_info(lease_request.resource_info_)))) {
+    LOG_WARN("fail to get server resource info", KR(ret));
   } else {
     lease_request.request_lease_time_ = 0; // this is not a valid member
     lease_request.version_ = ObLeaseRequest::LEASE_VERSION;
     lease_request.zone_ = gctx_.config_->zone.str();
     lease_request.server_ = gctx_.self_addr();
     lease_request.sql_port_ = gctx_.config_->mysql_port;
-    lease_request.resource_info_.cpu_ = get_cpu_count();
-    lease_request.resource_info_.report_cpu_assigned_ = svr_res_assigned.min_cpu_;
-    lease_request.resource_info_.report_cpu_max_assigned_ = svr_res_assigned.max_cpu_;
-    lease_request.resource_info_.report_mem_assigned_ = svr_res_assigned.memory_size_;
-    lease_request.resource_info_.mem_in_use_ = 0;
-    lease_request.resource_info_.mem_total_ = GMEMCONF.get_server_memory_avail();
-    lease_request.resource_info_.disk_total_
-        = OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    lease_request.resource_info_.disk_in_use_
-        = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    lease_request.resource_info_.log_disk_total_ = clog_total_size_byte;
-    lease_request.resource_info_.report_log_disk_assigned_ = svr_res_assigned.log_disk_size_;
     get_package_and_svn(lease_request.build_version_, sizeof(lease_request.build_version_));
     OTC_MGR.get_lease_request(lease_request);
     lease_request.start_service_time_ = gctx_.start_service_time_;
@@ -171,8 +157,8 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
     if (OB_INVALID_ID != lease_response.server_id_) {
       if (GCTX.server_id_ != lease_response.server_id_) {
         LOG_INFO("receive new server id",
-                 "old_id", GCTX.server_id_,
-                 "new_id", lease_response.server_id_);
+            "old_id", GCTX.server_id_,
+            "new_id", lease_response.server_id_);
         GCTX.server_id_ = lease_response.server_id_;
         GCONF.server_id = lease_response.server_id_;
         const int64_t delay = 0;
@@ -186,13 +172,16 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
       }
     }
 
-    // update server status if needed
-    if (RSS_INVALID != lease_response.rs_server_status_) {
-      if (GCTX.rs_server_status_ != lease_response.rs_server_status_) {
-        LOG_INFO("receive new server status recorded in rs",
-                 "old_status", GCTX.rs_server_status_,
-                 "new_status", lease_response.rs_server_status_);
-        GCTX.rs_server_status_ = lease_response.rs_server_status_;
+    if (!ObHeartbeatHandler::is_rs_epoch_id_valid()) {
+      ///// if the new heartbeat service has not started, this heartbeat is responsible for
+      //// update server_id_ and rs_server_status_
+      if (RSS_INVALID != lease_response.rs_server_status_) {
+        if (GCTX.rs_server_status_ != lease_response.rs_server_status_) {
+          LOG_INFO("receive new server status recorded in rs",
+                  "old_status", GCTX.rs_server_status_,
+                  "new_status", lease_response.rs_server_status_);
+          GCTX.rs_server_status_ = lease_response.rs_server_status_;
+        }
       }
     }
     // even try reload schema failed, we should continue do following things
@@ -200,10 +189,10 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
 
     if (OB_SUCCESS != schema_ret) {
       LOG_WARN("try reload schema failed", "schema_version", lease_response.schema_version_,
-               "refresh_schema_info", lease_response.refresh_schema_info_, K(schema_ret));
+              "refresh_schema_info", lease_response.refresh_schema_info_, K(schema_ret));
     } else {
       LOG_INFO("try reload schema success", "schema_version", lease_response.schema_version_,
-               "refresh_schema_info", lease_response.refresh_schema_info_, K(schema_ret));
+              "refresh_schema_info", lease_response.refresh_schema_info_, K(schema_ret));
     }
 
     const int64_t delay = 0;

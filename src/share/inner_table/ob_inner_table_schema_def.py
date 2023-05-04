@@ -12,6 +12,7 @@
 # - (50000, 60000)   : Lob meta table
 # - (60000, 70000)   : Lob piece table
 # - (100000, 200000) : System table Index
+# - (15305, <20000)  : Oracle Real Agent table Index
 # - (500000, ~)      : User Table
 #
 # Here are some table_name definition principles.
@@ -267,7 +268,11 @@ all_table_def = dict(
       ('b_interval_range', 'varchar:OB_MAX_B_HIGH_BOUND_VAL_LENGTH', 'true'),
       ('object_status', 'int', 'false', '1'),
       ('table_flags', 'int', 'false', '0'),
-      ('truncate_version', 'int', 'false', '-1')
+      ('truncate_version', 'int', 'false', '-1'),
+      ('external_file_location', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_location_access_info', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_format', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('external_file_pattern', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
     ],
 )
 
@@ -312,6 +317,8 @@ all_column_def = dict(
       ('orig_default_value_v2', 'varbinary:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
       ('cur_default_value_v2', 'varbinary:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
       ('srs_id', 'int', 'false', 'OB_DEFAULT_COLUMN_SRS_ID'),
+      ('udt_set_id', 'int', 'false', '0'),
+      ('sub_data_type', 'int', 'false', '0'),
     ],
 )
 
@@ -608,6 +615,7 @@ def_table_schema(
       ('start_service_time', 'int'),
       ('first_sessid', 'int', 'false', '0'),
       ('with_partition', 'int', 'false', '0'),
+      ('last_offline_time', 'int', 'false', '0'),
   ],
 )
 
@@ -2247,6 +2255,7 @@ all_trigger_def = dict(
     ('ref_trg_db_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
     ('ref_trg_name', 'varchar:OB_MAX_TRIGGER_NAME_LENGTH', 'true'),
     ('action_order', 'int', 'false'),
+    ('analyze_flag', 'int', 'false', 0),
   ],
 )
 
@@ -5456,9 +5465,85 @@ def_table_schema(
 # 448 : __all_backup_transferring_tablets
 
 # 449 : __all_wait_for_partition_split_tablet
-# 450 : __all_external_table_file
+
+def_table_schema(
+  owner = 'jim.wjh',
+  table_name    = '__all_external_table_file',
+  table_id      = '450',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+      ('table_id', 'int'),
+      ('part_id', 'int'),
+      ('file_id', 'int'),
+  ],
+  normal_columns = [
+    ('file_url', 'varbinary:16384'),
+    ('create_version', 'int'),
+    ('delete_version', 'int'),
+    ('file_size', 'int'),
+  ],
+  in_tenant_space = True,
+)
+
 # 451 : __all_task_opt_stat_gather_history
 # 452 : __all_table_opt_stat_gather_history
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name = '__all_task_opt_stat_gather_history',
+    table_id = '451',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'varchar:36')
+    ],
+    in_tenant_space = True,
+    is_cluster_private = True,
+    meta_record_in_sys = False,
+    normal_columns = [
+      ('type', 'int', 'true'),
+      ('ret_code', 'int', 'true'),
+      ('table_count', 'int', 'true'),
+      ('failed_count', 'int', 'true'),
+      ('start_time', 'timestamp'),
+      ('end_time', 'timestamp'),
+      ('spare1', 'int', 'true'),
+      ('spare2', 'int', 'true'),
+      ('spare3', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ],
+)
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name = '__all_table_opt_stat_gather_history',
+    table_id = '452',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'varchar:36'),
+      ('table_id', 'int'),
+    ],
+    in_tenant_space = True,
+    is_cluster_private = True,
+    meta_record_in_sys = False,
+    normal_columns = [
+      ('ret_code', 'int', 'true'),
+      ('start_time', 'timestamp', 'true'),
+      ('end_time', 'timestamp', 'true'),
+      ('memory_used', 'int', 'true'),
+      ('stat_refresh_failed_list', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('properties', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('spare1', 'int', 'true'),
+      ('spare2', 'int', 'true'),
+      ('spare3', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ],
+)
+
 # 453 : __all_zone_storage
 # 454 : __all_zone_storage_operation
 # 455 : __wr_active_session_history
@@ -6425,6 +6510,7 @@ def_table_schema(
   ('free_size', 'int', 'false'),
   ('is_disk_valid', 'int', 'false'),
   ('disk_error_begin_ts', 'int', 'false'),
+  ('allocated_size', 'int', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -6631,23 +6717,23 @@ def_table_schema(
     ('sqc_id', 'int'),
     ('worker_id', 'int'),
 
-    ('event', 'varchar:OB_MAX_WAIT_EVENT_NAME_LENGTH', 'false'),
-    ('p1text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p1', 'uint', 'false'),
-    ('p2text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p2', 'uint', 'false'),
-    ('p3text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('p3', 'uint', 'false'),
-    ('level', 'int', 'false'),
-    ('wait_class_id', 'int', 'false'),
-    ('wait_class#', 'int', 'false'),
-    ('wait_class', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'false'),
-    ('state', 'varchar:19', 'false'),
-    ('wait_time_micro', 'int', 'false'),
-    ('total_wait_time_micro', 'int', 'false'),
-    ('total_waits', 'int'),
+    ('event', 'varchar:OB_MAX_WAIT_EVENT_NAME_LENGTH', 'true'),
+    ('p1text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p1', 'uint', 'true'),
+    ('p2text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p2', 'uint', 'true'),
+    ('p3text', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('p3', 'uint', 'true'),
+    ('level', 'int', 'true'),
+    ('wait_class_id', 'int', 'true'),
+    ('wait_class#', 'int', 'true'),
+    ('wait_class', 'varchar:OB_MAX_WAIT_EVENT_PARAM_LENGTH', 'true'),
+    ('state', 'varchar:19', 'true'),
+    ('wait_time_micro', 'int', 'true'),
+    ('total_wait_time_micro', 'int', 'true'),
+    ('total_waits', 'int', 'true'),
 
-    ('rpc_count', 'int'),
+    ('rpc_count', 'int', 'true'),
     ('plan_type', 'int'),
 
     ('is_inner_sql', 'bool'),
@@ -6662,33 +6748,33 @@ def_table_schema(
     ('decode_time','int'),
     ('get_plan_time', 'int'),
     ('execute_time', 'int'),
-    ('application_wait_time', 'uint'),
-    ('concurrency_wait_time', 'uint'),
-    ('user_io_wait_time', 'uint'),
-    ('schedule_time', 'uint'),
-    ('row_cache_hit', 'int'),
-    ('bloom_filter_cache_hit', 'int'),
-    ('block_cache_hit', 'int'),
-    ('disk_reads', 'int'),
+    ('application_wait_time', 'uint', 'true'),
+    ('concurrency_wait_time', 'uint', 'true'),
+    ('user_io_wait_time', 'uint', 'true'),
+    ('schedule_time', 'uint', 'true'),
+    ('row_cache_hit', 'int', 'true'),
+    ('bloom_filter_cache_hit', 'int', 'true'),
+    ('block_cache_hit', 'int', 'true'),
+    ('disk_reads', 'int', 'true'),
     ('execution_id', 'int'),
     ('session_id', 'uint'),
     ('retry_cnt', 'int'),
     ('table_scan', 'bool'),
     ('consistency_level', 'int'),
-    ('memstore_read_row_count', 'int'),
-    ('ssstore_read_row_count', 'int'),
-    ('data_block_read_cnt', 'int'),
-    ('data_block_cache_hit', 'int'),
-    ('index_block_read_cnt', 'int'),
-    ('index_block_cache_hit', 'int'),
-    ('blockscan_block_cnt', 'int'),
-    ('blockscan_row_cnt', 'int'),
-    ('pushdown_storage_filter_row_cnt', 'int'),
+    ('memstore_read_row_count', 'int', 'true'),
+    ('ssstore_read_row_count', 'int', 'true'),
+    ('data_block_read_cnt', 'int', 'true'),
+    ('data_block_cache_hit', 'int', 'true'),
+    ('index_block_read_cnt', 'int', 'true'),
+    ('index_block_cache_hit', 'int', 'true'),
+    ('blockscan_block_cnt', 'int', 'true'),
+    ('blockscan_row_cnt', 'int', 'true'),
+    ('pushdown_storage_filter_row_cnt', 'int', 'true'),
     ('request_memory_used', 'bigint'),
     ('expected_worker_count', 'int'),
     ('used_worker_count', 'int'),
     ('sched_info', 'varchar:16384', 'true'),
-    ('fuse_row_cache_hit', 'int'),
+    ('fuse_row_cache_hit', 'int', 'true'),
 
     ('user_client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
     ('ps_client_stmt_id', 'int'),
@@ -8064,9 +8150,6 @@ def_table_schema(
 )
 
 # table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
-
-
-
 
 ################################################################
 ################################################################
@@ -10312,6 +10395,7 @@ def_table_schema(
       ('log_disk_in_use', 'int'),
       ('ssl_cert_expired_time', 'int'),
       ('memory_limit', 'int'),
+      ('data_disk_allocated', 'int'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11490,7 +11574,12 @@ def_table_schema(
 )
 
 # 12370: __all_virtual_wait_for_partition_split_tablet
-# 12371: __all_virtual_external_table_file
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12371',
+  table_name = '__all_virtual_external_table_file',
+  keywords = all_def_keywords['__all_external_table_file']))
+
 # 12372: __all_virtual_io_tracer
 # 12373: __all_virtual_mds_node_stat
 # 12374: __all_virtual_mds_event_history
@@ -11500,9 +11589,48 @@ def_table_schema(
 # 12378: __all_virtual_dup_ls_tablet_set
 # 12379: __all_virtual_dup_ls_tablets
 # 12380: __all_virtual_tx_data
-# 12381: __all_virtual_task_opt_stat_gather_history
-# 12382: __all_virtual_table_opt_stat_gather_history
-# 12383: __all_virtual_opt_stat_gather_monitor
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12381',
+  table_name = '__all_virtual_task_opt_stat_gather_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_task_opt_stat_gather_history']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12382',
+  table_name = '__all_virtual_table_opt_stat_gather_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_table_opt_stat_gather_history']))
+
+def_table_schema(
+  owner = 'jiangxiu.wt',
+  table_name     = '__all_virtual_opt_stat_gather_monitor',
+  table_id       = '12383',
+  table_type     = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+  normal_columns = [
+  ('tenant_id', 'int'),
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('session_id', 'int'),
+  ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+  ('task_id', 'varchar:36'),
+  ('type', 'int'),
+  ('task_start_time', 'timestamp'),
+  ('task_table_count', 'int'),
+  ('task_duration_time', 'int'),
+  ('completed_table_count', 'int'),
+  ('running_table_owner', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
+  ('running_table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+  ('running_table_duration_time', 'int'),
+  ('spare1', 'int', 'true'),
+  ('spare2', 'varchar:MAX_VALUE_LENGTH', 'true'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner             = 'fengshuo.fs',
@@ -11565,7 +11693,35 @@ def_table_schema(
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
 # 12397: __all_virtual_px_p2p_datahub
 # 12398: __all_virtual_column_group
+# 12399: __all_virtual_storage_leak_info
 #
+# 12400 __all_virtual_ls_log_restore_status
+# 12401: __all_virtual_tenant_parameter
+#
+
+def_table_schema(
+  owner = 'mingdou.tmd',
+  table_name    = '__all_virtual_px_p2p_datahub',
+  table_id      = '12397',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('datahub_id', 'bigint'),
+    ('message_type', 'varchar:256'),
+    ('tenant_id', 'int'),
+    ('hold_size', 'bigint'),
+    ('timeout_ts', 'timestamp'),
+    ('start_time', 'timestamp')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置
 #
 
@@ -11843,14 +11999,14 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15287'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288', all_def_keywords['__all_virtual_ls_arb_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289', all_def_keywords['__all_virtual_ls_arb_replica_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290', all_def_keywords['__all_virtual_archive_dest_status'])))
-
 # 15291: __all_virtual_backup_transferring_tablets
-# 15292: __all_virtual_external_table_file
-# 15293: __all_data_dictionary_in_log
-# 15294: __all_task_opt_stat_gather_history
-# 15295: __all_table_opt_stat_gather_history
-# 15296: __all_virtual_opt_stat_gather_monitor
 
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15292', all_def_keywords['__all_external_table_file']))
+
+# 15293: __all_data_dictionary_in_log
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15294', all_def_keywords['__all_virtual_task_opt_stat_gather_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295', all_def_keywords['__all_virtual_table_opt_stat_gather_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15296', all_def_keywords['__all_virtual_opt_stat_gather_monitor'])))
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
 
@@ -11860,10 +12016,85 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
-
 # 15305: __all_virtual_obj_lock
 
-# [15306, 15375] for oracle inner_table index
+#######################################################################
+# oracle agent table index is defined after the System table Index area
+#######################################################################
+# 15306: idx_data_table_id_real_agent
+# 15307: idx_db_tb_name_real_agent
+# 15308: idx_tb_name_real_agent
+# 15309: idx_tb_column_name_real_agent
+# 15310: idx_column_name_real_agent
+# 15311: idx_ur_name_real_agent
+# 15312: idx_db_name_real_agent
+# 15313: idx_tg_name_real_agent
+# 15314: idx_recyclebin_db_type_real_agent
+# 15315: idx_part_name_real_agent
+# 15316: idx_sub_part_name_real_agent
+# 15317: idx_def_sub_part_name_real_agent
+# 15318: idx_fk_child_tid_real_agent
+# 15319: idx_fk_parent_tid_real_agent
+# 15320: idx_fk_name_real_agent
+# 15321: idx_db_synonym_name_real_agent
+# 15322: idx_synonym_name_real_agent
+# 15323: idx_db_routine_name_real_agent
+# 15324: idx_routine_name_real_agent
+# 15325: idx_routine_pkg_id_real_agent
+# 15326: idx_routine_param_name_real_agent
+# 15327: idx_db_pkg_name_real_agent
+# 15328: idx_pkg_name_real_agent
+# 15329: idx_cst_name_real_agent
+# 15330: idx_db_type_name_real_agent
+# 15331: idx_type_name_real_agent
+# 15332: idx_type_attr_name_real_agent
+# 15333: idx_coll_name_type_real_agent
+# 15334: idx_owner_dblink_name_real_agent
+# 15335: idx_dblink_name_real_agent
+# 15336: idx_grantee_role_id_real_agent
+# 15337: idx_keystore_master_key_id_real_agent
+# 15338: idx_ols_policy_name_real_agent
+# 15339: idx_ols_policy_col_name_real_agent
+# 15340: idx_ols_com_policy_id_real_agent
+# 15341: idx_ols_lab_policy_id_real_agent
+# 15342: idx_ols_lab_tag_real_agent
+# 15343: idx_ols_lab_real_agent
+# 15344: idx_ols_level_uid_real_agent
+# 15345: idx_ols_level_policy_id_real_agent
+# 15346: idx_profile_name_real_agent
+# 15347: idx_audit_type_real_agent
+# 15348: idx_trigger_base_obj_id_real_agent
+# 15349: idx_db_trigger_name_real_agent
+# 15350: idx_trigger_name_real_agent
+# 15351: idx_objauth_grantor_real_agent
+# 15352: idx_objauth_grantee_real_agent
+# 15353: idx_obj_type_db_obj_name_real_agent
+# 15354: idx_obj_type_obj_name_real_agent
+# 15355: idx_dependency_ref_obj_real_agent
+# 15356: idx_table_stat_his_savtime_real_agent
+# 15357: idx_column_stat_his_savtime_real_agent
+# 15358: idx_histogram_stat_his_savtime_real_agent
+# 15359: idx_tablet_to_ls_id_real_agent
+# 15360: idx_tablet_to_table_id_real_agent
+# 15361: idx_ctx_namespace_real_agent
+# 15362: idx_spm_item_sql_id_real_agent
+# 15363: idx_spm_item_value_real_agent
+# 15364: idx_directory_name_real_agent
+# 15365: idx_job_powner_real_agent
+# 15366: idx_seq_obj_db_name_real_agent
+# 15367: idx_seq_obj_name_real_agent
+# 15368: idx_recyclebin_ori_name_real_agent
+# 15369: idx_tb_priv_db_name_real_agent
+# 15370: idx_tb_priv_tb_name_real_agent
+# 15371: idx_db_priv_db_name_real_agent
+# 15372: idx_rls_policy_table_id_real_agent
+# 15373: idx_rls_policy_group_id_real_agent
+# 15374: idx_rls_group_table_id_real_agent
+# 15375: idx_rls_context_table_id_real_agent
+#######################################################################
+# end for oracle agent table index
+#######################################################################
+
 # 15376: __all_virtual_log_restore_source
 # 15377: __all_virtual_balance_job
 # 15378: __all_virtual_balance_job_history
@@ -11873,8 +12104,12 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15382: __all_virtual_transfer_task_history
 # 15383: __all_virtual_resource_pool_sys_agent
 # 15384: __all_virtual_px_p2p_datahub
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
+# 15387: __all_virtual_ls_log_restore_status
+# 15388: __all_virtual_tenant_parameter
+
 
 ################################################################################
 # System View (20000,30000]
@@ -12274,7 +12509,7 @@ def_table_schema(
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     where a.tenant_id = 0
-                    and a.table_type in (0, 1, 2, 3, 4)
+                    and a.table_type in (0, 1, 2, 3, 4, 14)
                     and b.database_name != '__recyclebin'
                     and b.in_recyclebin = 0
                     and 0 = sys_privilege_check('table_acc', effective_tenant_id(), b.database_name, a.table_name)
@@ -12562,6 +12797,8 @@ def_table_schema(
                         WHEN 3 THEN "gbk"
                         WHEN 4 THEN "utf16"
                         WHEN 5 THEN "gb18030"
+                        WHEN 6 THEN "latin1"
+                        WHEN 7 THEN "gb18030_2022"
                         ELSE NULL
                         END
                           AS CHAR(64)
@@ -15810,7 +16047,12 @@ SELECT SVR_IP,
        gmt_create AS CREATE_TIME,
        gmt_modified AS MODIFY_TIME,
 
-       BUILD_VERSION
+       BUILD_VERSION,
+
+       CASE last_offline_time
+          WHEN 0 THEN NULL
+          ELSE usec_to_time(last_offline_time) END
+       AS LAST_OFFLINE_TIME
 FROM oceanbase.__all_server
 """.replace("\n", " ")
 )
@@ -16822,7 +17064,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -17337,7 +17579,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 6, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 6, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
 
   LEFT JOIN
@@ -17565,7 +17807,7 @@ FROM
      AND C.COLUMN_ID = STAT.COLUMN_ID
      AND STAT.OBJECT_TYPE = 1
 WHERE
-  T.TABLE_TYPE IN (0,1,3,4,5,6,7,8,9)
+  T.TABLE_TYPE IN (0,1,3,4,5,6,7,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -18861,7 +19103,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,CAST(TABLE_ID AS SIGNED) AS OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -20079,6 +20321,7 @@ SELECT
   DATA_DISK_IN_USE,
   DATA_DISK_HEALTH_STATUS,
   MEMORY_LIMIT,
+  DATA_DISK_ALLOCATED,
   (CASE
       WHEN data_disk_abnormal_time > 0 THEN usec_to_time(data_disk_abnormal_time)
       ELSE NULL
@@ -20994,7 +21237,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE IN (0,2,3,6))
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -21012,7 +21255,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -21035,7 +21278,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,6)
+        WHERE T.TABLE_TYPE IN (0,2,3,6,14)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -21094,7 +21337,7 @@ def_table_schema(
             database_id,
             table_id,
             table_name
-      FROM oceanbase.__all_table where table_type in (0,2,3,6)) T
+      FROM oceanbase.__all_table where table_type in (0,2,3,6,14)) T
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
@@ -21180,7 +21423,7 @@ def_table_schema(
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,3,6)
+  AND t.table_type in (0,3,6,14)
 """.replace("\n", " ")
 )
 
@@ -21237,7 +21480,7 @@ def_table_schema(
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,3,6)
+  AND t.table_type in (0,3,6,14)
 """.replace("\n", " ")
 )
 
@@ -21272,7 +21515,7 @@ def_table_schema(
             database_id,
             table_id,
             table_name
-      FROM oceanbase.__all_table where table_type in (0,3,6)) T
+      FROM oceanbase.__all_table where table_type in (0,3,6,14)) T
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
@@ -21334,7 +21577,7 @@ def_table_schema(
       AND hist.object_type = 2
   WHERE
     c.is_hidden = 0
-    AND t.table_type in (0,3,6)
+    AND t.table_type in (0,3,6,14)
   """.replace("\n", " ")
 )
 
@@ -21380,7 +21623,7 @@ def_table_schema(
       AND hist.object_type = 3
   WHERE
     c.is_hidden = 0
-    AND t.table_type in (0,3,6)
+    AND t.table_type in (0,3,6,14)
   """.replace("\n", " ")
 )
 
@@ -21428,7 +21671,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE IN (0,3,6))
+        WHERE T.TABLE_TYPE IN (0,3,6,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -21446,7 +21689,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,3,6,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -21469,7 +21712,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,3,6)
+        WHERE T.TABLE_TYPE IN (0,3,6,14)
     ) V
     JOIN
         oceanbase.__all_database DB
@@ -22091,6 +22334,7 @@ def_table_schema(
     JOIN OCEANBASE.__ALL_TABLE T
          ON V.TENANT_ID = T.TENANT_ID
          AND V.TABLE_ID = T.TABLE_ID
+         AND T.TABLE_TYPE in (0, 3, 6)
     JOIN
         OCEANBASE.__ALL_DATABASE DB
         ON T.TENANT_ID = DB.TENANT_ID
@@ -24805,6 +25049,8 @@ def_table_schema(
                           WHEN 3 THEN "gbk"
                           WHEN 4 THEN "utf16"
                           WHEN 5 THEN "gb18030"
+                          WHEN 6 THEN "latin1"
+                          WHEN 7 THEN "gb18030_2022"
                           ELSE NULL
                         END AS CHAR(64)) AS CHARACTER_SET_NAME,
                         CAST(CASE rp.param_coll_type
@@ -25644,7 +25890,7 @@ FROM
 
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
-WHERE T.TABLE_TYPE IN (3,6,8,9)
+WHERE T.TABLE_TYPE IN (3,6,8,9,14)
   """.replace("\n", " "),
 
 )
@@ -25890,10 +26136,127 @@ def_table_schema(
 # 21373: DBA_OB_ACCESS_POINT
 # 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
 # 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
-# 21376: GV$OB_OPT_STAT_GATHER_MONITOR
-# 21377: V$OB_OPT_STAT_GATHER_MONITOR
-# 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
-# 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name     = 'GV$OB_OPT_STAT_GATHER_MONITOR',
+    table_id       = '21376',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+          CAST(TENANT_ID AS SIGNED) AS TENANT_ID,
+          CAST(SVR_IP AS CHAR(46)) AS SVR_IP,
+          CAST(SVR_PORT AS SIGNED) AS SVR_PORT,
+          CAST(SESSION_ID AS SIGNED) AS SESSION_ID,
+          CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+          CAST(TASK_ID AS CHAR(36)) AS TASK_ID,
+          CAST((CASE WHEN TYPE = 0 THEN 'MANUAL GATHER' ELSE
+                (CASE WHEN TYPE = 1 THEN 'AUTO GATHER' ELSE 'UNDEFINED GATHER' END) END) AS CHAR(16)) AS TYPE,
+          CAST(TASK_START_TIME AS DATETIME(6)) AS TASK_START_TIME,
+          CAST(TASK_DURATION_TIME AS SIGNED) AS TASK_DURATION_TIME,
+          CAST(TASK_TABLE_COUNT AS SIGNED) AS TASK_TABLE_COUNT,
+          CAST(COMPLETED_TABLE_COUNT AS SIGNED) AS COMPLETED_TABLE_COUNT,
+          CAST(RUNNING_TABLE_OWNER AS CHAR(128)) AS RUNNING_TABLE_OWNER,
+          CAST(RUNNING_TABLE_NAME AS CHAR(256)) AS RUNNING_TABLE_NAME,
+          CAST(RUNNING_TABLE_DURATION_TIME AS SIGNED) AS RUNNING_TABLE_DURATION_TIME
+          FROM oceanbase.__all_virtual_opt_stat_gather_monitor
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name     = 'V$OB_OPT_STAT_GATHER_MONITOR',
+    table_id       = '21377',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+    SELECT * FROM oceanbase.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'jiangxiu.wt',
+  table_name      = 'DBA_OB_TASK_OPT_STAT_GATHER_HISTORY',
+  table_id        = '21378',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+        CAST(TENANT_ID           AS     SIGNED) AS TENANT_ID,
+        CAST(TASK_ID             AS     CHAR(36)) AS TASK_ID,
+        CAST((CASE  WHEN type = 0 THEN 'MANUAL GATHER'
+               ELSE ( CASE  WHEN type = 1 THEN 'AUTO GATHER'
+                         ELSE ( CASE  WHEN type IS NULL THEN NULL
+                                  ELSE 'UNDEFINED GATHER' END )END ) END ) AS CHAR(16)) AS TYPE,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS CHAR(8)) AS STATUS,
+        CAST(TABLE_COUNT         AS     SIGNED) AS TABLE_COUNT,
+        CAST(FAILED_COUNT        AS     SIGNED) AS FAILED_COUNT,
+        CAST(START_TIME          AS     DATETIME(6)) AS START_TIME,
+        CAST(END_TIME            AS     DATETIME(6)) AS END_TIME
+    FROM
+        oceanbase.__all_virtual_task_opt_stat_gather_history
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name     = 'DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY',
+    table_id       = '21379',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+        SELECT
+        CAST(DB.DATABASE_NAME         AS     CHAR(128)) AS OWNER,
+        CAST(V.TABLE_NAME             AS     CHAR(256)) AS TABLE_NAME,
+        CAST(STAT.TASK_ID             AS     CHAR(36)) AS TASK_ID,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS CHAR(8)) AS STATUS,
+        CAST(STAT.START_TIME          AS     DATETIME(6)) AS START_TIME,
+        CAST(STAT.END_TIME            AS     DATETIME(6)) AS END_TIME,
+        CAST(STAT.MEMORY_USED         AS     SIGNED) AS MEMORY_USED,
+        CAST(STAT.STAT_REFRESH_FAILED_LIST      AS     CHAR(4096)) AS STAT_REFRESH_FAILED_LIST,
+        CAST(STAT.PROPERTIES       AS     CHAR(4096)) AS PROPERTIES
+        FROM
+        (
+          (SELECT CAST(0 AS SIGNED) AS TENANT_ID,
+                  DATABASE_ID,
+                  TABLE_ID,
+                  TABLE_NAME
+              FROM
+                OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
+              WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+            UNION ALL
+            SELECT TENANT_ID,
+                  DATABASE_ID,
+                  TABLE_ID,
+                  TABLE_NAME
+            FROM
+                oceanbase.__all_table T
+            WHERE T.TABLE_TYPE IN (0,2,3,6))
+        ) V
+        JOIN
+            oceanbase.__all_database DB
+            ON DB.TENANT_ID = V.TENANT_ID
+            AND DB.DATABASE_ID = V.DATABASE_ID
+            AND V.TENANT_ID = 0
+        LEFT JOIN
+            oceanbase.__all_virtual_table_opt_stat_gather_history STAT
+            ON STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND V.TABLE_ID = STAT.TABLE_ID
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'fengshuo.fs',
@@ -25995,12 +26358,320 @@ def_table_schema(
 # 21414: CDB_OB_TRANSFER_TASKS
 # 21415: DBA_OB_TRANSFER_TASK_HISTORY
 # 21416: CDB_OB_TRANSFER_TASK_HISTORY
-# 21417: ALL_OB_EXTERNAL_TABLE_FILE
-# 21418: CDB_OB_EXTERNAL_TABLE_FILE
-# 21419: GV$OB_PX_P2P_DATAHUB
-# 21420: V$OB_PX_P2P_DATAHUB
-# 21421: GV$SQL_JOIN_FILTER
-# 21422: V$SQL_JOIN_FILTER
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'DBA_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21417',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
+       INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+    WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'ALL_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21418',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND B.TENANT_ID = 0
+       INNER JOIN OCEANBASE.__ALL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND C.TENANT_ID = 0
+    WHERE  B.TABLE_TYPE = 14
+          AND 0 = sys_privilege_check('table_acc', EFFECTIVE_TENANT_ID(), C.DATABASE_NAME, B.TABLE_NAME)
+          AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$OB_PX_P2P_DATAHUB',
+    table_id       = '21419',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+          CAST(DATAHUB_ID AS SIGNED) AS DATAHUB_ID,
+          CAST(MESSAGE_TYPE AS CHAR(256)) AS MESSAGE_TYPE,
+          CAST(TENANT_ID AS SIGNED) as TENANT_ID,
+          CAST(HOLD_SIZE AS SIGNED) as HOLD_SIZE,
+          CAST(TIMEOUT_TS AS DATETIME) as TIMEOUT_TS,
+          CAST(START_TIME AS DATETIME) as START_TIME
+        FROM oceanbase.__all_virtual_px_p2p_datahub
+
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$OB_PX_P2P_DATAHUB',
+    table_id       = '21420',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT * FROM OCEANBASE.GV$OB_PX_P2P_DATAHUB
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$SQL_JOIN_FILTER',
+    table_id       = '21421',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(NULL AS SIGNED) AS QC_SESSION_ID,
+          CAST(NULL AS SIGNED) AS QC_INSTANCE_ID,
+          CAST(NULL AS SIGNED) AS SQL_PLAN_HASH_VALUE,
+          CAST(OTHERSTAT_5_VALUE AS SIGNED) as FILTER_ID,
+          CAST(NULL AS SIGNED) as BITS_SET,
+          CAST(OTHERSTAT_1_VALUE AS SIGNED) as FILTERED,
+          CAST(OTHERSTAT_3_VALUE AS SIGNED) as PROBED,
+          CAST(NULL AS SIGNED) as ACTIVE,
+          CAST(TENANT_ID AS SIGNED) as CON_ID,
+          CAST(TRACE_ID AS CHAR(64)) as TRACE_ID
+        FROM oceanbase.__all_virtual_sql_plan_monitor
+        WHERE plan_operation = 'PHY_JOIN_FILTER'
+
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$SQL_JOIN_FILTER',
+    table_id       = '21422',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT * FROM OCEANBASE.GV$SQL_JOIN_FILTER
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'yibo.tyf',
+    table_name     = 'DBA_OB_TABLE_STAT_STALE_INFO',
+    table_id       = '21423',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+WITH V AS
+(SELECT
+  NVL(T.TENANT_ID, 0) AS TENANT_ID,
+  NVL(T.TABLE_ID, VT.TABLE_ID) AS TABLE_ID,
+  NVL(T.TABLET_ID, VT.TABLET_ID) AS TABLET_ID,
+  NVL(T.INSERTS, 0) + NVL(VT.INSERT_ROW_COUNT, 0) - NVL(T.LAST_INSERTS, 0) AS INSERTS,
+  NVL(T.UPDATES, 0) + NVL(VT.UPDATE_ROW_COUNT, 0) - NVL(T.LAST_UPDATES, 0) AS UPDATES,
+  NVL(T.DELETES, 0) + NVL(VT.DELETE_ROW_COUNT, 0) - NVL(T.LAST_DELETES, 0) AS DELETES
+  FROM
+  OCEANBASE.__ALL_MONITOR_MODIFIED T
+  FULL JOIN
+  OCEANBASE.__ALL_VIRTUAL_DML_STATS VT
+  ON T.TABLE_ID = VT.TABLE_ID
+  AND T.TABLET_ID = VT.TABLET_ID
+  AND VT.TENANT_ID = EFFECTIVE_TENANT_ID()
+)
+SELECT
+  CAST(TM.DATABASE_NAME AS CHAR(128)) AS DATABASE_NAME,
+  CAST(TM.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+  CAST(TM.PART_NAME AS CHAR(128)) AS PARTITION_NAME,
+  CAST(TM.SUB_PART_NAME AS CHAR(128)) AS SUBPARTITION_NAME,
+  CAST(TS.ROW_CNT AS SIGNED) AS LAST_ANALYZED_ROWS,
+  TS.LAST_ANALYZED AS LAST_ANALYZED_TIME,
+  CAST(TM.INSERTS AS SIGNED) AS INSERTS,
+  CAST(TM.UPDATES AS SIGNED) AS UPDATES,
+  CAST(TM.DELETES AS SIGNED) AS DELETES,
+  CAST(NVL(CAST(UP.VALCHAR AS SIGNED), CAST(GP.SPARE4 AS SIGNED)) AS SIGNED) STALE_PERCENT,
+  CAST(CASE NVL((TM.INSERTS + TM.UPDATES + TM.DELETES) > TS.ROW_CNT * NVL(CAST(UP.VALCHAR AS SIGNED), CAST(GP.SPARE4 AS SIGNED)) / 100,
+                (TM.INSERTS + TM.UPDATES + TM.DELETES) > 0)
+        WHEN 0 THEN 'NO'
+        WHEN 1 THEN 'YES'
+       END AS CHAR(3)) AS IS_STALE
+FROM
+(SELECT
+  T.TENANT_ID,
+  T.TABLE_ID,
+  CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  P.PART_NAME,
+  SP.SUB_PART_NAME,
+  NVL(V.INSERTS, 0) AS INSERTS,
+  NVL(V.UPDATES, 0) AS UPDATES,
+  NVL(V.DELETES, 0) AS DELETES
+FROM OCEANBASE.__ALL_TABLE T
+JOIN OCEANBASE.__ALL_DATABASE DB
+  ON T.TENANT_ID = DB.TENANT_ID AND DB.DATABASE_ID = T.DATABASE_ID
+LEFT JOIN OCEANBASE.__ALL_PART P
+  ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID
+LEFT JOIN OCEANBASE.__ALL_SUB_PART SP
+  ON T.TENANT_ID = SP.TENANT_ID AND T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID
+LEFT JOIN V
+ON T.TENANT_ID = V.TENANT_ID AND T.TABLE_ID = V.TABLE_ID
+AND V.TABLET_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLET_ID WHEN 1 THEN P.TABLET_ID WHEN 2 THEN SP.TABLET_ID END
+WHERE T.TABLE_TYPE IN (0, 3, 6)
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  -1 AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  NULL AS PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM OCEANBASE.__ALL_TABLE T
+JOIN OCEANBASE.__ALL_DATABASE DB
+  ON T.TENANT_ID = DB.TENANT_ID AND DB.DATABASE_ID = T.DATABASE_ID
+JOIN OCEANBASE.__ALL_PART P
+  ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID
+LEFT JOIN V
+ON T.TENANT_ID = V.TENANT_ID AND T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = P.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 6) AND T.PART_LEVEL = 1
+GROUP BY DB.DATABASE_NAME,
+         T.TABLE_NAME
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  MIN(P.PART_ID) AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  P.PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM OCEANBASE.__ALL_TABLE T
+JOIN OCEANBASE.__ALL_DATABASE DB
+  ON T.TENANT_ID = DB.TENANT_ID AND DB.DATABASE_ID = T.DATABASE_ID
+JOIN OCEANBASE.__ALL_PART P
+  ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID
+JOIN OCEANBASE.__ALL_SUB_PART SP
+  ON T.TENANT_ID = SP.TENANT_ID AND T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID
+LEFT JOIN V
+ON T.TENANT_ID = V.TENANT_ID AND T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 6) AND T.PART_LEVEL = 2
+GROUP BY DB.DATABASE_NAME,
+        T.TABLE_NAME,
+        P.PART_NAME
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  -1 AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  NULL AS PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM OCEANBASE.__ALL_TABLE T
+JOIN OCEANBASE.__ALL_DATABASE DB
+  ON T.TENANT_ID = DB.TENANT_ID AND DB.DATABASE_ID = T.DATABASE_ID
+JOIN OCEANBASE.__ALL_PART P
+  ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID
+JOIN OCEANBASE.__ALL_SUB_PART SP
+  ON T.TENANT_ID = SP.TENANT_ID AND T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID
+LEFT JOIN V
+ON T.TENANT_ID = V.TENANT_ID AND T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 6) AND T.PART_LEVEL = 2
+GROUP BY DB.DATABASE_NAME,
+        T.TABLE_NAME
+) TM
+LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS
+  ON TM.TENANT_ID = TS.TENANT_ID AND TM.TABLE_ID = TS.TABLE_ID AND TM.PARTITION_ID = TS.PARTITION_ID
+LEFT JOIN OCEANBASE.__ALL_OPTSTAT_USER_PREFS UP
+  ON TM.TENANT_ID = UP.TENANT_ID AND TM.TABLE_ID = UP.TABLE_ID AND UP.PNAME = 'STALE_PERCENT'
+JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
+  ON GP.SNAME = 'STALE_PERCENT'
+""".replace("\n", " ")
+)
+
+# 21424: V$OB_LS_LOG_RESTORE_STATUS
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'CDB_OB_EXTERNAL_TABLE_FILES',
+  table_id        = '21425',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+    SELECT
+      A.TENANT_ID AS TENANT_ID,
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS TABLE_SCHEMA,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       OCEANBASE.__ALL_VIRTUAL_EXTERNAL_TABLE_FILE A
+       INNER JOIN OCEANBASE.__ALL_VIRTUAL_TABLE B ON A.TABLE_ID = B.TABLE_ID AND A.TENANT_ID=B.TENANT_ID
+       INNER JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID=C.TENANT_ID
+    WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+""".replace("\n", " ")
+)
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -26139,7 +26810,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -26670,7 +27341,7 @@ def_table_schema(
       ,TABLE_ID OBJECT_ID
       ,TABLE_ID PRIV_OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -27237,7 +27908,7 @@ def_table_schema(
       ,NULL SUBOBJECT_NAME
       ,TABLE_ID OBJECT_ID
       ,(CASE WHEN TABLET_ID != 0 THEN TABLET_ID ELSE NULL END) DATA_OBJECT_ID
-      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9) THEN 'TABLE'
+      ,CASE WHEN TABLE_TYPE IN (0,3,6,8,9,14) THEN 'TABLE'
             WHEN TABLE_TYPE IN (2) THEN 'VIRTUAL TABLE'
             WHEN TABLE_TYPE IN (1,4) THEN 'VIEW'
             WHEN TABLE_TYPE IN (5) THEN 'INDEX'
@@ -28859,7 +29530,10 @@ SELECT
         43, 'NVARCHAR2',
         44, 'NCHAR',
         45, 'UROWID',
-        46, '',
+        46, 'LOB',
+        47, 'JSON',
+        48, 'GEOMETRY',
+        49, 'UDT',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -28948,7 +29622,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -29073,7 +29747,10 @@ SELECT
         43, 'NVARCHAR2',
         44, 'NCHAR',
         45, 'UROWID',
-        46, '',
+        46, 'LOB',
+        47, 'JSON',
+        48, 'GEOMETRY',
+        49, 'UDT',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -29162,7 +29839,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -29284,7 +29961,10 @@ SELECT
         43, 'NVARCHAR2',
         44, 'NCHAR',
         45, 'UROWID',
-        46, '',
+        46, 'LOB',
+        47, 'JSON',
+        48, 'GEOMETRY',
+        49, 'UDT',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
   CAST(NULL AS VARCHAR2(3)) AS  DATA_TYPE_MOD,
   CAST(NULL AS VARCHAR2(128)) AS  DATA_TYPE_OWNER,
@@ -29373,7 +30053,7 @@ FROM
             TABLE_TYPE
      FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
-     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9)) T
+     AND TABLE_TYPE IN (0,1,3,4,5,7,8,9,14)) T
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
     ON DB.TENANT_ID = T.TENANT_ID
@@ -29924,7 +30604,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
     AND (T.DATABASE_ID = USERENV('SCHEMAID')
@@ -30097,7 +30777,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
 
@@ -30267,7 +30947,7 @@ FROM
   ON
     DB.TENANT_ID = T.TENANT_ID
     AND DB.DATABASE_ID = T.DATABASE_ID
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND T.DATABASE_ID = USERENV('SCHEMAID')
     AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
     AND DB.DATABASE_NAME !=  '__recyclebin'
@@ -30299,6 +30979,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -30329,6 +31010,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -30360,6 +31042,7 @@ def_table_schema(
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
       CAST(CASE WHEN TABLE_TYPE = 0 OR TABLE_TYPE = 2 OR TABLE_TYPE = 3 OR TABLE_TYPE = 8 OR TABLE_TYPE = 9 THEN 'TABLE'
                 WHEN TABLE_TYPE = 1 OR TABLE_TYPE = 4 OR TABLE_TYPE = 7 THEN 'VIEW'
+                WHEN TABLE_TYPE = 14 THEN 'EXTERNAL_TABLE'
                 ELSE NULL END AS VARCHAR2(11)) AS TABLE_TYPE,
       CAST(B."COMMENT" AS VARCHAR(4000)) AS COMMENTS
     FROM
@@ -31736,6 +32419,9 @@ def_table_schema(
             44, 'NCHAR',
             45, 'UROWID',
             46, DECODE(A.COLL_TYPE, 63, 'BLOB', 'CLOB'),
+            47, 'JSON',
+            48, 'GEOMETRY',
+            49, 'UDT',
             'NOT_SUPPORT')
         ELSE t1.TYPE_NAME END AS VARCHAR2(324)) AS ATTR_TYPE_NAME,
       A.LENGTH AS LENGTH,
@@ -35773,7 +36459,7 @@ FROM
      AND T.DATABASE_ID = DB.DATABASE_ID
  WHERE
     T.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
     AND (T.DATABASE_ID = USERENV('SCHEMAID')
          OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
@@ -36055,7 +36741,7 @@ FROM
      AND T.DATABASE_ID = DB.DATABASE_ID
  WHERE
     T.TENANT_ID = EFFECTIVE_TENANT_ID()
-    AND T.TABLE_TYPE IN (0, 3, 8, 9)
+    AND T.TABLE_TYPE IN (0, 3, 8, 9, 14)
     AND DB.DATABASE_NAME != '__recyclebin'
     AND T.DATABASE_ID = USERENV('SCHEMAID')
 """.replace("\n", " ")
@@ -41524,6 +42210,7 @@ def_table_schema(
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.TABLE_ID
          AND T.TENANT_ID = V.TENANT_ID
+         AND T.TABLE_TYPE IN (0, 3, 8, 9)
          AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -41588,6 +42275,7 @@ def_table_schema(
          ON T.TABLE_ID = V.TABLE_ID
          AND T.TENANT_ID = V.TENANT_ID
          AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+         AND T.TABLE_TYPE IN (0, 3, 8, 9)
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
         ON DB.TENANT_ID = V.TENANT_ID
@@ -41647,6 +42335,7 @@ def_table_schema(
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.TABLE_ID
          AND T.TENANT_ID = V.TENANT_ID
+         AND T.TABLE_TYPE IN (0, 3, 8, 9)
          AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
          AND T.DATABASE_ID = USERENV('SCHEMAID')
     JOIN
@@ -43402,25 +44091,430 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25227: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
-# 25228: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+def_table_schema(
+  owner = 'jiangxiu.wt',
+  table_name      = 'DBA_OB_TASK_OPT_STAT_GATHER_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25227',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+        CAST(TENANT_ID           AS     NUMBER) AS TENANT_ID,
+        CAST(TASK_ID             AS     VARCHAR2(36)) AS TASK_ID,
+        CAST((CASE  WHEN type = 0 THEN 'MANUAL GATHER'
+               ELSE ( CASE  WHEN type = 1 THEN 'AUTO GATHER'
+                         ELSE ( CASE  WHEN type IS NULL THEN NULL
+                                  ELSE 'UNDEFINED GATHER' END )END ) END ) AS VARCHAR2(16)) AS TYPE,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS VARCHAR2(8)) AS STATUS,
+        CAST(TABLE_COUNT         AS     NUMBER) AS TASK_TABLE_COUNT,
+        CAST(FAILED_COUNT  AS     NUMBER) AS FAILED_COUNT,
+        CAST(START_TIME          AS     TIMESTAMP(6)) AS TASK_START_TIME,
+        CAST(END_TIME            AS     TIMESTAMP(6)) AS TASK_END_TIME
+    FROM
+        SYS.ALL_VIRTUAL_TASK_OPT_STAT_GATHER_HISTORY
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'jiangxiu.wt',
+  table_name      = 'DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25228',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+        CAST(DB.DATABASE_NAME         AS     VARCHAR2(128)) AS OWNER,
+        CAST(V.TABLE_NAME             AS     VARCHAR2(256)) AS TABLE_NAME,
+        CAST(STAT.TASK_ID             AS     VARCHAR2(36)) AS TASK_ID,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS VARCHAR2(8)) AS STATUS,
+        CAST(STAT.START_TIME          AS     TIMESTAMP(6)) AS START_TIME,
+        CAST(STAT.END_TIME            AS     TIMESTAMP(6)) AS END_TIME,
+        CAST(STAT.MEMORY_USED         AS     NUMBER) AS MEMORY_USED,
+        CAST(STAT.STAT_REFRESH_FAILED_LIST      AS     VARCHAR2(4096)) AS STAT_REFRESH_FAILED_LIST,
+        CAST(STAT.PROPERTIES       AS     VARCHAR2(4096)) AS PROPERTIES
+    FROM
+    (
+        (SELECT TENANT_ID,
+                DATABASE_ID,
+                TABLE_ID,
+                TABLE_ID AS PARTITION_ID,
+                TABLE_NAME,
+                NULL AS PARTITION_NAME,
+                NULL AS SUBPARTITION_NAME,
+                NULL AS PARTITION_POSITION,
+                NULL AS SUBPARTITION_POSITION,
+               'TABLE' AS OBJECT_TYPE
+          FROM
+             SYS.ALL_VIRTUAL_CORE_ALL_TABLE
+        UNION ALL
+        SELECT TENANT_ID,
+               DATABASE_ID,
+               TABLE_ID,
+               CASE WHEN PART_LEVEL = 0 THEN TABLE_ID ELSE -1 END AS PARTITION_ID,
+               TABLE_NAME,
+               NULL AS PARTITION_NAME,
+               NULL AS SUBPARTITION_NAME,
+               NULL AS PARTITION_POSITION,
+               NULL AS SUBPARTITION_POSITION,
+               'TABLE' AS OBJECT_TYPE
+        FROM
+            SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+    ) V
+    JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+        ON db.tenant_id = V.tenant_id
+        AND db.database_id = V.database_id
+        AND V.TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+    LEFT JOIN
+        SYS.ALL_VIRTUAL_TABLE_OPT_STAT_GATHER_HISTORY STAT
+        ON V.TENANT_ID = STAT.TENANT_ID
+        AND V.TABLE_ID = STAT.TABLE_ID
+        AND STAT.TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " ")
+)
+
 # 25229: DBA_WR_ACTIVE_SESSION_HISTORY
 # 25230: DBA_WR_SNAPSHOT
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
 # 25233: DBA_OB_LOG_RESTORE_SOURCE
-# 25234: DBA_OB_EXTERNAL_TABLE_FILES
-# 25235: ALL_OB_ETERNAL_TABLE_FILES
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'DBA_OB_EXTERNAL_TABLE_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25234',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+          B.TABLE_NAME AS TABLE_NAME,
+          C.DATABASE_NAME AS OWNER,
+          'P0' AS PARTITION_NAME,
+          A.FILE_URL AS FILE_URL,
+          A.FILE_SIZE AS FILE_SIZE
+        FROM
+          SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
+          INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID
+          INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+        WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
+              (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+    """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'jim.wjh',
+  table_name      = 'ALL_OB_EXTERNAL_TABLE_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25235',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      B.TABLE_NAME AS TABLE_NAME,
+      C.DATABASE_NAME AS OWNER,
+      'P0' AS PARTITION_NAME,
+      A.FILE_URL AS FILE_URL,
+      A.FILE_SIZE AS FILE_SIZE
+    FROM
+       SYS.ALL_VIRTUAL_EXTERNAL_TABLE_FILE_REAL_AGENT A
+       INNER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON A.TABLE_ID = B.TABLE_ID
+       INNER JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID = C.TENANT_ID
+    WHERE B.TENANT_ID = EFFECTIVE_TENANT_ID() AND B.TABLE_TYPE = 14 AND
+          (C.DATABASE_ID = USERENV('SCHEMAID') OR USER_CAN_ACCESS_OBJ(1, B.TABLE_ID, C.DATABASE_ID) = 1) AND
+          (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
+    """.replace("\n", " ")
+)
+
 # 25237: DBA_OB_BALANCE_JOBS
 # 25238: DBA_OB_BALANCE_JOB_HISTORY
 # 25239: DBA_OB_BALANCE_TASKS
 # 25240: DBA_OB_BALANCE_TASK_HISTORY
 # 25241: DBA_OB_TRANSFER_TASKS
 # 25242: DBA_OB_TRANSFER_TASK_HISTORY
-# 25243: GV$OB_PX_P2P_DATAHUB
-# 25244: V$OB_PX_P2P_DATAHUB
-# 25245: GV$SQL_JOIN_FILTER
-# 25246: V$SQL_JOIN_FILTER
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$OB_PX_P2P_DATAHUB',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25243',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+          SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(TRACE_ID AS CHAR(64)) AS TRACE_ID,
+          CAST(DATAHUB_ID AS NUMBER) AS DATAHUB_ID,
+          CAST(MESSAGE_TYPE AS VARCHAR2(256)) AS MESSAGE_TYPE,
+          CAST(TENANT_ID AS NUMBER) as TENANT_ID,
+          CAST(HOLD_SIZE AS NUMBER) as HOLD_SIZE,
+          CAST(TIMEOUT_TS AS TIMESTAMP) as TIMEOUT_TS,
+          CAST(START_TIME AS TIMESTAMP) as START_TIME
+        FROM SYS.ALL_VIRTUAL_PX_P2P_DATAHUB
+
+""".replace("\n", " "),
+
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$OB_PX_P2P_DATAHUB',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25244',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+        SELECT * FROM SYS.GV$OB_PX_P2P_DATAHUB
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'GV$SQL_JOIN_FILTER',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25245',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+        SELECT
+          SVR_IP,
+          SVR_PORT,
+          CAST(NULL AS NUMBER) AS QC_SESSION_ID,
+          CAST(NULL AS NUMBER) AS QC_INSTANCE_ID,
+          CAST(NULL AS NUMBER) AS SQL_PLAN_HASH_VALUE,
+          CAST(OTHERSTAT_5_VALUE AS NUMBER) as FILTER_ID,
+          CAST(NULL AS NUMBER) as BITS_SET,
+          CAST(OTHERSTAT_1_VALUE AS NUMBER) as FILTERED,
+          CAST(OTHERSTAT_3_VALUE AS NUMBER) as PROBED,
+          CAST(NULL AS NUMBER) as ACTIVE,
+          CAST(TENANT_ID AS NUMBER) as CON_ID,
+          CAST(TRACE_ID AS CHAR(64)) as TRACE_ID
+        FROM SYS.ALL_VIRTUAL_SQL_PLAN_MONITOR
+        WHERE plan_operation = 'PHY_JOIN_FILTER'
+
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'mingdou.tmd',
+    table_name     = 'V$SQL_JOIN_FILTER',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '25246',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+    SELECT * FROM SYS.GV$SQL_JOIN_FILTER
+    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " "),
+)
+# 25247: DBA_OB_TABLE_STAT_STALE_INFO
+
+def_table_schema(
+  owner = 'yibo.tyf',
+  table_name      = 'DBA_OB_TABLE_STAT_STALE_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25247',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+WITH V AS
+(SELECT
+  NVL(T.TABLE_ID, VT.TABLE_ID) AS TABLE_ID,
+  NVL(T.TABLET_ID, VT.TABLET_ID) AS TABLET_ID,
+  NVL(T.INSERTS, 0) + NVL(VT.INSERT_ROW_COUNT, 0) - NVL(T.LAST_INSERTS, 0) AS INSERTS,
+  NVL(T.UPDATES, 0) + NVL(VT.UPDATE_ROW_COUNT, 0) - NVL(T.LAST_UPDATES, 0) AS UPDATES,
+  NVL(T.DELETES, 0) + NVL(VT.DELETE_ROW_COUNT, 0) - NVL(T.LAST_DELETES, 0) AS DELETES
+  FROM
+  SYS.ALL_VIRTUAL_MONITOR_MODIFIED_REAL_AGENT T
+  FULL JOIN
+  SYS.ALL_VIRTUAL_DML_STATS VT
+  ON T.TABLE_ID = VT.TABLE_ID
+  AND T.TABLET_ID = VT.TABLET_ID
+  AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+  AND VT.TENANT_ID = EFFECTIVE_TENANT_ID()
+)
+SELECT
+  CAST(TM.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
+  CAST(TM.TABLE_NAME AS VARCHAR2(128)) AS TABLE_NAME,
+  CAST(TM.PART_NAME AS VARCHAR2(128)) AS PARTITION_NAME,
+  CAST(TM.SUB_PART_NAME AS VARCHAR2(128)) AS SUBPARTITION_NAME,
+  CAST(TS.ROW_CNT AS NUMBER) AS LAST_ANALYZED_ROWS,
+  TS.LAST_ANALYZED AS LAST_ANALYZED_TIME,
+  CAST(TM.INSERTS AS NUMBER) AS INSERTS,
+  CAST(TM.UPDATES AS NUMBER) AS UPDATES,
+  CAST(TM.DELETES AS NUMBER) AS DELETES,
+  CAST(NVL(CAST(UP.VALCHAR AS NUMBER), CAST(GP.SPARE4 AS NUMBER)) AS NUMBER) STALE_PERCENT,
+  CAST(CASE WHEN TS.ROW_CNT IS NOT NULL
+       THEN CASE WHEN (TM.INSERTS + TM.UPDATES + TM.DELETES) > TS.ROW_CNT * NVL(CAST(UP.VALCHAR AS NUMBER), CAST(GP.SPARE4 AS NUMBER)) / 100
+            THEN 'YES' ELSE 'NO' END
+       ELSE CASE WHEN (TM.INSERTS + TM.UPDATES + TM.DELETES) > 0
+            THEN 'YES' ELSE 'NO' END
+       END AS VARCHAR2(3)) AS IS_STALE
+FROM
+(SELECT
+  T.TENANT_ID,
+  T.TABLE_ID,
+  CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  P.PART_NAME,
+  SP.SUB_PART_NAME,
+  NVL(V.INSERTS, 0) AS INSERTS,
+  NVL(V.UPDATES, 0) AS UPDATES,
+  NVL(V.DELETES, 0) AS DELETES
+FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+  ON DB.DATABASE_ID = T.DATABASE_ID
+  AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+  AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+  ON T.TABLE_ID = P.TABLE_ID
+  AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP
+  ON T.TABLE_ID = SP.TABLE_ID
+  AND P.PART_ID = SP.PART_ID
+  AND SP.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN V
+ON T.TABLE_ID = V.TABLE_ID
+AND V.TABLET_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLET_ID WHEN 1 THEN P.TABLET_ID WHEN 2 THEN SP.TABLET_ID END
+WHERE T.TABLE_TYPE IN (0, 3, 8, 9)
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  -1 AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  NULL AS PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+  ON DB.DATABASE_ID = T.DATABASE_ID
+  AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+  AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+  ON T.TABLE_ID = P.TABLE_ID
+  AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN V
+ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = P.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 1
+GROUP BY DB.DATABASE_NAME,
+         T.TABLE_NAME
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  MIN(P.PART_ID) AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  P.PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+  ON DB.DATABASE_ID = T.DATABASE_ID
+  AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+  AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+  ON T.TENANT_ID = P.TENANT_ID AND T.TABLE_ID = P.TABLE_ID
+JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP
+  ON T.TENANT_ID = SP.TENANT_ID AND T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID
+LEFT JOIN V
+ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 2
+GROUP BY DB.DATABASE_NAME,
+        T.TABLE_NAME,
+        P.PART_NAME
+UNION ALL
+SELECT
+  MIN(T.TENANT_ID),
+  MIN(T.TABLE_ID),
+  -1 AS PARTITION_ID,
+  DB.DATABASE_NAME,
+  T.TABLE_NAME,
+  NULL AS PART_NAME,
+  NULL AS SUB_PART_NAME,
+  SUM(NVL(V.INSERTS, 0)) AS INSERTS,
+  SUM(NVL(V.UPDATES, 0)) AS UPDATES,
+  SUM(NVL(V.DELETES, 0)) AS DELETES
+FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
+JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+  ON DB.DATABASE_ID = T.DATABASE_ID
+  AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+  AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
+  ON T.TABLE_ID = P.TABLE_ID
+  AND P.TENANT_ID = EFFECTIVE_TENANT_ID()
+JOIN SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT SP
+  ON T.TABLE_ID = SP.TABLE_ID
+  AND P.PART_ID = SP.PART_ID
+  AND SP.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN V
+ON T.TABLE_ID = V.TABLE_ID AND V.TABLET_ID = SP.TABLET_ID
+WHERE T.TABLE_TYPE IN (0, 3, 8, 9) AND T.PART_LEVEL = 2
+GROUP BY DB.DATABASE_NAME,
+        T.TABLE_NAME
+) TM
+LEFT JOIN SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
+  ON TM.TABLE_ID = TS.TABLE_ID
+  AND TM.PARTITION_ID = TS.PARTITION_ID
+  AND TM.TENANT_ID = EFFECTIVE_TENANT_ID()
+LEFT JOIN SYS.ALL_VIRTUAL_OPTSTAT_USER_PREFS_REAL_AGENT UP
+  ON TM.TABLE_ID = UP.TABLE_ID
+  AND UP.PNAME = 'STALE_PERCENT'
+  AND UP.TENANT_ID = EFFECTIVE_TENANT_ID()
+JOIN SYS.ALL_VIRTUAL_OPTSTAT_GLOBAL_PREFS_REAL_AGENT GP
+  ON GP.SNAME = 'STALE_PERCENT'
+""".replace("\n", " ")
+)
 
 #### End Data Dictionary View
 ################################################################################
@@ -45299,7 +46393,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -45379,7 +46473,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -45456,7 +46550,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -45537,7 +46631,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -45598,7 +46692,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -45653,7 +46747,7 @@ FROM
     AND stat.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -45717,7 +46811,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -45778,7 +46872,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -45833,7 +46927,7 @@ FROM
     AND stat.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -45871,7 +46965,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -45928,7 +47022,7 @@ FROM
               TABLE_ID,
               TABLE_NAME
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT
-      WHERE table_type in (0,2,3,8,9)) t
+      WHERE table_type in (0,2,3,8,9,14)) t
   JOIN
     SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
     ON db.tenant_id = t.tenant_id
@@ -45985,7 +47079,7 @@ FROM
     AND hist.object_type = 1
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46038,7 +47132,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46088,7 +47182,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46131,7 +47225,7 @@ FROM
     AND hist.object_type = 2
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46184,7 +47278,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46234,7 +47328,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
 """.replace("\n", " ")
 )
 
@@ -46277,7 +47371,7 @@ FROM
     AND hist.object_type = 3
 WHERE
   c.is_hidden = 0
-  AND t.table_type in (0,2,3,8,9)
+  AND t.table_type in (0,2,3,8,9,14)
   AND t.database_id = USERENV('SCHEMAID')
 """.replace("\n", " ")
 )
@@ -46349,7 +47443,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -46367,7 +47461,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -46390,7 +47484,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -46475,7 +47569,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -46493,7 +47587,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -46516,7 +47610,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -46585,7 +47679,7 @@ def_table_schema(
                 'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -46604,7 +47698,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -46628,7 +47722,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     ) V
     LEFT JOIN
@@ -46908,7 +48002,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -46926,7 +48020,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -46949,7 +48043,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
@@ -47012,7 +48106,7 @@ def_table_schema(
                'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9))
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14))
     UNION ALL
         SELECT T.TENANT_ID,
                 T.DATABASE_ID,
@@ -47030,7 +48124,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -47053,7 +48147,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
     ) V
     JOIN
         SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
@@ -47100,7 +48194,7 @@ def_table_schema(
                 'TABLE' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47119,7 +48213,7 @@ def_table_schema(
             SYS.ALL_VIRTUAL_PART_REAL_AGENT P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
@@ -47143,7 +48237,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE IN (0,2,3,8,9)
+        WHERE T.TABLE_TYPE IN (0,2,3,8,9,14)
             AND t.database_id = USERENV('SCHEMAID')
     ) V
     LEFT JOIN
@@ -48591,6 +49685,7 @@ FROM (
   """.replace("\n", " "),
 )
 
+
 # 28153: GV$OB_TENANTS
 # 28154: V$OB_TENANTS
 
@@ -48966,8 +50061,52 @@ def_table_schema(
 # 28180:  V$OB_LOCKS
 # 28181:  DBA_OB_ACCESS_POINT
 # 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
-# 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
-# 28184:  V$OB_OPT_STAT_GATHER_MONITOR
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name     = 'GV$OB_OPT_STAT_GATHER_MONITOR',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28183',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """SELECT
+          CAST(TENANT_ID AS NUMBER) AS TENANT_ID,
+          CAST(SVR_IP AS VARCHAR2(46)) AS SVR_IP,
+          CAST(SVR_PORT AS NUMBER) AS SVR_PORT,
+          CAST(SESSION_ID AS NUMBER) AS SESSION_ID,
+          CAST(TRACE_ID AS VARCHAR2(64)) AS TRACE_ID,
+          CAST(TASK_ID AS VARCHAR(36)) AS TASK_ID,
+          CAST(DECODE(TYPE, 0, 'MANUAL GATHER', 1, 'AUTO GATHER', 'UNDEFINED GATHER') AS VARCHAR2(16)) AS TYPE,
+          CAST(TASK_START_TIME AS TIMESTAMP(6)) AS TASK_START_TIME,
+          CAST(TASK_DURATION_TIME AS NUMBER) AS TASK_DURATION_TIME,
+          CAST(TASK_TABLE_COUNT AS NUMBER) AS TASK_TABLE_COUNT,
+          CAST(COMPLETED_TABLE_COUNT AS NUMBER) AS COMPLETED_TABLE_COUNT,
+          CAST(RUNNING_TABLE_OWNER AS VARCHAR2(128)) AS RUNNING_TABLE_OWNER,
+          CAST(RUNNING_TABLE_NAME AS VARCHAR2(256)) AS RUNNING_TABLE_NAME,
+          CAST(RUNNING_TABLE_DURATION_TIME AS VARCHAR2(256)) AS RUNNING_TABLE_DURATION_TIME
+        FROM SYS.ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'jiangxiu.wt',
+    table_name     = 'V$OB_OPT_STAT_GATHER_MONITOR',
+    name_postfix = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28184',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    normal_columns = [],
+    view_definition = """
+    SELECT * FROM SYS.GV$OB_OPT_STAT_GATHER_MONITOR WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -49090,6 +50229,8 @@ def_table_schema(
       SYS.ALL_VIRTUAL_TIMESTAMP_SERVICE)
 """.replace("\n", " ")
 )
+
+# 28194: V$OB_LS_LOG_RESTORE_STATUS
 
 ################################################################################
 # Lob Table (50000, 70000)
@@ -49855,3 +50996,718 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
+
+
+################################################################################
+# Oracle Agent table Index [15306, 15375]
+def_agent_index_table(
+  index_name = 'idx_data_table_id_real_agent',
+  index_table_id = 15306,
+  index_columns = ['data_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_data_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_tb_name_real_agent',
+  index_table_id = 15307,
+  index_columns = ['database_id', 'table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_db_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_name_real_agent',
+  index_table_id = 15308,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table',
+  real_index_name = 'idx_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_tb_column_name_real_agent',
+  index_table_id = 15309,
+  index_columns = ['table_id', 'column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column',
+  real_index_name = 'idx_tb_column_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_column_name_real_agent',
+  index_table_id = 15310,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column',
+  real_index_name = 'idx_column_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ur_name_real_agent',
+  index_table_id = 15311,
+  index_columns = ['user_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_user' ,
+  real_index_name = 'idx_ur_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_USER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_name_real_agent',
+  index_table_id = 15312,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_database' ,
+  real_index_name = 'idx_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DATABASE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tg_name_real_agent',
+  index_table_id = 15313,
+  index_columns = ['tablegroup_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablegroup' ,
+  real_index_name = 'idx_tg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLEGROUP_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_recyclebin_db_type_real_agent',
+  index_table_id = 15314,
+  index_columns = ['tenant_id', 'database_id','type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_recyclebin' ,
+  real_index_name = 'idx_recyclebin_db_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_RECYCLEBIN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_part_name_real_agent',
+  index_table_id = 15315,
+  index_columns = ['part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_part' ,
+  real_index_name = 'idx_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_sub_part_name_real_agent',
+  index_table_id = 15316,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sub_part' ,
+  real_index_name = 'idx_sub_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SUB_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_def_sub_part_name_real_agent',
+  index_table_id = 15317,
+  index_columns = ['sub_part_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_def_sub_part' ,
+  real_index_name = 'idx_def_sub_part_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DEF_SUB_PART_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_child_tid_real_agent',
+  index_table_id = 15318,
+  index_columns = ['child_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_child_tid',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_parent_tid_real_agent',
+  index_table_id = 15319,
+  index_columns = ['parent_table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_parent_tid',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_fk_name_real_agent',
+  index_table_id = 15320,
+  index_columns = ['foreign_key_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_foreign_key' ,
+  real_index_name = 'idx_fk_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_FOREIGN_KEY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_synonym_name_real_agent',
+  index_table_id = 15321,
+  index_columns = ['database_id', 'synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_synonym' ,
+  real_index_name = 'idx_db_synonym_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SYNONYM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_synonym_name_real_agent',
+  index_table_id = 15322,
+  index_columns = ['synonym_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_synonym' ,
+  real_index_name = 'idx_synonym_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SYNONYM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_routine_name_real_agent',
+  index_table_id = 15323,
+  index_columns = ['database_id', 'routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_db_routine_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_name_real_agent',
+  index_table_id = 15324,
+  index_columns = ['routine_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_routine_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_pkg_id_real_agent',
+  index_table_id = 15325,
+  index_columns = ['package_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine' ,
+  real_index_name = 'idx_routine_pkg_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_routine_param_name_real_agent',
+  index_table_id = 15326,
+  index_columns = ['param_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_routine_param' ,
+  real_index_name = 'idx_routine_param_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_ROUTINE_PARAM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_pkg_name_real_agent',
+  index_table_id = 15327,
+  index_columns = ['database_id', 'package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_package' ,
+  real_index_name = 'idx_db_pkg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PACKAGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_pkg_name_real_agent',
+  index_table_id = 15328,
+  index_columns = ['package_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_package' ,
+  real_index_name = 'idx_pkg_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_PACKAGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_cst_name_real_agent',
+  index_table_id = 15329,
+  index_columns = ['constraint_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_constraint' ,
+  real_index_name = 'idx_cst_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_CONSTRAINT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_type_name_real_agent',
+  index_table_id = 15330,
+  index_columns = ['database_id', 'type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type' ,
+  real_index_name = 'idx_db_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_type_name_real_agent',
+  index_table_id = 15331,
+  index_columns = ['type_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type' ,
+  real_index_name = 'idx_type_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_type_attr_name_real_agent',
+  index_table_id = 15332,
+  index_columns = ['name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_type_attr' ,
+  real_index_name = 'idx_type_attr_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TYPE_ATTR_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_coll_name_type_real_agent',
+  index_table_id = 15333,
+  index_columns = ['coll_name', 'coll_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_coll_type' ,
+  real_index_name = 'idx_coll_name_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLL_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_owner_dblink_name_real_agent',
+  index_table_id = 15334,
+  index_columns = ['owner_id', 'dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dblink' ,
+  real_index_name = 'idx_owner_dblink_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBLINK_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_dblink_name_real_agent',
+  index_table_id = 15335,
+  index_columns = ['dblink_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_dblink' ,
+  real_index_name = 'idx_dblink_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DBLINK_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_grantee_role_id_real_agent',
+  index_table_id = 15336,
+  index_columns = ['tenant_id', 'role_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_role_grantee_map' ,
+  real_index_name = 'idx_grantee_role_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_ROLE_GRANTEE_MAP_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_keystore_master_key_id_real_agent',
+  index_table_id = 15337,
+  index_columns = ['master_key_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_keystore' ,
+  real_index_name = 'idx_keystore_master_key_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_KEYSTORE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_ols_policy_name_real_agent',
+  index_table_id = 15338,
+  index_columns = ['policy_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_policy' ,
+  real_index_name = 'idx_ols_policy_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_policy_col_name_real_agent',
+  index_table_id = 15339,
+  index_columns = ['column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_policy' ,
+  real_index_name = 'idx_ols_policy_col_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_com_policy_id_real_agent',
+  index_table_id = 15340,
+  index_columns = ['label_se_policy_id', 'comp_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_component' ,
+  real_index_name = 'idx_ols_com_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_COMPONENT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_policy_id_real_agent',
+  index_table_id = 15341,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_tag_real_agent',
+  index_table_id = 15342,
+  index_columns = ['label_tag'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab_tag',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_lab_real_agent',
+  index_table_id = 15343,
+  index_columns = ['label'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_label' ,
+  real_index_name = 'idx_ols_lab',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_LABEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_level_uid_real_agent',
+  index_table_id = 15344,
+  index_columns = ['user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_user_level' ,
+  real_index_name = 'idx_ols_level_uid',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_USER_LEVEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_ols_level_policy_id_real_agent',
+  index_table_id = 15345,
+  index_columns = ['label_se_policy_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_ols_user_level' ,
+  real_index_name = 'idx_ols_level_policy_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OLS_USER_LEVEL_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_profile_name_real_agent',
+  index_table_id = 15346,
+  index_columns = ['profile_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_profile' ,
+  real_index_name = 'idx_profile_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_PROFILE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_audit_type_real_agent',
+  index_table_id = 15347,
+  index_columns = ['audit_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_security_audit' ,
+  real_index_name = 'idx_audit_type',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_SECURITY_AUDIT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_trigger_base_obj_id_real_agent',
+  index_table_id = 15348,
+  index_columns = ['base_object_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_trigger_base_obj_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_trigger_name_real_agent',
+  index_table_id = 15349,
+  index_columns = ['database_id', 'trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_db_trigger_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_trigger_name_real_agent',
+  index_table_id = 15350,
+  index_columns = ['trigger_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_trigger' ,
+  real_index_name = 'idx_trigger_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_objauth_grantor_real_agent',
+  index_table_id = 15351,
+  index_columns = ['grantor_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth' ,
+  real_index_name = 'idx_objauth_grantor',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_objauth_grantee_real_agent',
+  index_table_id = 15352,
+  index_columns = ['grantee_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_objauth' ,
+  real_index_name = 'idx_objauth_grantee',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJAUTH_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_obj_type_db_obj_name_real_agent',
+  index_table_id = 15353,
+  index_columns = ['database_id', 'object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_object_type' ,
+  real_index_name = 'idx_obj_type_db_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_obj_type_obj_name_real_agent',
+  index_table_id = 15354,
+  index_columns = ['object_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_object_type' ,
+  real_index_name = 'idx_obj_type_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_OBJECT_TYPE_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_dependency_ref_obj_real_agent',
+  index_table_id = 15355,
+  index_columns = ['ref_obj_id', 'ref_obj_type'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_dependency' ,
+  real_index_name = 'idx_dependency_ref_obj',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_DEPENDENCY_REAL_AGENT_ORA'])
+
+
+
+def_agent_index_table(
+  index_name = 'idx_table_stat_his_savtime_real_agent',
+  index_table_id = 15356,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_stat_history' ,
+  real_index_name = 'idx_table_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_column_stat_his_savtime_real_agent',
+  index_table_id = 15357,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_column_stat_history' ,
+  real_index_name = 'idx_column_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_COLUMN_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_histogram_stat_his_savtime_real_agent',
+  index_table_id = 15358,
+  index_columns = ['savtime'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_histogram_stat_history' ,
+  real_index_name = 'idx_histogram_stat_his_savtime',
+  keywords = all_def_keywords['ALL_VIRTUAL_HISTOGRAM_STAT_HISTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tablet_to_ls_id_real_agent',
+  index_table_id = 15359,
+  index_columns = ['ls_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablet_to_ls' ,
+  real_index_name = 'idx_tablet_to_ls_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLET_TO_LS_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tablet_to_table_id_real_agent',
+  index_table_id = 15360,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tablet_to_ls' ,
+  real_index_name = 'idx_tablet_to_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLET_TO_LS_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_ctx_namespace_real_agent',
+  index_table_id = 15361,
+  index_columns = ['namespace'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_context' ,
+  real_index_name = 'idx_ctx_namespace',
+  keywords = all_def_keywords['ALL_VIRTUAL_CONTEXT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_spm_item_sql_id_real_agent',
+  index_table_id = 15362,
+  index_columns = ['sql_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_plan_baseline_item' ,
+  real_index_name = 'idx_spm_item_sql_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_PLAN_BASELINE_ITEM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_spm_item_value_real_agent',
+  index_table_id = 15363,
+  index_columns = ['plan_hash_value'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_plan_baseline_item' ,
+  real_index_name = 'idx_spm_item_value',
+  keywords = all_def_keywords['ALL_VIRTUAL_PLAN_BASELINE_ITEM_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_directory_name_real_agent',
+  index_table_id = 15364,
+  index_columns = ['directory_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_tenant_directory' ,
+  real_index_name = 'idx_directory_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TENANT_DIRECTORY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_job_powner_real_agent',
+  index_table_id = 15365,
+  index_columns = ['powner'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_job' ,
+  real_index_name = 'idx_job_powner',
+  keywords = all_def_keywords['ALL_VIRTUAL_JOB_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_seq_obj_db_name_real_agent',
+  index_table_id = 15366,
+  index_columns = ['database_id', 'sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sequence_object' ,
+  real_index_name = 'idx_seq_obj_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SEQUENCE_OBJECT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_seq_obj_name_real_agent',
+  index_table_id = 15367,
+  index_columns = ['sequence_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_sequence_object' ,
+  real_index_name = 'idx_seq_obj_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_SEQUENCE_OBJECT_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_recyclebin_ori_name_real_agent',
+  index_table_id = 15368,
+  index_columns = ['original_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_recyclebin' ,
+  real_index_name = 'idx_recyclebin_ori_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_RECYCLEBIN_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_priv_db_name_real_agent',
+  index_table_id = 15369,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_privilege' ,
+  real_index_name = 'idx_tb_priv_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_tb_priv_tb_name_real_agent',
+  index_table_id = 15370,
+  index_columns = ['table_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_table_privilege' ,
+  real_index_name = 'idx_tb_priv_tb_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_TABLE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_db_priv_db_name_real_agent',
+  index_table_id = 15371,
+  index_columns = ['database_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_database_privilege' ,
+  real_index_name = 'idx_db_priv_db_name',
+  keywords = all_def_keywords['ALL_VIRTUAL_DATABASE_PRIVILEGE_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_policy_table_id_real_agent',
+  index_table_id = 15372,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_policy' ,
+  real_index_name = 'idx_rls_policy_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_policy_group_id_real_agent',
+  index_table_id = 15373,
+  index_columns = ['rls_group_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_policy' ,
+  real_index_name = 'idx_rls_policy_group_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_POLICY_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_rls_group_table_id_real_agent',
+  index_table_id = 15374,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_group' ,
+  real_index_name = 'idx_rls_group_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_GROUP_REAL_AGENT_ORA'])
+
+
+def_agent_index_table(
+  index_name = 'idx_rls_context_table_id_real_agent',
+  index_table_id = 15375,
+  index_columns = ['table_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_rls_context' ,
+  real_index_name = 'idx_rls_context_table_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_RLS_CONTEXT_REAL_AGENT_ORA'])
+
+# End Oracle Agent table Index [15306, 15375]
+################################################################################

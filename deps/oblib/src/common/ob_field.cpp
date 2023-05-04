@@ -449,6 +449,7 @@ int ObField::get_field_mb_length(const ObObjType type,
       }
       break;
     case ObExtendTC:
+    case ObUserDefinedSQLTC:
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported get_field_mb_length for extend type", K(ret));
       break;

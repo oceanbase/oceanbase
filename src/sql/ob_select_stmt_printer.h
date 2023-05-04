@@ -77,7 +77,9 @@ private:
   int print_order_by();
   int print_for_update();
 
-  int print_multi_rollup_items(const common::ObIArray<ObMultiRollupItem> &rollup_items);
+  ///////cte related functions
+  int print_rollup_items(const common::ObIArray<ObRollupItem> &rollup_items);
+  int print_cube_items(const common::ObIArray<ObCubeItem> &cube_items);
   int print_with_check_option();
 
   int find_recursive_cte_table(const ObSelectStmt* stmt, TableItem* &table);

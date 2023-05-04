@@ -126,6 +126,11 @@ public:
   {
     return murmurhash(0);
   }
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   static int get_common_prefix_length(const ObRowkey &lhs, const ObRowkey &rhs, int64_t &prefix_len);
 
 public:

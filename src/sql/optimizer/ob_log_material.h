@@ -26,7 +26,7 @@ namespace sql
     {}
     virtual ~ObLogMaterial() {}
     virtual int est_cost() override;
-    virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+    virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
     virtual bool is_block_op() const override { return true; }
   private:
     DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);

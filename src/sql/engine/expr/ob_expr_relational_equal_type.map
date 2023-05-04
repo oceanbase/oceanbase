@@ -2517,8 +2517,8 @@ static ObObjType RELATIONAL_EQUAL_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,     /* ObNumberFloatType */
     ObMaxType,     /* ObNVarchar2Type */
     ObMaxType,          /* ObNCharType */
-    ObNullType,         /* ObURowIDType */
-    ObNullType,         /* ObLobType */
+    ObMaxType,          /* ObURowIDType */
+    ObMaxType,          /* ObLobType */
     ObJsonType,         /* ObJsonType */
     ObJsonType,         /* ObGeometryType*/
   },

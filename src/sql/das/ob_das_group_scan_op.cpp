@@ -81,6 +81,8 @@ int ObDASGroupScanOp::open_op()
   int64_t max_size = scan_rtdef_->eval_ctx_->is_vectorized()
                      ? scan_rtdef_->eval_ctx_->max_batch_size_
                      :1;
+
+  ObMemAttr attr = scan_rtdef_->stmt_allocator_.get_attr();
   iter_.init_group_range(cur_group_idx_, group_size_);
   if (OB_FAIL(iter_.init_row_store(scan_ctdef_->result_output_,
                                    *scan_rtdef_->eval_ctx_,
@@ -88,7 +90,8 @@ int ObDASGroupScanOp::open_op()
                                    max_size,
                                    scan_ctdef_->group_id_expr_,
                                    &this->get_scan_result(),
-                                   scan_rtdef_->need_check_output_datum_))) {
+                                   scan_rtdef_->need_check_output_datum_,
+                                   attr))) {
     LOG_WARN("fail to init iter", K(ret));
   } else if (OB_FAIL(ObDASScanOp::open_op())) {
     LOG_WARN("fail to open op", K(ret));
@@ -222,6 +225,7 @@ int ObDASGroupScanOp::decode_task_result(ObIDASTaskResult *task_result)
                        ? scan_rtdef_->eval_ctx_->max_batch_size_
                        :1;
     if (OB_SUCC(ret) && NULL == iter_.get_group_id_expr()) {
+      ObMemAttr attr = scan_rtdef_->stmt_allocator_.get_attr();
       iter_.init_group_range(cur_group_idx_, group_size_);
       if (OB_FAIL(iter_.init_row_store(scan_ctdef_->result_output_,
                                        *scan_rtdef_->eval_ctx_,
@@ -229,7 +233,8 @@ int ObDASGroupScanOp::decode_task_result(ObIDASTaskResult *task_result)
                                        max_size,
                                        scan_ctdef_->group_id_expr_,
                                        &this->get_scan_result(),
-                                       scan_rtdef_->need_check_output_datum_))) {
+                                       scan_rtdef_->need_check_output_datum_,
+                                       attr))) {
         LOG_WARN("fail to init iter", K(ret));
       }
     }
@@ -287,6 +292,7 @@ int ObGroupLookupOp::init_group_scan_iter(int64_t cur_group_idx,
   bool is_vectorized = lookup_rtdef_->p_pd_expr_op_->is_vectorized();
 
   int64_t max_row_store_size = is_vectorized ? lookup_rtdef_->eval_ctx_->max_batch_size_: 1;
+  ObMemAttr attr = lookup_rtdef_->stmt_allocator_.get_attr();
   group_iter_.init_group_range(cur_group_idx, group_size);
   OZ(group_iter_.init_row_store(lookup_ctdef_->result_output_,
                                 *lookup_rtdef_->eval_ctx_,
@@ -294,7 +300,8 @@ int ObGroupLookupOp::init_group_scan_iter(int64_t cur_group_idx,
                                 max_row_store_size,
                                 group_id_expr,
                                 &group_iter_.get_result_tmp_iter(),
-                                lookup_rtdef_->need_check_output_datum_));
+                                lookup_rtdef_->need_check_output_datum_,
+                                attr));
 
   return ret;
 }
@@ -355,7 +362,16 @@ int ObGroupLookupOp::set_lookup_scan_group(int64_t group_id)
   return ret;
 }
 
-
+int ObGroupLookupOp::revert_iter()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLocalIndexLookupOp::revert_iter())) {
+    LOG_WARN("revert ObLocalIndexLookupOp fail",K(ret));
+  } else {
+    group_iter_.reset();
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);
 

@@ -37,6 +37,7 @@ public:
   ObDDLTaskKey(const int64_t object_id, const int64_t schema_version);
   ~ObDDLTaskKey() = default;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskKey &other) const;
   bool is_valid() const { return OB_INVALID_ID != object_id_ && schema_version_ > 0; }
   int assign(const ObDDLTaskKey &other);
@@ -53,6 +54,7 @@ public:
   ObDDLTaskID(const uint64_t tenant_id, const int64_t task_id);
   ~ObDDLTaskID() = default;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObDDLTaskID &other) const;
   bool operator!=(const ObDDLTaskID &other) const;
   bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && task_id_ > 0; }
@@ -432,7 +434,7 @@ public:
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
-      longops_stat_(nullptr), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
+      longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
       execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
   {}
   virtual ~ObDDLTask() {}

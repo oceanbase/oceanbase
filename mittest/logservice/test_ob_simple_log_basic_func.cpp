@@ -415,7 +415,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, data_corrupted)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "data_corrupted");
   ObTimeGuard guard("data_corrupted", 0);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   PALF_LOG(INFO, "start advance_base_lsn", K(id));
   int64_t leader_idx = 0;
@@ -491,17 +491,23 @@ TEST_F(TestObSimpleLogClusterBasicFunc, out_of_disk_space)
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 6*31+1, id, MAX_LOG_BODY_SIZE));
-  LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
-  while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
-    usleep(500);
+
+  LSN max_lsn;
+  for (int64_t i =0; i< 20;++i)
+  {
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
+    max_lsn = leader.palf_handle_impl_->get_max_lsn();
+    wait_lsn_until_flushed(max_lsn, leader);
+    usleep(50*1000);
   }
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, MAX_LOG_BODY_SIZE));
-  while (LSN(6*PALF_BLOCK_SIZE + 20 * MAX_LOG_BODY_SIZE) > log_storage->log_tail_) {
-    usleep(500);
-  }
-  usleep(1000*10);
-  EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 7, id, MAX_LOG_BODY_SIZE));
+  max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  wait_lsn_until_flushed(max_lsn, leader);
+  usleep(10*1000);
+
+  PALF_LOG(INFO, " out of disk max_lsn", K(max_lsn));
+  ASSERT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_ = 5 * MIN_DISK_SIZE_PER_PALF_INSTANCE;
 }
 
@@ -536,8 +542,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   int64_t leader_idx = 0;
   PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
-  leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
+  leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_ = 0;
+  leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_ = 0;
   std::vector<PalfHandleImplGuard*> palf_list;
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   int64_t lag_follower_idx = (leader_idx + 1) % node_cnt_;
@@ -548,8 +554,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10000, leader_idx, 120));
   const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
-  const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t handle_count = leader.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
+  const int64_t has_batched_size = leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_;
+  const int64_t handle_count = leader.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_;
   const int64_t log_id = leader.palf_handle_impl_->sw_.get_max_log_id();
   PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "batched_size", K(has_batched_size), K(log_id));
 
@@ -563,8 +569,8 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
     PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
     lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
-  const int64_t follower_has_batched_size = lag_follower.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.has_batched_size_;
-  const int64_t follower_handle_count = lag_follower.palf_env_impl_->log_io_worker_.batch_io_task_mgr_.handle_count_;
+  const int64_t follower_has_batched_size = lag_follower.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.has_batched_size_;
+  const int64_t follower_handle_count = lag_follower.palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_.batch_io_task_mgr_.handle_count_;
   EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
 
   int64_t cost_ts = ObTimeUtility::current_time() - start_ts;

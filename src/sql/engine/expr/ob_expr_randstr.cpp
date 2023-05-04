@@ -21,7 +21,7 @@ namespace sql
 {
 
 ObExprRandstr::ObExprRandstr(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDSTR, "randstr", 2, NOT_ROW_DIMENSION)
+	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDSTR, "randstr", 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

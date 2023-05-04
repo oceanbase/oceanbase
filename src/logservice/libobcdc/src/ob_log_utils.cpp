@@ -567,6 +567,10 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_UROWID";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_ORA_XML:
+      sc_type = "MYSQL_TYPE_ORA_XML";
+      break;
+
     default:
       sc_type = "UNKNOWN";
       break;
@@ -603,6 +607,11 @@ bool is_json_type(const int ctype)
 bool is_geometry_type(const int ctype)
 {
   return (ctype == oceanbase::obmysql::MYSQL_TYPE_GEOMETRY);
+}
+
+bool is_xml_type(const int ctype)
+{
+  return (ctype == oceanbase::obmysql::MYSQL_TYPE_ORA_XML);
 }
 
 double get_delay_sec(const int64_t tstamp_ns)
@@ -1310,7 +1319,7 @@ char *lbt_oblog()
   //in this function and functions called.
   static __thread void *addrs[100];
   static __thread char buf[LBT_BUFFER_LENGTH];
-  int size = backtrace(addrs, 100);
+  int size = ob_backtrace(addrs, 100);
   char **res = backtrace_symbols(addrs, 100);
   int64_t pos = 0;
 

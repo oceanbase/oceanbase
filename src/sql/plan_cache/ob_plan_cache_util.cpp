@@ -364,12 +364,14 @@ int ObPhyLocationGetter::build_related_tablet_info(const ObTableLocation &table_
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(exec_ctx.get_my_session());
   ObPhysicalPlanCtx *plan_ctx = exec_ctx.get_physical_plan_ctx();
   ObArray<ObObjectID> partition_ids;
+  ObArray<ObObjectID> first_level_part_ids;
   ObArray<ObTabletID> tablet_ids;
 
   if (OB_FAIL(table_location.calculate_tablet_ids(exec_ctx,
                                                   plan_ctx->get_param_store(),
                                                   tablet_ids,
                                                   partition_ids,
+                                                  first_level_part_ids,
                                                   dtc_params))) {
     LOG_WARN("calculate tablet ids failed", K(ret));
   } else {
@@ -393,6 +395,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
   // here to add value of configs that can influence execution plan.
   enable_px_ordered_coord_ = GCONF._enable_px_ordered_coord;
   enable_newsort_ = GCONF._enable_newsort;
+  is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
 
   // For Tenant configs
   // tenant config use tenant_config to get configs
@@ -442,8 +445,11 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(px_join_skew_minfreq_));
 
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%lu", min_cluster_version_))) {
+                               "%lu,", min_cluster_version_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_cluster_version_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d", is_enable_px_fast_reclaim_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(is_enable_px_fast_reclaim_));
   } else {
     // do nothing
   }

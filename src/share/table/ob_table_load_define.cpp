@@ -96,31 +96,20 @@ OB_DEF_DESERIALIZE(ObTableLoadSqlStatistics)
   size = 0;
   OB_UNIS_DECODE(size)
   for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
-    ObArenaAllocator allocator;
-    ObOptColumnStat col_stat(allocator);
-    ObOptColumnStat *copied_col_stat = nullptr;
-    if (OB_FAIL(col_stat.deserialize(buf, data_len, pos))) {
-      LOG_WARN("deserialize datum store failed", K(ret), K(i));
-    } else {
-      int64_t size = col_stat.size();
-      char *new_buf = nullptr;
-      if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to allocate buffer", KR(ret), K(size));
-      } else if (OB_FAIL(col_stat.deep_copy(new_buf, size, copied_col_stat))) {
-        OB_LOG(WARN, "fail to copy table stat", KR(ret));
-      } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
-        OB_LOG(WARN, "fail to add table stat", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (copied_col_stat != nullptr) {
-          copied_col_stat->~ObOptColumnStat();
-          copied_col_stat = nullptr;
-        }
-        if(new_buf != nullptr) {
-          allocator_.free(new_buf);
-          new_buf = nullptr;
-        }
+    ObOptOSGColumnStat *osg_col_stat = NULL;
+    if (OB_ISNULL(osg_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_)) ||
+        OB_ISNULL(osg_col_stat->col_stat_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      OB_LOG(WARN, "failed to create col stat");
+    } else if (OB_FAIL(osg_col_stat->deserialize(buf, data_len, pos))) {
+      OB_LOG(WARN, "deserialize datum store failed", K(ret), K(i));
+    } else if (OB_FAIL(col_stat_array_.push_back(osg_col_stat))) {
+      OB_LOG(WARN, "fail to add table stat", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      if (osg_col_stat != nullptr) {
+        osg_col_stat->~ObOptOSGColumnStat();
+        osg_col_stat = nullptr;
       }
     }
   }

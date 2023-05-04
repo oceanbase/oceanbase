@@ -27,6 +27,7 @@ public:
     Key(const ObKVCacheHandle &cache_handle);
     ~Key() = default;
     uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
     OB_INLINE bool is_valid() const { return handle_ != nullptr; }
     bool operator== (const Key &other) const;
     TO_STRING_KV(KP_(handle));
@@ -38,6 +39,7 @@ public:
     Value(const Value &other);
     ~Value() = default;
     uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
     bool operator== (const Value &other) const;
     Value & operator= (const Value &other);
     TO_STRING_KV(K_(tenant_id), K_(cache_id), K_(bt));

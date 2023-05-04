@@ -30,21 +30,21 @@ const char *ObRlsContextMgr::RLS_CONTEXT_MGR = "RLS_CONTEXT_MGR";
 
 ObRlsPolicyMgr::ObRlsPolicyMgr()
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    rls_policy_infos_(0, NULL, RLS_POLICY_MGR),
-    rls_policy_name_map_(RLS_POLICY_MGR),
-    rls_policy_id_map_(RLS_POLICY_MGR)
+    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR)),
+    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR)),
+    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR))
 {
 }
 
 ObRlsPolicyMgr::ObRlsPolicyMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    rls_policy_infos_(0, NULL, RLS_POLICY_MGR),
-    rls_policy_name_map_(RLS_POLICY_MGR),
-    rls_policy_id_map_(RLS_POLICY_MGR)
+    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR)),
+    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR)),
+    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR))
 {
 }
 
@@ -506,21 +506,21 @@ int ObRlsPolicyMgr::rebuild_rls_policy_hashmap()
 
 ObRlsGroupMgr::ObRlsGroupMgr()
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    rls_group_infos_(0, NULL, RLS_GROUP_MGR),
-    rls_group_name_map_(RLS_GROUP_MGR),
-    rls_group_id_map_(RLS_GROUP_MGR)
+    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR)),
+    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR)),
+    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR))
 {
 }
 
 ObRlsGroupMgr::ObRlsGroupMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    rls_group_infos_(0, NULL, RLS_GROUP_MGR),
-    rls_group_name_map_(RLS_GROUP_MGR),
-    rls_group_id_map_(RLS_GROUP_MGR)
+    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR)),
+    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR)),
+    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR))
 {
 }
 
@@ -951,21 +951,21 @@ int ObRlsGroupMgr::rebuild_rls_group_hashmap()
 
 ObRlsContextMgr::ObRlsContextMgr()
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    rls_context_infos_(0, NULL, RLS_CONTEXT_MGR),
-    rls_context_name_map_(RLS_CONTEXT_MGR),
-    rls_context_id_map_(RLS_CONTEXT_MGR)
+    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR)),
+    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR)),
+    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR))
 {
 }
 
 ObRlsContextMgr::ObRlsContextMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    rls_context_infos_(0, NULL, RLS_CONTEXT_MGR),
-    rls_context_name_map_(RLS_CONTEXT_MGR),
-    rls_context_id_map_(RLS_CONTEXT_MGR)
+    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR)),
+    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR)),
+    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR))
 {
 }
 

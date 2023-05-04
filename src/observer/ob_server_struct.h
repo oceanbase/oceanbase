@@ -40,6 +40,7 @@ class ObDBMSJobRpcProxy;
 class ObBatchRpc;
 class ObInnerSQLRpcProxy;
 class ObDBMSSchedJobRpcProxy;
+class ObExtenralTableRpcProxy;
 } // end of namespace rpc
 
 namespace share
@@ -240,6 +241,7 @@ struct ObGlobalContext
   share::ObRsMgr *rs_mgr_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   common::ObITabletScan *vt_par_ser_;
+  common::ObITabletScan *et_access_service_;
   sql::ObSQLSessionMgr *session_mgr_;
   sql::ObSql *sql_engine_;
   pl::ObPL *pl_engine_;
@@ -271,6 +273,7 @@ struct ObGlobalContext
   int64_t ssl_key_expired_time_;
   sql::ObConnectResourceMgr* conn_res_mgr_;
   storage::ObLocalityManager *locality_manager_;
+  obrpc::ObExtenralTableRpcProxy *external_table_proxy_;
 
   ObGlobalContext() { MEMSET(this, 0, sizeof(*this)); init(); }
   ObGlobalContext &operator = (const ObGlobalContext &other);

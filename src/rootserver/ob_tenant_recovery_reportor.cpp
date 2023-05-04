@@ -87,8 +87,6 @@ int ObTenantRecoveryReportor::start()
   } else if (OB_FAIL(logical_start())) {
     LOG_WARN("failed to start", KR(ret));
   } else {
-    ObThreadCondGuard guard(get_cond());
-    get_cond().broadcast();
     LOG_INFO("tenant recovery service start", KPC(this));
   }
   return ret;
@@ -122,7 +120,6 @@ void ObTenantRecoveryReportor::run2()
     LOG_WARN("not init", KR(ret));
   } else {
     ObThreadCondGuard guard(get_cond());
-    const int64_t idle_time = ObTenantRoleTransitionConstants::TENANT_INFO_REFRESH_TIME_US;
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
     while (!stop_) {
       if (OB_ISNULL(GCTX.schema_service_)) {
@@ -141,19 +138,39 @@ void ObTenantRecoveryReportor::run2()
         }
       }
 
-      if (OB_SUCCESS != (tmp_ret = submit_tenant_refresh_schema_task_())) {
-        LOG_WARN("failed to submit_tenant_refresh_schema_task_", KR(tmp_ret));
-      }
-
       //更新受控回放位点到replayservice
       if (OB_SUCCESS != (tmp_ret = update_replayable_point_())) {
         LOG_WARN("failed to update_replayable_point", KR(tmp_ret));
       }
+
+      const int64_t idle_time = get_idle_time_();
+
       if (!stop_) {
         get_cond().wait_us(idle_time);
       }
     }//end while
   }
+}
+
+int64_t ObTenantRecoveryReportor::get_idle_time_()
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  ObAllTenantInfo tenant_info;
+  int64_t idle_time = ObTenantRoleTransitionConstants::STANDBY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("pointer is null", KR(ret), KP(tenant_info_loader));
+  } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+    LOG_WARN("fail to get tenant info", KR(ret), K_(tenant_id));
+  } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
+    idle_time = ObTenantRoleTransitionConstants::PRIMARY_UPDATE_LS_RECOVERY_STAT_TIME_US;
+  }
+  return idle_time;
 }
 
 int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
@@ -200,6 +217,7 @@ int ObTenantRecoveryReportor::submit_tenant_refresh_schema_task_()
   }
   return ret;
 }
+
 int ObTenantRecoveryReportor::update_ls_recovery_stat_()
 {
   int ret = OB_SUCCESS;

@@ -138,13 +138,25 @@ public:
   LSN get_begin_lsn() const { return header_.begin_lsn_; }
   LSN get_end_lsn() const { return header_.end_lsn_; }
   int64_t get_accum_checksum() const { return header_.accum_checksum_; }
+  void set_freeze_ts(const int64_t ts);
   void set_submit_ts(const int64_t ts);
+  void set_first_ack_ts(const int64_t ts);
   void set_flushed_ts(const int64_t ts);
+  void set_committed_ts(const int64_t ts);
   int64_t get_gen_ts() const { return ATOMIC_LOAD(&(gen_ts_)); }
+  int64_t get_freeze_ts() const { return ATOMIC_LOAD(&(freeze_ts_)); }
   int64_t get_submit_ts() const { return ATOMIC_LOAD(&(submit_ts_)); }
+  int64_t get_first_ack_ts() const { return ATOMIC_LOAD(&(first_ack_ts_)); }
   int64_t get_flushed_ts() const { return ATOMIC_LOAD(&(flushed_ts_)); }
-  TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt), K_(gen_ts), "submit_wait_time", submit_ts_ - gen_ts_,
-      K_(submit_ts), "flush_cost", ((flushed_ts_ - submit_ts_) < 0 ? 0 : (flushed_ts_ - submit_ts_)), K_(flushed_ts));
+  int64_t get_committed_ts() const { return ATOMIC_LOAD(&(committed_ts_)); }
+  TO_STRING_KV(K_(header), K_(state_map), K_(ref_cnt),
+      K_(gen_ts), K_(freeze_ts), K_(submit_ts), K_(flushed_ts), K_(first_ack_ts), K_(committed_ts),
+      "gen_to_freeze cost time", freeze_ts_ - gen_ts_,
+      "gen_to_submit cost time", submit_ts_ - gen_ts_,
+      "submit_to_flush cost time", ((flushed_ts_ - submit_ts_) < 0 ? 0 : (flushed_ts_ - submit_ts_)),
+      "submit_to_first_ack cost time", ((first_ack_ts_ - submit_ts_) < 0 ? 0 : (first_ack_ts_ - submit_ts_)),
+      "submit_to_commit cost time", ((committed_ts_ - submit_ts_) < 0 ? 0 : (committed_ts_ - submit_ts_))
+  );
 private:
   int try_freeze_(const LSN &end_lsn);
 private:
@@ -153,8 +165,11 @@ private:
   int64_t ref_cnt_;
   int64_t log_cnt_;  // log_entry count
   mutable int64_t gen_ts_;
+  mutable int64_t freeze_ts_;
   mutable int64_t submit_ts_;
+  mutable int64_t first_ack_ts_;
   mutable int64_t flushed_ts_;
+  mutable int64_t committed_ts_;
   mutable common::ObLatch lock_;
 };
 } // end namespace palf

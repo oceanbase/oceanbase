@@ -13,33 +13,15 @@
 #ifdef EVENT_INFO
 EVENT_INFO(WAIT_TIME, wait_time)
 EVENT_INFO(WAIT_COUNT, wait_count)
-EVENT_INFO(SCHED_TIME, sched_time)
+EVENT_INFO(IO_READ_COUNT, io_read_count)
 EVENT_INFO(USER_IO_TIME, user_io_time)
 EVENT_INFO(APPLICATION_TIME, application_time)
 EVENT_INFO(CONCURRENCY_TIME, concurrency_time)
-EVENT_INFO(IO_READ_COUNT, io_read_count)
 EVENT_INFO(IO_WRITES_COUNT, io_write_count)
-EVENT_INFO(IO_READ_BYTES, io_read_bytes)
-EVENT_INFO(IO_WRITE_BYTES, io_write_bytes)
-EVENT_INFO(RPC_PACKET_IN, rpc_packet_in)
-EVENT_INFO(RPC_PACKET_IN_BYTES, rpc_packet_in_bytes)
 EVENT_INFO(RPC_PACKET_OUT, rpc_packet_out)
-EVENT_INFO(RPC_PACKET_OUT_BYTES, rpc_packet_out_bytes)
 EVENT_INFO(ROW_CACHE_HIT, row_cache_hit)
-EVENT_INFO(ROW_CACHE_MISS, row_cache_miss)
 EVENT_INFO(BLOCK_CACHE_HIT, block_cache_hit)
-EVENT_INFO(BLOCK_CACHE_MISS, block_cache_miss)
 EVENT_INFO(BLOOM_FILTER_FILTS, bloom_filter_filts)
-EVENT_INFO(LOCATION_CACHE_HIT, location_cache_hit)
-EVENT_INFO(LOCATION_CACHE_MISS, location_cache_miss)
-EVENT_INFO(MEMSTORE_READ_LOCK_SUCC_COUNT, memstore_read_lock_succ_count)
-EVENT_INFO(MEMSTORE_WRITE_LOCK_SUCC_COUNT, memstore_write_lock_succ_count)
-EVENT_INFO(MEMSTORE_WAIT_READ_LOCK_TIME, memstore_wait_read_lock_time)
-EVENT_INFO(MEMSTORE_WAIT_WRITE_LOCK_TIME, memstore_wait_write_lock_time)
-EVENT_INFO(TRANS_COMMIT_LOG_SYNC_TIME, trans_commit_log_sync_time)
-EVENT_INFO(TRANS_COMMIT_LOG_SYNC_COUNT, trans_commit_log_sync_count)
-EVENT_INFO(TRANS_COMMIT_LOG_SUBMIT_COUNT, trans_commit_log_submit_count)
-EVENT_INFO(TRANS_COMMIT_TIME, trans_commit_time)
 EVENT_INFO(MEMSTORE_READ_ROW_COUNT, memstore_read_row_count)
 EVENT_INFO(SSSTORE_READ_ROW_COUNT, ssstore_read_row_count)
 EVENT_INFO(DATA_BLOCK_READ_CNT, data_block_read_cnt)
@@ -50,7 +32,6 @@ EVENT_INFO(BLOCKSCAN_BLOCK_CNT, blockscan_block_cnt)
 EVENT_INFO(BLOCKSCAN_ROW_CNT, blockscan_row_cnt)
 EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
-EVENT_INFO(FUSE_ROW_CACHE_MISS, fuse_row_cache_miss)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -88,42 +69,37 @@ struct ObExecRecord
 #undef EVENT_INFO
 
 
+#define EVENT_STAT_GET(event_stats_array, stat_no)              \
+ ({                                                            \
+   int64_t ret = 0;                                            \
+   oceanbase::common::ObStatEventAddStat *stat = NULL;         \
+   if (NULL != (stat = event_stats_array.get(::oceanbase::common::stat_no))) { \
+     ret = stat->get_stat_value();                             \
+   }                                                           \
+   ret;                                                        \
+ })
+
 #define RECORD(se, di) \
   do { \
-    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info = (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info = \
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
     if (NULL != diag_session_info) { \
-      io_read_count_##se##_= EVENT_GET(ObStatEventIds::IO_READ_COUNT, diag_session_info); \
-      io_write_count_##se##_ = EVENT_GET(ObStatEventIds::IO_WRITE_COUNT, diag_session_info); \
-      block_cache_hit_##se##_= EVENT_GET(ObStatEventIds::BLOCK_CACHE_HIT, diag_session_info); \
-      io_read_bytes_##se##_= EVENT_GET(ObStatEventIds::IO_READ_BYTES, diag_session_info); \
-      io_write_bytes_##se##_= EVENT_GET(ObStatEventIds::IO_WRITE_BYTES, diag_session_info); \
-      rpc_packet_in_##se##_= EVENT_GET(ObStatEventIds::RPC_PACKET_IN, diag_session_info); \
-      rpc_packet_in_bytes_##se##_= EVENT_GET(ObStatEventIds::RPC_PACKET_IN_BYTES, diag_session_info); \
-      rpc_packet_out_##se##_= EVENT_GET(ObStatEventIds::RPC_PACKET_OUT, diag_session_info); \
-      rpc_packet_out_bytes_##se##_= EVENT_GET(ObStatEventIds::RPC_PACKET_OUT_BYTES, diag_session_info); \
-      trans_commit_log_sync_time_##se##_= EVENT_GET(ObStatEventIds::TRANS_COMMIT_LOG_SYNC_TIME, diag_session_info); \
-      row_cache_hit_##se##_= EVENT_GET(ObStatEventIds::ROW_CACHE_HIT, diag_session_info); \
-      row_cache_miss_##se##_= EVENT_GET(ObStatEventIds::ROW_CACHE_MISS, diag_session_info); \
-      block_cache_hit_##se##_= EVENT_GET(ObStatEventIds::BLOCK_CACHE_HIT, diag_session_info); \
-      block_cache_miss_##se##_= EVENT_GET(ObStatEventIds::BLOCK_CACHE_MISS, diag_session_info); \
-      bloom_filter_filts_##se##_ = EVENT_GET(ObStatEventIds::BLOOM_FILTER_FILTS, diag_session_info); \
-      location_cache_hit_##se##_= EVENT_GET(ObStatEventIds::LOCATION_CACHE_HIT, diag_session_info); \
-      location_cache_miss_##se##_= EVENT_GET(ObStatEventIds::LOCATION_CACHE_MISS, diag_session_info); \
-      memstore_read_lock_succ_count_##se##_= EVENT_GET(ObStatEventIds::MEMSTORE_READ_LOCK_SUCC_COUNT, diag_session_info); \
-      memstore_write_lock_succ_count_##se##_= EVENT_GET(ObStatEventIds::MEMSTORE_WRITE_LOCK_SUCC_COUNT, diag_session_info); \
-      memstore_wait_read_lock_time_##se##_= EVENT_GET(ObStatEventIds::MEMSTORE_WAIT_READ_LOCK_TIME, diag_session_info); \
-      memstore_wait_write_lock_time_##se##_= EVENT_GET(ObStatEventIds::MEMSTORE_WAIT_WRITE_LOCK_TIME, diag_session_info); \
-      memstore_read_row_count_##se##_ = EVENT_GET(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, diag_session_info); \
-      ssstore_read_row_count_##se##_ = EVENT_GET(ObStatEventIds::SSSTORE_READ_ROW_COUNT, diag_session_info); \
-      data_block_read_cnt_##se##_ = EVENT_GET(ObStatEventIds::DATA_BLOCK_READ_CNT, diag_session_info); \
-      data_block_cache_hit_##se##_ = EVENT_GET(ObStatEventIds::DATA_BLOCK_CACHE_HIT, diag_session_info); \
-      index_block_read_cnt_##se##_ = EVENT_GET(ObStatEventIds::INDEX_BLOCK_READ_CNT, diag_session_info); \
-      index_block_cache_hit_##se##_ = EVENT_GET(ObStatEventIds::INDEX_BLOCK_CACHE_HIT, diag_session_info); \
-      blockscan_block_cnt_##se##_ = EVENT_GET(ObStatEventIds::BLOCKSCAN_BLOCK_CNT, diag_session_info); \
-      blockscan_row_cnt_##se##_ = EVENT_GET(ObStatEventIds::BLOCKSCAN_ROW_CNT, diag_session_info); \
-      pushdown_storage_filter_row_cnt_##se##_ = EVENT_GET(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, diag_session_info); \
-      fuse_row_cache_hit_##se##_= EVENT_GET(ObStatEventIds::FUSE_ROW_CACHE_HIT, diag_session_info); \
-      fuse_row_cache_miss_##se##_= EVENT_GET(ObStatEventIds::FUSE_ROW_CACHE_MISS, diag_session_info); \
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats(); \
+      io_read_count_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT); \
+      block_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT); \
+      rpc_packet_out_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::RPC_PACKET_OUT);   \
+      row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::ROW_CACHE_HIT);     \
+      bloom_filter_filts_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS);            \
+      memstore_read_row_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT);  \
+      ssstore_read_row_count_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT);    \
+      data_block_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::DATA_BLOCK_READ_CNT);          \
+      data_block_cache_hit_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::DATA_BLOCK_CACHE_HIT);        \
+      index_block_read_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::INDEX_BLOCK_READ_CNT);        \
+      index_block_cache_hit_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::INDEX_BLOCK_CACHE_HIT);      \
+      blockscan_block_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_BLOCK_CNT);          \
+      blockscan_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_ROW_CNT);              \
+      pushdown_storage_filter_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT); \
+      fuse_row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT);             \
     } \
   } while(0);
 
@@ -147,24 +123,10 @@ struct ObExecRecord
     UPDATE_EVENT(io_read_count);
     UPDATE_EVENT(io_write_count);
     UPDATE_EVENT(block_cache_hit);
-    UPDATE_EVENT(io_read_bytes);
-    UPDATE_EVENT(io_write_bytes);
-    UPDATE_EVENT(rpc_packet_in);
-    UPDATE_EVENT(rpc_packet_in_bytes);
     UPDATE_EVENT(rpc_packet_out);
-    UPDATE_EVENT(rpc_packet_out_bytes);
-    UPDATE_EVENT(trans_commit_log_sync_time);
     UPDATE_EVENT(row_cache_hit);
-    UPDATE_EVENT(row_cache_miss);
     UPDATE_EVENT(bloom_filter_filts);
-    UPDATE_EVENT(location_cache_hit);
-    UPDATE_EVENT(location_cache_miss);
-    UPDATE_EVENT(memstore_read_lock_succ_count);
-    UPDATE_EVENT(memstore_write_lock_succ_count);
-    UPDATE_EVENT(memstore_wait_read_lock_time);
-    UPDATE_EVENT(memstore_wait_write_lock_time);
     UPDATE_EVENT(user_io_time);
-    UPDATE_EVENT(sched_time);
     UPDATE_EVENT(concurrency_time);
     UPDATE_EVENT(application_time);
     UPDATE_EVENT(memstore_read_row_count);
@@ -228,6 +190,12 @@ struct ObExecTimestamp {
   int64_t decode_t_;
   int64_t get_plan_t_;
   int64_t executor_t_;
+
+  TO_STRING_KV(K(exec_type_), K(rpc_send_ts_), K(receive_ts_), K(enter_queue_ts_),
+               K(run_ts_), K(before_process_ts_), K(single_process_ts_),
+               K(process_executor_ts_), K(executor_end_ts_), K(multistmt_start_ts_),
+               K(elapsed_t_), K(net_t_), K(net_wait_t_), K(queue_t_),
+               K(decode_t_), K(get_plan_t_), K(executor_t_));
 
   //出现重试时时间累加
   void update_stage_time() {
@@ -315,6 +283,7 @@ struct ObAuditRecordData {
     trx_lock_for_read_elapse_ = 0;
     params_value_len_ = 0;
     partition_hit_ = true;
+    is_perf_event_closed_ = false;
   }
 
   int64_t get_elapsed_time() const
@@ -333,9 +302,7 @@ struct ObAuditRecordData {
     return exec_timestamp_.executor_end_ts_ - exec_timestamp_.single_process_ts_;
   }
 
-  void update_stage_stat()
-  {
-    exec_timestamp_.update_stage_time();
+  void update_event_stage_state() {
     exec_record_.update_stat();
     const int64_t cpu_time = MAX(exec_timestamp_.elapsed_t_ - exec_record_.wait_time_, 0);
     const int64_t elapsed_time = MAX(exec_timestamp_.elapsed_t_, 0);
@@ -435,6 +402,7 @@ struct ObAuditRecordData {
   uint64_t txn_free_route_flag_; // flag contains txn free route meta
   uint64_t txn_free_route_version_; // the version of txn's state
   bool partition_hit_;// flag for need das partition route or not
+  bool is_perf_event_closed_;
 };
 
 } //namespace sql

@@ -130,6 +130,12 @@ void ObEliminateTask::runTimerTask()
   int64_t evict_low_mem_level = 0;
   int64_t evict_high_size_level = 0;
   int64_t evict_low_size_level = 0;
+  flt_mgr_ = MTL(ObFLTSpanMgr*);
+  if (flt_mgr_->get_size() > (ObFLTSpanMgr::MAX_QUEUE_SIZE-ObFLTSpanMgr::RELEASE_QUEUE_SIZE)) {
+    for (int i = 0; i < ObFLTSpanMgr::RELEASE_QUEUE_SIZE/ObFLTSpanMgr::BATCH_RELEASE_COUNT; i++) {
+      flt_mgr_->release_old(ObFLTSpanMgr::BATCH_RELEASE_COUNT);
+    }
+  }
   if (OB_ISNULL(request_manager_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(request_manager_), K(ret));
@@ -149,7 +155,7 @@ void ObEliminateTask::runTimerTask()
     }
     if (OB_SUCC(ret) && REACH_TIME_INTERVAL(30 * 1000 * 1000)) { // 30s delay
       LOG_INFO("Eliminate task evict sql audit",
-          K(request_manager_->get_tenant_id()), K(queue_size),
+          K(request_manager_->get_tenant_id()), K(queue_size), K(config_mem_limit_),
           K(request_manager_->get_size_used()), K(evict_high_size_level), K(evict_low_size_level),
           K(allocator->allocated()), K(evict_high_mem_level), K(evict_low_mem_level));
     }
@@ -161,6 +167,7 @@ void ObEliminateTask::runTimerTask()
     //按内存淘汰
     if (evict_high_mem_level < allocator->allocated()) {
       LOG_INFO("sql audit evict mem start",
+               K(request_manager_->get_tenant_id()),
                K(evict_low_mem_level),
                K(evict_high_mem_level),
                "size_used",request_manager_->get_size_used(),
@@ -180,6 +187,7 @@ void ObEliminateTask::runTimerTask()
     if (request_manager_->get_size_used() > evict_high_size_level) {
       evict_batch_count = (request_manager_->get_size_used() - evict_low_size_level) / release_cnt;
       LOG_INFO("sql audit evict record start",
+               K(request_manager_->get_tenant_id()),
                K(evict_high_size_level),
                K(evict_low_size_level),
                "size_used",request_manager_->get_size_used(),
@@ -194,6 +202,7 @@ void ObEliminateTask::runTimerTask()
     }
     int64_t end_time = ObTimeUtility::current_time();
     LOG_INFO("sql audit evict task end",
+             K(request_manager_->get_tenant_id()),
              K(evict_high_mem_level),
              K(evict_high_size_level),
              K(evict_batch_count),

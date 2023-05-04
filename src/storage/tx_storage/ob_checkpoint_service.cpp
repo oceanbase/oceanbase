@@ -357,7 +357,7 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
     }
   }
 
-  if (OB_FAIL(checkpoint_service_.flush_if_need_(need_flush))) {
+  if (need_flush && OB_FAIL(checkpoint_service_.flush_if_need_(need_flush))) {
     STORAGE_LOG(ERROR, "flush if needed failed", K(ret), K(need_flush));
   }
 }

@@ -47,7 +47,6 @@ class SCN;
 namespace rootserver
 {
 class ObZoneManager;
-class ObServerManager;
 }
 namespace share
 {
@@ -349,7 +348,6 @@ public:
   // those whose status is OB_LS_CREATE_ABORT. And then, check majority and log_in_sync.
   //
   // @param [in] zone_mgr: zone manager from rs
-  // @param [in] server_mgr: server manager from rs
   // @param [in] to_stop_servers: servers to be stopped
   // @param [in] skip_log_sync_check: whether skip log_sync check
   // @param [in] print_str: string of operation. Used to print LOG_USER_ERROR "'print_str' not allowed"
@@ -359,8 +357,6 @@ public:
   // @return: OB_SUCCESS if all check is passed.
   //          OB_OP_NOT_ALLOW if ls doesn't have leader/enough member or ls' log is not in sync.
   int check_all_ls_has_majority_and_log_sync(
-      const rootserver::ObZoneManager &zone_mgr,
-      const rootserver::ObServerManager &server_mgr,
       const common::ObIArray<ObAddr> &to_stop_servers,
       const bool skip_log_sync_check,
       const char *print_str,
@@ -438,8 +434,6 @@ private:
   int parse_result_and_check_paxos_(
       common::sqlclient::ObMySQLResult &result,
       schema::ObMultiVersionSchemaService &schema_service,
-      const rootserver::ObZoneManager &zone_mgr,
-      const rootserver::ObServerManager &server_mgr,
       const common::ObIArray<ObAddr> &to_stop_servers,
       const bool skip_log_sync_check,
       const char *print_str,
@@ -454,16 +448,12 @@ private:
   int check_ls_log_stat_info_(
       schema::ObMultiVersionSchemaService &schema_service,
       const ObLSLogStatInfo &ls_log_stat_info,
-      const rootserver::ObZoneManager &zone_mgr,
-      const rootserver::ObServerManager &server_mgr,
       const common::ObIArray<ObAddr> &to_stop_servers,
       const bool skip_log_sync_check,
       const char *print_str,
       bool &need_retry);
   int generate_valid_servers_(
       const ObLSReplica::MemberList &member_list,
-      const rootserver::ObZoneManager &zone_mgr,
-      const rootserver::ObServerManager &server_mgr,
       const common::ObIArray<ObAddr> &to_stop_servers,
       common::ObIArray<ObAddr> &valid_servers);
   int construct_ls_leader_info_sql_(common::ObSqlString &sql);

@@ -35,7 +35,7 @@ class ObExprGetPackageVar : public ObFuncExprOperator
 {
 public:
   explicit ObExprGetPackageVar(common::ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_OP_GET_PACKAGE_VAR, N_GET_PACKAGE_VAR, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE) {}
+  : ObFuncExprOperator(alloc, T_OP_GET_PACKAGE_VAR, N_GET_PACKAGE_VAR, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE) {}
 
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types_stack,

@@ -31,8 +31,6 @@ class ObISQLClient;
 
 namespace rootserver
 {
-
-class ObServerManager;
 class ObSysTenantBackupJobMgr;
 class ObBackupSetTaskMgr;
 class ObIBackupJobMgr;

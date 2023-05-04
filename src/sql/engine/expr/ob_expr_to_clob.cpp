@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprToClob::ObExprToClob(ObIAllocator &alloc)
-    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CLOB, N_TO_CLOB, 1)
+    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CLOB, N_TO_CLOB, 1, VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -52,7 +52,8 @@ int ObExprToClob::calc_result_type1(ObExprResType &type,
              || ob_is_numeric_type(text.get_type())
              || ob_is_oracle_datetime_tc(text.get_type())
              || ob_is_rowid_tc(text.get_type())
-             || ob_is_interval_tc(text.get_type())) {
+             || ob_is_interval_tc(text.get_type())
+             || text.is_xml_sql_type()) {
     type.set_clob();
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_collation_type(nls_param.nls_collation_);
@@ -97,7 +98,8 @@ int ObExprToClob::calc_to_clob_expr(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("eval param failed", K(ret));
   } else if (arg->is_null()) {
     res.set_null();
-  } else if (ob_is_clob(input_type, cs_type)) {
+  } else if (ob_is_clob(input_type, cs_type) || expr.args_[0]->obj_meta_.is_xml_sql_type()) {
+    // todo convert to clob for xml type
     res.set_datum(*arg);
   } else {
     ObString raw_string = arg->get_string();

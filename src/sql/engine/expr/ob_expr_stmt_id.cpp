@@ -22,7 +22,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprStmtId::ObExprStmtId(common::ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_STMT_ID, "stmt_id", 0, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_SYS_STMT_ID, "stmt_id", 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

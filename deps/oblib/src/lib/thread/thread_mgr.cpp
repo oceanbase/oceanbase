@@ -46,7 +46,7 @@ void lib_init_create_func()
 {
   #define TG_DEF(id, name, desc, scope, type, args...)              \
     create_funcs_[TGDefIDs::id] = []() {                            \
-      auto ret = OB_NEW(TGCLSMap<TGType::type>::CLS, "tg", args);   \
+      auto ret = OB_NEW(TGCLSMap<TGType::type>::CLS, SET_USE_500("tg"), args); \
       ret->attr_ = {#name, desc, TGScope::scope, TGType::type};     \
       return ret;                                                   \
     };

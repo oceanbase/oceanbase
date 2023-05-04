@@ -16,10 +16,18 @@
 #include "share/stat/ob_stats_estimator.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
+#include "sql/engine/aggregate/ob_aggregate_processor.h"
 namespace oceanbase
 {
 namespace common
 {
+
+struct BucketDesc
+{
+  BucketDesc() : ep_count_(0), is_pop_(false) {}
+  int64_t ep_count_;
+  bool is_pop_;
+};
 
 struct BucketNode
 {
@@ -61,6 +69,14 @@ public:
                         int64_t bucket_num,
                         int64_t total_count,
                         int64_t num_distinct);
+  int build_hybrid_hist(sql::ObAggregateProcessor::HybridHistExtraResult *extra,
+                        ObIAllocator *alloc,
+                        int64_t bucket_num,
+                        int64_t total_count,
+                        int64_t num_distinct,
+                        int64_t pop_count,
+                        int64_t pop_freq,
+                        const ObObjMeta &obj_meta);
   TO_STRING_KV(K_(total_count),
                K_(num_distinct),
                K_(pop_count),

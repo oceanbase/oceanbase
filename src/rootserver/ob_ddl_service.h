@@ -83,7 +83,6 @@ namespace palf
 namespace rootserver
 {
 class ObDDLOperator;
-class ObServerManager;
 class ObZoneManager;
 class ObUnitManager;
 class ObCommitAlterTenantLocalityArg;
@@ -131,7 +130,6 @@ public:
            common::ObMySQLProxy &sql_proxy,
            share::schema::ObMultiVersionSchemaService &schema_service,
            share::ObLSTableOperator &lst_operator,
-           ObServerManager &server_mgr,
            ObZoneManager &zone_mgr,
            ObUnitManager &unit_mgr,
            ObSnapshotInfoManager &snapshot_mgr);
@@ -142,7 +140,6 @@ public:
   // these functions should be called after ddl_service has been inited
   share::schema::ObMultiVersionSchemaService &get_schema_service() { return *schema_service_; }
   common::ObMySQLProxy &get_sql_proxy() { return *sql_proxy_; }
-  ObServerManager &get_server_manager() { return *server_mgr_; }
   ObZoneManager &get_zone_mgr() { return *zone_mgr_; }
   ObSnapshotInfoManager &get_snapshot_mgr() { return *snapshot_mgr_; }
   share::ObLSTableOperator &get_lst_operator() { return *lst_operator_; }
@@ -277,7 +274,8 @@ public:
                               share::schema::ObTableSchema &schema);
   int create_index_tablet(const ObTableSchema &index_schema,
                           ObMySQLTransaction &trans,
-                          share::schema::ObSchemaGetterGuard &schema_guard);
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          const bool need_check_tablet_cnt);
   virtual int alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
                                 const share::schema::ObTableSchema &orgin_table_schema,
                                 share::schema::ObTableSchema &new_table_schema,
@@ -580,6 +578,12 @@ public:
                                      const common::ObString &constraint_name,
                                      const bool is_foreign_key, // this param is only effective in mysql mode
                                      bool &is_constraint_name_exist);
+int check_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                          const share::schema::ObColumnSchemaV2 &col_schema,
+                          const uint64_t tenant_id);
+int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard,
+                                const share::schema::ObTableSchema &table_schema,
+                                const uint64_t tenant_id);
   int check_cst_name_dup_for_rename_table_mysql(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema *from_table_schema,
@@ -1152,7 +1156,8 @@ private:
   int create_table_in_trans(share::schema::ObTableSchema &table_schema,
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
-                            share::schema::ObSchemaGetterGuard &schema_guard);
+                            share::schema::ObSchemaGetterGuard &schema_guard,
+                            const bool need_check_tablet_cnt);
   /*
    * Check and set various options of modify tenant, among which the modifications of zone_list,
    *  locality and resource_pool are related to each other.
@@ -1727,11 +1732,19 @@ private:
                                common::ObIArray<uint64_t> &drop_ug_id_array,
                                ObIArray<share::ObResourcePoolName> &pool_names);
   // private funcs for drop column
+  int get_all_dropped_udt_hidden_column_ids(const ObTableSchema &orig_table_schema,
+                                            const ObColumnSchemaV2 &orig_column_schema,
+                                            common::ObIArray<int64_t> &drop_cols_id_arr,
+                                            int64_t &columns_cnt_in_new_table);
   int get_all_dropped_column_ids(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const ObTableSchema &orig_table_schema,
       common::ObIArray<int64_t> &drop_cols_id_arr,
       int64_t *new_table_cols_cnt = nullptr);
+  int drop_udt_hidden_columns(const ObTableSchema &origin_table_schema,
+                              ObTableSchema &new_table_schema,
+                              const ObColumnSchemaV2 &new_origin_col,
+                              int64_t new_schema_version);
   int check_can_drop_columns(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
@@ -1739,8 +1752,10 @@ private:
   int check_can_drop_column(
       const common::ObString &orig_column_name,
       const share::schema::ObColumnSchemaV2 *orig_column_schema,
+      const ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &new_table_schema,
-      const int64_t new_table_cols_cnt);
+      const int64_t new_table_cols_cnt,
+      ObSchemaGetterGuard &schema_guard);
   int check_drop_column_with_drop_foreign_key(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::ObTableSchema &orig_table_schema,
@@ -1779,7 +1794,6 @@ public:
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
 
-  int check_all_server_frozen_scn(const share::SCN &frozen_scn);
   int handle_security_audit(const obrpc::ObSecurityAuditArg &arg);
 
   static int check_and_get_object_name(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2298,7 +2312,6 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   share::ObLSTableOperator *lst_operator_;
   //TODO(jingqian): used to choose partition server, use load balancer finnally
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   ObSnapshotInfoManager *snapshot_mgr_;

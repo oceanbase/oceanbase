@@ -56,12 +56,6 @@ public:
                                         const ParamStore &params,
                                         const common::ObDataTypeCastParams &dtc_params);
 
-  int calculate_phy_table_location_info(ObExecContext &exec_ctx,
-                                        const ParamStore &params,
-                                        const common::ObDataTypeCastParams &dtc_params,
-                                        const common::ObIArray<ObTabletID> &tablet_ids,
-                                        const common::ObIArray<ObObjectID> &partition_ids);
-
   int calc_phy_table_loc_and_select_leader(ObExecContext &exec_ctx,
                                            const ParamStore &params,
                                            const common::ObDataTypeCastParams &dtc_params);

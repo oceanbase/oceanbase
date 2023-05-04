@@ -280,22 +280,20 @@ public:
   //
   // Transaction free route relative
   //
-  // called when receive request to update txn state
-  static int update_txn_static_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
-  static int update_txn_dynamic_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
-  static int update_txn_parts_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
-  static int update_txn_extra_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos);
+#define SQL_TRANS_CONTROL_TXN_FREE_ROUTE_INTERFACE_(name)               \
+  /* called when receive request to update txn state */                 \
+  static int update_txn_##name##_state(ObSQLSessionInfo &session, const char* buf, const int64_t len, int64_t &pos); \
+  /* called when response client to serialize txn state which has changed */ \
+  static int64_t get_txn_##name##_state_serialize_size(ObSQLSessionInfo &session); \
+  static int serialize_txn_##name##_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos); \
+  static int64_t get_fetch_txn_##name##_state_size(ObSQLSessionInfo& sess); \
+  static int fetch_txn_##name##_state(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos); \
+  static int cmp_txn_##name##_state(const char* cur_buf, int64_t cur_len, const char* last_buf, int64_t last_len); \
+  static void display_txn_##name##_state(ObSQLSessionInfo &sess, const char* cur_buf, const int64_t cur_len, const char* last_buf, const int64_t last_len);
+#define SQL_TRANS_CONTROL_TXN_FREE_ROUTE_INTERFACE(name)  SQL_TRANS_CONTROL_TXN_FREE_ROUTE_INTERFACE_(name)
+  LST_DO(SQL_TRANS_CONTROL_TXN_FREE_ROUTE_INTERFACE, (), static, dynamic, parts, extra)
   // called when response client to decide whether need allow free route and whether state need to be returned
   static int calc_txn_free_route(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_route_ctx);
-  // called when response client to serialize txn state which has changed
-  static int serialize_txn_static_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
-  static int serialize_txn_dynamic_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
-  static int serialize_txn_parts_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
-  static int serialize_txn_extra_state(ObSQLSessionInfo &session, char* buf, const int64_t len, int64_t &pos);
-  static int64_t get_txn_static_state_serialize_size(ObSQLSessionInfo &session);
-  static int64_t get_txn_dynamic_state_serialize_size(ObSQLSessionInfo &session);
-  static int64_t get_txn_parts_state_serialize_size(ObSQLSessionInfo &session);
-  static int64_t get_txn_extra_state_serialize_size(ObSQLSessionInfo &session);
   static int check_free_route_tx_alive(ObSQLSessionInfo &session, transaction::ObTxnFreeRouteCtx &txn_free_rotue_ctx);
 };
 

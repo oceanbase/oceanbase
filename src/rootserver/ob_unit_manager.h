@@ -414,10 +414,6 @@ public:
       const common::ObIArray<common::ObZone> &schema_zone_list,
       const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
       bool &is_legal);
-  // get all server loads
-  int get_server_loads(const common::ObZone &zone,
-                       common::ObArray<ObServerLoad> &server_loads,
-                       double *weights, int64_t weights_count);
   static int calc_sum_load(const common::ObArray<ObUnitLoad> *unit_loads,
                            share::ObUnitConfig &sum_load);
 // get hard limit
@@ -528,25 +524,32 @@ protected:
                        const share::ObUnitStat &unit_stat,
                        const common::ObIArray<share::ObUnitStat> &migrating_unit_stat,
                        const common::ObAddr &dst,
+                       const share::ObServerResourceInfo &dst_resource_info,
                        const bool is_manual = false);
   int get_zone_units(const common::ObArray<share::ObResourcePool *> &pools,
                      common::ObArray<ZoneUnit> &zone_units) const;
   virtual int end_migrate_unit(const uint64_t unit_id, const EndMigrateOp end_migrate_op = COMMIT);
-  int get_excluded_servers(const share::ObUnit &unit,
-                           const share::ObUnitStat &unit_stat,
-                           const char *module,
-                           common::ObIArray<common::ObAddr> &servers) const;
+  int get_excluded_servers(
+      const share::ObUnit &unit,
+      const share::ObUnitStat &unit_stat,
+      const char *module,
+      const ObIArray<share::ObServerInfoInTable> &servers_info, // servers info in unit.zone_
+      const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info, // active servers' resource info in unit.zone_
+      common::ObIArray<common::ObAddr> &servers) const;
   int get_excluded_servers(const uint64_t resource_pool_id,
                            const common::ObZone &zone,
                            const char *module,
                            const bool new_allocate_pool, 
                            common::ObIArray<common::ObAddr> &excluded_servers) const;
-  int choose_server_for_unit(const share::ObUnitResource &config,
-                             const common::ObZone &zone,
-                             const common::ObArray<common::ObAddr> &excluded_servers,
-                             const char *module,
-                             common::ObAddr &server,
-                             std::string &resource_not_enough_reason) const;
+  int choose_server_for_unit(
+      const share::ObUnitResource &config,
+      const common::ObZone &zone,
+      const common::ObArray<common::ObAddr> &excluded_servers,
+      const char *module,
+      const ObIArray<share::ObServerInfoInTable> &active_servers_info, // active_servers_info of the give zone,
+      const ObIArray<obrpc::ObGetServerResourceInfoResult> &active_servers_resource_info, // active_servers_resource_info of the give zone
+      common::ObAddr &server,
+      std::string &resource_not_enough_reason) const;
   int inner_choose_server_for_unit(const share::ObUnitConfig &config,
                                    const common::ObZone &zone,
                                    const common::ObArray<common::ObAddr> &excluded_servers,
@@ -569,14 +572,7 @@ protected:
       const uint64_t tenant_id,
       const int64_t unit_group_num,
       common::ObIArray<uint64_t> &new_unit_group_id_array);
-  int get_server_loads_internal(const common::ObZone &zone,
-                                const bool only_active,
-                                common::ObArray<ObServerLoad> &server_loads,
-                                double &sum_load,
-                                int64_t &alive_server_count,
-                                double *weights, int64_t weights_count);
     int check_unit_group_normal(const share::ObUnit &unit, bool &normal);
-  int check_can_migrate_in(const common::ObAddr &server, bool &can_migrate_in) const;
   int get_migrate_units_by_server(const ObAddr &server,
                                   common::ObIArray<uint64_t> &migrate_units) const;
   int try_cancel_migrate_unit(const share::ObUnit &unit, bool &is_canceled);
@@ -590,7 +586,7 @@ protected:
   int check_has_intersect_pg(const share::ObUnit &a,
                              const share::ObUnit &b,
                              bool &intersect);
-  int have_enough_resource(const share::ObServerStatus &server_status,
+  int have_enough_resource(const obrpc::ObGetServerResourceInfoResult &report_server_resource_info,
                            const share::ObUnitResource &unit_resource,
                            const double limit,
                            bool &is_enough,
@@ -1047,7 +1043,10 @@ protected:
       common::ObPooledAllocator<common::ObArray<share::ObResourcePool *> > &allocator,
       const uint64_t id,
       share::ObResourcePool *resource_pool);
-  int cancel_migrate_unit(const share::ObUnit &unit, const bool is_gts_unit);
+  int cancel_migrate_unit(
+      const share::ObUnit &unit,
+      const bool migrate_from_server_can_migrate_in,
+      const bool is_gts_unit);
   int check_split_pool_name_condition(
       const common::ObIArray<share::ObResourcePoolName> &split_pool_name_list);
   int check_split_pool_zone_condition(
@@ -1133,6 +1132,12 @@ protected:
       const uint64_t tenant_id,
       const bool is_active,
       common::ObIArray<uint64_t> &unit_group_id_array);
+  int get_servers_resource_info_via_rpc(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &report_server_resource_info) const;
+  int get_server_resource_info_via_rpc(
+    const share::ObServerInfoInTable &server_inzfo,
+    obrpc::ObGetServerResourceInfoResult &report_servers_resource_info) const ;
 
 private:
   int check_shrink_resource_(const common::ObIArray<share::ObResourcePool *> &pools,
@@ -1146,7 +1151,8 @@ private:
       const common::ObIArray<share::ObResourcePool *> &pools,
       const share::ObUnitResource &old_resource,
       const share::ObUnitResource &new_resource) const;
-  int check_expand_resource_(const common::ObAddr &server,
+  int check_expand_resource_(
+      const share::ObServerInfoInTable &server_info,
       const share::ObUnitResource &expand_resource,
       bool &can_expand,
       AlterResourceErr &err_index) const;
@@ -1170,21 +1176,35 @@ private:
   int expand_pool_unit_num_(
       share::ObResourcePool *pool,
       const int64_t unit_num);
+  int check_enough_resource_for_delete_server_(
+      const ObAddr &server,
+      const ObZone &zone,
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
+      const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info);
+  int get_servers_resource_info_via_rpc_(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info);
+  static int order_report_servers_resource_info_(
+    const ObIArray<share::ObServerInfoInTable> &servers_info,
+    const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info,
+    ObIArray<obrpc::ObGetServerResourceInfoResult> &ordered_report_servers_resource_info);
+
   int check_server_have_enough_resource_for_delete_server_(
       const ObUnitLoad &unit_load,
       const common::ObZone &zone,
-      const ObIArray<share::ObServerStatus> &statuses,
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
       ObIArray<ObUnitPlacementStrategy::ObServerResource> &initial_servers_resource,
       std::string &resource_not_enough_reason);
-  int compute_server_resource_(const share::ObServerStatus &server_status,
-      ObUnitPlacementStrategy::ObServerResource &server_resource) const;
+  int compute_server_resource_(
+    const obrpc::ObGetServerResourceInfoResult &report_server_resource_info,
+    ObUnitPlacementStrategy::ObServerResource &server_resource) const;
   int build_server_resources_(
-      const ObIArray<share::ObServerStatus> &statuses,
+      const ObIArray<obrpc::ObGetServerResourceInfoResult> &report_servers_resource_info,
       ObIArray<ObUnitPlacementStrategy::ObServerResource> &initial_server_resource) const;
   int do_choose_server_for_unit_(const share::ObUnitResource &config,
       const ObZone &zone,
       const ObArray<ObAddr> &excluded_servers,
-      const ObIArray<share::ObServerStatus> &statuses,
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
       const ObIArray<ObUnitPlacementStrategy::ObServerResource> &server_resources,
       const char *module,
       ObAddr &server,

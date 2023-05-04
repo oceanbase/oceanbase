@@ -37,7 +37,8 @@ ObAnalyzeStmt::ObAnalyzeStmt()
     parallel_degree_(1),
     is_drop_(false),
     part_ids_(),
-    subpart_ids_()
+    subpart_ids_(),
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE)
 {
 }
 
@@ -75,6 +76,7 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
 
   param.tab_name_ = table_name_;
   param.table_id_ = table_id_;
+  param.ref_table_type_ = ref_table_type_;
   param.part_level_ = part_level_;
   param.total_part_cnt_ = total_part_cnt_;
 

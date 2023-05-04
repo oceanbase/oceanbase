@@ -748,16 +748,16 @@ Query Plan
 ========================================================================
 |ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |SORT                         |               |2       |21          |
-|1 |└─HASH UNION DISTINCT        |               |2       |21          |
-|2 |  ├─PX COORDINATOR           |               |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
-|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
-|6 |  └─PX COORDINATOR           |               |1       |10          |
-|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
-|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
-|9 |        └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|1       |9           |
+|0 |SORT                         |               |21      |62          |
+|1 |└─HASH UNION DISTINCT        |               |21      |58          |
+|2 |  ├─PX COORDINATOR           |               |11      |27          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |11      |21          |
+|4 |  │   └─PX PARTITION ITERATOR|               |11      |10          |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
+|6 |  └─PX COORDINATOR           |               |10      |25          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |10      |20          |
+|8 |      └─PX PARTITION ITERATOR|               |10      |10          |
+|9 |        └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|10      |10          |
 ========================================================================
 Outputs & filters:
 -------------------------------------
@@ -808,22 +808,22 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                         |NAME           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                             |               |1       |30          |
-|1 |└─HASH JOIN                      |               |1       |30          |
-|2 |  ├─PX COORDINATOR               |               |1       |9           |
-|3 |  │ └─EXCHANGE OUT DISTR         |:EX10000       |1       |9           |
-|4 |  │   └─PX PARTITION ITERATOR    |               |1       |9           |
-|5 |  │     └─TABLE FULL SCAN        |yy(idx_t7_c2c1)|1       |9           |
-|6 |  └─SUBPLAN SCAN                 |xx             |2       |21          |
-|7 |    └─HASH UNION DISTINCT        |               |2       |21          |
-|8 |      ├─PX COORDINATOR           |               |1       |10          |
-|9 |      │ └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
-|10|      │   └─PX PARTITION ITERATOR|               |1       |9           |
-|11|      │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
-|12|      └─PX COORDINATOR           |               |1       |10          |
-|13|        └─EXCHANGE OUT DISTR     |:EX30000       |1       |10          |
-|14|          └─PX PARTITION ITERATOR|               |1       |9           |
-|15|            └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|1       |9           |
+|0 |SORT                             |               |11      |78          |
+|1 |└─HASH JOIN                      |               |11      |77          |
+|2 |  ├─PX COORDINATOR               |               |11      |15          |
+|3 |  │ └─EXCHANGE OUT DISTR         |:EX10000       |11      |13          |
+|4 |  │   └─PX PARTITION ITERATOR    |               |11      |9           |
+|5 |  │     └─TABLE FULL SCAN        |yy(idx_t7_c2c1)|11      |9           |
+|6 |  └─SUBPLAN SCAN                 |xx             |21      |58          |
+|7 |    └─HASH UNION DISTINCT        |               |21      |58          |
+|8 |      ├─PX COORDINATOR           |               |11      |27          |
+|9 |      │ └─EXCHANGE OUT DISTR     |:EX20000       |11      |21          |
+|10|      │   └─PX PARTITION ITERATOR|               |11      |10          |
+|11|      │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
+|12|      └─PX COORDINATOR           |               |10      |25          |
+|13|        └─EXCHANGE OUT DISTR     |:EX30000       |10      |20          |
+|14|          └─PX PARTITION ITERATOR|               |10      |10          |
+|15|            └─TABLE RANGE SCAN   |t7(idx_t7_c2c1)|10      |10          |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -893,16 +893,16 @@ Query Plan
 ========================================================================
 |ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |SORT                         |               |2       |21          |
-|1 |└─HASH UNION DISTINCT        |               |2       |21          |
-|2 |  ├─PX COORDINATOR           |               |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
-|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
-|6 |  └─PX COORDINATOR           |               |1       |10          |
-|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
-|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
-|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|0 |SORT                         |               |22      |64          |
+|1 |└─HASH UNION DISTINCT        |               |22      |60          |
+|2 |  ├─PX COORDINATOR           |               |11      |27          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |11      |21          |
+|4 |  │   └─PX PARTITION ITERATOR|               |11      |10          |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
+|6 |  └─PX COORDINATOR           |               |11      |27          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |11      |21          |
+|8 |      └─PX PARTITION ITERATOR|               |11      |10          |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
 ========================================================================
 Outputs & filters:
 -------------------------------------
@@ -948,16 +948,16 @@ Query Plan
 ========================================================================
 |ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |SORT                         |               |2       |19          |
-|1 |└─HASH UNION DISTINCT        |               |2       |19          |
-|2 |  ├─PX COORDINATOR           |               |1       |9           |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |9           |
-|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
-|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
-|6 |  └─PX COORDINATOR           |               |1       |9           |
-|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |9           |
-|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
-|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|0 |SORT                         |               |22      |40          |
+|1 |└─HASH UNION DISTINCT        |               |22      |35          |
+|2 |  ├─PX COORDINATOR           |               |11      |15          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |11      |13          |
+|4 |  │   └─PX PARTITION ITERATOR|               |11      |9           |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |9           |
+|6 |  └─PX COORDINATOR           |               |11      |15          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |11      |13          |
+|8 |      └─PX PARTITION ITERATOR|               |11      |9           |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |9           |
 ========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1001,16 +1001,16 @@ Query Plan
 ========================================================================
 |ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |SORT                         |               |2       |21          |
-|1 |└─HASH UNION DISTINCT        |               |2       |21          |
-|2 |  ├─PX COORDINATOR           |               |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|               |1       |9           |
-|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
-|6 |  └─PX COORDINATOR           |               |1       |10          |
-|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |1       |10          |
-|8 |      └─PX PARTITION ITERATOR|               |1       |9           |
-|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|1       |9           |
+|0 |SORT                         |               |22      |66          |
+|1 |└─HASH UNION DISTINCT        |               |22      |60          |
+|2 |  ├─PX COORDINATOR           |               |11      |27          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000       |11      |21          |
+|4 |  │   └─PX PARTITION ITERATOR|               |11      |10          |
+|5 |  │     └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
+|6 |  └─PX COORDINATOR           |               |11      |27          |
+|7 |    └─EXCHANGE OUT DISTR     |:EX20000       |11      |21          |
+|8 |      └─PX PARTITION ITERATOR|               |11      |10          |
+|9 |        └─TABLE FULL SCAN    |t7(idx_t7_c2c1)|11      |10          |
 ========================================================================
 Outputs & filters:
 -------------------------------------
@@ -1083,12 +1083,12 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                         |                   |11      |19          |
-|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
-|2 |  ├─PX COORDINATOR           |                   |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
-|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|0 |SORT                         |                   |20      |39          |
+|1 |└─HASH UNION DISTINCT        |                   |20      |34          |
+|2 |  ├─PX COORDINATOR           |                   |10      |25          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |10      |20          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |10      |10          |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |10      |10          |
 |6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
 ============================================================================
 Outputs & filters:
@@ -1133,12 +1133,12 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                         |                   |11      |18          |
-|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
-|2 |  ├─PX COORDINATOR           |                   |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
-|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|0 |SORT                         |                   |20      |37          |
+|1 |└─HASH UNION DISTINCT        |                   |20      |34          |
+|2 |  ├─PX COORDINATOR           |                   |10      |25          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |10      |20          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |10      |10          |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |10      |10          |
 |6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
 ============================================================================
 Outputs & filters:
@@ -1185,12 +1185,12 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                         |                   |11      |19          |
-|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
-|2 |  ├─PX COORDINATOR           |                   |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
-|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|0 |SORT                         |                   |20      |39          |
+|1 |└─HASH UNION DISTINCT        |                   |20      |34          |
+|2 |  ├─PX COORDINATOR           |                   |10      |25          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |10      |20          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |10      |10          |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |10      |10          |
 |6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
 ============================================================================
 Outputs & filters:
@@ -1235,12 +1235,12 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                     |NAME               |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |SORT                         |                   |11      |18          |
-|1 |└─HASH UNION DISTINCT        |                   |11      |16          |
-|2 |  ├─PX COORDINATOR           |                   |1       |10          |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |1       |10          |
-|4 |  │   └─PX PARTITION ITERATOR|                   |1       |9           |
-|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |1       |9           |
+|0 |SORT                         |                   |20      |37          |
+|1 |└─HASH UNION DISTINCT        |                   |20      |34          |
+|2 |  ├─PX COORDINATOR           |                   |10      |25          |
+|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000           |10      |20          |
+|4 |  │   └─PX PARTITION ITERATOR|                   |10      |10          |
+|5 |  │     └─TABLE RANGE SCAN   |t7(idx_t7_c3c2c1)  |10      |10          |
 |6 |  └─TABLE RANGE SCAN         |t72(idx_t72_c3c2c1)|10      |3           |
 ============================================================================
 Outputs & filters:
@@ -1584,23 +1584,23 @@ Query Plan
 |ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
 |0 |MERGE UNION DISTINCT|       |6       |5           |
-|1 |├─TABLE FULL SCAN   |x2(ix2)|3       |2           |
-|2 |└─SORT              |       |3       |3           |
-|3 |  └─TABLE FULL SCAN |x1     |3       |2           |
+|1 |├─SORT              |       |3       |3           |
+|2 |│ └─TABLE FULL SCAN |x1     |3       |2           |
+|3 |└─TABLE FULL SCAN   |x2(ix2)|3       |2           |
 =======================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=256
-  1 - output([x2.d2], [x2.d3]), filter(nil), rowset=256
-      access([x2.d2], [x2.d3]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  2 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
+  1 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
       sort_keys([x1.c2, ASC], [x1.c3, ASC])
-  3 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
+  2 - output([x1.c2], [x1.c3]), filter(nil), rowset=256
       access([x1.c2], [x1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([x1.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([x2.d2], [x2.d3]), filter(nil), rowset=256
+      access([x2.d2], [x2.d3]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([x2.d2], [x2.d3], [x2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select c2, c3 from x1 union select /*+ index(x2 ix2) */ d2, d3 from x2 order by 1,2;
 +------+------+
 | c2   | c3   |
@@ -1833,12 +1833,12 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                     |NAME                  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |SORT                         |                      |1       |31          |
-|1 |└─SUBPLAN SCAN               |TUT                   |1       |31          |
-|2 |  └─MERGE UNION DISTINCT     |                      |1       |31          |
+|0 |SORT                         |                      |1       |35          |
+|1 |└─SUBPLAN SCAN               |TUT                   |6       |33          |
+|2 |  └─MERGE UNION DISTINCT     |                      |6       |33          |
 |3 |    ├─TABLE FULL SCAN        |table2_bigint(Reverse)|5       |4           |
-|4 |    └─SORT                   |                      |1       |26          |
-|5 |      └─MERGE UNION DISTINCT |                      |1       |26          |
+|4 |    └─SORT                   |                      |1       |28          |
+|5 |      └─MERGE UNION DISTINCT |                      |6       |26          |
 |6 |        ├─TABLE GET          |table2_bigint         |5       |16          |
 |7 |        └─SORT               |                      |1       |9           |
 |8 |          └─TOP-N SORT       |                      |1       |8           |

@@ -18,6 +18,8 @@
 
 #include "lib/oblog/ob_log_level.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/time/ob_tsc_timestamp.h"
+#include "common/ob_clock_generator.h"
 
 namespace oceanbase
 {
@@ -126,7 +128,7 @@ uint64_t UUID::gen_rand()
 UUID UUID::gen()
 {
   UUID ret;
-  ret.high_ = ObTimeUtility::fast_current_time();
+  ret.high_ = common::ObClockGenerator::getClock();
   ret.low_ = gen_rand();
   return ret;
 }
@@ -418,7 +420,7 @@ ObSpanCtx* ObTrace::begin_span(uint32_t span_type, uint8_t level, bool is_follow
       new_span->span_id_.high_ = 0;
       new_span->source_span_ = last_active_span_;
       new_span->is_follow_ = is_follow;
-      new_span->start_ts_ = ObTimeUtility::fast_current_time();
+      new_span->start_ts_ = OB_TSC_TIMESTAMP.current_time();
       new_span->end_ts_ = 0;
       new_span->tags_ = nullptr;
       last_active_span_ = new_span;
@@ -444,7 +446,7 @@ void ObTrace::end_span(ObSpanCtx* span)
   if (!trace_id_.is_inited() || OB_ISNULL(span) || !span->span_id_.is_inited()) {
     // do nothing
   } else {
-    span->end_ts_ = ObTimeUtility::fast_current_time();
+    span->end_ts_ = OB_TSC_TIMESTAMP.current_time();
     last_active_span_ = span->source_span_;
   }
 }

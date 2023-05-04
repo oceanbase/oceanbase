@@ -38,6 +38,7 @@ const char* const ENABLE_AUTO_LEADER_SWITCH = "enable_auto_leader_switch";
 const char* const MAJOR_COMPACT_TRIGGER = "major_compact_trigger";
 const char* const ENABLE_PERF_EVENT = "enable_perf_event";
 const char* const ENABLE_SQL_AUDIT = "enable_sql_audit";
+const char *const OB_STR_TRC_CONTROL_INFO = "_trace_control_info";
 const char* const CONFIG_TRUE_VALUE_BOOL = "1";
 const char* const CONFIG_FALSE_VALUE_BOOL = "0";
 const char* const CONFIG_TRUE_VALUE_STRING = "true";

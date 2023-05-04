@@ -45,14 +45,19 @@ int ObTransformSimplifyOrderby::transform_one_stmt(common::ObIArray<ObParentDMLS
   bool subquery_happened = false;
   bool view_happened = false;
   bool set_happened = false;
-
+  bool force_serial_set_order = false;
   trans_happened = false;
   UNUSED(parent_stmts);
-  if (OB_FAIL(remove_order_by_for_subquery(stmt, subquery_happened))) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null stmt", K(ret), K(stmt), K(ctx_), K(ctx_->session_info_));
+  } else if (OB_FAIL(ctx_->session_info_->is_serial_set_order_forced(force_serial_set_order, lib::is_oracle_mode()))) {
+    LOG_WARN("fail to get force_serial_set_order value", K(ret));
+  } else if (OB_FAIL(remove_order_by_for_subquery(stmt, subquery_happened))) {
     LOG_WARN("remove order by for subquery failed");
-  } else if (OB_FAIL(remove_order_by_for_view_stmt(stmt, view_happened))) {
+  } else if (OB_FAIL(remove_order_by_for_view_stmt(stmt, view_happened, force_serial_set_order))) {
     LOG_WARN("remove order by for subquery failed");
-  } else if (OB_FAIL(remove_order_by_for_set_stmt(stmt, set_happened))) {
+  } else if (OB_FAIL(remove_order_by_for_set_stmt(stmt, set_happened, force_serial_set_order))) {
     LOG_WARN("failed to remove order by for set stmt", K(ret));
   } else if (OB_FAIL(remove_order_by_duplicates(stmt, remove_duplicates))) {
     LOG_WARN("failed to remove order by duplicates", K(ret));
@@ -103,7 +108,7 @@ int ObTransformSimplifyOrderby::remove_order_by_for_subquery(ObDMLStmt *stmt, bo
   return ret;
 }
 
-int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, bool &trans_happened)
+int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, bool &trans_happened, bool &force_serial_set_order)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -133,7 +138,8 @@ int ObTransformSimplifyOrderby::remove_order_by_for_view_stmt(ObDMLStmt *stmt, b
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("view stmt is null", K(ret));
       } else if (view_stmt->is_contains_assignment() ||
-                 view_stmt->is_hierarchical_query()) {
+                 view_stmt->is_hierarchical_query() ||
+                 (force_serial_set_order && view_stmt->is_set_stmt())) {
         // do nothing
       } else if (1 == table_items.count()) {
         if (stmt->is_select_stmt()) {
@@ -303,14 +309,20 @@ int ObTransformSimplifyOrderby::exist_item_by_expr(ObRawExpr *expr, ObIArray<Ord
   return ret;
 }
 
-int ObTransformSimplifyOrderby::remove_order_by_for_set_stmt(ObDMLStmt *&stmt, bool &trans_happened)
+int ObTransformSimplifyOrderby::remove_order_by_for_set_stmt(ObDMLStmt *&stmt, bool &trans_happened, bool &force_serial_set_order)
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get null stmt", K(ret), K(stmt));
-  } else if (stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->is_set_stmt()) {
+    LOG_WARN("get null stmt", K(ret), K(stmt), K(ctx_), K(ctx_->session_info_));
+  } else if (!(stmt->is_select_stmt() && static_cast<ObSelectStmt*>(stmt)->is_set_stmt())) {
+    //not set stmt, do nothing
+  } else if (force_serial_set_order &&
+             ObSelectStmt::UNION == static_cast<ObSelectStmt*>(stmt)->get_set_op() &&
+             !static_cast<ObSelectStmt*>(stmt)->is_set_distinct()) {
+    //under oracle mode and force_serial_set_order, union-all do not remove order items in its child stmt
+  } else {
     ObIArray<ObSelectStmt*> &child_stmts = static_cast<ObSelectStmt*>(stmt)->get_set_query();
     ObSelectStmt *child_stmt = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {

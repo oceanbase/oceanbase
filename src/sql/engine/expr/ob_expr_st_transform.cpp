@@ -30,7 +30,7 @@ namespace sql
 {
 
 ObExprSTTransform::ObExprSTTransform(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_TRANSFORM, N_ST_TRANSFORM, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_TRANSFORM, N_ST_TRANSFORM, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

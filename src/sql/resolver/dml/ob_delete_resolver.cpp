@@ -419,6 +419,8 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
       } else if (OB_FAIL(add_all_index_rowkey_to_stmt(table_item,
                                                       table_info->column_exprs_))) {
         LOG_WARN("fail to add relate column to stmt", K(ret), K(table_item));
+      } else if (OB_FAIL(add_all_lob_columns_to_stmt(table_item, table_info->column_exprs_))) {
+        LOG_WARN("fail to add lob column to stmt", K(ret), K(table_item));
       }
       if (OB_SUCC(ret)) {
         table_info->table_id_ = table_item.table_id_;

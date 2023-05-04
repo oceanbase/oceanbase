@@ -229,8 +229,6 @@ private:
     int squash();
     void swap(DataBuffer &other);
     TO_STRING_KV(KPC_(file_buffer), K_(pos));
-  private:
-    common::ObArenaAllocator allocator_;
   public:
     ObLoadFileBuffer *file_buffer_;
     int64_t pos_; // left pos

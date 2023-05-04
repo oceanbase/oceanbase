@@ -26,12 +26,11 @@
 #include "fetch_log_engine.h"
 #include "log_loop_thread.h"
 #include "log_define.h"
-#include "log_io_worker.h"
 #include "log_io_task_cb_thread_pool.h"
 #include "log_rpc.h"
 #include "palf_options.h"
 #include "palf_handle_impl.h"
-#include "log_io_worker.h"
+#include "log_io_worker_wrapper.h"
 #include "block_gc_timer_task.h"
 #include "log_updater.h"
 namespace oceanbase
@@ -87,6 +86,7 @@ public:
   PalfDiskOptionsWrapper() : disk_opts_for_stopping_writing_(),
                              disk_opts_for_recycling_blocks_(),
                              status_(Status::INVALID_STATUS),
+                             cur_unrecyclable_log_disk_size_(0),
                              disk_opts_lock_(common::ObLatchIds::PALF_ENV_LOCK) {}
   ~PalfDiskOptionsWrapper() { reset(); }
 
@@ -105,6 +105,8 @@ public:
     ObSpinLockGuard guard(disk_opts_lock_);
     return disk_opts_for_recycling_blocks_;
   }
+  void set_cur_unrecyclable_log_disk_size(const int64_t unrecyclable_log_disk_size);
+  bool need_throttling() const;
 
   void get_disk_opts(PalfDiskOptions &disk_opts_for_stopping_writing,
                      PalfDiskOptions &disk_opts_for_recycling_blocks,
@@ -116,12 +118,22 @@ public:
     status = status_;
   }
 
+  void get_throttling_options(PalfThrottleOptions &options)
+  {
+    ObSpinLockGuard guard(disk_opts_lock_);
+    options.total_disk_space_ = disk_opts_for_stopping_writing_.log_disk_usage_limit_size_;
+    options.stopping_writing_percentage_ = disk_opts_for_stopping_writing_.log_disk_utilization_limit_threshold_;
+    options.trigger_percentage_ = disk_opts_for_stopping_writing_.log_disk_throttling_percentage_;
+    options.unrecyclable_disk_space_ = cur_unrecyclable_log_disk_size_;
+  }
+
   bool is_shrinking() const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
     return Status::SHRINKING_STATUS == status_;
   }
-  TO_STRING_KV(K_(disk_opts_for_stopping_writing), K_(disk_opts_for_recycling_blocks), K_(status));
+  TO_STRING_KV(K_(disk_opts_for_stopping_writing), K_(disk_opts_for_recycling_blocks), K_(status),
+               K_(cur_unrecyclable_log_disk_size));
 
 private:
   int update_disk_options_not_guarded_by_lock_(const PalfDiskOptions &new_opts);
@@ -133,6 +145,7 @@ private:
   PalfDiskOptions disk_opts_for_stopping_writing_;
   PalfDiskOptions disk_opts_for_recycling_blocks_;
   Status status_;
+  int64_t cur_unrecyclable_log_disk_size_;
   mutable ObSpinLock disk_opts_lock_;
 };
 
@@ -164,6 +177,7 @@ public:
   virtual int64_t get_tenant_id() = 0;
   // should be removed in version 4.2.0.0
   virtual int update_replayable_point(const SCN &replayable_scn) = 0;
+  virtual int get_throttling_options(PalfThrottleOptions &option) = 0;
   VIRTUAL_TO_STRING_KV("IPalfEnvImpl", "Dummy");
 
 };
@@ -182,7 +196,8 @@ public:
            const int64_t tenant_id,
            rpc::frame::ObReqTransport *transport,
            common::ObILogAllocator *alloc_mgr,
-           ILogBlockPool *log_block_pool);
+           ILogBlockPool *log_block_pool,
+           PalfMonitorCb *monitor);
 
   // start函数包含两层含义：
   //
@@ -228,6 +243,7 @@ public:
   int get_io_start_time(int64_t &last_working_time) override final;
   int64_t get_tenant_id() override final;
   int update_replayable_point(const SCN &replayable_scn) override final;
+  int get_throttling_options(PalfThrottleOptions &option);
   INHERIT_TO_STRING_KV("IPalfEnvImpl", IPalfEnvImpl, K_(self), K_(log_dir), K_(disk_options_wrapper),
       KPC(log_alloc_mgr_));
   // =================== disk space management ==================
@@ -264,8 +280,9 @@ private:
     GetTotalUsedDiskSpace();
     ~GetTotalUsedDiskSpace();
     bool operator() (const LSKey &palf_id, IPalfHandleImpl *palf_handle_impl);
-    TO_STRING_KV(K_(total_used_disk_space), K_(ret_code));
+    TO_STRING_KV(K_(total_used_disk_space), K_(total_unrecyclable_disk_space), K_(ret_code));
     int64_t total_used_disk_space_;
+    int64_t total_unrecyclable_disk_space_;
     int64_t maximum_used_size_;
     int64_t palf_id_;
     int ret_code_;
@@ -286,10 +303,12 @@ private:
   int scan_all_palf_handle_impl_director_();
   const PalfDiskOptions &get_disk_options_guarded_by_lock_() const;
   int get_total_used_disk_space_(int64_t &total_used_disk_space,
+                                 int64_t &total_unrecyclable_disk_space,
                                  int64_t &palf_id,
                                  int64_t &maximum_used_size);
   int get_disk_usage_(int64_t &used_size_byte);
   int get_disk_usage_(int64_t &used_size_byte,
+                      int64_t &unrecyclable_disk_space,
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
   int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, share::SCN &oldest_scn);
@@ -312,9 +331,10 @@ private:
   LogRpc log_rpc_;
   LogIOTaskCbThreadPool cb_thread_pool_;
   common::ObOccamTimer election_timer_;
-  LogIOWorker log_io_worker_;
+  LogIOWorkerWrapper log_io_worker_wrapper_;
   BlockGCTimerTask block_gc_timer_task_;
   LogUpdater log_updater_;
+  PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
   int64_t check_disk_print_log_interval_;

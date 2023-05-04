@@ -312,12 +312,24 @@
 #include "ob_expr_cast.h"
 #include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
+#include "ob_expr_priv_xml_binary.h"
+#include "ob_expr_sys_makexml.h"
+#include "ob_expr_priv_xml_binary.h"
+#include "ob_expr_xmlparse.h"
+#include "ob_expr_xml_element.h"
+#include "ob_expr_xml_attributes.h"
+#include "ob_expr_extract_value.h"
+#include "ob_expr_extract_xml.h"
+#include "ob_expr_xml_serialize.h"
+#include "ob_expr_xmlcast.h"
+#include "ob_expr_update_xml.h"
 #include "ob_expr_generator_func.h"
 #include "ob_expr_random.h"
 #include "ob_expr_randstr.h"
 #include "ob_expr_zipf.h"
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
+#include "ob_expr_prefix_pattern.h"
 
 namespace oceanbase
 {
@@ -403,6 +415,9 @@ extern int eval_batch_ceil_floor(const ObExpr &, ObEvalCtx &, const ObBitVector 
 extern int eval_assign_question_mark_func(EVAL_FUNC_ARG_DECL);
 extern int calc_timestamp_to_scn_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
 extern int calc_scn_to_timestamp_expr(const ObExpr &, ObEvalCtx &, ObDatum &);
+extern int calc_sqrt_expr_mysql_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
+extern int calc_sqrt_expr_oracle_double_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
+extern int calc_sqrt_expr_oracle_number_in_batch(const ObExpr &, ObEvalCtx &, const ObBitVector &, const int64_t);
 
 // append only, can not delete, set to NULL for mark delete
 static ObExpr::EvalFunc g_expr_eval_functions[] = {
@@ -1001,7 +1016,21 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprUniform::eval_next_number_value,                              /* 588 */
   ObExprRandom::calc_random_expr_const_seed,                          /* 589 */
   ObExprRandom::calc_random_expr_nonconst_seed,                       /* 590 */
-  ObExprRandstr::calc_random_str                                      /* 591 */
+  ObExprRandstr::calc_random_str,                                     /* 591 */
+  NULL, //ObExprNlsInitCap::calc_nls_initcap_expr                     /* 592 */
+  ObExprPrefixPattern::eval_prefix_pattern,                           /* 593 */
+  ObExprSysMakeXML::eval_sys_makexml,                                 /* 594 */
+  ObExprPrivXmlBinary::eval_priv_xml_binary,                          /* 595 */
+  ObExprXmlparse::eval_xmlparse,                                      /* 596 */
+  ObExprXmlElement::eval_xml_element,                                 /* 597 */
+  ObExprXmlAttributes::eval_xml_attributes,                           /* 598 */
+  ObExprExtractValue::eval_extract_value,                             /* 599 */
+  ObExprExtractXml::eval_extract_xml,                                 /* 600 */
+  ObExprXmlSerialize::eval_xml_serialize,                             /* 601 */
+  ObExprXmlcast::eval_xmlcast,                                        /* 602 */
+  ObExprUpdateXml::eval_update_xml,                                   /* 603 */
+  ObExprJoinFilter::eval_range_filter,                                /* 604 */
+  ObExprJoinFilter::eval_in_filter                                    /* 605 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1115,7 +1144,13 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprEncode::eval_encode_batch,                                    /* 107 */
   ObExprDecode::eval_decode_batch,                                    /* 108 */
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
-  ObExprIsNot::calc_batch_is_not_null                                 /* 110 */
+  ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
+  NULL, //ObExprNlsInitCap::calc_nls_initcap_batch                    /* 111 */
+  ObExprJoinFilter::eval_range_filter_batch,                          /* 112 */
+  ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
+  calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
+  calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
+  calc_sqrt_expr_oracle_number_in_batch                               /* 116 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

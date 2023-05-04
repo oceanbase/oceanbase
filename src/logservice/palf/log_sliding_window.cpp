@@ -76,6 +76,7 @@ LogSlidingWindow::LogSlidingWindow()
     mm_(NULL),
     mode_mgr_(NULL),
     log_engine_(NULL),
+    plugins_(NULL),
     lsn_allocator_(),
     group_buffer_(),
     last_submit_info_lock_(common::ObLatchIds::PALF_SW_SUBMIT_INFO_LOCK),
@@ -113,8 +114,6 @@ LogSlidingWindow::LogSlidingWindow()
     submit_log_handling_lease_(),
     last_fetch_log_renew_leader_ts_us_(OB_INVALID_TIMESTAMP),
     end_lsn_stat_time_us_(OB_INVALID_TIMESTAMP),
-    lc_cb_lock_(common::ObLatchIds::PALF_SW_LOC_CB_LOCK),
-    lc_cb_(NULL),
     reconfirm_fetch_dest_(),
     is_truncating_(false),
     is_rebuilding_(false),
@@ -122,8 +121,12 @@ LogSlidingWindow::LogSlidingWindow()
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
     fs_cb_cost_stat_("[PALF STAT FS CB]", PALF_STAT_PRINT_INTERVAL_US),
     log_life_time_stat_("[PALF STAT LOG LIFETIME]", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_wait_stat_("[PALF STAT LOG SUBMIT WAIT]", PALF_STAT_PRINT_INTERVAL_US),
-    log_submit_to_slide_cost_stat_("[PALF STAT LOG SLIDE WAIT]", PALF_STAT_PRINT_INTERVAL_US),
+    log_gen_to_freeze_cost_stat_("PALF STAT LOG GEN_TO_FREEZE COST TIME", PALF_STAT_PRINT_INTERVAL_US),
+    log_gen_to_submit_cost_stat_("PALF STAT LOG GEN_TO_SUBMIT COST TIME", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_to_first_ack_cost_stat_("PALF STAT LOG SUBMIT_TO_FIRST_ACK COST TIME", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_to_flush_cost_stat_("PALF STAT LOG SUBMIT_TO_FLUSH COST TIME", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_to_commit_cost_stat_("PALF STAT LOG SUBMIT_TO_COMMIT COST TIME", PALF_STAT_PRINT_INTERVAL_US),
+    log_submit_to_slide_cost_stat_("[PALF STAT LOG SUBMIT_TO_SLIDE COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     group_log_stat_time_us_(OB_INVALID_TIMESTAMP),
     accum_log_cnt_(0),
     accum_group_log_size_(0),
@@ -142,10 +145,10 @@ void LogSlidingWindow::destroy()
   sw_.destroy();
   group_buffer_.destroy();
   match_lsn_map_.destroy();
-  lc_cb_ = NULL;
   reconfirm_fetch_dest_.reset();
   state_mgr_ = NULL;
   log_engine_ = NULL;
+  plugins_ = NULL;
   mm_ = NULL;
   mode_mgr_ = NULL;
 }
@@ -208,6 +211,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
                            LogEngine *log_engine,
                            palf::PalfFSCbWrapper *palf_fs_cb,
                            common::ObILogAllocator *alloc_mgr,
+                           LogPlugins *plugins,
                            const PalfBaseInfo &palf_base_info,
                            const bool is_normal_replica)
 {
@@ -222,10 +226,11 @@ int LogSlidingWindow::init(const int64_t palf_id,
              || NULL == mm
              || NULL == mode_mgr
              || NULL == log_engine
-             || NULL == palf_fs_cb) {
+             || NULL == palf_fs_cb
+             || NULL == plugins) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K(palf_id), K(self), K(palf_base_info),
-        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb));
+        KP(state_mgr), KP(mm), KP(mode_mgr), KP(log_engine), KP(palf_fs_cb), KP(plugins));
   } else if (is_normal_replica && OB_FAIL(do_init_mem_(palf_id, palf_base_info, alloc_mgr))) {
     PALF_LOG(WARN, "do_init_mem_ failed", K(ret), K(palf_id));
   } else {
@@ -236,6 +241,7 @@ int LogSlidingWindow::init(const int64_t palf_id,
     mode_mgr_ = mode_mgr;
     log_engine_ = log_engine;
     palf_fs_cb_ = palf_fs_cb;
+    plugins_ = plugins;
 
     last_submit_lsn_ = prev_log_info.lsn_;
     last_submit_end_lsn_ = palf_base_info.curr_lsn_;
@@ -256,6 +262,16 @@ int LogSlidingWindow::init(const int64_t palf_id,
     committed_end_lsn_ = palf_base_info.curr_lsn_;
 
     MEMSET(append_cnt_array_, 0, APPEND_CNT_ARRAY_SIZE * sizeof(int64_t));
+
+    PALF_REPORT_INFO_KV(K_(palf_id));
+    fs_cb_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_life_time_stat_.set_extra_info(EXTRA_INFOS);
+    log_gen_to_freeze_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_gen_to_submit_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_submit_to_first_ack_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_submit_to_flush_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_submit_to_commit_cost_stat_.set_extra_info(EXTRA_INFOS);
+    log_submit_to_slide_cost_stat_.set_extra_info(EXTRA_INFOS);
 
     is_inited_ = true;
     LogGroupEntryHeader group_header;
@@ -561,6 +577,7 @@ int LogSlidingWindow::try_freeze_prev_log_(const int64_t next_log_id, const LSN 
       log_task->unlock();
       // check if this log_task can be submitted
       if (log_task->is_freezed()) {
+        log_task->set_freeze_ts(ObTimeUtility::current_time());
         is_need_handle = (0 == log_task->get_ref_cnt()) ? true : false;
       }
     }
@@ -703,8 +720,22 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
       if (OB_FAIL(wait_group_buffer_ready_(lsn, log_body_size + LogGroupEntryHeader::HEADER_SER_SIZE))) {
         PALF_LOG(ERROR, "group_buffer wait failed", K(ret), K_(palf_id), K_(self));
       } else if (is_padding_log) {
-        // padding log, fill log body with '\0'.
-        if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, log_body_size))) {
+        const int64_t padding_log_body_size = log_body_size - LogEntryHeader::HEADER_SER_SIZE;
+        const int64_t padding_valid_data_len = LogEntryHeader::PADDING_LOG_ENTRY_SIZE;
+        // padding_valid_data only include LogEntryHeader and ObLogBaseHeader
+        // The format like follow:
+        // | LogEntryHeader | ObLogBaseHeader|
+        // and the format of padding log entry like follow:
+        // | LogEntryHeader | ObLogBaseHeader| PADDING_LOG_CONTENT_CHAR |
+        // |   32 BYTE      |   16 BYTE      | padding_log_body_size - 48 BYTE |
+        char padding_valid_data[padding_valid_data_len];
+        memset(padding_valid_data, 0, padding_valid_data_len);
+        if (OB_FAIL(LogEntryHeader::generate_padding_log_buf(padding_log_body_size, scn, padding_valid_data, padding_valid_data_len))) {
+          PALF_LOG(ERROR, "generate_padding_log_buf failed", K_(palf_id), K_(self), K(padding_valid_data_len),
+            K(scn), K(padding_log_body_size));
+        }
+        // padding log, fill log body with PADDING_LOG_CONTENT_CHAR.
+        else if (OB_FAIL(group_buffer_.fill_padding_body(lsn + LogGroupEntryHeader::HEADER_SER_SIZE, padding_valid_data, padding_valid_data_len, log_body_size))) {
           PALF_LOG(WARN, "group_buffer fill_padding_body failed", K(ret), K_(palf_id), K_(self), K(log_body_size));
         } else {
           // inc ref
@@ -733,6 +764,7 @@ int LogSlidingWindow::generate_new_group_log_(const LSN &lsn,
       }
       // check if this log_task can be submitted
       if (log_task->is_freezed()) {
+        log_task->set_freeze_ts(ObTimeUtility::current_time());
         is_need_handle = (0 == log_task->get_ref_cnt()) ? true : false;
       }
     }
@@ -1161,6 +1193,7 @@ int LogSlidingWindow::try_freeze_last_log_task_(const int64_t expected_log_id,
       log_task->unlock();
       // check if this log_task can be submitted
       if (log_task->is_freezed()) {
+        log_task->set_freeze_ts(ObTimeUtility::current_time());
         is_need_handle = (0 == log_task->get_ref_cnt()) ? true : false;
       }
     }
@@ -1189,6 +1222,11 @@ int LogSlidingWindow::feedback_freeze_last_log_()
     (void) handle_committed_log_();
   }
   return ret;
+}
+
+bool LogSlidingWindow::is_in_period_freeze_mode() const
+{
+  return (PERIOD_FREEZE_MODE == freeze_mode_);
 }
 
 int LogSlidingWindow::check_and_switch_freeze_mode()
@@ -1586,12 +1624,67 @@ int LogSlidingWindow::try_advance_committed_lsn_(const LSN &end_lsn)
         get_committed_end_lsn_(old_committed_end_lsn);
       }
     }
+    if (end_lsn > old_committed_end_lsn) {
+      (void) try_advance_log_task_committed_ts_();
+    }
     PALF_LOG(TRACE, "try_advance_committed_lsn_ success", K_(palf_id), K_(self), K_(committed_end_lsn));
     if (palf_reach_time_interval(PALF_STAT_PRINT_INTERVAL_US, end_lsn_stat_time_us_)) {
       LSN curr_end_lsn;
       get_committed_end_lsn_(curr_end_lsn);
       PALF_LOG(INFO, "[PALF STAT COMMITTED LOG SIZE]", K_(palf_id), K_(self), "committed size", curr_end_lsn.val_ - last_record_end_lsn_.val_);
       last_record_end_lsn_ = curr_end_lsn;
+    }
+  }
+  return ret;
+}
+
+int LogSlidingWindow::try_advance_log_task_committed_ts_()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    LSN new_committed_end_lsn;
+    get_committed_end_lsn(new_committed_end_lsn);
+    const int64_t commit_ts = ObTimeUtility::current_time();
+    int64_t last_submit_log_id = get_last_submit_log_id_();
+    int64_t log_start_id = get_start_id();
+    LogTask *log_task = NULL;
+    for (int64_t tmp_log_id = last_submit_log_id; OB_SUCC(ret) && tmp_log_id >= log_start_id; tmp_log_id--) {
+      LogTaskGuard guard(this);
+      if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
+        // the log_task may has been slided
+      } else if (!log_task->is_freezed() || log_task->get_end_lsn() > new_committed_end_lsn) {
+        continue;
+      } else if (OB_INVALID_TIMESTAMP == log_task->get_committed_ts()) {
+        log_task->set_committed_ts(commit_ts);
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int LogSlidingWindow::try_advance_log_task_first_ack_ts_(const LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    const int64_t log_start_id = sw_.get_begin_sn();
+    LogTask *log_task = NULL;
+    for (int64_t tmp_log_id = last_submit_log_id_; OB_SUCC(ret) && tmp_log_id >= log_start_id; tmp_log_id--) {
+      LogTaskGuard guard(this);
+      if (OB_FAIL(guard.get_log_task(tmp_log_id, log_task))) {
+        // the log_task may has been slided
+      } else if (!log_task->is_freezed() || log_task->get_end_lsn() > end_lsn) {
+        continue;
+      } else if (OB_INVALID_TIMESTAMP == log_task->get_first_ack_ts()) {
+        log_task->set_first_ack_ts(ObTimeUtility::current_time());
+      } else {
+        break;
+      }
     }
   }
   return ret;
@@ -1951,12 +2044,10 @@ int LogSlidingWindow::get_fetch_log_dst_(common::ObAddr &fetch_dst) const
     fetch_dst = parent;
   } else if (state_mgr_leader.is_valid()) {
     fetch_dst = state_mgr_leader;
-  } else if (OB_ISNULL(lc_cb_)) {
-    PALF_LOG(TRACE, "lc_cb_ is NULL", K(ret), K_(palf_id), K_(self));
   } else if (palf_reach_time_interval(PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US, last_fetch_log_renew_leader_ts_us_) &&
-             OB_FAIL(lc_cb_->nonblock_renew_leader(palf_id_))) {
+             OB_FAIL(plugins_->nonblock_renew_leader(palf_id_))) {
     PALF_LOG(WARN, "nonblock_renew_leader failed", KR(ret), K_(palf_id), K_(self));
-  } else if (OB_FAIL(lc_cb_->nonblock_get_leader(palf_id_, fetch_dst))) {
+  } else if (OB_FAIL(plugins_->nonblock_get_leader(palf_id_, fetch_dst))) {
     if (palf_reach_time_interval(5 * 1000 * 1000, lc_cb_get_warn_time_)) {
       PALF_LOG(WARN, "nonblock_get_leader failed", KR(ret), K_(palf_id), K_(self));
     }
@@ -2024,7 +2115,12 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_proposal_id = log_task->get_proposal_id();
       const int64_t log_accum_checksum = log_task->get_accum_checksum();
       const int64_t log_gen_ts = log_task->get_gen_ts();
+      const int64_t log_freeze_ts = log_task->get_freeze_ts();
       const int64_t log_submit_ts = log_task->get_submit_ts();
+      const int64_t log_flush_ts = log_task->get_flushed_ts();
+      const int64_t log_first_ack_ts = log_task->get_first_ack_ts();
+      const int64_t log_commit_ts = log_task->get_committed_ts();
+      PALF_LOG(INFO, "sliding_cb log_task", K(log_commit_ts), KPC(log_task));
       log_task->unlock();
 
       // Verifying accum_checksum firstly.
@@ -2053,7 +2149,18 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
 
         const int64_t log_life_time = fs_cb_begin_ts - log_gen_ts;
         log_life_time_stat_.stat(log_life_time);
-        log_submit_wait_stat_.stat(log_submit_ts - log_gen_ts);
+        // When role is follower, the freeze state takes effect immediately and we do not need to stat it.
+        log_gen_to_freeze_cost_stat_.stat(log_freeze_ts - log_gen_ts);
+        log_gen_to_submit_cost_stat_.stat(log_submit_ts - log_gen_ts);
+        log_submit_to_flush_cost_stat_.stat(log_flush_ts - log_submit_ts);
+        // Concurrency problem
+        // The first_ack_ts and committed_ts of log_task may havn't been updated when they were slided from sw.
+        if (OB_INVALID_TIMESTAMP != log_first_ack_ts) {
+          log_submit_to_first_ack_cost_stat_.stat(log_first_ack_ts - log_submit_ts);
+        }
+        if (OB_INVALID_TIMESTAMP != log_commit_ts) {
+          log_submit_to_commit_cost_stat_.stat(log_commit_ts - log_submit_ts);
+        }
         log_submit_to_slide_cost_stat_.stat(fs_cb_begin_ts - log_submit_ts);
 
         if (log_life_time > 100 * 1000) {
@@ -3099,6 +3206,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
             // update group log data_checksum
             log_task->set_group_log_checksum(group_log_data_checksum);
             (void) log_task->set_freezed();
+            log_task->set_freeze_ts(ObTimeUtility::current_time());
           }
           log_task->unlock();
         }
@@ -3285,6 +3393,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
             log_task->set_group_log_checksum(group_log_data_checksum);
             (void) log_task->set_submit_log_exist();
             (void) log_task->set_freezed();
+            log_task->set_freeze_ts(ObTimeUtility::current_time());
           }
           log_task->unlock();
 
@@ -3521,9 +3630,13 @@ bool LogSlidingWindow::pre_check_for_config_log(const int64_t &msg_proposal_id,
                 match_log_end_lsn = curr_log_end_lsn;
               } else {
                 // this log has not been flushed
-                PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "local log is match with arg, but it has not been flushed", K(bool_ret),
+                PALF_LOG_RET(WARN, OB_STATE_NOT_MATCH, "local log is match with arg, but it has not been flushed", K(bool_ret),
                     K(msg_proposal_id), K_(palf_id), K_(self), K(max_flushed_end_lsn), K(curr_log_end_lsn),
                     K(lsn), K(log_proposal_id));
+                int local_ret = OB_SUCCESS;
+                if (OB_SUCCESS != (local_ret = log_engine_->submit_purge_throttling_task(PURGE_BY_PRE_CHECK_FOR_CONFIG))) {
+                  PALF_LOG_RET(WARN, local_ret, "submit_purge_throttling_task failed", K_(palf_id), K_(self));
+                }
               }
             } else {
               // proposal_id does not match with arg
@@ -3953,6 +4066,10 @@ int LogSlidingWindow::ack_log(const common::ObAddr &src_server, const LSN &end_l
     LSN old_committed_end_lsn;
     get_committed_end_lsn_(old_committed_end_lsn);
     LSN new_committed_end_lsn;
+    // first ack ts only needs to be updated when end_lsn >= old_committed_lsn
+    if (old_committed_end_lsn < end_lsn) {
+      (void) try_advance_log_task_first_ack_ts_(end_lsn);
+    }
     if (state_mgr_->is_leader_active()) {
       // Only leader with ACTIVE state can generate new committed_end_lsn.
       (void) gen_committed_end_lsn_(new_committed_end_lsn);
@@ -4053,6 +4170,7 @@ int LogSlidingWindow::append_disk_log_to_sw_(const LSN &lsn,
       log_task->set_prev_lsn(max_flushed_lsn);
       log_task->set_prev_log_proposal_id(max_flushed_log_pid);
       log_task->set_freezed();
+      log_task->set_freeze_ts(ObTimeUtility::current_time());
       log_task->try_pre_submit();
       PALF_LOG(TRACE, "append_disk_log success", K(ret), K_(palf_id), K_(self), K(lsn), K(header), KPC(log_task));
     }
@@ -4120,39 +4238,6 @@ void LogSlidingWindow::LogTaskGuard::revert_log_task() {
   }
   sw_ = NULL;
   log_id_ = -1;
-}
-
-int LogSlidingWindow::set_location_cache_cb(PalfLocationCacheCb *lc_cb)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(lc_cb)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "lc_cb is NULL, can't register", KR(ret), K_(palf_id), K_(self));
-  } else {
-    ObSpinLockGuard guard(lc_cb_lock_);
-    if (OB_NOT_NULL(lc_cb_)) {
-      ret = OB_NOT_SUPPORTED;
-      PALF_LOG(WARN, "lc_cb_ is not NULL, can't register", KR(ret), K_(palf_id), K_(self));
-    } else {
-      lc_cb_ = lc_cb;
-      PALF_LOG(INFO, "set_location_cache_cb success", K_(palf_id), K_(self), KP_(lc_cb));
-    }
-  }
-  return ret;
-}
-
-int LogSlidingWindow::reset_location_cache_cb()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    ObSpinLockGuard guard(lc_cb_lock_);
-    lc_cb_ = NULL;
-  }
-  return ret;
 }
 
 int LogSlidingWindow::get_min_scn_from_buf_(const LogGroupEntryHeader &header,

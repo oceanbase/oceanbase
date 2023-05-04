@@ -116,6 +116,11 @@ const char *ObSysVarPxDistAggPartialRollupPushdown::_PX_DIST_AGG_PARTIAL_ROLLUP_
   "ADAPTIVE",
   0
 };
+const char *ObSysVarParallelDegreePolicy::PARALLEL_DEGREE_POLICY_NAMES[] = {
+  "MANUAL",
+  "AUTO",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -125,6 +130,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_force_order_preserve_set",
   "_force_parallel_ddl_dop",
   "_force_parallel_dml_dop",
   "_force_parallel_query_dop",
@@ -272,7 +278,11 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_trx_lock_timeout",
   "ob_trx_timeout",
   "optimizer_capture_sql_plan_baselines",
+  "optimizer_dynamic_sampling",
   "optimizer_use_sql_plan_baselines",
+  "parallel_degree_limit",
+  "parallel_degree_policy",
+  "parallel_min_scan_time_threshold",
   "parallel_servers_target",
   "performance_schema",
   "plsql_ccflags",
@@ -289,6 +299,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "regexp_stack_limit",
   "regexp_time_limit",
   "resource_manager_plan",
+  "runtime_bloom_filter_max_size",
+  "runtime_filter_max_in_num",
+  "runtime_filter_type",
+  "runtime_filter_wait_time_ms",
   "secure_file_priv",
   "server_id",
   "server_uuid",
@@ -351,6 +365,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__FORCE_ORDER_PRESERVE_SET,
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
   SYS_VAR__FORCE_PARALLEL_DML_DOP,
   SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
@@ -498,7 +513,11 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_TRX_LOCK_TIMEOUT,
   SYS_VAR_OB_TRX_TIMEOUT,
   SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES,
+  SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING,
   SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES,
+  SYS_VAR_PARALLEL_DEGREE_LIMIT,
+  SYS_VAR_PARALLEL_DEGREE_POLICY,
+  SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD,
   SYS_VAR_PARALLEL_SERVERS_TARGET,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PLSQL_CCFLAGS,
@@ -515,6 +534,10 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_REGEXP_STACK_LIMIT,
   SYS_VAR_REGEXP_TIME_LIMIT,
   SYS_VAR_RESOURCE_MANAGER_PLAN,
+  SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE,
+  SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM,
+  SYS_VAR_RUNTIME_FILTER_TYPE,
+  SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS,
   SYS_VAR_SECURE_FILE_PRIV,
   SYS_VAR_SERVER_ID,
   SYS_VAR_SERVER_UUID,
@@ -792,7 +815,16 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_max_read_stale_time",
   "_optimizer_gather_stats_on_load",
   "_set_reverse_dblink_infos",
-  "_show_ddl_in_compat_mode"
+  "_show_ddl_in_compat_mode",
+  "_force_order_preserve_set",
+  "parallel_degree_policy",
+  "parallel_degree_limit",
+  "parallel_min_scan_time_threshold",
+  "optimizer_dynamic_sampling",
+  "runtime_filter_type",
+  "runtime_filter_wait_time_ms",
+  "runtime_filter_max_in_num",
+  "runtime_bloom_filter_max_size"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1183,6 +1215,15 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOptimizerGatherStatsOnLoad)
         + sizeof(ObSysVarSetReverseDblinkInfos)
         + sizeof(ObSysVarShowDdlInCompatMode)
+        + sizeof(ObSysVarForceOrderPreserveSet)
+        + sizeof(ObSysVarParallelDegreePolicy)
+        + sizeof(ObSysVarParallelDegreeLimit)
+        + sizeof(ObSysVarParallelMinScanTimeThreshold)
+        + sizeof(ObSysVarOptimizerDynamicSampling)
+        + sizeof(ObSysVarRuntimeFilterType)
+        + sizeof(ObSysVarRuntimeFilterWaitTimeMs)
+        + sizeof(ObSysVarRuntimeFilterMaxInNum)
+        + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3198,31 +3239,96 @@ int ObSysVarFactory::create_all_sys_vars()
         ptr = (void *)((char *)ptr + sizeof(ObSysVarShowDdlInCompatMode));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarForceOrderPreserveSet())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarForceOrderPreserveSet", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarForceOrderPreserveSet));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelDegreePolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelDegreePolicy", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_POLICY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarParallelDegreePolicy));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelDegreeLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelDegreeLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARALLEL_DEGREE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarParallelDegreeLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelMinScanTimeThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelMinScanTimeThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarParallelMinScanTimeThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerDynamicSampling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerDynamicSampling", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOptimizerDynamicSampling));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterType())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterType", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_TYPE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterType));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterWaitTimeMs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterWaitTimeMs", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterWaitTimeMs));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterMaxInNum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterMaxInNum", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeFilterMaxInNum));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeBloomFilterMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeBloomFilterMaxSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeBloomFilterMaxSize));
+      }
+    }
 
   }
   return ret;
 }
 
-int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType sys_var_id,
+                                        ObBasicSysVar *&sys_var_ptr)
 {
   int ret = OB_SUCCESS;
-  int64_t store_idx = -1;
-  ObBasicSysVar *sys_var_ptr = NULL;
-  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
-    LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
-  } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected store idx", K(ret), K(store_idx), K(sys_var_id));
-  } else if (OB_NOT_NULL(store_[store_idx])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("store ptr shoule be null", K(ret), K(store_idx), K(sys_var_id));
-  } else {
-    if (OB_NOT_NULL(store_buf_[store_idx])) {
-      sys_var_ptr = store_buf_[store_idx];
-      store_buf_[store_idx] = nullptr;
-    }
-  }
-  if (OB_ISNULL(sys_var_ptr)) {
   switch(sys_var_id) {
     case SYS_VAR_AUTO_INCREMENT_INCREMENT: {
       void *ptr = NULL;
@@ -5677,6 +5783,105 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       }
       break;
     }
+    case SYS_VAR__FORCE_ORDER_PRESERVE_SET: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarForceOrderPreserveSet)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarForceOrderPreserveSet)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarForceOrderPreserveSet())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarForceOrderPreserveSet", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARALLEL_DEGREE_POLICY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarParallelDegreePolicy)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarParallelDegreePolicy)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelDegreePolicy())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelDegreePolicy", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARALLEL_DEGREE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarParallelDegreeLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarParallelDegreeLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelDegreeLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelDegreeLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PARALLEL_MIN_SCAN_TIME_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarParallelMinScanTimeThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarParallelMinScanTimeThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarParallelMinScanTimeThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarParallelMinScanTimeThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OPTIMIZER_DYNAMIC_SAMPLING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOptimizerDynamicSampling)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOptimizerDynamicSampling)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOptimizerDynamicSampling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOptimizerDynamicSampling", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_TYPE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterType)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterType)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterType())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterType", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_WAIT_TIME_MS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterWaitTimeMs)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterWaitTimeMs)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterWaitTimeMs())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterWaitTimeMs", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_FILTER_MAX_IN_NUM: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeFilterMaxInNum)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeFilterMaxInNum)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeFilterMaxInNum())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeFilterMaxInNum", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarRuntimeBloomFilterMaxSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarRuntimeBloomFilterMaxSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeBloomFilterMaxSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarRuntimeBloomFilterMaxSize", K(ret));
+      }
+      break;
+    }
 
     default: {
       ret = OB_ERR_UNEXPECTED;
@@ -5684,6 +5889,32 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
       break;
     }
   }
+  return ret;
+}
+
+int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar *&sys_var)
+{
+  int ret = OB_SUCCESS;
+  int64_t store_idx = -1;
+  ObBasicSysVar *sys_var_ptr = NULL;
+  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
+    LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
+  } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected store idx", K(ret), K(store_idx), K(sys_var_id));
+  } else if (OB_NOT_NULL(store_[store_idx])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("store ptr shoule be null", K(ret), K(store_idx), K(sys_var_id));
+  } else {
+    if (OB_NOT_NULL(store_buf_[store_idx])) {
+      sys_var_ptr = store_buf_[store_idx];
+      store_buf_[store_idx] = nullptr;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(sys_var_ptr)) {
+    if (OB_FAIL(create_sys_var(allocator_, sys_var_id, sys_var_ptr))) {
+      LOG_WARN("fail to calc sys var", K(ret), K(sys_var_id));
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(sys_var_ptr)) {

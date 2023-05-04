@@ -242,15 +242,19 @@ int ObExtendHashTable<Item>::set(Item &item)
     ret = OB_INVALID_ARGUMENT;
     SQL_ENG_LOG(WARN, "invalid argument", K(ret), K(buckets_));
   } else {
-    uint64_t hash_val = hf(item);
-    Bucket *bucket = const_cast<Bucket *>(&locate_bucket(*buckets_, hash_val));
-    if (NULL == bucket->item_) {
-      bucket->hash_ = hash_val;
+    uint64_t hash_val = 0;
+    if (OB_FAIL(hf(item, hash_val))) {
+      SQL_ENG_LOG(WARN, "hash failed", K(ret));
     } else {
-      item.next() = bucket->item_;
+      Bucket *bucket = const_cast<Bucket *>(&locate_bucket(*buckets_, hash_val));
+      if (NULL == bucket->item_) {
+        bucket->hash_ = hash_val;
+      } else {
+        item.next() = bucket->item_;
+      }
+      bucket->item_ = &item;
+      size_ += 1;
     }
-    bucket->item_ = &item;
-    size_ += 1;
   }
   return ret;
 }

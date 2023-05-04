@@ -36,7 +36,7 @@ ObExprSysContext::ObExprSysContext(common::ObIAllocator &alloc)
 : ObFuncExprOperator(alloc,
                     T_FUN_SYS_SYS_CONTEXT,
                     N_SYS_CONTEXT,
-                    2 /*TWO_OR_THREE*/, NOT_ROW_DIMENSION)
+                    2 /*TWO_OR_THREE*/, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

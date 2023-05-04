@@ -312,12 +312,12 @@ int ObLogSort::est_cost()
   if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
-  } else if (OB_FAIL(inner_est_cost(child->get_card(), double_topn_count, sort_cost))) {
+  } else if (OB_FAIL(inner_est_cost(get_parallel(), child->get_card(), double_topn_count, sort_cost))) {
     LOG_WARN("failed to est sort cost", K(ret));
   } else {
     set_op_cost(sort_cost);
     set_cost(child->get_cost() + sort_cost);
-    if (double_topn_count >= 0) {
+    if (double_topn_count >= 0 && child->get_card() > double_topn_count) {
       set_card(double_topn_count);
     } else {
       set_card(child->get_card());
@@ -328,14 +328,14 @@ int ObLogSort::est_cost()
   return ret;
 }
 
-int ObLogSort::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   double child_card = 0.0;
   double child_cost = 0.0;
   double double_topn_count = -1;
-  double sort_cost = 0.0;
   card = get_card();
+  const int64_t parallel = param.need_parallel_;
   if (param.need_row_count_ >=0 && param.need_row_count_ < card) {
     card = param.need_row_count_;
   }
@@ -347,27 +347,21 @@ int ObLogSort::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
     //limit N在sort算子被阻塞
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
-  } else if (OB_FAIL(inner_est_cost(child_card, double_topn_count, sort_cost))) {
+  } else if (OB_FAIL(inner_est_cost(parallel, child_card, double_topn_count, op_cost))) {
     LOG_WARN("failed to est sort cost", K(ret));
   } else {
-    cost = child_cost + sort_cost;
+    cost = child_cost + op_cost;
     card = child_card < card ? child_card : card;
     if (double_topn_count >= 0 && card > double_topn_count) {
       card = double_topn_count;
-    }
-    if (param.override_) {
-      set_op_cost(sort_cost);
-      set_cost(cost);
-      set_card(card);
     }
   }
   return ret;
 }
 
-int ObLogSort::inner_est_cost(double child_card, double &double_topn_count, double &op_cost)
+int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double &double_topn_count, double &op_cost)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = 0;
   int64_t topn_count = -1;
   bool is_null_value = false;
   double_topn_count = -1;
@@ -377,7 +371,7 @@ int ObLogSort::inner_est_cost(double child_card, double &double_topn_count, doub
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(get_stmt()),
         K(get_plan()), K(ret));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+  } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
   } else if (NULL != topn_expr_ &&
@@ -390,7 +384,7 @@ int ObLogSort::inner_est_cost(double child_card, double &double_topn_count, doub
     LOG_WARN("failed to get value", K(ret));
   } else {
     if (NULL != topn_expr_) {
-      double_topn_count = std::min(static_cast<double>(topn_count), child_card);
+      double_topn_count = static_cast<double>(topn_count);
     }
     get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child_card);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
@@ -405,6 +399,8 @@ int ObLogSort::inner_est_cost(double child_card, double &double_topn_count, doub
                              part_cnt_);
     if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
+    } else if (NULL != topn_expr_) {
+      double_topn_count = std::min(double_topn_count * parallel, child_card);
     }
   }
   return ret;
@@ -422,6 +418,19 @@ int ObLogSort::compute_op_ordering()
     LOG_WARN("failed to set op ordering", K(ret));
   } else {
     is_local_order_ = false;
+  }
+  return ret;
+}
+
+int ObLogSort::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  int ret = OB_SUCCESS;
+  is_fixed = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_FUN_SYS_ENCODE_SORTKEY == expr->get_expr_type() || expr == hash_sortkey_.expr_) {
+    is_fixed = true;
   }
   return ret;
 }

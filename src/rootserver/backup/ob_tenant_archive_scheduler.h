@@ -32,7 +32,6 @@ namespace common {
 namespace rootserver
 {
 
-class ObServerManager;
 class ObZoneManager;
 class ObUnitManager;
 
@@ -44,7 +43,6 @@ public:
 
   int init(
       const uint64_t tenant_id,
-      ObServerManager &server_mgr,
       ObZoneManager &zone_mgr,
       ObUnitManager &unit_manager,
       share::schema::ObMultiVersionSchemaService *schema_service,
@@ -77,7 +75,6 @@ private:
 private:
   bool is_inited_;
   uint64_t tenant_id_; // user tenant id
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObUnitManager *unit_mgr_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

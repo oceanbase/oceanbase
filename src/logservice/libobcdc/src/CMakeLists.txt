@@ -24,6 +24,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_global_info.cpp
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp
+  ob_cdc_udt.cpp
   ob_concurrent_seq_queue.cpp
   ob_log_adapt_string.cpp
   ob_log_batch_buffer.cpp

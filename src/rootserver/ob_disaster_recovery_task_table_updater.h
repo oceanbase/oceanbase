@@ -72,6 +72,7 @@ public:
   virtual void reset();
   virtual bool is_valid() const;
   virtual int64_t hash() const { return task_id_.hash(); };
+  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   virtual bool operator==(const ObDRTaskTableUpdateTask &other) const;
   virtual bool operator!=(const ObDRTaskTableUpdateTask &other) const;
   virtual bool compare_without_version(const ObDRTaskTableUpdateTask &other) const;

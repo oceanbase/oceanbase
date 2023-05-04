@@ -38,6 +38,8 @@ public:
 
   int64_t hash() const;
 
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
   ObPsSqlKey &operator=(const ObPsSqlKey &other);
   bool operator==(const ObPsSqlKey &other) const;
   //need to reset allocator?

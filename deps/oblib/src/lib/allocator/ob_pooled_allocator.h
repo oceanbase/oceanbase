@@ -27,6 +27,7 @@ public:
   ObPooledAllocator(int64_t block_size = common::OB_MALLOC_NORMAL_BLOCK_SIZE,
                     const BlockAllocatorT &alloc = BlockAllocatorT(ObModIds::OB_POOL));
   virtual ~ObPooledAllocator();
+  void set_attr(const lib::ObMemAttr &attr) { the_pool_.set_attr(attr); }
 
   T *alloc();
   void free(T *obj);

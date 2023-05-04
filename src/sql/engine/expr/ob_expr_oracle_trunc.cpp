@@ -30,12 +30,12 @@ namespace sql
 #define GET_SCALE_FOR_CALC(scale) (scale < 0 ? max(static_cast<int64_t>(number::ObNumber::MIN_SCALE), scale) : min(static_cast<int64_t>(number::ObNumber::MAX_SCALE), scale))
 
 ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, N_ORA_TRUNC, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, N_ORA_TRUNC, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
 ObExprOracleTrunc::ObExprOracleTrunc(ObIAllocator &alloc, const char *name)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, name, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ORA_TRUNC, name, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

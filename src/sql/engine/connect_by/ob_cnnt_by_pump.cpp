@@ -29,24 +29,27 @@ int ObConnectByOpPumpBase::deep_copy_row(
   return ret;
 }
 
-uint64_t ObConnectByOpPump::ObHashColumn::inner_hash() const
+int ObConnectByOpPump::ObHashColumn::inner_hash(uint64_t &result) const
 {
-  uint64_t result = 99194853094755497L;
+  int ret = OB_SUCCESS;
+  result = 99194853094755497L;
   if (OB_ISNULL(exprs_) || OB_ISNULL(row_) || OB_UNLIKELY(exprs_->count() != row_->cnt_)) {
   } else {
     int64_t col_count = exprs_->count();
     ObExpr *expr = NULL;
     const ObDatum *datum = NULL;
-    for (int64_t i = 0; i < col_count; i++) {
+    for (int64_t i = 0; i < col_count && OB_SUCC(ret); i++) {
       if (OB_ISNULL(expr = exprs_->at(i))
           || OB_ISNULL(expr->basic_funcs_)) {
       } else {
         datum = &row_->cells()[i];
-        result = expr->basic_funcs_->murmur_hash_v2_(*datum, result);
+        if (OB_FAIL(expr->basic_funcs_->murmur_hash_v2_(*datum, result, result))) {
+          LOG_WARN("do hash failed", K(ret));
+        }
       }
     }
   }
-  return result;
+  return ret;
 }
 
 bool ObConnectByOpPump::ObHashColumn::operator ==(const ObHashColumn &other) const
@@ -60,11 +63,13 @@ bool ObConnectByOpPump::ObHashColumn::operator ==(const ObHashColumn &other) con
 
     int64_t col_count = exprs_->count();
     ObExpr *expr = NULL;
+    int cmp_ret = 0;
     for (int64_t i = 0; result && i < col_count; i++) {
       if (OB_ISNULL(expr = exprs_->at(i))
           || OB_ISNULL(expr->basic_funcs_)) {
       } else {
-        result = (0 == expr->basic_funcs_->null_first_cmp_(lcell[i], rcell[i]));
+        (void)expr->basic_funcs_->null_first_cmp_(lcell[i], rcell[i], cmp_ret);
+        result = (0 == cmp_ret);
       }
     }
   }
@@ -613,8 +618,9 @@ int ObConnectByOpPump::calc_hash_value(const ObArray<ObExpr *> &hash_exprs, uint
       LOG_WARN("hash probe expr is null", K(ret));
     } else if (OB_FAIL(hash_expr->eval(*eval_ctx_, datum))) {
       LOG_WARN("calc left expr value failed", K(ret));
+    } else if (OB_FAIL(hash_expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value, hash_value))) {
+      LOG_WARN("calc hash value failed", K(ret));
     } else {
-      hash_value = hash_expr->basic_funcs_->murmur_hash_v2_(*datum, hash_value);
       LOG_DEBUG("calc hash value", KPC(datum), K(hash_value), K(hash_expr), KPC(hash_expr));
     }
   }

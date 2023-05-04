@@ -21,8 +21,9 @@ namespace sql
 using namespace oceanbase::common;
 
 ObExprNvl2Oracle::ObExprNvl2Oracle(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_NVL2, N_NVL2, 3, NOT_ROW_DIMENSION)
-{}
+  : ObFuncExprOperator(alloc, T_FUN_NVL2, N_NVL2, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 ObExprNvl2Oracle::~ObExprNvl2Oracle()
 {}

@@ -577,10 +577,10 @@ uint64_t ObRowkey::murmurhash(const uint64_t hash) const
                KP_(obj_ptr), K_(obj_cnt), K(tmp_ret));
   } else if (0 < obj_cnt_ && NULL != obj_ptr_) {
     if (is_min_row() || is_max_row()) {
-      ret = obj_ptr_[0].hash(ret);
+      tmp_ret = obj_ptr_[0].hash(ret, ret);
     } else {
       for (int64_t i = 0; i < obj_cnt_; i++) {
-        ret = obj_ptr_[i].hash(ret);
+        tmp_ret = obj_ptr_[i].hash(ret, ret);
       }
     }
   }

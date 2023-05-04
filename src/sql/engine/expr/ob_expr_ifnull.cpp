@@ -26,7 +26,7 @@ using namespace oceanbase::common;
 namespace sql
 {
 
-ObExprIfNull::ObExprIfNull(ObIAllocator &alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_IFNULL, N_IFNULL, 2, NOT_ROW_DIMENSION)
+ObExprIfNull::ObExprIfNull(ObIAllocator &alloc) : ObFuncExprOperator(alloc, T_FUN_SYS_IFNULL, N_IFNULL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -80,9 +80,15 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
     } else {
       type.set_scale(-1);
     }
-    if (lib::is_mysql_mode() && ob_is_real_type(type.get_type()) &&
-         SCALE_UNKNOWN_YET != type.get_scale()) {
-      type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
+    if (lib::is_mysql_mode() && SCALE_UNKNOWN_YET != type.get_scale()) {
+      if (ob_is_real_type(type.get_type())) {
+        type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type.get_scale())));
+      } else if (ob_is_number_tc(type.get_type())) { // TODO:@zuojiao.hzj add decimal_int here
+        const int16_t intd1 = type1.get_precision() - type1.get_scale();
+        const int16_t intd2 = type2.get_precision() - type2.get_scale();
+        const int16_t prec = MAX(type.get_precision(), MAX(intd1, intd2) + type.get_scale());
+        type.set_precision(static_cast<ObPrecision>(prec));
+      }
     }
     type.set_length(MAX(type1.get_length(), type2.get_length()));
     type1.set_calc_meta(type.get_obj_meta());

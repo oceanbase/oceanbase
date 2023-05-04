@@ -25,7 +25,7 @@ namespace sql
 
 ObExprJsonUnquote::ObExprJsonUnquote(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc,T_FUN_SYS_JSON_UNQUOTE,
-      N_JSON_UNQUOTE, 1, NOT_ROW_DIMENSION)
+      N_JSON_UNQUOTE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

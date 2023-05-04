@@ -34,6 +34,7 @@ struct ObObjCastParams;
 }
 namespace sql
 {
+struct ObExternalFileFormat;
 struct PartitionInfo
 {
   share::schema::ObPartitionLevel part_level_;
@@ -244,7 +245,8 @@ public:
       ObIArray<ObString> &gen_col_expr_arr,
       const ObSQLMode sql_mode,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker);
+      ObSchemaChecker *schema_checker,
+      share::schema::ObColumnSchemaV2 *hidden_col = NULL);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
@@ -410,7 +412,8 @@ public:
       const common::ObString &column_name,
       int64_t column_num,
       const int64_t index_keyname_value,
-      bool is_explicit_order);
+      bool is_explicit_order,
+      bool is_func_index);
   int resolve_spatial_index_constraint(
       const share::schema::ObColumnSchemaV2 &column_schema,
       int64_t column_num,
@@ -465,7 +468,8 @@ protected:
       bool &is_modify_column_visibility,
       common::ObString &pk_name,
       const bool is_oracle_temp_table = false,
-      const bool is_create_table_as = false);
+      const bool is_create_table_as = false,
+      const bool is_external_table = false);
   int resolve_uk_name_from_column_attribute(
       ParseNode *attrs_node,
       common::ObString &uk_name);
@@ -493,7 +497,8 @@ protected:
                                                   ObCreateTableStmt *create_table_stmt);
   int resolve_generated_column_attribute(share::schema::ObColumnSchemaV2 &column,
                                          ParseNode *attrs_node,
-                                         ObColumnResolveStat &reslove_stat);
+                                         ObColumnResolveStat &reslove_stat,
+                                         const bool is_external_table);
   int resolve_identity_column_attribute(share::schema::ObColumnSchemaV2 &column,
                                         ParseNode *attrs_node,
                                         ObColumnResolveStat &reslove_stat,
@@ -836,6 +841,10 @@ protected:
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
 
+  int resolve_file_format(const ParseNode *node, ObExternalFileFormat &format);
+
+  int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
+
   void reset();
   int64_t block_size_;
   int64_t consistency_level_;
@@ -892,6 +901,7 @@ protected:
   int64_t tablespace_id_;
   int64_t table_dop_; // default value is 1
   int64_t hash_subpart_num_;
+  bool is_external_table_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

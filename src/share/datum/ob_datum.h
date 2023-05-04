@@ -792,7 +792,8 @@ inline int ObDatum::from_obj(const ObObj &obj)
       case ObURowIDType:
       case ObLobType:
       case ObJsonType:
-      case ObGeometryType: {
+      case ObGeometryType:
+      case ObUserDefinedSQLType: {
         obj2datum<OBJ_DATUM_STRING>(obj);
         break;
       }
@@ -913,7 +914,8 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       case ObURowIDType:
       case ObLobType:
       case ObJsonType:
-      case ObGeometryType: {
+      case ObGeometryType:
+      case ObUserDefinedSQLType: {
         datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }

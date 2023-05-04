@@ -177,8 +177,7 @@ public:
     if (OB_UNLIKELY(ObTransErrsim::is_memory_errsim())) {
       ret = NULL;
     } else {
-      const common::ObMemAttr attr(tenant_id_, label_, ctx_id_);
-      ret = inner_alloc_(sz, attr);
+      ret = inner_alloc_(sz, attr_);
     }
     return ret;
   }
@@ -259,6 +258,11 @@ public:
   uint64_t hash() const
   {
     return murmurhash(&tx_id_, sizeof(tx_id_), 0);
+  }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
   }
   bool is_valid() const { return tx_id_ > 0; }
   void reset() { tx_id_ = 0; }
@@ -425,8 +429,8 @@ public:
 
 enum TransType : int32_t
 {
-  UNKNOWN_TRANS = -1, 
-  SP_TRANS = 0, 
+  UNKNOWN_TRANS = -1,
+  SP_TRANS = 0,
   DIST_TRANS = 2
 };
 
@@ -683,11 +687,11 @@ private:
 
 typedef common::ObReserveArenaAllocator<1024> ObTxReserveArenaAllocator;
 
-class ObTransTraceLog : public common::ObTraceEventRecorderBase<100, 4000>
+class ObTransTraceLog : public common::ObTraceEventRecorder
 {
 public:
   ObTransTraceLog()
-      : common::ObTraceEventRecorderBase<100, 4000>::ObTraceEventRecorderBase(
+      : common::ObTraceEventRecorder::ObTraceEventRecorderBase(
           true, common::ObLatchIds::TRANS_TRACE_RECORDER_LOCK) {}
   ~ObTransTraceLog() {}
   void destroy() {}

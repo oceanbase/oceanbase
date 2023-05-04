@@ -276,7 +276,7 @@ public:
 struct ObListPartMapKey {
   common::ObNewRow row_;
 
-  int64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   bool operator==(const ObListPartMapKey &other) const;
   TO_STRING_KV(K_(row));
 };
@@ -467,6 +467,7 @@ public:
     is_col_part_expr_(false),
     is_col_subpart_expr_(false),
     is_oracle_temp_table_(false),
+    table_type_(share::schema::MAX_TABLE_TYPE),
     inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
     allocator_(inner_allocator_),
     loc_meta_(inner_allocator_),
@@ -512,6 +513,7 @@ public:
     is_col_part_expr_(false),
     is_col_subpart_expr_(false),
     is_oracle_temp_table_(false),
+    table_type_(share::schema::MAX_TABLE_TYPE),
     allocator_(allocator),
     loc_meta_(allocator),
     calc_node_(NULL),
@@ -631,6 +633,7 @@ public:
                            const ParamStore &params,
                            ObIArray<ObTabletID> &tablet_ids,
                            ObIArray<ObObjectID> &partition_ids,
+                           ObIArray<ObObjectID> &first_level_part_ids,
                            const ObDataTypeCastParams &dtc_params) const;
 
   int init_partition_ids_by_rowkey2(ObExecContext &exec_ctx,
@@ -664,6 +667,7 @@ public:
                            const uint64_t ref_table_id,
                            const ObIArray<ObTabletID> &tablet_ids,
                            const ObIArray<ObObjectID> &partition_ids,
+                           const ObIArray<ObObjectID> &first_level_part_ids,
                            ObCandiTabletLocIArray &candi_tablet_locs,
                            bool nonblock = false) const;
 
@@ -1115,6 +1119,7 @@ private:
   bool is_col_subpart_expr_;
   bool is_oracle_temp_table_;//是否为oracle模式下的临时表, 根据此调用不同的hash计算函数, 因为内部sql时
                              //is_oracle_mode()不可靠
+  share::schema::ObTableType table_type_;
   common::ObArenaAllocator inner_allocator_;
   common::ObIAllocator &allocator_; //used for deep copy other table location
   ObDASTableLocMeta loc_meta_;

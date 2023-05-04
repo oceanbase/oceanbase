@@ -42,6 +42,7 @@
 #include "ob_log_resource_collector.h"              // IObLogResourceCollector
 #include "ob_cdc_lob_data_merger.h"                 // IObCDCLobDataMerger
 #include "ob_log_schema_cache_info.h"               // ColumnSchemaInfo
+#include "ob_cdc_udt.h"                             // ObCDCUdtValueMap
 
 #define PARSE_INT64(name, obj, val, INVALID_VALUE, check_value) \
     do { \
@@ -343,6 +344,8 @@ int MutatorRow::parse_columns_(
   int ret = OB_SUCCESS;
   blocksstable::ObRowReader row_reader;
   blocksstable::ObDatumRow datum_row;
+  // warpper cols for udt column values
+  ObCDCUdtValueMap udt_value_map(allocator_, tb_schema_info, cols);
 
   // NOTE: Allow obj2str_helper and column_schema to be empty
   if (OB_ISNULL(col_data) || OB_UNLIKELY(col_data_size <= 0)) {
@@ -376,9 +379,13 @@ int MutatorRow::parse_columns_(
         LOG_ERROR("get_column_info", KR(ret), K_(table_id), K(column_stored_idx));
       } else {
         bool ignore_column = false;
-
         if (OB_NOT_NULL(tb_schema_info)) {
-          if (! column_schema_info->is_usr_column()) {
+          // for normal column which is not belong to some udt, is_usr_column is true and is_udt_column is false
+          // for udt column
+          // if is main column of group, is_usr_column is true , is_udt_column is also true.
+          // and currently main column without data, always is nop, will not execute to here.
+          // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
+          if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
             // ignore non user columns
             LOG_DEBUG("ignore non user-required column",
                 K(tenant_id), K(table_id), K(column_stored_idx), K(column_schema_info));
@@ -464,7 +471,8 @@ int MutatorRow::parse_columns_(
                 column_schema_info,
                 obj2str_helper,
                 tz_info_wrap,
-                cols))) {
+                cols,
+                &udt_value_map))) {
               LOG_ERROR("add_column_ fail", KR(ret), K(tenant_id), K(table_id), K(cols), K(column_stored_idx), K(column_id),
                   K(obj), K(obj2str_helper), K(column_schema_info));
             }
@@ -526,7 +534,8 @@ int MutatorRow::add_column_(
     const ColumnSchemaInfo *column_schema_info,
     const ObObj2strHelper *obj2str_helper/*NULL if parse all_ddl_operation_table  columns*/,
     const ObTimeZoneInfoWrap *tz_info_wrap,
-    ColValueList &cols)
+    ColValueList &cols,
+    ObCDCUdtValueMap *udt_value_map)
 {
   int ret = OB_SUCCESS;
   ColValue *cv_node = static_cast<ColValue *>(allocator_.alloc(sizeof(ColValue)));
@@ -600,6 +609,13 @@ int MutatorRow::add_column_(
         tz_info_wrap))) {
       LOG_ERROR("obj2str fail", KR(ret),
           "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
+    } else if ( // add to udt if is udt column , else add to cols as usual
+        OB_NOT_NULL(column_schema_info)
+        && OB_NOT_NULL(udt_value_map)
+        && column_schema_info->is_udt_column()) {
+      if (OB_FAIL(udt_value_map->add_column_value_to_udt(column_schema_info->get_udt_set_id(), cv_node))) {
+        LOG_ERROR("add column to udt fail", KR(ret), "column_value", *cv_node, K(cols));
+      }
     } else if (OB_FAIL(cols.add(cv_node))) {
       LOG_ERROR("add column into ColValueList fail", KR(ret), "column_value", *cv_node, K(cols));
     }
@@ -712,7 +728,8 @@ int MutatorRow::parse_rowkey_(
             column_schema_info,
             obj2str_helper,
             tz_info_wrap,
-            rowkey_cols))) {
+            rowkey_cols,
+            nullptr/*udt_value_map*/))) {
           LOG_ERROR("add_column_ fail", KR(ret), K(tenant_id), K(table_id), K(rowkey_cols), K(column_id),
               K(index), K(rowkey_objs[index]), K(obj2str_helper), KPC(tb_schema_info), K(column_schema_info));
         }

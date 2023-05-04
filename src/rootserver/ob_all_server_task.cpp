@@ -21,6 +21,8 @@
 #include "rootserver/ob_disaster_recovery_task_mgr.h"
 #include "rootserver/ob_root_utils.h"
 #include "observer/ob_server_struct.h"
+#include "share/ob_all_server_tracer.h"
+#include "ob_heartbeat_service.h"
 
 namespace oceanbase
 {
@@ -47,18 +49,25 @@ ObAllServerTask::~ObAllServerTask()
 int ObAllServerTask::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
-    //Prevent the current trace_id from being overwritten
-    ObCurTraceId::init(GCONF.self_addr_);
-  }
-
-  THIS_WORKER.set_timeout_ts(INT64_MAX);
-  if (!ObRootServiceRoleChecker::is_rootserver()) {
-     ret = OB_NOT_MASTER;
-     LOG_WARN("not master", K(ret));
-  } else if (OB_FAIL(server_manager_.adjust_server_status(
-          server_, disaster_recovery_task_mgr_, with_rootserver_))) {
-    LOG_WARN("fail to adjust server status", K(ret), K(server_));
+  int tmp_ret = OB_SUCCESS;
+  if (!ObHeartbeatService::is_service_enabled()) {
+    if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
+      //Prevent the current trace_id from being overwritten
+      ObCurTraceId::init(GCONF.self_addr_);
+    }
+    THIS_WORKER.set_timeout_ts(INT64_MAX);
+    if (!ObRootServiceRoleChecker::is_rootserver()) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("not master", K(ret));
+    } else if (OB_FAIL(server_manager_.adjust_server_status(
+            server_, disaster_recovery_task_mgr_, with_rootserver_))) {
+      LOG_WARN("fail to adjust server status", K(ret), K(server_));
+    }
+    if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+      LOG_WARN("fail to refresh all server tracer", KR(ret), KR(tmp_ret));
+    }
+  } else {
+    LOG_TRACE("no need to do ObAllServerTask in version >= 4.2");
   }
   return ret;
 }

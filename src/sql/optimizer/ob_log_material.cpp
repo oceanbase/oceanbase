@@ -46,10 +46,10 @@ int ObLogMaterial::est_cost()
   return ret;
 }
 
-int ObLogMaterial::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogMaterial::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
-  int64_t parallel = 0;
+  const int64_t parallel = param.need_parallel_;
   double child_card = 0.0;
   double child_cost = 0.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
@@ -57,25 +57,19 @@ int ObLogMaterial::re_est_cost(EstimateCostInfo &param, double &card, double &co
       OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+  } else if (OB_UNLIKELY(parallel < 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
-  } else if (OB_FALSE_IT(param.need_row_count_ = child->get_card())) {
+  } else if (OB_FALSE_IT(param.need_row_count_ = -1)) {
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else {
-    double op_cost = 0.0;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    op_cost += ObOptEstCost::cost_material(child_card / parallel, 
-                                           child->get_width(),
-                                           opt_ctx.get_cost_model_type());
+    op_cost = ObOptEstCost::cost_material(child_card / parallel,
+                                          child->get_width(),
+                                          opt_ctx.get_cost_model_type());
     cost = child_cost + op_cost;
     card = child_card;
-    if (param.override_) {
-      set_op_cost(op_cost);
-      set_cost(cost);
-      set_card(card);
-    }
   }
   return ret;
 }

@@ -25,7 +25,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprCalcURowID::ObExprCalcURowID(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_SYS_CALC_UROWID, N_CALC_UROWID, MORE_THAN_ZERO, NOT_ROW_DIMENSION,
+  : ObExprOperator(alloc, T_FUN_SYS_CALC_UROWID, N_CALC_UROWID, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                    false, INTERNAL_IN_ORACLE_MODE)
 {
 }

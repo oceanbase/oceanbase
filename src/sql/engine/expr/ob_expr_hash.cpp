@@ -24,7 +24,7 @@ namespace sql
 {
 
 ObExprHash::ObExprHash(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_SYS_HASH, N_HASH, MORE_THAN_ONE, NOT_ROW_DIMENSION,
+  : ObExprOperator(alloc, T_FUN_SYS_HASH, N_HASH, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                    INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -56,7 +56,9 @@ int ObExprHash::calc_hash_value_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       LOG_WARN("failed to eval datum", K(ret));
     } else {
       ObExprHashFuncType hash_func = expr.args_[i]->basic_funcs_->murmur_hash_v2_;
-      hash_value = hash_func(*datum, hash_value);
+      if (OB_FAIL(hash_func(*datum, hash_value, hash_value))) {
+        LOG_WARN("failed to do hash", K(ret));
+      }
     }
   }
   res_datum.set_uint(hash_value);

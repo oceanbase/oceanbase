@@ -49,6 +49,7 @@ ob_set_subtarget(ob_logservice common
   ob_server_log_block_mgr.cpp
   ob_log_flashback_service.cpp
   ob_net_keepalive_adapter.cpp
+  ob_log_monitor.cpp
 )
 
 ob_set_subtarget(ob_logservice common_mixed
@@ -142,6 +143,7 @@ ob_set_subtarget(ob_logservice palf
   palf/log_mode_mgr.cpp
   palf/log_updater.cpp
   palf/log_io_utils.cpp
+  palf/log_io_worker_wrapper.cpp
 )
 
 ob_set_subtarget(ob_logservice palf_election

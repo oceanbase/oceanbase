@@ -14,6 +14,29 @@
 #include "rpc/obmysql/obp20_extra_info.h"
 namespace oceanbase {
 namespace obmysql {
+
+// proxy -> server verify sess info required: addr, sess_id, proxy_sess_id.
+int Obp20SessInfoVeriDecoder::deserialize(const char *buf, int64_t len, int64_t &pos,
+                                                            Ob20ExtraInfo &extra_info)
+{
+  int ret = OB_SUCCESS;
+  char* ptr = NULL;
+  int32_t v_len = 0;
+  int16_t extra_id = 0;
+  if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, v_len))) {
+      OB_LOG(WARN,"failed to get extra_info", K(ret), KP(buf));
+  } else if (static_cast<ExtraInfoKeyType>(extra_id) != type_) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "invalid encoder", K(ret), K(extra_id), K(type_));
+  } else if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
+    OB_LOG(WARN,"failed to resolve sess info verification required", K(ret));
+  } else {
+    extra_info.sess_info_veri_.assign_ptr(ptr, v_len);
+    OB_LOG(TRACE,"success to deserialize sess info verification required", K(ret));
+  }
+  return ret;
+}
+
 int Obp20TraceInfoEncoder::serialize(char *buf, int64_t len, int64_t &pos) {
   int ret = OB_SUCCESS;
   // resrver for type and len
@@ -42,7 +65,7 @@ int Obp20TraceInfoEncoder::get_serialize_size() {
 
 int Obp20TaceInfoDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {
   int ret = OB_SUCCESS;
-  char* ptr;
+  char* ptr = NULL;
   int32_t v_len = 0;
   int16_t extra_id = 0;
   if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, v_len))) {
@@ -88,7 +111,7 @@ int Obp20SessInfoEncoder::get_serialize_size() {
 
 int Obp20SessInfoDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {
   int ret = OB_SUCCESS;
-  char* ptr;
+  char* ptr = NULL;
   int32_t v_len = 0;
   int16_t extra_id = 0;
   if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, v_len))) {
@@ -130,7 +153,7 @@ int Obp20FullTrcEncoder::get_serialize_size() {
 
 int Obp20FullTrcDecoder::deserialize(const char *buf, int64_t len, int64_t &pos, Ob20ExtraInfo &extra_info) {
   int ret = OB_SUCCESS;
-  char* ptr;
+  char* ptr = NULL;
   int32_t v_len = 0;
   int16_t extra_id = 0;
   if (OB_FAIL(ObProtoTransUtil::resolve_type_and_len(buf, len, pos, extra_id, v_len))) {

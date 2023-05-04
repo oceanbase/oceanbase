@@ -47,13 +47,30 @@ void ObTxCallbackList::reset()
   length_ = 0;
 }
 
-int ObTxCallbackList::append_callback(ObITransCallback *callback)
+// the semantic of the append_callback is atomic which means the cb is removed
+// and no side effect is taken effects if some unexpected failure has happened.
+int ObTxCallbackList::append_callback(ObITransCallback *callback,
+                                      const bool for_replay)
 {
   int ret = OB_SUCCESS;
+  // It is important that we should put the before_append_cb and after_append_cb
+  // into the latch guard otherwise the callback may already paxosed and released
+  // before callback it.
   SpinLockGuard lock(latch_);
 
-  if (OB_SUCC(get_tail()->append(callback))) {
-    length_ ++;
+  if (OB_ISNULL(callback)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "before_append_cb failed", K(ret), KPC(callback));
+  } else if (OB_FAIL(callback->before_append_cb(for_replay))) {
+    TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(callback));
+  } else {
+    (void)get_tail()->append(callback);
+    length_++;
+
+    // Once callback is appended into callback lists, we can not handle the
+    // error after it. So it should never report the error later. What's more,
+    // after_append also should never return the error.
+    (void)callback->after_append_cb(for_replay);
   }
 
   return ret;

@@ -608,8 +608,6 @@ int ObPxMSReceiveOp::inner_get_next_row()
     LOG_ERROR("Get operator context failed", K(ret), K(MY_SPEC.id_));
   } else if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (!ctx_.get_bloom_filter_ctx_array().empty() && OB_FAIL(prepare_send_bloom_filter())) {
-    LOG_WARN("fail to prepare send bloom filter", K(ret));
   } else if (OB_FAIL(try_send_bloom_filter())) {
     LOG_WARN("fail to send bloom filter", K(ret));
   }
@@ -1030,13 +1028,12 @@ bool ObPxMSReceiveOp::Compare::operator()(
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(r->at(idx)->eval(eval_ctx, other_datum))) {
         LOG_WARN("failed to eval expr", K(ret));
-      } else {
-        cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], *other_datum);
-        if (cmp < 0) {
-          less = !sort_collations_->at(i).is_ascending_;
-        } else if (cmp > 0) {
-          less = sort_collations_->at(i).is_ascending_;
-        }
+      } else if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], *other_datum, cmp))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp < 0) {
+        less = !sort_collations_->at(i).is_ascending_;
+      } else if (cmp > 0) {
+        less = sort_collations_->at(i).is_ascending_;
       }
     }
   }

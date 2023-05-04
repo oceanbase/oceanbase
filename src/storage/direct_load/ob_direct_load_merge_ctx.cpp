@@ -230,58 +230,58 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
         int64_t col_id = param_.is_heap_table_ ? i + 1 : i;
         int64_t row_count = 0;
         int64_t avg_len = 0;
-        ObOptColumnStat *col_stat = nullptr;
-        if (OB_FAIL(sql_statistics.allocate_col_stat(col_stat))) {
+        ObOptOSGColumnStat *osg_col_stat = nullptr;
+        if (OB_FAIL(sql_statistics.allocate_col_stat(osg_col_stat))) {
           LOG_WARN("fail to allocate table stat", KR(ret));
         }
         // scan task_array
         for (int64_t j = 0; OB_SUCC(ret) && j < task_array_.count(); ++j) {
-          ObOptColumnStat *tmp_col_stat = task_array_.at(j)->get_column_stat_array().at(i);
-          if (tmp_col_stat != nullptr) {
-            ObOptColumnStat *copied_col_stat = nullptr;
-            int64_t size = tmp_col_stat->size();
-            char *new_buf = nullptr;
-            if (OB_ISNULL(new_buf = static_cast<char *>(sql_statistics.allocator_.alloc(size)))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to allocate buffer", KR(ret), K(size));
-            } else if (OB_FAIL(tmp_col_stat->deep_copy(new_buf, size, copied_col_stat))) {
-              LOG_WARN("fail to copy colstat", KR(ret));
-            } else if (OB_FAIL(col_stat->merge_column_stat(*copied_col_stat))) {
-              LOG_WARN("fail to merge column stat", KR(ret));
-            } else {
-              row_count += task_array_.at(j)->get_row_count();
-              avg_len += col_stat->get_avg_len();
-            }
+          ObOptOSGColumnStat *tmp_col_stat = task_array_.at(j)->get_column_stat_array().at(i);
+          ObOptOSGColumnStat *copied_col_stat = NULL;
+          if (OB_ISNULL(tmp_col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null");
+          } else if (OB_ISNULL(copied_col_stat =
+                    ObOptOSGColumnStat::create_new_osg_col_stat(sql_statistics.allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory");
+          } else if (OB_FAIL(copied_col_stat->deep_copy(*tmp_col_stat))) {
+            LOG_WARN("fail to copy colstat", KR(ret));
+          } else if (OB_FAIL(osg_col_stat->merge_column_stat(*copied_col_stat))) {
+            LOG_WARN("fail to merge column stat", KR(ret));
+          } else {
+            row_count += task_array_.at(j)->get_row_count();
+            avg_len += osg_col_stat->col_stat_->get_avg_len();
           }
         }
         // scan fast heap table
         for (int64_t j = 0; OB_SUCC(ret) && j < fast_heap_table_array.count(); ++j) {
-          ObOptColumnStat *tmp_col_stat = fast_heap_table_array.at(j)->get_column_stat_array().at(i);
-          if (tmp_col_stat != nullptr) {
-            ObOptColumnStat *copied_col_stat = nullptr;
-            int64_t size = tmp_col_stat->size();
-            char *new_buf = nullptr;
-            if (OB_ISNULL(new_buf = static_cast<char *>(sql_statistics.allocator_.alloc(size)))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("fail to allocate buffer", KR(ret), K(size));
-            } else if (OB_FAIL(tmp_col_stat->deep_copy(new_buf, size, copied_col_stat))) {
-              LOG_WARN("fail to copy colstat", KR(ret));
-            } else if (OB_FAIL(col_stat->merge_column_stat(*copied_col_stat))) {
-              LOG_WARN("fail to merge column stat", KR(ret));
-            } else {
-              row_count += fast_heap_table_array.at(j)->get_row_count();
-              avg_len += col_stat->get_avg_len();
-            }
+          ObOptOSGColumnStat *tmp_col_stat = fast_heap_table_array.at(j)->get_column_stat_array().at(i);
+          ObOptOSGColumnStat *copied_col_stat = NULL;
+          if (OB_ISNULL(tmp_col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null");
+          } else if (OB_ISNULL(copied_col_stat =
+                    ObOptOSGColumnStat::create_new_osg_col_stat(sql_statistics.allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory");
+          } else if (OB_FAIL(copied_col_stat->deep_copy(*tmp_col_stat))) {
+            LOG_WARN("fail to copy colstat", KR(ret));
+          } else if (OB_FAIL(osg_col_stat->merge_column_stat(*copied_col_stat))) {
+            LOG_WARN("fail to merge column stat", KR(ret));
+          } else {
+            row_count += fast_heap_table_array.at(j)->get_row_count();
+            avg_len += osg_col_stat->col_stat_->get_avg_len();
           }
         }
         if (OB_SUCC(ret)) {
           table_row_cnt = row_count;
           table_avg_len += avg_len;
-          col_stat->set_table_id(param_.target_table_id_);
-          col_stat->set_partition_id(target_partition_id_);
-          col_stat->set_stat_level(stat_level);
-          col_stat->set_column_id(param_.col_descs_->at(col_id).col_id_);
-          col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
+          osg_col_stat->col_stat_->set_table_id(param_.target_table_id_);
+          osg_col_stat->col_stat_->set_partition_id(target_partition_id_);
+          osg_col_stat->col_stat_->set_stat_level(stat_level);
+          osg_col_stat->col_stat_->set_column_id(param_.col_descs_->at(col_id).col_id_);
+          osg_col_stat->col_stat_->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(osg_col_stat->col_stat_->get_llc_bitmap()));
         }
       }
       if (OB_SUCC(ret)) {

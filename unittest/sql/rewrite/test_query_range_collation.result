@@ -3,8 +3,7 @@
 f = 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -12,8 +11,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -21,8 +19,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -30,8 +27,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -39,8 +35,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -48,8 +43,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -57,8 +51,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -66,8 +59,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -75,8 +67,7 @@ count of rang columns = 1
 f = 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -86,9 +77,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -98,8 +87,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -107,8 +95,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -116,8 +103,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -125,9 +111,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -137,8 +121,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -146,8 +129,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -155,8 +137,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -164,9 +145,7 @@ count of rang columns = 1
 f != 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 2
-get_methods.count() = 2
-get_methods 0: 0
-get_methods 1: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -178,8 +157,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -187,8 +165,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -196,8 +173,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -205,8 +181,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -214,8 +189,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -223,8 +197,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -232,8 +205,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -241,8 +213,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -250,8 +221,7 @@ count of rang columns = 1
 f > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -261,8 +231,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -270,8 +239,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -279,8 +247,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -288,8 +255,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -297,8 +263,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -306,8 +271,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -315,8 +279,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -324,8 +287,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -333,8 +295,7 @@ count of rang columns = 1
 f < 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -344,8 +305,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -353,8 +313,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -362,8 +321,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -371,8 +329,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -380,8 +337,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -389,8 +345,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -398,8 +353,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -407,8 +361,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -416,8 +369,7 @@ count of rang columns = 1
 f >= 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -427,8 +379,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -436,8 +387,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -445,8 +395,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -454,8 +403,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -463,8 +411,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -472,8 +419,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -481,8 +427,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -490,8 +435,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -499,8 +443,7 @@ count of rang columns = 1
 f <= 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -510,8 +453,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 45 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -519,8 +461,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -528,8 +469,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -537,8 +477,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -546,8 +485,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -555,8 +493,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -564,8 +501,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -573,8 +509,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -582,8 +517,7 @@ count of rang columns = 1
 f is TRUE--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -593,8 +527,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 45 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -602,8 +535,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -611,8 +543,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -620,8 +551,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -629,8 +559,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -638,8 +567,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -647,8 +575,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -656,8 +583,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -665,8 +591,7 @@ count of rang columns = 1
 f is FALSE--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -676,8 +601,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -685,8 +609,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 45 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -694,8 +617,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 45 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -703,8 +625,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 46 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -712,8 +633,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -721,8 +641,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 46 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -730,8 +649,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 63 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -739,8 +657,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 63 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -748,8 +665,7 @@ count of rang columns = 1
 f is NULL--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 1
+all_single_value_ranges = 1
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -759,8 +675,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -768,8 +683,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 45 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -777,8 +691,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 45 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -786,8 +699,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 46 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -795,8 +707,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -804,8 +715,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 46 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -813,8 +723,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 63 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -822,8 +731,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 63 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -831,8 +739,7 @@ count of rang columns = 1
 f > 'a' and false--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -842,8 +749,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -851,8 +757,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 45 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -860,8 +765,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 45 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -869,8 +773,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 46 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -878,8 +781,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -887,8 +789,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 46 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -896,8 +797,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 63 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -905,8 +805,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 63 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -914,8 +813,7 @@ count of rang columns = 1
 false and f > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -925,10 +823,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -940,8 +835,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -949,8 +843,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -958,8 +851,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -967,10 +859,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -982,8 +871,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -991,8 +879,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1000,8 +887,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1009,10 +895,7 @@ count of rang columns = 1
 f < 'a' or f > 'b' or f > 'sda' and f > 'sds' or f = 'adas'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 3
-get_methods.count() = 3
-get_methods 0: 0
-get_methods 1: 0
-get_methods 2: 1
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 star_border_flag[1] = 0
@@ -1026,8 +909,7 @@ count of rang columns = 1
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1035,8 +917,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1044,8 +925,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1053,8 +933,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1062,8 +941,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1071,8 +949,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1080,8 +957,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1089,8 +965,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1098,8 +973,7 @@ count of rang columns = 2
 f > 'a' or f > 'b' and (g > 'a' or g > 'k') and (f > 'c')--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1109,8 +983,7 @@ count of rang columns = 2
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1118,8 +991,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1127,8 +999,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1136,8 +1007,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1145,8 +1015,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1154,8 +1023,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1163,8 +1031,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1172,8 +1039,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1181,8 +1047,7 @@ count of rang columns = 5
 f > 'a' and g > 'a' and h > 'a' and i > 'a' and j > 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 5
@@ -1192,8 +1057,7 @@ count of rang columns = 5
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1201,8 +1065,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1210,8 +1073,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1219,8 +1081,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1228,8 +1089,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1237,8 +1097,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1246,8 +1105,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1255,8 +1113,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1264,8 +1121,7 @@ count of rang columns = 1
 f > 'a' and f < 'B' --------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1275,8 +1131,7 @@ count of rang columns = 1
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1284,8 +1139,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1293,8 +1147,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1302,8 +1155,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1311,8 +1163,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1320,8 +1171,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1329,8 +1179,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1338,8 +1187,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1347,8 +1195,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'b'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1358,8 +1205,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1367,8 +1213,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1376,8 +1221,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1385,8 +1229,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1394,8 +1237,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1403,8 +1245,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1412,8 +1253,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1421,8 +1261,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1430,8 +1269,7 @@ count of rang columns = 2
 f > 'B' or f < 'a' and g > 'a' or g < 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1441,8 +1279,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1450,8 +1287,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1459,8 +1295,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1468,8 +1303,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1477,8 +1311,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1486,8 +1319,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1495,8 +1327,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1504,8 +1335,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1513,8 +1343,7 @@ count of rang columns = 2
 f > 'B' and f < 'a' and g > 'a' and g < 'B'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 2
@@ -1524,8 +1353,7 @@ count of rang columns = 2
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1533,8 +1361,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1542,8 +1369,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1551,8 +1377,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1560,8 +1385,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1569,8 +1393,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 46 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1578,8 +1401,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1587,8 +1409,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1596,8 +1417,7 @@ count of rang columns = 1
 f > 'B' and 'a' = 'A'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1609,8 +1429,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1618,8 +1437,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1627,8 +1445,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1636,8 +1453,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1645,8 +1461,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1654,8 +1469,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1663,8 +1477,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1672,8 +1485,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1681,8 +1493,7 @@ count of rang columns = 1
 f between 'a' and 'b'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1692,8 +1503,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 45
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1701,8 +1511,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1710,8 +1519,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1719,8 +1527,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1728,8 +1535,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 46
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1737,8 +1543,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1746,8 +1551,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1755,8 +1559,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1764,8 +1567,7 @@ count of rang columns = 1
 f between 'B' and 'a'--------------connection_collation = 63 col_type = 63
 is not min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 1
 end_border_flag[0] = 1
 count of rang columns = 1
@@ -1775,8 +1577,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1784,8 +1585,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1793,8 +1593,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1802,8 +1601,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1811,8 +1609,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1820,8 +1617,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1829,8 +1625,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1838,8 +1633,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1847,8 +1641,7 @@ count of rang columns = 1
 f not between 'a' and 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1858,8 +1651,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1867,8 +1659,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1876,8 +1667,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 45 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1885,8 +1675,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1894,8 +1683,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1903,8 +1691,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 46 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1912,8 +1699,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 45
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1921,8 +1707,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 46
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1
@@ -1930,8 +1715,7 @@ count of rang columns = 1
 f = 'a' + 'b'--------------connection_collation = 63 col_type = 63
 is min_to_max_range
 ranges.count() = 1
-get_methods.count() = 1
-get_methods 0: 0
+all_single_value_ranges = 0
 star_border_flag[0] = 0
 end_border_flag[0] = 0
 count of rang columns = 1

@@ -150,6 +150,7 @@ struct ObKVCacheInstKey
   int64_t cache_id_;
   uint64_t tenant_id_;
   inline uint64_t hash() const { return cache_id_ + tenant_id_; }
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   inline bool operator==(const ObKVCacheInstKey &other) const
   {
     return cache_id_ == other.cache_id_ && tenant_id_ == other.tenant_id_;

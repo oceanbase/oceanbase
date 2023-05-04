@@ -155,6 +155,7 @@ int ObExprField::eval_field(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
 {
   int ret = OB_SUCCESS;
   ObDatum *first = NULL;
+  int cmp_ret = 0;
   if (OB_FAIL(expr.args_[0]->eval(ctx, first))) {
     LOG_WARN("evaluate parameter failed", K(ret));
   } else {
@@ -165,7 +166,9 @@ int ObExprField::eval_field(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
         ObDatum *d = NULL;
         if (OB_FAIL(expr.args_[pos]->eval(ctx, d))) {
           LOG_WARN("evaluate parameter failed", K(ret));
-        } else if (0 == expr.args_[0]->basic_funcs_->null_first_cmp_(*first, *d)) {
+        } else if (OB_FAIL(expr.args_[0]->basic_funcs_->null_first_cmp_(*first, *d, cmp_ret))) {
+          LOG_WARN("compare failed", K(ret));
+        } else if (0 == cmp_ret) {
           expr_datum.set_int(pos);
           break;
         }

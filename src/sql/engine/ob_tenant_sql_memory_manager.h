@@ -255,6 +255,11 @@ public:
       uint64_t val = common::murmurhash(&plan_id_, sizeof(plan_id_), 0);
       return common::murmurhash(&operator_id_, sizeof(operator_id_), val);
     }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
 
     bool operator==(const WorkareaKey &other) const
     {

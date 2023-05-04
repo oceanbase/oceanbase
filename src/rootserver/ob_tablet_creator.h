@@ -33,7 +33,6 @@ class ObLSTableOperator;
 }
 namespace rootserver
 {
-class ObServerManager;
 struct ObTabletCreatorArg
 {
 public:

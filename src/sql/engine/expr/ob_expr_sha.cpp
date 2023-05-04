@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprSha::ObExprSha(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_SHA, N_SHA, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_SHA, N_SHA, 1, VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -86,7 +86,7 @@ int ObExprSha::eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 }
 
 ObExprSha2::ObExprSha2(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_SHA2, N_SHA2, 2)
+    : ObStringExprOperator(alloc, T_FUN_SYS_SHA2, N_SHA2, 2, VALID_FOR_GENERATED_COL)
 {
 }
 

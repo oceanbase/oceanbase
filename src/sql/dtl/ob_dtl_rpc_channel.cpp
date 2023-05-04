@@ -176,7 +176,7 @@ ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t tenant_id,
     const uint64_t id,
     const ObAddr &peer)
-    : ObDtlBasicChannel(tenant_id, id, peer)
+    : ObDtlBasicChannel(tenant_id, id, peer), recv_sqc_fin_res_(false)
 {}
 
 ObDtlRpcChannel::ObDtlRpcChannel(
@@ -184,7 +184,7 @@ ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t id,
     const ObAddr &peer,
     const int64_t hash_val)
-    : ObDtlBasicChannel(tenant_id, id, peer, hash_val)
+    : ObDtlBasicChannel(tenant_id, id, peer, hash_val), recv_sqc_fin_res_(false)
 {}
 
 ObDtlRpcChannel::~ObDtlRpcChannel()
@@ -204,6 +204,7 @@ int ObDtlRpcChannel::init()
 
 void ObDtlRpcChannel::destroy()
 {
+  recv_sqc_fin_res_ = false;
 }
 
 int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
@@ -249,6 +250,9 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
         linked_buffer = nullptr;
       } else if (FALSE_IT(inc_recv_buffer_cnt())) {
       } else {
+        if (static_cast<uint16_t>(ObDtlMsgType::FINISH_SQC_RESULT) == header.type_) {
+          recv_sqc_fin_res_ = true;
+        }
         if (buffer->is_data_msg()) {
           metric_.mark_first_in();
           if (buffer->is_eof()) {

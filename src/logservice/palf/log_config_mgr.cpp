@@ -79,6 +79,7 @@ LogConfigMgr::LogConfigMgr()
       election_(NULL),
       mode_mgr_(NULL),
       reconfirm_(NULL),
+      plugins_(NULL),
       is_inited_(false)
 {}
 
@@ -96,7 +97,8 @@ int LogConfigMgr::init(const int64_t palf_id,
                        LogStateMgr *state_mgr,
                        election::Election* election,
                        LogModeMgr *mode_mgr,
-                       LogReconfirm *reconfirm)
+                       LogReconfirm *reconfirm,
+                       LogPlugins *plugins)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -109,10 +111,13 @@ int LogConfigMgr::init(const int64_t palf_id,
              OB_ISNULL(sw) ||
              OB_ISNULL(state_mgr) ||
              OB_ISNULL(election) ||
-             OB_ISNULL(mode_mgr)) {
+             OB_ISNULL(mode_mgr) ||
+             OB_ISNULL(reconfirm) ||
+             OB_ISNULL(plugins)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), K(palf_id), K(self),
-        K(log_ms_meta), K(log_engine), K(sw), K(state_mgr), K(election), K(mode_mgr));
+        K(log_ms_meta), KP(log_engine), KP(sw), KP(state_mgr), KP(election), KP(mode_mgr),
+        KP(reconfirm), KP(plugins));
   } else if (OB_FAIL(paxos_member_region_map_.init("LogRegionMap", OB_MAX_MEMBER_NUMBER))) {
     PALF_LOG(WARN, "paxos_member_region_map_ init failed", K(palf_id));
   } else {
@@ -126,6 +131,7 @@ int LogConfigMgr::init(const int64_t palf_id,
     election_ = election;
     mode_mgr_ = mode_mgr;
     reconfirm_ = reconfirm;
+    plugins_ = plugins;
     if (true == log_ms_meta.curr_.is_valid()) {
       if (OB_FAIL(append_config_info_(log_ms_meta.curr_))) {
         PALF_LOG(WARN, "append_config_info_ failed", K(ret), K(palf_id), K(log_ms_meta));
@@ -156,6 +162,7 @@ void LogConfigMgr::destroy()
     sw_ = NULL;
     log_engine_ = NULL;
     reconfirm_ = NULL;
+    plugins_ = NULL;
     register_time_us_ = OB_INVALID_TIMESTAMP;
     parent_.reset();
     parent_keepalive_time_us_ = OB_INVALID_TIMESTAMP;
@@ -272,8 +279,9 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
     if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
       PALF_LOG(INFO, "persistent_config_version_ has been greater than or equal to config_version, \
           no need set_initial_config_info_", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K_(persistent_config_version), K(init_config_version));
-    } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info, proposal_id, LSN(PALF_INITIAL_LSN_VAL), proposal_id))) {
-      PALF_LOG(ERROR, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K(proposal_id), K(initial_config_seq));
+    } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info,
+        proposal_id, LSN(PALF_INITIAL_LSN_VAL), proposal_id))) {
+      PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K(proposal_id), K(initial_config_seq));
     } else {
       config_meta_ = log_ms_meta_;
       FlushMetaCbCtx cb_ctx;
@@ -1728,6 +1736,10 @@ int LogConfigMgr::check_barrier_condition_(const int64_t &prev_log_proposal_id,
     if (OB_EAGAIN == ret && palf_reach_time_interval(500 * 1000, barrier_print_log_time_)) {
       PALF_LOG(INFO, "check_barrier_condition_ eagain", KR(ret), K_(palf_id), K_(self),
           K(max_flushed_log_pid), K(max_flushed_lsn), K(prev_log_proposal_id), K(prev_lsn));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = log_engine_->submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_CHECK_BARRIER_CONDITION))) {
+        LOG_WARN_RET(tmp_ret, "submit_purge_throttling_task", K_(palf_id), K_(self));
+      }
     }
   }
   return ret;
@@ -1925,6 +1937,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
   LSN added_member_flushed_end_lsn;
   int64_t added_member_last_slide_log_id = INT64_MAX;
   int64_t leader_last_slide_log_id = sw_->get_last_slide_log_id();
+  const bool need_purge_throttling = (is_check_log_barrier || DEGRADE_ACCEPTOR_TO_LEARNER == args.type_);
 
   (void) sw_->get_committed_end_lsn(first_leader_committed_end_lsn);
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
@@ -1932,7 +1945,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     ret = OB_INVALID_ARGUMENT;
   } else if (new_member_list.get_member_number() == 1) {
     ret = OB_SUCCESS;
-  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
+  } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, need_purge_throttling,
       conn_timeout_us, first_committed_end_lsn, added_member_has_new_version, added_member_flushed_end_lsn,
       added_member_last_slide_log_id))) {
     PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
@@ -1993,14 +2006,14 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
         (added_member_last_slide_log_id != INT64_MAX &&
         leader_last_slide_log_id - added_member_last_slide_log_id < PALF_SLIDING_WINDOW_SIZE)) {
       ret = OB_SUCCESS;
-      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size, skip",
+      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size",
           K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
-          K(added_member_flushed_end_lsn));
+          K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     } else {
       ret = OB_EAGAIN;
-      PALF_LOG(INFO, "the gap between the leader and added member is smaller than the group_buffer_size, skip",
+      PALF_LOG(INFO, "the gap between the leader and added member is larger than the group_buffer_size, skip",
           K(ret), K_(palf_id), K_(self), K(args), K(new_replica_num), K(first_leader_committed_end_lsn),
-          K(added_member_flushed_end_lsn));
+          K(added_member_flushed_end_lsn), K(leader_last_slide_log_id), K(added_member_last_slide_log_id));
     }
   } else {
     PALF_LOG(INFO, "majority of new_member_list aren't sync with leader", K_(palf_id), K_(self), K(first_committed_end_lsn),
@@ -2012,7 +2025,7 @@ int LogConfigMgr::check_follower_sync_status_(const LogConfigChangeArgs &args,
     int64_t expected_sync_time_s;
     int64_t sync_speed_gap;
     added_member_has_new_version = is_add_member_list(args.type_)? false: true;
-    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, conn_timeout_us,
+    if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num, false/*no need purge throttling*/, conn_timeout_us,
         second_committed_end_lsn, added_member_has_new_version, added_member_flushed_end_lsn, added_member_last_slide_log_id))) {
       PALF_LOG(WARN, "sync_get_committed_end_lsn failed", K(ret), K_(palf_id), K_(self), K(new_member_list),
           K(new_replica_num), K(added_member_has_new_version));
@@ -2045,6 +2058,7 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
                                                  const LogConfigVersion &config_version,
                                                  const int64_t conn_timeout_us,
                                                  const bool force_remote_check,
+                                                 const bool need_purge_throttling,
                                                  LSN &max_flushed_end_lsn,
                                                  bool &has_same_version,
                                                  int64_t &last_slide_log_id) const
@@ -2056,6 +2070,12 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
   if (self_ == server) {
     get_from_local = true;
     sw_->get_max_flushed_end_lsn(max_flushed_end_lsn);
+    if (need_purge_throttling) {
+      int tmp_ret = log_engine_->submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_CHECK_SERVERS_LSN_AND_VERSION);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "submit_purge_throttling_task", K_(palf_id), K_(self));
+      }
+    }
   } else if (false == force_remote_check && (OB_FAIL(sw_->get_server_ack_info(server, ack_info)) && OB_ENTRY_NOT_EXIST != ret)) {
     PALF_LOG(WARN, "get_server_ack_info failed", KR(ret), K_(palf_id), K_(self), K(server));
   } else if (false == force_remote_check &&
@@ -2065,9 +2085,9 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
     // so we check ack_ts to ensure B's ack_info is fresh.
     max_flushed_end_lsn = ack_info.lsn_;
     get_from_local = true;
-  } else if (OB_FAIL(log_engine_->submit_config_change_pre_check_req(server, config_version,
+  } else if (OB_FAIL(log_engine_->submit_config_change_pre_check_req(server, config_version, need_purge_throttling,
       conn_timeout_us, resp))) {
-    PALF_LOG(WARN, "submit_config_change_pre_check_req failed", KR(ret), K_(palf_id), K_(self), K(server),
+    PALF_LOG(WARN, "submit_config_change_pre_check_req failed", KR(ret), K_(palf_id), K_(self), K(server), K(need_purge_throttling),
         K(config_version), K(conn_timeout_us), K(resp));
     has_same_version = false;
   } else if (false == resp.is_normal_replica_) {
@@ -2080,7 +2100,8 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
     get_from_local = false;
   }
   PALF_LOG(INFO, "check_servers_lsn_and_version_ finish", K(ret), K_(palf_id), K_(self), K(server), K(config_version),
-      K(conn_timeout_us), K(force_remote_check), K(get_from_local), K(resp), K(max_flushed_end_lsn), K(has_same_version));
+      K(conn_timeout_us), K(force_remote_check), K(need_purge_throttling), K(get_from_local), K(resp),
+      K(max_flushed_end_lsn), K(has_same_version));
   return ret;
 }
 
@@ -2090,6 +2111,7 @@ int LogConfigMgr::check_servers_lsn_and_version_(const common::ObAddr &server,
 int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                               const ObMemberList &new_member_list,
                                               const int64_t new_replica_num,
+                                              const bool need_purge_throttling,
                                               const int64_t conn_timeout_us,
                                               LSN &committed_end_lsn,
                                               bool &added_member_has_new_version,
@@ -2115,9 +2137,10 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
       PALF_LOG(ERROR, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self), K(i),
           "new_member_list size:", new_member_list.get_member_number());
     } else if (FALSE_IT(is_added_member = is_add_member_list(args.type_) && (args.server_.get_server() == server))) {
-    } else if (FALSE_IT(force_remote_check = is_added_member)) {
+    } else if (FALSE_IT(force_remote_check = is_added_member || need_purge_throttling)) {
     } else if (OB_SUCCESS != (tmp_ret = check_servers_lsn_and_version_(server, config_version,
-        conn_timeout_us, force_remote_check, max_flushed_end_lsn, has_same_version, added_member_last_slide_log_id))) {
+        conn_timeout_us, force_remote_check, need_purge_throttling, max_flushed_end_lsn, has_same_version,
+        added_member_last_slide_log_id))) {
       PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K(tmp_ret), K_(palf_id), K_(self), K(server),
           K(config_version), K(conn_timeout_us), K(force_remote_check), K(max_flushed_end_lsn), K(has_same_version));
     } else {
@@ -2132,7 +2155,8 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
     LSN max_flushed_end_lsn;
     bool has_same_version = false;
     if (OB_SUCCESS != (tmp_ret = check_servers_lsn_and_version_(args.server_.get_server(),
-        config_version, conn_timeout_us, true, max_flushed_end_lsn, has_same_version, added_member_last_slide_log_id))) {
+        config_version, conn_timeout_us, true/*force_check*/, false/*need_purge_throttle*/, max_flushed_end_lsn,
+        has_same_version, added_member_last_slide_log_id))) {
       PALF_LOG(WARN, "check_servers_lsn_and_version_ failed", K(ret), K_(palf_id), K_(self), K(args), K(config_version),
           K(conn_timeout_us), K(max_flushed_end_lsn), K(has_same_version));
     }

@@ -36,7 +36,7 @@ int ObLogJoinFilter::est_cost()
   ObLogicalOperator *first_child = get_child(ObLogicalOperator::first_child);
   if (OB_ISNULL(first_child)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("first_child is null", K(ret)); 
+    LOG_WARN("first_child is null", K(ret));
   } else {
     // refine this
     set_op_cost(0.0);
@@ -81,15 +81,70 @@ int ObLogJoinFilter::get_plan_item_info(PlanText &plan_text,
                                         ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
+  bool is_first = false;
+  static const char *join_filter_type_name[] =
+      {"bloom", "range", "in"};
+  int64_t arr_len = sizeof(join_filter_type_name) / sizeof(const char *);
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   } else if (OB_INVALID_ID != get_filter_id()) {
     BEGIN_BUF_PRINT;
-    if (OB_FAIL(BUF_PRINTF(":BF%04ld", get_filter_id()))) {
+    if (OB_FAIL(BUF_PRINTF(":RF%04ld", get_filter_id()))) {
       LOG_WARN("failed to print str", K(ret));
     }
     END_BUF_PRINT(plan_item.object_alias_,
                   plan_item.object_alias_len_);
+  }
+  if (OB_SUCC(ret) && is_create_) {
+    BEGIN_BUF_PRINT;
+    int64_t idx = 0;
+    const char *type_name = nullptr;
+    if (OB_FAIL(BUF_PRINTF("RF_TYPE("))) {
+      LOG_WARN("fail to print rf", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_filter_types_.count(); ++i) {
+      idx = (int64_t)(join_filter_types_.at(i)) - 1;
+      if (idx >= arr_len || idx < 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected type", K(ret));
+      } else if (FALSE_IT(type_name = join_filter_type_name[idx])) {
+      } else if (is_first && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("%.*s",
+                                    (int)strlen(type_name),
+                                    type_name))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else {
+        is_first = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(BUF_PRINTF(")"))) {
+        LOG_WARN("fail to print rf", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!join_exprs_.empty()) {
+        if (OB_FAIL(BUF_PRINTF(", RF_EXPR["))) {
+          LOG_WARN("fail to print rf", K(ret));
+        } else {
+          int cnt = join_exprs_.count();
+          for (int i = 0; i < cnt && OB_SUCC(ret); ++i) {
+            if (OB_FAIL(join_exprs_.at(i)->get_name(buf, buf_len, pos, type))) {
+              LOG_WARN("fail to get name", K(ret));
+            } else if (i != cnt - 1 && OB_FAIL(BUF_PRINTF(", "))) {
+              LOG_WARN("fail to print buf", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(BUF_PRINTF("]"))) {
+            LOG_WARN("fail to print buf", K(ret));
+          }
+        }
+      }
+    }
+    END_BUF_PRINT(plan_item.special_predicates_,
+                  plan_item.special_predicates_len_);
   }
   return ret;
 }

@@ -74,7 +74,7 @@ int64_t ObScheduleSuspectInfo::gen_hash(int64_t tenant_id, int64_t dag_hash)
 
 ObScheduleSuspectInfoMgr::ObScheduleSuspectInfoMgr()
   : is_inited_(false),
-    allocator_("scheSuspectInfo", OB_SERVER_TENANT_ID),
+    allocator_(SET_USE_500("scheSuspectInfo")),
     lock_(common::ObLatchIds::INFO_MGR_LOCK)
 {
 }
@@ -82,7 +82,7 @@ ObScheduleSuspectInfoMgr::ObScheduleSuspectInfoMgr()
 int ObScheduleSuspectInfoMgr::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(info_map_.create(SUSPECT_INFO_BUCKET_NUM, "scheSuspectInfo"))) {
+  if (OB_FAIL(info_map_.create(SUSPECT_INFO_BUCKET_NUM, SET_USE_500("scheSuspectInfo")))) {
     COMMON_LOG(WARN, "failed to create dap map", K(ret));
   } else {
     is_inited_ = true;

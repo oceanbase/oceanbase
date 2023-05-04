@@ -20,6 +20,7 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/ob_force_print_log.h"
+#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
@@ -31,34 +32,70 @@ int ObServiceEpochProxy::init_service_epoch(
     ObISQLClient &sql_proxy,
     const int64_t tenant_id,
     const int64_t freeze_service_epoch,
-    const int64_t arbitration_service_epoch)
+    const int64_t arbitration_service_epoch,
+    const int64_t server_zone_op_service_epoch,
+    const int64_t heartbeat_service_epoch)
 {
   int ret = OB_SUCCESS;
   if (is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   // sys/meta tenant initialized freeze_service_epoch
-  } else if (OB_FAIL(insert_service_epoch(sql_proxy, tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
-    LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(tenant_id), K(freeze_service_epoch));
-  } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
-                         sql_proxy,
-                         tenant_id,
-                         ARBITRATION_SERVICE_EPOCH,
-                         arbitration_service_epoch))) {
-    LOG_WARN("fail to init arb service epoch", KR(ret), K(tenant_id), K(arbitration_service_epoch));
+  } else if (is_sys_tenant(tenant_id)) {
+    if (OB_FAIL(insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        FREEZE_SERVICE_EPOCH,
+        freeze_service_epoch))) {
+      LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(tenant_id), K(freeze_service_epoch));
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        ARBITRATION_SERVICE_EPOCH,
+        arbitration_service_epoch))) {
+      LOG_WARN("fail to init arb service epoch", KR(ret), K(tenant_id), K(arbitration_service_epoch));
+    } else if (OB_FAIL(insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        SERVER_ZONE_OP_SERVICE_EPOCH,
+        server_zone_op_service_epoch))) {
+      LOG_WARN("fail to init server_zone_op_service_epoch", KR(ret), K(tenant_id), K(server_zone_op_service_epoch));
+    } else if (OB_FAIL(insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        HEARTBEAT_SERVICE_EPOCH,
+        heartbeat_service_epoch))) {
+      LOG_WARN("fail to init heartbeat_service_epoch", KR(ret), K(tenant_id), K(heartbeat_service_epoch));
+    } else {}
   } else if (is_meta_tenant(tenant_id)) {
     // user tenant initialized freeze_service_epoch
     const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-    if (OB_FAIL(insert_service_epoch(sql_proxy, user_tenant_id, FREEZE_SERVICE_EPOCH, freeze_service_epoch))) {
+    if (OB_FAIL(insert_service_epoch(
+        sql_proxy,
+        user_tenant_id,
+        FREEZE_SERVICE_EPOCH,
+        freeze_service_epoch))) {
       LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(user_tenant_id), K(freeze_service_epoch));
+    } else if (OB_FAIL(insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        FREEZE_SERVICE_EPOCH,
+        freeze_service_epoch))) {
+      LOG_WARN("fail to init freeze_service_epoch", KR(ret), K(tenant_id), K(freeze_service_epoch));
     } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
-                           sql_proxy,
-                           user_tenant_id,
-                           ARBITRATION_SERVICE_EPOCH,
-                           arbitration_service_epoch))) {
+        sql_proxy,
+        user_tenant_id,
+        ARBITRATION_SERVICE_EPOCH,
+        arbitration_service_epoch))) {
       LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
-    }
-  }
+    } else if (OB_FAIL(ObServiceEpochProxy::insert_service_epoch(
+        sql_proxy,
+        tenant_id,
+        ARBITRATION_SERVICE_EPOCH,
+        arbitration_service_epoch))) {
+      LOG_WARN("fail to init arb service epoch", KR(ret), K(user_tenant_id), K(arbitration_service_epoch));
+    } else {}
+  } else {}
   return ret;
 }
 
@@ -224,6 +261,51 @@ int ObServiceEpochProxy::check_service_epoch_with_trans(
   } else if (persistent_epoch != expected_epoch) {
     is_match = false;
   }
+  return ret;
+}
+
+int ObServiceEpochProxy::check_and_update_service_epoch(
+    ObMySQLTransaction &trans,
+    const int64_t tenant_id,
+    const char * const name,
+    const int64_t service_epoch)
+{
+  int ret = OB_SUCCESS;
+  int64_t persistent_service_epoch = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || palf::INVALID_PROPOSAL_ID == service_epoch)
+      || OB_ISNULL(name)) {
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(service_epoch), KP(name));
+  } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(
+      trans,
+      tenant_id,
+      name,
+      persistent_service_epoch ))) {
+    // check and update service epoch
+    LOG_WARN("fail to get heartbeat service epoch from inner table", KR(ret), K(tenant_id), K(name));
+  } else if (OB_UNLIKELY(service_epoch < persistent_service_epoch)) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("the service_epoch is smaller than the service epoch in __all_service_epoch table, "
+        "the service cannot be provided", KR(ret), K(tenant_id), K(name),
+        K(service_epoch), K(persistent_service_epoch));
+  } else if (service_epoch > persistent_service_epoch) {
+    int64_t affected_rows = 0;
+    if (OB_FAIL(ObServiceEpochProxy::update_service_epoch(
+        trans,
+        tenant_id,
+        name,
+        service_epoch,
+        affected_rows))) {
+      LOG_WARN("fail to update the service epoch", KR(ret), K(tenant_id), K(name),
+          K(service_epoch), K(persistent_service_epoch), K(affected_rows));
+    } else if (1 != affected_rows) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("fail to update service epoch, affected_rows is expected to be one", KR(ret),
+          K(tenant_id), K(name), K(service_epoch), K(persistent_service_epoch), K(affected_rows));
+    }
+  } else {}
+  FLOG_INFO("check and update service epoch", KR(ret), K(tenant_id), K(name),
+      K(service_epoch), K(persistent_service_epoch));
   return ret;
 }
 

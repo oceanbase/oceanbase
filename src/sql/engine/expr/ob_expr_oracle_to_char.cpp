@@ -38,7 +38,7 @@ const int64_t MAX_INTERVAL_BUFFER_SIZE = 32;
 const int64_t MAX_CLOB_BUFFER_SIZE = 4000;
 
 ObExprOracleToChar::ObExprOracleToChar(ObIAllocator &alloc)
-    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CHAR, N_TO_CHAR, MORE_THAN_ZERO)
+    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_CHAR, N_TO_CHAR, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -163,7 +163,7 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOracleToNChar::ObExprOracleToNChar(ObIAllocator &alloc)
-    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_NCHAR, N_TO_NCHAR, MORE_THAN_ZERO)
+    : ObExprToCharCommon(alloc, T_FUN_SYS_TO_NCHAR, N_TO_NCHAR, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
 {
 }
 

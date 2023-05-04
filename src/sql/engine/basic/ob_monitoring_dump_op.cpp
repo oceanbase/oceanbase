@@ -162,7 +162,12 @@ int ObMonitoringDumpOp::calc_hash_value()
       LOG_WARN("eval expr failed", K(ret));
     } else {
       uint64_t ori_hash_value = output_hash_.at(i);
-      output_hash_.at(i) = ori_hash_value + expr->basic_funcs_->default_hash_(*datum, 0);
+      uint64_t hash_value = 0;
+      if (OB_FAIL(expr->basic_funcs_->default_hash_(*datum, 0, hash_value))) {
+        LOG_WARN("do hash failed", K(ret));
+      } else {
+        output_hash_.at(i) = ori_hash_value + hash_value;
+      }
     }
   }
   return ret;

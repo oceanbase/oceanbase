@@ -314,7 +314,9 @@ template <typename _key_type,
           typename _equal>
 uint64_t ObCuckooHashMap<_key_type, _value_type, _hashfunc, _equal>::hash1(const _key_type &key) const
 {
-  return hashfunc_(key);
+  uint64_t hash_val = 0;
+  hashfunc_(key, hash_val);
+  return hash_val;
 }
 
 template <typename _key_type,

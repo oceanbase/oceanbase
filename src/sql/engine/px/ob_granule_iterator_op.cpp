@@ -19,8 +19,12 @@
 #include "sql/executor/ob_task_spliter.h"
 #include "sql/engine/dml/ob_table_insert_op.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_part_mgr_util.h"
+
 
 namespace oceanbase
 {
@@ -170,8 +174,8 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   pwj_rescan_task_infos_(),
   filter_count_(0),
   total_count_(0),
-  bf_key_(),
-  bloom_filter_ptr_(NULL),
+  rf_msg_(NULL),
+  rf_key_(),
   tablet2part_id_map_(),
   real_child_(NULL),
   is_parallel_runtime_filtered_(false)
@@ -411,11 +415,9 @@ int ObGranuleIteratorOp::inner_open()
       LOG_WARN("child_op is null", K(ret));
     } else if (MY_SPEC.bf_info_.is_inited_) {
       ObGIOpInput *input = static_cast<ObGIOpInput*>(input_);
-      bf_key_.init(MY_SPEC.bf_info_.tenant_id_,
-          MY_SPEC.bf_info_.filter_id_,
-          MY_SPEC.bf_info_.server_id_,
-          input->get_px_sequence_id(),
-          MY_SPEC.bf_info_.is_shared_? 0 : worker_id_);
+      rf_key_.task_id_ = MY_SPEC.bf_info_.is_shared_? 0 : worker_id_;
+      rf_key_.px_sequence_id_ = input->px_sequence_id_;
+      rf_key_.p2p_datahub_id_ = MY_SPEC.bf_info_.p2p_dh_id_;
     } else if (OB_FAIL(prepare_table_scan())) {
       LOG_WARN("prepare table scan failed", K(ret));
     }
@@ -425,6 +427,11 @@ int ObGranuleIteratorOp::inner_open()
 
 int ObGranuleIteratorOp::inner_close()
 {
+  if (OB_NOT_NULL(rf_msg_)) {
+    // rf_msg_ is got from PX_P2P_DH map
+    // do not destroy it, because other worker thread may not start yet
+    rf_msg_->dec_ref_count();
+  }
   return OB_SUCCESS;
 }
 
@@ -663,23 +670,30 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
 {
   int ret = OB_SUCCESS;
   bool is_match = false;
-  while (OB_SUCC(ret) && OB_ISNULL(bloom_filter_ptr_)) {
-    if (OB_FAIL(ObPxBloomFilterManager::instance().get_px_bloom_filter(bf_key_,
-        bloom_filter_ptr_))) {
+  while (OB_SUCC(ret) && (OB_ISNULL(rf_msg_) || !rf_msg_->check_ready())) {
+    if (OB_ISNULL(rf_msg_) && OB_FAIL(PX_P2P_DH.atomic_get_msg(rf_key_, rf_msg_))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("fail to get px bloom filter", K(ret), K(bf_key_));
+        LOG_WARN("fail to get px bloom filter", K(ret), K(rf_key_));
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ctx_.fast_check_status())) {
-          LOG_WARN("fail to check status", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ctx_.fast_check_status())) {
+        LOG_WARN("fail to check status", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(rf_msg_) || !rf_msg_->check_ready()) {
+        if (MY_SPEC.bf_info_.is_shuffle_) {
+          partition_pruning = false;
+          break;
         }
       }
     }
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(bloom_filter_ptr_)) {
+  if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg_) && rf_msg_->check_ready()) {
     uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
     ObDatum &datum = MY_SPEC.tablet_id_expr_->locate_expr_datum(eval_ctx_);
     if (MY_SPEC.bf_info_.skip_subpart_) {
@@ -695,8 +709,10 @@ int ObGranuleIteratorOp::do_join_filter_partition_pruning(
     if (OB_SUCC(ret) && !is_match) {
       datum.int_ = &tablet_id;
       datum.len_ = sizeof(tablet_id);
-      hash_val = MY_SPEC.hash_func_.hash_func_(datum, hash_val);
-      if (OB_FAIL(bloom_filter_ptr_->might_contain(hash_val, is_match))) {
+      ObRFBloomFilterMsg *bf_msg = static_cast<ObRFBloomFilterMsg *>(rf_msg_);
+      if (OB_FAIL(MY_SPEC.hash_func_.hash_func_(datum, hash_val, hash_val))) {
+        LOG_WARN("fail to calc hash value", K(ret));
+      } else if (OB_FAIL(bf_msg->bloom_filter_.might_contain(hash_val, is_match))) {
         LOG_WARN("fail to check filter might contain value", K(ret), K(hash_val));
       } else {
         partition_pruning = !is_match;

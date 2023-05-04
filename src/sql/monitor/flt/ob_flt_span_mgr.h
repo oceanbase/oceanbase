@@ -19,13 +19,9 @@
 #include "lib/string/ob_string.h"
 #include "lib/atomic/ob_atomic.h"
 #include "lib/stat/ob_diagnose_info.h"
-//#include "observer/mysql/ob_mysql_result_set.h"
 #include "share/config/ob_server_config.h"
 #include "share/schema/ob_schema_getter_guard.h"
-//#include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql_define.h"
-//#include "sql/ob_result_set.h"
-#include "observer/mysql/ob_eliminate_task.h"
 #include "observer/mysql/ob_ra_queue.h"
 
 using namespace oceanbase::common;
@@ -41,7 +37,7 @@ namespace sql
   static const char START_TS[] = "start_ts";
   static const char END_TS[] = "end_ts";
   static const char PARENT_SPAN_ID[] = "parent_id";
-
+  class ObFLTSpanMgr;
   class ObFLTSpanData {
   public:
     int64_t tenant_id_;
@@ -162,9 +158,10 @@ namespace sql
   public:
     static const int64_t FLT_SPAN_PAGE_SIZE = (1LL << 21) - ACHUNK_PRESERVE_SIZE; // 2M - 17k
     static const int32_t BATCH_RELEASE_COUNT = 1000;
-    //初始化queue大小为1000w
-    static const int64_t MAX_QUEUE_SIZE = 100000; //10m
-    static const int64_t RELEASE_QUEUE_SIZE = 10000; //1w
+    //初始化queue大小为10w
+    static const int64_t MAX_QUEUE_SIZE = 100000; //10w
+    static const int64_t RELEASE_QUEUE_SIZE = 50000; //1w
+    static const int64_t EVICT_INTERVAL = 1000000; //1s
     ObFLTSpanMgr()
       : inited_(false), destroyed_(false), request_id_(0), mem_limit_(0),
         allocator_(), queue_(),
@@ -183,8 +180,9 @@ namespace sql
     int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }
     uint64_t get_tenant_id() { return tenant_id_; }
     int init(uint64_t tenant_id, const int64_t max_mem_size, const int64_t queue_size);
-    int record_span(ObFLTSpanData &span_data);
+    int record_span(ObFLTSpanData &span_data, bool is_formmated_json);
     int release_old(int64_t limit = BATCH_RELEASE_COUNT); // evict old span and release memory
+    uint64_t get_size() { return queue_.get_size(); }
     void destroy();
     static int mtl_init(ObFLTSpanMgr* &span_mgr);
     static void mtl_destroy(ObFLTSpanMgr* &span_mgr);
@@ -220,13 +218,11 @@ namespace sql
     int64_t mem_limit_;
     common::ObConcurrentFIFOAllocator allocator_; //alloc mem for  span info
     common::ObRaQueue queue_; // store span node
-    //ObEliminateTask task_;
 
     // tenant id of this request manager
     uint64_t tenant_id_;
     int tg_id_;
   };
-
 } // namespace sql
 } // namespace oceanbase
 #endif

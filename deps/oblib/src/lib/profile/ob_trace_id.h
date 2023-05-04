@@ -167,6 +167,8 @@ struct ObCurTraceId
       return hash_value;
     }
 
+    inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
     inline bool operator == (const TraceId &other) const
     {
       return equals(other);

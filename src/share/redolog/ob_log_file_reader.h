@@ -33,6 +33,7 @@ public:
   void reset();
   bool is_valid() const;
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator==(const ObLogReadFdKey &other) const;
   bool operator!=(const ObLogReadFdKey &other) const;
   TO_STRING_KV(K(path_), "len", STRLEN(path_));

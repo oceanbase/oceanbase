@@ -183,8 +183,9 @@ int ObMergeSetOp::Compare::operator()(
     int64_t idx = sort_collations_->at(i).field_idx_;
     if (OB_FAIL(r.at(idx)->eval(eval_ctx, r_datum))) {
       LOG_WARN("failed to get expr value", K(ret), K(i));
+    } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(lcells[idx], *r_datum, cmp))) {
+      LOG_WARN("failed to compare", K(ret), K(i));
     } else {
-      cmp = cmp_funcs_->at(i).cmp_func_(lcells[idx], *r_datum);
       if (0 != cmp) {
         cmp = sort_collations_->at(i).is_ascending_ ? cmp : -cmp;
         break;
@@ -209,8 +210,9 @@ int ObMergeSetOp::Compare::operator()(
     if (OB_FAIL(l.at(idx)->eval(eval_ctx, l_datum))) {
       LOG_WARN("failed to get expr value", K(ret), K(i));
     } else if (OB_FAIL(r.at(idx)->eval(eval_ctx, r_datum))) {
+    } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum, cmp))) {
+      LOG_WARN("failed to compare", K(ret), K(i));
     } else {
-      cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum);
       LOG_DEBUG("debug compare merge set op", K(EXPR2STR(eval_ctx, *l.at(idx))),
         K(EXPR2STR(eval_ctx, *r.at(idx))), K(cmp));
       if (0 != cmp) {
@@ -242,12 +244,11 @@ int ObMergeSetOp::Compare::operator() (const common::ObIArray<ObExpr*> &l,
     } else if (FALSE_IT(batch_info_guard.set_batch_idx(r_idx))) {
     } else if (OB_FAIL(r.at(idx)->eval(eval_ctx, r_datum))) {
       LOG_WARN("failed to get expr value", K(ret), K(i));
-    } else {
-      cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum);
-      if (0 != cmp) {
-        cmp = sort_collations_->at(i).is_ascending_ ? cmp : -cmp;
-        break;
-      }
+    } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum, cmp))) {
+      LOG_WARN("failed to compare", K(ret), K(i));
+    } else if (0 != cmp) {
+      cmp = sort_collations_->at(i).is_ascending_ ? cmp : -cmp;
+      break;
     }
   }
   return ret;
@@ -271,12 +272,11 @@ int ObMergeSetOp::Compare::operator() (const ObChunkDatumStore::StoredRow &l,
     l_datum = &l_cells[idx];
     batch_info_guard.set_batch_idx(r_idx);
     if (OB_FAIL(r.at(idx)->eval(eval_ctx, r_datum))) {
-    } else {
-      cmp = cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum);
-      if (0 != cmp) {
-        cmp = sort_collations_->at(i).is_ascending_ ? cmp : -cmp;
-        break;
-      }
+    } else if (OB_FAIL(cmp_funcs_->at(i).cmp_func_(*l_datum, *r_datum, cmp))) {
+      LOG_WARN("failed to compare", K(ret), K(i));
+    } else if (0 != cmp) {
+      cmp = sort_collations_->at(i).is_ascending_ ? cmp : -cmp;
+      break;
     }
   }
   return ret;

@@ -28,8 +28,9 @@ public:
   ObMergeStmtPrinter()=delete;
   ObMergeStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObMergeStmt *stmt,
                      ObSchemaGetterGuard *schema_guard,
-                     common::ObObjPrintParams print_params) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params) {}
+                     common::ObObjPrintParams print_params,
+                      const ParamStore *param_store = NULL) :
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store) {}
   virtual ~ObMergeStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObMergeStmt *stmt);

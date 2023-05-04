@@ -650,6 +650,7 @@ public:
   int encode_##name##_state(char *buf, const int64_t len, int64_t &pos); \
   int decode_##name##_state(const char *buf, const int64_t len, int64_t &pos); \
   int64_t name##_state_encoded_length();                                \
+  static int display_##name##_state(const char *buf, const int64_t len, int64_t &pos); \
   int64_t est_##name##_size__()
 #define DEF_FREE_ROUTE_DECODE(name) DEF_FREE_ROUTE_DECODE_(name)
 LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);

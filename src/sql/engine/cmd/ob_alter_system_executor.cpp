@@ -2105,6 +2105,12 @@ int ObDeletePolicyExecutor::execute(ObExecContext &ctx, ObDeletePolicyStmt &stmt
   return ret;
 }
 
+int ObBackupKeyExecutor::execute(ObExecContext &ctx, ObBackupKeyStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
 int ObBackupBackupsetExecutor::execute(ObExecContext &ctx, ObBackupBackupsetStmt &stmt)
 {
   int ret = OB_SUCCESS;

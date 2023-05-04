@@ -390,8 +390,6 @@ public:
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
   virtual transaction::ObPartTransCtx *get_trans_ctx() const { return ctx_; }
   virtual void inc_truncate_cnt() override { truncate_cnt_++; }
-  virtual int audit_partition(const enum transaction::ObPartitionAuditOperator op,
-                              const int64_t count);
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
   uint64_t get_lock_for_read_retry_count() const { return lock_for_read_retry_count_; }
   virtual void add_trans_mem_total_size(const int64_t size);
@@ -491,8 +489,6 @@ private:
       const transaction::tablelock::ObTableLockOp &lock_op,
       const bool is_replay);
   static int64_t get_us() { return ::oceanbase::common::ObTimeUtility::current_time(); }
-  int audit_partition_cache_(const enum transaction::ObPartitionAuditOperator op, const int32_t count);
-  int flush_audit_partition_cache_(bool commit);
   void set_read_elr_data(const bool read_elr_data) { read_elr_data_ = read_elr_data; }
   int reset_log_generator_();
   int reuse_log_generator_();
@@ -520,7 +516,6 @@ private:
   MemtableCtxStat mtstat_;
   ObTimeInterval log_conflict_interval_;
   transaction::ObPartTransCtx *ctx_;
-  transaction::ObPartitionAuditInfoCache partition_audit_info_cache_;
   int64_t truncate_cnt_;
   // the retry count of lock for read
   uint64_t lock_for_read_retry_count_;

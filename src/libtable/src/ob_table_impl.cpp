@@ -416,6 +416,7 @@ public:
       :entity_(entity)
   {}
   int64_t hash() const { return entity_->hash_rowkey(); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator== (const EntityRowkeyAdaptor &other) const
   {
     bool bret = (entity_->get_rowkey_size() == other.entity_->get_rowkey_size());

@@ -54,6 +54,35 @@ enum class TableAccessType {
   PURE_VIRTUAL_TABLE,
   HAS_USER_TABLE
 };
+
+struct ObP2PDfoMapNode
+{
+  ObP2PDfoMapNode() : target_dfo_id_(OB_INVALID_ID),  addrs_() {}
+  ~ObP2PDfoMapNode() { addrs_.reset(); }
+  int assign(const ObP2PDfoMapNode &other) {
+    target_dfo_id_ = other.target_dfo_id_;
+    return addrs_.assign(other.addrs_);
+  }
+  void reset() {
+    target_dfo_id_ = OB_INVALID_ID;
+    addrs_.reset();
+  }
+  int64_t target_dfo_id_;
+  common::ObSArray<ObAddr>addrs_;
+  TO_STRING_KV(K(target_dfo_id_), K(addrs_));
+};
+struct ObTempTableP2PInfo
+{
+  ObTempTableP2PInfo() : temp_access_ops_(),  dfos_() {}
+  ~ObTempTableP2PInfo() { reset(); }
+  void reset() {
+    temp_access_ops_.reset();
+    dfos_.reset();
+  }
+  ObSEArray<const ObOpSpec *, 4> temp_access_ops_;
+  ObSEArray<ObDfo *, 4> dfos_;
+  TO_STRING_KV(K(temp_access_ops_), K(dfos_));
+};
 // 这些信息是调度时候需要用的变量，暂时统一叫做CoordInfo
 class ObPxCoordInfo
 {
@@ -71,13 +100,18 @@ public:
     coord_(coord),
     batch_rescan_ctl_(NULL),
     pruning_table_location_(NULL),
-    table_access_type_(TableAccessType::NO_TABLE)
+    table_access_type_(TableAccessType::NO_TABLE),
+    qc_detectable_id_(),
+    p2p_dfo_map_(),
+    p2p_temp_table_info_()
   {}
   virtual ~ObPxCoordInfo() {}
   virtual void destroy()
   {
     dfo_mgr_.destroy();
     piece_msg_ctx_mgr_.reset();
+    p2p_dfo_map_.destroy();
+    p2p_temp_table_info_.reset();
   }
   void reset_for_rescan()
   {
@@ -85,7 +119,10 @@ public:
     dfo_mgr_.destroy();
     piece_msg_ctx_mgr_.reset();
     batch_rescan_ctl_ = NULL;
+    p2p_dfo_map_.reuse();
+    p2p_temp_table_info_.reset();
   }
+  int init();
   bool enable_px_batch_rescan() { return get_rescan_param_count() > 0; }
   int64_t get_rescan_param_count()
   {
@@ -112,6 +149,10 @@ public:
   ObBatchRescanCtl *batch_rescan_ctl_;
   const common::ObIArray<ObTableLocation> *pruning_table_location_;
   TableAccessType table_access_type_;
+  ObDetectableId qc_detectable_id_;
+  // key = p2p_dh_id value = dfo_id + target_addrs
+  hash::ObHashMap<int64_t, ObP2PDfoMapNode, hash::NoPthreadDefendMode> p2p_dfo_map_;
+  ObTempTableP2PInfo p2p_temp_table_info_;
 };
 
 class ObDfoSchedulerBasic;
@@ -178,6 +219,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
+  void clean_dtl_interm_result(ObExecContext &ctx);
   // end DATAHUB msg processing
 private:
   int do_cleanup_dfo(ObDfo &dfo);

@@ -39,6 +39,7 @@ public:
   {}
 
   int64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator ==(const ObLogicMacroBlockId &other) const;
   bool operator !=(const ObLogicMacroBlockId &other) const;
   bool operator <(const ObLogicMacroBlockId &other) const;

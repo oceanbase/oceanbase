@@ -528,6 +528,8 @@ public:
   ~ObPushdownExprSpec() = default;
   TO_STRING_KV(K_(calc_exprs),
                K_(access_exprs),
+               K_(ext_file_column_exprs),
+               K_(ext_column_convert_exprs),
                K_(max_batch_size),
                K_(pushdown_filters),
                K_(pd_storage_flag));
@@ -549,6 +551,9 @@ public:
   ObPushdownFilter pd_storage_filters_;
   // used to pushdown aggregate expression now.
   ExprFixedArray pd_storage_aggregate_output_;
+  // used by external table
+  ExprFixedArray ext_file_column_exprs_;
+  ExprFixedArray ext_column_convert_exprs_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx

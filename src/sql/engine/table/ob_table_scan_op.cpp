@@ -28,6 +28,9 @@
 #include "observer/virtual_table/ob_virtual_data_access_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/omt/ob_tenant_srs_mgr.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/external_table/ob_external_table_utils.h"
+#include "lib/container/ob_array_wrap.h"
 
 namespace oceanbase
 {
@@ -377,7 +380,9 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     tsc_ctdef_(alloc),
     pdml_partition_id_(NULL),
     agent_vt_meta_(alloc),
-    flags_(0)
+    flags_(0),
+    tenant_id_col_idx_(0),
+    partition_id_calc_type_(0)
 {
 }
 
@@ -400,7 +405,9 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     tsc_ctdef_,
                     pdml_partition_id_,
                     agent_vt_meta_,
-                    ddl_output_cids_);
+                    ddl_output_cids_,
+                    tenant_id_col_idx_,
+                    partition_id_calc_type_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -424,7 +431,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K(tsc_ctdef_),
        K(report_col_checksum_),
        K_(agent_vt_meta),
-       K_(ddl_output_cids));
+       K_(ddl_output_cids),
+       K_(tenant_id_col_idx));
   J_OBJ_END();
   return pos;
 }
@@ -734,14 +742,16 @@ int ObTableScanOp::prepare_das_task()
     const ObTableLocation &das_location = *MY_CTDEF.das_dppr_tbl_;
     ObSEArray<ObTabletID, 1> tablet_ids;
     ObSEArray<ObObjectID, 1> partition_ids;
+    ObSEArray<ObObjectID, 1> first_level_part_ids;
     if (OB_FAIL(das_location.calculate_tablet_ids(ctx_,
                                                   plan_ctx->get_param_store(),
                                                   tablet_ids,
                                                   partition_ids,
+                                                  first_level_part_ids,
                                                   dtc_params))) {
       LOG_WARN("calculate dynamic partitions failed", K(ret));
     } else {
-      LOG_TRACE("dynamic partitions", K(tablet_ids), K(partition_ids));
+      LOG_TRACE("dynamic partitions", K(tablet_ids), K(partition_ids), K(first_level_part_ids));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
       ObDASTabletLoc *tablet_loc = nullptr;
@@ -873,7 +883,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
-  if(is_foreign_check_nested_session() && stmt::T_SELECT == ctx_.get_sql_ctx()->stmt_type_) {
+  if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
   }
   if (MY_SPEC.batch_scan_flag_ || is_lookup) {
@@ -909,11 +919,6 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
       LOG_WARN("failed to set flashback query snapshot version", K(ret));
     }
   }
-  if (OB_SUCC(ret) && is_lookup && MY_SPEC.is_vt_mapping_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "virtual table with index lookup");
-    LOG_WARN("virtual table with index lookup not supported", K(das_ctdef.ref_table_id_), K(MY_SPEC.agent_vt_meta_));
-  }
   if (OB_SUCC(ret)) {
     ObTableID table_loc_id = MY_SPEC.get_table_loc_id();
     das_rtdef.table_loc_ = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, das_ctdef.ref_table_id_);
@@ -933,30 +938,47 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
 int ObTableScanOp::update_output_tablet_id()
 {
   int ret = OB_SUCCESS;
-  const ObDASTabletLoc *data_tablet_loc = MY_SPEC.should_scan_index() ?
-      ObDASUtils::get_related_tablet_loc(*scan_result_.get_tablet_loc(), MY_SPEC.ref_table_id_) :
-      scan_result_.get_tablet_loc();
-  if (OB_NOT_NULL(data_tablet_loc)) {
-    if (is_vectorized()) {
-      const int64_t batch_size = MY_SPEC.max_batch_size_;
-      if (NULL != MY_SPEC.pdml_partition_id_) {
+  if (NULL != MY_SPEC.pdml_partition_id_) {
+    const ObDASTabletLoc *data_tablet_loc = nullptr;
+    int64_t output_id = OB_INVALID_ID;
+    if (MY_SPEC.partition_id_calc_type_ > 0) {
+      // partition id for gather statistics, index scan should output index partition id
+      data_tablet_loc = scan_result_.get_tablet_loc();
+    } else if (MY_SPEC.should_scan_index()) {
+      data_tablet_loc = ObDASUtils::get_related_tablet_loc(*scan_result_.get_tablet_loc(), MY_SPEC.ref_table_id_);
+    } else {
+      data_tablet_loc = scan_result_.get_tablet_loc();
+    }
+    if (OB_NOT_NULL(data_tablet_loc)) {
+      if (MY_SPEC.partition_id_calc_type_ == 0) {
+        output_id = data_tablet_loc->tablet_id_.id();
+      } else if (MY_SPEC.partition_id_calc_type_ == 1) {
+        output_id = data_tablet_loc->first_level_part_id_ != OB_INVALID_ID ?
+            data_tablet_loc->first_level_part_id_ : data_tablet_loc->partition_id_;
+      } else if (MY_SPEC.partition_id_calc_type_ == 2) {
+        output_id = data_tablet_loc->partition_id_;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid partition id cacl type", K(ret));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_vectorized()) {
+        const int64_t batch_size = MY_SPEC.max_batch_size_;
         ObExpr *expr = MY_SPEC.pdml_partition_id_;
         ObDatum *datums = expr->locate_datums_for_update(eval_ctx_, batch_size);
         for (int64_t i = 0; i < batch_size; i++) {
-          datums[i].set_int(data_tablet_loc->tablet_id_.id());
+          datums[i].set_int(output_id);
         }
         expr->set_evaluated_projected(eval_ctx_);
-        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(expr), KPC(data_tablet_loc));
-      }
-    } else {
-      // handle PDML partition id:
-      // if partition id expr in TSC output_exprs,
-      // set the TSC partition id to the corresponding expr frame
-      if (NULL != MY_SPEC.pdml_partition_id_) {
+        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(expr), KPC(data_tablet_loc), K(output_id));
+      } else {
+        // handle PDML partition id:
+        // if partition id expr in TSC output_exprs,
+        // set the TSC partition id to the corresponding expr frame
         ObExpr *expr = MY_SPEC.pdml_partition_id_;
-        expr->locate_datum_for_write(eval_ctx_).set_int(data_tablet_loc->tablet_id_.id());
+        expr->locate_datum_for_write(eval_ctx_).set_int(output_id);
         expr->set_evaluated_projected(eval_ctx_);
-        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(data_tablet_loc));
+        LOG_TRACE("find the partition id expr in pdml table scan", K(ret), KPC(data_tablet_loc), K(output_id));
       }
     }
   }
@@ -1030,7 +1052,6 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
   int ret = OB_SUCCESS;
   ObQueryRangeArray key_ranges;
   ObQueryRangeArray ss_key_ranges;
-  ObGetMethodArray get_method;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObIAllocator &range_allocator = (table_rescan_allocator_ != nullptr ?
       *table_rescan_allocator_ : ctx_.get_allocator());
@@ -1061,7 +1082,6 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                ctx_,
                key_ranges,
                MY_INPUT.mbr_filters_,
-               get_method,
                ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
     } else if (!MY_CTDEF.pre_query_range_.is_contain_geo_filters() &&
@@ -1070,9 +1090,23 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
                 range_allocator,
                 ctx_,
                 key_ranges,
-                get_method,
                 ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
       LOG_WARN("failed to extract pre query ranges", K(ret));
+    } else if (MY_CTDEF.scan_ctdef_.is_external_table_) {
+      uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
+      ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
+      if (OB_ISNULL(tab_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table lock is null", K(ret));
+      } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
+                                                  ctx_.get_my_session()->get_effective_tenant_id(),
+                                                  MY_CTDEF.scan_ctdef_.ref_table_id_,
+                                                  key_ranges,
+                                                  range_allocator,
+                                                  key_ranges,
+                           tab_loc->loc_meta_->is_external_files_on_disk_))) {
+        LOG_WARN("failed to prepare single scan range for external table", K(ret));
+      }
     } else if (OB_FAIL(MY_CTDEF.pre_query_range_.get_ss_tablet_ranges(range_allocator,
                                   ctx_,
                                   ss_key_ranges,
@@ -1160,7 +1194,7 @@ int ObTableScanOp::init_converter()
   int ret = OB_SUCCESS;
   if (MY_SPEC.is_vt_mapping_) {
     ObSqlCtx *sql_ctx = NULL;
-    if (MY_SPEC.is_index_back()|| MY_SPEC.is_index_global_) {
+    if (MY_SPEC.is_index_global_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table id is not match", K(ret), K(MY_CTDEF), K(MY_SPEC.is_index_global_));
     } else if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx())
@@ -1198,7 +1232,8 @@ int ObTableScanOp::init_converter()
                                           &ctx_.get_allocator(),
                                           org_table_schema,
                                           &agent_vt_meta.access_column_ids_,
-                                          MY_SPEC.has_tenant_id_col_
+                                          MY_SPEC.has_tenant_id_col_,
+                                          MY_SPEC.tenant_id_col_idx_
                                           ))) {
         LOG_WARN("failed to init converter", K(ret));
       }
@@ -2111,7 +2146,7 @@ int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
   ObDASGroupScanOp *batch_op = DAS_GROUP_SCAN_OP(scan_op);
   bool add_all = false;
   bool prune_all = true;
-  if (OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
+  if (!MY_SPEC.is_vt_mapping_ && OB_UNLIKELY(input_ranges.count() != input_ss_ranges.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ranges and skip scan postfix ranges mismatch", K(ret), K(input_ranges.count()),
                                                              K(input_ss_ranges.count()));

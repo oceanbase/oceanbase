@@ -41,5 +41,7 @@ private:
   SERVER_EVENT_INSTANCE.add_event(args)
 #define SERVER_EVENT_SYNC_ADD(args...)                                         \
   SERVER_EVENT_INSTANCE.sync_add_event(args)
+#define SERVER_EVENT_ADD_WITH_RETRY(args...)                                         \
+  SERVER_EVENT_INSTANCE.add_event_with_retry(args)
 
 #endif /* _OB_SERVER_EVENT_HISTORY_TABLE_OPERATOR_H */

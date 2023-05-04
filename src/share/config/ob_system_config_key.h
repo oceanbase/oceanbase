@@ -32,6 +32,7 @@ public:
   // with exactly equal comparision
   bool operator == (const ObSystemConfigKey &other) const;
   uint64_t hash() const;
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   // check if key's information can fit this. i.e. can use the `key' to get config accordingly
   bool match(const ObSystemConfigKey &key) const;
   bool match_ip_port(const ObSystemConfigKey &key) const;

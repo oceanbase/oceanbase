@@ -100,7 +100,8 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
   int64_t MAX_ROWSIZE = 65535;
   int64_t MIN_ROWSIZE = 2;
   const common::ObIArray<ObRawExpr *> &raw_exprs = exprs.get_expr_array();
-  if (can_execute_vectorizely(raw_exprs)) {
+  auto size = get_expr_execute_size(raw_exprs);
+  if (size == ObExprBatchSize::full) {
     if (config_maxrows) {
       batch_size = config_maxrows;
       for (int64_t i = 0; OB_SUCC(ret) && i < raw_exprs.count(); i++) {
@@ -141,8 +142,10 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
         }
       }
     }
+  } else if (size == ObExprBatchSize::small) {
+    batch_size = static_cast<int64_t>(ObExprBatchSize::small); //
   } else {
-    batch_size = 1;
+    batch_size = static_cast<int64_t>(ObExprBatchSize::one);
   }
 
   return ret;
@@ -259,7 +262,8 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       // init obj_meta_
       rt_expr->obj_meta_ = result_meta;
       // pl extend type has its own explanation for scale
-      if (ObExtendType != rt_expr->obj_meta_.get_type()) {
+      if (ObExtendType != rt_expr->obj_meta_.get_type()
+          && ObUserDefinedSQLType != rt_expr->obj_meta_.get_type()) {
         rt_expr->obj_meta_.set_scale(rt_expr->datum_meta_.scale_);
       }
       if (is_lob_storage(rt_expr->obj_meta_.get_type())) {
@@ -1391,28 +1395,30 @@ int ObStaticEngineExprCG::get_vectorized_exprs(
   return ret;
 }
 
-bool ObStaticEngineExprCG::can_execute_vectorizely(
+ObStaticEngineExprCG::ObExprBatchSize ObStaticEngineExprCG::get_expr_execute_size(
     const common::ObIArray<ObRawExpr *> &raw_exprs)
 {
-  bool can_exprs_execute_vectorizely = true;
+  ObExprBatchSize size = ObExprBatchSize::full;
   bool has_udf_expr = false;
   bool has_usr_var_expr = false;
   bool has_wrapper_inner_expr = false;
-  for (int64_t i = 0; (can_exprs_execute_vectorizely) && i < raw_exprs.count();
-       i++) {
+  for (int64_t i = 0; i < raw_exprs.count(); i++) {
     ObItemType type = raw_exprs.at(i)->get_expr_type();
     if (T_OP_GET_USER_VAR == type) {
       has_usr_var_expr = true;
     } else if (T_FUN_UDF == type) {
       has_udf_expr = true;
       if (!(static_cast<ObUDFRawExpr*>(raw_exprs.at(i))->is_deterministic())) {
-        can_exprs_execute_vectorizely = false;
+        size = ObExprBatchSize::one;
+        break;
       }
     } else if (T_FUN_SYS_WRAPPER_INNER == type) {
-      can_exprs_execute_vectorizely = false;
+      size = ObExprBatchSize::one;
+      break;
     } else if (T_REF_QUERY == type) {
       if (static_cast<ObQueryRefRawExpr*>(raw_exprs.at(i))->is_cursor()) {
-        can_exprs_execute_vectorizely = false;
+        size = ObExprBatchSize::one;
+        break;
       }
     }
     LOG_DEBUG("check expr type", K(type), KPC(raw_exprs.at(i)));
@@ -1436,13 +1442,19 @@ bool ObStaticEngineExprCG::can_execute_vectorizely(
     //
     // Execute UDF f1() vectorizely would set @b='abc' within a batch and leave
     // NO chance to disaply @b=1
-    if (can_exprs_execute_vectorizely) {
-      can_exprs_execute_vectorizely = !(has_udf_expr & has_usr_var_expr);
+    if (has_udf_expr & has_usr_var_expr) {
+      size = ObExprBatchSize::one;
+      break;
     }
+    if (is_large_data(raw_exprs.at(i)->get_data_type())) {
+      // 1. batchsize should be scale down when longtext/mediumtext/lob shows up
+      // 2. keep searching
+      size = ObExprBatchSize::small;
+    }
+
   }
-  LOG_TRACE("can_execute_vectorizely",
-           K(can_exprs_execute_vectorizely));
-  return can_exprs_execute_vectorizely;
+  LOG_TRACE("can_execute_vectorizely", K(size));
+  return size;
 }
 int ObStaticEngineExprCG::divide_probably_local_exprs(common::ObIArray<ObRawExpr *> &exprs)
 {

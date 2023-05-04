@@ -166,6 +166,8 @@ public:
                                 common::ObString &key,
                                 common::ObObj &value);
   inline bool get_serially_reusable() const { return serially_reusable_; }
+  int remove_user_variables_for_package_state(ObSQLSessionInfo &session);
+  uint64_t get_package_id() { return package_id_; }
 
   ObIArray<ObObj> &get_vars() { return vars_; }
 

@@ -50,6 +50,7 @@ public:
   ~ObTabletStatKey();
   void reset();
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   bool is_valid() const;
   bool operator == (const ObTabletStatKey &other) const;
   bool operator != (const ObTabletStatKey &other) const;

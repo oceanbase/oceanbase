@@ -34,7 +34,7 @@ public:
 
   int remove_order_by_for_subquery(ObDMLStmt *stmt, bool &trans_happened);
 
-  int remove_order_by_for_view_stmt(ObDMLStmt *stmt, bool &trans_happened);
+  int remove_order_by_for_view_stmt(ObDMLStmt *stmt, bool &trans_happened, bool &force_serial_set_order);
 
   int do_remove_stmt_order_by(ObSelectStmt *select_stmt, bool &trans_happened);
 
@@ -45,7 +45,7 @@ public:
                          ObIArray<OrderItem> &order_items,
                          bool &is_exist);
 
-  int remove_order_by_for_set_stmt(ObDMLStmt *&stmt, bool &trans_happened);
+  int remove_order_by_for_set_stmt(ObDMLStmt *&stmt, bool &trans_happened, bool& force_serial_set_order);
 };
 
 }

@@ -73,6 +73,8 @@
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "observer/ob_heartbeat_handler.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 namespace oceanbase
 {
@@ -1484,8 +1486,126 @@ int ObService::is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::B
   }
   return ret;
 }
+int ObService::check_server_for_adding_server(
+    const obrpc::ObCheckServerForAddingServerArg &arg,
+    obrpc::ObCheckServerForAddingServerResult &result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t sys_tenant_data_version = 0;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else if (arg.get_sys_tenant_data_version() > 0
+      && sys_tenant_data_version > arg.get_sys_tenant_data_version()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("adding server with larger sys tenant data version is not supported",
+        KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
+  } else {
+    bool server_empty = false;
+    ObCheckServerEmptyArg check_server_empty_arg;
+    check_server_empty_arg.mode_ = ObCheckServerEmptyArg::ADD_SERVER;
+    const bool wait_log_scan = ObCheckServerEmptyArg::BOOTSTRAP == check_server_empty_arg.mode_;
 
+    if (OB_FAIL(check_server_empty(check_server_empty_arg, wait_log_scan, server_empty))) {
+      LOG_WARN("check_server_empty failed", KR(ret), K(check_server_empty_arg), K(wait_log_scan));
+    } else {
+      char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
+      ObServerInfoInTable::ObBuildVersion build_version_string;
+      ObZone zone;
+      int64_t sql_port = GCONF.mysql_port;
+      get_package_and_svn(build_version, sizeof(build_version));
+      if (OB_FAIL(zone.assign(GCONF.zone.str()))) {
+        LOG_WARN("fail to assign zone", KR(ret), K(GCONF.zone.str()));
+      } else if (OB_FAIL(build_version_string.assign(build_version))) {
+        LOG_WARN("fail to assign build version", KR(ret), K(build_version));
+      } else if (OB_FAIL(result.init(
+          server_empty,
+          zone,
+          sql_port,
+          build_version_string))) {
+        LOG_WARN("fail to init result", KR(ret), K(server_empty), K(zone), K(sql_port),
+            K(build_version_string));
+      } else {}
+    }
+  }
+  LOG_INFO("generate result", KR(ret), K(arg), K(result));
+  return ret;
+}
 
+int ObService::get_server_resource_info(
+    const obrpc::ObGetServerResourceInfoArg &arg,
+    obrpc::ObGetServerResourceInfoResult &result)
+{
+  int ret = OB_SUCCESS;
+  const ObAddr &my_addr = GCONF.self_addr_;
+  share::ObServerResourceInfo resource_info;
+  result.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_FAIL(get_server_resource_info(resource_info))) {
+    LOG_WARN("fail to get server resource info", KR(ret));
+  } else if (OB_FAIL(result.init(my_addr, resource_info))) {
+    LOG_WARN("fail to init result", KR(ret), K(my_addr), K(resource_info));
+  }
+  FLOG_INFO("get server resource info", KR(ret), K(arg), K(result));
+  return ret;
+}
+int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_info)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantNodeBalancer::ServerResource svr_res_assigned;
+  int64_t clog_free_size_byte = 0;
+  int64_t clog_total_size_byte = 0;
+  logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
+  resource_info.reset();
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_ISNULL(log_block_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log_block_mgr is null", KR(ret), K(GCTX.log_block_mgr_));
+  } else if (OB_FAIL(omt::ObTenantNodeBalancer::get_instance().get_server_allocated_resource(svr_res_assigned))) {
+    LOG_WARN("fail to get server allocated resource", KR(ret));
+  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
+    LOG_WARN("Failed to get clog stat ", KR(ret));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    LOG_WARN("Failed to get reserved size ", KR(ret));
+  } else {
+    resource_info.cpu_ = get_cpu_count();
+    resource_info.report_cpu_assigned_ = svr_res_assigned.min_cpu_;
+    resource_info.report_cpu_max_assigned_ = svr_res_assigned.max_cpu_;
+    resource_info.report_mem_assigned_ = svr_res_assigned.memory_size_;
+    resource_info.mem_in_use_ = 0;
+    resource_info.mem_total_ = GMEMCONF.get_server_memory_avail();
+    resource_info.disk_total_
+        = OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    resource_info.disk_in_use_
+        = OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    resource_info.log_disk_total_ = clog_total_size_byte;
+    resource_info.report_log_disk_assigned_ = svr_res_assigned.log_disk_size_;
+
+  }
+  return ret;
+}
+int ObService::get_build_version(share::ObServerInfoInTable::ObBuildVersion &build_version)
+{
+  int ret = OB_SUCCESS;
+  char build_version_char_array[common::OB_SERVER_VERSION_LENGTH] = {0};
+  build_version.reset();
+  get_package_and_svn(build_version_char_array, sizeof(build_version));
+  if (OB_FAIL(build_version.assign(build_version_char_array))) {
+    LOG_WARN("fail to assign build_version", KR(ret), K(build_version_char_array));
+  }
+  return ret;
+}
 int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
 {
   UNUSEDx(result);
@@ -1504,6 +1624,7 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
 
 int ObService::check_server_empty(const ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &is_empty)
 {
+  // **TODO (linqiucen.lqc): if rs_epoch has been already valid, this server is not empty
   int ret = OB_SUCCESS;
   is_empty = true;
   UNUSED(wait_log_scan);
@@ -1733,41 +1854,6 @@ int ObService::get_tenant_refreshed_schema_version(
 int ObService::sync_partition_table(const obrpc::Int64 &arg)
 {
   return OB_NOT_SUPPORTED;
-}
-
-int ObService::get_server_heartbeat_expire_time(int64_t &lease_expire_time)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    lease_expire_time = lease_state_mgr_.get_heartbeat_expire_time();
-  }
-  return ret;
-}
-
-bool ObService::is_heartbeat_expired() const
-{
-  bool bret = false;  // returns false on error
-  if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    bret = !lease_state_mgr_.is_valid_heartbeat();
-  }
-  return bret;
-}
-
-bool ObService::is_svr_lease_valid() const
-{
-  // Determine if local lease is valid in OFS mode
-  bool bret = false;
-  if (OB_UNLIKELY(!inited_)) {
-    LOG_WARN_RET(OB_NOT_INIT, "not init");
-  } else {
-    bret = lease_state_mgr_.is_valid_lease();
-  }
-  return bret;
 }
 
 int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
@@ -2701,6 +2787,57 @@ int ObService::init_tenant_config(
   FLOG_INFO("init tenant config", KR(ret), K(arg));
   // use result to pass ret
   return OB_SUCCESS;
+}
+
+int ObService::handle_heartbeat(
+    const share::ObHBRequest &hb_request,
+    share::ObHBResponse &hb_response)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("receive a heartbeat request from heartbeat service", K(hb_request));
+  const int64_t now = ::oceanbase::common::ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObService is not inited", KR(ret), K(inited_));
+  } else if (OB_FAIL(ObHeartbeatHandler::handle_heartbeat(hb_request, hb_response))) {
+    LOG_WARN("fail to handle heartbeat", KR(ret), K(hb_request));
+  }
+  const int64_t time_cost = ::oceanbase::common::ObTimeUtility::current_time() - now;
+  FLOG_INFO("handle_heartbeat", KR(ret), K(hb_request), K(hb_response), K(time_cost));
+  return ret;
+}
+int ObService::update_tenant_info_cache(
+    const ObUpdateTenantInfoCacheArg &arg,
+    ObUpdateTenantInfoCacheRes &result)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invaild", KR(ret), K(arg));
+  } else if (arg.get_tenant_id() != MTL_ID() && OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
+    LOG_WARN("switch tenant failed", KR(ret), K(arg));
+  }
+
+  if (OB_SUCC(ret)) {
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+
+    if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "tenant_info_loader should not be null", KR(ret));
+    } else if (OB_FAIL(tenant_info_loader->update_tenant_info_cache(arg.get_ora_rowscn(), arg.get_tenant_info()))) {
+      COMMON_LOG(WARN, "update_tenant_info_cache failed", KR(ret), K(arg));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg.get_tenant_id()));
+    } else {
+      LOG_TRACE("finish update_tenant_info_cache", KR(ret), K(arg), K(result));
+    }
+  }
+  return ret;
 }
 
 }// end namespace observer

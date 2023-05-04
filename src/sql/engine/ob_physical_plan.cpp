@@ -33,7 +33,6 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
-#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -129,7 +128,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     need_record_plan_info_(false),
     enable_append_(false),
     append_table_id_(0),
-    logical_plan_()
+    logical_plan_(),
+    is_enable_px_fast_reclaim_(false)
 {
 }
 
@@ -220,6 +220,7 @@ void ObPhysicalPlan::reset()
   tm_sessid_ = -1;
   need_record_plan_info_ = false;
   logical_plan_.reset();
+  is_enable_px_fast_reclaim_ = false;
 }
 
 void ObPhysicalPlan::destroy()
@@ -457,7 +458,7 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_evolution,
                                       const ObIArray<ObTableRowCount> *table_row_count_list)
 {
-  const int64_t current_time = ObTimeUtility::current_time();
+  const int64_t current_time = ObClockGenerator::getClock();
   int64_t execute_count = 0;
   if (record.is_timeout()) {
     ATOMIC_INC(&(stat_.timeout_count_));
@@ -767,7 +768,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     min_cluster_version_,
                     need_record_plan_info_,
                     enable_append_,
-                    append_table_id_);
+                    append_table_id_,
+                    is_enable_px_fast_reclaim_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1218,7 +1220,6 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
   int64_t plan_open_time = 0;
-  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
   ObSEArray<ObSqlPlanItem*, 4> plan_items;
   ObExecFeedbackInfo &feedback_info = ctx.get_feedback_info();
   const common::ObIArray<ObExecFeedbackNode> &feedback_nodes = feedback_info.get_feedback_nodes();
@@ -1250,8 +1251,8 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
       }
       plan_item->real_cardinality_ = feedback_node.output_row_count_;
       plan_item->real_cost_ = real_cost;
-      plan_item->cpu_cost_ = feedback_node.db_time_ / cpu_khz;
-      plan_item->io_cost_ = feedback_node.block_time_ / cpu_khz;
+      plan_item->cpu_cost_ = feedback_node.db_time_;
+      plan_item->io_cost_ = feedback_node.block_time_;
       plan_item->search_columns_ = feedback_node.worker_count_;
     }
   }

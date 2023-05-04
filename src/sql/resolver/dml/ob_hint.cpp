@@ -156,13 +156,34 @@ void ObGlobalHint::merge_max_concurrent_hint(int64_t max_concurrent)
   }
 }
 
+/* global parallel hint priority:
+    1. with paralle degree: parallel(8)
+    2. enable auto dop: parallel(auto)
+    3. disable auto dop: parallel(manual)
+ */
 void ObGlobalHint::merge_parallel_hint(int64_t parallel)
 {
-  if (parallel > 0) {
-    if (UNSET_PARALLEL == parallel_) {
+  if (SET_ENABLE_MANUAL_DOP == parallel) {
+    parallel_ = UNSET_PARALLEL == parallel_ ? SET_ENABLE_MANUAL_DOP : parallel_;
+  } else if (SET_ENABLE_AUTO_DOP == parallel) {
+    parallel_ = (UNSET_PARALLEL == parallel_ || SET_ENABLE_MANUAL_DOP == parallel_)
+                ? SET_ENABLE_AUTO_DOP : parallel_;
+  } else if (UNSET_PARALLEL < parallel) {
+    if (UNSET_PARALLEL >= parallel_) {
       parallel_ = parallel;
     } else {
       parallel_ = std::min(parallel, parallel_);
+    }
+  }
+}
+
+void ObGlobalHint::merge_dynamic_sampling_hint(int64_t dynamic_sampling)
+{
+  if (dynamic_sampling != UNSET_DYNAMIC_SAMPLING) {
+    if (UNSET_DYNAMIC_SAMPLING == dynamic_sampling_ || dynamic_sampling == dynamic_sampling_) {
+      dynamic_sampling_ = dynamic_sampling;
+    } else {//conflict will cause reset origin state compatible Oracle.
+      dynamic_sampling_ = UNSET_DYNAMIC_SAMPLING;
     }
   }
 }
@@ -266,7 +287,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || false != enable_lock_early_release_
          || false != force_refresh_lc_
          || !log_level_.empty()
-         || UNSET_PARALLEL != parallel_
+         || has_parallel_hint()
          || false != monitor_
          || ObPDMLOption::NOT_SPECIFIED != pdml_option_
          || ObParamOption::NOT_SPECIFIED != param_option_
@@ -305,6 +326,7 @@ void ObGlobalHint::reset()
   enable_append_ = false;
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
+  dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
 }
 
 int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
@@ -331,6 +353,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
+  merge_dynamic_sampling_hint(other.dynamic_sampling_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -386,7 +409,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   //DOP
   if (OB_SUCC(ret) && !dops_.empty() && !ignore_parallel) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dops_.count(); ++i) {
-      if (OB_FAIL(BUF_PRINTF("%sDOP(%lu %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
+      if (OB_FAIL(BUF_PRINTF("%sDOP(%lu, %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
         LOG_WARN("failed to print dop hint", K(ret));
       }
     }
@@ -440,8 +463,14 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
       LOG_WARN("failed to print log level hint", K(ret));
     }
   }
-  if (OB_SUCC(ret) && UNSET_PARALLEL != parallel_ && !ignore_parallel) { //PARALLEL
-    PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
+  if (OB_SUCC(ret) && has_parallel_hint() && !ignore_parallel) { //PARALLEL
+    if (has_parallel_degree()) {
+      PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
+    } else if (enable_auto_dop()) {
+      PRINT_GLOBAL_HINT_STR("PARALLEL( AUTO )");
+    } else if (enable_manual_dop()) {
+      PRINT_GLOBAL_HINT_STR("PARALLEL( MANUAL )");
+    }
   }
   if (OB_SUCC(ret) && monitor_) { //MONITOR
     PRINT_GLOBAL_HINT_STR("MONITOR");
@@ -490,6 +519,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && has_append()) { // APPEND
     PRINT_GLOBAL_HINT_STR("APPEND");
+  }
+  if (OB_SUCC(ret) && UNSET_DYNAMIC_SAMPLING != dynamic_sampling_) { //DYNAMIC SAMPLING
+    PRINT_GLOBAL_HINT_NUM("DYNAMIC_SAMPLING", dynamic_sampling_);
   }
   if (OB_SUCC(ret) && OB_FAIL(opt_params_.print_opt_param_hint(plan_text))) {
     LOG_WARN("failed to print opt param hint", K(ret));
@@ -683,6 +715,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case USE_DEFAULT_OPT_STAT: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case USE_FORCE_BLOCK_SAMPLE: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -834,6 +876,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_DISTINCT_PUSHDOWN: return T_DISTINCT_PUSHDOWN;
     case T_NO_USE_HASH_SET: return T_USE_HASH_SET;
     case T_NO_USE_DISTRIBUTED_DML:    return T_USE_DISTRIBUTED_DML;
+    case T_DYNAMIC_SAMPLING:    return T_DYNAMIC_SAMPLING;
 
     default:                    return type;
   }
@@ -975,6 +1018,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_GROUPBY_PLACEMENT: DEEP_COPY_NORMAL_HINT(ObGroupByPlacementHint); break;
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
+    case HINT_TABLE_DYNAMIC_SAMPLING: DEEP_COPY_NORMAL_HINT(ObTableDynamicSamplingHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -2538,6 +2582,37 @@ int ObAggHint::print_hint_desc(PlanText &plan_text) const
     } else if (!use_partition_sort_ && OB_FAIL(BUF_PRINTF("NO_PARTITION_SORT"))) {
       LOG_WARN("print failed", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTableDynamicSamplingHint::assign(const ObTableDynamicSamplingHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_.assign(other.table_))) {
+    LOG_WARN("fail to assign table", K(ret));
+  } else if (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  } else {
+    dynamic_sampling_ = other.dynamic_sampling_;
+    sample_block_cnt_ = other.sample_block_cnt_;
+  }
+  return ret;
+}
+
+int ObTableDynamicSamplingHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
+    LOG_WARN("fail to print table in hint", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(" %ld", dynamic_sampling_))) {
+    LOG_WARN("fail to print dynamic sampling", K(ret));
+  } else if (sample_block_cnt_ > 0 &&
+             OB_FAIL(BUF_PRINTF(" %ld", sample_block_cnt_))) {
+    LOG_WARN("fail to print dynamic sampling sample percent", K(ret));
   }
   return ret;
 }

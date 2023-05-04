@@ -1322,11 +1322,12 @@ int ObTransformGroupByPushdown::transform_aggregation_expr(ObDMLStmt &stmt,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < eager_aggr_views.count(); ++i) {
     ObRawExpr *view_column = NULL;
-    if (OB_FAIL(get_view_column(stmt,
-                                eager_aggr_views.at(i),
-                                table_types.at(i),
-                                &aggr_expr,
-                                view_column))) {
+    if (OB_FAIL(ObTransformUtils::get_view_column(ctx_,
+                                                  stmt,
+                                                  eager_aggr_views.at(i),
+                                                  table_types.at(i),
+                                                  &aggr_expr,
+                                                  view_column))) {
       LOG_WARN("failed to get aggregation column", K(ret));
     } else if (OB_NOT_NULL(view_column)) {
       aggr_column = view_column;
@@ -1352,7 +1353,7 @@ int ObTransformGroupByPushdown::transform_aggregation_expr(ObDMLStmt &stmt,
   LOG_TRACE("transform aggregation", K(mul_params), K(aggr_column));
   if (OB_SUCC(ret) && OB_ISNULL(aggr_column)) {
     // the aggregation expr is not pushed into eager view
-    if (OB_FAIL(convert_aggr_expr(&stmt, &aggr_expr, aggr_column))) {
+    if (OB_FAIL(ObTransformUtils::convert_aggr_expr(ctx_, &stmt, &aggr_expr, aggr_column))) {
       LOG_WARN("failed to convert aggr expr to plain expr", K(ret));
     } else if (OB_ISNULL(aggr_column)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1391,129 +1392,6 @@ int ObTransformGroupByPushdown::transform_aggregation_expr(ObDMLStmt &stmt,
   return ret;
 }
 
-int ObTransformGroupByPushdown::convert_aggr_expr(ObDMLStmt *stmt,
-                                                   ObAggFunRawExpr *aggr_expr,
-                                                   ObRawExpr *&output_expr)
-{
-  int ret = OB_SUCCESS;
-  // for sum
-  bool is_not_null = true;
-  ObConstRawExpr *value_one = NULL;
-  ObConstRawExpr *value_zero = NULL;
-  ObSEArray<ObRawExpr *, 4> constraints;
-  if (OB_ISNULL(stmt) || OB_ISNULL(aggr_expr) || OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(stmt), K(aggr_expr));
-  } else if (aggr_expr->get_expr_type() == T_FUN_MAX ||
-             aggr_expr->get_expr_type() == T_FUN_MIN ||
-             aggr_expr->get_expr_type() == T_FUN_SUM) {
-    output_expr = aggr_expr->get_param_expr(0);
-  } else if (aggr_expr->get_expr_type() != T_FUN_COUNT) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid aggregation type", K(ret));
-  } else if (aggr_expr->get_param_count() == 0) {
-    // Note 1: actually output expr should be "expr 1L"
-    // we do not create the dummy const expr, instead we let
-    // the caller to handle this case, which will ignore the expr
-    // in deduce the aggreagtion result
-    output_expr = aggr_expr;
-  } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_,
-                                                        stmt,
-                                                        aggr_expr->get_real_param_exprs().at(0),
-                                                        NULLABLE_SCOPE::NS_WHERE,
-                                                        is_not_null,
-                                                        &constraints))) {
-    LOG_WARN("failed to check expr not null", K(ret));
-  } else if (is_not_null) {
-    // See Note 1
-    if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, constraints))) {
-      LOG_WARN("failed to add param not null constraint", K(ret));
-    } else {
-      output_expr = aggr_expr;
-    }  
-  } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_, 1L,
-                                                                  value_one))) {
-    LOG_WARN("failed to create const int expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_, 0L,
-                                                                  value_zero))) {
-    LOG_WARN("failed to create const int expr", K(ret));
-  } else if (OB_FAIL(build_case_when(stmt, aggr_expr->get_real_param_exprs().at(0),
-                                     value_one, value_zero, output_expr))) {
-    LOG_WARN("failed to build case when", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformGroupByPushdown::build_case_when(ObDMLStmt *stmt,
-                                                 ObRawExpr *when_expr,
-                                                 ObRawExpr *then_expr,
-                                                 ObRawExpr *else_expr,
-                                                 ObRawExpr *&case_when)
-{
-  int ret = OB_SUCCESS;
-  ObCaseOpRawExpr *case_expr = NULL;
-  ObOpRawExpr *is_not_expr = NULL;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("param expr is null", K(ret), K(ctx_));
-  } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_OP_CASE, case_expr))) {
-    LOG_WARN("failed to create case expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, when_expr, is_not_expr))) {
-    LOG_WARN("failed to build is not null expr", K(ret));
-  } else if (OB_FAIL(case_expr->add_when_param_expr(is_not_expr))) {
-    LOG_WARN("failed to add when param expr", K(ret));
-  } else if (OB_FAIL(case_expr->add_then_param_expr(then_expr))) {
-    LOG_WARN("failed to add then expr", K(ret));
-  } else {
-    case_expr->set_default_param_expr(else_expr);
-    case_when = case_expr;
-    if (OB_FAIL(case_when->formalize(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize case when expr", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTransformGroupByPushdown::get_view_column(ObDMLStmt &stmt,
-                                                 TableItem *table_item,
-                                                 bool is_outer_join_table,
-                                                 ObRawExpr *aggr_expr,
-                                                 ObRawExpr *&aggr_column)
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = NULL;
-  uint64_t column_id = OB_INVALID_ID;
-  aggr_column = NULL;
-  if (OB_ISNULL(table_item) || OB_ISNULL(aggr_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params are invalid", K(ret), K(table_item), K(aggr_expr));
-  } else if (OB_ISNULL(select_stmt = table_item->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is expected to be generated table", K(ret), K(*table_item));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
-    if (select_stmt->get_select_item(i).expr_ == aggr_expr) {
-      column_id = OB_APP_MIN_COLUMN_ID + i;
-      break;
-    }
-  }
-  if (OB_SUCC(ret) && column_id != OB_INVALID_ID) {
-    ObColumnRefRawExpr *col_expr = NULL;
-    if (OB_ISNULL(col_expr = stmt.get_column_expr_by_id(
-                    table_item->table_id_, column_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get column item", K(*table_item), K(column_id));
-    } else if (aggr_expr->get_expr_type() != T_FUN_COUNT ||
-               !is_outer_join_table) {
-      aggr_column = col_expr;
-    } else if (OB_FAIL(wrap_case_when_for_count(
-                               &stmt, col_expr, aggr_column))) {
-      LOG_WARN("failed to convert outer join count", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTransformGroupByPushdown::get_count_star(ObDMLStmt &stmt,
                                                 TableItem *table_item,
                                                 bool is_outer_join_table,
@@ -1547,31 +1425,9 @@ int ObTransformGroupByPushdown::get_count_star(ObDMLStmt &stmt,
     LOG_WARN("failed to get column expr", K(*table_item));
   } else if (!is_outer_join_table) {
     count_column = col_expr;
-  } else if (OB_FAIL(wrap_case_when_for_count(&stmt, col_expr, count_column, true))) {
+  } else if (OB_FAIL(ObTransformUtils::wrap_case_when_for_count(ctx_, &stmt, col_expr,
+                                                                count_column, true))) {
     LOG_WARN("failed to convert count star", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformGroupByPushdown::wrap_case_when_for_count(ObDMLStmt *stmt,
-                                                          ObColumnRefRawExpr *view_count,
-                                                          ObRawExpr *&output,
-                                                          bool is_count_star /*= false*/)
-{
-  int ret = OB_SUCCESS;
-  const int64_t const_int_value = (is_count_star ? 1 : 0);
-  ObRawExpr *case_when = NULL;
-  ObConstRawExpr *int_value = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(view_count)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(stmt), K(view_count));
-  } else if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(*ctx_->expr_factory_,
-                                                                  const_int_value, int_value))) {
-    LOG_WARN("failed to build const int expr", K(ret));
-  } else if (OB_FAIL(build_case_when(stmt, view_count, view_count, int_value, case_when))) {
-    LOG_WARN("failed to build case when expr", K(ret));
-  } else {
-    output = case_when;
   }
   return ret;
 }

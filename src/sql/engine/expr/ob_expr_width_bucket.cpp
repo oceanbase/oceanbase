@@ -28,8 +28,9 @@ namespace sql
 {
 
 ObExprWidthBucket::ObExprWidthBucket(common::ObIAllocator &alloc) :
-    ObFuncExprOperator(alloc, T_FUN_SYS_WIDTH_BUCKET, N_WIDTH_BUCKET, 4, NOT_ROW_DIMENSION)
-{}
+    ObFuncExprOperator(alloc, T_FUN_SYS_WIDTH_BUCKET, N_WIDTH_BUCKET, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprWidthBucket::calc_result_typeN(ObExprResType &type,
                                          ObExprResType *types,

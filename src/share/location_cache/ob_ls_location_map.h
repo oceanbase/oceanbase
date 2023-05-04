@@ -43,6 +43,7 @@ struct ObTenantLSInfoKey
     hash_val = murmurhash(&ls_id_, sizeof(ls_id_), hash_val);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid(); }
   TO_STRING_KV(K_(tenant_id), K_(ls_id));
   uint64_t tenant_id_;

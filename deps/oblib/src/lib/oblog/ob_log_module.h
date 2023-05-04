@@ -1138,7 +1138,9 @@ LOG_MOD_END(PL)
 #define _LOG_USER_MSG(level, errcode, umsg, args...)                      \
   do {\
     OB_LOGGER.log_user_message(level, errcode, umsg, ##args);\
-    OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(OB_LOG_LEVEL_WARN), errcode, umsg, ##args);\
+    if (OB_LOG_NEED_TO_PRINT(WARN)) { \
+      OB_LOGGER.log_message_fmt("", OB_LOG_NUM_LEVEL(OB_LOG_LEVEL_WARN), errcode, umsg, ##args);\
+    } \
   } while(0)
 
 //

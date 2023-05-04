@@ -336,11 +336,12 @@ inline int ObURowIDData::get_pk_value(ObObjType obj_type, int64_t &pos, ObObj &p
   const uint8_t version = get_version();
   if (OB_UNLIKELY(PK_ROWID_VERSION != version
                   && NO_PK_ROWID_VERSION != version
-                  && LOB_NO_PK_ROWID_VERSION != version)) {
+                  && LOB_NO_PK_ROWID_VERSION != version
+                  && EXTERNAL_TABLE_ROWID_VERSION != version)) {
     ret = OB_INVALID_ROWID;
     COMMON_LOG(WARN, "invalid rowid version", K(ret), K(version));
   } else if (OB_UNLIKELY(obj_type >= ObMaxType)
-      || OB_UNLIKELY(NULL == inner_get_funcs_[obj_type])) {
+             || OB_UNLIKELY(NULL == inner_get_funcs_[obj_type])) {
     ret = OB_INVALID_ROWID;
     COMMON_LOG(WARN, "invalid type or get null for get pk function", K(ret), K(obj_type));
   } else {
@@ -493,7 +494,8 @@ bool ObURowIDData::is_valid_urowid() const
     is_valid = rowid_len_ == EXT_HEAP_ORGANIZED_TABLE_ROWID_CONTENT_BUF_SIZE;
   } else if (NO_PK_ROWID_VERSION == version
              || PK_ROWID_VERSION == version
-             || LOB_NO_PK_ROWID_VERSION == version) {
+             || LOB_NO_PK_ROWID_VERSION == version
+             || EXTERNAL_TABLE_ROWID_VERSION == version) {
     int64_t pos = get_pk_content_offset();
     ObObj obj;
     for (; is_valid && pos < rowid_len_; ) {
@@ -519,6 +521,7 @@ bool ObURowIDData::is_valid_version(int64_t v)
     bret = false;
   } else if (PK_ROWID_VERSION != v
       && NO_PK_ROWID_VERSION != v
+      && EXTERNAL_TABLE_ROWID_VERSION != v
       && HEAP_TABLE_ROWID_VERSION != v
       && EXT_HEAP_TABLE_ROWID_VERSION != v
       && LOB_NO_PK_ROWID_VERSION != v) {
@@ -549,7 +552,8 @@ uint8_t ObURowIDData::get_version() const
         raw_version = rowid_content_[offset];
         if (PK_ROWID_VERSION == raw_version
             || NO_PK_ROWID_VERSION == raw_version
-            || LOB_NO_PK_ROWID_VERSION == raw_version) {
+            || LOB_NO_PK_ROWID_VERSION == raw_version
+            || EXTERNAL_TABLE_ROWID_VERSION == raw_version) {
           version = raw_version;
         } else if (is_valid_part_gen_col_version(raw_version)) {
           version = PK_ROWID_VERSION;
@@ -1022,6 +1026,30 @@ int ObURowIDData::get_pk_vals(ObIArray<ObObj> &pk_vals) const
     if (OB_FAIL(get_rowkey_for_heap_organized_table(pk_vals))) {
       COMMON_LOG(WARN, "failed to get rowkey for heap organized_table", K(ret));
     } else {/*do nothing*/}
+  } else if (EXTERNAL_TABLE_ROWID_VERSION == get_version()) {
+    // external table rowid = partition id + file id + line number
+    pos = get_pk_content_offset();
+    int i = 0;
+    while (OB_SUCC(ret) && pos < get_buf_len() && i < 3) {
+      if (OB_LIKELY(pos + 1 <= get_buf_len())) {
+        ObObjType type = get_pk_type(pos);
+        ObObj tmp_obj;
+        if (OB_LIKELY(is_valid_obj_type(type))) {
+          if (OB_FAIL(get_pk_value(type, pos, tmp_obj))) {
+            COMMON_LOG(WARN, "failed to get pk value", K(ret));
+          } else if (i > 0) { // skip partition id here
+            if (OB_FAIL(pk_vals.push_back(tmp_obj))) {
+              COMMON_LOG(WARN, "failed to push back element", K(ret));
+            }
+          }
+          i++;
+        } else {
+          ret = OB_INVALID_ROWID;
+        }
+      } else {
+        ret = OB_INVALID_ROWID;
+      }
+    }
   } else {
     pos = get_pk_content_offset();
     while (OB_SUCC(ret) && pos < get_buf_len()) {

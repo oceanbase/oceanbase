@@ -23,7 +23,7 @@ namespace sql
 {
 using namespace common;
 ObExprSoundex::ObExprSoundex(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_SOUNDEX, N_SOUNDEX, 1, NOT_ROW_DIMENSION) {}
+  : ObFuncExprOperator(alloc, T_FUN_SYS_SOUNDEX, N_SOUNDEX, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
 
 int ObExprSoundex::calc_result_type1(
     ObExprResType &type,

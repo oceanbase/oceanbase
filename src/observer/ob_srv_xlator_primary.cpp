@@ -48,6 +48,9 @@
 #include "observer/dbms_job/ob_dbms_job_rpc_processor.h"
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_processor.h"
+#include "share/detect/ob_detect_rpc_processor.h"
+
+#include "share/external_table/ob_external_table_file_rpc_processor.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -72,6 +75,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObInitTenantConfigP, gctx_);
   RPC_PROCESSOR(ObGetLeaderLocationsP, gctx_);
   RPC_PROCESSOR(ObBatchBroadcastSchemaP, gctx_);
+  RPC_PROCESSOR(ObRpcSendHeartbeatP, gctx_);
+  RPC_PROCESSOR(ObRpcNotifySwitchLeaderP, gctx_);
 
   // interrupt
   RPC_PROCESSOR(obrpc::ObInterruptProcessor);
@@ -91,6 +96,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObBlacklistReqP);
   RPC_PROCESSOR(ObBlacklistRespP);
 
+  RPC_PROCESSOR(ObDetectRpcP);
+
   // election provided
 //  RPC_PROCESSOR(ObElectionP);
   RPC_PROCESSOR(ObRequestHeartbeatP, gctx_);
@@ -108,6 +115,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
 
   //dbms_scheduler
   RPC_PROCESSOR(ObRpcRunDBMSSchedJobP, gctx_);
+
+  RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator *xlator) {
@@ -221,4 +230,6 @@ void oceanbase::observer::init_srv_xlator_for_executor(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObDASAsyncEraseP);
   RPC_PROCESSOR(ObRpcEraseIntermResultP, gctx_);
   RPC_PROCESSOR(ObDASAsyncAccessP, gctx_);
+  RPC_PROCESSOR(ObFlushExternalTableKVCacheP);
+  RPC_PROCESSOR(ObAsyncLoadExternalTableFileListP);
 }

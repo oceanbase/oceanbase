@@ -12,6 +12,13 @@ set @@session.explicit_defaults_for_timestamp=off;
 --result_format 4
 --explain_protocol 2
 
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+alter system set _enable_newsort = true;
+--sleep 3
+connection default;
+--sleep 3
+
 --disable_warnings
 drop table if exists xy_t1, xy_t2;
 --enable_warnings
@@ -88,8 +95,11 @@ insert/*insert trace*/ into xy_x_t values(NULL,"VECPQ"),(NULL,"bdarkyzh"),(NULL,
 insert/*insert trace*/ into xy_y_t values(NULL,"mmkfu"),(NULL,"c"),(NULL,"know"),(NULL,"ZYTQH"),(NULL,"j"),(NULL,"y"),(NULL,"what"),(NULL,"SXXNL"),(NULL,"b"),(NULL,"NFZFZ"),(-1992359936,"not"),(-1711210496,"uoorvy"),(-1150287872,"BKNFS"),(-926613504,"was"),(-858128384,"y"),(-549126144,"v"),(-537198592,"now"),(-491651072,"t"),(-66125824,"here"),(0,"XCYGJ"),(1,"YGHBI"),(2,"g"),(6,"kfuoorvyvn"),(7,"EGBLS"),(9,"jsnsdfm"),(1584463872,"face");
 
 --echo
+--sorted_result
 select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+--sorted_result
 select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+--sorted_result
 select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 --echo
 
@@ -99,9 +109,11 @@ create table xy_y_t(y1 int not null, y2 varchar(100) not null);
 --sleep 3
 insert/*insert trace*/ into xy_x_t values(-2139029504,"eyqjoq"),(-2061369344,"GSUGA"),(-1882128384,"there"),(-1552613376,"d"),(-1511981056,"and"),(-1504706560,"and"),(-1259929600,"o"),(-973340672,"at"),(-918945792,"DNMFW"),(-778960896,"r"),(-753336320,"PKGAE"),(-593821696,"UGSPN"),(-457179136,"got"),(-314638336,"will"),(-233701376,"o"),(-104202240,"SUEUH"),(0,"yzh"),(0,"i"),(1,"TQOYB"),(1,"FFHTJ"),(2,"it's"),(2,"ezcuilyxac"),(2,"VZLUW"),(2,"want"),(2,"think"),(3,"prsazev"),(3,"get"),(3,"out"),(4,"a"),(4,"PVYPZ"),(4,"k"),(4,"bpqswbeyqj"),(4,"isjn"),(4,"that's"),(4,"well"),(5,"arkyz"),(5,"w"),(5,"with"),(5,"just"),(5,"PFBCU"),(6,"uyslpcybda"),(6,"co"),(6,"u"),(6,"j"),(6,"g"),(7,"cybdark"),(7,"BKWPE"),(8,"lmdsl"),(8,"NNIGT"),(8,"of"),(9,"etu"),(9,"TBMEI"),(9,"QPPLC"),(9,"mdsl"),(27262976,"n"),(162267136,"to"),(199884800,"y"),(334364672,"h"),(597295104,"did"),(748814336,"rhljip"),(769916928,"OQKEV"),(839778304,"USTRY"),(947585024,"hey"),(1210777600,"want"),(1232601088,"azev"),(1250689024,"a"),(1329463296,"QAMOL"),(1573126144,"zcuilyx"),(1594753024,"yeah"),(1730215936,"PMUMX"),(1925709824,"g"),(2048262144,"b"),(2082275328,"k"),(2131492864,"was");
 insert/*insert trace*/ into xy_y_t values(-1992359936,"not"),(-1711210496,"uoorvy"),(-1150287872,"BKNFS"),(-926613504,"was"),(-858128384,"y"),(-549126144,"v"),(-537198592,"now"),(-491651072,"t"),(-66125824,"here"),(0,"XCYGJ"),(1,"YGHBI"),(2,"g"),(6,"kfuoorvyvn"),(7,"EGBLS"),(9,"jsnsdfm"),(1584463872,"face");
-
+--sorted_result
 select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+--sorted_result
 select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
+--sorted_result
 select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 
 drop table xy_x_t, xy_y_t;
@@ -128,7 +140,9 @@ insert/*insert trace*/ into xy_t4 values(1,1), (3,3);
 select * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+--sorted_result
 select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+--sorted_result
 select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 
 --echo
@@ -159,6 +173,7 @@ select /*+ use_merge(xy_t2 xy_t1)*/ * from xy_t2 where exists (select 1 from xy_
 select * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 select /*+ use_nl(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 select /*+ use_hash(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
+--sorted_result
 select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 select /*+ no_rewrite */ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 

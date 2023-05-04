@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprUuidShort::ObExprUuidShort(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_UUID_SHORT, N_UUID_SHORT, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_UUID_SHORT, N_UUID_SHORT, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

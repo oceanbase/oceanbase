@@ -345,13 +345,16 @@ int ObConfigManager::update_local(int64_t expected_version)
       LOG_ERROR("Read server config failed", K(ret));
     } else if (OB_FAIL(reload_config())) {
       LOG_WARN("Reload configuration failed", K(ret));
-    } else if (OB_FAIL(dump2file())) {
-      LOG_WARN("Dump to file failed", K_(dump_path), K(ret));
     } else {
-      GCONF.cluster.set_dumped_version(GCONF.cluster.version());
-      LOG_INFO("Reload server config successfully!");
-      ret = config_backup();
-   }
+      DRWLock::RDLockGuard guard(OTC_MGR.rwlock_); // need protect tenant config because it will also serialize tenant config
+      if (OB_FAIL(dump2file())) {
+        LOG_WARN("Dump to file failed", K_(dump_path), K(ret));
+      } else {
+        GCONF.cluster.set_dumped_version(GCONF.cluster.version());
+        LOG_INFO("Reload server config successfully!");
+        ret = config_backup();
+      }
+    }
     server_config_.print();
   } else {
     LOG_WARN("Read system config from inner table error", K(ret));

@@ -33,7 +33,8 @@ public:
   hash_part_(false),
   bf_info_(),
   tablet_id_expr_(NULL),
-  repartition_ref_table_id_(OB_INVALID_ID)
+  repartition_ref_table_id_(OB_INVALID_ID),
+  used_by_external_table_(false)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -79,6 +80,9 @@ public:
   int64_t get_repartition_ref_table_id() { return repartition_ref_table_id_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+
+  void set_used_by_external_table() { used_by_external_table_ = true; }
+  bool is_used_by_external_table() const { return used_by_external_table_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogGranuleIterator);
   int64_t tablet_size_;
@@ -88,6 +92,7 @@ private:
   ObPxBFStaticInfo bf_info_; // for join partition filter
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
   int64_t repartition_ref_table_id_;
+  bool used_by_external_table_;
 };
 
 }

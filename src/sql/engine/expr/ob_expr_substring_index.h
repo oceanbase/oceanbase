@@ -39,8 +39,7 @@ public:
                                         ObEvalCtx &ctx,
                                         const ObBitVector &skip,
                                         const int64_t batch_size);
- virtual bool need_rt_ctx() const override { return true; }
-
+  virtual bool need_rt_ctx() const override { return true; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstringIndex);
 };

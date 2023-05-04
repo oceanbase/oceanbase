@@ -37,7 +37,7 @@ WAIT_EVENT_DEF(OMT_IDLE, 12002, "sched idle", "wait start timestamp", "", "", ID
 WAIT_EVENT_DEF(SYNC_RPC, 13000, "sync rpc", "pcode", "size", "", NETWORK, "sync rpc", true)
 WAIT_EVENT_DEF(MYSQL_RESPONSE_WAIT_CLIENT, 13001, "mysql response wait client", "", "", "", NETWORK, "mysql response wait client", true)
 WAIT_EVENT_DEF(DAS_ASYNC_RPC_LOCK_WAIT, 13002, "das wait remote response", "", "", "", NETWORK, "das wait remote response", true)
-//WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, "external table wait remote response", true)
+WAIT_EVENT_DEF(ASYNC_EXTERNAL_TABLE_LOCK_WAIT, 13003, "external table wait remote response", "", "", "", NETWORK, "external table wait remote response", true)
 
 //application
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,"memstore read lock wait", false)
@@ -300,6 +300,9 @@ WAIT_EVENT_DEF(TENANT_IO_CONFIG_WAIT, 15254, "rwlock: tenant io config wait", "a
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_LOCK_WAIT, 15255, "latch: window function participator cond lock wait", "address", "", "", CONCURRENCY, "window function participator cond lock wait", true)
 WAIT_EVENT_DEF(SQL_WF_PARTICIPATOR_COND_WAIT, 15256, "mutex: window function participator cond wait", "address", "", "", CONCURRENCY, "window function participator cond wait", true)
 WAIT_EVENT_DEF(MAJOR_FREEZE_DIAGNOSE_LOCK_WAIT, 15257, "latch: major_freeze diagnose lock wait", "address", "number", "tries", CONCURRENCY, "latch: major_freeze diagnose lock wait", true)
+WAIT_EVENT_DEF(HB_RESPONSES_LOCK_WAIT, 15258, "latch: hb responses lock wait", "address", "number", "tries", CONCURRENCY, "latch: hb responses lock wait", true)
+WAIT_EVENT_DEF(ALL_SERVERS_INFO_IN_TABLE_LOCK_WAIT, 15259, "latch: all servers info in table lock wait", "address", "number", "tries", CONCURRENCY, "latch: all servers info in table lock wait", true)
+WAIT_EVENT_DEF(OPT_STAT_GATHER_STAT_LOCK_WAIT, 15260, "latch: optimizer stat gather stat lock wait", "address", "number", "tries", CONCURRENCY, "latch: optimizer stat gather stat lock wait", true)
 
 //transaction
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,"wait end trans", false)

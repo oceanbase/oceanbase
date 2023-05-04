@@ -164,7 +164,10 @@ bool SeRowkeyItem::operator==(
   } else {
     for (int64_t i = 0; equal && i < cnt_; ++i) {
       ObExprCmpFuncType cmp_func = row_[i]->basic_funcs_->null_first_cmp_;
-      equal = cmp_func(datums_[i], other.datums_[i]) == 0;
+      // rowkey has no lob col, can ignore ret here
+      int cmp_ret = 0;
+      (void)cmp_func(datums_[i], other.datums_[i], cmp_ret);
+      equal = cmp_ret == 0;
     }
   }
   return equal;
@@ -175,7 +178,7 @@ uint64_t SeRowkeyItem::hash() const
   uint64_t hash_val = 0;
   for (int64_t i = 0; i < cnt_; ++i) {
     ObExprHashFuncType hash_func = row_[i]->basic_funcs_->default_hash_;
-    hash_val = hash_func(datums_[i], hash_val);
+    hash_func(datums_[i], hash_val, hash_val);
   }
   return hash_val;
 }

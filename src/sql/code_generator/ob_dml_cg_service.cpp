@@ -967,7 +967,7 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
       if (OB_ISNULL(item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column item", K(i), K(item));
-      } else if (item->is_virtual_generated_column()) {
+      } else if (item->is_virtual_generated_column() && !item->is_xml_column()) {
         // do nothing.
       } else if (OB_FAIL(get_column_ref_base_cid(op, item, base_cid))) {
         LOG_WARN("get base column id failed", K(ret), K(item));
@@ -1625,6 +1625,15 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
       dml_base_ctdef.is_heap_table_ = is_heap_table;
     }
   }
+
+  if (OB_SUCC(ret) &&
+      log_op_def::LOG_INSERT == op.get_type()) {
+    ObLogInsert &log_ins_op = static_cast<ObLogInsert &>(op);
+    if (log_ins_op.get_insert_up()) {
+      dml_base_ctdef.das_base_ctdef_.is_insert_up_ = true;
+    }
+  }
+
   return ret;
 }
 
@@ -1681,6 +1690,7 @@ int ObDmlCgService::add_trigger_arg(const ObTriggerInfo &trigger_info, ObDMLBase
   trigger_arg.set_trigger_id(trigger_info.get_trigger_id());
   trigger_arg.set_trigger_events(trigger_info.get_trigger_events());
   trigger_arg.set_timing_points(trigger_info.get_timing_points());
+  trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
   if (OB_FAIL(dml_ctdef.trig_ctdef_.tg_args_.push_back(trigger_arg))) {
     LOG_WARN("failed to add trigger arg", K(ret));
   } else {
@@ -2068,10 +2078,27 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       }
       LOG_DEBUG("debug trigger", K(trig_ctdef.new_row_exprs_.count()),
         K(trig_ctdef.old_row_exprs_.count()));
-      cg_.phy_plan_->set_has_nested_sql(true);
-      //为了支持触发器/UDF支持异常捕获，要求含有trigger的涉及修改表数据的dml串行执行
-      cg_.phy_plan_->set_need_serial_exec(true);
-      cg_.phy_plan_->set_contain_pl_udf_or_trigger(true);
+      bool is_forbid_parallel = false;
+      const ObTriggerInfo *trigger_info = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && !is_forbid_parallel && i < trigger_infos.count(); ++i) {
+        trigger_info = trigger_infos.at(i);
+        if (trigger_info->is_modifies_sql_data() ||
+            trigger_info->is_wps() ||
+            trigger_info->is_rps() ||
+            trigger_info->is_has_sequence()) {
+          is_forbid_parallel = true;
+        } else if (trigger_info->is_reads_sql_data()) { // dml + trigger(select) serial execute
+          is_forbid_parallel = true;
+        } else if (trigger_info->is_external_state()) {
+          is_forbid_parallel = true;
+        }
+      }
+      if (is_forbid_parallel) {
+        cg_.phy_plan_->set_has_nested_sql(true);
+        //为了支持触发器/UDF支持异常捕获，要求含有trigger的涉及修改表数据的dml串行执行
+        cg_.phy_plan_->set_need_serial_exec(true);
+        cg_.phy_plan_->set_contain_pl_udf_or_trigger(true);
+      }
     }
   }
   return ret;
@@ -2417,6 +2444,9 @@ int ObDmlCgService::generate_table_loc_meta(const IndexDMLInfo &index_dml_info,
     //we will build the related tablet_id map when dml operator be opened in distributed plan
     loc_meta.unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
                                        && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());
+    loc_meta.is_external_table_ = table_schema->is_external_table();
+    loc_meta.is_external_files_on_disk_ =
+        ObSQLUtils::is_external_files_on_local_disk(table_schema->get_external_file_location());
   }
   if (OB_SUCC(ret) && index_dml_info.is_primary_index_) {
     TableLocRelInfo *rel_info = nullptr;

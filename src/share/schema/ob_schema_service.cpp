@@ -394,7 +394,15 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("Fail to deep copy expire info string", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.parser_name_, parser_name_))) {
         LOG_WARN("deep copy parser name failed", K(ret));
-      } else {} // no more to do
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_, external_file_location_))) {
+        LOG_WARN("deep copy external_file_location failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_location_access_info_, external_file_location_access_info_))) {
+        LOG_WARN("deep copy external_file_location_access_info failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_format_, external_file_format_))) {
+        LOG_WARN("deep copy external_file_format failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
+        LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      }
 
       //view schema
       view_schema_ = src_schema.view_schema_;

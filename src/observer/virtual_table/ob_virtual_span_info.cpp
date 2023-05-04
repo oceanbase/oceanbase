@@ -46,13 +46,8 @@ ObVirtualSpanInfo::~ObVirtualSpanInfo() {
 
 void ObVirtualSpanInfo::reset()
 {
-  if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    if (cur_flt_span_mgr_ != nullptr && ref_.idx_ != -1) {
-      cur_flt_span_mgr_->revert(&ref_);
-    }
-    with_tenant_ctx_->~ObTenantSpaceFetcher();
-    allocator_->free(with_tenant_ctx_);
-    with_tenant_ctx_ = nullptr;
+  if (cur_flt_span_mgr_ != nullptr && ref_.idx_ != -1) {
+    cur_flt_span_mgr_->revert(&ref_);
   }
   ObVirtualTableScannerIterator::reset();
   is_first_get_ = true;
@@ -242,8 +237,12 @@ int ObVirtualSpanInfo::fill_cells(sql::ObFLTSpanRec &record)
       case REF_TYPE: {
         if (record.data_.ref_type_ == 0) {
           cells[cell_idx].set_varchar("CHILD");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                     ObCharset::get_default_charset()));
         } else if (record.data_.ref_type_ == 1) {
           cells[cell_idx].set_varchar("FOLLOW");
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                     ObCharset::get_default_charset()));
         } else {
           // do nothing
         }

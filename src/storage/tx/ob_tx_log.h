@@ -20,7 +20,7 @@
 #include "storage/tx/ob_tx_serialization.h"
 #include "storage/tx/ob_tx_big_segment_buf.h"
 #include "storage/tx/ob_trans_factory.h"
-#include "storage/tx/ob_clog_encrypter.h"
+#include "storage/tx/ob_clog_encrypt_info.h"
 #include "share/ob_admin_dump_helper.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_base_header.h"
@@ -191,23 +191,25 @@ private:
 class ObTxRedoLogTempRef
 {
 public:
-  ObTxRedoLogTempRef() : encrypt_info_() { encrypt_info_.init(); }
+  ObTxRedoLogTempRef() {}
 public:
-  ObCLogEncryptInfo encrypt_info_;
+  // remove member variable ObCLogEncryptInfo encrypt_info_
+  // there may be added other variables in the future
 };
 
 struct ObCtxRedoInfo
 {
-  ObCtxRedoInfo(ObCLogEncryptInfo &encrypt_info, const int64_t cluster_version)
-      : clog_encrypt_info_(encrypt_info), cluster_version_(cluster_version)
+  ObCtxRedoInfo(const int64_t cluster_version)
+      : cluster_version_(cluster_version)
   {
   };
   int before_serialize();
 
   ObTxSerCompatByte compat_bytes_;
   // serialize before mutator_buf by fixed length
-  ObCLogEncryptInfo &clog_encrypt_info_;
   uint64_t cluster_version_;
+  // remove member variable ObCLogEncryptInfo encrypt_info_
+  // there may be added other variables in the future
 
   OB_UNIS_VERSION(1);
 };
@@ -221,14 +223,14 @@ class ObTxRedoLog
 public:
   ObTxRedoLog(ObTxRedoLogTempRef &temp_ref)
       : mutator_buf_(nullptr), replay_mutator_buf_(nullptr), mutator_size_(-1),
-        ctx_redo_info_(temp_ref.encrypt_info_, 0)
+        ctx_redo_info_(0)
         // (ctx_redo_info_.clog_encrypt_info_)(temp_ref.encrypt_info_), (ctx_redo_info_.cluster_version_)(0)
   {
     before_serialize();
   }
-  ObTxRedoLog(ObCLogEncryptInfo &encrypt_info, const int64_t &log_no, const uint64_t &cluster_version)
+  ObTxRedoLog(const int64_t &log_no, const uint64_t &cluster_version)
       : mutator_buf_(nullptr), replay_mutator_buf_(nullptr), mutator_size_(-1),
-        ctx_redo_info_(encrypt_info, cluster_version)
+        ctx_redo_info_(cluster_version)
   // (ctx_redo_info_.clog_encrypt_info_)(encrypt_info),(ctx_redo_info_.cluster_version_)(cluster_version)
   {
     before_serialize();
@@ -237,7 +239,6 @@ public:
   char *get_mutator_buf() { return mutator_buf_; }
   const char *get_replay_mutator_buf() const { return replay_mutator_buf_; }
   const int64_t &get_mutator_size() const { return mutator_size_; }
-  const ObCLogEncryptInfo &get_clog_encrypt_info() const { return ctx_redo_info_.clog_encrypt_info_; }
   const uint64_t &get_cluster_version() const { return ctx_redo_info_.cluster_version_; }
 
   //------------ Only invoke in ObTxLogBlock

@@ -229,7 +229,6 @@ int ObChunkDatumStore::StoredRow::build(StoredRow *&sr,
   return ret;
 }
 
-
 int ObChunkDatumStore::Block::add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx,
   const int64_t row_size, uint32_t row_extend_size, StoredRow **stored_row)
 {
@@ -330,6 +329,42 @@ int ObChunkDatumStore::Block::copy_stored_row(const StoredRow &stored_row, Store
   } else {
     StoredRow *sr = new (buf->head())StoredRow;
     sr->assign(&stored_row);
+    if (OB_FAIL(buf->advance(row_size))) {
+      LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
+    } else {
+      rows_++;
+      if (nullptr != dst_sr) {
+        *dst_sr = sr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::Block::copy_datums(const ObDatum *datums, const int64_t cnt,
+                                          const int64_t extra_size, StoredRow **dst_sr)
+{
+  int ret = OB_SUCCESS;
+  BlockBuffer *buf = get_buffer();
+  int64_t head_size = sizeof(StoredRow);
+  int64_t datum_size = sizeof(ObDatum) * cnt;
+  int64_t row_size = head_size + sizeof(ObDatum) * cnt + extra_size;
+  if (!buf->is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(buf), K(row_size));
+  } else {
+    StoredRow *sr = new (buf->head())StoredRow;
+    sr->cnt_ = cnt;
+    MEMCPY(sr->payload_, static_cast<const void*>(datums), datum_size);
+    char* data_start = sr->payload_ + datum_size + extra_size;
+    int64_t pos = 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+      MEMCPY(data_start + pos, datums[i].ptr_, datums[i].len_);
+      sr->cells()[i].ptr_ = data_start + pos;
+      pos += datums[i].len_;
+      row_size += datums[i].len_;
+    }
+    sr->row_size_ = row_size;
     if (OB_FAIL(buf->advance(row_size))) {
       LOG_WARN("fill buffer head failed", K(ret), K(buf), K(row_size));
     } else {
@@ -749,33 +784,6 @@ inline int ObChunkDatumStore::dump_one_block(BlockBuffer *item)
   return ret;
 }
 
-int ObChunkDatumStore::clean_block(Block *clean_block)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(clean_block)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("clean block is null", K(ret));
-  } else if (blocks_.get_first() != clean_block) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("clean block is not first block", K(ret));
-  } else {
-    Block* cur = blocks_.remove_first();
-    BlockBuffer* buf = NULL;
-    buf = cur->get_buffer();
-    if (!buf->is_empty()) {
-      mem_used_ -= buf->mem_size();
-      row_cnt_ -= cur->rows();
-    }
-    mem_hold_ -= buf->mem_size();
-    if (nullptr != callback_) {
-      callback_->free(buf->mem_size());
-    }
-    allocator_->free(cur);
-    --n_blocks_;
-  }
-  return ret;
-}
-
 // only clean memory data
 int ObChunkDatumStore::clean_memory_data(bool reuse)
 {
@@ -1178,6 +1186,35 @@ int ObChunkDatumStore::add_row(
       row_cnt_++;
       if (col_count_ < 0) {
         col_count_ = src_stored_row.cnt_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::add_row(const ObDatum *datums, const int64_t cnt,
+                               const int64_t extra_size, StoredRow **stored_row)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    int64_t head_size = sizeof(StoredRow);
+    int64_t datum_size = sizeof(ObDatum) * cnt;
+    int64_t data_size = 0;
+    for (int64_t i = 0; i < cnt; ++i) {
+      data_size += datums[i].len_;
+    }
+    const int64_t row_size = head_size + datum_size + extra_size + data_size;
+    if (OB_FAIL(ensure_write_blk(row_size))) {
+      LOG_WARN("ensure write block failed", K(ret));
+    } else if (OB_FAIL(cur_blk_->copy_datums(datums, cnt, extra_size, stored_row))) {
+      LOG_WARN("add row to block failed", K(ret), K(datums), K(cnt), K(extra_size), K(row_size));
+    } else {
+      row_cnt_++;
+      if (col_count_ < 0) {
+        col_count_ = cnt;
       }
     }
   }
@@ -1624,392 +1661,6 @@ void ObChunkDatumStore::remove_added_blocks()
   row_cnt_ = 0;
 }
 
-int ObChunkDatumStore::load_next_chunk_blocks(ChunkIterator &it)
-{
-  // We do not support get_next_batch() read rows span multiple chunks.
-  int ret = OB_SUCCESS;
-  int64_t read_off = 0;
-  if (NULL == it.chunk_mem_) {
-    if (it.chunk_read_size_ > file_size_) {
-      it.chunk_read_size_ = file_size_;
-    }
-    it.chunk_mem_ = static_cast<char*>(alloc_blk_mem(sizeof(char) * it.chunk_read_size_, true));
-    if (OB_ISNULL(it.chunk_mem_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory failed", K(ret), K(it.chunk_read_size_), K(mem_hold_), K(mem_used_));
-    }
-  } else {
-    /* when the last block haven't been read fully,
-       copy the head half to the start of chunk-mem and read next chunk after it */
-    char* last_blk_end = static_cast<char*>(static_cast<void*>(it.cur_iter_blk_))
-                        + it.cur_iter_blk_->blk_size_;
-    char* chunk_end = it.chunk_mem_ + it.chunk_read_size_;
-    LOG_DEBUG("load chunk", KP(last_blk_end), K_(it.cur_iter_blk_->blk_size),
-        KP(chunk_end), K(chunk_end - last_blk_end));
-    if (chunk_end > last_blk_end) {
-      MEMCPY(it.chunk_mem_, last_blk_end, chunk_end - last_blk_end);
-      read_off += chunk_end - last_blk_end;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    int64_t read_n_blocks = 0;
-    int64_t read_size = it.chunk_read_size_ - read_off;
-    int64_t chunk_size = it.chunk_read_size_;
-    int64_t tmp_read_size = 0;
-    it.chunk_n_rows_ = 0;
-    if (read_size > (it.file_size_ - it.cur_iter_pos_)) {
-      read_size = it.file_size_ - it.cur_iter_pos_;
-      tmp_read_size = read_size;
-      chunk_size = read_size + read_off;
-    }
-    int64_t tmp_file_size = -1;
-    if (0 == read_size) {
-      // ret end
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = read_file(
-          it.chunk_mem_ + read_off, tmp_read_size, it.cur_iter_pos_,
-          it.aio_read_handle_, it.file_size_, it.cur_iter_pos_, tmp_file_size))) {
-        LOG_WARN("read blk info from file failed", K(tmp_ret), K_(it.cur_iter_pos));
-      }
-      if (OB_ITER_END != tmp_ret) {
-        if (OB_UNLIKELY(OB_SUCCESS == tmp_ret)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected read succ", K(read_size), K(tmp_read_size),
-                                           K(it), K(read_off), K(tmp_file_size));
-        } else {
-          ret = tmp_ret;
-          LOG_WARN("unexpected status", K(ret));
-        }
-      } else {
-        ret = OB_ITER_END;
-      }
-    } else if (OB_FAIL(read_file(
-        it.chunk_mem_ + read_off, read_size, it.cur_iter_pos_,
-        it.aio_read_handle_, it.file_size_, it.cur_iter_pos_, tmp_file_size))) {
-      LOG_WARN("read blk info from file failed", K(ret), K_(it.cur_iter_pos));
-    } else {
-      int64_t cur_pos = 0;
-      Block* block = reinterpret_cast<Block *>(it.chunk_mem_);
-      Block* prev_block = block;
-      do {
-        if (!block->magic_check()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("StoreRow load block magic check failed", K(ret), K(it),
-            K(cur_pos), K(chunk_size), K(io_));
-        } else if (block->blk_size_ <= chunk_size - cur_pos) {
-          prev_block->next_ = block;
-          cur_pos += block->blk_size_;
-          prev_block = block;
-          block = reinterpret_cast<Block*>(it.chunk_mem_ + cur_pos);
-          read_n_blocks++;
-          if (prev_block->blk_size_ == 0 || prev_block->rows_ == 0) {
-            ret = OB_INNER_STAT_ERROR;
-            LOG_WARN("read file failed", K(ret), K(prev_block->blk_size_),
-              K(read_n_blocks), K(cur_pos));
-          } else if (OB_FAIL(prev_block->swizzling(NULL))){
-            LOG_WARN("swizzling failed after read block from file", K(ret),
-              K(it), K(read_n_blocks));
-          } else {
-            it.chunk_n_rows_ += prev_block->rows_;
-          }
-        } else {
-          break;
-        }
-      } while (OB_SUCC(ret) && cur_pos < (chunk_size - BlockBuffer::HEAD_SIZE));
-
-      if (OB_SUCC(ret)) {
-        prev_block->next_ = NULL;
-        it.cur_iter_blk_ = reinterpret_cast<Block *>(it.chunk_mem_);
-        it.cur_iter_pos_ += read_size;
-        it.cur_chunk_n_blocks_ = read_n_blocks;
-        it.cur_nth_blk_ += read_n_blocks;
-        if (0 == read_n_blocks) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to chunk read blocks", K(read_n_blocks), K(it), K(read_off),
-            K(it.cur_iter_pos_), K(read_size), K(chunk_size), K(cur_pos), K(ret));
-        } else {
-          LOG_TRACE("chunk read blocks succ:", K(read_n_blocks), K(it), K(read_off),
-            K(it.cur_iter_pos_), K(read_size), K(chunk_size), K(cur_pos),
-            K(it.cur_nth_blk_));
-        }
-      }
-    }
-  }
-  if (OB_ITER_END == ret) {
-    it.set_read_file_iter_end();
-    if (nullptr != it.chunk_mem_) {
-      callback_free(it.chunk_read_size_);
-      allocator_->free(it.chunk_mem_);
-    }
-    it.chunk_mem_ = nullptr;
-    it.cur_iter_blk_ = nullptr;
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::ChunkIterator::aio_read(char *buf, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (!aio_read_handle_.is_valid()) {
-    // first read, wait write finish
-    int64_t timeout_ms = 0;
-    OZ(store_->get_timeout(timeout_ms));
-    OZ(store_->aio_write_handle_.wait(timeout_ms));
-  }
-  if (OB_SUCC(ret)) {
-    if (size <= 0 || cur_iter_pos_ >= file_size_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected read offset", K(ret), K(size), K(cur_iter_pos_), K(file_size_));
-    } else {
-      int64_t read_size = std::min(file_size_ - cur_iter_pos_, size);
-      if (OB_FAIL(store_->aio_read_file(buf, read_size, cur_iter_pos_, aio_read_handle_))) {
-        LOG_WARN("aio read file failed", K(ret), K(read_size));
-      } else {
-        cur_iter_pos_ += size;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::ChunkIterator::aio_wait()
-{
-  int ret = OB_SUCCESS;
-  int64_t timeout_ms = 0;
-  OZ(store_->get_timeout(timeout_ms));
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(aio_read_handle_.wait(timeout_ms))) {
-      LOG_WARN("aio wait failed", K(ret), K(timeout_ms));
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::ChunkIterator::alloc_block(Block *&blk, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  try_free_cached_blocks();
-  if (size == default_block_size_ && NULL != free_list_.get_first()) {
-    blk = free_list_.remove_first();
-    init_block_buffer(blk, size, blk);
-  } else if (OB_FAIL(store_->alloc_block_buffer(blk, size, true))) {
-    LOG_WARN("alloc block buffer failed", K(ret), K(size));
-  }
-  return ret;
-}
-
-void ObChunkDatumStore::ChunkIterator::free_block(Block *blk, const int64_t size,
-                                                  const bool force_free)
-{
-  if (NULL != blk) {
-    bool do_phy_free = force_free;
-    if (!force_free) {
-      try_free_cached_blocks();
-      if (NULL != age_) {
-        STATIC_ASSERT(sizeof(BlockBuffer) >= sizeof(int64_t), "unexpected block buffer size");
-        // Save age to the tail of the block, we always allocate one BlockBuffer in tail of block,
-        // it's safe to write it here.
-        *((int64_t *)((char *)blk + size - sizeof(int64_t))) = age_->get();
-        // Save memory size to %blk_size_
-        blk->blk_size_ = size;
-        cached_.add_last(blk);
-      } else {
-        if (size == default_block_size_ && !force_free) {
-#ifndef NDEBUG
-          memset((char *)blk + sizeof(*blk), 0xAA, size - sizeof(*blk));
-#endif
-          free_list_.add_last(blk);
-        } else {
-          do_phy_free = true;
-        }
-      }
-    }
-
-    if (do_phy_free) {
-#ifndef NDEBUG
-      memset(blk, 0xAA, size);
-#endif
-      store_->allocator_->free(blk);
-      store_->callback_free(size);
-    }
-  }
-}
-
-void ObChunkDatumStore::ChunkIterator::try_free_cached_blocks()
-{
-  const int64_t read_age = NULL == age_ ? INT64_MAX : age_->get();
-  // try free age expired blocks
-  while (NULL != cached_.get_first()) {
-    Block *b = cached_.get_first();
-    // age is stored in tail of block, see free_block()
-    const int64_t age = *((int64_t *)((char *)b + b->blk_size_ - sizeof(int64_t)));
-    if (age < read_age) {
-      b = cached_.remove_first();
-      if (b->blk_size_ == default_block_size_ && 0 == free_list_.get_size()) {
-#ifndef NDEBUG
-        memset((char *)b + sizeof(*b), 0xAA, b->blk_size_ - sizeof(*b));
-#endif
-        free_list_.add_last(b);
-      } else {
-        const bool force_free = true;
-        free_block(b, b->blk_size_, force_free);
-      }
-    } else {
-      break;
-    }
-  }
-}
-
-int ObChunkDatumStore::ChunkIterator::read_next_blk()
-{
-  int ret = OB_SUCCESS;
-  if (NULL == aio_blk_) {
-    if (OB_FAIL(prefetch_next_blk())) {
-      LOG_WARN("prefetch next blk failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(aio_wait())) {
-      LOG_WARN("aio wait failed", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !aio_blk_->magic_check()) {
-    #ifndef NDEBUG
-      ob_abort();
-    #endif
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("read corrupt data", K(ret), K(*aio_blk_), K(*this), K(*store_));
-  }
-  if (OB_SUCC(ret)) {
-    // data block is larger than min block
-    const int64_t loaded_len = aio_blk_buf_->capacity();
-    if (aio_blk_->blk_size_ > loaded_len) {
-      Block *blk= NULL;
-      if (OB_FAIL(alloc_block(blk, aio_blk_->blk_size_ + sizeof(BlockBuffer)))) {
-        LOG_WARN("alloc block failed", K(ret), K(aio_blk_->blk_size_));
-      } else {
-        BlockBuffer *blk_buf = blk->get_buffer();
-        MEMCPY(blk, aio_blk_, loaded_len);
-        free_block(aio_blk_, aio_blk_buf_->mem_size());
-        aio_blk_ = blk;
-        aio_blk_buf_ = blk_buf;
-        if (OB_FAIL(aio_read((char *)aio_blk_ + loaded_len,
-                             aio_blk_->blk_size_ - loaded_len))) {
-          LOG_WARN("aio read failed", K(ret));
-        } else if (OB_FAIL(aio_wait())) {
-          LOG_WARN("aio wait failed", K(ret));
-        }
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    // move aio block to read block
-    if (NULL != read_blk_) {
-      free_block(read_blk_, read_blk_buf_->mem_size());
-    }
-    read_blk_ = aio_blk_;
-    read_blk_buf_ = aio_blk_buf_;
-    aio_blk_ = NULL;
-    aio_blk_buf_ = NULL;
-    #ifndef NDEBUG
-      LOG_INFO("read one block", K(*read_blk_), K(*this), K(*store_));
-    #endif
-    if (OB_FAIL(read_blk_->swizzling(NULL))) {
-      LOG_WARN("swizzling failed", K(ret));
-    } else {
-      cur_chunk_n_blocks_ = 1;
-      cur_nth_blk_ += 1;
-      read_blk_->next_ = NULL;
-      cur_iter_blk_ = read_blk_;
-      chunk_n_rows_ = cur_iter_blk_->rows_;
-    }
-  }
-  return ret;
-}
-
-int ObChunkDatumStore::ChunkIterator::prefetch_next_blk()
-{
-  int ret = OB_SUCCESS;
-  CK(NULL == aio_blk_);
-  const int64_t block_size = store_->min_blk_size_;
-  if (OB_FAIL(alloc_block(aio_blk_, block_size))) {
-    LOG_WARN("allocate block buffer failed", K(ret));
-  } else {
-    aio_blk_buf_ = aio_blk_->get_buffer();
-    if (OB_FAIL(aio_read((char *)aio_blk_, aio_blk_buf_->capacity()))) {
-      LOG_WARN("aio read failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-// assume we have written blk(0)~blk(9) to the datum store
-// blk(0)~blk(n) will be read from disk first,
-// blk(n+1)~blk(9) will be read from memory then.
-// that's to say, first write, first to disk.
-// so, when we call load_next_block(), we load disk blocks first
-int ObChunkDatumStore::ChunkIterator::load_next_block()
-{
-  int ret = OB_SUCCESS;
-  CK(store_->is_inited());
-  if (OB_SUCC(ret) && file_size_ != store_->file_size_) {
-    reset_cursor(store_->file_size_);
-  }
-  if (OB_FAIL(ret)) {
-  } else if (cur_nth_blk_ < -1 || cur_nth_blk_ >= store_->n_blocks_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row should be saved", K(ret), K_(cur_nth_blk), K_(store_->n_blocks));
-  } else if (store_->is_file_open() && !read_file_iter_end()) {
-    uint64_t begin_io_read_time = rdtsc();
-    if (chunk_read_size_ > store_->max_blk_size_) {
-      // may return OB_ITER_END when read file not end (!read_file_iter_end())
-      if (OB_FAIL(store_->load_next_chunk_blocks(*this)) && OB_ITER_END != ret) {
-        LOG_WARN("RowStore iter load next chunk blocks failed", K(ret));
-      }
-    } else {
-      // return at least one block when read file not end (!read_file_iter_end())
-      if (OB_FAIL(read_next_blk())) {
-        LOG_WARN("read next blk failed", K(ret));
-      } else {
-        if (cur_iter_pos_ >= file_size_) {
-          set_read_file_iter_end();
-        } else {
-          if (OB_FAIL(prefetch_next_blk())) {
-            LOG_WARN("prefetch next blk failed", K(ret));
-          }
-        }
-      }
-    }
-    if (OB_LIKELY(nullptr != store_->get_io_event_observer())) {
-      store_->get_io_event_observer()->on_read_io(rdtsc() - begin_io_read_time);
-    }
-  } else {
-    ret = OB_ITER_END;
-  }
-
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
-    set_read_file_iter_end();
-    if (NULL == store_->blocks_.get_first()) {
-      set_read_mem_iter_end();
-      ret = OB_ITER_END;
-    } else {
-      cur_iter_blk_ = store_->blocks_.get_first();
-      cur_chunk_n_blocks_ = store_->blocks_.get_size();
-      cur_nth_blk_ += cur_chunk_n_blocks_;
-      chunk_n_rows_ = store_->get_row_cnt_in_memory();
-      if (cur_nth_blk_ != store_->n_blocks_ - 1) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected status",
-                 K(ret), K(cur_nth_blk_), K(store_->n_blocks_), K(store_->blocks_.get_size()));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObChunkDatumStore::get_store_row(RowIterator &it, const StoredRow *&sr)
 {
   int ret = OB_SUCCESS;
@@ -2068,139 +1719,28 @@ ObChunkDatumStore::RowIterator::RowIterator(ObChunkDatumStore *row_store)
 {
 }
 
-int ObChunkDatumStore::RowIterator::init(ChunkIterator *chunk_it)
+int ObChunkDatumStore::RowIterator::init(ObChunkDatumStore *store)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(chunk_it) || !chunk_it->is_valid()) {
+  if (OB_ISNULL(store)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(chunk_it));
+    LOG_WARN("invalid argument", K(ret));
   } else {
-    store_ = chunk_it->store_;
-  }
-  return ret;
-}
-
-ObChunkDatumStore::ChunkIterator::ChunkIterator()
-  : store_(NULL),
-    cur_iter_blk_(NULL),
-    aio_read_handle_(),
-    cur_nth_blk_(-1),
-    cur_chunk_n_blocks_(0),
-    cur_iter_pos_(0),
-    file_size_(0),
-    chunk_read_size_(0),
-    chunk_mem_(NULL),
-    chunk_n_rows_(0),
-    iter_end_flag_(IterEndState::PROCESSING),
-    read_blk_(NULL),
-    read_blk_buf_(NULL),
-    aio_blk_(NULL),
-    aio_blk_buf_(NULL),
-    age_(NULL)
-{
-}
-
-int ObChunkDatumStore::ChunkIterator::init(ObChunkDatumStore *store,
-                                           int64_t chunk_read_size,
-                                           const IterationAge *age /* = NULL */)
-{
-  int ret = OB_SUCCESS;
-  store_ = store;
-  chunk_read_size_ = chunk_read_size;
-  age_ = age;
-  default_block_size_ = store->default_block_size_;
-  return ret;
-}
-
-ObChunkDatumStore::ChunkIterator::~ChunkIterator()
-{
-  reset_cursor(0);
-}
-
-void ObChunkDatumStore::ChunkIterator::reset_cursor(const int64_t file_size)
-{
-  file_size_ = file_size;
-
-  if (chunk_mem_ != NULL) {
-    store_->allocator_->free(chunk_mem_);
-    chunk_mem_ = NULL;
-    cur_iter_blk_ = NULL;
-    store_->callback_free(chunk_read_size_);
-    if (read_file_iter_end()) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: chunk mem is allocated, but don't free");
-    }
-  }
-
-  aio_read_handle_.reset();
-
-  const bool force_free = true;
-  if (NULL != aio_blk_) {
-    free_block(aio_blk_, aio_blk_buf_->mem_size(), force_free);
-  }
-  if (NULL != read_blk_) {
-    free_block(read_blk_, read_blk_buf_->mem_size(), force_free);
-  }
-  aio_blk_ = NULL;
-  aio_blk_buf_ = NULL;
-  read_blk_ = NULL;
-  read_blk_buf_ = NULL;
-
-  while (NULL != cached_.get_first()) {
-    free_block(cached_.remove_first(), default_block_size_, force_free);
-  }
-
-  while (NULL != free_list_.get_first()) {
-    free_block(free_list_.remove_first(), default_block_size_, force_free);
-  }
-
-  cur_iter_blk_ = nullptr;
-  cur_nth_blk_ = -1;
-  cur_iter_pos_ = 0;
-  iter_end_flag_ = IterEndState::PROCESSING;
-}
-
-void ObChunkDatumStore::ChunkIterator::reset()
-{
-  reset_cursor(0);
-  chunk_read_size_ = 0;
-  chunk_n_rows_ = 0;
-}
-
-int ObChunkDatumStore::ChunkIterator::load_next_chunk(RowIterator& it)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ChunkIterator not init", K(ret));
-  } else if (!has_next_chunk()){
-    ret = OB_ITER_END;
-  } else {
-    if (chunk_read_size_ > 0) {
-      cur_iter_blk_ = it.cur_iter_blk_;
-    }
-    if (OB_FAIL(load_next_block())) {
-      LOG_WARN("load block failed", K(ret), K(*this));
-    } else {
-      it.store_ = store_;
-      it.cur_iter_blk_ = cur_iter_blk_;
-      it.cur_pos_in_blk_ = 0;
-      it.cur_row_in_blk_ = 0;
-      it.n_blocks_ = cur_chunk_n_blocks_;
-      it.cur_nth_block_ = 0;
-    }
+    store_ = store;
   }
   return ret;
 }
 
 int ObChunkDatumStore::Iterator::init(ObChunkDatumStore *store,
-                                      int64_t chunk_read_size,
                                       const IterationAge *age /* = NULL */)
 {
   reset();
   int ret = OB_SUCCESS;
-  if (OB_FAIL(chunk_it_.init(store, chunk_read_size, age))
-      || OB_FAIL(row_it_.init(&chunk_it_))) {
-    LOG_WARN("chunk iterator or row iterator init failed", K(ret));
+  store_ = store;
+  age_ = age;
+  default_block_size_ = store->default_block_size_;
+  if (OB_FAIL(row_it_.init(store))) {
+    LOG_WARN("row iterator init failed", K(ret));
   }
   return ret;
 }
@@ -2237,7 +1777,7 @@ int ObChunkDatumStore::Iterator::get_next_row(const common::ObIArray<ObExpr*> &e
       LOG_WARN("get next stored row failed", K(ret));
     }
   } else if (OB_FAIL(convert_to_row(tmp_sr, exprs, ctx))) {
-    LOG_WARN("convert row failed", K(ret), K_(chunk_it), K_(row_it));
+    LOG_WARN("convert row failed", K(ret), K_(row_it));
   } else if (NULL != sr) {
     *sr = tmp_sr;
   }
@@ -2261,7 +1801,7 @@ int ObChunkDatumStore::Iterator::get_next_row(common::ObDatum **datums)
       LOG_WARN("get next stored row failed", K(ret));
     }
   } else if (OB_FAIL(convert_to_row(sr, datums))) {
-    LOG_WARN("convert row failed", K(ret), K_(chunk_it), K_(row_it));
+    LOG_WARN("convert row failed", K(ret), K_(row_it));
   }
   return ret;
 }
@@ -2274,7 +1814,7 @@ int ObChunkDatumStore::Iterator::get_next_row(const StoredRow *&sr)
 {
   int ret = OB_SUCCESS;
   if (!start_iter_) {
-    if (OB_FAIL(chunk_it_.load_next_chunk(row_it_))) {
+    if (OB_FAIL(load_next_block(row_it_))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("Iterator load chunk failed", K(ret));
       }
@@ -2284,7 +1824,7 @@ int ObChunkDatumStore::Iterator::get_next_row(const StoredRow *&sr)
   }
   if (OB_SUCC(ret) && OB_FAIL(row_it_.get_next_row(sr))) {
     if (OB_ITER_END == ret) {
-      if (OB_FAIL(chunk_it_.load_next_chunk(row_it_))) {
+      if (OB_FAIL(load_next_block(row_it_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("Iterator load chunk failed", K(ret));
         }
@@ -2306,7 +1846,7 @@ int ObChunkDatumStore::Iterator::get_next_batch(const StoredRow **rows,
     LOG_WARN("invalid argument", K(ret), KP(rows), K(read_rows));
   } else {
     if (!start_iter_) {
-      if (OB_FAIL(chunk_it_.load_next_chunk(row_it_))) {
+      if (OB_FAIL(load_next_block(row_it_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("Iterator load chunk failed", K(ret));
         }
@@ -2317,7 +1857,7 @@ int ObChunkDatumStore::Iterator::get_next_batch(const StoredRow **rows,
   }
   if (OB_SUCC(ret)) {
     // free cached blocks first, which are cached for previous batch
-    chunk_it_.begin_new_batch();
+    begin_new_batch();
     for (read_rows = 0; read_rows < max_rows && OB_SUCC(ret); ) {
       int64_t tmp_read_rows = 0;
       if (OB_FAIL(row_it_.get_next_batch(rows + read_rows,
@@ -2325,9 +1865,9 @@ int ObChunkDatumStore::Iterator::get_next_batch(const StoredRow **rows,
                                          tmp_read_rows))) {
         if (OB_ITER_END == ret) {
           read_rows += tmp_read_rows;
-          if (!chunk_it_.in_chunk_iterate() || 0 == read_rows + tmp_read_rows) {
+          if (NULL == chunk_mem_ || 0 == read_rows + tmp_read_rows) {
             // read next block if not in chunk iterate and already got row.
-            if (OB_FAIL(chunk_it_.load_next_chunk(row_it_))) {
+            if (OB_FAIL(load_next_block(row_it_))) {
               if (OB_ITER_END != ret) {
                 LOG_WARN("Iterator load chunk failed", K(ret));
               }
@@ -2431,25 +1971,6 @@ int ObChunkDatumStore::RowIterator::get_next_batch(const common::ObIArray<ObExpr
     }
   }
 
-  return ret;
-}
-
-// one block one iter end
-int ObChunkDatumStore::RowIterator::get_next_block_row(const StoredRow *&sr)
-{
-  int ret = OB_SUCCESS;
-  if (!cur_blk_has_next()) {
-    if (OB_FAIL(store_->clean_block(cur_iter_blk_))) {
-      LOG_WARN("failed to clean block", K(ret));
-    } else {
-      ret = OB_ITER_END;
-    }
-  } else if (OB_FAIL(store_->get_store_row(*this, sr))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("get store row failed", K(ret), K_(cur_nth_block), K_(cur_pos_in_blk),
-          K_(cur_row_in_blk));
-    }
-  }
   return ret;
 }
 
@@ -2638,36 +2159,6 @@ int ObChunkDatumStore::append_datum_store(const ObChunkDatumStore &other_store)
   return ret;
 }
 
-// 一个特殊iterator，由于store在不断add数据，导致iterator这边拿到数据是之前的数据，需要重新根据store情况下处理
-int ObChunkDatumStore::update_iterator(Iterator &org_it)
-{
-  int ret = OB_SUCCESS;
-  if (!org_it.start_iter_) {
-    // 还没有开始迭代，则忽略
-  } else if (is_file_open()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status: row store has dump file", K(ret));
-  } else if (org_it.row_it_.store_ != this) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected status: row store is not match", K(ret));
-  } else {
-    if (blocks_.get_size() != org_it.chunk_it_.cur_chunk_n_blocks_) {
-      // update chunk iterator
-      // it.cur_iter_blk_ dont' need to reset
-      org_it.chunk_it_.cur_chunk_n_blocks_ = blocks_.get_size();
-      org_it.chunk_it_.cur_nth_blk_ = org_it.chunk_it_.cur_chunk_n_blocks_;
-
-      // update iterator
-      // org_it.row_it_.cur_iter_blk_ = cur_iter_blk_ don't need to reset
-      org_it.row_it_.n_blocks_ = org_it.chunk_it_.cur_chunk_n_blocks_;
-      // chunk_n_rows没有用，其实可以不设置
-      org_it.chunk_it_.chunk_n_rows_ = get_row_cnt_in_memory();
-    }
-    LOG_TRACE("trace update iterator", K(ret), K(org_it.chunk_it_), K(org_it.row_it_));
-  }
-  return ret;
-}
-
 int ObChunkDatumStore::assign(const ObChunkDatumStore &other_store)
 {
   int ret = OB_SUCCESS;
@@ -2840,6 +2331,310 @@ void ObChunkDatumStore::free_tmp_dump_blk()
     free_block(tmp_dump_blk_);
     tmp_dump_blk_ = nullptr;
   }
+}
+
+
+void ObChunkDatumStore::Iterator::reset_cursor(const int64_t file_size)
+{
+  file_size_ = file_size;
+
+  if (chunk_mem_ != NULL) {
+    store_->allocator_->free(chunk_mem_);
+    chunk_mem_ = NULL;
+    cur_iter_blk_ = NULL;
+    store_->callback_free(0);
+    if (read_file_iter_end()) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpect status: chunk mem is allocated, but don't free");
+    }
+  }
+
+  aio_read_handle_.reset();
+
+  const bool force_free = true;
+  if (NULL != aio_blk_) {
+    free_block(aio_blk_, aio_blk_buf_->mem_size(), force_free);
+  }
+  if (NULL != read_blk_) {
+    free_block(read_blk_, read_blk_buf_->mem_size(), force_free);
+  }
+  aio_blk_ = NULL;
+  aio_blk_buf_ = NULL;
+  read_blk_ = NULL;
+  read_blk_buf_ = NULL;
+
+  while (NULL != cached_.get_first()) {
+    free_block(cached_.remove_first(), default_block_size_, force_free);
+  }
+
+  while (NULL != free_list_.get_first()) {
+    free_block(free_list_.remove_first(), default_block_size_, force_free);
+  }
+
+  cur_iter_blk_ = nullptr;
+  cur_nth_blk_ = -1;
+  cur_iter_pos_ = 0;
+  iter_end_flag_ = IterEndState::PROCESSING;
+}
+
+int ObChunkDatumStore::Iterator::load_next_block(RowIterator& it)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("chunk store not init", K(ret));
+  } else if (store_->n_blocks_ <= 0 || cur_nth_blk_ >= store_->n_blocks_ - 1) {
+    ret = OB_ITER_END;
+  } else {
+    CK(store_->is_inited());
+    if (OB_SUCC(ret) && file_size_ != store_->file_size_) {
+      reset_cursor(store_->file_size_);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (cur_nth_blk_ < -1 || cur_nth_blk_ >= store_->n_blocks_) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("row should be saved", K(ret), K_(cur_nth_blk), K_(store_->n_blocks));
+    } else if (store_->is_file_open() && !read_file_iter_end()) {
+      uint64_t begin_io_read_time = rdtsc();
+      // return at least one block when read file not end (!read_file_iter_end())
+      if (OB_FAIL(read_next_blk())) {
+        LOG_WARN("read next blk failed", K(ret));
+      } else {
+        if (cur_iter_pos_ >= file_size_) {
+          set_read_file_iter_end();
+        } else {
+          if (OB_FAIL(prefetch_next_blk())) {
+            LOG_WARN("prefetch next blk failed", K(ret));
+          }
+        }
+      }
+      if (OB_LIKELY(nullptr != store_->get_io_event_observer())) {
+        store_->get_io_event_observer()->on_read_io(rdtsc() - begin_io_read_time);
+      }
+    } else {
+      ret = OB_ITER_END;
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+      set_read_file_iter_end();
+      if (NULL == store_->blocks_.get_first()) {
+        set_read_mem_iter_end();
+        ret = OB_ITER_END;
+      } else {
+        cur_iter_blk_ = store_->blocks_.get_first();
+        cur_chunk_n_blocks_ = store_->blocks_.get_size();
+        cur_nth_blk_ += cur_chunk_n_blocks_;
+        chunk_n_rows_ = store_->get_row_cnt_in_memory();
+        if (cur_nth_blk_ != store_->n_blocks_ - 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected status",
+                  K(ret), K(cur_nth_blk_), K(store_->n_blocks_), K(store_->blocks_.get_size()));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    it.store_ = store_;
+    it.cur_iter_blk_ = cur_iter_blk_;
+    it.cur_pos_in_blk_ = 0;
+    it.cur_row_in_blk_ = 0;
+    it.n_blocks_ = cur_chunk_n_blocks_;
+    it.cur_nth_block_ = 0;
+  }
+  return ret;
+}
+
+
+int ObChunkDatumStore::Iterator::read_next_blk()
+{
+  int ret = OB_SUCCESS;
+  if (NULL == aio_blk_) {
+    if (OB_FAIL(prefetch_next_blk())) {
+      LOG_WARN("prefetch next blk failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(aio_wait())) {
+      LOG_WARN("aio wait failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && !aio_blk_->magic_check()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read corrupt data", K(ret), K(aio_blk_->magic_),
+             K(store_->file_size_), K(cur_iter_pos_));
+  }
+  if (OB_SUCC(ret)) {
+    // data block is larger than min block
+    const int64_t loaded_len = aio_blk_buf_->capacity();
+    if (aio_blk_->blk_size_ > loaded_len) {
+      Block *blk= NULL;
+      if (OB_FAIL(alloc_block(blk, aio_blk_->blk_size_ + sizeof(BlockBuffer)))) {
+        LOG_WARN("alloc block failed", K(ret), K(aio_blk_->blk_size_));
+      } else {
+        BlockBuffer *blk_buf = blk->get_buffer();
+        MEMCPY(blk, aio_blk_, loaded_len);
+        free_block(aio_blk_, aio_blk_buf_->mem_size());
+        aio_blk_ = blk;
+        aio_blk_buf_ = blk_buf;
+        if (OB_FAIL(aio_read((char *)aio_blk_ + loaded_len,
+                             aio_blk_->blk_size_ - loaded_len))) {
+          LOG_WARN("aio read failed", K(ret));
+        } else if (OB_FAIL(aio_wait())) {
+          LOG_WARN("aio wait failed", K(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // move aio block to read block
+    if (NULL != read_blk_) {
+      free_block(read_blk_, read_blk_buf_->mem_size());
+    }
+    read_blk_ = aio_blk_;
+    read_blk_buf_ = aio_blk_buf_;
+    aio_blk_ = NULL;
+    aio_blk_buf_ = NULL;
+    if (OB_FAIL(read_blk_->swizzling(NULL))) {
+      LOG_WARN("swizzling failed", K(ret));
+    } else {
+      cur_chunk_n_blocks_ = 1;
+      cur_nth_blk_ += 1;
+      read_blk_->next_ = NULL;
+      cur_iter_blk_ = read_blk_;
+      chunk_n_rows_ = cur_iter_blk_->rows_;
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::Iterator::prefetch_next_blk()
+{
+  int ret = OB_SUCCESS;
+  CK(NULL == aio_blk_);
+  const int64_t block_size = store_->min_blk_size_;
+  if (OB_FAIL(alloc_block(aio_blk_, block_size))) {
+    LOG_WARN("allocate block buffer failed", K(ret));
+  } else {
+    aio_blk_buf_ = aio_blk_->get_buffer();
+    if (OB_FAIL(aio_read((char *)aio_blk_, aio_blk_buf_->capacity()))) {
+      LOG_WARN("aio read failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::Iterator::alloc_block(Block *&blk, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  try_free_cached_blocks();
+  if (size == default_block_size_ && NULL != free_list_.get_first()) {
+    blk = free_list_.remove_first();
+    ObChunkDatumStore::init_block_buffer(blk, size, blk);
+  } else if (OB_FAIL(store_->alloc_block_buffer(blk, size, true))) {
+    LOG_WARN("alloc block buffer failed", K(ret), K(size));
+  }
+  return ret;
+}
+
+void ObChunkDatumStore::Iterator::free_block(Block *blk, const int64_t size,
+                                                  const bool force_free)
+{
+  if (NULL != blk) {
+    bool do_phy_free = force_free;
+    if (!force_free) {
+      try_free_cached_blocks();
+      if (NULL != age_) {
+        STATIC_ASSERT(sizeof(BlockBuffer) >= sizeof(int64_t), "unexpected block buffer size");
+        // Save age to the tail of the block, we always allocate one BlockBuffer in tail of block,
+        // it's safe to write it here.
+        *((int64_t *)((char *)blk + size - sizeof(int64_t))) = age_->get();
+        // Save memory size to %blk_size_
+        blk->blk_size_ = size;
+        cached_.add_last(blk);
+      } else {
+        if (size == default_block_size_ && !force_free) {
+#ifndef NDEBUG
+          memset((char *)blk + sizeof(*blk), 0xAA, size - sizeof(*blk));
+#endif
+          free_list_.add_last(blk);
+        } else {
+          do_phy_free = true;
+        }
+      }
+    }
+
+    if (do_phy_free) {
+#ifndef NDEBUG
+      memset(blk, 0xAA, size);
+#endif
+      store_->allocator_->free(blk);
+      store_->callback_free(size);
+    }
+  }
+}
+
+void ObChunkDatumStore::Iterator::try_free_cached_blocks()
+{
+  const int64_t read_age = NULL == age_ ? INT64_MAX : age_->get();
+  // try free age expired blocks
+  while (NULL != cached_.get_first()) {
+    Block *b = cached_.get_first();
+    // age is stored in tail of block, see free_block()
+    const int64_t age = *((int64_t *)((char *)b + b->blk_size_ - sizeof(int64_t)));
+    if (age < read_age) {
+      b = cached_.remove_first();
+      if (b->blk_size_ == default_block_size_) {
+#ifndef NDEBUG
+        memset((char *)b + sizeof(*b), 0xAA, b->blk_size_ - sizeof(*b));
+#endif
+        free_list_.add_last(b);
+      } else {
+        const bool force_free = true;
+        free_block(b, b->blk_size_, force_free);
+      }
+    } else {
+      break;
+    }
+  }
+}
+
+int ObChunkDatumStore::Iterator::aio_read(char *buf, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (!aio_read_handle_.is_valid()) {
+    // first read, wait write finish
+    int64_t timeout_ms = 0;
+    OZ(store_->get_timeout(timeout_ms));
+    OZ(store_->aio_write_handle_.wait(timeout_ms));
+  }
+  if (OB_SUCC(ret)) {
+    if (size <= 0 || cur_iter_pos_ >= file_size_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected read offset", K(ret), K(size), K(cur_iter_pos_), K(file_size_));
+    } else {
+      int64_t read_size = std::min(file_size_ - cur_iter_pos_, size);
+      if (OB_FAIL(store_->aio_read_file(buf, read_size, cur_iter_pos_, aio_read_handle_))) {
+        LOG_WARN("aio read file failed", K(ret), K(read_size));
+      } else {
+        cur_iter_pos_ += size;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObChunkDatumStore::Iterator::aio_wait()
+{
+  int ret = OB_SUCCESS;
+  int64_t timeout_ms = 0;
+  OZ(store_->get_timeout(timeout_ms));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(aio_read_handle_.wait(timeout_ms))) {
+      LOG_WARN("aio wait failed", K(ret), K(timeout_ms));
+    }
+  }
+  return ret;
 }
 
 } // end namespace sql

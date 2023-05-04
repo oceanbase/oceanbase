@@ -27,7 +27,7 @@ namespace sql
 {
 
 ObExprTimeDiff::ObExprTimeDiff(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_DIFF, N_TIME_DIFF, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TIME_DIFF, N_TIME_DIFF, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

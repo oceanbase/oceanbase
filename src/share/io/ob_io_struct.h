@@ -518,6 +518,7 @@ public:
   public:
     TraceInfo();
     uint64_t hash() const;
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator== (const TraceInfo &param) const;
     TO_STRING_KV(KCSTRING(bt_str_), K(ref_log_));
   public:

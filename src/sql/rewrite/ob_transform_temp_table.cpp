@@ -580,9 +580,7 @@ bool ObTransformTempTable::is_similar_stmt(ObSelectStmt& stmt,
     bret = QueryRelation::QUERY_EQUAL == relation;
   } else if (stmt.get_table_size() < 2) {
     if (stmt.get_group_expr_size() > 0 ||
-        stmt.get_rollup_expr_size() > 0 ||
-        stmt.get_grouping_sets_items_size() > 0 ||
-        stmt.get_multi_rollup_items_size() > 0) {
+        stmt.get_rollup_expr_size() > 0) {
       bret = map_info.is_group_equal_;
     } else if (stmt.get_aggr_item_size() > 0) {
       bret = map_info.is_table_equal_ && map_info.is_from_equal_ && map_info.is_semi_info_equal_ && map_info.is_cond_equal_;
@@ -1024,7 +1022,9 @@ int ObTransformTempTable::inner_create_temp_table(ObSelectStmt *parent_stmt,
 
     ObSEArray<TableItem *, 8> origin_tables;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObTransformUtils::pushdown_pseudo_column_like_exprs(*parent_stmt, pushdown_select))) {
+    } else if (OB_FAIL(ObTransformUtils::pushdown_pseudo_column_like_exprs(*parent_stmt,
+                                                                           false,
+                                                                           pushdown_select))) {
       LOG_WARN("failed to pushdown pseudo column like exprs", K(ret));
     } else if (OB_FAIL(origin_tables.assign(parent_stmt->get_table_items()))) {
       LOG_WARN("failed to get table items", K(ret));

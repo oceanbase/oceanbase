@@ -19,7 +19,7 @@ using namespace common;
 namespace sql
 {
 ObExprReturningLob::ObExprReturningLob(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_RETURNING_LOB, "returning_lob", 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_RETURNING_LOB, "returning_lob", 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                         false, INTERNAL_IN_ORACLE_MODE)
 {
 }

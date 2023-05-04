@@ -242,24 +242,25 @@ public:
   int rd_sort_cmp(const STORE_ROW_L *l,
                   const STORE_ROW_R *r,
                   const int64_t begin,
-                  const int64_t end) const;
+                  const int64_t end,
+                  int &cmp_ret) const;
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_pby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r) const
+  int rd_pby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
   {
-    return rd_sort_cmp(l, r, 0, rd_pby_sort_cnt_);
+    return rd_sort_cmp(l, r, 0, rd_pby_sort_cnt_, cmp_ret);
   }
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r) const
+  int rd_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
   {
-    return rd_sort_cmp(l, r, rd_pby_sort_cnt_, rd_sort_collations_.count());
+    return rd_sort_cmp(l, r, rd_pby_sort_cnt_, rd_sort_collations_.count(), cmp_ret);
   }
 
   template <typename STORE_ROW_L, typename STORE_ROW_R>
-  int rd_pby_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r) const
+  int rd_pby_oby_cmp(const STORE_ROW_L *l, const STORE_ROW_R *r, int &cmp_ret) const
   {
-    return rd_sort_cmp(l, r, 0, rd_sort_collations_.count());
+    return rd_sort_cmp(l, r, 0, rd_sort_collations_.count(), cmp_ret);
   }
 
   int64_t get_role_type() const { return role_type_; }
@@ -559,7 +560,7 @@ public:
     AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos)
       : WinFuncCell(wf_info, op),
         finish_prepared_(false),
-        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc"),
+        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc", op.get_monitor_info()),
         result_(),
         got_result_(false),
         remove_type_(wf_info.remove_type_)
@@ -980,25 +981,28 @@ template <typename STORE_ROW_L, typename STORE_ROW_R>
 int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
                                       const STORE_ROW_R *r,
                                       const int64_t begin,
-                                      const int64_t end) const
+                                      const int64_t end,
+                                      int &cmp_ret) const
 {
-  int cmp = 0;
+  int ret = OB_SUCCESS;
+  cmp_ret = 0;
   // NULL last
   if (NULL == l && NULL == r) {
-    cmp = 0;
+    cmp_ret = 0;
   } else if (NULL == l) {
-    cmp = 1;
+    cmp_ret = 1;
   } else if (NULL == r) {
-    cmp = -1;
+    cmp_ret = -1;
   } else {
-    for (int64_t i = begin; 0 == cmp && i < end; i++) {
-      cmp = rd_sort_cmp_funcs_.at(i).cmp_func_(l->cells()[i], r->cells()[i]);
-      if (!rd_sort_collations_.at(i).is_ascending_) {
-        cmp = cmp * (-1);
+    for (int64_t i = begin; 0 == cmp_ret && i < end && OB_SUCC(ret); i++) {
+      if (OB_FAIL(rd_sort_cmp_funcs_.at(i).cmp_func_(l->cells()[i], r->cells()[i], cmp_ret))) {
+        SQL_ENG_LOG(WARN, "compare failed", K(ret));
+      } else if (!rd_sort_collations_.at(i).is_ascending_) {
+        cmp_ret = cmp_ret * (-1);
       }
     }
   }
-  return cmp;
+  return ret;
 }
 
 } // end namespace sql

@@ -23,9 +23,9 @@ namespace blocksstable
 {
 static int nonext_nonext_compare(const ObStorageDatum &left, const ObStorageDatum &right, const common::ObCmpFunc &cmp_func, int &cmp_ret)
 {
-  cmp_ret = cmp_func.cmp_func_(left, right);
-  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(left), K(right), K(cmp_ret));
-  return OB_SUCCESS;
+  int ret = cmp_func.cmp_func_(left, right, cmp_ret);
+  STORAGE_LOG(DEBUG, "chaser debug compare datum", K(ret), K(left), K(right), K(cmp_ret));
+  return ret;
 }
 
 static int nonext_ext_compare(const ObStorageDatum &left, const ObStorageDatum &right, const common::ObCmpFunc &cmp_func, int &cmp_ret)

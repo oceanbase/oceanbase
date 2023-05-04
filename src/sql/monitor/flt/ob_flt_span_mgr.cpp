@@ -47,7 +47,7 @@ namespace sql
                                       "SqlFltSpanRec",
                                        tenant_id,
                                        INT64_MAX))) {
-      SERVER_LOG(WARN, "failed to init allocator", K(ret));
+       SERVER_LOG(WARN, "failed to init allocator", K(ret));
     } else {
       mem_limit_ = max_mem_size;
       tenant_id_ = tenant_id;
@@ -104,7 +104,7 @@ namespace sql
   }
 
 
-  int ObFLTSpanMgr::record_span(ObFLTSpanData &span_data)
+  int ObFLTSpanMgr::record_span(ObFLTSpanData &span_data, bool is_formmated_json)
   {
     int ret = OB_SUCCESS;
     if (!inited_) {
@@ -120,7 +120,8 @@ namespace sql
                         + min(span_data.parent_span_id_.length(), OB_MAX_SPAN_LENGTH)
                         + min(span_data.span_name_.length(), OB_MAX_SPAN_LENGTH)
                         + min(span_data.tags_.length(), OB_MAX_SPAN_TAG_LENGTH)
-                        + min(span_data.logs_.length(), OB_MAX_SPAN_TAG_LENGTH);
+                        + min(span_data.logs_.length(), OB_MAX_SPAN_TAG_LENGTH)
+                        + (is_formmated_json ? 0:4);
       if (NULL == (buf = (char*)allocator_.alloc(total_sz))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         if (REACH_TIME_INTERVAL(100 * 1000)) {
@@ -161,16 +162,32 @@ namespace sql
         //deep copy tags
         if (!span_data.tags_.empty()) {
           const int len = min(span_data.tags_.length(), OB_MAX_SPAN_TAG_LENGTH);
-          MEMCPY(buf + pos, span_data.tags_.ptr(), len);
-          rec->data_.tags_.assign_ptr(buf + pos, len);
-          pos += len;
+          if (is_formmated_json) {
+            MEMCPY(buf + pos, span_data.tags_.ptr(), len);
+            rec->data_.tags_.assign_ptr(buf + pos, len);
+            pos += len;
+          } else {
+            buf[pos] = '[';
+            MEMCPY(buf + pos + 1, span_data.tags_.ptr(), len);
+            buf[pos + len + 1] = ']';
+            rec->data_.tags_.assign_ptr(buf + pos, len + 2);
+            pos += len + 2;
+          }
         }
         //deep copy logs_
         if (!span_data.logs_.empty()) {
           const int len = min(span_data.logs_.length(), OB_MAX_SPAN_TAG_LENGTH);
-          MEMCPY(buf + pos, span_data.logs_.ptr(), len);
-          rec->data_.logs_.assign_ptr(buf + pos, len);
-          pos += len;
+          if (is_formmated_json) {
+            MEMCPY(buf + pos, span_data.logs_.ptr(), len);
+            rec->data_.logs_.assign_ptr(buf + pos, len);
+            pos += len;
+          } else {
+            buf[pos] = '[';
+            MEMCPY(buf + pos + 1, span_data.logs_.ptr(), len);
+            buf[pos + len + 1] = ']';
+            rec->data_.logs_.assign_ptr(buf + pos, len + 2);
+            pos += len + 2;
+          }
         }
         //push into queue
         if (OB_SUCC(ret)) {
@@ -179,9 +196,6 @@ namespace sql
             //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
             if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
               SERVER_LOG(WARN, "push into queue failed", K(ret));
-            }
-            if (ret == OB_ENTRY_NOT_EXIST) {
-              release_old(RELEASE_QUEUE_SIZE);
             }
             allocator_.free(rec);
             rec = NULL;
@@ -200,7 +214,7 @@ namespace sql
   // evict old span and release memory
   int ObFLTSpanMgr::release_old(int64_t limit)
   {
-    void* span = NULL;
+    void * span = NULL;
     int64_t count = 0;
     while(count++ < limit && NULL != (span = queue_.pop())) {
       free(span);

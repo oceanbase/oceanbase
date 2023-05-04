@@ -1843,7 +1843,6 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("create stmt failed");
         } else {
-          bool has_perf_audit = false;
           HEAP_VAR(ObCreateTableResolver, ddl_resolver, params_) {
             for (int64_t i = 0; OB_SUCC(ret) && i < list_node->num_child_; ++i) {
               if (OB_UNLIKELY(NULL == list_node->children_)) {
@@ -1973,6 +1972,12 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
 
                 if (OB_SUCC(ret)) {
                   bool is_backup_config = false;
+                  bool can_set_trace_control_info = false;
+                  int  tmp_ret = OB_SUCCESS;
+                  tmp_ret = OB_E(EventTable::EN_ENABLE_SET_TRACE_CONTROL_INFO) OB_SUCCESS;
+                  if (OB_SUCCESS != tmp_ret) {
+                    can_set_trace_control_info = true;
+                  }
                   share::ObBackupConfigChecker backup_config_checker;
                   if (OB_FAIL(backup_config_checker.check_config_name(item.name_.ptr(), is_backup_config))) {
                     LOG_WARN("fail to check is valid backup config", K(ret), "config_name", item.name_.ptr(), "config value", item.value_.ptr());
@@ -1992,35 +1997,6 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                   if (OB_FAIL(ret)) {
                   } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
                     LOG_WARN("add config item failed", K(ret), K(item));
-                  } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT)
-                      || 0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT)) {
-                    if (has_perf_audit) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event and enable_sql_audit together");
-                      LOG_WARN("enable_perf_event and enable_sql_audit should not set together", K(ret));
-                    } else if (0 == STRCMP(item.name_.ptr(), ENABLE_PERF_EVENT)
-                              && (0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_BOOL)
-                                 || 0 == STRCASECMP(item.value_.ptr(), CONFIG_FALSE_VALUE_STRING))) {
-                      if (GCONF.enable_sql_audit) {
-                        ret = OB_NOT_SUPPORTED;
-                        LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_perf_event to false when enable_sql_audit is true");
-                        LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
-                      } else if (OB_FAIL(item.name_.assign(ENABLE_SQL_AUDIT))) {
-                        LOG_WARN("assign config name to enable_sql_audit failed", K(item), K(ret));
-                      } else if (OB_FAIL(stmt->get_rpc_arg().items_.push_back(item))) {
-                        LOG_WARN("add config item failed", K(ret), K(item));
-                      }
-                    } else if (0 == STRCMP(item.name_.ptr(), ENABLE_SQL_AUDIT)
-                              && (0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_BOOL)
-                                 || 0 == STRCASECMP(item.value_.ptr(), CONFIG_TRUE_VALUE_STRING))
-                              && !GCONF.enable_perf_event) {
-                      ret = OB_NOT_SUPPORTED;
-                      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set enable_sql_audit to true when enable_perf_event is false");
-                      LOG_WARN("enable_sql_audit cannot set true when enable_perf_event is false", K(ret));
-                    }
-                    if (OB_SUCC(ret)) {
-                      has_perf_audit = true;
-                    }
                   } else if (0 == STRCMP(item.name_.ptr(), Ob_STR_BACKUP_REGION)) {
                     if (OB_FAIL(check_backup_region(item.value_.str()))) {
                       LOG_WARN("failed to check backup dest", K(ret));
@@ -2041,6 +2017,13 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
                       LOG_WARN("set query response time stats", K(ret));
                     }  
+                  } else if (!can_set_trace_control_info &&
+                              session_info_ != NULL &&
+                              0 == STRCMP(item.name_.ptr(), OB_STR_TRC_CONTROL_INFO) &&
+                              !session_info_->is_inner()) {
+                    ret = OB_OP_NOT_ALLOW;
+                    LOG_WARN("_trace_control_info is not allowed to modify");
+                    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter _trace_control_info");
                   }
                 }
               }
@@ -2487,7 +2470,7 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null");
-  } else if (OB_UNLIKELY(6 != parse_tree.num_child_)) {
+  } else if (OB_UNLIKELY(8 != parse_tree.num_child_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num of children not match", K(ret), "child_num", parse_tree.num_child_);
   } else {
@@ -2512,7 +2495,31 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
           }
         }
       }
-      ParseNode *description_node = parse_tree.children_[4];
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_NOT_NULL(parse_tree.children_[4])
+          && OB_FAIL(Util::resolve_string(parse_tree.children_[4],
+                                          stmt->get_rpc_arg().encrypt_key_))) {
+        LOG_WARN("failed to resolve encrypt key", K(ret));
+      } else if (OB_NOT_NULL(parse_tree.children_[5])) {
+        ParseNode *kms_node = parse_tree.children_[5];
+        if (2 != kms_node->num_child_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("num of children not match", K(ret), "child_num", kms_node->num_child_);
+        } else if (OB_ISNULL(kms_node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("kms uri should not be NULL", K(ret));
+        } else if (OB_FAIL(Util::resolve_string(kms_node->children_[0],
+                                                stmt->get_rpc_arg().kms_uri_))) {
+          LOG_WARN("failed to resolve kms uri", K(ret));
+        } else if (OB_NOT_NULL(kms_node->children_[1])
+            && OB_FAIL(Util::resolve_string(kms_node->children_[1],
+                                            stmt->get_rpc_arg().kms_encrypt_key_))) {
+          LOG_WARN("failed to resolve kms encrypt key", K(ret));
+        }
+      }
+
+      ParseNode *description_node = parse_tree.children_[6];
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(Util::resolve_string(parse_tree.children_[3],
@@ -2537,8 +2544,8 @@ int ObPhysicalRestoreTenantResolver::resolve(const ParseNode &parse_tree)
       }
 
       if (OB_SUCC(ret)) {
-        if (6 == parse_tree.num_child_) { // resolve table_list
-          const ParseNode *node = parse_tree.children_[5];
+        if (8 == parse_tree.num_child_) { // resolve table_list
+          const ParseNode *node = parse_tree.children_[7];
           if (OB_ISNULL(node)) {
             stmt->set_is_preview(false);
           } else {
@@ -4060,6 +4067,12 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
       stmt_ = stmt;
     }
   }
+  return ret;
+}
+
+int ObBackupKeyResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_ERR_PARSE_SQL;
   return ret;
 }
 

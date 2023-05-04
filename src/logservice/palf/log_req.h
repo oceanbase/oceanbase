@@ -234,12 +234,14 @@ struct LogGetMCStReq {
   OB_UNIS_VERSION(1);
 public:
   LogGetMCStReq();
-  LogGetMCStReq(const LogConfigVersion &config_version);
+  LogGetMCStReq(const LogConfigVersion &config_version,
+                const bool need_purge_throttling);
   ~LogGetMCStReq();
   bool is_valid() const;
   void reset();
-  TO_STRING_KV(K_(config_version));
+  TO_STRING_KV(K_(config_version), K_(need_purge_throttling));
   LogConfigVersion config_version_;
+  bool need_purge_throttling_;
 };
 
 struct LogGetMCStResp {

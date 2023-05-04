@@ -59,7 +59,9 @@ ObLogService::ObLogService() :
     ls_adapter_(),
     rpc_proxy_(),
     reporter_(),
-    restore_service_()
+    restore_service_(),
+    flashback_service_(),
+    monitor_()
   {}
 
 ObLogService::~ObLogService()
@@ -225,7 +227,7 @@ int ObLogService::init(const PalfOptions &options,
              KP(alloc_mgr), KP(transport), KP(ls_service), KP(location_service), KP(reporter),
              KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
   } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport,
-                                              alloc_mgr, log_block_pool, palf_env_))) {
+                                              alloc_mgr, log_block_pool, &monitor_, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -517,6 +519,7 @@ int ObLogService::update_palf_options_except_disk_usage_limit_size()
     } else {
       palf_opts.disk_options_.log_disk_utilization_threshold_ = tenant_config->log_disk_utilization_threshold;
       palf_opts.disk_options_.log_disk_utilization_limit_threshold_ = tenant_config->log_disk_utilization_limit_threshold;
+      palf_opts.disk_options_.log_disk_throttling_percentage_ = tenant_config->log_disk_throttling_percentage;
       palf_opts.compress_options_.enable_transport_compress_ = tenant_config->log_transport_compress_all;
       palf_opts.compress_options_.transport_compress_func_ = compressor_type;
       if (OB_FAIL(palf_env_->update_options(palf_opts))) {

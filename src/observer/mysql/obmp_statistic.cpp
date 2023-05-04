@@ -55,11 +55,8 @@ int ObMPStatistic::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql session info is null", K(ret));
     } else if (FALSE_IT(session->set_txn_free_route(mysql_pkt.txn_free_route()))) {
-    } else if (mysql_pkt.get_extra_info().exist_sync_sess_info()
-                 && OB_FAIL(ObMPUtils::sync_session_info(*session,
-                              mysql_pkt.get_extra_info().get_sync_sess_info()))) {
-      need_response_error = false;
-      LOG_WARN("fail to update sess info", K(ret));
+    } else if (OB_FAIL(process_extra_info(*session, mysql_pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session->post_sync_session_info())) {
     } else if (OB_FAIL(update_transmission_checksum_flag(*session))) {
       LOG_WARN("update transmisson checksum flag failed", K(ret));

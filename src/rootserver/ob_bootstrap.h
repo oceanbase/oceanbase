@@ -52,6 +52,7 @@ namespace rootserver
 class ObRsGtsManager;
 struct ObSysStat;
 class ObTableCreator;
+class ObServerZoneOpService;
 
 class ObBaseBootstrap
 {
@@ -101,6 +102,7 @@ private:
 
   virtual int check_is_all_server_empty(bool &is_empty);
   virtual int check_all_server_bootstrap_mode_match(bool &match);
+  virtual int notify_sys_tenant_root_key();
   virtual int notify_sys_tenant_server_unit_resource();
   virtual int create_ls();
   virtual int wait_elect_ls(common::ObAddr &master_rs);
@@ -138,7 +140,7 @@ public:
                        obrpc::ObCommonRpcProxy &rs_rpc_proxy);
 
   virtual ~ObBootstrap() {}
-  virtual int execute_bootstrap();
+  virtual int execute_bootstrap(rootserver::ObServerZoneOpService &server_zone_op_service);
   static int create_all_schema(
       ObDDLService &ddl_service,
       common::ObIArray<share::schema::ObTableSchema> &table_schemas);
@@ -170,12 +172,10 @@ private:
   virtual int check_is_already_bootstrap(bool &is_bootstrap);
   virtual int init_global_stat();
   virtual int init_sequence_id();
-  virtual int init_system_data(const uint64_t server_id);
+  virtual int init_system_data();
   virtual int init_all_zone_table();
   virtual int init_multiple_zone_deployment_table(common::ObISQLClient &sql_client);
-  virtual int init_server_id(const uint64_t server_id);
-  virtual int add_rs_list(uint64_t &server_id);
-  virtual int wait_all_rs_online();
+  virtual int add_servers_in_rs_list(rootserver::ObServerZoneOpService &server_zone_op_service);
   virtual int wait_all_rs_in_service();
   int init_backup_inner_table();
   int init_backup_data();

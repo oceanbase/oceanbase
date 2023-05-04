@@ -26,8 +26,9 @@ using namespace oceanbase::obrpc;
 ObRpcSessionHandler::ObRpcSessionHandler()
 {
   sessid_ = 0;
-  next_wait_map_.create(MAX_COND_COUNT, ObModIds::OB_HASH_BUCKET_NEXT_WAIT_MAP,
-                        ObModIds::OB_HASH_NODE_NEXT_WAIT_MAP);
+  ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_NODE_NEXT_WAIT_MAP);
+  SET_USE_500(attr);
+  next_wait_map_.create(MAX_COND_COUNT, attr, attr);
   max_waiting_thread_count_ = MAX_WAIT_THREAD_COUNT;
   waiting_thread_count_ = 0;
 
@@ -197,7 +198,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid,
         LOG_WARN("session wait thread id doesn't equal each other",
                  K(ret), K(sessid), K(thid), K(wait_object.thid_), K(ret));
       } else if (NULL == wait_object.req_) {
-        int32_t timeout_ms = static_cast<int32_t>(timeout / 1000);
+        int64_t timeout_ms = timeout / 1000;
         if (timeout_ms < DEFAULT_WAIT_TIMEOUT_MS) {
           timeout_ms = DEFAULT_WAIT_TIMEOUT_MS;
         } else {

@@ -27,7 +27,7 @@ const int64_t ORACLE_DBTIMEZONE_MAX_LENGTH = 6;//[+|-]TZH:TZM
 
 ObExprBaseTimezone::ObExprBaseTimezone(ObIAllocator &alloc, ObExprOperatorType type,
     const char *name, const bool is_sessiontimezone)
-  : ObFuncExprOperator(alloc, type, name, 0, NOT_ROW_DIMENSION), is_sessiontimezone_(is_sessiontimezone)
+  : ObFuncExprOperator(alloc, type, name, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION), is_sessiontimezone_(is_sessiontimezone)
 {
 }
 

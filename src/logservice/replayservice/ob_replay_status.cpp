@@ -111,7 +111,6 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
     CLOG_LOG(ERROR, "base_scn is invalid", K(type_), K(base_lsn), K(base_scn), KR(ret));
   } else {
     replay_status_ = replay_status;
-    committed_end_lsn_ = base_lsn;
     next_to_submit_lsn_ = base_lsn;
     next_to_submit_scn_.set_min();
     base_lsn_ = base_lsn;
@@ -121,7 +120,7 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));
     }
-    CLOG_LOG(INFO, "submit log task init success", K(type_), K(next_to_submit_lsn_), K(committed_end_lsn_),
+    CLOG_LOG(INFO, "submit log task init success", K(type_), K(next_to_submit_lsn_),
                K(next_to_submit_scn_), K(replay_status_), K(ret));
   }
   return ret;
@@ -131,7 +130,6 @@ void ObReplayServiceSubmitTask::reset()
 {
   ObLockGuard<ObSpinLock> guard(lock_);
   next_to_submit_lsn_.reset();
-  committed_end_lsn_.reset();
   next_to_submit_scn_.reset();
   base_lsn_.reset();
   base_scn_.reset();
@@ -157,13 +155,6 @@ int ObReplayServiceSubmitTask::get_next_to_submit_log_info_(LSN &lsn, SCN &scn) 
   int ret = OB_SUCCESS;
   lsn.val_ = ATOMIC_LOAD(&next_to_submit_lsn_.val_);
   scn = next_to_submit_scn_.atomic_load();
-  return ret;
-}
-
-int ObReplayServiceSubmitTask::get_committed_end_lsn(LSN &lsn) const
-{
-  int ret = OB_SUCCESS;
-  lsn = committed_end_lsn_;
   return ret;
 }
 
@@ -229,35 +220,6 @@ int ObReplayServiceSubmitTask::update_submit_log_meta_info(const LSN &lsn,
   } else {
     CLOG_LOG(TRACE, "update_submit_log_meta_info", KR(ret), K(lsn), K(scn),
              K(next_to_submit_lsn_), K(next_to_submit_scn_), K(iterator_));
-  }
-  return ret;
-}
-
-int ObReplayServiceSubmitTask::update_committed_end_lsn(const LSN &lsn)
-{
-  return update_committed_end_lsn_(lsn);
-}
-
-int ObReplayServiceSubmitTask::update_committed_end_lsn_(const LSN &lsn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(lsn <= committed_end_lsn_)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "update_committed_end_lsn invalid argument", K(type_), K(lsn),
-               K(committed_end_lsn_), K(ret));
-  } else {
-    committed_end_lsn_ = lsn;
-  }
-  return ret;
-}
-
-int ObReplayServiceSubmitTask::set_committed_end_lsn(const LSN &lsn)
-{
-  int ret = OB_SUCCESS;
-  ATOMIC_SET(&committed_end_lsn_.val_, lsn.val_);
-  if (next_to_submit_lsn_ > committed_end_lsn_) {
-    CLOG_LOG(INFO, "need rollback next_to_submit_lsn_", K(lsn), KPC(this));
-    next_to_submit_lsn_ = committed_end_lsn_;
   }
   return ret;
 }
@@ -838,35 +800,6 @@ void ObReplayStatus::switch_to_follower(const palf::LSN &begin_lsn)
   CLOG_LOG(INFO, "replay status switch_to_follower", KPC(this), K(begin_lsn));
 }
 
-int ObReplayStatus::flashback()
-{
-  int ret = OB_SUCCESS;
-  WLockGuardWithRetryInterval wguard(rwlock_, WRLOCK_TRY_THRESHOLD, WRLOCK_RETRY_INTERVAL);
-  if (OB_FAIL(flashback_())) {
-      CLOG_LOG(WARN, "replay status flashback failed", K(ret), KPC(this));
-  } else {
-    CLOG_LOG(INFO, "replay status flashback success", K(ret), KPC(this));
-  }
-  return ret;
-}
-
-int ObReplayStatus::flashback_()
-{
-  int ret = OB_SUCCESS;
-  LSN committed_end_lsn;
-  if (OB_FAIL(palf_handle_.get_end_lsn(committed_end_lsn))) {
-    CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
-  } else if (OB_FAIL(submit_log_task_.set_committed_end_lsn(committed_end_lsn))) {
-    CLOG_LOG(WARN, "set_committed_end_lsn failed", K(ret), KPC(this), K(committed_end_lsn));
-  } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
-      CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
-                  KPC(this), K(ret));
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
 bool ObReplayStatus::has_remained_replay_task() const
 {
   int64_t count = 0;
@@ -928,9 +861,6 @@ int ObReplayStatus::update_end_offset(const LSN &lsn)
     CLOG_LOG(ERROR, "invalid arguments", K(ls_id_), K(lsn), K(ret));
   } else if (!need_submit_log()) {
     // leader do nothing, keep submit_log_task recording last round status as follower
-  } else if (OB_FAIL(submit_log_task_.update_committed_end_lsn(lsn))) {
-    // update offset and submit submit_log_task
-    CLOG_LOG(ERROR, "failed to update_apply_end_offset", KR(ret), K(ls_id_), K(lsn));
   } else if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
     CLOG_LOG(ERROR, "failed to submit submit_log_task to replay Service", K(submit_log_task_),
              KPC(this), K(ret));
@@ -1345,8 +1275,8 @@ int ObReplayStatus::stat(LSReplayStat &stat) const
     if (OB_FAIL(submit_log_task_.get_next_to_submit_log_info(stat.unsubmitted_lsn_,
                                                              stat.unsubmitted_scn_))) {
       CLOG_LOG(WARN, "get_next_to_submit_log_info failed", KPC(this), K(ret));
-    } else if (OB_FAIL(submit_log_task_.get_committed_end_lsn(stat.end_lsn_))) {
-      CLOG_LOG(WARN, "get_committed_end_lsn failed", KPC(this), K(ret));
+    } else if (OB_FAIL(palf_handle_.get_end_lsn(stat.end_lsn_))) {
+      CLOG_LOG(WARN, "get_end_lsn from palf failed", KPC(this), K(ret));
     }
   }
   return ret;

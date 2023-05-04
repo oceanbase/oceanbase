@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprBenchmark::ObExprBenchmark(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_BENCHMARK, N_BENCHMARK, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_BENCHMARK, N_BENCHMARK, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

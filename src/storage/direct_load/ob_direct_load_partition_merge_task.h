@@ -10,6 +10,7 @@
 #include "storage/direct_load/ob_direct_load_external_scanner.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_scanner.h"
+#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
 
 namespace oceanbase
 {
@@ -19,7 +20,7 @@ class ObDatumRange;
 } // namespace blocksstable
 namespace common
 {
-class ObOptColumnStat;
+class ObOptOSGColumnStat;
 } // namespace common
 namespace storage
 {
@@ -34,7 +35,7 @@ public:
   ObDirectLoadPartitionMergeTask();
   virtual ~ObDirectLoadPartitionMergeTask();
   int process();
-  const common::ObIArray<ObOptColumnStat*> &get_column_stat_array() const
+  const common::ObIArray<ObOptOSGColumnStat*> &get_column_stat_array() const
   {
     return column_stat_array_;
   }
@@ -52,7 +53,7 @@ protected:
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   int64_t parallel_idx_;
   int64_t affected_rows_;
-  common::ObArray<ObOptColumnStat*> column_stat_array_;
+  common::ObArray<ObOptOSGColumnStat*> column_stat_array_;
   common::ObArenaAllocator allocator_;
   volatile bool is_stop_;
   bool is_inited_;

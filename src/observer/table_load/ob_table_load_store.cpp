@@ -657,6 +657,9 @@ int ObTableLoadStore::write(const ObTableLoadTransId &trans_id, int32_t session_
     if (OB_FAIL(store_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret));
     }
+    else if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
+      LOG_WARN("fail to check trans status", KR(ret));
+    }
     // 取出store_writer
     else if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));

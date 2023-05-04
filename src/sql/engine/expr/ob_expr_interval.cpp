@@ -27,9 +27,10 @@ namespace sql
 {
 
 ObExprInterval::ObExprInterval(common::ObIAllocator &alloc) :
-    ObExprOperator(alloc, T_FUN_SYS_INTERVAL, "interval", MORE_THAN_TWO, NOT_ROW_DIMENSION),
+    ObExprOperator(alloc, T_FUN_SYS_INTERVAL, "interval", MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
     use_binary_search_(true)
-{}
+{
+}
 
 OB_SERIALIZE_MEMBER((ObExprInterval, ObExprOperator), use_binary_search_);
 
@@ -101,26 +102,33 @@ int ObExprInterval::calc_interval_expr(const ObExpr &expr, ObEvalCtx &ctx,
     ObDatumCmpFuncType cmp_func = reinterpret_cast<ObDatumCmpFuncType>(
                                     expr.inner_functions_[0]);
     bool use_binary_search = static_cast<bool>(expr.extra_);
+    int cmp_ret = 0;
     if (!use_binary_search) {
       int64_t i = 1;
-      for (; i < expr.arg_cnt_; ++i) {
+      for (; i < expr.arg_cnt_ && OB_SUCC(ret); ++i) {
         const ObDatum &arg_i = expr.locate_param_datum(ctx, static_cast<int>(i));
         if (arg_i.is_null()) {
           continue;
-        } else if (cmp_func(arg_i, *arg0) > 0) {
+        } else if (OB_FAIL(cmp_func(arg_i, *arg0, cmp_ret))) {
+          LOG_WARN("faile to compare", K(ret));
+        } else if (cmp_ret > 0) {
           // if arg_i > *arg0 break
           break;
         }
       }
-      res.set_int(i - 1);;
+      if (OB_SUCC(ret)) {
+        res.set_int(i - 1);
+      }
     } else {
       int64_t high = expr.arg_cnt_ - 1;
       int64_t low = 1;
       int64_t mid = 0;
-      while (low <= high) {
+      while (low <= high && OB_SUCC(ret)) {
         const ObDatum &arg_i = expr.locate_param_datum(ctx, static_cast<int>(mid));
         mid = (low + high + 1) / 2;
-        if (cmp_func(arg_i, *arg0) > 0) {
+        if (OB_FAIL(cmp_func(arg_i, *arg0, cmp_ret))) {
+          LOG_WARN("faile to compare", K(ret));
+        } else if (cmp_ret > 0) {
           high = mid - 1;
           mid -= 1;
         } else if (low == high) {
@@ -129,7 +137,9 @@ int ObExprInterval::calc_interval_expr(const ObExpr &expr, ObEvalCtx &ctx,
           low = mid;
         }
       } // while
-      res.set_int(mid);
+      if (OB_SUCC(ret)) {
+        res.set_int(mid);
+      }
     }
   }
   return ret;

@@ -141,6 +141,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "share/stat/ob_stat_define.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 
 namespace oceanbase
 {
@@ -880,6 +881,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_FUN_SYS_ROWNUM != raw_expr->get_expr_type()
             && T_CTE_SEARCH_COLUMN != raw_expr->get_expr_type()
             && T_CTE_CYCLE_COLUMN != raw_expr->get_expr_type()
+            && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_USER_VARIABLE))
             // TODO:@guoping.wgp, following T_FUN_SYS_PART restrictions should be removed later
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())) {
@@ -1114,6 +1116,10 @@ int ObStaticEngineCG::generate_spec(
         } else if (OB_ISNULL(expr->basic_funcs_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+        } else if (expr->obj_meta_.is_ext() || expr->obj_meta_.is_user_defined_sql_type()) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         } else {
           ObOrderDirection order_direction = default_asc_direction();
           bool is_ascending = is_ascending_direction(order_direction);
@@ -1205,8 +1211,8 @@ int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimize
         spec.set_target_osg_id(target_id);
       }
     }
-    if (OB_SUCC(ret) && (spec.part_level_ == share::schema::PARTITION_LEVEL_ONE
-                         || spec.part_level_ == share::schema::PARTITION_LEVEL_TWO)) {
+    // only osg gather need calc_part_id_expr
+    if (OB_SUCC(ret) && spec.is_part_table() && !op.is_merge_osg()) {
       if (OB_ISNULL(op.get_calc_part_id_expr())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("calc_part_id_expr is null", K(ret));
@@ -1275,7 +1281,7 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> out_raw_exprs;
-  if (OB_FAIL(op.extra_set_exprs(out_raw_exprs))) {
+  if (OB_FAIL(op.get_pure_set_exprs(out_raw_exprs))) {
     LOG_WARN("failed to get output exprs", K(ret));
   } else if (OB_FAIL(mark_expr_self_produced(out_raw_exprs))) { // set expr
     LOG_WARN("fail to mark exprs self produced", K(ret));
@@ -1308,6 +1314,10 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
       } else if (OB_ISNULL(expr->basic_funcs_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: basic funcs is not init", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
         LOG_WARN("failed to push back sort collation", K(ret));
       } else {
@@ -1446,7 +1456,7 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> out_raw_exprs;
-  if (OB_FAIL(op.extra_set_exprs(out_raw_exprs))) {
+  if (OB_FAIL(op.get_pure_set_exprs(out_raw_exprs))) {
     LOG_WARN("failed to get output exprs", K(ret));
   } else if (OB_FAIL(mark_expr_self_produced(out_raw_exprs))) { // set expr
     LOG_WARN("fail to mark exprs self produced", K(ret));
@@ -1480,6 +1490,10 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
             (is_null_first(order_direction) ^ is_ascending) ? NULL_LAST : NULL_FIRST);
         if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
           LOG_WARN("failed to push back sort collation", K(ret));
+        } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         } else {
           ObSortCmpFunc cmp_func;
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -1654,6 +1668,10 @@ int ObStaticEngineCG::fill_sort_funcs(
       ObExpr* expr = nullptr;
       if (OB_FAIL(sort_exprs.at(sort_collation.field_idx_, expr))) {
         LOG_WARN("failed to get sort exprs", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else {
         ObSortCmpFunc cmp_func;
         cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -2487,10 +2505,9 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
   UNUSED(in_root_job);
   spec.set_mode(op.is_create_filter() ? JoinFilterMode::CREATE : JoinFilterMode::USE);
   spec.set_filter_id(op.get_filter_id());
-  spec.set_server_id(GCTX.server_id_);
   spec.set_filter_length(op.get_filter_length());
-  spec.set_is_shuffle(op.is_use_filter_shuffle());
-  spec.set_filter_type(op.get_filter_type());
+  spec.set_shared_filter_type(op.get_filter_type());
+  spec.is_shuffle_ = op.is_use_filter_shuffle();
   if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
@@ -2498,8 +2515,14 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
     LOG_WARN("fail to generate calc part id expr", K(ret), KP(op.get_tablet_id_expr()));
   } else if (OB_FAIL(spec.hash_funcs_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
+  } else if (OB_FAIL(spec.null_first_cmp_funcs_.init(op.get_join_exprs().count()))) {
+    LOG_WARN("failed to init cmp funcs", K(ret));
+  } else if (OB_FAIL(spec.null_last_cmp_funcs_.init(op.get_join_exprs().count()))) {
+    LOG_WARN("failed to init cmp funcs", K(ret));
   } else if (OB_FAIL(generate_rt_exprs(op.get_join_exprs(), spec.join_keys_))) {
     LOG_WARN("failed to generate rt exprs", K(ret));
+  } else if (OB_FAIL(spec.need_null_cmp_flags_.assign(op.get_is_null_safe_cmps()))) {
+    LOG_WARN("fail to assign cml flags", K(ret));
   } else {
     if (OB_NOT_NULL(spec.calc_tablet_id_expr_)) {
       ObHashFunc hash_func;
@@ -2511,28 +2534,80 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       for (int64_t i = 0; i < spec.join_keys_.count() && OB_SUCC(ret); ++i) {
         ObExpr *join_expr = spec.join_keys_.at(i);
         ObHashFunc hash_func;
+        ObCmpFunc null_first_cmp;
+        ObCmpFunc null_last_cmp;
+        null_first_cmp.cmp_func_ = join_expr->basic_funcs_->null_first_cmp_;
+        null_last_cmp.cmp_func_ = join_expr->basic_funcs_->null_last_cmp_;
         set_murmur_hash_func(hash_func, join_expr->basic_funcs_);
-        if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_)) {
+        if (OB_ISNULL(hash_func.hash_func_) || OB_ISNULL(hash_func.batch_hash_func_) ||
+            OB_ISNULL(null_first_cmp.cmp_func_) ||
+            OB_ISNULL(null_last_cmp.cmp_func_ )) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("hash func is null, check datatype is valid", K(ret));
         } else if (OB_FAIL(spec.hash_funcs_.push_back(hash_func))) {
           LOG_WARN("failed to push back hash func", K(ret));
+        } else if (OB_FAIL(spec.null_first_cmp_funcs_.push_back(null_first_cmp))) {
+          LOG_WARN("failed to push back null first cmp func", K(ret));
+        } else if (OB_FAIL(spec.null_last_cmp_funcs_.push_back(null_last_cmp))) {
+          LOG_WARN("failed to push back null last cmp func", K(ret));
         }
       }
     }
   }
-  if (OB_SUCC(ret) && !op.is_create_filter()) {
-    ObExpr *join_filter_expr = nullptr;
-    if (OB_ISNULL(op.get_join_filter_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("join filter expr is null", K(ret));
-    } else if (OB_ISNULL(join_filter_expr =
-        reinterpret_cast<ObExpr *>(
-            ObStaticEngineExprCG::get_left_value_rt_expr(*op.get_join_filter_expr())))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("join filter rt_expr_ is null", K(ret));
+
+  if (OB_SUCC(ret)) {
+    int64_t tenant_id =
+        op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      const char *ptr = NULL;
+      if (OB_ISNULL(ptr = tenant_config->_px_bloom_filter_group_size.get_value())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("each group size ptr is null", K(ret));
+      } else if (0 == ObString::make_string("auto").case_compare(ptr)) {
+        spec.each_group_size_ = -1;
+      } else {
+        char *end_ptr = nullptr;
+        spec.each_group_size_ = strtoull(ptr, &end_ptr, 10); // get group size from tenant config
+        if (*end_ptr != '\0') {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("each group size ptr is unexpected", K(ret));
+        }
+      }
     } else {
-      spec.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tenant config", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // construct runtime filter exec info
+    ObRuntimeFilterInfo rf_info;
+    const common::ObIArray<int64_t> &p2p_sequence_ids = op.get_p2p_sequence_ids();
+    const common::ObIArray<RuntimeFilterType> &rf_types =
+        op.get_join_filter_types();
+    CK(p2p_sequence_ids.count() > 0 && p2p_sequence_ids.count() == rf_types.count());
+    OZ(spec.rf_infos_.init(rf_types.count()));
+    ObExpr *join_filter_expr = nullptr;
+    for (int i = 0; i < rf_types.count() && OB_SUCC(ret); ++i) {
+      rf_info.reset();
+      join_filter_expr = nullptr;
+      rf_info.p2p_datahub_id_ = p2p_sequence_ids.at(i);
+      rf_info.filter_shared_type_ = op.get_filter_type();
+      rf_info.dh_msg_type_ = static_cast<ObP2PDatahubMsgBase::ObP2PDatahubMsgType>(rf_types.at(i));
+      if (!op.is_create_filter()) {
+        const common::ObIArray<ObRawExpr *> &join_filter_exprs =
+            op.get_join_filter_exprs();
+        if (OB_ISNULL(join_filter_expr =
+            reinterpret_cast<ObExpr *>(
+            ObStaticEngineExprCG::get_left_value_rt_expr(*join_filter_exprs.at(i))))) {
+          ret = OB_ERR_UNEXPECTED;
+        } else {
+          rf_info.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(spec.rf_infos_.push_back(rf_info))) {
+        LOG_WARN("fail to push back rf info", K(ret));
+      }
     }
   }
   return ret;
@@ -3000,10 +3075,13 @@ int ObStaticEngineCG::generate_popular_values_hash(
   ObDatum datum;
   char buf[OBJ_DATUM_MAX_RES_SIZE];
   datum.ptr_ = buf;
+  uint64_t hash_val = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < popular_values_expr.count(); ++i) {
     if (OB_FAIL(datum.from_obj(popular_values_expr.at(i)))) {
       LOG_WARN("fail convert obj to datum", K(ret));
-    } else if (OB_FAIL(popular_values_hash.push_back(hash_func.hash_func_(datum, 0)))) {
+    } else if (OB_FAIL(hash_func.hash_func_(datum, 0, hash_val))) {
+      LOG_WARN("fail to do hash", K(ret));
+    } else if (OB_FAIL(popular_values_hash.push_back(hash_val))) {
       LOG_WARN("fail push back values", K(ret));
     }
   }
@@ -3467,8 +3545,29 @@ int ObStaticEngineCG::set_rollup_adaptive_info(ObLogGroupBy &op, ObMergeGroupByS
   }
   if (OB_SUCC(ret) && 0 < op.get_inner_sort_keys().count()) {
     ObIArray<OrderItem> &sork_keys = op.get_inner_sort_keys();
-    if (OB_FAIL(spec.sort_exprs_.init(sork_keys.count()))) {
-      LOG_WARN("failed to init all exprs", K(ret));
+    if (!op.has_encode_sort()) {
+      if (OB_FAIL(spec.sort_exprs_.init(sork_keys.count()))) {
+        LOG_WARN("failed to init all exprs", K(ret));
+      }
+    } else {
+      if (1 != op.get_inner_ecd_sort_keys().count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status: encode sortkey expr more than one", K(ret), K(op.get_inner_ecd_sort_keys().count()));
+      } else {
+        ObExpr *encode_expr = nullptr;
+        OrderItem order_item = op.get_inner_ecd_sort_keys().at(0);
+        if (OB_FAIL(spec.sort_exprs_.init(1 + sork_keys.count()))) {
+          LOG_WARN("failed to init all exprs", K(ret));
+        } else if (OB_FAIL(generate_rt_expr(*order_item.expr_, encode_expr))) {
+          LOG_WARN("failed to generate rt expr", K(ret));
+        } else if (OB_FAIL(spec.sort_exprs_.push_back(encode_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
     } else if (OB_FAIL(fill_sort_info(sork_keys, spec.sort_collations_, spec.sort_exprs_))) {
       LOG_WARN("failed to sort info", K(ret));
     } else if (OB_FAIL(fill_sort_funcs(
@@ -3800,10 +3899,16 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
         LOG_WARN("generate rt expr failed", K(ret));
       } else {
         spec.pdml_partition_id_ = rt_expr;
+        spec.partition_id_calc_type_ = op.get_tablet_id_type();
         found = true;
       }
     }
   }
+
+  if (OB_SUCC(ret) && op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+    spec.is_external_table_ = true;
+  }
+
   return ret;
 }
 
@@ -3982,19 +4087,25 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
       for (int64_t i = 0; i < spec.connect_by_prior_exprs_.count() && OB_SUCC(ret); ++i) {
         ObExpr *expr = spec.connect_by_prior_exprs_.at(i);
         ObCmpFunc cmp_func;
-        cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
-                              expr->datum_meta_.type_,
-                              expr->datum_meta_.type_,
-                              NULL_LAST,//这里null last还是first无所谓
-                              expr->datum_meta_.cs_type_,
-                              expr->datum_meta_.scale_,
-                              lib::is_oracle_mode(),
-                              expr->obj_meta_.has_lob_header());
-        if (OB_ISNULL(cmp_func.cmp_func_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
-        } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
-          LOG_WARN("failed to push back sort function", K(ret));
+        if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+          // other udt types not supported, xmltype does not have order or map member function
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else {
+          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
+                                expr->datum_meta_.type_,
+                                expr->datum_meta_.type_,
+                                NULL_LAST,//这里null last还是first无所谓
+                                expr->datum_meta_.cs_type_,
+                                expr->datum_meta_.scale_,
+                                lib::is_oracle_mode(),
+                                expr->obj_meta_.has_lob_header());
+          if (OB_ISNULL(cmp_func.cmp_func_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+          } else if (OB_FAIL(spec.cmp_funcs_.push_back(cmp_func))) {
+            LOG_WARN("failed to push back sort function", K(ret));
+          }
         }
       }
     }
@@ -4289,7 +4400,7 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
           ObNestedLoopJoinSpec &nlj = static_cast<ObNestedLoopJoinSpec &>(spec);
           if (op.enable_px_batch_rescan()) {
             nlj.enable_px_batch_rescan_ = true;
-            nlj.group_size_ = ObNestedLoopJoinOp::PX_RESCAN_BATCH_ROW_COUNT;
+            nlj.group_size_ = PX_RESCAN_BATCH_ROW_COUNT;
           } else {
             nlj.enable_px_batch_rescan_ = false;
           }
@@ -5363,24 +5474,30 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                                   const_cast<ObExprResType &>(param_raw_expr.get_result_type())))) {
           LOG_WARN("failed to push_back expr type", K(ret));
         } else if (aggr_info.has_distinct_) {
-          ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
-          ObSortCmpFunc cmp_func;
-          cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
-                                                                   expr->datum_meta_.type_,
-                                                                   field_collation.null_pos_,
-                                                                   field_collation.cs_type_,
-                                                                   expr->datum_meta_.scale_,
-                                                                   lib::is_oracle_mode(),
-                                                                   expr->obj_meta_.has_lob_header());
-          if (OB_ISNULL(cmp_func.cmp_func_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
-          } else if (OB_FAIL(aggr_info.distinct_collations_.push_back(field_collation))) {
-            LOG_WARN("failed to push back field collation", K(ret));
-          } else if (OB_FAIL(aggr_info.distinct_cmp_funcs_.push_back(cmp_func))) {
-            LOG_WARN("failed to push back cmp function", K(ret));
+          if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+            // other udt types not supported, xmltype does not have order or map member function
+            ret = OB_ERR_NO_ORDER_MAP_SQL;
+            LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
           } else {
-            LOG_DEBUG("succ to push back field collation", K(field_collation), K(i));
+            ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
+            ObSortCmpFunc cmp_func;
+            cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
+                                                                    expr->datum_meta_.type_,
+                                                                    field_collation.null_pos_,
+                                                                    field_collation.cs_type_,
+                                                                    expr->datum_meta_.scale_,
+                                                                    lib::is_oracle_mode(),
+                                                                    expr->obj_meta_.has_lob_header());
+            if (OB_ISNULL(cmp_func.cmp_func_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("cmp_func is null, check datatype is valid", K(ret));
+            } else if (OB_FAIL(aggr_info.distinct_collations_.push_back(field_collation))) {
+              LOG_WARN("failed to push back field collation", K(ret));
+            } else if (OB_FAIL(aggr_info.distinct_cmp_funcs_.push_back(cmp_func))) {
+              LOG_WARN("failed to push back cmp function", K(ret));
+            } else {
+              LOG_DEBUG("succ to push back field collation", K(field_collation), K(i));
+            }
           }
         }
       }
@@ -5400,7 +5517,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
                          T_FUN_KEEP_COUNT == raw_expr.get_expr_type() ||
                          T_FUN_KEEP_WM_CONCAT == raw_expr.get_expr_type() ||
                          T_FUN_HYBRID_HIST == raw_expr.get_expr_type() ||
-                         T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type())) {
+                         T_FUN_ORA_JSON_ARRAYAGG == raw_expr.get_expr_type() ||
+                         T_FUN_ORA_XMLAGG == raw_expr.get_expr_type())) {
       const ObRawExpr *param_raw_expr = (is_oracle_mode()
           && T_FUN_GROUP_CONCAT == raw_expr.get_expr_type()
           && raw_expr.get_real_param_count() > 1)
@@ -5900,6 +6018,10 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
       int64_t idx = OB_INVALID_INDEX;
       if (OB_FAIL(generate_rt_expr(*order_item.expr_, expr))) {
         LOG_WARN("failed to generate rt expr", K(ret));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // other udt types not supported, xmltype does not have order or map member function
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (sort_exprs != NULL && OB_FAIL(sort_exprs->push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (has_exist_in_array(all_exprs, expr, &idx)) {
@@ -5915,6 +6037,7 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
           idx = all_exprs.count() - 1;
         }
       }
+
       if (OB_SUCC(ret)) {
         ObSortFieldCollation field_collation(idx,
             expr->datum_meta_.cs_type_,
@@ -6409,11 +6532,15 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_is_affect_found_row(log_plan.get_stmt()->is_affect_found_rows());
     phy_plan.set_has_top_limit(log_plan.get_stmt()->has_top_limit());
     phy_plan.set_use_px(true);
-    phy_plan.set_px_dop(log_plan.get_optimizer_context().get_parallel());
+    phy_plan.set_px_dop(log_plan.get_optimizer_context().get_max_parallel());
     phy_plan.set_expected_worker_count(log_plan.get_optimizer_context().get_expected_worker_count());
     phy_plan.set_minimal_worker_count(log_plan.get_optimizer_context().get_minimal_worker_count());
     phy_plan.set_is_batched_multi_stmt(log_plan.get_optimizer_context().is_batched_multi_stmt());
     phy_plan.set_need_consistent_snapshot(log_plan.need_consistent_read());
+    // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
+      phy_plan.set_enable_px_fast_reclaim(GCONF._enable_px_fast_reclaim);
+    }
     if (OB_FAIL(phy_plan.set_expected_worker_map(log_plan.get_optimizer_context().get_expected_worker_map()))) {
       LOG_WARN("set expected worker map", K(ret));
     } else if (OB_FAIL(phy_plan.set_minimal_worker_map(log_plan.get_optimizer_context().get_minimal_worker_map()))) {
@@ -6575,7 +6702,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     if (OB_ISNULL(log_plan.get_stmt())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (log_plan.get_stmt()->get_query_ctx()->has_pl_udf_) {
+    } else if (log_plan.get_stmt()->get_query_ctx()->disable_udf_parallel_) {
       if (log_plan.get_stmt()->is_insert_stmt() ||
           log_plan.get_stmt()->is_update_stmt() ||
           log_plan.get_stmt()->is_delete_stmt() ||

@@ -23,14 +23,14 @@ namespace oceanbase
 class ObSchemaMemory
 {
 public:
-  ObSchemaMemory():pos_(OB_INVALID_INDEX), tenant_id_(OB_INVALID_TENANT_ID), 
+  ObSchemaMemory():pos_(OB_INVALID_INDEX), tenant_id_(OB_INVALID_TENANT_ID),
                   mem_used_(OB_INVALID_COUNT), mem_total_(OB_INVALID_COUNT),
-                  used_schema_mgr_cnt_(OB_INVALID_COUNT), 
+                  used_schema_mgr_cnt_(OB_INVALID_COUNT),
                   free_schema_mgr_cnt_(OB_INVALID_COUNT) {}
   ~ObSchemaMemory() {}
   void reset();
   void init(const int64_t pos, const uint64_t &tenant_id,
-            const int64_t &mem_used, const int64_t &mem_total, 
+            const int64_t &mem_used, const int64_t &mem_total,
             const int64_t &used_schema_mgr_cnt,
             const int64_t &free_schema_mgr_cnt);
   int64_t get_pos() const { return pos_; }

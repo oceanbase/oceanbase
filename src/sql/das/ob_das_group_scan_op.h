@@ -54,6 +54,8 @@ public:
                                    ObExpr *group_id_expr);
   virtual int switch_lookup_scan_group() override;
   virtual int set_lookup_scan_group(int64_t group_id) override;
+
+  int revert_iter();
 public:
   ObGroupScanIter group_iter_;
 };

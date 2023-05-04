@@ -73,14 +73,14 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                                |NAME    |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR                          |        |0       |11          |
-|1 |└─EXCHANGE OUT DISTR                    |:EX10001|0       |11          |
-|2 |  └─NESTED-LOOP JOIN                    |        |0       |11          |
-|3 |    ├─PX BLOCK ITERATOR                 |        |1       |6           |
-|4 |    │ └─TABLE FULL SCAN                 |score   |1       |6           |
-|5 |    └─MATERIAL                          |        |1       |6           |
-|6 |      └─EXCHANGE IN DISTR               |        |1       |6           |
-|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |6           |
+|0 |PX COORDINATOR                          |        |26      |68          |
+|1 |└─EXCHANGE OUT DISTR                    |:EX10001|26      |42          |
+|2 |  └─NESTED-LOOP JOIN                    |        |26      |12          |
+|3 |    ├─PX BLOCK ITERATOR                 |        |28      |6           |
+|4 |    │ └─TABLE FULL SCAN                 |score   |28      |6           |
+|5 |    └─MATERIAL                          |        |1       |7           |
+|6 |      └─EXCHANGE IN DISTR               |        |1       |7           |
+|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |7           |
 |8 |          └─PX BLOCK ITERATOR           |        |1       |6           |
 |9 |            └─TABLE FULL SCAN           |stu     |1       |6           |
 ============================================================================
@@ -135,40 +135,40 @@ sid	name	cls	sid	subject	score
 11	a1	1	64	MA	87
 explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 Query Plan
-========================================================================
-|ID|OPERATOR                            |NAME    |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------
-|0 |PX COORDINATOR                      |        |1       |10          |
-|1 |└─EXCHANGE OUT DISTR                |:EX10001|1       |9           |
-|2 |  └─SHARED HASH JOIN                |        |1       |8           |
-|3 |    ├─EXCHANGE IN DISTR             |        |1       |6           |
-|4 |    │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|1       |6           |
-|5 |    │   └─PX BLOCK ITERATOR         |        |1       |6           |
-|6 |    │     └─TABLE FULL SCAN         |score   |1       |6           |
-|7 |    └─PX BLOCK ITERATOR             |        |1       |2           |
-|8 |      └─TABLE GET                   |teacher |1       |2           |
-========================================================================
+==========================================================================
+|ID|OPERATOR                              |NAME    |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |PX COORDINATOR                        |        |14      |40          |
+|1 |└─EXCHANGE OUT DISTR                  |:EX10001|14      |26          |
+|2 |  └─NESTED-LOOP JOIN                  |        |14      |10          |
+|3 |    ├─EXCHANGE IN DISTR               |        |1       |3           |
+|4 |    │ └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|1       |2           |
+|5 |    │   └─PX BLOCK ITERATOR           |        |1       |2           |
+|6 |    │     └─TABLE GET                 |teacher |1       |2           |
+|7 |    └─PX BLOCK ITERATOR               |        |28      |6           |
+|8 |      └─TABLE FULL SCAN               |score   |28      |6           |
+==========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
   1 - output([INTERNAL_FUNCTION(score.sid, score.subject, score.score, teacher.tid, teacher.name, teacher.subject)]), filter(nil), rowset=256
       dop=2
-  2 - output([teacher.subject], [score.subject], [score.sid], [score.score], [teacher.tid], [teacher.name]), filter(nil), rowset=256
-      equal_conds([teacher.subject = score.subject]), other_conds(nil)
-  3 - output([score.subject], [score.sid], [score.score]), filter(nil), rowset=256
-  4 - output([score.subject], [score.sid], [score.score]), filter(nil), rowset=256
+  2 - output([teacher.subject], [score.subject], [teacher.tid], [teacher.name], [score.sid], [score.score]), filter(nil), rowset=256
+      conds([teacher.subject = score.subject]), nl_params_(nil), use_batch=false
+  3 - output([teacher.subject], [teacher.tid], [teacher.name]), filter(nil), rowset=256
+  4 - output([teacher.subject], [teacher.tid], [teacher.name]), filter(nil), rowset=256
       dop=2
-  5 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
-  6 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
-      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
-      is_index_back=false, is_global_index=false,
-      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
-  7 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
-  8 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
+  5 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
+  6 - output([teacher.tid], [teacher.subject], [teacher.name]), filter(nil), rowset=256
       access([teacher.tid], [teacher.subject], [teacher.name]), partitions(p1)
       is_index_back=false, is_global_index=false,
       range_key([teacher.tid]), range[1 ; 1],
       range_cond([teacher.tid = 1])
+  7 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
+  8 - output([score.sid], [score.subject], [score.score]), filter(nil), rowset=256
+      access([score.sid], [score.subject], [score.score]), partitions(p[0-5])
+      is_index_back=false, is_global_index=false,
+      range_key([score.sid], [score.subject]), range(MIN,MIN ; MAX,MAX)always true
 select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 sid	subject	score	tid	name	subject
 11	EN	60	1	Miss Zhang	EN

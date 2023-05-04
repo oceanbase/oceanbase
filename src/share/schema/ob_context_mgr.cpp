@@ -83,19 +83,19 @@ ObContextHashWrapper ObGetContextKey<ObContextHashWrapper,ObContextSchema *>
 
 ObContextMgr::ObContextMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      context_infos_(0, NULL, "SchemaContext"),
-      context_map_("SchemaContext")
+      context_infos_(0, NULL, SET_USE_500("SchemaContext")),
+      context_map_(SET_USE_500("SchemaContext"))
 {
 }
 
 ObContextMgr::ObContextMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      context_infos_(0, NULL, "SchemaContext"),
-      context_map_("SchemaContext")
+      context_infos_(0, NULL, SET_USE_500("SchemaContext")),
+      context_map_(SET_USE_500("SchemaContext"))
 {
 }
 
@@ -322,7 +322,7 @@ int ObContextMgr::del_context(const ObContextKey &context)
              K(context_infos_.count()),
              K(context_map_.item_count()));
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret 
+    if (OB_SUCCESS != (tmp_ret
                        = ObContextMgr::rebuild_context_hashmap(context_infos_, context_map_))) {
       LOG_WARN("rebuild context hashmap failed", K(tmp_ret));
     }

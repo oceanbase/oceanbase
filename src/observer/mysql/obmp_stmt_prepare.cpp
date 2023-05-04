@@ -194,9 +194,6 @@ int ObMPStmtPrepare::process()
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
-    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
-      ret = OB_ERR_NET_PACKET_TOO_LARGE;
-      LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
       LOG_WARN("fail to get query timeout", K_(sql), K(ret));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
@@ -210,13 +207,12 @@ int ObMPStmtPrepare::process()
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
     } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
-    } else if (pkt.get_extra_info().exist_sync_sess_info()
-               && OB_FAIL(ObMPUtils::sync_session_info(session,
-                                pkt.get_extra_info().get_sync_sess_info()))) {
-      // won't response error, disconnect will let proxy sens failure
-      need_response_error = false;
-      LOG_WARN("fail to update sess info", K(ret));
+    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
+      ret = OB_ERR_NET_PACKET_TOO_LARGE;
+      LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
@@ -416,7 +412,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
     {
       ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
       ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
-      if (enable_sql_audit) {
+      if (enable_perf_event) {
         audit_record.exec_record_.record_start(di);
       }
       result.set_has_more_result(has_more_result);
@@ -455,9 +451,8 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
           LOG_WARN("ps : get inner stmt id fail.", K(ret), K(result.get_statement_id()));
         } else {
           //监控项统计开始
-          if (enable_perf_event) {
-            exec_start_timestamp_ = ObTimeUtility::current_time();
-          }
+          exec_start_timestamp_ = ObTimeUtility::current_time();
+
           // 本分支内如果出错，全部会在response_result内部处理妥当
           // 无需再额外处理回复错误包
           need_response_error = false;
@@ -478,20 +473,24 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
                       plan_ctx->get_timeout_timestamp());
             }
           }
+          //监控项统计结束
+          exec_end_timestamp_ = ObTimeUtility::current_time();
+
+          // some statistics must be recorded for plan stat, even though sql audit disabled
+          bool first_record = (1 == audit_record.try_cnt_);
+          ObExecStatUtils::record_exec_timestamp(*this, first_record, audit_record.exec_timestamp_);
+          audit_record.exec_timestamp_.update_stage_time();
+
           if (enable_perf_event) {
-            exec_end_timestamp_ = ObTimeUtility::current_time();
-            if (lib::is_diagnose_info_enabled() && !THIS_THWORKER.need_retry()) {
+            audit_record.exec_record_.record_end(di);
+            audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+            audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+            audit_record.update_event_stage_state();
+            if (!THIS_THWORKER.need_retry()) {
               const int64_t time_cost = exec_end_timestamp_ - get_receive_timestamp();
               EVENT_INC(SQL_PS_PREPARE_COUNT);
               EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
             }
-          }
-          if (enable_sql_audit) {
-            audit_record.exec_record_.record_end(di);
-            bool first_record = (1 == audit_record.try_cnt_);
-            ObExecStatUtils::record_exec_timestamp(*this,
-                first_record,
-                audit_record.exec_timestamp_);
           }
         }
       }
@@ -541,15 +540,13 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
       audit_record.client_addr_ = session.get_peer_addr();
       audit_record.user_client_addr_ = session.get_user_client_addr();
       audit_record.user_group_ = THIS_WORKER.get_group_id();
-      audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-      audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
       audit_record.ps_stmt_id_ = result.get_statement_id();
       audit_record.ps_inner_stmt_id_ = inner_stmt_id;
-      audit_record.update_stage_stat();
-      bool need_retry = (THIS_THWORKER.need_retry()
-                         || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
-      ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, ctx_.is_sensitive_);
+      audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
     }
+    bool need_retry = (THIS_THWORKER.need_retry()
+                       || RETRY_TYPE_NONE != retry_ctrl_.get_retry_type());
+    ObSQLUtils::handle_audit_record(need_retry, EXECUTE_PS_PREPARE, session, ctx_.is_sensitive_);
   }
 
   // reset thread waring buffer in sync mode

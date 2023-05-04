@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprInsert::ObExprInsert(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_INSERT, N_INSERT, MORE_THAN_TWO)
+    : ObStringExprOperator(alloc, T_FUN_SYS_INSERT, N_INSERT, MORE_THAN_TWO, VALID_FOR_GENERATED_COL)
 {
 }
 

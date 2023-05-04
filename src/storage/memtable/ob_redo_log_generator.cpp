@@ -35,6 +35,10 @@ void ObRedoLogGenerator::reset()
   generate_cursor_.reset();
   callback_mgr_ = nullptr;
   mem_ctx_ = NULL;
+  if (clog_encrypt_meta_ != NULL) {
+    op_free(clog_encrypt_meta_);
+    clog_encrypt_meta_ = NULL;
+  }
 }
 
 void ObRedoLogGenerator::reuse()
@@ -86,6 +90,9 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
     ObCallbackScope callbacks;
     int64_t data_size = 0;
     ObITransCallbackIterator cursor;
+    // for encrypt
+    transaction::ObCLogEncryptInfo encrypt_info;
+    encrypt_info.init();
 
     for (cursor = generate_cursor_ + 1; OB_SUCC(ret) && callback_mgr_->end() != cursor; ++cursor) {
       ObITransCallback *iter = (ObITransCallback *)*cursor;
@@ -102,7 +109,7 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
       } else {
         bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == iter->get_mutator_type()) {
-          ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node, fake_fill);
+          ret = fill_row_redo(cursor, mmw, redo, log_for_lock_node, fake_fill, encrypt_info);
         } else if (MutatorType::MUTATOR_TABLE_LOCK == iter->get_mutator_type()) {
           ret = fill_table_lock_redo(cursor, mmw, table_lock_redo, log_for_lock_node, fake_fill);
         } else {
@@ -151,7 +158,8 @@ int ObRedoLogGenerator::fill_redo_log(char *buf,
 
       if (OB_LIKELY(OB_ERR_TOO_BIG_ROWSIZE != ret)) {
         int64_t res_len = 0;
-        if (OB_SUCCESS != (tmp_ret = mmw.serialize(ObTransRowFlag::NORMAL_ROW, res_len))) {
+        uint8_t row_flag = ObTransRowFlag::NORMAL_ROW;
+        if (OB_SUCCESS != (tmp_ret = mmw.serialize(row_flag, res_len, encrypt_info))) {
           if (OB_ENTRY_NOT_EXIST != tmp_ret) {
             TRANS_LOG(ERROR, "mmw.serialize fail", K(ret), K(tmp_ret));
             ret = tmp_ret;
@@ -268,7 +276,8 @@ int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
                                       ObMutatorWriter &mmw,
                                       RedoDataNode &redo,
                                       const bool log_for_lock_node,
-                                      bool &fake_fill)
+                                      bool &fake_fill,
+                                      transaction::ObCLogEncryptInfo &encrypt_info)
 {
   int ret = OB_SUCCESS;
 
@@ -290,13 +299,14 @@ int ObRedoLogGenerator::fill_row_redo(ObITransCallbackIterator &cursor,
   } else if (OB_ENTRY_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
   } else {
-    transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(mem_ctx_->get_trans_ctx());
-    if (OB_ISNULL(part_ctx)) {
-      TRANS_LOG(ERROR, "part ctx is null", K(mem_ctx_));
+    ObMemtable *memtable = static_cast<memtable::ObMemtable *>(riter->get_memtable());
+    if (OB_ISNULL(memtable)) {
+      TRANS_LOG(ERROR, "memtable is null", K(riter));
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(mmw.append_row_kv(mem_ctx_->get_max_table_version(),
                                          redo,
-                                         part_ctx->get_clog_encrypt_info(),
+                                         clog_encrypt_meta_,
+                                         encrypt_info,
                                          false))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
         TRANS_LOG(WARN, "mutator writer append_kv fail", "ret", ret);

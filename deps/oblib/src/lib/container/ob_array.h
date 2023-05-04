@@ -97,6 +97,7 @@ public:
           const BlockAllocatorT &alloc = BlockAllocatorT(ObNewModIds::OB_COMMON_ARRAY));
   virtual ~ObArrayImpl() __attribute__((noinline));
   inline void set_label(const lib::ObLabel &label) { block_allocator_.set_label(label); }
+  inline void set_attr(const lib::ObMemAttr &attr) { block_allocator_.set_attr(attr); }
   inline void set_block_size(const int64_t block_size) { block_size_ = block_size; }
   inline int64_t get_block_size() const {return block_size_; }
   inline void set_block_allocator(const BlockAllocatorT &alloc) { block_allocator_ = alloc; }

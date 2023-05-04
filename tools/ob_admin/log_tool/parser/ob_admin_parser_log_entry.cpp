@@ -505,7 +505,7 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
         switch (header.get_dict_meta_type()) {
           case datadict::ObDictMetaType::TENANT_META: {
             datadict::ObDictTenantMeta tenant_meta(&allocator);
-            if (OB_FAIL(dict_iterator.next_dict_entry(tenant_meta))) {
+            if (OB_FAIL(dict_iterator.next_dict_entry(header, tenant_meta))) {
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(tenant_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("TenantMeta");
@@ -515,7 +515,7 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
           }
           case datadict::ObDictMetaType::DATABASE_META: {
             datadict::ObDictDatabaseMeta db_meta(&allocator);
-            if (OB_FAIL(dict_iterator.next_dict_entry(db_meta))) {
+            if (OB_FAIL(dict_iterator.next_dict_entry(header, db_meta))) {
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(db_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("DatabaseMeta");
@@ -525,7 +525,7 @@ int ObAdminParserLogEntry::parse_data_dict_log_()
           }
           case datadict::ObDictMetaType::TABLE_META: {
             datadict::ObDictTableMeta table_meta(&allocator);
-            if (OB_FAIL(dict_iterator.next_dict_entry(table_meta))) {
+            if (OB_FAIL(dict_iterator.next_dict_entry(header, table_meta))) {
               LOG_ERROR("get next_dict_entry failed", KR(ret), K(header), K(table_meta));
             } else {
               str_arg_.writer_ptr_->dump_key("TableMeta");

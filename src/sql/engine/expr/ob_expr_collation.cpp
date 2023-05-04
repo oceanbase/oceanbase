@@ -28,7 +28,7 @@ namespace sql
 //{}
 
 ObExprCharset::ObExprCharset(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CHARSET, N_CHARSET, 1, NOT_VALID_FOR_GENERATED_COL)
 {}
 
 ObExprCharset::~ObExprCharset()
@@ -100,7 +100,7 @@ namespace sql
 //{}
 
 ObExprCollation::ObExprCollation(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_COLLATION, N_COLLATION, 1, NOT_VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }
@@ -168,14 +168,14 @@ namespace sql
 //    :ObExprOperator(T_FUN_SYS_COERCIBILITY,
 //                    N_COERCIBILITY,
 //                    1,
-//                    NOT_ROW_DIMENSION)
+//                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 //{}
 
 ObExprCoercibility::ObExprCoercibility(ObIAllocator &alloc)
     :ObExprOperator(alloc, T_FUN_SYS_COERCIBILITY,
                     N_COERCIBILITY,
                     1,
-                    NOT_ROW_DIMENSION)
+                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   disable_operand_auto_cast();
 }
@@ -229,13 +229,14 @@ namespace sql
 //    :ObExprOperator(T_FUN_SYS_SET_COLLATION,
 //                    N_SET_COLLATION,
 //                    2,
-//                    NOT_ROW_DIMENSION)
+//                    NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 //{}
 
 ObExprSetCollation::ObExprSetCollation(ObIAllocator &alloc)
     :ObExprOperator(alloc, T_FUN_SYS_SET_COLLATION,
                     N_SET_COLLATION,
                     2,
+                    VALID_FOR_GENERATED_COL,
                     NOT_ROW_DIMENSION,
                     INTERNAL_IN_MYSQL_MODE,
                     INTERNAL_IN_ORACLE_MODE)
@@ -263,7 +264,9 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
   type.set_length(type1.get_length());
   type.set_length_semantics(type1.is_varchar_or_char() ? type1.get_length_semantics() : default_length_semantics);
   //set calc type
-  if (OB_SUCC(ret) && type1.is_string_type()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (type1.is_string_type()) {
     ObCollationType collation_type = type2.get_collation_type();
     ObCharsetType cs_type = type1.get_charset_type();
     if (!ObCharset::is_valid_collation(cs_type, collation_type)) {
@@ -274,6 +277,10 @@ int ObExprSetCollation::calc_result_type2(ObExprResType &type,
       ObString collation = ObString::make_string(coll_name);
       LOG_USER_ERROR(OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(), charset.length(), charset.ptr());
     }
+  } else if (type1.is_xml_sql_type()) {
+    ret = OB_ERR_INVALID_XML_DATATYPE;
+    LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "CHAR", "ANYDATA");
+    LOG_WARN("invalid type, expect char", K(ret), K(type1), K(type));
   }
   if (OB_SUCC(ret)) {
     type1.set_calc_type(ObVarcharType);
@@ -345,7 +352,7 @@ namespace sql
 {
 
 ObExprCmpMeta::ObExprCmpMeta(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CMP_META, "cmp_meta", 1)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CMP_META, "cmp_meta", 1, NOT_VALID_FOR_GENERATED_COL)
 {
   /*
    * CmpMeta需要显示CalcMeta，type1的get_type()是int，meta_type是varchar，不需要转换

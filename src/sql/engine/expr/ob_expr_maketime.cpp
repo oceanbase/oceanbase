@@ -29,7 +29,7 @@ namespace sql
 {
 
 ObExprMakeTime::ObExprMakeTime(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKETIME, N_MAKETIME, 3, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKETIME, N_MAKETIME, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

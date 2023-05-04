@@ -193,6 +193,7 @@ ObExprSubQueryRef::ObExprSubQueryRef(ObIAllocator &alloc)
   : ObExprOperator(alloc, T_REF_QUERY,
                    N_REF_QUERY,
                    0,
+                   VALID_FOR_GENERATED_COL,
                    NOT_ROW_DIMENSION,
                    INTERNAL_IN_MYSQL_MODE,
                    INTERNAL_IN_ORACLE_MODE),

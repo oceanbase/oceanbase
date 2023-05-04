@@ -38,12 +38,14 @@ ObDDLRedoLogReplayer::~ObDDLRedoLogReplayer()
 int ObDDLRedoLogReplayer::init(ObLS *ls)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "RedoLogBuckLock");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDDLRedoLogReplayer has been inited twice", K(ret));
   } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to init allocator", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_HASH_BUCKET_COUNT))) {
+  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_HASH_BUCKET_COUNT, ObLatchIds::DEFAULT_BUCKET_LOCK, attr))) {
     LOG_WARN("fail to init bucket lock", K(ret));
   } else {
     ls_ = ls;

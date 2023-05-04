@@ -23,6 +23,7 @@
 #include "share/ob_ls_id.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tx/ob_trans_define.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 
 namespace oceanbase
 {
@@ -82,6 +83,7 @@ struct SampleInfo
     scope_ = SAMPLE_ALL_DATA;
     percent_ = 100;
     seed_ = -1;
+    force_block_ = false;
   }
 
   uint64_t table_id_;
@@ -89,7 +91,8 @@ struct SampleInfo
   SampleScope scope_;
   double percent_; // valid value: [0.000001, 100)
   int64_t seed_; // valid value: [0, 4294967296], -1 stands for random seed
-  TO_STRING_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope));
+  bool force_block_;//force sample block
+  TO_STRING_KV(K_(method), K_(percent), K_(seed), K_(table_id), K_(scope), K_(force_block));
   OB_UNIS_VERSION(1);
 };
 
@@ -186,9 +189,10 @@ typedef common::ObSEArray<common::ObSpatialMBR, OB_DEFAULT_MBR_FILTER_COUNT> ObM
 /**
  *  This is the common interface for storage service.
  *
- *  So far there are two components that implement the interface:
+ *  So far there are three components that implement the interface:
  *    1. partition storage
  *    2. virtual table
+ *    3. external table
  */
 class ObVTableScanParam
 {
@@ -212,12 +216,15 @@ ObVTableScanParam() :
       force_refresh_lc_(false),
       is_for_foreign_check_(false),
       output_exprs_(NULL),
+      calc_exprs_(NULL),
       aggregate_exprs_(NULL),
       op_(NULL),
       op_filters_(NULL),
       pd_storage_filters_(nullptr),
       pd_storage_flag_(false),
       row2exprs_projector_(NULL),
+      ext_file_column_exprs_(NULL),
+      ext_column_convert_exprs_(NULL),
       schema_guard_(NULL)
   { }
 
@@ -281,6 +288,7 @@ ObVTableScanParam() :
   //
   // output column expressions, same size as %column_ids_.
   const sql::ExprFixedArray *output_exprs_;
+  const sql::ExprFixedArray *calc_exprs_;
   // aggregate expressions, for calculating aggregation in storage layer.
   const sql::ExprFixedArray *aggregate_exprs_;
   sql::ObPushdownOperator *op_;
@@ -289,6 +297,13 @@ ObVTableScanParam() :
   int32_t pd_storage_flag_;
   // project storage output row to %output_exprs_
   storage::ObRow2ExprsProjector *row2exprs_projector_;
+
+  // external table
+  const sql::ExprFixedArray *ext_file_column_exprs_;
+  const sql::ExprFixedArray *ext_column_convert_exprs_;
+  sql::ObExternalFileFormat external_file_format_;
+  ObString external_file_location_;
+  ObString external_file_access_info_;
 
   virtual bool is_valid() const {
     return (tablet_id_.is_valid()

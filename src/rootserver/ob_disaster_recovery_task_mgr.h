@@ -33,7 +33,6 @@ struct ObDRTaskReplyResult;
 namespace rootserver
 {
 class ObDRTaskExecutor;
-class ObServerManager;
 class ObDRTaskMgr;
 
 class ObDRTaskQueue
@@ -53,12 +52,10 @@ public:
   // @param [in] config, server config
   // @param [in] bucket_num, the size of task_map
   // @param [in] rpc_proxy, to send rpc
-  // @param [in] server_mgr, server manager to get server infos
   int init(
       common::ObServerConfig &config,
       const int64_t bucket_num,
       obrpc::ObSrvRpcProxy *rpc_proxy,
-      ObServerManager *server_mgr,
       ObDRTaskPriority priority);
 
 public:
@@ -190,7 +187,6 @@ private:
   TaskList schedule_list_;
   TaskMap task_map_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
-  ObServerManager *server_mgr_;
   ObDRTaskPriority priority_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDRTaskQueue);
@@ -218,7 +214,6 @@ public:
                   low_task_queue_(queues_[1]),
                   self_(),
                   task_executor_(nullptr),
-                  server_mgr_(nullptr),
                   rpc_proxy_(nullptr),
                   sql_proxy_(nullptr),
                   schema_service_(nullptr) {}
@@ -229,7 +224,6 @@ public:
   // @param [in] server, local server address
   // @param [in] config, local server config
   // @param [in] task_executor, to execute a task
-  // @param [in] server_mgr, to check server status for task queue
   // @param [in] rpc_proxy, to send rpc for task queue
   // @param [in] sql_proxy, to send sql for updater
   // @param [in] schema_service, to get infos about objects
@@ -237,7 +231,6 @@ public:
       const common::ObAddr &server,
       common::ObServerConfig &config,
       ObDRTaskExecutor &task_executor,
-      ObServerManager *server_mgr,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       common::ObMySQLProxy *sql_proxy,
       share::schema::ObMultiVersionSchemaService *schema_service);
@@ -427,7 +420,6 @@ private:
   ObDRTaskQueue &low_task_queue_;  // queues_[1]
   common::ObAddr self_;
   ObDRTaskExecutor *task_executor_;
-  ObServerManager *server_mgr_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   common::ObMySQLProxy *sql_proxy_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

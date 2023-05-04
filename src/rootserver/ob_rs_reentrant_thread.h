@@ -33,9 +33,7 @@ public:
 
   virtual void run2() override {
     int ret = common::OB_SUCCESS;
-    CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, common::OB_RS_TENANT_ID) {
-      run3();
-    }
+    run3();
   }
   virtual void run3() = 0;
 
@@ -62,6 +60,7 @@ public:
   int start();
   void stop();
   void wait();
+  void reset_last_run_timestamp() { ATOMIC_STORE(&last_run_timestamp_, 0); }
   TO_STRING_KV("name", get_thread_name());
 
 private:

@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprDatabase::ObExprDatabase(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_SYS_DATABASE, N_DATABASE, 0)
+  : ObStringExprOperator(alloc, T_FUN_SYS_DATABASE, N_DATABASE, 0, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

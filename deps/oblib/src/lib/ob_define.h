@@ -562,6 +562,8 @@ const uint64_t OB_HIDDEN_SESSION_ID_COLUMN_ID = 9;
 const uint64_t OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID = 10;
 const uint64_t OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID = 11;
 const uint64_t OB_HIDDEN_GROUP_IDX_COLUMN_ID = 13; // used for batch nlj
+const uint64_t OB_HIDDEN_FILE_ID_COLUMN_ID = 14; // used for external table
+const uint64_t OB_HIDDEN_LINE_NUMBER_COLUMN_ID = 15; // used for external table
 const int64_t OB_END_RESERVED_COLUMN_ID_NUM = 16;
 const uint64_t OB_APP_MIN_COLUMN_ID = 16;
 const uint64_t OB_ACTION_FLAG_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
@@ -582,6 +584,8 @@ const char *const OB_HIDDEN_PK_INCREMENT_COLUMN_NAME = "__pk_increment"; //hidde
 const char *const OB_MOCK_LINK_TABLE_PK_COLUMN_NAME = "__link_table_pkey"; //hidden
 const char *const OB_HIDDEN_SESSION_ID_COLUMN_NAME = "SYS_SESSION_ID"; //oracle temporary table
 const char *const OB_HIDDEN_SESS_CREATE_TIME_COLUMN_NAME = "SYS_SESS_CREATE_TIME"; //oracle temporary table
+const char *const OB_HIDDEN_FILE_ID_COLUMN_NAME = "__file_id"; // used for external table
+const char *const OB_HIDDEN_LINE_NUMBER_COLUMN_NAME = "__line_number"; // used for external table
 
 // hidden rowid name
 const char *const OB_HIDDEN_ROWID_COLUMN_NAME = "__ob_rowid";
@@ -802,26 +806,15 @@ const double MONITOR_MEM_FACTOR = 0.01;
 const double KVCACHE_FACTOR = TENANT_RESERVE_MEM_RATIO;
 
 const double MIN_TENANT_QUOTA = .5;
-const double EXT_LOG_TENANT_CPU = 4.;
-const int64_t EXT_LOG_TENANT_MEMORY_LIMIT = 4L << 30;
-const double OB_MONITOR_CPU = 1.;
-const double OB_DTL_CPU = 5.;
-const double OB_DIAG_CPU = 1.0;
-const double OB_DATA_CPU = 2.5;
-const double OB_RS_CPU = 1.0;
-const double OB_SVR_BLACKLIST_CPU = 1.0;
-const int64_t OB_RS_MEMORY = 2L << 30;
+const double OB_DTL_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 5.;
+const double OB_DATA_CPU = (sysconf(_SC_NPROCESSORS_ONLN) <= 4) ? 1. : 2.5;
 
 const uint64_t OB_INVALID_TENANT_ID = 0;
 const uint64_t OB_SYS_TENANT_ID = 1;
 const uint64_t OB_GTS_TENANT_ID = 2;
 const uint64_t OB_SERVER_TENANT_ID = 500;
-const uint64_t OB_ELECT_TENANT_ID = 501;
-const uint64_t OB_EXT_LOG_TENANT_ID = 506;
-// const uint64_t OB_MONITOR_TENANT_ID = 507;
 const uint64_t OB_DTL_TENANT_ID = 508;
 const uint64_t OB_DATA_TENANT_ID = 509;
-const uint64_t OB_RS_TENANT_ID = 510;
 const uint64_t OB_GTS_SOURCE_TENANT_ID = 511;
 const uint64_t OB_SVR_BLACKLIST_TENANT_ID = 512;
 const uint64_t OB_MAX_RESERVED_TENANT_ID = 1000;
@@ -1851,9 +1844,7 @@ OB_INLINE bool is_valid_cluster_id(const int64_t cluster_id)
 
 OB_INLINE bool is_virtual_tenant_for_memory(const uint64_t tenant_id)
 {
-  return is_virtual_tenant_id(tenant_id) &&
-       (OB_EXT_LOG_TENANT_ID == tenant_id ||
-        OB_RS_TENANT_ID == tenant_id);
+  return is_virtual_tenant_id(tenant_id);
 }
 
 enum ObNameCaseMode

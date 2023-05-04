@@ -429,6 +429,7 @@ public:
   ObTZIDKey() : tz_id_(0) { }
   ObTZIDKey(const int64_t tz_id) : tz_id_(tz_id) {}
   uint64_t hash() const  { return common::murmurhash(&tz_id_, sizeof(tz_id_), 0); };
+  int hash(uint64_t &hash_val) const  { hash_val = hash(); return OB_SUCCESS; };
   int compare(const ObTZIDKey & r)
   {
     int cmp = 0;
@@ -466,7 +467,8 @@ public:
   }
   bool operator==(const ObTZNameKey &key) const { return 0 == compare(key); }
 
-  uint64_t hash(uint64_t seed = 0) const;
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_));
 private:
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
@@ -532,12 +534,12 @@ public:
   inline int32_t get_curr_idx() const { return curr_idx_; }
   inline int32_t get_next_idx() const { return curr_idx_ + 1; }
   inline void inc_curr_idx() { ++curr_idx_; }
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &get_tz_tran_types() const { return tz_tran_types_[get_curr_idx() % 2]; }
-  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &get_tz_revt_types() const { return tz_revt_types_[get_curr_idx() % 2]; }
-  const common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &get_next_tz_tran_types() const { return tz_tran_types_[get_next_idx() % 2]; }
-  const common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &get_next_tz_revt_types() const { return tz_revt_types_[get_next_idx() % 2]; }
-  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> &get_next_tz_tran_types() { return tz_tran_types_[get_next_idx() % 2]; }
-  common::ObSArray<ObTZRevertTypeInfo, ObMalloc> &get_next_tz_revt_types() { return tz_revt_types_[get_next_idx() % 2]; }
+  const common::ObSArray<ObTZTransitionTypeInfo> &get_tz_tran_types() const { return tz_tran_types_[get_curr_idx() % 2]; }
+  const common::ObSArray<ObTZRevertTypeInfo> &get_tz_revt_types() const { return tz_revt_types_[get_curr_idx() % 2]; }
+  const common::ObSArray<ObTZTransitionTypeInfo> &get_next_tz_tran_types() const { return tz_tran_types_[get_next_idx() % 2]; }
+  const common::ObSArray<ObTZRevertTypeInfo> &get_next_tz_revt_types() const { return tz_revt_types_[get_next_idx() % 2]; }
+  common::ObSArray<ObTZTransitionTypeInfo> &get_next_tz_tran_types() { return tz_tran_types_[get_next_idx() % 2]; }
+  common::ObSArray<ObTZRevertTypeInfo> &get_next_tz_revt_types() { return tz_revt_types_[get_next_idx() % 2]; }
   int calc_revt_types();
   virtual int timezone_to_str(char *buf, const int64_t len, int64_t &pos) const;
   VIRTUAL_TO_STRING_KV("tz_name", common::ObString(common::OB_MAX_TZ_NAME_LEN, tz_name_),
@@ -562,9 +564,9 @@ private:
     there are no transitions at all.*/
   ObTZTransitionTypeInfo default_type_;
   //used for utc time -> local time
-  common::ObSArray<ObTZTransitionTypeInfo, ObMalloc> tz_tran_types_[2];
+  common::ObSArray<ObTZTransitionTypeInfo> tz_tran_types_[2];
   //used for local time -> utc time
-  common::ObSArray<ObTZRevertTypeInfo, ObMalloc> tz_revt_types_[2];
+  common::ObSArray<ObTZRevertTypeInfo> tz_revt_types_[2];
   uint32_t curr_idx_;
   char tz_name_[common::OB_MAX_TZ_NAME_LEN];
 };
@@ -630,7 +632,7 @@ class ObTZInfoMap
 public:
   ObTZInfoMap() : inited_(false), id_map_(), name_map_() {}
   ~ObTZInfoMap() {}
-  int init(const lib::ObLabel &label);
+  int init(const lib::ObMemAttr &attr);
   int reset();
   void destroy();
   int print_tz_info_map();

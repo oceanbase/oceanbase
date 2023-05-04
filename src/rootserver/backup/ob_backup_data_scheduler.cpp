@@ -20,7 +20,6 @@
 #include "rootserver/ob_root_utils.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_backup_helper.h"
-#include "rootserver/ob_server_manager.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "share/backup/ob_backup_connectivity.h"

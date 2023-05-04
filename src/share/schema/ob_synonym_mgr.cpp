@@ -118,21 +118,21 @@ int64_t ObSimpleSynonymSchema::get_convert_size() const
 
 ObSynonymMgr::ObSynonymMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      synonym_infos_(0, NULL, ObModIds::OB_SCHEMA_SYNONYM),
-      synonym_id_map_(ObModIds::OB_SCHEMA_SYNONYM),
-      synonym_name_map_(ObModIds::OB_SCHEMA_SYNONYM)
+      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
+      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
+      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM))
 {
 }
 
 ObSynonymMgr::ObSynonymMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      synonym_infos_(0, NULL, ObModIds::OB_SCHEMA_SYNONYM),
-      synonym_id_map_(ObModIds::OB_SCHEMA_SYNONYM),
-      synonym_name_map_(ObModIds::OB_SCHEMA_SYNONYM)
+      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
+      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
+      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM))
 {
 }
 

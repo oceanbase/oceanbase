@@ -90,12 +90,14 @@ int ObLogTempTableAccess::allocate_expr_post(ObAllocExprContext &ctx)
   return ret;
 }
 
-int ObLogTempTableAccess::re_est_cost(EstimateCostInfo &param, double &card, double &cost)
+int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
   card = get_card();
+  op_cost = get_op_cost();
   cost = get_cost();
   double selectivity = 1.0;
+  const int64_t parallel = param.need_parallel_;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()),K(ret));
@@ -107,7 +109,7 @@ int ObLogTempTableAccess::re_est_cost(EstimateCostInfo &param, double &card, dou
     LOG_WARN("failed to calculate selectivity", K(ret));
   } else { 
     double read_card = card;
-    if (selectivity > 0 && selectivity < 1) {
+    if (selectivity > 0 && selectivity <= 1) {
       read_card /= selectivity;
     } else {
       read_card = 0;
@@ -128,15 +130,11 @@ int ObLogTempTableAccess::re_est_cost(EstimateCostInfo &param, double &card, dou
         card = param.need_row_count_;
       }
     }
-    double per_dop_card = read_card / parallel_;
+    double per_dop_card = read_card / parallel;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx.get_cost_model_type()) +
                 ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx.get_cost_model_type());
-    if (param.override_) {
-      set_op_cost(cost);
-      set_cost(cost);
-      set_card(card);
-    }
+    op_cost = cost;
   }
   return ret;
 }

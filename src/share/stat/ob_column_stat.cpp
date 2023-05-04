@@ -148,7 +148,10 @@ int ObColumnStat::add_value(const common::ObObj &value)
         }
       }
       if (OB_SUCC(ret)) {
-        calc_llc_value(value);
+        uint64_t hval = 0;
+        if (OB_FAIL(calc_llc_value(value, hval))) {
+          COMMON_LOG(WARN, "calc llc values failed.", K(ret));
+        }
       }
     }
 
@@ -360,24 +363,29 @@ int ObColumnStat::store_min_value(const common::ObObj &min)
   return ret;
 }
 
-void ObColumnStat::calc_llc_value(const common::ObObj &value)
+int ObColumnStat::calc_llc_value(const common::ObObj &value, uint64_t &h)
 {
-  uint64_t h = value.hash(0);
-  //  Mask out the k least significant bits as bucket NO
-  uint64_t hash_bucket = h;
-  uint64_t total_bucket_bits = TOTAL_BUCKET_BITS;
-  uint64_t bucket = 0;
-  while (total_bucket_bits > 0) {
-    bucket ^= (hash_bucket & (NUM_LLC_BUCKET -1));
-    hash_bucket >>= BUCKET_BITS;
-    total_bucket_bits -= BUCKET_BITS;
-  }
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(value.hash(h, 0))) {
+    COMMON_LOG(WARN, "fail to hash.", K(ret), K(value));
+  } else {
+    //  Mask out the k least significant bits as bucket NO
+    uint64_t hash_bucket = h;
+    uint64_t total_bucket_bits = TOTAL_BUCKET_BITS;
+    uint64_t bucket = 0;
+    while (total_bucket_bits > 0) {
+      bucket ^= (hash_bucket & (NUM_LLC_BUCKET -1));
+      hash_bucket >>= BUCKET_BITS;
+      total_bucket_bits -= BUCKET_BITS;
+    }
 
-  const uint64_t pmax = trailing_zeroes(h >> BUCKET_BITS); // pmax <= 64;
-  if (pmax > static_cast<uint8_t>(llc_bitmap_[bucket])) {
-    llc_bitmap_[bucket] = static_cast<uint8_t>(pmax);
-    is_modified_ = true;
+    const uint64_t pmax = trailing_zeroes(h >> BUCKET_BITS); // pmax <= 64;
+    if (pmax > static_cast<uint8_t>(llc_bitmap_[bucket])) {
+      llc_bitmap_[bucket] = static_cast<uint8_t>(pmax);
+      is_modified_ = true;
+    }
   }
+  return ret;
 }
 
 uint64_t ObColumnStat::trailing_zeroes(const uint64_t num)

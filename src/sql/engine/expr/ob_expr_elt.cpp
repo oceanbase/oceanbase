@@ -26,7 +26,7 @@ namespace sql
 }
 
 ObExprElt::ObExprElt(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_SYS_ELT, N_ELT, MORE_THAN_ONE, NOT_ROW_DIMENSION) {}
+  : ObExprOperator(alloc, T_FUN_SYS_ELT, N_ELT, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
 
 int ObExprElt::calc_result_typeN(
   ObExprResType &type,

@@ -28,12 +28,14 @@ struct ObWriteFlag
   #define OBWF_BIT_TABLE_LOCK       1
   #define OBWF_BIT_MDS              1
   #define OBWF_BIT_DML_BATCH_OPT    1
+  #define OBWF_BIT_INSERT_UP        1
   #define OBWF_BIT_RESERVED         61
 
   static const uint64_t OBWF_MASK_TABLE_API = (0x1UL << OBWF_BIT_TABLE_API) - 1;
   static const uint64_t OBWF_MASK_TABLE_LOCK = (0x1UL << OBWF_BIT_TABLE_LOCK) - 1;
   static const uint64_t OBWF_MASK_MDS = (0x1UL << OBWF_BIT_MDS) - 1;
   static const uint64_t OBWF_MASK_DML_BATCH_OPT = (0x1UL << OBWF_BIT_DML_BATCH_OPT) - 1;
+  static const uint64_t OBWF_MASK_INSERT_UP = (0x1UL << OBWF_BIT_INSERT_UP) - 1;
 
   union
   {
@@ -44,6 +46,7 @@ struct ObWriteFlag
       uint64_t is_table_lock_    : OBWF_BIT_TABLE_LOCK;       // 0: false(default), 1: true
       uint64_t is_mds_           : OBWF_BIT_MDS;              // 0: false(default), 1: true
       uint64_t is_dml_batch_opt_ : OBWF_BIT_DML_BATCH_OPT;    // 0: false(default), 1: true
+      uint64_t is_insert_up_     : OBWF_BIT_INSERT_UP;        // 0: false(default), 1: true
       uint64_t reserved_         : OBWF_BIT_RESERVED;
     };
   };
@@ -58,11 +61,15 @@ struct ObWriteFlag
   inline void set_is_mds() { is_mds_ = true; }
   inline bool is_dml_batch_opt() const { return is_dml_batch_opt_; }
   inline void set_is_dml_batch_opt() { is_dml_batch_opt_ = true; }
+  inline bool is_insert_up() const { return is_insert_up_; }
+  inline void set_is_insert_up() { is_insert_up_ = true; }
+
 
   TO_STRING_KV("is_table_api", is_table_api_,
                "is_table_lock", is_table_lock_,
                "is_mds", is_mds_,
-               "is_dml_batch_opt", is_dml_batch_opt_);
+               "is_dml_batch_opt", is_dml_batch_opt_,
+               "is_insert_up", is_insert_up_);
 
   OB_UNIS_VERSION(1);
 };

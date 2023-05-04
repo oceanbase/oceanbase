@@ -75,6 +75,7 @@
 #include "storage/tx/ob_i_ts_source.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/scn.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 
 namespace oceanbase
 {
@@ -126,7 +127,7 @@ int ObSysStat::set_initial_values(const uint64_t tenant_id)
     ob_max_used_unit_config_id_.value_.set_int(OB_USER_UNIT_CONFIG_ID);
     ob_max_used_resource_pool_id_.value_.set_int(OB_USER_RESOURCE_POOL_ID);
     ob_max_used_unit_id_.value_.set_int(OB_USER_UNIT_ID);
-    ob_max_used_server_id_.value_.set_int(OB_INIT_SERVER_ID);
+    ob_max_used_server_id_.value_.set_int(OB_INIT_SERVER_ID - 1);
     ob_max_used_ddl_task_id_.value_.set_int(OB_INIT_DDL_TASK_ID);
     ob_max_used_unit_group_id_.value_.set_int(OB_USER_UNIT_GROUP_ID);
   } else {
@@ -1492,7 +1493,7 @@ int ObDDLOperator::create_table(ObTableSchema &table_schema,
   }
 
   // add audit in table if necessary
-  if (OB_SUCC(ret) && !is_truncate_table && table_schema.is_user_table()) {
+  if (OB_SUCC(ret) && !is_truncate_table && (table_schema.is_user_table() || table_schema.is_external_table())) {
     const uint64_t tenant_id = table_schema.get_tenant_id();
     ObArray<const ObSAuditSchema *> audits;
 
@@ -4214,8 +4215,15 @@ int ObDDLOperator::drop_table(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(drop_tablet_of_table(table_schema, trans))) {
-    LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+  } else if (table_schema.is_external_table()) {
+    if (OB_FAIL(ObExternalTableFileManager::get_instance().clear_inner_table_files(
+                  table_schema.get_tenant_id(), table_schema.get_table_id(), trans))) {
+      LOG_WARN("delete external table file list failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(drop_tablet_of_table(table_schema, trans))) {
+      LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+    }
   }
 
   return ret;
@@ -4274,7 +4282,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(
   }
 
   // delete audit in table
-  if (OB_SUCC(ret) && table_schema.is_user_table()) {
+  if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
     ObArray<const ObSAuditSchema *> audits;
     if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
                                                        AUDIT_TABLE,
@@ -8606,39 +8614,37 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
                                   ObErrorInfo &error_info,
                                   ObIArray<ObDependencyInfo> &dep_infos,
                                   const ObString *ddl_stmt_str,
-                                  bool for_insert_errors,
                                   bool is_update_table_schema_version,
                                   bool is_for_truncate_table)
 {
   int ret = OB_SUCCESS;
-  //for_insert_errors is false: create trigger normally
-  //for_insert_errors is true: Insert error information into the system table after the trigger is built so the following steps can be skipped
-  if (!for_insert_errors) {
-    ObSchemaService *schema_service = schema_service_.get_schema_service();
-    const uint64_t tenant_id = trigger_info.get_tenant_id();
-    int64_t new_schema_version = OB_INVALID_VERSION;
-    bool is_replace = false;
-    OV (OB_NOT_NULL(schema_service));
-    if (!is_for_truncate_table) {
-      // If create_trigger through truncate table, trigger_info already has its own trigger_id.
-      // but there is no such trigger in the internal table at this time, so is_replace must be false
-      OX (is_replace = (OB_INVALID_ID != trigger_info.get_trigger_id()));
-      if (!is_replace) {
-        OZ (fill_trigger_id(*schema_service, trigger_info), trigger_info.get_trigger_name());
-      }
+
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  const uint64_t tenant_id = trigger_info.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  bool is_replace = false;
+  OV (OB_NOT_NULL(schema_service));
+  if (!is_for_truncate_table) {
+    // If create_trigger through truncate table, trigger_info already has its own trigger_id.
+    // but there is no such trigger in the internal table at this time, so is_replace must be false
+    OX (is_replace = (OB_INVALID_ID != trigger_info.get_trigger_id()));
+    if (!is_replace) {
+      OZ (fill_trigger_id(*schema_service, trigger_info), trigger_info.get_trigger_name());
     }
-    OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version),
-        tenant_id, trigger_info.get_trigger_name());
-    OX (trigger_info.set_schema_version(new_schema_version));
-    OZ (schema_service->get_trigger_sql_service().create_trigger(trigger_info, is_replace,
-                                                                trans, ddl_stmt_str),
-        trigger_info.get_trigger_name(), is_replace);
-    if (!trigger_info.is_system_type() && is_update_table_schema_version) {
-      uint64_t base_table_id = trigger_info.get_base_object_id();
-      OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
-          trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
-          base_table_id, trigger_info.get_trigger_name());
-    }
+  }
+  OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version),
+      tenant_id, trigger_info.get_trigger_name());
+  OX (trigger_info.set_schema_version(new_schema_version));
+  OZ (schema_service->get_trigger_sql_service().create_trigger(trigger_info, is_replace,
+                                                              trans, ddl_stmt_str),
+      trigger_info.get_trigger_name(), is_replace);
+  if (!trigger_info.is_system_type() && is_update_table_schema_version) {
+    uint64_t base_table_id = trigger_info.get_base_object_id();
+    OZ (schema_service->get_table_sql_service().update_data_table_schema_version(
+        trans, tenant_id, base_table_id, false/*in offline ddl white list*/),
+        base_table_id, trigger_info.get_trigger_name());
+  }
+  if (OB_FAIL(ret)) {
   } else if (0 == dep_infos.count()) {
     // create trigger in mysql mode or create trigger when truncate table, dep_infos.count() is 0,
     // no need to deal with dependencies.

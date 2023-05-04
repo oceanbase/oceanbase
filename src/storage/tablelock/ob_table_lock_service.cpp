@@ -1435,7 +1435,7 @@ int ObTableLockService::check_op_allowed_(const uint64_t table_id,
 
   if (is_inner_table(table_id)) {
     is_allowed = false;
-  } else if (!table_schema->is_user_table() && !table_schema->is_mysql_tmp_table()) {
+  } else if (!table_schema->is_user_table() && !table_schema->is_mysql_tmp_table() && !table_schema->is_external_table()) {
     // table lock not support virtual table/oracle tmp table /sys table  etc.
     is_allowed = false;
   } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {

@@ -232,19 +232,19 @@ ObSequenceHashWrapper ObGetSequenceKey<ObSequenceHashWrapper, ObSequenceSchema *
 
 ObSequenceMgr::ObSequenceMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      sequence_infos_(0, NULL, ObModIds::OB_SCHEMA_SEQUENCE),
-      sequence_map_(ObModIds::OB_SCHEMA_SEQUENCE)
+      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE)),
+      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE))
 {
 }
 
 ObSequenceMgr::ObSequenceMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      sequence_infos_(0, NULL, ObModIds::OB_SCHEMA_SEQUENCE),
-      sequence_map_(ObModIds::OB_SCHEMA_SEQUENCE)
+      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE)),
+      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE))
 {
 }
 

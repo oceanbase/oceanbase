@@ -28,7 +28,7 @@ ObExprDateAdjust::ObExprDateAdjust(ObIAllocator &alloc,
                                    const char *name,
                                    int32_t param_num,
                                    int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 
@@ -289,6 +289,14 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
+int ObExprDateAdjust::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
+    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
+  }
+  return ret;
+}
+
 ObExprDateAdd::ObExprDateAdd(ObIAllocator &alloc)
     : ObExprDateAdjust(alloc, T_FUN_SYS_DATE_ADD, N_DATE_ADD, 3, NOT_ROW_DIMENSION)
 {}
@@ -354,8 +362,9 @@ int ObExprDateSub::calc_date_sub(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
 }
 
 ObExprAddMonths::ObExprAddMonths(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ADD_MONTHS, N_ADD_MONTHS, 2, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ADD_MONTHS, N_ADD_MONTHS, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprAddMonths::calc_result_type2(ObExprResType &type,
                                        ObExprResType &type1,
@@ -427,8 +436,9 @@ int ObExprAddMonths::calc_add_months(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 }
 
 ObExprLastDay::ObExprLastDay(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_LAST_DAY, N_LAST_DAY, 1, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, T_FUN_SYS_LAST_DAY, N_LAST_DAY, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprLastDay::calc_result_type1(ObExprResType &type,
                                      ObExprResType &type1,
@@ -516,8 +526,9 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
 }
 
 ObExprNextDay::ObExprNextDay(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_NEXT_DAY, N_NEXT_DAY, 2, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, T_FUN_SYS_NEXT_DAY, N_NEXT_DAY, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprNextDay::calc_result_type2(ObExprResType &type,
                                      ObExprResType &type1,

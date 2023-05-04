@@ -68,6 +68,7 @@
 #include "share/config/ob_config.h" // ObConfigArray
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
 #include "share/scn.h"//SCN
+#include "share/ob_server_table_operator.h"
 
 namespace oceanbase
 {
@@ -2047,7 +2048,8 @@ public:
       is_hidden_(false)
   {}
   bool operator==(const ObTableItem &table_item) const;
-  inline uint64_t hash(uint64_t seed = 0) const;
+  inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_val, uint64_t seed = 0) const;
   void reset() {
     mode_ = common::OB_NAME_CASE_INVALID;
     database_name_.reset();
@@ -2062,14 +2064,24 @@ public:
   bool is_hidden_;
 };
 
-inline uint64_t ObTableItem::hash(uint64_t seed) const
+inline uint64_t ObTableItem::hash() const
 {
-  uint64_t val = seed;
+  uint64_t val = 0;
   if (!database_name_.empty() && !table_name_.empty()) {
     val = common::murmurhash(database_name_.ptr(), database_name_.length(), val);
     val = common::murmurhash(table_name_.ptr(), table_name_.length(), val);
   }
   return val;
+}
+
+inline int ObTableItem::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  hash_val = seed;
+  if (!database_name_.empty() && !table_name_.empty()) {
+    hash_val = common::murmurhash(database_name_.ptr(), database_name_.length(), hash_val);
+    hash_val = common::murmurhash(table_name_.ptr(), table_name_.length(), hash_val);
+  }
+  return OB_SUCCESS;
 }
 
 struct ObDropTableArg : public ObDDLArg
@@ -3023,6 +3035,48 @@ private:
   int ret_;
 };
 
+struct ObNotifySwitchLeaderArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum SwitchLeaderComment
+  {
+    INVALID_COMMENT = -1,
+    STOP_SERVER,
+    STOP_ZONE,
+    CHANGE_MEMBER,//remove member, migrate replica, type transfer
+    MODIFY_PRIMARY_ZONE,
+    MANUAL_SWITCH,
+  };
+  const char* comment_to_str() const;
+  ObNotifySwitchLeaderArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), advise_leader_(),
+  comment_(INVALID_COMMENT) {}
+  ~ObNotifySwitchLeaderArg() {}
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(advise_leader), K_(comment), "commet_str", comment_to_str());
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObAddr &leader, const SwitchLeaderComment &comment);
+  bool is_valid() const
+  {
+    return INVALID_COMMENT != comment_;
+  }
+  int assign(const ObNotifySwitchLeaderArg &other);
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifySwitchLeaderArg);
+private:
+  //tenant_id is invalid weakup all tenant
+  //teenant_id is valid weakup target tenant
+  uint64_t tenant_id_;
+  //ls_id is invalid iterator all ls
+  //ls_id is valid, only check target ls
+  share::ObLSID ls_id_;
+  //advise_leader maybe invalid
+  common::ObAddr advise_leader_;
+  SwitchLeaderComment comment_;
+};
+
 struct ObCreateTabletInfo
 {
   OB_UNIS_VERSION(1);
@@ -3965,6 +4019,7 @@ struct ObLSTabletPair final
 public:
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid(); }
   uint64_t hash() const { return ls_id_.hash() + tablet_id_.hash(); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   bool operator == (const ObLSTabletPair &other) const { return ls_id_ == other.ls_id_ && tablet_id_ == other.tablet_id_; }
   bool operator < (const ObLSTabletPair &other) const { return ls_id_ != other.ls_id_ ? ls_id_ < other.ls_id_ : tablet_id_ < other.tablet_id_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id));
@@ -4756,7 +4811,10 @@ public:
                K_(kms_info),
                K_(table_items),
                K_(multi_uri),
-               K_(with_restore_scn));
+               K_(with_restore_scn),
+               K_(encrypt_key),
+               K_(kms_uri),
+               K_(kms_encrypt_key));
 
   common::ObString tenant_name_;
   common::ObString uri_;
@@ -4768,6 +4826,9 @@ public:
   common::ObString multi_uri_; // 备份拆分用
   common::ObString description_;
   bool with_restore_scn_;
+  common::ObString encrypt_key_;
+  common::ObString kms_uri_;
+  common::ObString kms_encrypt_key_;
 };
 
 struct ObServerZoneArg
@@ -5785,7 +5846,7 @@ public:
                K(base_object_name_),
                K(trigger_info_),
                K(with_replace_),
-               K(for_insert_errors_),
+               K(in_second_stage_),
                K(error_info_),
                K(dependency_infos_));
 public:
@@ -5799,7 +5860,7 @@ public:
     struct
     {
       uint32_t with_replace_:1;
-      uint32_t for_insert_errors_:1;
+      uint32_t in_second_stage_:1; // is second create trigger stage
       uint32_t reserved_:30;
     };
   };
@@ -6257,6 +6318,60 @@ public:
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRefreshTenantInfoRes);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObUpdateTenantInfoCacheArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpdateTenantInfoCacheArg(): tenant_id_(OB_INVALID_TENANT_ID), tenant_info_(), ora_rowscn_(0)  {}
+  ~ObUpdateTenantInfoCacheArg() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id, const share::ObAllTenantInfo &tenant_info, const int64_t ora_rowscn);
+  int assign(const ObUpdateTenantInfoCacheArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(tenant_info), K_(ora_rowscn));
+
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+
+  const share::ObAllTenantInfo &get_tenant_info() const
+  {
+    return tenant_info_;
+  }
+
+  int64_t get_ora_rowscn() const
+  {
+    return ora_rowscn_;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTenantInfoCacheArg);
+private:
+  uint64_t tenant_id_;
+  share::ObAllTenantInfo tenant_info_;
+  int64_t ora_rowscn_;
+};
+
+struct ObUpdateTenantInfoCacheRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObUpdateTenantInfoCacheRes(): tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObUpdateTenantInfoCacheRes() {}
+  bool is_valid() const;
+  int init(const uint64_t tenant_id);
+  int assign(const ObUpdateTenantInfoCacheRes &other);
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUpdateTenantInfoCacheRes);
 private:
   uint64_t tenant_id_;
 };
@@ -6741,20 +6856,6 @@ public:
   uint64_t tenant_id_;
   int64_t schema_version_;
   TO_STRING_KV(K_(tenant_id), K_(schema_version));
-};
-
-struct ObCheckMergeFinishArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObCheckMergeFinishArg()
-  {
-    frozen_scn_.set_min();
-  }
-  bool is_valid() const;
-public:
-  share::SCN frozen_scn_;
-  TO_STRING_KV(K_(frozen_scn));
 };
 
 struct ObGetRecycleSchemaVersionsArg
@@ -7379,6 +7480,70 @@ public:
   TO_STRING_KV(K_(mode), K_(sys_data_version));
   Mode mode_;
   uint64_t sys_data_version_;
+};
+struct ObCheckServerForAddingServerArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum Mode {
+    ADD_SERVER
+  };
+
+  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0) {}
+  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version));
+  int init(const Mode &mode, const uint64_t sys_tenant_data_version);
+  int assign(const ObCheckServerForAddingServerArg &other);
+  Mode get_mode() const
+  {
+    return mode_;
+  }
+  uint64_t get_sys_tenant_data_version() const
+  {
+    return sys_tenant_data_version_;
+  }
+private:
+  Mode mode_;
+  uint64_t sys_tenant_data_version_;
+};
+struct ObCheckServerForAddingServerResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckServerForAddingServerResult()
+      : is_server_empty_(false),
+      zone_(),
+      sql_port_(0),
+      build_version_()
+  {
+  }
+  TO_STRING_KV(K_(is_server_empty), K_(zone), K_(sql_port), K_(build_version));
+  int init(
+      const bool is_server_empty,
+      const ObZone &zone,
+      const int64_t sql_port,
+      const share::ObServerInfoInTable::ObBuildVersion &build_version);
+  int assign(const ObCheckServerForAddingServerResult &other);
+  bool get_is_server_empty() const
+  {
+    return is_server_empty_;
+  }
+  const ObZone& get_zone() const
+  {
+    return zone_;
+  }
+  int64_t get_sql_port() const
+  {
+    return sql_port_;
+  }
+  const share::ObServerInfoInTable::ObBuildVersion& get_build_version() const
+  {
+    return build_version_;
+  }
+private:
+  bool is_server_empty_;
+  ObZone zone_;
+  int64_t sql_port_;
+  share::ObServerInfoInTable::ObBuildVersion build_version_;
 };
 
 struct ObArchiveLogArg
@@ -8848,6 +9013,92 @@ public:
   ObSArray<uint64_t> synonym_ids_;
 };
 
+// session info self-verification arg
+struct ObSessInfoVerifyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSessInfoVerifyArg() : sess_id_(0), proxy_sess_id_(0) {}
+  ~ObSessInfoVerifyArg() {}
+  bool is_valid() const;
+  void reset() { sess_id_ = 0;
+                 proxy_sess_id_ = 0; }
+  int assign(const ObSessInfoVerifyArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    sess_id_ = other.sess_id_;
+    proxy_sess_id_ = other.proxy_sess_id_;
+    return ret;
+  }
+  void set_sess_id(uint32_t sess_id) { sess_id_ = sess_id; }
+  uint32_t get_sess_id() { return sess_id_; }
+  void set_proxy_sess_id(uint64_t proxy_sess_id) { proxy_sess_id_ = proxy_sess_id; }
+  uint64_t get_proxy_sess_id() { return proxy_sess_id_; }
+  TO_STRING_KV(K_(sess_id), K_(proxy_sess_id));
+private:
+  uint32_t sess_id_;
+  uint64_t proxy_sess_id_;
+};
+
+// session info self-verification result
+struct ObSessionInfoVeriRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSessionInfoVeriRes() : verify_info_buf_(),
+    allocator_(common::ObModIds::OB_SQL_SESSION), need_verify_(false) {}
+  ~ObSessionInfoVeriRes() {}
+  bool is_valid() const;
+  void reset() {  verify_info_buf_.reset();
+                  need_verify_ = false;
+                  allocator_.reset(); }
+  int assign(const ObSessionInfoVeriRes &other)
+  {
+    int ret = common::OB_SUCCESS;
+    verify_info_buf_.assign_ptr(other.verify_info_buf_.ptr(),
+                            static_cast<int32_t>(other.verify_info_buf_.length()));
+    need_verify_ = other.need_verify_;
+    return ret;
+  }
+  void set_info_check_buf(common::ObString verify_info_buf) { verify_info_buf_ = verify_info_buf; }
+  common::ObString &get_info_check_buf() {return verify_info_buf_;}
+  TO_STRING_KV(K_(verify_info_buf), K_(need_verify));
+  common::ObString verify_info_buf_;
+  common::ObArenaAllocator allocator_;
+  bool need_verify_;
+};
+
+struct ObGetServerResourceInfoArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetServerResourceInfoArg() : rs_addr_() {}
+  TO_STRING_KV(K_(rs_addr));
+  int init(const common::ObAddr &rs_addr);
+  int assign(const ObGetServerResourceInfoArg &other);
+  bool is_valid() const;
+  void reset();
+  const common::ObAddr &get_rs_addr() const { return rs_addr_; }
+private:
+  common::ObAddr rs_addr_;
+};
+
+struct ObGetServerResourceInfoResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetServerResourceInfoResult() : server_(), resource_info_() {}
+  TO_STRING_KV(K_(server), K_(resource_info));
+  int init(const common::ObAddr &server, const share::ObServerResourceInfo &resource_info);
+  int assign(const ObGetServerResourceInfoResult &other);
+  bool is_valid() const;
+  void reset();
+  const common::ObAddr &get_server() const { return server_; }
+  const share::ObServerResourceInfo &get_resource_info() const { return resource_info_; }
+private:
+  common::ObAddr server_;
+  share::ObServerResourceInfo resource_info_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

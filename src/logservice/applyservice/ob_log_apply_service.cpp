@@ -15,6 +15,7 @@
 #include "logservice/ob_ls_adapter.h"
 #include "logservice/palf/palf_env.h"
 #include "share/scn.h"
+#include "common/ob_clock_generator.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ob_thread_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -904,8 +905,8 @@ void ObApplyStatus::statistics_cb_cost_(const LSN &lsn,
                                         const int64_t idx)
 {
   // no need to print debug log when config [default value is true] is false;
-  if (GCONF.enable_record_trace_log) {
-    const int64_t cb_finish_time = ObTimeUtility::fast_current_time();
+  if (REACH_TIME_INTERVAL(10 * 1000)) {
+    const int64_t cb_finish_time = common::ObClockGenerator::getClock();
     int64_t total_cost_time = cb_finish_time - append_start_time;
     int64_t append_cost_time = append_finish_time - append_start_time;
     int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;

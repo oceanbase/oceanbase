@@ -22,7 +22,7 @@
 #include "share/ob_share_util.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ls/ob_ls_log_stat_info.h" // ObLSLogStatInfo
-#include "rootserver/ob_server_manager.h" // ObServerManager
+#include "share/ob_server_table_operator.h"
 #include "rootserver/ob_zone_manager.h" // ObZoneManager
 #include "rootserver/ob_root_utils.h" // majority
 #include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
@@ -891,8 +891,6 @@ int ObLSStatusOperator::construct_ls_log_stat_info_sql_(common::ObSqlString &sql
 }
 
 int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
-    const ObZoneManager &zone_mgr,
-    const ObServerManager &server_mgr,
     const common::ObIArray<ObAddr> &to_stop_servers,
     const bool skip_log_sync_check,
     const char *print_str,
@@ -915,8 +913,6 @@ int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
       } else if (OB_FAIL(parse_result_and_check_paxos_(
           *result,
           schema_service,
-          zone_mgr,
-          server_mgr,
           to_stop_servers,
           skip_log_sync_check,
           print_str,
@@ -932,8 +928,6 @@ int ObLSStatusOperator::check_all_ls_has_majority_and_log_sync(
 int ObLSStatusOperator::parse_result_and_check_paxos_(
     common::sqlclient::ObMySQLResult &result,
     schema::ObMultiVersionSchemaService &schema_service,
-    const ObZoneManager &zone_mgr,
-    const ObServerManager &server_mgr,
     const common::ObIArray<ObAddr> &to_stop_servers,
     const bool skip_log_sync_check,
     const char *print_str,
@@ -974,10 +968,8 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
         if (OB_FAIL(check_ls_log_stat_info_(
             schema_service,
             ls_log_stat_info,
-            zone_mgr,
-            server_mgr,
             to_stop_servers,
-            skip_log_sync_check, 
+            skip_log_sync_check,
             print_str,
             need_retry))) {
           LOG_WARN("fail to check ls paxos info", KR(ret), K(ls_log_stat_info));
@@ -1003,11 +995,9 @@ int ObLSStatusOperator::parse_result_and_check_paxos_(
       if (OB_FAIL(check_ls_log_stat_info_(
           schema_service,
           ls_log_stat_info,
-          zone_mgr,
-          server_mgr,
           to_stop_servers,
           skip_log_sync_check,
-          print_str, 
+          print_str,
           need_retry))) {
         LOG_WARN("fail to check ls paxos info", KR(ret), K(ls_log_stat_info));
       }
@@ -1087,8 +1077,6 @@ int ObLSStatusOperator::construct_ls_log_stat_replica_(
 int ObLSStatusOperator::check_ls_log_stat_info_(
     schema::ObMultiVersionSchemaService &schema_service,
     const ObLSLogStatInfo &ls_log_stat_info,
-    const ObZoneManager &zone_mgr,
-    const ObServerManager &server_mgr,
     const common::ObIArray<ObAddr> &to_stop_servers,
     const bool skip_log_sync_check,
     const char *print_str,
@@ -1145,8 +1133,6 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
   } else if (OB_FAIL(generate_valid_servers_(
       leader.get_member_list(),
-      zone_mgr,
-      server_mgr,
       to_stop_servers,
       valid_servers))) {
     LOG_WARN("fail to generate valid member_list", KR(ret),
@@ -1196,30 +1182,32 @@ int ObLSStatusOperator::check_ls_log_stat_info_(
 // (skip_servers include to_stop_servers, servers_in_stopped_zone, stopped_servers, not_alive_servers, not_in_service_servers)
 int ObLSStatusOperator::generate_valid_servers_(
     const ObLSReplica::MemberList &member_list,
-    const ObZoneManager &zone_mgr,
-    const ObServerManager &server_mgr,
     const common::ObIArray<ObAddr> &to_stop_servers,
     common::ObIArray<ObAddr> &valid_servers)
 {
   int ret = OB_SUCCESS;
   valid_servers.reset();
   ObArray<ObAddr> invalid_servers;
-  if (OB_UNLIKELY(member_list.empty())) {
+  ObArray<ObServerInfoInTable> servers_info;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info))) {
+    LOG_WARN("fail to get servers_info in table", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(member_list.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("member_list is empty", KR(ret), K(member_list), K(to_stop_servers));
-  } else if (OB_FAIL(ObRootUtils::get_invalid_server_list(
-      zone_mgr,
-      server_mgr,
-      invalid_servers))) {
-    LOG_WARN("fail to get invalid server list", KR(ret));
+  } else if (OB_FAIL(ObRootUtils::get_invalid_server_list(servers_info, invalid_servers))) {
+    LOG_WARN("fail to get invalid server list", KR(ret), K(servers_info));
   } else {
     ARRAY_FOREACH_N(member_list, idx, cnt) {
       const ObAddr &server = member_list.at(idx).get_server();
       bool is_alive = false;
-      if (OB_FAIL(server_mgr.check_server_alive(server, is_alive))) { // filter deleted server which is only in member_list
-        LOG_WARN("fail to check is server alive", KR(ret), K(server));
+      // filter deleted server which is only in member_list
+      if (OB_FAIL(ObRootUtils::check_server_alive(servers_info, server, is_alive))) {
+        LOG_WARN("fail to check is server alive", KR(ret), K(servers_info), K(server));
       } else if (!is_alive) {
-        LOG_INFO("find not alive server in member_list", K(server), K(member_list));
+        LOG_INFO("find not alive server in member_list", K(servers_info), K(server), K(member_list));
       } else if (!common::has_exist_in_array(invalid_servers, server)
           && !common::has_exist_in_array(to_stop_servers, server)) {
         if (OB_FAIL(valid_servers.push_back(server))) {

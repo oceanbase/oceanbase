@@ -1165,12 +1165,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
             LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
             row->storage_datums_[read_info_->get_schema_rowkey_count()].set_int(-trans_version);
           }
-          if (read_uncommitted_row) {
-            // Need to iterate out uncommitted rows when building a bloomfilter or marking for deletion,
-            // The uncommitted rows are not yet determined,
-            // so even if they are deleted, they must be treated as existing rows.
-            row->row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-          }
+
           if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
             row->snapshot_version_ = 0;
             row->trans_id_.reset();

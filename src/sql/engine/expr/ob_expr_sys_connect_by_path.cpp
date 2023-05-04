@@ -20,7 +20,7 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 ObExprSysConnectByPath::ObExprSysConnectByPath(common::ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_FUN_SYS_CONNECT_BY_PATH, N_SYS_CONNECT_BY_PATH, 2, NOT_ROW_DIMENSION) {};
+  : ObExprOperator(alloc, T_FUN_SYS_CONNECT_BY_PATH, N_SYS_CONNECT_BY_PATH, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 
 int ObExprSysConnectByPath::calc_result_type2(ObExprResType &type,
                                               ObExprResType &type1,

@@ -1285,6 +1285,19 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         true, ignore_column_error, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, object_status, table_schema, int64_t, true, ignore_column_error, static_cast<int64_t> (ObObjectStatus::VALID));
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
+
+    ObString external_file_location;
+    ObString external_file_location_access_info;
+    ObString external_file_format;
+    ObString external_file_pattern;
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_location_access_info, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location_access_info);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_format);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+      result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_pattern);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -1362,10 +1375,14 @@ int ObSchemaRetrieveUtils::fill_column_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_flags, column, int64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, 0);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, prev_column_id, column, uint64_t, true, ObSchemaService::g_ignore_column_retrieve_error_, UINT64_MAX);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, srs_id, column, uint64_t, true, true, OB_DEFAULT_COLUMN_SRS_ID);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, udt_set_id, column, int64_t, true, true, 0);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, sub_data_type, column, int64_t, true, true, 0);
 
     common::ColumnType default_type = column.get_data_type();
     if (column.is_generated_column() || column.is_identity_column()) {
       default_type = ObVarcharType;
+    } else if (column.is_xmltype()) {
+      default_type = ObLongTextType;
     }
 
     if (OB_SUCC(ret)) {
@@ -2186,6 +2203,7 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
   ObString default_value;
   int64_t order_type_defualt_value = 0;
   int64_t action_order_default_value = 1;
+  uint64_t analyze_flag_default_value = 0;
   trigger_info.set_tenant_id(tenant_id);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, trigger_id, trigger_info, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
@@ -2222,6 +2240,8 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
       true, true, default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, action_order, trigger_info, int64_t,
       false, true, action_order_default_value);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, analyze_flag, trigger_info, uint64_t,
+      true, true, analyze_flag_default_value);
   }
   return ret;
 }

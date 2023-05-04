@@ -218,6 +218,7 @@ enum class ObLockOBJType : char
   OBJ_TYPE_COMMON_OBJ = 3, // common_obj
   OBJ_TYPE_LS = 4,     // for ls
   OBJ_TYPE_TENANT = 5, // for tenant
+  OBJ_TYPE_EXTERNAL_TABLE_REFRESH = 6, // for external table
   OBJ_TYPE_MAX
 };
 
@@ -237,6 +238,7 @@ public:
     hash_value_(0) {}
   uint64_t hash() const
   { return hash_value_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   uint64_t inner_hash() const
   {
     uint64_t hash_val = 0;

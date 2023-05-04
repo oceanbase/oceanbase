@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprSubstr::ObExprSubstr(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_SUBSTR, N_SUBSTR, TWO_OR_THREE)
+    : ObStringExprOperator(alloc, T_FUN_SYS_SUBSTR, N_SUBSTR, TWO_OR_THREE, VALID_FOR_GENERATED_COL)
 {
 }
 

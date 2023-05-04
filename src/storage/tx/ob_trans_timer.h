@@ -129,7 +129,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTransTimer);
 protected:
   // schedule timeout task precision. us
-  static const int64_t TRANS_TIMEOUT_TASK_PRECISION_US = 5000;
+  static const int64_t TRANS_TIMEOUT_TASK_PRECISION_US = 100 * 1000L;
 
   bool is_inited_;
   bool is_running_;

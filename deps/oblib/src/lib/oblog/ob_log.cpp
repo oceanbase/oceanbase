@@ -1380,13 +1380,13 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     error_allocator_ = new (allocator_ + 1) ObFIFOAllocator();
     if (OB_FAIL(allocator_->init(OB_MALLOC_BIG_BLOCK_SIZE,
                                  *log_mem_limiter_,
-                                 lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",
-                                                common::ObCtxIds::LOGGER_CTX_ID)))) {
+                                 SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "Logger",
+                                                common::ObCtxIds::LOGGER_CTX_ID))))) {
       LOG_STDERR("init fifo error. ret=%d\n", ret);
     } else if (OB_FAIL(error_allocator_->init(lib::ObMallocAllocator::get_instance(),
                                               OB_MALLOC_BIG_BLOCK_SIZE,
-                                              lib::ObMemAttr(OB_SERVER_TENANT_ID, "ErrorLogger",
-                                                             common::ObCtxIds::LOGGER_CTX_ID),
+                                              SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, "ErrorLogger",
+                                                             common::ObCtxIds::LOGGER_CTX_ID)),
                                               ERROR_LOG_INIT_MEM,
                                               ERROR_LOG_INIT_MEM << 1,
                                               limit))) {

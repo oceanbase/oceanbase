@@ -45,6 +45,7 @@ int PalfEnv::create_palf_env(
     rpc::frame::ObReqTransport *transport,
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
+    PalfMonitorCb *monitor,
     PalfEnv *&palf_env)
 {
   int ret = OB_SUCCESS;
@@ -55,7 +56,7 @@ int PalfEnv::create_palf_env(
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
                                                    MTL_ID(), transport,
-                                                   log_alloc_mgr, log_block_pool))) {
+                                                   log_alloc_mgr, log_block_pool, monitor))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->start_())) {
     PALF_LOG(WARN, "start palf env failed", K(ret), K(base_dir));

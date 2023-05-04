@@ -25,6 +25,7 @@
 #include "lib/profile/ob_trace_id.h"
 
 #include "share/partition_table/ob_partition_location.h"
+#include "share/ob_all_server_tracer.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
 
@@ -242,8 +243,7 @@ ObDBMSSchedJobMaster &ObDBMSSchedJobMaster::get_instance()
   return master_;
 }
 
-int ObDBMSSchedJobMaster::init(ObServerManager *server_mgr,
-                          ObUnitManager *unit_mgr,
+int ObDBMSSchedJobMaster::init(ObUnitManager *unit_mgr,
                           ObISQLClient *sql_client,
                           ObMultiVersionSchemaService *schema_service)
 {
@@ -251,17 +251,13 @@ int ObDBMSSchedJobMaster::init(ObServerManager *server_mgr,
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("dbms sched job master already inited", K(ret), K(inited_));
-  } else if (OB_ISNULL(server_mgr)
-          || OB_ISNULL(unit_mgr)
+  } else if (OB_ISNULL(unit_mgr)
           || OB_ISNULL(sql_client)
           || OB_ISNULL(schema_service)
           || OB_ISNULL(GCTX.dbms_sched_job_rpc_proxy_)
           ) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), K(server_mgr), K(unit_mgr), K(sql_client), K(schema_service));
-  } else if (!server_mgr->is_inited()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not init yet", K(ret));
+    LOG_WARN("null ptr", K(ret), K(unit_mgr), K(sql_client), K(schema_service));
   } else if (OB_FAIL(ready_queue_.init(MAX_READY_JOBS_CAPACITY))) {
     LOG_WARN("fail to init ready job queue for all jobs", K(ret));
   } else if (OB_FAIL(scheduler_task_.init())) {
@@ -278,7 +274,6 @@ int ObDBMSSchedJobMaster::init(ObServerManager *server_mgr,
   } else {
     trace_id_ = ObCurTraceId::get();
     self_addr_ = GCONF.self_addr_;
-    server_mgr_ = server_mgr;
     unit_mgr_ = unit_mgr;
     schema_service_ = schema_service;
     job_rpc_proxy_ = GCTX.dbms_sched_job_rpc_proxy_;
@@ -486,16 +481,16 @@ int ObDBMSSchedJobMaster::server_random_pick(int64_t tenant_id, ObString &pick_z
   } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid job id", K(ret), K(tenant_id));
-  } else if (!server_mgr_->is_inited()) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("server manager not init yet!", K(ret));
+  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(unit_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service_ or unit_mgr_ is null", KR(ret), KP(schema_service_), KP(unit_mgr_));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail get schema guard", K(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
     LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null ptr", K(ret), K(tenant_info));
+    LOG_WARN("null ptr", K(ret), KP(tenant_info));
   } else if (OB_FAIL(tenant_info->get_zone_list(zone_list))) {
     LOG_WARN("fail to get zone list", K(ret));
   } else {
@@ -503,8 +498,8 @@ int ObDBMSSchedJobMaster::server_random_pick(int64_t tenant_id, ObString &pick_z
       common::ObZone zone = zone_list.at(i);
       common::ObArray<ObAddr> server_list;
       if (pick_zone.empty() || 0 == pick_zone.case_compare(zone.str())) {
-        if (OB_FAIL(server_mgr_->get_alive_servers(zone, server_list))) {
-          LOG_WARN("fail to get zone server list", K(ret));
+        if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, server_list))) {
+          LOG_WARN("fail to get zone server list", KR(ret), K(zone));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < server_list.count(); j++) {
             if (OB_FAIL(total_server.push_back(server_list.at(j)))) {
@@ -529,13 +524,18 @@ int ObDBMSSchedJobMaster::server_random_pick(int64_t tenant_id, ObString &pick_z
     do {
       pos = (pos + 1) % total_server.count();
       pick = total_server.at(pos);
-      server_mgr_->check_server_alive(pick, is_alive);
-      server_mgr_->check_server_active(pick, is_active);
-      unit_mgr_->check_tenant_on_server(tenant_id, pick, on_server);
-      if (is_alive && is_active && on_server) {
-        break;
+      if (OB_FAIL(SVR_TRACER.check_server_alive(pick, is_alive))) {
+        LOG_WARN("fail to check server alive", KR(ret), K(pick));
+      } else if (OB_FAIL(SVR_TRACER.check_server_active(pick, is_active))) {
+        LOG_WARN("fail to check server active", KR(ret), K(pick));
+      } else if (OB_FAIL(unit_mgr_->check_tenant_on_server(tenant_id, pick, on_server))) {
+        LOG_WARN("fail to check tenant on server", KR(ret), K(tenant_id), K(pick));
+      } else {
+        if (is_alive && is_active && on_server) {
+          break;
+        }
+        cnt++;
       }
-      cnt++;
     } while (cnt < total_server.count());
     if (cnt >= total_server.count()) {
       ret = OB_ERR_UNEXPECTED;

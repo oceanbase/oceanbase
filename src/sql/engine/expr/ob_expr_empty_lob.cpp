@@ -26,7 +26,7 @@ namespace sql
 
 // empty_clob
 ObExprEmptyClob::ObExprEmptyClob(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_EMPTY_CLOB, N_EMPTY_CLOB, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_EMPTY_CLOB, N_EMPTY_CLOB, 0, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprEmptyClob::~ObExprEmptyClob()
@@ -77,7 +77,7 @@ int ObExprEmptyClob::cg_expr(
 
 // empty_blob
 ObExprEmptyBlob::ObExprEmptyBlob(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_EMPTY_BLOB, N_EMPTY_BLOB, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_EMPTY_BLOB, N_EMPTY_BLOB, 0, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprEmptyBlob::~ObExprEmptyBlob()

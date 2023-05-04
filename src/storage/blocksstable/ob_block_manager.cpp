@@ -17,6 +17,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/ob_server_utils.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_force_print_log.h"
 #include "share/ob_io_device_helper.h"
@@ -29,6 +30,7 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/ob_super_block_struct.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -142,7 +144,8 @@ ObBlockManager::ObBlockManager()
     io_device_(NULL),
     blk_seq_generator_(),
     is_inited_(false),
-    is_started_(false)
+    is_started_(false),
+    resize_file_lock_()
 {
 }
 
@@ -302,14 +305,26 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle)
     LOG_WARN("ObBlockManager not init", K(ret));
   } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
     LOG_WARN("Failed to alloc block from io device", K(ret));
-  } else if (OB_FAIL(blk_seq_generator_.generate_next_sequence(write_seq))) {
-    LOG_WARN("Failed to generate next block id", K(ret), K(write_seq), K_(blk_seq_generator));
-  } else {
-    macro_id.reset();
-    macro_id.set_write_seq(write_seq);
-    macro_id.set_block_index(io_fd.second_id_);
-    if (OB_FAIL(macro_handle.set_macro_block_id(macro_id))) {
-      LOG_ERROR("Failed to set macro block id", K(ret), K(macro_id));
+  }
+  // try alloc block
+  if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
+    if (OB_FAIL(extend_file_size_if_need())) { // block to get disk
+      ret = OB_SERVER_OUTOF_DISK_SPACE; // reuse last ret code
+      LOG_WARN("Failed to alloc block from io device", K(ret));
+    } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
+      LOG_WARN("Failed to alloc block from io device", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(blk_seq_generator_.generate_next_sequence(write_seq))) {
+      LOG_WARN("Failed to generate next block id", K(ret), K(write_seq), K_(blk_seq_generator));
+    } else {
+      macro_id.reset();
+      macro_id.set_write_seq(write_seq);
+      macro_id.set_block_index(io_fd.second_id_);
+      if (OB_FAIL(macro_handle.set_macro_block_id(macro_id))) {
+        LOG_ERROR("Failed to set macro block id", K(ret), K(macro_id));
+      }
     }
   }
 
@@ -471,6 +486,11 @@ int64_t ObBlockManager::get_total_macro_block_count() const
   return super_block_.get_total_macro_block_count();
 }
 
+int64_t ObBlockManager::get_max_macro_block_count(int64_t reserved_size) const
+{
+  return io_device_->get_max_block_count(reserved_size);
+}
+
 int64_t ObBlockManager::get_free_macro_block_count() const
 {
   return io_device_->get_free_block_count();
@@ -596,6 +616,8 @@ int ObBlockManager::resize_file(const int64_t new_data_file_size,
                                 const int64_t reserved_size)
 {
   int ret = OB_SUCCESS;
+
+  lib::ObMutexGuard guard(resize_file_lock_); // lock resize file opt
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -638,8 +660,8 @@ int ObBlockManager::resize_file(const int64_t new_data_file_size,
                 K(ret));
             ob_abort();
           } else {
-            FLOG_INFO("succeed to resize file", K(new_actual_file_size), K(new_data_file_size),
-                K(new_data_file_disk_percentage));
+            FLOG_INFO("succeed to resize file",
+              K(new_actual_file_size), K(new_data_file_size), K(new_data_file_disk_percentage));
           }
         }
       }
@@ -1313,6 +1335,7 @@ int ObBlockManager::BlockMapIterator::get_next_block(common::ObIOFd &block_id)
 void ObBlockManager::MarkBlockTask::runTimerTask()
 {
   blk_mgr_.mark_and_sweep();
+  (void) blk_mgr_.extend_file_size_if_need(); // auto extend
 }
 
 // 2 days
@@ -1393,6 +1416,86 @@ int ObBlockManager::InspectBadBlockTask::check_block(const MacroBlockId &macro_i
     }
   }
   return ret;
+}
+
+int ObBlockManager::extend_file_size_if_need()
+{
+  int ret = OB_SUCCESS;
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; //default RESERVED_DISK_SIZE -> 4G
+
+  if (OB_ISNULL(io_device_)) {
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    LOG_WARN("Fail to get reserved size", K(ret));
+  } else if (!check_can_be_extend(reserved_size)) {
+    ret = OB_NOT_READY_TO_EXTEND_FILE;
+    LOG_DEBUG("Check auto extend, no need to start ssbfile auto extend", K(ret));
+  } else {
+    const int64_t total_block_cnt = get_total_macro_block_count();
+    const int64_t free_block_cnt = get_free_macro_block_count();
+    const int64_t usage_upper_bound_percentage = GCONF._datafile_usage_upper_bound_percentage;
+    const int64_t free_block_cnt_to_extend =
+      total_block_cnt - total_block_cnt * usage_upper_bound_percentage / 100;
+    // here we can see auto extend disk premise:
+    // 1. free_block_cnt ratio is less than one percentage (default 10%)
+    // 2. free_block_cnt is less than one value (512 = 1G)
+    if (free_block_cnt_to_extend < free_block_cnt &&
+        (free_block_cnt > AUTO_EXTEND_LEAST_FREE_BLOCK_CNT)) {
+      LOG_DEBUG("Do not extend file, not reach extend trigger.",
+        K(free_block_cnt_to_extend),
+        K(free_block_cnt),
+        K(total_block_cnt));
+    } else {
+      LOG_INFO("Start to do auto ssblock file extend.",
+        K(total_block_cnt),
+        K(free_block_cnt),
+        K(free_block_cnt_to_extend),
+        K(usage_upper_bound_percentage));
+
+      int64_t suggest_extend_size = 0;
+      int64_t datafile_disk_percentage = 0;
+
+      if (OB_FAIL(observer::ObServerUtils::calc_auto_extend_size(suggest_extend_size))) {
+        LOG_DEBUG("calc auto extend size error, maybe ssblock file has reach it's max size", K(ret));
+      } else if (OB_FAIL(resize_file(suggest_extend_size, datafile_disk_percentage, reserved_size))) {
+        LOG_WARN("Fail to resize file in auto extend", K(ret), K(suggest_extend_size));
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObBlockManager::check_can_be_extend(const int64_t reserved_size)
+{
+  bool can_be_extended  = false;
+
+  const int64_t datafile_maxsize = GCONF.datafile_maxsize;
+  const int64_t datafile_next = GCONF.datafile_next;
+  const int64_t current_block_file_size = io_device_->get_total_block_size();
+
+  if (OB_UNLIKELY(datafile_maxsize <= 0) ||
+      OB_UNLIKELY(datafile_next <= 0) ||
+      OB_UNLIKELY(current_block_file_size <= 0)) {
+    LOG_DEBUG("Do not extend file size, datafile param not set or unexpected block file size",
+      K(datafile_maxsize),
+      K(datafile_next),
+      K(current_block_file_size));
+  } else if (datafile_maxsize <= current_block_file_size) {
+    LOG_DEBUG("Do not extend file size, maxsize is smaller than datafile size",
+      K(datafile_maxsize),
+      K(current_block_file_size));
+  } else {
+    const int64_t max_block_cnt = get_max_macro_block_count(reserved_size);
+    const int64_t current_block_cnt = get_total_macro_block_count();
+    if (max_block_cnt <= current_block_cnt) {
+      LOG_DEBUG("Do not extend file size, max block cnt is smaller than current block cnt",
+        K(max_block_cnt),
+        K(current_block_cnt));
+    } else {
+      can_be_extended = true;
+    }
+  }
+
+  return can_be_extended;
 }
 
 static inline int64_t get_disk_allowed_iops(const int64_t macro_block_size)

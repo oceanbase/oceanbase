@@ -116,19 +116,19 @@ ObSimpleUDFSchema &ObSimpleUDFSchema::operator =(const ObSimpleUDFSchema &other)
 
 ObUDFMgr::ObUDFMgr() :
     is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    udf_infos_(0, NULL, ObModIds::OB_SCHEMA_UDF),
-    udf_map_(ObModIds::OB_SCHEMA_UDF)
+    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF)),
+    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF))
   {
   }
 
 ObUDFMgr::ObUDFMgr(common::ObIAllocator &allocator) :
     is_inited_(false),
-    local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    udf_infos_(0, NULL, ObModIds::OB_SCHEMA_UDF),
-    udf_map_(ObModIds::OB_SCHEMA_UDF)
+    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF)),
+    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF))
 {
 }
 

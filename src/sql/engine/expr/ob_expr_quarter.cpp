@@ -23,7 +23,7 @@ ObExprQuarter::ObExprQuarter(ObIAllocator& alloc)
     : ObFuncExprOperator(alloc, 
                          T_FUN_SYS_QUARTER,
                          N_QUARTER,
-                         1, NOT_ROW_DIMENSION)
+                         1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprQuarter::~ObExprQuarter(){}
@@ -93,6 +93,14 @@ int ObExprQuarter::calc_quater(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr
   } else {
     int64_t quarter = ObTimeConverter::ob_time_to_int_extract(ot, ObDateUnitType::DATE_UNIT_QUARTER);
     expr_datum.set_int(quarter);
+  }
+  return ret;
+}
+
+int ObExprQuarter::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
+    LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
   }
   return ret;
 }

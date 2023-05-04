@@ -127,7 +127,9 @@ ObMemtable::ObMemtable()
       minor_merged_time_(0),
       contain_hotspot_row_(false),
       multi_source_data_(local_allocator_),
-      multi_source_data_lock_()
+      multi_source_data_lock_(),
+      encrypt_meta_(nullptr),
+      encrypt_meta_lock_(ObLatchIds::DEFAULT_SPIN_RWLOCK)
 {
   mt_stat_.reset();
   migration_clog_checkpoint_scn_.set_min();
@@ -273,6 +275,7 @@ void ObMemtable::destroy()
   is_inited_ = false;
   contain_hotspot_row_ = false;
   snapshot_version_.set_max();
+  encrypt_meta_ = nullptr;
 }
 
 int ObMemtable::safe_to_destroy(bool &is_safe)
@@ -318,7 +321,8 @@ int ObMemtable::set(
     const uint64_t table_id,
     const storage::ObTableReadInfo &read_info,
     const common::ObIArray<share::schema::ObColDesc> &columns,
-    const storage::ObStoreRow &row)
+    const storage::ObStoreRow &row,
+    const share::ObEncryptMeta *encrypt_meta)
 {
   int ret = OB_SUCCESS;
   ObMvccWriteGuard guard;
@@ -331,6 +335,9 @@ int ObMemtable::set(
     TRANS_LOG(WARN, "invalid param", K(ctx), K(read_info),
               K(columns.count()), K(row.row_val_.count_));
     ret = OB_INVALID_ARGUMENT;
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(guard.write_auth(ctx))) {
     TRANS_LOG(WARN, "not allow to write", K(ctx));
   } else {
@@ -355,7 +362,8 @@ int ObMemtable::set(
     const ObIArray<ObColDesc> &columns,
     const ObIArray<int64_t> &update_idx,
     const storage::ObStoreRow &old_row,
-    const storage::ObStoreRow &new_row)
+    const storage::ObStoreRow &new_row,
+    const share::ObEncryptMeta *encrypt_meta)
 {
   int ret = OB_SUCCESS;
   ObMvccWriteGuard guard;
@@ -366,6 +374,9 @@ int ObMemtable::set(
              || read_info.get_schema_rowkey_count() > columns.count()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid param", K(ret), K(ctx), K(read_info));
+  }
+
+  if (OB_FAIL(ret)){
   } else if (OB_FAIL(guard.write_auth(ctx))) {
     TRANS_LOG(WARN, "not allow to write", K(ctx));
   } else {
@@ -1097,8 +1108,7 @@ int ObMemtable::replay_schema_version_change_log(const int64_t schema_version)
 }
 
 int ObMemtable::replay_row(ObStoreCtx &ctx,
-                           ObMemtableMutatorIterator *mmi,
-                           ObEncryptRowBuf &decrypt_buf)
+                           ObMemtableMutatorIterator *mmi)
 {
   int ret = OB_SUCCESS;
 
@@ -1375,17 +1385,17 @@ ObDatumRange &ObMemtable::m_get_real_range(ObDatumRange &real_range, const ObDat
 }
 
 int ObMemtable::row_compact(ObMvccRow *row,
-                            const bool for_replay,
-                            const SCN snapshot_version)
+                            const SCN snapshot_version,
+                            const int64_t flag)
 {
   int ret = OB_SUCCESS;
   ObMemtableRowCompactor row_compactor;
   if (OB_ISNULL(row)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "row is NULL");
-  } else if (OB_FAIL(row_compactor.init(row, this, &local_allocator_, for_replay))) {
+  } else if (OB_FAIL(row_compactor.init(row, this, &local_allocator_))) {
     TRANS_LOG(WARN, "row compactor init error", K(ret));
-  } else if (OB_FAIL(row_compactor.compact(snapshot_version))) {
+  } else if (OB_FAIL(row_compactor.compact(snapshot_version, flag))) {
     TRANS_LOG(WARN, "row_compact fail", K(ret), K(*row), K(snapshot_version));
   } else {
     // do nothing
@@ -2383,10 +2393,13 @@ bool ObMemtable::has_multi_source_data_unit(const MultiSourceDataUnitType type) 
   return multi_source_data_.is_valid() && multi_source_data_.has_multi_source_data_unit(type);
 }
 
+
 ObMemtableStat::ObMemtableStat()
     : lock_(common::ObLatchIds::MEMTABLE_STAT_LOCK),
       memtables_()
-{}
+{
+  memtables_.set_attr(SET_USE_500("MemTables"));
+}
 
 ObMemtableStat::~ObMemtableStat()
 {}

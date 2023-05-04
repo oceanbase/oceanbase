@@ -983,6 +983,7 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
       ObTableID related_table_id = related_index_ids_.at(i);
       const ObSimpleTableSchemaV2 *relative_table_schema = nullptr;
       ObObjectID related_part_id = OB_INVALID_ID;
+      ObObjectID related_first_level_part_id = OB_INVALID_ID;
       ObTabletID related_tablet_id;
       if (OB_FAIL(schema_guard_.get_simple_table_schema(tenant_id_,
                                                         related_table_id,
@@ -994,12 +995,14 @@ int ObTableCtx::init_das_context(ObDASCtx &das_ctx)
       } else if (OB_FAIL(relative_table_schema->get_part_id_and_tablet_id_by_idx(part_idx,
                                                                                  subpart_idx,
                                                                                  related_part_id,
+                                                                                 related_first_level_part_id,
                                                                                  related_tablet_id))) {
         LOG_WARN("get part by idx failed", K(ret), K(part_idx), K(subpart_idx), K(related_table_id));
       } else if (OB_FAIL(related_tablet_map.add_related_tablet_id(tablet_id_,
                                                                   related_table_id,
                                                                   related_tablet_id,
-                                                                  related_part_id))) {
+                                                                  related_part_id,
+                                                                  related_first_level_part_id))) {
         LOG_WARN("fail to add related tablet id", K(ret),
                   K(tablet_id_), K(related_table_id), K(related_part_id), K(related_tablet_id));
       }

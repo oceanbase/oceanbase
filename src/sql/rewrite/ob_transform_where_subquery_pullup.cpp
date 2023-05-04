@@ -1113,7 +1113,8 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
         LOG_WARN("get unexpected null", K(ret));
       } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
         //do nothing
-      } else if (has_exist_in_array(transformed_subqueries, query_expr)) {
+      } else if (has_exist_in_array(transformed_subqueries, query_expr) ||
+                 (subquery->get_select_item_size() > 1 && !is_vector_assign)) {
         //do nothing
       } else if (OB_FAIL(transformed_subqueries.push_back(query_expr))) {
         LOG_WARN("fail to push back", K(ret));

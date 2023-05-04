@@ -41,6 +41,7 @@
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "pl/ob_pl_type.h"
 #include "share/schema/ob_trigger_info.h"
+#include "sql/engine/expr/ob_expr_join_filter.h"
 #include "sql/engine/expr/ob_expr_calc_partition_id.h"
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 namespace oceanbase
@@ -59,6 +60,7 @@ class ObPLCodeGenerator;
 namespace sql
 {
 class ObStmt;
+class ObCallProcedureInfo;
 class ObSQLSessionInfo;
 class ObExprOperator;
 class ObRawExprFactory;
@@ -149,6 +151,10 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_PRIV_ST_ASEWKT)) \
 
 #define IS_GEO_OP(op) ((IS_MYSQL_GEO_OP(op)) || IS_PRIV_GEO_OP(op))
+
+#define IS_XML_OP(op) \
+  (((op) == T_FUN_SYS_XML_ELEMENT) \
+    || ((op) == T_FUN_SYS_XMLPARSE)) \
 
 #define IS_SPATIAL_EXPR(op) \
   ((op) >= T_FUN_SYS_ST_LONGITUDE && (op) <= T_FUN_SYS_ST_LATITUDE)
@@ -273,6 +279,8 @@ public:
     }
     return hash_val;
   }
+
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
 
   void reuse()
   {
@@ -1294,6 +1302,12 @@ public:
     return seed;
   }
 
+  int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
+  }
+
   bool is_null_first() const {
     return NULLS_FIRST_ASC == order_type_ || NULLS_FIRST_DESC == order_type_;
   }
@@ -1607,6 +1621,7 @@ public:
   friend sql::ObExpr *ObStaticEngineExprCG::get_rt_expr(const ObRawExpr &raw_expr);
   friend sql::ObExpr *ObExprOperator::get_rt_expr(const ObRawExpr &raw_expr) const;
   friend class pl::ObPLCodeGenerator;
+  friend class sql::ObCallProcedureInfo;
   friend class sql::ObRTDatumArith;
 
   explicit ObRawExpr(ObItemType expr_type = T_INVALID)
@@ -1644,7 +1659,8 @@ public:
        is_calculated_(false),
        is_deterministic_(true),
        partition_id_calc_type_(CALC_INVALID),
-       may_add_interval_part_(MayAddIntervalPart::NO)
+       may_add_interval_part_(MayAddIntervalPart::NO),
+       runtime_filter_type_(NOT_INIT_RUNTIME_FILTER_TYPE)
   {
   }
   virtual ~ObRawExpr();
@@ -1696,9 +1712,9 @@ public:
   /**                                                   +-is_static_scalar_const_expr
    *                               （1、1+2、sysdate）   ｜     （1，not for[1,2,3])
    *                             +-is_static_const_expr-+
-   *                             |                      
-   * is_const_or_calculable_expr-+                     
-   *    (1、1+2、2+？、sysdate）   |                            
+   *                             |
+   * is_const_or_calculable_expr-+
+   *    (1、1+2、2+？、sysdate）   |
    *                             +-is_dynamic_const_expr
    *                                 （2 + ？）
    */
@@ -1754,6 +1770,11 @@ public:
     seed = result_type_.hash(seed);
     seed = hash_internal(seed);
     return seed;
+  }
+  inline int hash(uint64_t &hash_val, uint64_t seed) const
+  {
+    hash_val = hash(seed);
+    return OB_SUCCESS;
   }
   inline bool is_type_to_str_expr() const
   {
@@ -1823,6 +1844,7 @@ public:
   bool is_geo_expr() const;
   bool is_mysql_geo_expr() const;
   bool is_priv_geo_expr() const;
+  bool is_xml_expr() const;
   ObGeoType get_geo_expr_result_type() const;
   void set_is_deterministic(bool is_deterministic) { is_deterministic_ = is_deterministic; }
   int get_geo_cast_result_type(ObGeoType& geo_type) const;
@@ -1836,6 +1858,8 @@ public:
   }
   MayAddIntervalPart get_may_add_interval_part() const
   { return may_add_interval_part_;}
+  RuntimeFilterType get_runtime_filter_type() const { return runtime_filter_type_; }
+  void set_runtime_filter_type(RuntimeFilterType type) { runtime_filter_type_ = type; }
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
@@ -1884,7 +1908,8 @@ protected:
   bool is_calculated_; // 用于在新引擎 cg 中检查 raw expr 是否被重复计算
   bool is_deterministic_; //expr is deterministic, given the same inputs, returns the same result
   PartitionIdCalcType partition_id_calc_type_; //for calc_partition_id func to mark calc part type
-  MayAddIntervalPart may_add_interval_part_; // for calc_partition_id 
+  MayAddIntervalPart may_add_interval_part_; // for calc_partition_id
+  RuntimeFilterType runtime_filter_type_; // for runtime filter
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRawExpr);
 };
@@ -1951,7 +1976,7 @@ inline bool ObRawExpr::is_const_expr() const
 
 inline bool ObRawExpr::is_static_const_expr() const
 {
-  return is_const_expr() && 
+  return is_const_expr() &&
           !has_flag(CNT_DYNAMIC_PARAM);
 }
 
@@ -2405,7 +2430,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2432,7 +2458,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2459,7 +2486,8 @@ public:
       is_unique_key_column_(false),
       is_mul_key_column_(false),
       is_strict_json_column_(0),
-      srs_id_(UINT64_MAX)
+      srs_id_(UINT64_MAX),
+      udt_set_id_(0)
   {
     set_expr_class(ObIRawExpr::EXPR_COLUMN_REF);
   }
@@ -2547,6 +2575,15 @@ public:
   int get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const;
   inline uint64_t get_srs_id() const { return srs_id_; };
   inline void set_srs_id(uint64_t srs_id) { srs_id_ = srs_id; };
+
+  inline uint64_t get_udt_set_id() const { return udt_set_id_; };
+  inline void set_udt_set_id(uint64_t udt_set_id) { udt_set_id_ = udt_set_id; };
+
+  bool is_xml_column() const { return ob_is_xml_pl_type(get_data_type(), get_udt_id())
+                                      || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
+
+  bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
+
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
@@ -2571,7 +2608,8 @@ public:
                        K_(is_unique_key_column),
                        K_(is_mul_key_column),
                        K_(is_strict_json_column),
-                       K_(srs_id));
+                       K_(srs_id),
+                       K_(udt_set_id));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObColumnRefRawExpr);
   uint64_t table_id_;
@@ -2600,6 +2638,7 @@ private:
     } srs_info_;
     uint64_t srs_id_;
   };
+  uint64_t udt_set_id_;
 };
 
 inline void ObColumnRefRawExpr::set_ref_id(uint64_t table_id, uint64_t column_id)
@@ -4451,16 +4490,20 @@ public:
   void get_cte_cycle_value(ObRawExpr *&v, ObRawExpr *&d_v) {v = cte_cycle_value_; d_v = cte_cycle_default_value_; };
   void set_table_id(int64_t table_id) { table_id_ = table_id; }
   int64_t get_table_id() const { return table_id_; }
+  void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
+  const common::ObString & get_table_name() const { return table_name_; }
 
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
                        N_REL_ID, rel_ids_,
-                       N_TABLE_ID, table_id_);
+                       N_TABLE_ID, table_id_,
+                       N_TABLE_NAME, table_name_);
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
   int64_t table_id_;
+  common::ObString table_name_;
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };
 
@@ -4707,7 +4750,7 @@ public:
   inline void set_stmt_type(stmt::StmtType type) { type_ = type; }
   inline void set_route_sql(const common::ObString &sql) { route_sql_ = sql; }
   inline void set_subquery_result_type(const sql::ObExprResType &type)
-  { 
+  {
     subquery_result_type_ = type;
   }
   inline const common::ObString &get_ps_sql() const { return ps_sql_; }

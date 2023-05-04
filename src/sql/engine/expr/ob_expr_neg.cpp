@@ -174,7 +174,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_NEG_EVAL, eval_neg_funcs, ARRAYSIZEOF(eval_ne
 
 
 ObExprNeg::ObExprNeg(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_OP_NEG, N_NEG, 1, NOT_ROW_DIMENSION) {};
+  : ObExprOperator(alloc, T_OP_NEG, N_NEG, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {};
 int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);

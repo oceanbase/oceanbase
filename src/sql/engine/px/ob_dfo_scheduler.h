@@ -41,18 +41,14 @@ public:
                                                     ObDfo &child,
                                                     ObDfo &parent,
                                                     bool is_parallel_scheduler = true) const;
+  virtual void clean_dtl_interm_result(ObExecContext &ctx) = 0;
   int build_data_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   int build_data_mn_xchg_ch(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
   virtual int on_sqc_threads_inited(ObExecContext &ctx, ObDfo &dfo) const;
   virtual int dispatch_root_dfo_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
-  int dispatch_bf_channel_info(ObExecContext &ctx,
-      ObDfo &child, ObDfo &parent) const;
-  int set_bloom_filter_ch_for_root_dfo(ObExecContext &ctx,
-      ObDfo &dfo) const;
-  int build_bloom_filter_ch(ObExecContext &ctx,
-      ObDfo &child, ObDfo &parent) const;
   int get_tenant_id(ObExecContext &ctx, uint64_t &tenant_id) const;
+  int prepare_schedule_info(ObExecContext &ctx);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDfoSchedulerBasic);
 protected:
@@ -69,6 +65,8 @@ public:
   virtual int init_all_dfo_channel(ObExecContext &ctx) const;
   virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
   virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+  virtual void clean_dtl_interm_result(ObExecContext &ctx) override;
+
 private:
   int build_transmit_recieve_channel(ObExecContext &ctx, ObDfo *dfo) const;
   int init_dfo_channel(ObExecContext &ctx, ObDfo *child, ObDfo *parent) const;
@@ -91,6 +89,7 @@ public:
     {}
     virtual int dispatch_dtl_data_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
     virtual int try_schedule_next_dfo(ObExecContext &ctx) const;
+    virtual void clean_dtl_interm_result(ObExecContext &ctx) override { UNUSED(ctx); }
 private:
     int dispatch_transmit_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;
     int dispatch_receive_channel_info(ObExecContext &ctx, ObDfo &child, ObDfo &parent) const;

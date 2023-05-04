@@ -24,14 +24,22 @@ int ObGroupResultRows::init(const common::ObIArray<ObExpr *> &exprs,
                             ObIAllocator &das_op_allocator,
                             int64_t max_size,
                             ObExpr *group_id_expr,
-                            bool need_check_output_datum)
+                            bool need_check_output_datum,
+                            ObMemAttr& attr)
 {
   int ret = OB_SUCCESS;
-  if (inited_) {
+  //Temp fix see the comment in the ob_group_scan_iter.cpp
+  if (inited_ || nullptr != reuse_alloc_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
     need_check_output_datum_ = need_check_output_datum;
+    //Temp fix see the comment in the ob_group_scan_iter.cpp
+    if (nullptr == reuse_alloc_) {
+      reuse_alloc_ = new(reuse_alloc_buf_) common::ObArenaAllocator();
+      reuse_alloc_->set_attr(attr);
+    }
+    //rows_ = static_cast<LastDASStoreRow *>(reuse_alloc_->alloc(max_size * sizeof(LastDASStoreRow)));
     rows_ = static_cast<LastDASStoreRow *>(das_op_allocator.alloc(max_size * sizeof(LastDASStoreRow)));
     if (NULL == rows_) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

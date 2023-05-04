@@ -36,12 +36,12 @@
  * ObSharedGuard
  *
  * ObSharedGuard protect a raw pointer's ownership, promise if there is at least one owner holding
- * the guard, pointer will not be deleted, and if there is no holder, pointer will be deleted 
+ * the guard, pointer will not be deleted, and if there is no holder, pointer will be deleted
  * properly.
  *
- * 
+ *
  * When to use:
- *   - hope a pointer has shared ownership, and could delete(both logically and physically) it 
+ *   - hope a pointer has shared ownership, and could delete(both logically and physically) it
  *     customized under RAII.
  *
  * When not to use:
@@ -49,7 +49,7 @@
  *
  * Memory usage:
  *   - sizeof(ObSharedGuard<T>) is 16 Bytes in common, including 2 pointers.
- *   - if ObSharedGuard is assigned by a raw pointer, a piece of heap memory for control block will 
+ *   - if ObSharedGuard is assigned by a raw pointer, a piece of heap memory for control block will
  *     be allocated, to avoid this, using ob_make_shared() or ob_alloc_shared() to ceate a
  *     ObSharedGuard and object with only one time alloc.
  *
@@ -74,8 +74,8 @@
  *     + int assign(const ObSharedGuard<T> &)
  *         success always
  *     + template <typename FUNC>
- *       int assign(T *, FUNC &&, ObIAllocator &) 
- *         general assign, could assigned by a raw pointer, may return OB_INVALID_ARGUMENT or 
+ *       int assign(T *, FUNC &&, ObIAllocator &)
+ *         general assign, could assigned by a raw pointer, may return OB_INVALID_ARGUMENT or
  *         OB_ALLOCATE_MEMORY_FAILED.
  *     5. using
  *       using ObSharedGuard<T> obj just like using T* obj.
@@ -83,11 +83,11 @@
  *  - CAUTION:
  *      + MAKE SURE ObSharedGuard is valid before using it, or will CRASH.
  *      + if the first ObSharedGuard is created by ob_make_shared() or ob_alloc_shared(), the delete
- *        action will be acted after the last ObSharedGuard destructed, and it's behavior is just 
- *        call ptr's destruction method and call allocator's free method, WILL NOT CALL destory() 
+ *        action will be acted after the last ObSharedGuard destructed, and it's behavior is just
+ *        call ptr's destruction method and call allocator's free method, WILL NOT CALL destory()
  *        method even if ptr has one.
- *      + if ObSharedGuard is created by ob_make_shared() or ob_alloc_shared(), ptr's destruct 
- *        method will be called immediately, but it's memory will be delay-freed after the last 
+ *      + if ObSharedGuard is created by ob_make_shared() or ob_alloc_shared(), ptr's destruct
+ *        method will be called immediately, but it's memory will be delay-freed after the last
  *        associated ObWeakGuard destructed.
  *
  *  - Contact  for help.
@@ -126,7 +126,9 @@ struct DefaultSharedGuardAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num++;
 #endif
-    return ob_malloc(size, "ObGuard");
+    static lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "ObGuard");
+    SET_USE_500(attr);
+    return ob_malloc(size, attr);
   }
   void* alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);
@@ -155,7 +157,7 @@ struct ControlBlock {
   allocator_(allocator),
   alloc_area_pointer_(alloc_area_pointer) {}
   template <typename FUNC>
-  ControlBlock(FUNC &&deleter, ObIAllocator &allocator, void *alloc_area_pointer) : 
+  ControlBlock(FUNC &&deleter, ObIAllocator &allocator, void *alloc_area_pointer) :
   weak_count_(1),
   shared_count_(1),
   deleter_(std::forward<FUNC>(deleter), allocator),

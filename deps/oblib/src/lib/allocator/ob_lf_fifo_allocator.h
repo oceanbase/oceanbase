@@ -27,14 +27,12 @@ public:
   ObLfFIFOAllocator() {}
   virtual ~ObLfFIFOAllocator() { destroy(); }
   int init(const int64_t page_size,
-           const lib::ObLabel &label,
-           const uint64_t tenant_id = OB_SERVER_TENANT_ID,
+           const lib::ObMemAttr &attr,
            const int64_t cache_page_count = DEFAULT_CACHE_PAGE_COUNT,
            const int64_t total_limit = INT64_MAX)
   {
     int ret = OB_SUCCESS;
-    mattr_.label_ = label;
-    mattr_.tenant_id_ = tenant_id;
+    mattr_ = attr;
     block_alloc_.set_limit(total_limit);
     if (OB_FAIL(ObVSliceAlloc::init(page_size, block_alloc_, mattr_))) {
     } else if (cache_page_count < 0 || cache_page_count > INT32_MAX) {
@@ -45,6 +43,16 @@ public:
     }
     return ret;
   }
+  int init(const int64_t page_size,
+           const lib::ObLabel &label,
+           const uint64_t tenant_id = OB_SERVER_TENANT_ID,
+           const int64_t cache_page_count = DEFAULT_CACHE_PAGE_COUNT,
+           const int64_t total_limit = INT64_MAX)
+  {
+    mattr_.label_ = label;
+    mattr_.tenant_id_ = tenant_id;
+    return init(page_size, mattr_, cache_page_count, total_limit);
+  }
   void destroy() { ObVSliceAlloc::purge_extra_cached_block(0); }
 public:
   void *alloc(const int64_t size) { return ObVSliceAlloc::alloc(size); }
@@ -53,6 +61,7 @@ public:
   int64_t allocated() const { return block_alloc_.hold(); }
   void set_tenant_id(const uint64_t tenant_id) { mattr_.tenant_id_ = tenant_id; }
   void set_label(const lib::ObLabel &label) { mattr_.label_ = label; }
+  void set_attr(const lib::ObMemAttr &attr) { mattr_ = attr; }
   void set_total_limit(int64_t total_limit) { block_alloc_.set_limit(total_limit); }
   bool is_fragment(void* ptr) { return get_block_using_ratio(ptr) < 0.8; }
 private:

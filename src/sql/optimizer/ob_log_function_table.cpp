@@ -118,5 +118,11 @@ uint64_t ObLogFunctionTable::hash(uint64_t seed) const
   return seed;
 }
 
+int ObLogFunctionTable::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
+{
+  is_fixed = ObOptimizerUtil::find_item(access_exprs_, expr);
+  return OB_SUCCESS;
+}
+
 } // namespace sql
 }// namespace oceanbase

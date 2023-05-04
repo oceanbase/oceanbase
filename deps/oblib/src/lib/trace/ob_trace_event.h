@@ -111,7 +111,7 @@ private:
 // template <EVENT_COUNT, BUF_SIZE>
 // EVENT_COUNT is generally sufficient
 // After BUF_SIZE exceeds the defined value, the kv pair in REC_TRACE_EXT will not be printed
-typedef ObTraceEventRecorderBase<189, 1600> ObTraceEventRecorder;
+typedef ObTraceEventRecorderBase<189, 1200> ObTraceEventRecorder;
 
 inline ObTraceEventRecorder *get_trace_recorder()
 {

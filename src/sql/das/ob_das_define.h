@@ -57,7 +57,7 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
  * it can be considered that the DAS request will send at most one RPC request to each zone.
  * so OB_DAS_MAX_TOTAL_PACKET_SIZE was defined as:
  */
-const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 2 * OB_DAS_MAX_PACKET_SIZE;
+const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 1 * OB_DAS_MAX_PACKET_SIZE;
 const int64_t OB_DAS_MAX_META_TENANT_PACKET_SIZE = 1 * 1024 * 1024l - 8 * 1024;
 }  // namespace das
 
@@ -113,7 +113,8 @@ public:
                K_(select_leader),
                K_(is_dup_table),
                K_(is_weak_read),
-               K_(unuse_related_pruning));
+               K_(unuse_related_pruning),
+               K_(is_external_table));
 
   uint64_t table_loc_id_; //location object id
   uint64_t ref_table_id_; //table object id
@@ -126,7 +127,9 @@ public:
       uint64_t is_dup_table_                    : 1; //mark if this table is a duplicated table
       uint64_t is_weak_read_                    : 1; //mark if this tale can use weak read consistency
       uint64_t unuse_related_pruning_           : 1; //mark if this table use the related pruning to prune local index tablet_id
-      uint64_t reserved_                        : 59;
+      uint64_t is_external_table_               : 1; //mark if this table is an external table
+      uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
+      uint64_t reserved_                        : 57;
     };
   };
 
@@ -154,14 +157,18 @@ public:
       server_(),
       loc_meta_(nullptr),
       next_(this),
-      flags_(0)
+      flags_(0),
+      partition_id_(OB_INVALID_ID),
+      first_level_part_id_(OB_INVALID_ID)
   { }
   ~ObDASTabletLoc() = default;
 
   TO_STRING_KV(K_(tablet_id),
                K_(ls_id),
                K_(server),
-               K_(need_refresh));
+               K_(need_refresh),
+               K_(partition_id),
+               K_(first_level_part_id));
   /**
    * BE CAREFUL!!! can't declare implicit allocator or
    * data structure holding implicit allocator here,
@@ -183,6 +190,10 @@ public:
       uint64_t reserved_                        : 63;
     };
   };
+  // partition id of this tablet
+  uint64_t partition_id_;
+  // first level part id of this tablet, only valid for subpartitioned table.
+  uint64_t first_level_part_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASTabletLoc);
   int assign(const ObDASTabletLoc &other);
@@ -313,6 +324,7 @@ typedef common::ObFixedArray<uint64_t, common::ObIAllocator> UIntFixedArray;
 typedef common::ObFixedArray<int64_t, common::ObIAllocator> IntFixedArray;
 typedef common::ObFixedArray<ObObjectID, common::ObIAllocator> ObjectIDFixedArray;
 typedef common::ObFixedArray<ObDASTableLoc*, common::ObIAllocator> DASTableLocFixedArray;
+typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ExternalFileNameArray;
 
 //DAS: data access service
 //CtDef: Compile time Definition

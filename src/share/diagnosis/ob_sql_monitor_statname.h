@@ -24,11 +24,15 @@ SQL_MONITOR_STATNAME_DEF(DTL_LOOP_TOTAL_MISS, sql_monitor_statname::INT, "dtl mi
 SQL_MONITOR_STATNAME_DEF(DTL_LOOP_TOTAL_MISS_AFTER_DATA, sql_monitor_statname::INT, "dtl miss count after data", "the total count of dtl loop miss after get data")
 SQL_MONITOR_STATNAME_DEF(HASH_INIT_BUCKET_COUNT, sql_monitor_statname::INT, "hash bucket init size",  "init hash bucket count")
 SQL_MONITOR_STATNAME_DEF(DISTINCT_BLOCK_MODE, sql_monitor_statname::INT, "hash distinct block mode",  "hash distinct block mode")
-// JOIN BLOOM FILTER
+// JOIN FILTER
 SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_FILTERED_COUNT, sql_monitor_statname::INT, "filtered row count", "filtered row count in join filter")
 SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_TOTAL_COUNT, sql_monitor_statname::INT, "total row count", "total row count in join filter")
 SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_CHECK_COUNT, sql_monitor_statname::INT, "check row count", "the row count of participate in check bloom filter")
 SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_READY_TIMESTAMP, sql_monitor_statname::TIMESTAMP, "filter ready time", "bloom filter ready time")
+SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_ID, sql_monitor_statname::INT, "filter id", "join filter id in plan")
+SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_LENGTH, sql_monitor_statname::INT, "filter length", "join filter length")
+SQL_MONITOR_STATNAME_DEF(JOIN_FILTER_BIT_SET, sql_monitor_statname::INT, "filter bitset", "join filter bitset")
+
 // PDML
 SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_TIME, sql_monitor_statname::INT, "clock time cost write storage", "total time cost writing data to storage by pdml op")
 SQL_MONITOR_STATNAME_DEF(PDML_PARTITION_FLUSH_COUNT, sql_monitor_statname::INT, "times write to storage", "total times writing data to storage by pdml op")

@@ -34,6 +34,7 @@ ObExprGeomWkb::ObExprGeomWkb(common::ObIAllocator &alloc,
                          type,
                          name,
                          param_num,
+                         VALID_FOR_GENERATED_COL,
                          dimension)
 {
 }

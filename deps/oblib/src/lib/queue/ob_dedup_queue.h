@@ -81,6 +81,7 @@ public:
   virtual ~IObDedupTask() {}
 public:
   virtual int64_t hash() const = 0;
+  virtual int hash(uint64_t &hash_val) const{ hash_val = hash(); return OB_SUCCESS; }
   virtual bool operator ==(const IObDedupTask &other) const = 0;
   virtual int64_t get_deep_copy_size() const = 0;
   virtual IObDedupTask *deep_copy(char *buffer, const int64_t buf_size) const = 0;
@@ -175,6 +176,7 @@ public:
   int add_task(const IObDedupTask &task);
   int64_t task_count() const { return task_queue_.get_total(); }
   void set_label(const lib::ObLabel &label) { allocator_.set_label(label); }
+  void set_attr(const lib::ObMemAttr &attr) { allocator_.set_attr(attr); }
   int set_thread_dead_threshold(const int64_t thread_dead_threshold);
 public:
   void run1() override;
@@ -191,8 +193,8 @@ private:
   typedef hash::HashMapTypes<const IObDedupTask *, IObDedupTask *>::pair_type TaskMapKVPair;
   static const int32_t DEFAULT_THREAD_NUM = 4;
   static const int32_t MAX_THREAD_NUM = 64;
-  static const int32_t QUEUE_WAIT_TIME_MS = 10; //10ms
-  static const int32_t MAX_QUEUE_WAIT_TIME_MS = 100; //100ms
+  static const int32_t QUEUE_WAIT_TIME_MS = 50; //50ms
+  static const int32_t MAX_QUEUE_WAIT_TIME_MS = 500; //500ms
   static const int64_t GC_BATCH_NUM = 512;
   static const int64_t DEFALT_THREAD_DEAD_THRESHOLD = 30000000L; //30s
   static const int64_t THREAD_CHECK_INTERVAL = 10000000L; //10s

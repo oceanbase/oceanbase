@@ -23,7 +23,7 @@ class ObGroupResultRows
 public:
   ObGroupResultRows() : inited_(false), exprs_(NULL), eval_ctx_(NULL),
                         saved_size_(0), max_size_(1), start_pos_(0), group_id_expr_pos_(0),
-                        rows_(NULL), need_check_output_datum_(false)
+                        rows_(NULL), need_check_output_datum_(false),reuse_alloc_(nullptr)
   {
   }
 
@@ -32,7 +32,8 @@ public:
            common::ObIAllocator &das_op_allocator,
            int64_t max_size,
            ObExpr *group_id_expr,
-           bool need_check_output_datum);
+           bool need_check_output_datum,
+           ObMemAttr& attr);
   int save(bool is_vectorized, int64_t start_pos, int64_t size);
   int to_expr(bool is_vectorized, int64_t start_pos, int64_t size);
   int64_t cur_group_idx();
@@ -48,6 +49,12 @@ public:
     group_id_expr_pos_ = 0;
     rows_ = NULL;
     need_check_output_datum_ = false;
+    //Temp fix
+    if (reuse_alloc_ != nullptr) {
+      reuse_alloc_->reset();
+      reuse_alloc_->~ObArenaAllocator();
+      reuse_alloc_ = nullptr;
+    }
   }
   TO_STRING_KV(K_(saved_size),
                K_(start_pos),
@@ -66,6 +73,17 @@ public:
   int64_t group_id_expr_pos_;
   LastDASStoreRow *rows_;
   bool need_check_output_datum_;
+  //Temp fix
+  //Current implement group iter is eval in das task context.
+  //Whe Das task retry we hard to ues allocator pass from eval ctx, we can not free or
+  //reuse LastDASStoreRow memory because when das task is remote the alloctor is change,
+  //only memory from eval ctx can be reuse.
+  //So we just introduce this temp fix use a new alloctor make LastDASStoreRow have a same
+  //life cycle with ObGroupResultRows.
+  //After next version @xiyang.gjc will refactor group rescan, then ObGroupResultRows will
+  //be move from das into Table scan op, every thing will be easy.
+  common::ObArenaAllocator *reuse_alloc_;
+  char reuse_alloc_buf_[sizeof(common::ObArenaAllocator)];
 };
 
 class ObGroupScanIter : public ObNewRowIterator
@@ -99,7 +117,8 @@ public:
                      int64_t max_size,
                      ObExpr *group_id_expr,
                      ObNewRowIterator **iter,
-                     bool need_check_output_datum)
+                     bool need_check_output_datum,
+                     ObMemAttr& attr)
   {
     group_id_expr_ = group_id_expr;
     iter_ = iter;
@@ -108,7 +127,8 @@ public:
                            das_op_allocator,
                            max_size,
                            group_id_expr,
-                           need_check_output_datum);
+                           need_check_output_datum,
+                           attr);
   }
   ObNewRowIterator *&get_result_tmp_iter() { return result_tmp_iter_; }
 

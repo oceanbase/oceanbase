@@ -35,6 +35,7 @@
 #include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
 #include "ob_cdc_lob_aux_table_parse.h"    // ObCDCLobAuxMetaStorager
+#include "ob_cdc_udt.h"                  // ObCDCUdtValueBuilder
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -1195,6 +1196,31 @@ int ObLogFormatter::handle_lob_ctx_cols_(
   return ret;
 }
 
+int ObLogFormatter::group_udt_column_values_(
+    const ColumnSchemaInfo &column_schema_info,
+    const ObTimeZoneInfoWrap *tz_info_wrap,
+    const bool is_new_value,
+    DmlStmtTask &stmt_task,
+    ObLobDataOutRowCtxList &ob_ctx_cols,
+    ColValue &cv)
+{
+  int ret = OB_SUCCESS;
+  if (! column_schema_info.is_udt_column()) {
+    // do nothing if no group
+  } else if (OB_FAIL(ObCDCUdtValueBuilder::build(
+      column_schema_info,
+      tz_info_wrap,
+      is_new_value,
+      allocator_,
+      stmt_task,
+      *obj2str_helper_,
+      ob_ctx_cols,
+      cv))) {
+    LOG_ERROR("build udt value failed", KR(ret), K(column_id), K(column_schema_info));
+  }
+  return ret;
+}
+
 template<class TABLE_SCHEMA>
 int ObLogFormatter::fill_normal_cols_(
     DmlStmtTask &stmt_task,
@@ -1243,6 +1269,14 @@ int ObLogFormatter::fill_normal_cols_(
               K(tb_schema_info),
               K(column_id),
               KPC(column_schema_info));
+        } else if (OB_FAIL(group_udt_column_values_(
+            *column_schema_info,
+            tz_info_wrap,
+            is_new_value,
+            stmt_task,
+            lob_ctx_cols,
+            *cv))) {
+          LOG_ERROR("group_udt_column_values_ fail", KR(ret), K(usr_column_idx), K(column_id), K(is_new_value));
         } else if (is_new_value) {
           if (! cv->is_out_row_) {
             rv->new_columns_[usr_column_idx] = &cv->string_value_;

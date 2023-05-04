@@ -16,6 +16,7 @@
 
 #include "share/config/ob_server_config.h"
 #include "rootserver/ob_server_manager.h"
+#include "rootserver/ob_heartbeat_service.h"
 
 namespace oceanbase
 {
@@ -149,8 +150,12 @@ ObCheckServerTask::ObCheckServerTask(common::ObWorkQueue &work_queue,
 int ObCheckServerTask::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(checker_.check_all_server())) {
-    LOG_WARN("checker all server failed", K(ret));
+  if (!ObHeartbeatService::is_service_enabled()) {
+    if (OB_FAIL(checker_.check_all_server())) {
+      LOG_WARN("checker all server failed", K(ret));
+    }
+  } else {
+    LOG_TRACE("no need to do ObCheckServerTask in version >= 4.2");
   }
   return ret;
 }

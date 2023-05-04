@@ -268,7 +268,7 @@ int ObMPConnect::process()
       session->set_sql_request_level(conn->sql_req_level_);
       // set session var sync info.
       session->set_session_var_sync(conn->proxy_cap_flags_.is_session_var_sync_support());
-
+      session->get_control_info().support_show_trace_ = conn->proxy_cap_flags_.is_flt_show_trace_support();
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
                K(tenant_id),
@@ -1485,7 +1485,8 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC = 0;
     }
-
+    server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC = 1;
+    server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT = 1;
     conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);//if old java client, set it 0
 
     LOG_DEBUG("Negotiated capability",

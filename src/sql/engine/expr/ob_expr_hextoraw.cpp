@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprHextoraw::ObExprHextoraw(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_HEXTORAW, N_HEXTORAW, 1)
+    : ObStringExprOperator(alloc, T_FUN_SYS_HEXTORAW, N_HEXTORAW, 1, VALID_FOR_GENERATED_COL)
 {
   disable_operand_auto_cast();
 }

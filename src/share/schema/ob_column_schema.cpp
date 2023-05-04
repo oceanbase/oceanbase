@@ -142,6 +142,8 @@ ObColumnSchemaV2 &ObColumnSchemaV2::operator =(const ObColumnSchemaV2 &src_schem
     encoding_type_ = src_schema.encoding_type_;
     sequence_id_ = src_schema.sequence_id_;
     srs_id_ = src_schema.srs_id_;
+    udt_set_id_ = src_schema.udt_set_id_;
+    sub_type_ = src_schema.sub_type_;
 
     int ret = OB_SUCCESS;
     if (OB_FAIL(deep_copy_obj(src_schema.orig_default_value_, orig_default_value_))) {
@@ -216,10 +218,10 @@ bool ObColumnSchemaV2::is_prefix_column() const
   return bret;
 }
 
-bool ObColumnSchemaV2::is_func_idx_column(const bool is_oracle_mode) const
+bool ObColumnSchemaV2::is_func_idx_column() const
 {
   bool bret = false;
-  if (is_hidden() && is_generated_column() && is_oracle_mode) {
+  if (is_hidden() && is_generated_column()) {
     const char *func_idx_str = "SYS_NC";
     int64_t min_len = min(column_name_.length(), static_cast<int64_t>(strlen(func_idx_str)));
     bret = (0 == strncmp(get_column_name(), func_idx_str, min_len));
@@ -258,6 +260,8 @@ void ObColumnSchemaV2::reset()
   encoding_type_ = INT64_MAX;
   sequence_id_ = INT64_MAX;
   srs_id_ = OB_DEFAULT_COLUMN_SRS_ID;
+  udt_set_id_ = 0;
+  sub_type_ = 0;
   reset_string_array(extended_type_info_);
   ObSchema::reset();
 }
@@ -305,7 +309,9 @@ OB_DEF_SERIALIZE(ObColumnSchemaV2)
   } else {
     LST_DO_CODE(OB_UNIS_ENCODE,
                 sequence_id_,
-                srs_id_);
+                srs_id_,
+                udt_set_id_,
+                sub_type_);
   }
 
   return ret;
@@ -369,7 +375,9 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
   } else {
     LST_DO_CODE(OB_UNIS_DECODE,
                 sequence_id_,
-                srs_id_);
+                srs_id_,
+                udt_set_id_,
+                sub_type_);
   }
   return ret;
 }
@@ -411,7 +419,9 @@ OB_DEF_SERIALIZE_SIZE(ObColumnSchemaV2)
   len += get_string_array_serialize_size(extended_type_info_);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               sequence_id_,
-              srs_id_);
+              srs_id_,
+              udt_set_id_,
+              sub_type_);
   return len;
 }
 
@@ -503,6 +513,8 @@ int64_t ObColumnSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(sequence_id),
     K_(encoding_type),
     K_(srs_id),
+    K_(udt_set_id),
+    K_(sub_type),
     KPC_(column_ref_idxs));
   J_OBJ_END();
   return pos;
@@ -514,7 +526,9 @@ int ObColumnSchemaV2::get_byte_length(
     const bool for_check_length) const
 {
   int ret = OB_SUCCESS;
-  if (CS_TYPE_INVALID == get_collation_type()) {
+  if (CS_TYPE_INVALID == get_collation_type()
+      && !ob_is_extend(meta_type_.get_type())
+      && !ob_is_user_defined_sql_type(meta_type_.get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("collation type is invalid", K(ret));
   } else if (ob_is_text_tc(meta_type_.get_type()) || ob_is_json(meta_type_.get_type())

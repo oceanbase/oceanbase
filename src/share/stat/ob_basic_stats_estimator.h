@@ -45,7 +45,17 @@ public:
   static int estimate_modified_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const uint64_t table_id,
-                                     int64_t &inc_modified_count);
+                                     int64_t &result,
+                                     const bool need_inc_modified_count = true);
+
+  static int estimate_row_count(ObExecContext &ctx,
+                                const uint64_t tenant_id,
+                                const uint64_t table_id,
+                                int64_t &row_cnt);
+  static int get_gather_table_duration(ObExecContext &ctx,
+                                       const uint64_t tenant_id,
+                                       const uint64_t table_id,
+                                       int64_t &last_gather_duration);
 
   static int estimate_stale_partition(ObExecContext &ctx,
                                       const uint64_t tenant_id,
@@ -122,6 +132,7 @@ private:
                                   ObTableStatParam &new_param,
                                   ObExtraParam &new_extra);
 
+  int fill_hints(common::ObIAllocator &alloc, const ObString &table_name);
 };
 
 }

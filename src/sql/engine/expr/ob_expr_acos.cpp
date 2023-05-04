@@ -26,9 +26,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprAcos::ObExprAcos(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ACOS, N_ACOS, 1, NOT_ROW_DIMENSION)
-{
-}
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ACOS, N_ACOS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION) {}
 
 ObExprAcos::~ObExprAcos()
 {

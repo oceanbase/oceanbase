@@ -5637,7 +5637,7 @@ int ObOptimizerUtil::is_order_by_match(const ObIArray<OrderItem> &ordering,
 
 int ObOptimizerUtil::is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless)
 {
-int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   is_lossless = false;
   const ObRawExpr *child_expr = NULL;
   if (OB_ISNULL(expr)) {
@@ -5648,85 +5648,108 @@ int ret = OB_SUCCESS;
   } else if (OB_ISNULL(child_expr = expr->get_param_expr(4))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else {
-    ObExprResType child_type = child_expr->get_result_type();
-    ObObjTypeClass child_tc = child_type.get_type_class();
-    ObExprResType dst_type = expr->get_result_type();
-    ObObjTypeClass dst_tc = dst_type.get_type_class();
-    ObAccuracy dst_acc = dst_type.get_accuracy();
-    if (!is_oracle_mode()) {
-      // mysql模式允许的无损类型转换可以参考
-      if (ObIntTC == child_tc || ObUIntTC == child_tc) {
-        if (child_type.get_type() == dst_type.get_type()) {
-          is_lossless = true;
-        } else if (ObNumberTC == dst_tc) {
-          ObAccuracy lossless_acc = child_type.get_accuracy();
-          if ((dst_acc.get_scale() >= 0 &&
-               dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
-              (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
-        if (child_tc == dst_tc) {
-          ObAccuracy lossless_acc = child_type.get_accuracy();
-          if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
-                dst_acc.get_scale() == lossless_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObTimestampType == child_type.get_type() || ObDateTimeType == child_type.get_type()) {
-        if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
-          if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
-              child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
-        if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObYearTC == child_tc) {
-        if (ObNumberTC == dst_tc) {
-          ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
-          if (dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() - lossless_acc.get_scale()) {
-            is_lossless = true;
-          }
-        } else if (ObDoubleTC == dst_tc) {
-          if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
-            is_lossless = true;
-          }
-        }
-        // varchar, varbinnary
-      } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()) {
-        //in mysql c1 varchar(x) as (func(y)) can not insert data makes length(fun(y)) > x
-        if (child_type.get_type() == dst_type.get_type() &&
-              dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
-          is_lossless = true;
-        }
-      }
-    } else {
-      if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
-        if (child_tc == dst_tc || ObNumberTC == dst_tc) {
-          ObAccuracy lossless_acc = child_type.get_accuracy();
-          if ((dst_acc.get_scale() >= 0 &&
-               dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
-              (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
-            is_lossless = true;
-          }
-        }
-      } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()) {
-        //in oracle creating table ... c1 varchar(x) as (func(y)) will ensure that x>=length(y);
-        if (child_type.get_type() == dst_type.get_type() &&
-              dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
-          is_lossless = true;
-        }
-      }
-    }
+   } else {
+    is_lossless = is_lossless_type_conv(child_expr->get_result_type(), expr->get_result_type());
   }
   return ret;
+}
+
+bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, const ObExprResType &dst_type) {
+  bool is_lossless = false;
+  ObObjTypeClass child_tc = child_type.get_type_class();
+  ObObjTypeClass dst_tc = dst_type.get_type_class();
+  ObAccuracy dst_acc = dst_type.get_accuracy();
+  if (child_type.get_type() == dst_type.get_type() &&
+    (child_type.get_accuracy().get_precision() == dst_acc.get_precision() || -1 == dst_acc.get_precision()) &&
+    (child_type.get_accuracy().get_scale() == dst_acc.get_scale() || -1 == dst_acc.get_scale())) {
+    if (ob_is_string_type(child_type.get_type())) {
+      if (dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type() &&
+         (child_type.get_accuracy().get_length() <= dst_acc.get_length() || -1 == dst_acc.get_length())) {
+        is_lossless = true;
+      }
+    } else if (ob_is_numeric_type(child_type.get_type()) || ob_is_temporal_type(child_type.get_type()) || ob_is_otimestampe_tc(child_type.get_type())) {
+      is_lossless = true;
+    }
+  }
+  if (is_lossless) {
+    //do nothing
+  } else if (!is_oracle_mode()) {
+    // mysql模式允许的无损类型转换可以参考
+    if (ObIntTC == child_tc || ObUIntTC == child_tc || ObNumberTC == child_tc) {
+      if (child_type.get_type() == dst_type.get_type() && ObNumberTC != child_tc) {
+        is_lossless = true;
+      } else if (ObNumberTC == dst_tc) {
+        ObAccuracy lossless_acc = child_type.get_accuracy();
+        if ((dst_acc.get_scale() >= 0 &&
+              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
+            (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale())) {
+           is_lossless = true;
+         }
+      }
+    } else if (ObFloatTC == child_tc || ObDoubleTC == child_tc) {
+      if (child_tc == dst_tc || ObDoubleTC == dst_tc) {
+        ObAccuracy lossless_acc = child_type.get_accuracy();
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+          is_lossless = true;
+        } else if (dst_acc.get_precision() >= lossless_acc.get_precision() &&
+                  dst_acc.get_scale() >= lossless_acc.get_scale()) {
+          is_lossless = true;
+         }
+      }
+    } else if (ObTimestampType == child_type.get_type() || ObDateTimeType == child_type.get_type()) {
+      if (ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (child_type.get_accuracy().get_precision() == dst_acc.get_precision() &&
+            child_type.get_accuracy().get_scale() == dst_acc.get_scale()) {
+          is_lossless = true;
+         }
+      }
+    } else if (ObDateTC == child_tc || ObTimeTC == child_tc) {
+      if (child_tc == dst_tc || ObDateTimeType == dst_type.get_type() || ObTimestampType == dst_type.get_type()) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+           is_lossless = true;
+         }
+       }
+    } else if (ObYearTC == child_tc) {
+      if (ObNumberTC == dst_tc) {
+        ObAccuracy lossless_acc = ObAccuracy::DDL_DEFAULT_ACCURACY2[ObCompatibilityMode::MYSQL_MODE][child_type.get_type()];
+        if (dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision() - lossless_acc.get_scale()) {
+          is_lossless = true;
+         }
+      } else if (ObDoubleTC == dst_tc) {
+        if (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) {
+           is_lossless = true;
+         }
+      } else if (child_tc == dst_tc) {
+        is_lossless = true;
+      }
+      // varchar, varbinnary
+    } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type()) {
+      //in mysql c1 varchar(x) as (func(y)) can not insert data makes length(fun(y)) > x
+      if (child_type.get_type() == dst_type.get_type() &&
+            dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+        is_lossless = true;
+      }
+    }
+  } else {
+    if (ObNumberTC == child_tc || ObIntTC == child_tc || ObUIntTC == child_tc) {
+      if (child_tc == dst_tc || ObNumberTC == dst_tc) {
+        ObAccuracy lossless_acc = child_type.get_accuracy();
+        if ((dst_acc.get_scale() >= 0 &&
+              dst_acc.get_precision() - dst_acc.get_scale() >= lossless_acc.get_precision()) ||
+            (-1 == dst_acc.get_precision() && -1 == dst_acc.get_scale()) ||
+            (-1 == dst_acc.get_precision() && -85 == dst_acc.get_scale())) {
+          is_lossless = true;
+        }
+      }
+    } else if (ObCharType == child_type.get_type() || ObVarcharType == child_type.get_type() || ObNCharType == child_type.get_type() || ObNVarchar2Type == child_type.get_type()) {
+      //in oracle creating table ... c1 varchar(x) as (func(y)) will ensure that x>=length(y);
+      if (child_type.get_type() == dst_type.get_type() &&
+            dst_type.get_obj_meta().get_collation_type() == child_type.get_obj_meta().get_collation_type()) {
+        is_lossless = true;
+       }
+     }
+   }
+  return is_lossless;
 }
 
 int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless)
@@ -6148,7 +6171,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                     && (ob_is_oracle_temporal_type(right_type.get_type())))
                 || (left_type.is_urowid() && right_type.is_urowid())
                 || (is_oracle_mode() && left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
-                || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type()))) {
+                || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
+                || (is_oracle_mode() && (ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
+                                     && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
                 // || (left_type.is_lob() && right_type.is_lob() && !is_distinct))) {
                 // Originally, cases like "select clob from t union all select blob from t" return error
             if (session_info->is_ps_prepare_stage()) {
@@ -6681,15 +6706,11 @@ int ObOptimizerUtil::rename_set_op_pushdown_filter(const ObSelectStmt &parent_st
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> child_select_list;
-  ObSEArray<ObRawExpr *, 4> parent_select_list;
   ObSEArray<ObRawExpr *, 4> parent_set_exprs;
   ObRawExprCopier copier(expr_factory);
   if (OB_FAIL(subquery.get_select_exprs(child_select_list))) {
     LOG_WARN("get child stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(parent_stmt.get_select_exprs(parent_select_list))) {
-    LOG_WARN("get parent stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(parent_select_list,
-                                                        parent_set_exprs))) {
+  } else if (OB_FAIL(parent_stmt.get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get expr in cast", K(ret));
   } else if (OB_FAIL(copier.add_replaced_expr(parent_set_exprs, child_select_list))) {
     LOG_WARN("failed to add exprs", K(ret));
@@ -7536,22 +7557,20 @@ int ObOptimizerUtil::check_pushdown_filter_to_base_table(ObLogPlan &plan,
   return ret;
 }
 
-int ObOptimizerUtil::get_join_style_parallel(ObOptimizerContext &opt_ctx,
-                                             int64_t left_parallel,
-                                             int64_t right_parallel,
-                                             const DistAlgo join_dist_algo,
-                                             int64_t &parallel)
+int64_t ObOptimizerUtil::get_join_style_parallel(const int64_t left_parallel,
+                                                 const int64_t right_parallel,
+                                                 const DistAlgo join_dist_algo,
+                                                 const bool use_left /* default false */)
 {
-  int ret = OB_SUCCESS;
-  parallel = 1.0;
+  int64_t parallel = ObGlobalHint::UNSET_PARALLEL;
   if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo ||
              DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo) {
-    parallel = 1.0;
-  } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo) {
-    parallel = opt_ctx.get_parallel();
-  } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo ||
-             DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
+    parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  } else if (DistAlgo::DIST_HASH_HASH == join_dist_algo ||
+             DistAlgo::DIST_PARTITION_WISE == join_dist_algo ||
+             DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo) {
+    parallel = (use_left || (left_parallel > right_parallel)) ? left_parallel : right_parallel;
+  } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
              DistAlgo::DIST_BC2HOST_NONE == join_dist_algo ||
              DistAlgo::DIST_HASH_NONE == join_dist_algo ||
              DistAlgo::DIST_PARTITION_NONE == join_dist_algo) {
@@ -7559,7 +7578,7 @@ int ObOptimizerUtil::get_join_style_parallel(ObOptimizerContext &opt_ctx,
   } else {
     parallel = left_parallel;
   }
-  return ret;
+  return parallel;
 }
 
 bool ObOptimizerUtil::is_left_need_exchange(const ObShardingInfo &sharding,
@@ -8503,74 +8522,6 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_set(const ObSelectStmt &pare
   return ret;
 }
 
-
-int ObOptimizerUtil::init_calc_part_id_expr(ObLogPlan * log_plan,
-                                            const uint64_t table_id,
-                                            const uint64_t ref_table_id,
-                                            ObRawExpr *&calc_part_id_expr)
-{
-  int ret = OB_SUCCESS;
-  calc_part_id_expr = NULL;
-  share::schema::ObPartitionLevel part_level = share::schema::PARTITION_LEVEL_MAX;
-  ObSQLSessionInfo *session = NULL;
-  ObRawExpr *part_expr = NULL;
-  ObRawExpr *subpart_expr = NULL;
-  ObRawExpr *new_part_expr = NULL;
-  ObRawExpr *new_subpart_expr = NULL;
-  if (OB_ISNULL(log_plan) || OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid argument", K(ret), K(ref_table_id));
-  } else if (OB_ISNULL(session = log_plan->get_optimizer_context().get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", K(ret));
-  } else {
-    share::schema::ObSchemaGetterGuard *schema_guard = NULL;
-    const share::schema::ObTableSchema *table_schema = NULL;
-    if (OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL ptr", K(ret));
-    } else if (OB_FAIL(schema_guard->get_table_schema(
-               session->get_effective_tenant_id(),
-               ref_table_id, table_schema))) {
-      LOG_WARN("get table schema failed", K(ref_table_id), K(ret));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is null", K(ret), K(table_schema));
-    } else if (OB_FAIL(log_plan->gen_calc_part_id_expr(table_id,
-                                                       ref_table_id,
-                                                       CALC_PARTITION_TABLET_ID,
-                                                       calc_part_id_expr))) {
-      LOG_WARN("failed to build calc part id expr", K(ret));
-    } else if (!table_schema->is_heap_table() &&
-               OB_NOT_NULL(calc_part_id_expr) &&
-               OB_FAIL(replace_gen_column(log_plan, calc_part_id_expr, calc_part_id_expr))) {
-      LOG_WARN("failed to replace gen column", K(ret));
-    } else {
-      // For no-pk table partitioned by generated column, it is no need to replace generated
-      // column as dependent exprs, because index table scan will add dependant columns
-      // into access_exprs_
-      // eg:
-      // create table t1(c1 int, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
-      // create index idx on t1(c2) global;
-      // select /*+ index(t1 idx) */ * from t1\G
-      // TLU
-      //  TSC // output([pk_inc],[calc_part_id_expr(c3)], [c1]), access([pk_inc], [c1])
-
-      // For pk table partitioned by generated column, we can replace generated column by
-      // dependant exprs, because pk must be a superset of partition columns
-      // eg:
-      // create table t1(c1 int primary key, c2 int, c3 int generated always as (c1 + 1)) partition by hash(c3);
-      // create index idx on t1(c2) global;
-      // select /*+ index(t1 idx) */ * from t1\G
-      // TLU
-      //  TSC // output([c1],[calc_part_id_expr(c1 + 1)]), access([c1])
-      LOG_TRACE("log table scan init calc part id expr", KPC(calc_part_id_expr));
-    }
-  }
-
-  return ret;
-}
-
 int ObOptimizerUtil::replace_column_with_select_for_partid(const ObInsertStmt *stmt,
                                                            ObOptimizerContext &opt_ctx,
                                                            ObRawExpr *&calc_part_id_expr)
@@ -8643,11 +8594,14 @@ int ObOptimizerUtil::replace_gen_column(ObLogPlan *log_plan, ObRawExpr *part_exp
 
 int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
                                                    ObIAllocator &alloc,
-                                                   const ObObj *&new_obj)
+                                                   ObObj *&new_obj)
 {
   int ret = OB_SUCCESS;
   bool is_truncated = false;
-  if (old_obj->is_string_type()) {
+  if (OB_ISNULL(old_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (old_obj->is_string_type()) {
     ObString str;
     if (OB_FAIL(old_obj->get_string(str))) {
       LOG_WARN("failed to get string", K(ret), K(str));
@@ -8677,7 +8631,8 @@ int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
     }
   }
   if (OB_SUCC(ret) && !is_truncated) {
-    new_obj = old_obj;
+    new_obj = const_cast<ObObj *>(old_obj);
   }
+  LOG_TRACE("Succeed to truncate string obj for opt stats", KPC(old_obj), KPC(new_obj), K(is_truncated));
   return ret;
 }

@@ -17,6 +17,8 @@
 #include "sql/engine/cmd/ob_analyze_executor.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_dbms_stats_lock_unlock.h"
+#include "share/stat/ob_dbms_stats_utils.h"
+#include "share/stat/ob_opt_stat_manager.h"
 
 //#define COMPUTE_FREQUENCY_HISTOGRAM
 //   "SELECT /*+NO_USE_PX*/ col, sum(val) over (order by col rows between unbounded preceding and current row) "
@@ -59,14 +61,35 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
   } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {
     LOG_WARN("failed to fill table stat param", K(ret));
   } else if (!stmt.is_delete_histogram()) {
-    if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
-      LOG_WARN("failed check stat locked", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param))) {
-      LOG_WARN("failed to gather table stats", K(ret));
-    } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
-      LOG_WARN("failed to update stat cache", K(ret));
+    int64_t task_cnt = 1;
+    int64_t seq_id = 1;
+    int64_t start_time = ObTimeUtility::current_time();
+    ObOptStatTaskInfo task_info;
+    if (OB_FAIL(pl::ObDbmsStats::init_gather_task_info(ctx, ObOptStatGatherType::MANUAL_GATHER,
+                                                       start_time, task_cnt, task_info))) {
+      LOG_WARN("failed to init gather task info", K(ret));
     } else {
-      LOG_TRACE("succeed to gather table stats", K(param));
+      ObOptStatGatherStat gather_stat(task_info);
+      ObOptStatGatherStatList::instance().push(gather_stat);
+      ObOptStatRunningMonitor running_monitor(ctx.get_allocator(), start_time, param.allocator_->total(), gather_stat);
+      if (OB_FAIL(running_monitor.add_table_info(param))) {
+        LOG_WARN("failed to add table info", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+        LOG_WARN("failed check stat locked", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, param))) {
+        LOG_WARN("failed to gather table stats", K(ret));
+      } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
+        LOG_WARN("failed to update stat cache", K(ret));
+      } else {
+        LOG_TRACE("succeed to gather table stats", K(param));
+      }
+      running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), param.allocator_->used());
+      ObOptStatGatherStatList::instance().remove(gather_stat);
+      task_info.task_end_time_ = ObTimeUtility::current_time();
+      task_info.ret_code_ = ret;
+      task_info.failed_count_ = ret == OB_SUCCESS ? 0 : 1;
+      ObOptStatManager::get_instance().update_opt_stat_task_stat(task_info);
+      ObOptStatManager::get_instance().update_opt_stat_gather_stat(gather_stat);
     }
   } else {
     if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, param, true))) {

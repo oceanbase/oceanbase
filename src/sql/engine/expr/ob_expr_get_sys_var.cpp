@@ -30,7 +30,7 @@ namespace sql
 {
 
 ObExprGetSysVar::ObExprGetSysVar(ObIAllocator &alloc)
-    :ObFuncExprOperator(alloc, T_OP_GET_SYS_VAR, N_GET_SYS_VAR, 2, NOT_ROW_DIMENSION,
+    :ObFuncExprOperator(alloc, T_OP_GET_SYS_VAR, N_GET_SYS_VAR, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                         INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
 }

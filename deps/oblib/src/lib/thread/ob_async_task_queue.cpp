@@ -53,6 +53,7 @@ int ObAsyncTaskQueue::init(const int64_t thread_cnt, const int64_t queue_size, c
   } else if (OB_FAIL(create(thread_cnt, thread_name))) {
     LOG_WARN("create async task thread failed", K(ret), K(thread_cnt));
   } else {
+    allocator_.set_attr(SET_USE_500("AsyncTaskQueue"));
     is_inited_ = true;
   }
   return ret;

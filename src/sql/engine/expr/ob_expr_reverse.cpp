@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprReverse::ObExprReverse(ObIAllocator &alloc) :
-    ObStringExprOperator(alloc, T_FUN_SYS_REVERSE, "reverse", 1)
+    ObStringExprOperator(alloc, T_FUN_SYS_REVERSE, "reverse", 1, VALID_FOR_GENERATED_COL)
 {
 }
 

@@ -29,6 +29,7 @@ namespace oceanbase
 {
 namespace sql
 {
+const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
 class ObIExtraStatusCheck;
 enum ObBcastOptimization {
   BC_TO_WORKER,
@@ -155,6 +156,14 @@ public:
       ObTabletIdxMap &idx_map);
   static int find_dml_ops(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                           const ObOpSpec &op);
+  static int get_external_table_loc(
+      ObExecContext &ctx,
+      uint64_t table_id,
+      uint64_t ref_table_id,
+      const ObQueryRange &pre_query_range,
+      ObDfo &dfo,
+      ObDASTableLoc *&table_loc);
+
 private:
   static int find_dml_ops_inner(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                              const ObOpSpec &op);
@@ -233,6 +242,13 @@ private:
   static int do_random_dfo_distribution(const common::ObIArray<common::ObAddr> &src_addrs,
                                         int64_t dst_addrs_count,
                                         common::ObIArray<common::ObAddr> &dst_addrs);
+  static int sort_and_collect_local_file_distribution(common::ObIArray<share::ObExternalFileInfo> &files,
+                                                      common::ObIArray<common::ObAddr> &dst_addrs);
+  static int assign_external_files_to_sqc(const common::ObIArray<share::ObExternalFileInfo> &files,
+                                          bool is_file_on_disk,
+                                          common::ObIArray<ObPxSqcMeta *> &sqcs);
+private:
+  static int generate_dh_map_info(ObDfo &dfo);
   DISALLOW_COPY_AND_ASSIGN(ObPXServerAddrUtil);
 };
 
@@ -553,6 +569,33 @@ class ObPxCheckAlive
 public:
   static bool is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time);
 };
+
+template<class T>
+static int get_location_addrs(const T &locations,
+                              ObIArray<ObAddr> &addrs)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashSet<ObAddr> addr_set;
+  if (OB_FAIL(addr_set.create(locations.size()))) {
+    SQL_LOG(WARN, "fail create addr set", K(locations.size()), K(ret));
+  }
+  for (auto iter = locations.begin(); OB_SUCC(ret) && iter != locations.end(); ++iter) {
+    ret = addr_set.exist_refactored((*iter)->server_);
+    if (OB_HASH_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      if (OB_FAIL(addrs.push_back((*iter)->server_))) {
+        SQL_LOG(WARN, "fail push back server", K(ret));
+      } else if (OB_FAIL(addr_set.set_refactored((*iter)->server_))) {
+        SQL_LOG(WARN, "fail set addr to addr_set", K(ret));
+      }
+    } else {
+      SQL_LOG(WARN, "fail check server exist in addr_set", K(ret));
+    }
+  }
+  (void)addr_set.destroy();
+  return ret;
+}
 
 }
 }

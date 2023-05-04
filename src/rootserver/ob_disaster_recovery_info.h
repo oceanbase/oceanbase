@@ -37,7 +37,6 @@ namespace rootserver
 {
 
 class ObUnitManager;
-class ObServerManager;
 class ObZoneManager;
 
 struct DRServerStatInfo
@@ -141,13 +140,11 @@ class DRLSInfo
 public:
   DRLSInfo(const uint64_t resource_tenant_id,
            ObUnitManager *unit_mgr,
-           ObServerManager *server_mgr,
            ObZoneManager *zone_mgr,
            share::schema::ObMultiVersionSchemaService *schema_service)
     : resource_tenant_id_(resource_tenant_id),
       sys_schema_guard_(),
       unit_mgr_(unit_mgr),
-      server_mgr_(server_mgr),
       zone_mgr_(zone_mgr),
       schema_service_(schema_service),
       unit_stat_info_map_(),
@@ -238,7 +235,6 @@ private:
   uint64_t resource_tenant_id_;
   share::schema::ObSchemaGetterGuard sys_schema_guard_;
   ObUnitManager *unit_mgr_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   UnitStatInfoMap unit_stat_info_map_;

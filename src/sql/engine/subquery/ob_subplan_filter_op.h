@@ -15,6 +15,7 @@
 
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/px/ob_px_util.h"
 
 namespace oceanbase
 {
@@ -27,7 +28,7 @@ public:
   DatumRow() : elems_(NULL), cnt_(0) {}
   ~DatumRow() {}
   bool operator==(const DatumRow &other) const;
-  uint64_t hash(uint64_t seed=0) const;
+  int hash(uint64_t &hash_val, uint64_t seed=0) const;
   TO_STRING_KV(KP(elems_));
   ObDatum *elems_;
   int64_t cnt_;
@@ -215,7 +216,6 @@ public:
 
 public:
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
-  static const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
   int handle_next_batch_with_px_rescan(const int64_t op_max_batch_size);
   int handle_next_batch_with_group_rescan(const int64_t op_max_batch_size);
 private:

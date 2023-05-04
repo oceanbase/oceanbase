@@ -282,16 +282,21 @@ struct LogTableHint
 {
   LogTableHint() :  table_(NULL),
                     parallel_hint_(NULL),
-                    use_das_hint_(NULL) {}
+                    use_das_hint_(NULL),
+                    dynamic_sampling_hint_(NULL),
+                    is_ds_hint_conflict_(false) {}
   LogTableHint(const TableItem *table) :  table_(table),
                                           parallel_hint_(NULL),
-                                          use_das_hint_(NULL) {}
+                                          use_das_hint_(NULL),
+                                          dynamic_sampling_hint_(NULL),
+                                          is_ds_hint_conflict_(false) {}
   int assign(const LogTableHint &other);
   int init_index_hints(ObSqlSchemaGuard &schema_guard);
   bool is_use_index_hint() const { return !index_hints_.empty() && NULL != index_hints_.at(0)
                                           && index_hints_.at(0)->is_use_index_hint(); }
   bool is_valid() const { return !index_list_.empty() || NULL != parallel_hint_
-                                || NULL != use_das_hint_ || !join_filter_hints_.empty(); }
+                                || NULL != use_das_hint_ || !join_filter_hints_.empty()
+                                || dynamic_sampling_hint_ != NULL; }
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
@@ -305,7 +310,8 @@ struct LogTableHint
 
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint),
-               K_(join_filter_hints), K_(left_tables));
+               K_(join_filter_hints), K_(left_tables),
+               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_));
 
   const TableItem *table_;
   common::ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> index_list_;
@@ -314,6 +320,8 @@ struct LogTableHint
   const ObIndexHint *use_das_hint_;
   ObSEArray<const ObJoinFilterHint*, 1, common::ModulePageAllocator, true> join_filter_hints_;
   ObSEArray<ObRelIds, 1, common::ModulePageAllocator, true> left_tables_; // left table relids in join filter hint
+  const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
+  bool is_ds_hint_conflict_;
 };
 
 struct LeadingInfo {
@@ -394,6 +402,9 @@ struct ObLogPlanHint
   int add_table_parallel_hint(const ObDMLStmt &stmt,
                               const ObQueryHint &query_hint,
                               const ObTableParallelHint &table_parallel_hint);
+  int add_table_dynamic_sampling_hint(const ObDMLStmt &stmt,
+                                      const ObQueryHint &query_hint,
+                                      const ObTableDynamicSamplingHint &table_ds_hint);
   int add_index_hint(const ObDMLStmt &stmt,
                      const ObQueryHint &query_hint,
                      const ObIndexHint &index_hint);
@@ -408,7 +419,8 @@ struct ObLogPlanHint
   int check_status() const;
   const LogTableHint* get_log_table_hint(uint64_t table_id) const;
   const LogTableHint* get_index_hint(uint64_t table_id) const;
-  const ObTableParallelHint* get_parallel_hint(uint64_t table_id) const;
+  int64_t get_parallel(uint64_t table_id) const;
+  const ObTableDynamicSamplingHint* get_dynamic_sampling_hint(uint64_t table_id) const;
   int check_use_join_filter(uint64_t filter_table_id,
                             const ObRelIds &left_tables,
                             bool part_join_filter,

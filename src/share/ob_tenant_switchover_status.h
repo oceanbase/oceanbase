@@ -75,6 +75,7 @@ IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashba
 #undef IS_TENANT_STATUS 
 
   TO_STRING_KV(K_(value));
+  DECLARE_TO_YSON_KV;
 private:
   ObTenantSwitchoverStatus::Status value_;
 };

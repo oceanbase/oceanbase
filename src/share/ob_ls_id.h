@@ -83,6 +83,7 @@ public:
   }
 
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_KV(K_(id));
 private:

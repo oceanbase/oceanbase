@@ -34,7 +34,6 @@ ObAlterLocalityFinishChecker::ObAlterLocalityFinishChecker(volatile bool &stop)
     common_rpc_proxy_(NULL),
     self_(),
     unit_mgr_(NULL),
-    server_mgr_(NULL),
     zone_mgr_(NULL),
     sql_proxy_(NULL),
     stop_(stop)
@@ -50,7 +49,6 @@ int ObAlterLocalityFinishChecker::init(
     obrpc::ObCommonRpcProxy &common_rpc_proxy,
     common::ObAddr &addr,
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     common::ObMySQLProxy &sql_proxy,
     share::ObLSTableOperator &lst_operator)
@@ -67,7 +65,6 @@ int ObAlterLocalityFinishChecker::init(
     common_rpc_proxy_ = &common_rpc_proxy;
     self_ = addr;
     unit_mgr_ = &unit_mgr;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     sql_proxy_ = &sql_proxy;
     lst_operator_ = &lst_operator;
@@ -89,11 +86,9 @@ int ObAlterLocalityFinishChecker::check()
   } else if (OB_ISNULL(schema_service_)
              || OB_ISNULL(unit_mgr_)
              || OB_ISNULL(zone_mgr_)
-             || OB_ISNULL(server_mgr_)
              || !self_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP_(schema_service), KP_(unit_mgr),
-             KP_(zone_mgr), KP_(server_mgr), K_(self));
+    LOG_WARN("invalid argument", KR(ret), KP_(schema_service), KP_(unit_mgr), KP_(zone_mgr), K_(self));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("ObAlterLocalityFinishChecker stopped", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
@@ -123,7 +118,6 @@ int ObAlterLocalityFinishChecker::check()
       } else if (OB_SUCCESS != (tmp_ret = ObDRWorker::check_tenant_locality_match(
                          tenant_id,
                          *unit_mgr_,
-                         *server_mgr_,
                          *zone_mgr_,
                          alter_locality_finish))){
         LOG_WARN("fail to check tenant locality match", KR(tmp_ret), K(tenant_id), K(alter_locality_finish));
@@ -131,7 +125,6 @@ int ObAlterLocalityFinishChecker::check()
                  && OB_SUCCESS != (tmp_ret = ObDRWorker::check_tenant_locality_match(
                          gen_meta_tenant_id(tenant_id),
                          *unit_mgr_,
-                         *server_mgr_,
                          *zone_mgr_,
                          meta_alter_locality_finish))){
         LOG_WARN("fail to check tenant locality match", KR(tmp_ret), "meta_tenant_id",

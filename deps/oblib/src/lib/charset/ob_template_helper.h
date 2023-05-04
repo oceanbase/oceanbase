@@ -16,6 +16,12 @@
 #include <stddef.h>
 
 
+template< size_t N >
+constexpr size_t str_length( char const (&)[N] )
+{
+  return N-1;
+}
+
 template <class T, size_t N>
 constexpr size_t array_elements(T (&)[N]) noexcept {
   return N;

@@ -44,7 +44,8 @@ int ObTableLoadUtils::check_user_access(const common::ObString &credential_str,
     LOG_WARN("user info is null", K(ret), K(credential));
   } else {
     const uint64_t user_token = user_info->get_passwd_str().hash();
-    uint64_t hash_val = credential.hash(user_token);
+    uint64_t hash_val = 0;
+    credential.hash(hash_val, user_token);
     uint64_t my_cluster_id = GCONF.cluster_id;
     if (hash_val != credential.hash_val_) {
       ret = OB_ERR_NO_PRIVILEGE;
@@ -275,7 +276,7 @@ int ObTableLoadUtils::generate_credential(uint64_t tenant_id, uint64_t user_id,
   credential.user_id_ = user_id;
   credential.database_id_ = database_id;
   credential.expire_ts_ = expire_ts;
-  credential.hash_val_ = credential.hash(user_token);
+  credential.hash(credential.hash_val_, user_token);
   char *credential_buf = nullptr;
   int64_t pos = 0;
   if (OB_ISNULL(credential_buf = static_cast<char *>(allocator.alloc(CREDENTIAL_BUF_SIZE)))) {
@@ -301,7 +302,7 @@ int ObTableLoadUtils::generate_credential(uint64_t tenant_id, uint64_t user_id,
   credential.user_id_ = user_id;
   credential.database_id_ = database_id;
   credential.expire_ts_ = expire_ts;
-  credential.hash_val_ = credential.hash(user_token);
+  credential.hash(credential.hash_val_, user_token);
   int64_t pos = 0;
   if (OB_FAIL(serialization::encode(buf, size, pos, credential))) {
     LOG_WARN("failed to serialize credential", KR(ret), K(pos));

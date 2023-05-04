@@ -498,7 +498,10 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
       break;
     }
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REQ: {
-      if (is_sub2pc()) {
+      if (!is_sub2pc() && TX_MSG_TYPE::TX_2PC_PREPARE_VERSION_REQ == msg_2pc_cache_->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpect tx flag", KR(ret), KPC(this));
+      } else if (is_sub2pc()) {
         // prepare version for xa trans
         // these actions has been done in entrance function handle_tx_2pc_prepare_version_req
       } else {
@@ -514,7 +517,10 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
       break;
     }
     case ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_RESP: {
-      if (is_sub2pc()) {
+      if (!is_sub2pc() && TX_MSG_TYPE::TX_2PC_PREPARE_VERSION_RESP == msg_2pc_cache_->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpect tx flag", KR(ret), KPC(this));
+      } else if (is_sub2pc()) {
         // prepare version for xa trans
         // these actions has been done in entrance function handle_tx_2pc_prepare_version_resp
       } else {

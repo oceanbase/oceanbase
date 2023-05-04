@@ -56,6 +56,7 @@ int ObDropIndexTask::init(
   } else if (OB_FAIL(deep_copy_index_arg(allocator_, drop_index_arg, drop_index_arg_))) {
     LOG_WARN("deep copy drop index arg failed", K(ret));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     tenant_id_ = tenant_id;
     object_id_ = data_table_id;
     target_object_id_ = index_table_id;

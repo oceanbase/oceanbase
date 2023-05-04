@@ -71,11 +71,27 @@ public:
 
 typedef common::ObLinkHashMap<ObPxTenantInfo, ObPxResInfo, ObPxInfoAlloc> ObPxInfoMap;
 
+class ObPxGlobalResGather
+{
+public:
+  ObPxGlobalResGather(ObPxRpcFetchStatResponse &result) : result_(result) {}
+  ~ObPxGlobalResGather() {}
+  int operator()(hash::HashMapPair<ObAddr, ServerTargetUsage> &entry)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(result_.push_peer_target_usage(entry.first, entry.second.get_peer_used()))) {
+      COMMON_LOG(WARN, "push_back peer_used failed", K(ret));
+    }
+    return ret;
+  }
+  ObPxRpcFetchStatResponse &result_;
+};
+
 class ObPxTargetMgr
     : public share::ObThreadPool
 {
 
-#define PX_REFRESH_TARGET_INTERVEL_US (100 * 1000)
+#define PX_REFRESH_TARGET_INTERVEL_US (500 * 1000)
 #define PX_MAX_ALIVE_SERVER_NUM (2000)
 
 public:
@@ -104,7 +120,7 @@ public:
   int get_version(uint64_t tenant_id, uint64_t &version);
   int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used);
   int rollback_local_report_target_used(uint64_t tenant_id, const ObAddr &server, int64_t local_report);
-  int get_global_target_usage(uint64_t tenant_id, const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
+  int gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather);
   int reset_leader_statistics(uint64_t tenant_id);
   
   // for px_admission

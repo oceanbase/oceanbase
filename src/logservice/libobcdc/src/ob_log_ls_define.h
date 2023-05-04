@@ -47,6 +47,12 @@ public:
     return hash_val;
   }
 
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+
   bool is_sys_log_stream() const { return ls_id_.is_sys_ls(); }
 
   int compare(const TenantLSID &other) const;

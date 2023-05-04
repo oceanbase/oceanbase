@@ -22,7 +22,7 @@ namespace sql
 {
 
 ObExprMakedate::ObExprMakedate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKEDATE, N_MAKEDATE, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKEDATE, N_MAKEDATE, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -19,7 +19,7 @@
 #include "share/ob_web_service_root_addr.h"
 #include "share/ob_thread_mgr.h"
 #include "observer/ob_server_struct.h"
-
+#include "share/ob_all_server_tracer.h"
 namespace oceanbase
 {
 namespace share
@@ -122,13 +122,17 @@ int ObAliveServerMap::get_server_status(const ObAddr &addr, bool &alive,
   return ret;
 }
 
-int ObAliveServerMap::refresh(common::ObIArray<ObAddr> &active_server_list,
-                              common::ObIArray<ObAddr> &inactive_server_list)
+int ObAliveServerMap::refresh()
 {
   int ret = OB_SUCCESS;
+  common::ObArray<ObAddr> active_server_list;
+  common::ObArray<ObAddr> inactive_server_list;
+  ObZone empty_zone;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_servers_by_status(empty_zone, active_server_list, inactive_server_list))) {
+    LOG_WARN("fail to get servers by status", KR(ret));
   } else if (active_server_list.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument, empty server list", K(ret));
@@ -372,16 +376,7 @@ int ObAliveServerTracer::refresh()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    obrpc::ObFetchAliveServerArg arg;
-    obrpc::ObFetchAliveServerResult result;
-    arg.cluster_id_ = GCONF.cluster_id;
-    if (OB_FAIL(rpc_proxy_->fetch_alive_server(arg, result))) {
-      LOG_WARN("fetch alive server failed", K(ret));
-    } else if (!result.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid alive server list", K(ret), K(result));
-    } else if (OB_FAIL(last_map_->refresh(result.active_server_list_,
-                                          result.inactive_server_list_))) {
+    if (OB_FAIL(last_map_->refresh())) {
       LOG_WARN("refresh sever list failed", K(ret));
     } else {
       ObAliveServerMap *volatile map = cur_map_;

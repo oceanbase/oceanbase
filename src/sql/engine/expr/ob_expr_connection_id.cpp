@@ -24,7 +24,7 @@ namespace sql
 
 
 ObExprConnectionId::ObExprConnectionId(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_CONNECTION_ID, N_CONNECTION_ID, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_CONNECTION_ID, N_CONNECTION_ID, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

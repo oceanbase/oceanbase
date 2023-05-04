@@ -19,6 +19,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "storage/slog/ob_storage_logger_manager.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -61,6 +62,8 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   int64_t clog_free_size_byte = 0;
   int64_t clog_total_size_byte = 0;
 
+  int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
+
   if (start_to_read_) {
     ret = OB_ITER_END;
   } else if (OB_ISNULL(cur_row_.cells_)) {
@@ -76,6 +79,8 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs,
       data_disk_abnormal_time))) {
     SERVER_LOG(WARN, "get device health status fail", KR(ret));
+  } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
+    SERVER_LOG(WARN, "Fail to get reserved size", K(ret));
   } else {
     const int64_t col_count = output_column_ids_.count();
     const double hard_limit = GCONF.resource_hard_limit;
@@ -85,11 +90,12 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
     const double cpu_assigned_max = svr_res_assigned.max_cpu_;
     const int64_t mem_capacity = GMEMCONF.get_server_memory_avail();
     const int64_t mem_assigned = svr_res_assigned.memory_size_;
-    const int64_t data_disk_capacity =
+    const int64_t data_disk_allocated =
         OB_SERVER_BLOCK_MGR.get_total_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    const int64_t log_disk_capacity = clog_total_size_byte;
+    const int64_t data_disk_capacity =
+        OB_SERVER_BLOCK_MGR.get_max_macro_block_count(reserved_size) * OB_SERVER_BLOCK_MGR.get_macro_block_size();
     const int64_t log_disk_assigned = svr_res_assigned.log_disk_size_;
-
+    const int64_t log_disk_capacity = clog_total_size_byte;
     const int64_t data_disk_in_use =
         OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
     const int64_t clog_disk_in_use = clog_total_size_byte - clog_free_size_byte;
@@ -141,6 +147,9 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
           break;
         case DATA_DISK_IN_USE:
           cur_row_.cells_[i].set_int(data_disk_in_use);
+          break;
+        case DATA_DISK_ALLOCATED:
+          cur_row_.cells_[i].set_int(data_disk_allocated);
           break;
         case DATA_DISK_HEALTH_STATUS:
           cur_row_.cells_[i].set_varchar(data_disk_health_status);

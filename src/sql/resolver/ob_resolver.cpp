@@ -986,6 +986,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(BackupDatabase);
         break;
       }
+      case T_BACKUP_KEY: {
+        REGISTER_STMT_RESOLVER(BackupKey);
+        break;
+      }
       case T_BACKUP_MANAGE: {
         REGISTER_STMT_RESOLVER(BackupManage);
         break;
@@ -1069,6 +1073,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         break;
       }
     }  // end switch
+
+    if (OB_SUCC(ret) && stmt->is_dml_stmt()) {
+      OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
+    }
 
     if (OB_SUCC(ret)) {
       if (ObStmt::is_write_stmt(stmt->get_stmt_type(), stmt->has_global_variable())

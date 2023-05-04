@@ -1678,7 +1678,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
     //除了group_concat,rank,dense_rank,percent_rank,cume_dist函数、keep相关aggr及带有distinct的count函数
     //其他聚集函数的参数只有一列
     int64_t col_count = (T_FUN_JSON_OBJECTAGG == expr.get_expr_type()
-                        || T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type()) ?  2 : 1;
+                        || T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type()
+                        || T_FUN_ORA_XMLAGG == expr.get_expr_type()) ?  2 : 1;
     aggr_expr->set_real_param_col_count(col_count);
     aggr_expr->set_all_param_col_count(col_count);
     const ObIArray<ObRawExpr*> &real_param_exprs = expr.get_real_param_exprs();
@@ -1742,6 +1743,7 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || T_FUN_KEEP_WM_CONCAT == expr.get_expr_type()
         || T_FUN_PL_AGG_UDF == expr.get_expr_type()
         || T_FUN_HYBRID_HIST == expr.get_expr_type()
+        || T_FUN_ORA_XMLAGG == expr.get_expr_type()
         || (T_FUN_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)) {
       ObExprOperator *op = NULL;
@@ -1777,7 +1779,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                T_FUN_KEEP_SUM == expr.get_expr_type() ||
                T_FUN_KEEP_COUNT == expr.get_expr_type() ||
                T_FUN_KEEP_WM_CONCAT == expr.get_expr_type() ||
-               T_FUN_HYBRID_HIST == expr.get_expr_type())) {
+               T_FUN_HYBRID_HIST == expr.get_expr_type() ||
+               T_FUN_ORA_XMLAGG == expr.get_expr_type())) {
             ObConstRawExpr *sep_expr = static_cast<ObConstRawExpr *>(expr.get_separator_param_expr());
             // set separator
             if (NULL != sep_expr) {

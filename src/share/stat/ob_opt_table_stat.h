@@ -58,6 +58,7 @@ public:
     {
       return common::murmurhash(this, sizeof(Key), 0);
     }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
     bool operator==(const ObIKVCacheKey &other) const
     {
       const Key &other_key = reinterpret_cast<const Key&>(other);
@@ -234,6 +235,8 @@ public:
     return stat_expired_time_ != -1 && stat_expired_time_ <= ObTimeUtility::current_time(); }
 
   void set_stat_expired_time(int64_t expired_time) {  stat_expired_time_ = expired_time; }
+
+  bool is_locked() const { return stattype_locked_ > 0; }
 
   void add_row_count(int64_t rc) { row_count_ += rc; }
 

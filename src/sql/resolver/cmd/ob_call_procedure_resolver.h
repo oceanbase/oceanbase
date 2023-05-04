@@ -17,6 +17,7 @@
 #include "lib/container/ob_se_array.h"
 #include "share/ob_rpc_struct.h"
 #include "share/schema/ob_schema_struct.h"
+#include "pl/pl_cache/ob_pl_cache.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,7 @@ class ObRoutineInfo;
 namespace sql
 {
 class ObCallProcedureStmt;
+class ObCallProcedureInfo;
 class ObCallProcedureResolver: public ObCMDResolver
 {
 public:
@@ -40,7 +42,8 @@ public:
 private:
   int resolve_cparams(const ParseNode* params_node,
                       const share::schema::ObRoutineInfo *routien_info,
-                      ObCallProcedureStmt *stmt);
+                      ObCallProcedureInfo *call_proc_info,
+                      ObIArray<ObRawExpr*> &params);
   int resolve_cparam_without_assign(const ParseNode *param_node,
                       const int64_t position,
                       common::ObIArray<ObRawExpr*> &params);
@@ -50,6 +53,9 @@ private:
   int resolve_param_exprs(const ParseNode *params_node,
                       ObIArray<ObRawExpr*> &expr_params);
   int check_param_expr_legal(ObRawExpr *param);
+  int find_call_proc_info(ObCallProcedureStmt &stmt);
+  int add_call_proc_info(ObCallProcedureInfo *call_info);
+  int generate_pl_cache_ctx(pl::ObPLCacheCtx &pc_ctx);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObCallProcedureResolver);

@@ -54,7 +54,8 @@ public:
   char *ptr() { return buf_; }
 
   const ObString str() const { return ObString(size(), ptr()); };
-  uint64_t hash(uint64_t seed = 0) const;
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val, uint64_t seed = 0) const;
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
@@ -204,10 +205,18 @@ int ObFixedLengthString<N>::assign(const ObString &str)
 }
 
 template<int64_t N>
-uint64_t ObFixedLengthString<N>::hash(uint64_t seed) const
+uint64_t ObFixedLengthString<N>::hash() const
 {
-  seed = murmurhash(buf_, static_cast<int32_t>(strlen(buf_)), seed);
-  return seed;
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(buf_, static_cast<int32_t>(strlen(buf_)), hash_val);
+  return hash_val;
+}
+
+template<int64_t N>
+int ObFixedLengthString<N>::hash(uint64_t &hash_val, uint64_t seed) const
+{
+  hash_val = murmurhash(buf_, static_cast<int32_t>(strlen(buf_)), seed);
+  return OB_SUCCESS;
 }
 
 template<int64_t N>

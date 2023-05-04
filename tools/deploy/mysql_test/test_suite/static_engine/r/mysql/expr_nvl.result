@@ -731,7 +731,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c1, DECIMAL(10, 0)), t1.c17)]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c1, DECIMAL(11, 0)), t1.c17)]), filter(nil), rowset=256
       access([t1.c1], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -772,7 +772,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c1, DECIMAL(10, 0)), cast(t1.c18, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c1, DECIMAL(11, 0)), cast(t1.c18, DECIMAL(11, 0)))]), filter(nil), rowset=256
       access([t1.c1], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7947,7 +7947,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c9, DECIMAL(10, 0)), t1.c17)]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c9, DECIMAL(11, 0)), t1.c17)]), filter(nil), rowset=256
       access([t1.c9], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7988,7 +7988,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c9, DECIMAL(10, 0)), cast(t1.c18, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c9, DECIMAL(11, 0)), cast(t1.c18, DECIMAL(11, 0)))]), filter(nil), rowset=256
       access([t1.c9], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9751,7 +9751,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c11, DECIMAL(10, 0)), t1.c17)]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c11, DECIMAL(20, 0)), t1.c17)]), filter(nil), rowset=256
       access([t1.c11], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9792,7 +9792,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c11, DECIMAL(10, 0)), cast(t1.c18, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c11, DECIMAL(20, 0)), cast(t1.c18, DECIMAL(20, 0)))]), filter(nil), rowset=256
       access([t1.c11], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10653,7 +10653,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c12, DECIMAL(10, 0)), t1.c17)]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c12, DECIMAL(20, 0)), t1.c17)]), filter(nil), rowset=256
       access([t1.c12], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10694,7 +10694,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c12, DECIMAL(10, 0)), cast(t1.c18, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c12, DECIMAL(20, 0)), cast(t1.c18, DECIMAL(20, 0)))]), filter(nil), rowset=256
       access([t1.c12], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14507,7 +14507,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(t1.c17, cast(t1.c1, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(t1.c17, cast(t1.c1, DECIMAL(11, 0)))]), filter(nil), rowset=256
       access([t1.c17], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14835,7 +14835,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(t1.c17, cast(t1.c9, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(t1.c17, cast(t1.c9, DECIMAL(11, 0)))]), filter(nil), rowset=256
       access([t1.c17], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14917,7 +14917,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(t1.c17, cast(t1.c11, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(t1.c17, cast(t1.c11, DECIMAL(20, 0)))]), filter(nil), rowset=256
       access([t1.c17], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14958,7 +14958,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(t1.c17, cast(t1.c12, DECIMAL(10, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(t1.c17, cast(t1.c12, DECIMAL(20, 0)))]), filter(nil), rowset=256
       access([t1.c17], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15491,7 +15491,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(4, 0)), cast(t1.c3, DECIMAL(4, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c3, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15532,7 +15532,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(3, 0)), cast(t1.c4, DECIMAL(3, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c4, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15573,7 +15573,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(6, 0)), cast(t1.c5, DECIMAL(6, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c5, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15614,7 +15614,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(5, 0)), cast(t1.c6, DECIMAL(5, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c6, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15655,7 +15655,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(9, 0)), cast(t1.c7, DECIMAL(9, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c7, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15696,7 +15696,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([nvl(cast(t1.c18, DECIMAL(8, 0)), cast(t1.c8, DECIMAL(8, 0)))]), filter(nil), rowset=256
+  0 - output([nvl(cast(t1.c18, DECIMAL(10, 0)), cast(t1.c8, DECIMAL(10, 0)))]), filter(nil), rowset=256
       access([t1.c18], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19932,4 +19932,20 @@ select nvl(null,b) from t1;
 | 2020-09-13 20:26:40.000 |
 | 2020-09-13 20:26:40.000 |
 +-------------------------+
+drop table t1;
+
+#bug:
+create table t1 as select nvl(cast(1 as decimal(10, 7)), cast(2 as decimal(12, 5))) as c from dual;
+desc t1;
++-------+---------------+------+-----+---------+-------+
+| Field | Type          | Null | Key | Default | Extra |
++-------+---------------+------+-----+---------+-------+
+| c     | decimal(14,7) | NO   |     | NULL    |       |
++-------+---------------+------+-----+---------+-------+
+select * from t1;
++-----------+
+| c         |
++-----------+
+| 1.0000000 |
++-----------+
 drop table t1;

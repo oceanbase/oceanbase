@@ -1,5 +1,6 @@
 result_format: 4
 explain_protocol: 2
+alter system set _enable_newsort = true;
 drop table if exists xy_t1, xy_t2;
 create table xy_t1(c1 int, c2 int);
 create table xy_t2(c1 int, c2 int);
@@ -227,7 +228,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |5       |5           |
+|0 |NESTED-LOOP SEMI JOIN |     |6       |5           |
 |1 |├─TABLE FULL SCAN     |xy_t1|8       |3           |
 |2 |└─MATERIAL            |     |5       |3           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|5       |2           |
@@ -261,7 +262,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |5       |6           |
+|0 |MERGE SEMI JOIN    |     |6       |6           |
 |1 |├─SORT             |     |8       |3           |
 |2 |│ └─TABLE FULL SCAN|xy_t1|8       |3           |
 |3 |└─SORT             |     |5       |3           |
@@ -300,7 +301,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |5       |6           |
+|0 |HASH RIGHT SEMI JOIN |     |6       |6           |
 |1 |├─TABLE FULL SCAN    |xy_t2|5       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|8       |3           |
 ======================================================
@@ -664,14 +665,14 @@ select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy
 | x1   | x2         |
 +------+------------+
 |    0 | yzh        |
-|    2 | it's       |
 |    2 | VZLUW      |
-|    2 | want       |
+|    2 | it's       |
 |    2 | think      |
-|    6 | uyslpcybda |
+|    2 | want       |
 |    6 | u          |
-|    9 | TBMEI      |
+|    6 | uyslpcybda |
 |    9 | QPPLC      |
+|    9 | TBMEI      |
 |    9 | mdsl       |
 +------+------------+
 EXPLAIN select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
@@ -707,15 +708,15 @@ select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from x
 | x1   | x2         |
 +------+------------+
 |    0 | yzh        |
-|    2 | think      |
 |    2 | VZLUW      |
-|    2 | want       |
 |    2 | it's       |
+|    2 | think      |
+|    2 | want       |
 |    6 | u          |
 |    6 | uyslpcybda |
 |    9 | QPPLC      |
-|    9 | mdsl       |
 |    9 | TBMEI      |
+|    9 | mdsl       |
 +------+------------+
 EXPLAIN select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 Query Plan
@@ -745,14 +746,14 @@ select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 in (select y1 from xy_y
 | x1   | x2         |
 +------+------------+
 |    0 | yzh        |
-|    2 | it's       |
 |    2 | VZLUW      |
-|    2 | want       |
+|    2 | it's       |
 |    2 | think      |
-|    6 | uyslpcybda |
+|    2 | want       |
 |    6 | u          |
-|    9 | TBMEI      |
+|    6 | uyslpcybda |
 |    9 | QPPLC      |
+|    9 | TBMEI      |
 |    9 | mdsl       |
 +------+------------+
 
@@ -761,13 +762,12 @@ create table xy_x_t(x1 int not null, x2 varchar(100) not null);
 create table xy_y_t(y1 int not null, y2 varchar(100) not null);
 insert/*insert trace*/ into xy_x_t values(-2139029504,"eyqjoq"),(-2061369344,"GSUGA"),(-1882128384,"there"),(-1552613376,"d"),(-1511981056,"and"),(-1504706560,"and"),(-1259929600,"o"),(-973340672,"at"),(-918945792,"DNMFW"),(-778960896,"r"),(-753336320,"PKGAE"),(-593821696,"UGSPN"),(-457179136,"got"),(-314638336,"will"),(-233701376,"o"),(-104202240,"SUEUH"),(0,"yzh"),(0,"i"),(1,"TQOYB"),(1,"FFHTJ"),(2,"it's"),(2,"ezcuilyxac"),(2,"VZLUW"),(2,"want"),(2,"think"),(3,"prsazev"),(3,"get"),(3,"out"),(4,"a"),(4,"PVYPZ"),(4,"k"),(4,"bpqswbeyqj"),(4,"isjn"),(4,"that's"),(4,"well"),(5,"arkyz"),(5,"w"),(5,"with"),(5,"just"),(5,"PFBCU"),(6,"uyslpcybda"),(6,"co"),(6,"u"),(6,"j"),(6,"g"),(7,"cybdark"),(7,"BKWPE"),(8,"lmdsl"),(8,"NNIGT"),(8,"of"),(9,"etu"),(9,"TBMEI"),(9,"QPPLC"),(9,"mdsl"),(27262976,"n"),(162267136,"to"),(199884800,"y"),(334364672,"h"),(597295104,"did"),(748814336,"rhljip"),(769916928,"OQKEV"),(839778304,"USTRY"),(947585024,"hey"),(1210777600,"want"),(1232601088,"azev"),(1250689024,"a"),(1329463296,"QAMOL"),(1573126144,"zcuilyx"),(1594753024,"yeah"),(1730215936,"PMUMX"),(1925709824,"g"),(2048262144,"b"),(2082275328,"k"),(2131492864,"was");
 insert/*insert trace*/ into xy_y_t values(-1992359936,"not"),(-1711210496,"uoorvy"),(-1150287872,"BKNFS"),(-926613504,"was"),(-858128384,"y"),(-549126144,"v"),(-537198592,"now"),(-491651072,"t"),(-66125824,"here"),(0,"XCYGJ"),(1,"YGHBI"),(2,"g"),(6,"kfuoorvyvn"),(7,"EGBLS"),(9,"jsnsdfm"),(1584463872,"face");
-
 EXPLAIN select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 Query Plan
 =======================================================
 |ID|OPERATOR             |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |      |69      |22          |
+|0 |HASH RIGHT ANTI JOIN |      |66      |22          |
 |1 |├─TABLE FULL SCAN    |xy_y_t|16      |3           |
 |2 |└─TABLE FULL SCAN    |xy_x_t|74      |6           |
 =======================================================
@@ -787,48 +787,32 @@ select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fro
 +-------------+------------+
 | x1          | x2         |
 +-------------+------------+
-| -2139029504 | eyqjoq     |
-| -2061369344 | GSUGA      |
-| -1882128384 | there      |
-| -1552613376 | d          |
-| -1511981056 | and        |
-| -1504706560 | and        |
-| -1259929600 | o          |
-|  -973340672 | at         |
-|  -918945792 | DNMFW      |
-|  -778960896 | r          |
-|  -753336320 | PKGAE      |
-|  -593821696 | UGSPN      |
-|  -457179136 | got        |
-|  -314638336 | will       |
-|  -233701376 | o          |
-|  -104202240 | SUEUH      |
 |           0 | i          |
-|           1 | TQOYB      |
 |           1 | FFHTJ      |
+|           1 | TQOYB      |
 |           2 | ezcuilyxac |
-|           3 | prsazev    |
 |           3 | get        |
 |           3 | out        |
-|           4 | a          |
+|           3 | prsazev    |
 |           4 | PVYPZ      |
-|           4 | k          |
+|           4 | a          |
 |           4 | bpqswbeyqj |
 |           4 | isjn       |
+|           4 | k          |
 |           4 | that's     |
 |           4 | well       |
+|           5 | PFBCU      |
 |           5 | arkyz      |
+|           5 | just       |
 |           5 | w          |
 |           5 | with       |
-|           5 | just       |
-|           5 | PFBCU      |
 |           6 | co         |
-|           6 | j          |
 |           6 | g          |
-|           7 | cybdark    |
+|           6 | j          |
 |           7 | BKWPE      |
-|           8 | lmdsl      |
+|           7 | cybdark    |
 |           8 | NNIGT      |
+|           8 | lmdsl      |
 |           8 | of         |
 |           9 | etu        |
 |    27262976 | n          |
@@ -840,6 +824,15 @@ select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fro
 |   769916928 | OQKEV      |
 |   839778304 | USTRY      |
 |   947585024 | hey        |
+|  -104202240 | SUEUH      |
+|  -233701376 | o          |
+|  -314638336 | will       |
+|  -457179136 | got        |
+|  -593821696 | UGSPN      |
+|  -753336320 | PKGAE      |
+|  -778960896 | r          |
+|  -918945792 | DNMFW      |
+|  -973340672 | at         |
 |  1210777600 | want       |
 |  1232601088 | azev       |
 |  1250689024 | a          |
@@ -851,13 +844,20 @@ select /*+use_hash(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fro
 |  2048262144 | b          |
 |  2082275328 | k          |
 |  2131492864 | was        |
+| -1259929600 | o          |
+| -1504706560 | and        |
+| -1511981056 | and        |
+| -1552613376 | d          |
+| -1882128384 | there      |
+| -2061369344 | GSUGA      |
+| -2139029504 | eyqjoq     |
 +-------------+------------+
 EXPLAIN select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 Query Plan
 =====================================================
 |ID|OPERATOR           |NAME  |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE ANTI JOIN    |      |69      |44          |
+|0 |MERGE ANTI JOIN    |      |66      |43          |
 |1 |├─SORT             |      |74      |23          |
 |2 |│ └─TABLE FULL SCAN|xy_x_t|74      |6           |
 |3 |└─SORT             |      |16      |6           |
@@ -884,48 +884,32 @@ select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fr
 +-------------+------------+
 | x1          | x2         |
 +-------------+------------+
-| -2139029504 | eyqjoq     |
-| -2061369344 | GSUGA      |
-| -1882128384 | there      |
-| -1552613376 | d          |
-| -1511981056 | and        |
-| -1504706560 | and        |
-| -1259929600 | o          |
-|  -973340672 | at         |
-|  -918945792 | DNMFW      |
-|  -778960896 | r          |
-|  -753336320 | PKGAE      |
-|  -593821696 | UGSPN      |
-|  -457179136 | got        |
-|  -314638336 | will       |
-|  -233701376 | o          |
-|  -104202240 | SUEUH      |
 |           0 | i          |
-|           1 | TQOYB      |
 |           1 | FFHTJ      |
+|           1 | TQOYB      |
 |           2 | ezcuilyxac |
 |           3 | get        |
-|           3 | prsazev    |
 |           3 | out        |
+|           3 | prsazev    |
 |           4 | PVYPZ      |
-|           4 | k          |
+|           4 | a          |
 |           4 | bpqswbeyqj |
 |           4 | isjn       |
+|           4 | k          |
 |           4 | that's     |
 |           4 | well       |
-|           4 | a          |
-|           5 | with       |
-|           5 | w          |
+|           5 | PFBCU      |
 |           5 | arkyz      |
 |           5 | just       |
-|           5 | PFBCU      |
+|           5 | w          |
+|           5 | with       |
 |           6 | co         |
-|           6 | j          |
 |           6 | g          |
-|           7 | cybdark    |
+|           6 | j          |
 |           7 | BKWPE      |
-|           8 | lmdsl      |
+|           7 | cybdark    |
 |           8 | NNIGT      |
+|           8 | lmdsl      |
 |           8 | of         |
 |           9 | etu        |
 |    27262976 | n          |
@@ -937,6 +921,15 @@ select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fr
 |   769916928 | OQKEV      |
 |   839778304 | USTRY      |
 |   947585024 | hey        |
+|  -104202240 | SUEUH      |
+|  -233701376 | o          |
+|  -314638336 | will       |
+|  -457179136 | got        |
+|  -593821696 | UGSPN      |
+|  -753336320 | PKGAE      |
+|  -778960896 | r          |
+|  -918945792 | DNMFW      |
+|  -973340672 | at         |
 |  1210777600 | want       |
 |  1232601088 | azev       |
 |  1250689024 | a          |
@@ -948,13 +941,20 @@ select /*+use_merge(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 fr
 |  2048262144 | b          |
 |  2082275328 | k          |
 |  2131492864 | was        |
+| -1259929600 | o          |
+| -1504706560 | and        |
+| -1511981056 | and        |
+| -1552613376 | d          |
+| -1882128384 | there      |
+| -2061369344 | GSUGA      |
+| -2139029504 | eyqjoq     |
 +-------------+------------+
 EXPLAIN select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from xy_y_t where y2 < xy_x_t.x2);
 Query Plan
 ========================================================
 |ID|OPERATOR              |NAME  |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |      |69      |60          |
+|0 |NESTED-LOOP ANTI JOIN |      |66      |60          |
 |1 |├─TABLE FULL SCAN     |xy_x_t|74      |6           |
 |2 |└─MATERIAL            |      |16      |5           |
 |3 |  └─TABLE FULL SCAN   |xy_y_t|16      |3           |
@@ -976,48 +976,32 @@ select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from 
 +-------------+------------+
 | x1          | x2         |
 +-------------+------------+
-| -2139029504 | eyqjoq     |
-| -2061369344 | GSUGA      |
-| -1882128384 | there      |
-| -1552613376 | d          |
-| -1511981056 | and        |
-| -1504706560 | and        |
-| -1259929600 | o          |
-|  -973340672 | at         |
-|  -918945792 | DNMFW      |
-|  -778960896 | r          |
-|  -753336320 | PKGAE      |
-|  -593821696 | UGSPN      |
-|  -457179136 | got        |
-|  -314638336 | will       |
-|  -233701376 | o          |
-|  -104202240 | SUEUH      |
 |           0 | i          |
-|           1 | TQOYB      |
 |           1 | FFHTJ      |
+|           1 | TQOYB      |
 |           2 | ezcuilyxac |
-|           3 | prsazev    |
 |           3 | get        |
 |           3 | out        |
-|           4 | a          |
+|           3 | prsazev    |
 |           4 | PVYPZ      |
-|           4 | k          |
+|           4 | a          |
 |           4 | bpqswbeyqj |
 |           4 | isjn       |
+|           4 | k          |
 |           4 | that's     |
 |           4 | well       |
+|           5 | PFBCU      |
 |           5 | arkyz      |
+|           5 | just       |
 |           5 | w          |
 |           5 | with       |
-|           5 | just       |
-|           5 | PFBCU      |
 |           6 | co         |
-|           6 | j          |
 |           6 | g          |
-|           7 | cybdark    |
+|           6 | j          |
 |           7 | BKWPE      |
-|           8 | lmdsl      |
+|           7 | cybdark    |
 |           8 | NNIGT      |
+|           8 | lmdsl      |
 |           8 | of         |
 |           9 | etu        |
 |    27262976 | n          |
@@ -1029,6 +1013,15 @@ select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from 
 |   769916928 | OQKEV      |
 |   839778304 | USTRY      |
 |   947585024 | hey        |
+|  -104202240 | SUEUH      |
+|  -233701376 | o          |
+|  -314638336 | will       |
+|  -457179136 | got        |
+|  -593821696 | UGSPN      |
+|  -753336320 | PKGAE      |
+|  -778960896 | r          |
+|  -918945792 | DNMFW      |
+|  -973340672 | at         |
 |  1210777600 | want       |
 |  1232601088 | azev       |
 |  1250689024 | a          |
@@ -1040,6 +1033,13 @@ select /*+use_nl(xy_x_t xy_y_t)*/ * from xy_x_t where x1 not in (select y1 from 
 |  2048262144 | b          |
 |  2082275328 | k          |
 |  2131492864 | was        |
+| -1259929600 | o          |
+| -1504706560 | and        |
+| -1511981056 | and        |
+| -1552613376 | d          |
+| -1882128384 | there      |
+| -2061369344 | GSUGA      |
+| -2139029504 | eyqjoq     |
 +-------------+------------+
 
 drop table xy_x_t, xy_y_t;
@@ -1063,7 +1063,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |10      |22          |
+|0 |HASH RIGHT SEMI JOIN |     |51      |23          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -1133,7 +1133,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |10      |22          |
+|0 |NESTED-LOOP SEMI JOIN |     |51      |23          |
 |1 |├─TABLE FULL SCAN     |xy_t1|116     |9           |
 |2 |└─MATERIAL            |     |8       |3           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|8       |2           |
@@ -1205,7 +1205,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |10      |22          |
+|0 |HASH RIGHT SEMI JOIN |     |51      |23          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -1275,7 +1275,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |10      |36          |
+|0 |MERGE SEMI JOIN    |     |51      |38          |
 |1 |├─SORT             |     |116     |25          |
 |2 |│ └─TABLE FULL SCAN|xy_t1|116     |9           |
 |3 |└─SORT             |     |8       |3           |
@@ -1317,35 +1317,35 @@ select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where exists (select 1 from xy_
 |    5 |    5 |
 |    5 |    5 |
 |    5 |    5 |
-|    5 |    7 |
 |    5 |    5 |
 |    5 |    5 |
 |    5 |    5 |
-|    5 |    7 |
 |    5 |    5 |
 |    5 |    5 |
 |    5 |    7 |
 |    5 |    7 |
-|    6 | NULL |
-|    6 |    7 |
+|    5 |    7 |
+|    5 |    7 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
 |    6 |    6 |
 |    6 |    7 |
-|    6 |    6 |
-|    6 | NULL |
 |    6 |    7 |
-|    6 |    6 |
-|    6 | NULL |
 |    6 |    7 |
-|    6 |    6 |
+|    6 |    7 |
 |    6 | NULL |
-|    9 |    7 |
+|    6 | NULL |
+|    6 | NULL |
+|    6 | NULL |
+|    9 |    0 |
+|    9 |    0 |
+|    9 |    0 |
 |    9 |    0 |
 |    9 |    7 |
-|    9 |    0 |
 |    9 |    7 |
-|    9 |    0 |
 |    9 |    7 |
-|    9 |    0 |
+|    9 |    7 |
 +------+------+
 EXPLAIN select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 Query Plan
@@ -1373,49 +1373,49 @@ select /*+ no_rewrite */ * from xy_t1 where exists (select 1 from xy_t2 where xy
 | c1   | c2   |
 +------+------+
 |    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    1 |    1 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    3 |    3 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
+|    5 |    5 |
 |    5 |    5 |
 |    5 |    5 |
 |    5 |    7 |
-|    6 |    7 |
-|    6 |    6 |
-|    6 | NULL |
-|    9 |    0 |
-|    9 |    7 |
-|    1 |    1 |
-|    3 |    3 |
-|    1 |    1 |
-|    5 |    5 |
-|    5 |    5 |
 |    5 |    7 |
-|    6 |    7 |
-|    6 |    6 |
-|    6 | NULL |
-|    9 |    0 |
-|    9 |    7 |
-|    1 |    1 |
-|    3 |    3 |
-|    1 |    1 |
-|    5 |    5 |
-|    5 |    5 |
 |    5 |    7 |
-|    6 |    7 |
-|    6 |    6 |
-|    6 | NULL |
-|    9 |    0 |
-|    9 |    7 |
-|    1 |    1 |
-|    3 |    3 |
-|    1 |    1 |
-|    5 |    5 |
-|    5 |    5 |
 |    5 |    7 |
-|    6 |    7 |
 |    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    6 |
+|    6 |    7 |
+|    6 |    7 |
+|    6 |    7 |
+|    6 |    7 |
+|    6 | NULL |
+|    6 | NULL |
+|    6 | NULL |
 |    6 | NULL |
 |    9 |    0 |
+|    9 |    0 |
+|    9 |    0 |
+|    9 |    0 |
 |    9 |    7 |
-|    1 |    1 |
-|    3 |    3 |
+|    9 |    7 |
+|    9 |    7 |
+|    9 |    7 |
 +------+------+
 
 
@@ -1425,7 +1425,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |HASH SEMI JOIN   |     |8       |20          |
+|0 |HASH SEMI JOIN   |     |7       |20          |
 |1 |├─TABLE FULL SCAN|xy_t2|8       |3           |
 |2 |└─TABLE FULL SCAN|xy_t1|116     |6           |
 ==================================================
@@ -1458,7 +1458,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP SEMI JOIN |     |8       |23          |
+|0 |NESTED-LOOP SEMI JOIN |     |7       |23          |
 |1 |├─TABLE FULL SCAN     |xy_t2|8       |3           |
 |2 |└─MATERIAL            |     |116     |10          |
 |3 |  └─TABLE FULL SCAN   |xy_t1|116     |6           |
@@ -1493,7 +1493,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |HASH SEMI JOIN   |     |8       |20          |
+|0 |HASH SEMI JOIN   |     |7       |20          |
 |1 |├─TABLE FULL SCAN|xy_t2|8       |3           |
 |2 |└─TABLE FULL SCAN|xy_t1|116     |6           |
 ==================================================
@@ -1526,7 +1526,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE SEMI JOIN    |     |8       |23          |
+|0 |MERGE SEMI JOIN    |     |7       |23          |
 |1 |├─SORT             |     |8       |3           |
 |2 |│ └─TABLE FULL SCAN|xy_t2|8       |3           |
 |3 |└─SORT             |     |116     |19          |
@@ -1823,7 +1823,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |     |107     |25          |
+|0 |HASH RIGHT ANTI JOIN |     |66      |24          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -1921,7 +1921,7 @@ Query Plan
 =======================================================
 |ID|OPERATOR              |NAME |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |     |107     |22          |
+|0 |NESTED-LOOP ANTI JOIN |     |66      |23          |
 |1 |├─TABLE FULL SCAN     |xy_t1|116     |9           |
 |2 |└─MATERIAL            |     |8       |3           |
 |3 |  └─TABLE FULL SCAN   |xy_t2|8       |2           |
@@ -2021,7 +2021,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |     |107     |25          |
+|0 |HASH RIGHT ANTI JOIN |     |66      |24          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -2119,7 +2119,7 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |MERGE ANTI JOIN    |     |107     |39          |
+|0 |MERGE ANTI JOIN    |     |66      |38          |
 |1 |├─SORT             |     |116     |25          |
 |2 |│ └─TABLE FULL SCAN|xy_t1|116     |9           |
 |3 |└─SORT             |     |8       |3           |
@@ -2146,42 +2146,38 @@ select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from
 +------+------+
 | c1   | c2   |
 +------+------+
-| NULL |    1 |
-| NULL |    1 |
-| NULL |    1 |
-| NULL |    1 |
 |    0 |    0 |
 |    0 |    0 |
 |    0 |    0 |
 |    0 |    0 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
+|    2 |    2 |
 |    2 | NULL |
-|    2 |    2 |
-|    2 |    2 |
-|    2 |    2 |
 |    2 | NULL |
-|    2 |    2 |
 |    2 | NULL |
 |    2 | NULL |
 |    7 |    0 |
 |    7 |    0 |
-|    7 |    7 |
+|    7 |    0 |
 |    7 |    0 |
 |    7 |    7 |
-|    7 |    0 |
 |    7 |    7 |
 |    7 |    7 |
-|    8 |    8 |
-|    8 |    5 |
+|    7 |    7 |
 |    8 |    0 |
-|    8 |    8 |
-|    8 |    5 |
 |    8 |    0 |
-|    8 |    8 |
-|    8 |    5 |
 |    8 |    0 |
-|    8 |    8 |
-|    8 |    5 |
 |    8 |    0 |
+|    8 |    5 |
+|    8 |    5 |
+|    8 |    5 |
+|    8 |    5 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
+|    8 |    8 |
 |   10 |   10 |
 |   10 |   10 |
 |   10 |   10 |
@@ -2218,6 +2214,10 @@ select /*+ use_merge(xy_t1 xy_t2)*/ * from xy_t1 where not exists (select 1 from
 |   20 |    1 |
 |   20 |    1 |
 |   20 |    1 |
+| NULL |    1 |
+| NULL |    1 |
+| NULL |    1 |
+| NULL |    1 |
 +------+------+
 EXPLAIN select /*+ no_rewrite */ * from xy_t1 where not exists (select 1 from xy_t2 where xy_t2.c1 = xy_t1.c1);
 Query Plan
@@ -2675,10 +2675,10 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY          |     |1       |27          |
-|1 |└─HASH RIGHT SEMI JOIN   |     |10      |27          |
+|0 |SCALAR GROUP BY          |     |1       |34          |
+|1 |└─HASH RIGHT SEMI JOIN   |     |45      |33          |
 |2 |  ├─TABLE FULL SCAN      |xy_t3|12      |3           |
-|3 |  └─HASH RIGHT SEMI JOIN |     |10      |22          |
+|3 |  └─HASH RIGHT SEMI JOIN |     |51      |23          |
 |4 |    ├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |5 |    └─TABLE FULL SCAN    |xy_t1|116     |9           |
 ==========================================================
@@ -2713,10 +2713,10 @@ Query Plan
 ==========================================================
 |ID|OPERATOR                 |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------
-|0 |SCALAR GROUP BY          |     |1       |27          |
-|1 |└─HASH RIGHT SEMI JOIN   |     |10      |27          |
+|0 |SCALAR GROUP BY          |     |1       |34          |
+|1 |└─HASH RIGHT SEMI JOIN   |     |45      |33          |
 |2 |  ├─TABLE FULL SCAN      |xy_t3|12      |3           |
-|3 |  └─HASH RIGHT SEMI JOIN |     |10      |22          |
+|3 |  └─HASH RIGHT SEMI JOIN |     |51      |23          |
 |4 |    ├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |5 |    └─TABLE FULL SCAN    |xy_t1|116     |9           |
 ==========================================================
@@ -2788,35 +2788,35 @@ Query Plan
 ==============================================================
 |ID|OPERATOR             |NAME         |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------
-|0 |SCALAR GROUP BY      |             |1       |22          |
-|1 |└─MERGE ANTI JOIN    |             |9       |22          |
-|2 |  ├─MERGE SEMI JOIN  |             |10      |19          |
+|0 |SCALAR GROUP BY      |             |1       |25          |
+|1 |└─MERGE SEMI JOIN    |             |20      |25          |
+|2 |  ├─MERGE ANTI JOIN  |             |32      |20          |
 |3 |  │ ├─TABLE FULL SCAN|xy_t1(idx_c2)|116     |9           |
-|4 |  │ └─TABLE FULL SCAN|xy_t2(idx_c2)|8       |2           |
-|5 |  └─TABLE FULL SCAN  |xy_t3(idx_c2)|12      |3           |
+|4 |  │ └─TABLE FULL SCAN|xy_t3(idx_c2)|12      |3           |
+|5 |  └─TABLE FULL SCAN  |xy_t2(idx_c2)|8       |2           |
 ==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_SUM(xy_t1.c1)], [T_FUN_SUM(xy_t1.c2)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_SUM(xy_t1.c1)], [T_FUN_SUM(xy_t1.c2)])
   1 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
-      equal_conds([xy_t3.c2 = xy_t1.c2]), other_conds(nil)
+      equal_conds([xy_t2.c2 = xy_t1.c2]), other_conds(nil)
       merge_directions([ASC])
   2 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
-      equal_conds([xy_t2.c2 = xy_t1.c2]), other_conds(nil)
+      equal_conds([xy_t3.c2 = xy_t1.c2]), other_conds(nil)
       merge_directions([ASC])
   3 - output([xy_t1.c2], [xy_t1.c1]), filter(nil), rowset=256
       access([xy_t1.c2], [xy_t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([xy_t1.c2], [xy_t1.c1], [xy_t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  4 - output([xy_t2.c2]), filter(nil), rowset=256
-      access([xy_t2.c2]), partitions(p0)
-      is_index_back=false, is_global_index=false,
-      range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
-  5 - output([xy_t3.c2]), filter(nil), rowset=256
+  4 - output([xy_t3.c2]), filter(nil), rowset=256
       access([xy_t3.c2]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([xy_t3.c2], [xy_t3.c1], [xy_t3.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+  5 - output([xy_t2.c2]), filter(nil), rowset=256
+      access([xy_t2.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([xy_t2.c2], [xy_t2.c1], [xy_t2.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
 select sum(c1), sum(c2) from xy_t1 where not exists (select 1 from xy_t3 where c2 = xy_t1.c2) and  exists (select 1 from xy_t2 where c2 = xy_t1.c2);
 +---------+---------+
 | sum(c1) | sum(c2) |
@@ -2828,11 +2828,11 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |             |1       |4176        |
-|1 |└─SUBPLAN FILTER                |             |29      |4175        |
+|0 |SCALAR GROUP BY                 |             |1       |4180        |
+|1 |└─SUBPLAN FILTER                |             |29      |4179        |
 |2 |  ├─TABLE FULL SCAN             |xy_t1        |116     |9           |
-|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|1       |18          |
-|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|1       |18          |
+|3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|2       |18          |
+|4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|2       |18          |
 =========================================================================
 Outputs & filters:
 -------------------------------------
@@ -2868,7 +2868,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT SEMI JOIN |     |10      |22          |
+|0 |HASH RIGHT SEMI JOIN |     |51      |23          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -2938,10 +2938,10 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |LIMIT                  |     |3       |11          |
-|1 |└─HASH RIGHT SEMI JOIN |     |3       |11          |
+|0 |LIMIT                  |     |3       |7           |
+|1 |└─HASH RIGHT SEMI JOIN |     |3       |7           |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|8       |2           |
-|3 |  └─TABLE FULL SCAN    |xy_t1|38      |4           |
+|3 |  └─TABLE FULL SCAN    |xy_t1|7       |3           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -2970,8 +2970,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |LIMIT                  |     |10      |22          |
-|1 |└─HASH RIGHT SEMI JOIN |     |10      |22          |
+|0 |LIMIT                  |     |51      |23          |
+|1 |└─HASH RIGHT SEMI JOIN |     |51      |23          |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |3 |  └─TABLE FULL SCAN    |xy_t1|116     |9           |
 ========================================================
@@ -3046,7 +3046,7 @@ Query Plan
 ==================================================
 |ID|OPERATOR         |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------
-|0 |HASH SEMI JOIN   |     |8       |20          |
+|0 |HASH SEMI JOIN   |     |7       |20          |
 |1 |├─TABLE FULL SCAN|xy_t2|8       |3           |
 |2 |└─TABLE FULL SCAN|xy_t1|116     |6           |
 ==================================================
@@ -3111,8 +3111,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |LIMIT              |     |8       |20          |
-|1 |└─HASH SEMI JOIN   |     |8       |20          |
+|0 |LIMIT              |     |7       |20          |
+|1 |└─HASH SEMI JOIN   |     |7       |20          |
 |2 |  ├─TABLE FULL SCAN|xy_t2|8       |3           |
 |3 |  └─TABLE FULL SCAN|xy_t1|116     |6           |
 ====================================================
@@ -3150,7 +3150,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |HASH RIGHT ANTI JOIN |     |107     |25          |
+|0 |HASH RIGHT ANTI JOIN |     |66      |24          |
 |1 |├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |2 |└─TABLE FULL SCAN    |xy_t1|116     |9           |
 ======================================================
@@ -3251,7 +3251,7 @@ Query Plan
 |0 |LIMIT                  |     |3       |6           |
 |1 |└─HASH RIGHT ANTI JOIN |     |3       |6           |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|8       |2           |
-|3 |  └─TABLE FULL SCAN    |xy_t1|4       |2           |
+|3 |  └─TABLE FULL SCAN    |xy_t1|6       |2           |
 ========================================================
 Outputs & filters:
 -------------------------------------
@@ -3280,8 +3280,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |LIMIT                  |     |107     |25          |
-|1 |└─HASH RIGHT ANTI JOIN |     |107     |25          |
+|0 |LIMIT                  |     |66      |24          |
+|1 |└─HASH RIGHT ANTI JOIN |     |66      |24          |
 |2 |  ├─TABLE FULL SCAN    |xy_t2|8       |2           |
 |3 |  └─TABLE FULL SCAN    |xy_t1|116     |9           |
 ========================================================
@@ -4385,8 +4385,8 @@ Query Plan
 ========================================================
 |ID|OPERATOR               |NAME |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |SORT                   |     |3       |6           |
-|1 |└─HASH RIGHT ANTI JOIN |     |3       |6           |
+|0 |SORT                   |     |2       |6           |
+|1 |└─HASH RIGHT ANTI JOIN |     |2       |6           |
 |2 |  ├─SUBPLAN SCAN       |VIEW1|3       |3           |
 |3 |  │ └─TABLE FULL SCAN  |xy_t1|3       |3           |
 |4 |  └─TABLE FULL SCAN    |xy_t2|5       |2           |
@@ -4422,8 +4422,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |3       |6           |
-|1 |└─HASH ANTI JOIN     |     |3       |6           |
+|0 |SORT                 |     |2       |6           |
+|1 |└─HASH ANTI JOIN     |     |2       |6           |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |2           |
 |3 |  └─SUBPLAN SCAN     |VIEW1|3       |3           |
 |4 |    └─TABLE FULL SCAN|xy_t1|3       |3           |
@@ -4459,8 +4459,8 @@ Query Plan
 ======================================================
 |ID|OPERATOR             |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |SORT                 |     |3       |6           |
-|1 |└─HASH ANTI JOIN     |     |3       |6           |
+|0 |SORT                 |     |2       |6           |
+|1 |└─HASH ANTI JOIN     |     |2       |6           |
 |2 |  ├─TABLE FULL SCAN  |xy_t2|5       |2           |
 |3 |  └─SUBPLAN SCAN     |VIEW1|3       |3           |
 |4 |    └─TABLE FULL SCAN|xy_t1|3       |3           |

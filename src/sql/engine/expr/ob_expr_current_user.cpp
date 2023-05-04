@@ -30,7 +30,7 @@ namespace sql
 
 
 ObExprCurrentUser::ObExprCurrentUser(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_SYS_CURRENT_USER, N_CURRENT_USER, 0)
+    :ObStringExprOperator(alloc, T_FUN_SYS_CURRENT_USER, N_CURRENT_USER, 0, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

@@ -35,6 +35,7 @@ public:
   void destroy();
 public:
   void set_label(const lib::ObLabel &label);
+  void set_attr(const lib::ObMemAttr &attr);
   void set_tenant_id(const uint64_t tenant_id);
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);

@@ -167,6 +167,11 @@ struct LSKey {
     hash_val = common::murmurhash(&hash_val, sizeof(id_), id_);
     return hash_val;
   }
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
   int compare(const LSKey &palf_id) const
   {
     if (palf_id.id_ < id_) {
@@ -515,6 +520,7 @@ public:
   virtual int inner_flashback(const share::SCN &flashback_scn) = 0;
   virtual int check_and_switch_state() = 0;
   virtual int check_and_switch_freeze_mode() = 0;
+  virtual bool is_in_period_freeze_mode() const = 0;
   virtual int period_freeze_last_log() = 0;
   virtual int handle_prepare_request(const common::ObAddr &server,
                                      const int64_t &proposal_id) = 0;
@@ -780,6 +786,8 @@ public:
   int unregister_rebuild_cb(palf::PalfRebuildCbNode *rebuild_cb) override final;
   int set_location_cache_cb(PalfLocationCacheCb *lc_cb) override final;
   int reset_location_cache_cb() override final;
+  int set_monitor_cb(PalfMonitorCb *monitor_cb);
+  int reset_monitor_cb();
   int set_election_priority(election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;
   // ==================== Callback end ========================
@@ -843,6 +851,7 @@ public:
   // ==================================================================
   int check_and_switch_state() override final;
   int check_and_switch_freeze_mode() override final;
+  bool is_in_period_freeze_mode() const override final;
   int period_freeze_last_log() override final;
   int handle_prepare_request(const common::ObAddr &server,
                              const int64_t &proposal_id) override final;
@@ -938,7 +947,6 @@ private:
                    FetchLogEngine *fetch_log_engine,
                    ObILogAllocator *alloc_mgr,
                    LogRpc *log_rpc,
-                   LogIOWorker *log_io_worker,
                    IPalfEnvImpl *palf_env_impl,
                    common::ObOccamTimer *election_timer);
   int after_flush_prepare_meta_(const int64_t &proposal_id);
@@ -1107,7 +1115,7 @@ private:
   palf::PalfFSCbWrapper fs_cb_wrapper_;
   palf::PalfRoleChangeCbWrapper role_change_cb_wrpper_;
   palf::PalfRebuildCbWrapper rebuild_cb_wrapper_;
-  PalfLocationCacheCb *lc_cb_;
+  LogPlugins plugins_;
   // ======optimization for locate_by_scn_coarsely=========
   mutable SpinLock last_locate_lock_;
   share::SCN last_locate_scn_;

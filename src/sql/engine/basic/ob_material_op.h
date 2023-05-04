@@ -16,6 +16,7 @@
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
+#include "sql/engine/basic/ob_material_op_impl.h"
 
 namespace oceanbase
 {
@@ -52,9 +53,9 @@ class ObMaterialOp : public ObOperator
 public:
   ObMaterialOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
-    mem_context_(nullptr), datum_store_(), datum_store_it_(),
     profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
-    sql_mem_processor_(profile_, op_monitor_info_), is_first_(false)
+    is_first_(false),
+    material_impl_(op_monitor_info_, profile_)
   {}
 
   virtual int inner_open() override;
@@ -63,36 +64,24 @@ public:
   virtual int inner_get_next_batch(int64_t max_row_cnt) override;
   virtual int inner_close() override;
   virtual void destroy() override;
+  int init_material_impl(int64_t tenant_id, int64_t row_count);
 
   int get_material_row_count(int64_t &count) const
   {
-    count = datum_store_.get_row_cnt();
+    count = material_impl_.get_material_row_count();
     return common::OB_SUCCESS;
   }
   // reset material iterator, used for NLJ/NL connectby
   int rewind();
 private:
-  int process_dump();
   int get_all_row_from_child(ObSQLSessionInfo &session);
   int get_all_batch_from_child(ObSQLSessionInfo &session);
 
-  bool need_dump()
-  { return sql_mem_processor_.get_data_size() > sql_mem_processor_.get_mem_bound(); }
-  void destroy_mem_context()
-  {
-    if (nullptr != mem_context_) {
-      DESTROY_CONTEXT(mem_context_);
-      mem_context_ = nullptr;
-    }
-  }
 private:
-  lib::MemoryContext mem_context_;
-  ObChunkDatumStore datum_store_;
-  ObChunkDatumStore::Iterator datum_store_it_;
   friend class ObValues;
   ObSqlWorkAreaProfile profile_;
-  ObSqlMemMgrProcessor sql_mem_processor_;
   bool is_first_;
+  ObMaterialOpImpl material_impl_;
 };
 
 } // end namespace sql

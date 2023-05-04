@@ -233,6 +233,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 443	__all_tenant_rewrite_rules	0	201001	1
 444	__all_reserved_snapshot	0	201001	1
 445	__all_cluster_event_history	0	201001	1
+450	__all_external_table_file	0	201001	1
+451	__all_task_opt_stat_gather_history	0	201001	1
+452	__all_table_opt_stat_gather_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -585,9 +588,14 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12365	__all_virtual_ls_arb_replica_task_history	2	201001	1
 12366	__all_virtual_archive_dest_status	2	201001	1
 12369	__all_virtual_io_scheduler	2	201001	1
+12371	__all_virtual_external_table_file	2	201001	1
+12381	__all_virtual_task_opt_stat_gather_history	2	201001	1
+12382	__all_virtual_table_opt_stat_gather_history	2	201001	1
+12383	__all_virtual_opt_stat_gather_monitor	2	201001	1
 12384	__all_virtual_thread	2	201001	1
 12393	__all_virtual_virtual_long_ops_status_mysql_sys_agent	2	201001	1
 12395	__all_virtual_timestamp_service	2	201001	1
+12397	__all_virtual_px_p2p_datahub	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -877,9 +885,21 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21363	DBA_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
 21364	CDB_OB_LS_LOG_ARCHIVE_PROGRESS	1	201001	1
 21369	DBA_OB_RSRC_IO_DIRECTIVES	1	201001	1
+21376	GV$OB_OPT_STAT_GATHER_MONITOR	1	201001	1
+21377	V$OB_OPT_STAT_GATHER_MONITOR	1	201001	1
+21378	DBA_OB_TASK_OPT_STAT_GATHER_HISTORY	1	201001	1
+21379	DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY	1	201001	1
 21380	GV$OB_THREAD	1	201001	1
 21381	V$OB_THREAD	1	201001	1
 21404	V$OB_TIMESTAMP_SERVICE	1	201001	1
+21417	DBA_OB_EXTERNAL_TABLE_FILES	1	201001	1
+21418	ALL_OB_EXTERNAL_TABLE_FILES	1	201001	1
+21419	GV$OB_PX_P2P_DATAHUB	1	201001	1
+21420	V$OB_PX_P2P_DATAHUB	1	201001	1
+21421	GV$SQL_JOIN_FILTER	1	201001	1
+21422	V$SQL_JOIN_FILTER	1	201001	1
+21423	DBA_OB_TABLE_STAT_STALE_INFO	1	201001	1
+21425	CDB_OB_EXTERNAL_TABLE_FILES	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

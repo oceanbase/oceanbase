@@ -32,7 +32,7 @@ OB_SERIALIZE_MEMBER((ObExprCollPred, ObExprOperator),
 typedef hash::ObHashMap<ObObj, int64_t, common::hash::NoPthreadDefendMode> LocalNTSHashMap;
 
 ObExprCollPred::ObExprCollPred(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_OP_COLL_PRED, N_COLL_PRED, 2, NOT_ROW_DIMENSION),
+  : ObExprOperator(alloc, T_OP_COLL_PRED, N_COLL_PRED, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
     ms_type_(ObMultiSetType::MULTISET_TYPE_INVALID),
     ms_modifier_(ObMultiSetModifier::MULTISET_MODIFIER_INVALID)
 {

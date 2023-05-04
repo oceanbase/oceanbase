@@ -31,7 +31,7 @@ bool ObSimpleLogClusterTestBase::is_started_ = false;
 common::ObMemberList ObSimpleLogClusterTestBase::member_list_ = ObMemberList();
 common::ObArrayHashMap<common::ObAddr, common::ObRegion> ObSimpleLogClusterTestBase::member_region_map_;
 common::ObMemberList ObSimpleLogClusterTestBase::node_list_ = ObMemberList();
-int64_t ObSimpleLogClusterTestBase::node_idx_base_ = 1000;
+int64_t ObSimpleLogClusterTestBase::node_idx_base_ = 1002;
 char ObSimpleLogClusterTestBase::sig_buf_[sizeof(ObSignalWorker) + sizeof(observer::ObSignalHandle)];
 ObSignalWorker *ObSimpleLogClusterTestBase::sig_worker_ = new (sig_buf_) ObSignalWorker();
 observer::ObSignalHandle *ObSimpleLogClusterTestBase::signal_handle_ = new (sig_worker_ + 1) observer::ObSignalHandle();
@@ -66,7 +66,6 @@ int ObSimpleLogClusterTestBase::start()
 {
   int ret = OB_SUCCESS;
   int64_t member_cnt = 0;
-  int64_t node_id = node_idx_base_;
   ObTenantMutilAllocatorMgr::get_instance().init();
   ObMemoryDump::get_instance().init();
   // set easy allocator for watching easy memory holding
@@ -83,6 +82,7 @@ int ObSimpleLogClusterTestBase::start()
     // 如果需要新增arb server，将其作为memberlist最后一项
     // TODO by runlin, 这个是暂时的解决方法，以后可以走加减成员的流程
     const int64_t arb_idx = member_cnt_ - 1;
+    int64_t node_id = node_idx_base_;
     for (int i = 0; OB_SUCC(ret) && i < node_cnt_; i++) {
       ObISimpleLogServer *svr = NULL;
       if (i == arb_idx && true == need_add_arb_server_) {
@@ -92,11 +92,12 @@ int ObSimpleLogClusterTestBase::start()
       }
       common::ObAddr server;
       if (OB_FAIL(node_list_.get_server_by_index(i, server))) {
-      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id++, true))) {
+      } else if (OB_FAIL(svr->simple_init(test_name_, server, node_id, true))) {
         SERVER_LOG(WARN, "simple_init failed", K(ret), K(i), K_(node_list));
       } else if (OB_FAIL(svr->simple_start(true))) {
         SERVER_LOG(WARN, "simple_start failed", K(ret), K(i), K_(node_list));
       } else {
+        node_id += 2;
         cluster_.push_back(svr);
       }
       if (i < ObSimpleLogClusterTestBase::member_cnt_ && OB_SUCC(ret)) {
@@ -107,12 +108,12 @@ int ObSimpleLogClusterTestBase::start()
         }
       }
       usleep(500);
-      SERVER_LOG(INFO, "ObSimpleLogClusterTestBase start success");
+      SERVER_LOG(INFO, "ObSimpleLogClusterTestBase start success", K(node_id), K(server));
     }
     if (OB_SUCC(ret)) {
       is_started_ = true;
     }
-    SERVER_LOG(INFO, "ObSimpleLogClusterTestBase started", K(ret), K_(member_cnt), K_(node_cnt), K_(node_list));
+    SERVER_LOG(INFO, "ObSimpleLogClusterTestBase started", K(ret), K_(member_cnt), K_(node_cnt), K_(node_list), K(member_list_));
   }
   return ret;
 }

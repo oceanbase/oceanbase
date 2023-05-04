@@ -82,22 +82,14 @@ public:
                                 const bool commit = true);
   virtual int start_server_list(const obrpc::ObServerList &server_list, const common::ObZone &zone);
   virtual int stop_server_list(const obrpc::ObServerList &server_list, const common::ObZone &zone);
-  // only add to memory, only used by bootstrap
-  int add_server_list(const obrpc::ObServerInfoList &server_list,
-                      uint64_t &server_id);
 
   // server_id is OB_INVALID_ID before build server manager from __all_server
   int receive_hb(const share::ObLeaseRequest &lease_request,
                  uint64_t &server_id,
-                 bool &to_alive,
-                 bool &update_delay_time_flag);
+                 bool &to_alive);
   int get_server_id(
       const common::ObAddr &server,
       uint64_t &server_id) const;
-
-  int expend_server_lease(
-      const common::ObAddr &server,
-      const int64_t new_lease_end);
 
   // if server not exist or server's status is not serving, return false
   // otherwise, return true
@@ -107,27 +99,6 @@ public:
   virtual int check_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
   virtual int check_server_permanent_offline(const common::ObAddr &server, bool &is_offline) const;
   virtual int check_migrate_in_blocked(const common::ObAddr &addr, bool &blocked) const;
-  virtual int check_server_takenover_by_rs(const common::ObAddr &addr, bool &taken_over_by_rs) const;
-  virtual int check_server_valid_for_partition(const common::ObAddr &server, bool &is_valid) const;
-  virtual int check_server_with_id_exist(
-      const common::ObAddr &server,
-      const uint64_t server_id,
-      bool &exist) const;
-
-  virtual int get_alive_servers(const common::ObZone &zone, ObIServerArray &server_list) const;
-  virtual int get_servers_by_status(ObIServerArray &active_server_list,
-                                    ObIServerArray &inactive_server_list) const;
-  virtual int get_servers_by_status(const common::ObZone &zone,
-                                    ObIServerArray &active_server_list,
-                                    ObIServerArray &inactive_server_list) const;
-  virtual int get_alive_server_count(const common::ObZone &zone, int64_t &count) const;
-  virtual int get_zone_max_unit_num(const common::ObZone &zone, int64_t &count) const;
-  virtual int get_active_server_array(const common::ObZone &zone, ObIServerArray &server_list) const;
-  virtual int get_servers_takenover_by_rs(
-      const common::ObZone &zone,
-      ObIServerArray &server_list) const;
-  virtual int finish_server_recovery(const common::ObAddr &server);
-  void clear_in_recovery_server_takenover_by_rs(const common::ObAddr &server);
   virtual int get_servers_of_zone(
       const common::ObZone &zone,
       ObServerArray &server_list) const;
@@ -144,16 +115,20 @@ public:
   // get ObServerStatus through server addr, return OB_ENTRY_NOT_EXIST if not exist
   virtual int get_server_status(const common::ObAddr &server,
                         share::ObServerStatus &server_status) const;
+  int get_server_resource_info(
+      const common::ObAddr &server,
+      share::ObServerResourceInfo &resource_info);
   int update_server_status(const share::ObServerStatus &server_status);
   // build ObServerManager from __all_server table
   int load_server_manager();
   int load_server_statuses(const ObServerStatusArray &server_status);
   virtual bool has_build() const;
-  virtual int get_all_server_list(common::ObIArray<common::ObAddr> &server_list);
-  // get server infos of zone, if zone is empty, get all server_infos
   virtual int get_server_statuses(const common::ObZone &zone,
       ObServerStatusIArray &server_statuses,
       bool include_permanent_offline = true) const;
+  virtual int build_server_resource_info_result(
+      const common::ObZone &zone,
+      ObIArray<obrpc::ObGetServerResourceInfoResult> &active_servers_resource_info);
   virtual int get_server_statuses(const ObServerArray &servers,
                                   ObServerStatusArray &server_statuses) const;
   int get_persist_server_statuses(ObServerStatusArray &server_statuses);
@@ -161,36 +136,18 @@ public:
       const ObAddr &server,
       ObDRTaskMgr &disaster_recovery_task_mgr,
       const bool with_rootserver);
-  int get_lease_duration(int64_t &lease_duration_time) const;
   virtual int get_server_zone(const common::ObAddr &addr, common::ObZone &zone) const;
   inline ObIStatusChangeCallback &get_status_change_callback() const;
   inline const common::ObAddr &get_rs_addr() const { return rs_addr_; }
   void reset();
 
-  // set %zone_merged to true if servers in the same zone of %addr merged to %frozen_version
-  virtual int update_merged_version(
-      const common::ObAddr &addr, int64_t frozen_version, bool &zone_merged);
-  int get_merged_version(const common::ObAddr &addr, int64_t &merged_version) const;
-
-  int block_migrate_in(const common::ObAddr &addr);
-  int unblock_migrate_in(const common::ObAddr &addr);
-
   int64_t to_string(char *buf, const int64_t buf_len) const;
-
-  virtual int set_with_partition(const common::ObAddr &server);
-  virtual int clear_with_partiton(const common::ObAddr &server, const int64_t last_hb_time);
-  virtual int set_force_stop_hb(const common::ObAddr &server, const bool &force_stop_hb);
   virtual int is_server_stopped(const common::ObAddr &server, bool &is_stopped) const;
-  virtual int get_server_leader_cnt(const common::ObAddr &server, int64_t &leader_cnt) const;
-  int check_other_zone_stopped(const common::ObZone &zone, bool &stopped);
-  int have_server_stopped(const common::ObZone &zone, bool &is_stopped) const;
-  int get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH]);
-  bool have_server_deleting() const;
-  int check_all_server_active(bool &all_active) const;
-  int try_modify_recovery_server_takenover_by_rs(
-      const common::ObAddr &server,
-      const common::ObZone &zone);
   int get_server_id(const ObZone &zone, const common::ObAddr &server, uint64_t &server_id) const;
+  static int try_delete_server_working_dir(
+      const common::ObZone &zone,
+      const common::ObAddr &server,
+      const int64_t svr_seq);
 protected:
   int construct_not_empty_server_set(
       common::hash::ObHashSet<common::ObAddr> &not_empty_server_set);
@@ -201,25 +158,14 @@ protected:
                         const int64_t hb_timestamp,
                         const bool with_rootserver,
                         share::ObServerStatus &server_status);
-  int set_server_delay_time(const int64_t server_behind_time,
-                            const int64_t round_trip_time,
-                            share::ObServerStatus &server_status);
   int reset_existing_rootserver();
-  int try_delete_server_working_dir(
-      const common::ObZone &zone,
-      const common::ObAddr &server,
-      const int64_t svr_seq);
-
   int update_admin_status(const common::ObAddr &server,
       const share::ObServerStatus::ServerAdminStatus status,
       const bool remove);
 
-  int set_migrate_in_blocked(const common::ObAddr &addr, const bool block);
-
   int find(const common::ObAddr &server, const share::ObServerStatus *&status) const;
   int find(const common::ObAddr &server, share::ObServerStatus *&status);
   int fetch_new_server_id(uint64_t &server_id);
-  int check_server_id_used(const uint64_t server_id, bool &server_id_used);
   int start_or_stop_server(const common::ObAddr &server,
       const common::ObZone &zone, const bool is_start);
   virtual int start_server(const common::ObAddr &server, const common::ObZone &zone);

@@ -31,6 +31,11 @@ class ObMemLeakChecker
     {
       return murmurhash(&ptr_, sizeof(ptr_), 0);
     }
+    int hash(uint64_t &res) const
+    {
+      res = hash();
+      return OB_SUCCESS;
+    }
     bool operator==(const PtrKey &other) const
     {
       return (other.ptr_ == this->ptr_);
@@ -46,6 +51,11 @@ class ObMemLeakChecker
     uint64_t hash() const
     {
       return murmurhash(bt_, static_cast<int32_t> (strlen(bt_)), 0);
+    }
+    int hash(uint64_t &res) const
+    {
+      res = hash();
+      return OB_SUCCESS;
     }
     bool operator==(const Info &other) const
     {

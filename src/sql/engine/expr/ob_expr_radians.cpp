@@ -28,7 +28,7 @@ namespace sql
 const double ObExprRadians::radians_ratio_ = std::acos(-1) / 180;
 
 ObExprRadians::ObExprRadians(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_RADIANS, N_RADIANS, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_RADIANS, N_RADIANS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

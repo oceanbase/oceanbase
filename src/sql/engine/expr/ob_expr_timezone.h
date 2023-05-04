@@ -26,6 +26,7 @@ public:
                                const char *name, const bool is_sessiontimezone);
   virtual ~ObExprBaseTimezone() {}
   virtual int calc_result_type0(ObExprResType &type, common::ObExprTypeCtx &type_ctx) const;
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const { is_valid = is_sessiontimezone_; return OB_SUCCESS; }
 
 private:
   bool is_sessiontimezone_;

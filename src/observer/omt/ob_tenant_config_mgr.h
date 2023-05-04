@@ -89,6 +89,7 @@ struct ObTenantID {
     return tenant_id_ == other.tenant_id_;
   }
   uint64_t hash() const { return tenant_id_; }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   uint64_t tenant_id_;
 };
 using TenantConfigMap = common::__ObConfigContainer<ObTenantID, ObTenantConfig, common::OB_MAX_SERVER_TENANT_CNT>;
@@ -162,7 +163,8 @@ public:
     }
     return id;
   }
-
+  // protect config_map_
+  mutable common::DRWLock rwlock_;
   OB_UNIS_VERSION(1);
 
 private:
@@ -171,8 +173,6 @@ private:
   bool inited_;
   common::ObAddr self_;
   common::ObMySQLProxy *sql_proxy_;
-  // protect config_map_
-  mutable common::DRWLock rwlock_;
   // 租户配置项的映射
   TenantConfigMap config_map_;
   TenantConfigVersionMap config_version_map_;

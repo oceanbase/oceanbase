@@ -34,14 +34,23 @@ DEF_STR(redundancy_level, OB_CLUSTER_PARAMETER, "NORMAL",
 // ObServerUtils::get_data_disk_info_in_config()
 DEF_CAP(datafile_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)", "size of the data file. Range: [0, +∞)",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_next, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend step. Range: [0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(datafile_maxsize, OB_CLUSTER_PARAMETER, "0", "[0M,)", "the auto extend max size. Range: [0, +∞)",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(datafile_disk_percentage, OB_CLUSTER_PARAMETER, "0", "[0,99]",
         "the percentage of disk space used by the data files. Range: [0,99] in integer",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_upper_bound_percentage, OB_CLUSTER_PARAMETER, "90", "[5,99]",
+        "the percentage of disk space usage upper bound to trigger datafile extend. Range: [5,99] in integer",
+        ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_datafile_usage_lower_bound_percentage, OB_CLUSTER_PARAMETER, "10", "[5,99]",
+        "the percentage of disk space usage lower bound to trigger datafile shrink. Range: [5,99] in integer",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(memory_reserved, OB_CLUSTER_PARAMETER, "500M", "[10M,)",
         "the size of the system memory reserved for emergency internal use. "
         "Range: [10M, total size of memory]",
         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 //// observer config
 DEF_STR_LIST(config_additional_dir, OB_CLUSTER_PARAMETER, "etc2;etc3", "additional directories of configure file",
              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -116,7 +125,7 @@ DEF_BOOL(enable_sql_audit, OB_CLUSTER_PARAMETER, "true",
          "specifies whether SQL audit is turned on. "
          "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(enable_record_trace_id, OB_CLUSTER_PARAMETER, "true",
+DEF_BOOL(enable_record_trace_id, OB_CLUSTER_PARAMETER, "False",
          "specifies whether record app trace id is turned on.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_rich_error_msg, OB_CLUSTER_PARAMETER, "false",
@@ -162,7 +171,7 @@ DEF_STR_WITH_CHECKER(default_compress, OB_CLUSTER_PARAMETER, "archive",
                      "default compress strategy for create new table within oracle mode",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
+DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "500ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -348,6 +357,9 @@ DEF_BOOL(_enable_convert_real_to_decimal, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_ob_enable_dynamic_worker, OB_TENANT_PARAMETER, "True",
          "specifies whether worker count increases when all workers were in blocking.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_optimizer_ads_time_limit, OB_TENANT_PARAMETER, "10", "[0, 300]",
+        "the maximum optimizer dynamic sampling time limit. Range: [0, 300]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "50", "(0, 100)",
@@ -372,7 +384,7 @@ DEF_CAP(plan_cache_low_watermark, OB_CLUSTER_PARAMETER, "1500M",
         "(don't use now) memory usage at which plan cache eviction will be stopped. "
         "Range: [0, plan_cache_high_watermark)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "1s", "[0s,)",
+DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(max_px_worker_count, OB_CLUSTER_PARAMETER, "64", "[0,65535]",
@@ -571,6 +583,11 @@ DEF_INT(log_disk_utilization_threshold, OB_TENANT_PARAMETER,"80",
         "Range: [10, 100)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(log_disk_throttling_percentage, OB_TENANT_PARAMETER, "60",
+        "[40, 100]",
+        "the threshold of the size of the log disk when writing_limit will be triggered. Rang:[40，100]. setting 100 means turn off writing limit",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(log_storage_warning_tolerance_time, OB_CLUSTER_PARAMETER, "5s",
         "[1s,300s]",
         "time to tolerate log disk io delay, after that, the disk status will be set warning. "
@@ -712,7 +729,7 @@ DEF_TIME(virtual_table_location_cache_expire_time, OB_CLUSTER_PARAMETER, "8s", "
          "expiration time for virtual table location info in partiton location cache. "
          "Range: [1s, +∞)",
          ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(location_refresh_thread_count, OB_CLUSTER_PARAMETER, "4", "(1,64]",
+DEF_INT(location_refresh_thread_count, OB_CLUSTER_PARAMETER, "2", "(1,64]",
         "the number of threads for fetching location cache in the background. Range: (1, 64]",
         ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -885,7 +902,7 @@ DEF_INT(_migrate_block_verify_level, OB_CLUSTER_PARAMETER, "1", "[0,2]",
         "2 : logical verification",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(_cache_wash_interval, OB_CLUSTER_PARAMETER, "200ms", "[1ms, 1m]",
+DEF_TIME(_cache_wash_interval, OB_CLUSTER_PARAMETER, "1s", "[1ms, 3s]",
         "specify interval of cache background wash",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
@@ -1413,6 +1430,12 @@ DEF_INT(server_id, OB_CLUSTER_PARAMETER, "0", "[1, 65536]",
 DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000", "[1024,18446744073709551615]",
         "pipeline table function result set memory size limit. default 524288000 (500M), Range: [1024,18446744073709551615]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
+        "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
+         "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -571,7 +571,7 @@ void ObGlobalNdvEval::add(int64_t ndv, const char *llc_bitmap)
 void ObGlobalNdvEval::update_llc(char *dst_llc_bitmap, const char *src_llc_bitmap, bool force_update)
 {
   if (dst_llc_bitmap != NULL && src_llc_bitmap != NULL) {
-    for (int64_t k = 0; k < ObColumnStat::NUM_LLC_BUCKET; ++k) {
+    for (int64_t k = 0; k < ObOptColumnStat::NUM_LLC_BUCKET; ++k) {
       if (force_update ||
           static_cast<uint8_t>(src_llc_bitmap[k]) > static_cast<uint8_t>(dst_llc_bitmap[k])) {
         dst_llc_bitmap[k] = src_llc_bitmap[k];
@@ -600,27 +600,27 @@ int64_t ObGlobalNdvEval::get_ndv_from_llc(const char *llc_bitmap)
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "get unexpected null pointer");
   } else {
     double sum_of_pmax = 0;
-    double alpha = select_alpha_value(ObColumnStat::NUM_LLC_BUCKET);
+    double alpha = select_alpha_value(ObOptColumnStat::NUM_LLC_BUCKET);
     int64_t empty_bucket_num = 0;
-    for (int64_t i = 0; i < ObColumnStat::NUM_LLC_BUCKET; ++i) {
+    for (int64_t i = 0; i < ObOptColumnStat::NUM_LLC_BUCKET; ++i) {
       sum_of_pmax += (1 / pow(2, (llc_bitmap[i])));
       if (llc_bitmap[i] == 0) {
         ++empty_bucket_num;
       }
     }
-    double estimate_ndv = (alpha * ObColumnStat::NUM_LLC_BUCKET
-                          * ObColumnStat::NUM_LLC_BUCKET)  / sum_of_pmax;
+    double estimate_ndv = (alpha * ObOptColumnStat::NUM_LLC_BUCKET
+                          * ObOptColumnStat::NUM_LLC_BUCKET)  / sum_of_pmax;
     num_distinct = static_cast<int64_t>(estimate_ndv);
     // check if estimate result too tiny or large.
-    if (estimate_ndv <= 5 * ObColumnStat::NUM_LLC_BUCKET / 2) {
+    if (estimate_ndv <= 5 * ObOptColumnStat::NUM_LLC_BUCKET / 2) {
       if (0 != empty_bucket_num) {
         // use linear count
-        num_distinct = static_cast<int64_t>(ObColumnStat::NUM_LLC_BUCKET
-                                            * log(ObColumnStat::NUM_LLC_BUCKET / double(empty_bucket_num)));
+        num_distinct = static_cast<int64_t>(ObOptColumnStat::NUM_LLC_BUCKET
+                                            * log(ObOptColumnStat::NUM_LLC_BUCKET / double(empty_bucket_num)));
       }
     }
-    if (estimate_ndv > (static_cast<double>(ObColumnStat::LARGE_NDV_NUMBER) / 30)) {
-      num_distinct = static_cast<int64_t>((0-pow(2, 32)) * log(1 - estimate_ndv / ObColumnStat::LARGE_NDV_NUMBER));
+    if (estimate_ndv > (static_cast<double>(ObOptColumnStat::LARGE_NDV_NUMBER) / 30)) {
+      num_distinct = static_cast<int64_t>((0-pow(2, 32)) * log(1 - estimate_ndv / ObOptColumnStat::LARGE_NDV_NUMBER));
     }
   }
 
@@ -720,7 +720,9 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
   } else {
     col_stat_->get_histogram().get_buckets().reset();
     col_stat_->get_histogram().set_bucket_cnt(hybrid_hist.get_buckets().count());
-    if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
+    if (hybrid_hist.get_buckets().empty()) {
+      //do nothing, maybe the sample data is all null
+    } else if (OB_FAIL(col_stat_->get_histogram().prepare_allocate_buckets(allocator, hybrid_hist.get_buckets().count()))) {
       LOG_WARN("failed to prepare allocate buckets", K(ret));
     } else if (OB_FAIL(col_stat_->get_histogram().assign_buckets(hybrid_hist.get_buckets()))) {
       LOG_WARN("failed to assign buckets", K(ret));

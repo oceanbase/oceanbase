@@ -125,14 +125,16 @@ int ObSimpleLogServer::simple_init(
   int ret = OB_SUCCESS;
   ObTimeGuard guard("simple_init", 0);
   SERVER_LOG(INFO, "simple_log_server simple_init start", K(node_id), K(addr_));
-  tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
   auto malloc = ObMallocAllocator::get_instance();
   if (NULL == malloc->get_tenant_ctx_allocator(node_id, 0)) {
     malloc->create_and_add_tenant_allocator(node_id);
   }
-  tenant_base_->init();
-  tenant_base_->set(&log_service_);
-  tenant_base_->set(&detector_);
+  if (is_bootstrap) {
+    tenant_base_ = OB_NEW(ObTenantBase, "TestBase", node_id);
+    tenant_base_->init();
+    tenant_base_->set(&log_service_);
+    tenant_base_->set(&detector_);
+  }
   ObTenantEnv::set_tenant(tenant_base_);
   assert(&log_service_ == MTL(logservice::ObLogService*));
   guard.click("init tenant_base");
@@ -281,6 +283,7 @@ int ObSimpleLogServer::init_log_service_()
   opts.disk_options_.log_disk_usage_limit_size_ = 10 * 1024 * 1024 * 1024ul;
   opts.disk_options_.log_disk_utilization_threshold_ = 80;
   opts.disk_options_.log_disk_utilization_limit_threshold_ = 95;
+  opts.disk_options_.log_disk_throttling_percentage_ = 100;
   std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
   ObMemAttr attr(1, "SimpleLog");
@@ -301,6 +304,7 @@ int ObSimpleLogServer::init_log_service_()
 int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
 {
   int ret = OB_SUCCESS;
+  ObTenantEnv::set_tenant(tenant_base_);
   if (is_bootstrap && OB_FAIL(net_.start())) {
     SERVER_LOG(ERROR, "net start fail", K(ret));
   } else if (OB_FAIL(deliver_.start())) {
@@ -316,6 +320,7 @@ int ObSimpleLogServer::simple_start(const bool is_bootstrap = false)
 int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 {
   int ret = OB_SUCCESS;
+  ObTenantEnv::set_tenant(tenant_base_);
   ObTimeGuard guard("simple_close", 0);
   deliver_.destroy(is_shutdown);
   guard.click("destroy");
@@ -340,6 +345,7 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int64_t node_idx)
 {
   int ret = OB_SUCCESS;
+  ObTenantEnv::set_tenant(tenant_base_);
   ObTimeGuard guard("simple_restart", 0);
   if (OB_FAIL(simple_close())) {
     SERVER_LOG(ERROR, "simple_close failed", K(ret));
@@ -686,6 +692,10 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     case obrpc::OB_LOG_GET_STAT: {
       modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetStatP)
+    }
+    case obrpc::OB_LOG_NOTIFY_FETCH_LOG: {
+      modify_pkt.set_tenant_id(node_id_);
+      PROCESS(LogNotifyFetchLogReqP)
     }
     default:
       SERVER_LOG(ERROR, "invalid req type", K(pkt.get_pcode()));

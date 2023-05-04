@@ -250,7 +250,7 @@ int UuidCommon::uuid2bin(char *result, bool &is_valid, const char *src, int64_t 
 }
 
 ObExprUuid::ObExprUuid(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID, N_UUID, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID, N_UUID, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -260,7 +260,7 @@ ObExprUuid::ObExprUuid(
   const char *name,
   int32_t param_num,
   int32_t dimension)
-  : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+  : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 
@@ -395,11 +395,6 @@ int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
   if (OB_ISNULL(server_uuid) || OB_UNLIKELY(uuid_len != UuidCommon::LENGTH_UUID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(server_uuid), K(uuid_len));
-  } else if (OB_ISNULL(uuid_node = static_cast<ObUUIDNode*>(calc_buf.alloc(sizeof(ObUUIDNode))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate memory failed", K(ret));
-  } else if (OB_FAIL(uuid_node->init())) {
-    LOG_WARN("failed to init", K(ret));
   } else if (OB_FAIL(calc(scratch))) {
     LOG_WARN("failed to calc", K(ret));
   } else if (OB_FAIL(UuidCommon::bin2uuid(server_uuid, scratch))) {
@@ -409,7 +404,7 @@ int ObExprUuid::gen_server_uuid(char *server_uuid, const int64_t uuid_len)
 }
 
 ObExprUuid2bin::ObExprUuid2bin(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID2BIN, N_UUID_TO_BIN, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UUID2BIN, N_UUID_TO_BIN, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -626,7 +621,7 @@ int ObExprUuid2bin::uuid2bin_batch(const ObExpr &expr,
 }
 
 ObExprIsUuid::ObExprIsUuid(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_IS_UUID, N_IS_UUID, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_IS_UUID, N_IS_UUID, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -720,7 +715,7 @@ int ObExprIsUuid::is_uuid_batch(const ObExpr &expr,
 }
 
 ObExprBin2uuid::ObExprBin2uuid(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_BIN2UUID, N_BIN_TO_UUID, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_BIN2UUID, N_BIN_TO_UUID, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -21,32 +21,13 @@ namespace oceanbase
 {
 namespace common
 {
-namespace value_sematic_string
-{
-class DefaultAllocator : public ObIAllocator
-{
-public:
-  virtual void* alloc(const int64_t size) override
-  { return ob_malloc(size, "VSStr"); }
-
-  virtual void* alloc(const int64_t size, const ObMemAttr &attr) override
-  { return ob_malloc(size, attr); }
-
-  virtual void free(void *ptr) override
-  { ob_free(ptr); }
-
-  static DefaultAllocator &get_instance() {
-    static DefaultAllocator allocator;
-    return allocator;
-  }
-};
-}
 
 class ObStringHolder
 {
   static constexpr int64_t TINY_STR_SIZE = 32;// no need count '\0'
 public:
-  ObStringHolder() : buffer_(nullptr), len_(0) {}
+  ObStringHolder(const lib::ObMemAttr &attr=lib::ObMemAttr(OB_SERVER_TENANT_ID, "VSStr"))
+    : buffer_(nullptr), len_(0), attr_(attr) {}
   ~ObStringHolder() { reset(); }
   void reset() {
     if (buffer_ == local_buffer_for_tiny_str_) {// tiny str
@@ -55,7 +36,7 @@ public:
     } else if (OB_ISNULL(buffer_)) {// empty str
       len_ = 0;
     } else {// big str
-      value_sematic_string::DefaultAllocator::get_instance().free(buffer_);
+      ob_free(buffer_);
       buffer_ = nullptr;
       len_ = 0;
     }
@@ -85,7 +66,7 @@ public:
       } else {// big str
         int64_t len = str.length();
         char *temp_buffer = nullptr;
-        if (OB_ISNULL(temp_buffer = (char *)value_sematic_string::DefaultAllocator::get_instance().alloc(len))) {
+        if (OB_ISNULL(temp_buffer = (char *)ob_malloc(len, attr_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
           reset();
@@ -138,6 +119,7 @@ private:
   char *buffer_;
   int64_t len_;
   char local_buffer_for_tiny_str_[TINY_STR_SIZE];
+  lib::ObMemAttr attr_;
 };
 
 }

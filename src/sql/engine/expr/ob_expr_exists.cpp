@@ -21,7 +21,7 @@ namespace sql
 {
 
 ObExprExists::ObExprExists(ObIAllocator &alloc)
-  : ObSubQueryRelationalExpr(alloc, T_OP_EXISTS, N_EXISTS, 1, NOT_ROW_DIMENSION)
+  : ObSubQueryRelationalExpr(alloc, T_OP_EXISTS, N_EXISTS, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

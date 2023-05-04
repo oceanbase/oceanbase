@@ -96,6 +96,19 @@ public:
   {
     return ht_.create(cal_next_prime(bucket_num), &allocer_, &bucket_allocer_);
   }
+  int create(int64_t bucket_num,
+             const ObMemAttr &bucket_attr)
+  {
+    return create(bucket_num, bucket_attr, bucket_attr);
+  }
+  int create(int64_t bucket_num,
+             const ObMemAttr &bucket_attr,
+             const ObMemAttr &node_attr)
+  {
+    allocer_.set_attr(node_attr);
+    bucket_allocer_.set_attr(bucket_attr);
+    return ht_.create(cal_next_prime(bucket_num), &allocer_, &bucket_allocer_);
+  }
   int create(int64_t bucket_num, _allocer *allocer, _bucket_allocer *bucket_allocer)
   {
     return ht_.create(cal_next_prime(bucket_num), allocer, bucket_allocer);

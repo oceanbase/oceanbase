@@ -339,6 +339,7 @@ struct VersionHisKey
     hash_code = common::murmurhash(&schema_id_, sizeof(schema_id_), hash_code);
     return hash_code;
   }
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   inline bool is_valid() const
   {
     return OB_MAX_SCHEMA != schema_type_
@@ -413,9 +414,10 @@ public:
   #define SCHEMA_KEY_FUNC(SCHEMA)   \
     struct SCHEMA##_key_hash_func   \
     {                               \
-      uint64_t operator()(const SchemaKey &schema_key) const \
+      int operator()(const SchemaKey &schema_key, uint64_t &hash_val) const \
       {                             \
-        return common::murmurhash(&schema_key.SCHEMA##_id_, sizeof(schema_key.SCHEMA##_id_), 0); \
+        hash_val = common::murmurhash(&schema_key.SCHEMA##_id_, sizeof(schema_key.SCHEMA##_id_), 0); \
+        return OB_SUCCESS;          \
       }                             \
     };                              \
     struct SCHEMA##_key_equal_to    \
@@ -453,8 +455,9 @@ public:
   #undef SCHEMA_KEY_FUNC
 
   struct udf_key_hash_func {
-    uint64_t operator()(const SchemaKey &schema_key) const {
-      return common::murmurhash(schema_key.udf_name_.ptr(), schema_key.udf_name_.length(), 0);
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const {
+      hash_code = common::murmurhash(schema_key.udf_name_.ptr(), schema_key.udf_name_.length(), 0);
+      return OB_SUCCESS;
     }
   };
 
@@ -466,9 +469,9 @@ public:
 
   struct db_priv_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.tenant_id_,
                                      sizeof(schema_key.tenant_id_),
                                      hash_code);
@@ -478,7 +481,7 @@ public:
       hash_code = common::murmurhash(schema_key.database_name_.ptr(),
                                      schema_key.database_name_.length(),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct db_priv_equal_to
@@ -492,9 +495,9 @@ public:
   };
   struct table_priv_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.tenant_id_,
                                      sizeof(schema_key.tenant_id_),
                                      hash_code);
@@ -507,7 +510,7 @@ public:
       hash_code = common::murmurhash(schema_key.table_name_.ptr(),
                                      schema_key.table_name_.length(),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct table_priv_equal_to
@@ -522,9 +525,9 @@ public:
   };
   struct obj_priv_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.tenant_id_,
                                      sizeof(schema_key.tenant_id_),
                                      hash_code);
@@ -543,7 +546,7 @@ public:
       hash_code = common::murmurhash(&schema_key.grantee_id_,
                                      sizeof(schema_key.grantee_id_),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct obj_priv_equal_to
@@ -560,8 +563,9 @@ public:
     }
   };
   struct sys_variable_key_hash_func {
-    uint64_t operator()(const SchemaKey &schema_key) const {
-      return common::murmurhash(&schema_key.tenant_id_, sizeof(schema_key.tenant_id_), 0);
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const {
+      hash_code = common::murmurhash(&schema_key.tenant_id_, sizeof(schema_key.tenant_id_), 0);
+      return OB_SUCCESS;
     }
   };
 
@@ -572,16 +576,16 @@ public:
   };
   struct sys_priv_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.tenant_id_,
                                      sizeof(schema_key.tenant_id_),
                                      hash_code);
       hash_code = common::murmurhash(&schema_key.grantee_id_,
                                      sizeof(schema_key.grantee_id_),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct sys_priv_equal_to
@@ -594,13 +598,13 @@ public:
   };
   struct context_key_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.context_id_,
                                      sizeof(schema_key.context_id_),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct context_key_equal_to
@@ -613,9 +617,9 @@ public:
   };
   struct mock_fk_parent_table_key_hash_func
   {
-    uint64_t operator()(const SchemaKey &schema_key) const
+    int operator()(const SchemaKey &schema_key, uint64_t &hash_code) const
     {
-      uint64_t hash_code = 0;
+      hash_code = 0;
       hash_code = common::murmurhash(&schema_key.tenant_id_,
                                      sizeof(schema_key.tenant_id_),
                                      hash_code);
@@ -625,7 +629,7 @@ public:
       hash_code = common::murmurhash(&schema_key.mock_fk_parent_table_id_,
                                      sizeof(schema_key.mock_fk_parent_table_id_),
                                      hash_code);
-      return hash_code;
+      return OB_SUCCESS;
     }
   };
   struct mock_fk_parent_table_key_equal_to

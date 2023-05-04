@@ -538,6 +538,16 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
 int ObPxReceiveOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  int64_t query_timeout = 0;
+  session->get_query_timeout(query_timeout);
+  if (OB_FAIL(OB_E(EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT) OB_SUCCESS)) {
+    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret), K(query_timeout));
+    return OB_SUCCESS;
+  }
+#endif
+
   dtl::ObDtlChannelInfo ci;
   ObDTLIntermResultKey key;
   for (int i = 0; i < get_ch_set().count(); ++i) {
@@ -545,10 +555,19 @@ int ObPxReceiveOp::erase_dtl_interm_result()
       LOG_WARN("fail get channel info", K(ret));
     } else {
       key.channel_id_ = ci.chid_;
-      key.batch_id_ = ctx_.get_px_batch_id();
-      if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
-        LOG_TRACE("fail to release recieve internal result", K(ret));
+      for (int64_t batch_id = ctx_.get_px_batch_id();
+           batch_id < PX_RESCAN_BATCH_ROW_COUNT && OB_SUCC(ret); batch_id++) {
+        key.batch_id_ = batch_id;
+        if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            break;
+          } else {
+            LOG_WARN("fail to release recieve internal result", K(ret), K(key));
+          }
+        }
       }
+      LOG_TRACE("receive erase dtl interm res", K(i), K(get_spec().get_id()), K(ci), K(ctx_.get_px_batch_id()));
     }
   }
   return ret;
@@ -704,33 +723,10 @@ int ObPxFifoReceiveOp::inner_get_next_batch(const int64_t max_row_cnt)
   return ret;
 }
 
-int ObPxReceiveOp::prepare_send_bloom_filter()
-{
-  int ret = OB_SUCCESS;
-  ObJoinFilterDataCtx temp_bf_ctx; // just for declare a reference, don't use temp_bf_ctx to do anything else
-  ObJoinFilterDataCtx &bf_ctx = temp_bf_ctx;
-  const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
-  while(OB_SUCC(ret) && bf_ctx_idx_ < spec.bloom_filter_id_array_.count()) {
-    if (OB_FAIL(get_bf_ctx(bf_ctx_idx_++, bf_ctx))) {
-      // get_bf_ctx will find a valid bf_ctx, if not will report -4016
-      // bf_ctx_idx_++ means it need get next one bf_ctx at next fetch_rows
-      LOG_WARN("failed to get bloom filter context", K(bf_ctx_idx_), K(ret));
-    } else if (bf_ctx.filter_ready_ && OB_FAIL(ObPxMsgProc::mark_rpc_filter(ctx_, // bf_ctx.filter_ready_ promise that only one thread will run mark_rpc_filter()
-                                                                            bf_ctx,
-                                                                            each_group_size_))) {
-      LOG_WARN("fail to send rpc bloom filter", K(bf_ctx_idx_), K(each_group_size_), K(ret));
-    } else {
-      LOG_DEBUG("succ to mark rpc filter", K(bf_ctx_idx_), K(spec.bloom_filter_id_array_.count()), K(each_group_size_),
-                K(bf_ctx.filter_ready_));
-    }
-  }
-  return ret;
-}
-
 int ObPxReceiveOp::try_send_bloom_filter()
 {
   int ret = OB_SUCCESS;
-  ObPxReceiveOpInput *recv_input = reinterpret_cast<ObPxReceiveOpInput*>(input_);
+  /*ObPxReceiveOpInput *recv_input = reinterpret_cast<ObPxReceiveOpInput*>(input_);
   ObPxSQCProxy *sqc_proxy = reinterpret_cast<ObPxSQCProxy *>(recv_input->get_ch_provider());
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   common::ObIArray<ObBloomFilterSendCtx> &bf_send_ctx_array = sqc_proxy->get_bf_send_ctx_array();
@@ -793,7 +789,7 @@ int ObPxReceiveOp::try_send_bloom_filter()
       }
     }
     ++bf_send_idx_;
-  }
+  }*/
   return ret;
 }
 
@@ -820,10 +816,6 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (!ctx_.get_bloom_filter_ctx_array().empty() && OB_FAIL(prepare_send_bloom_filter())) {
-    LOG_WARN("fail to prepare send bloom filter", K(ret));
-  } else if (OB_FAIL(try_send_bloom_filter())) {
-    LOG_WARN("fail to try send bloom filter", K(ret));
   }
 
   if (OB_SUCC(ret)) {
@@ -926,9 +918,6 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
           brs_.size_ = read_rows;
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(try_send_bloom_filter())) {
-        LOG_WARN("fail to try send bloom filter", K(ret));
-      }
       break;
     }
     if (msg_loop_.all_eof(task_channels_.count())) {
@@ -939,8 +928,6 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
     if (OB_FAIL(msg_loop_.process_any())) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("fail pop sqc execution result from channel", K(ret));
-      } else if (OB_FAIL(try_send_bloom_filter())) {
-        LOG_WARN("fail to try send bloom filter", K(ret));
       } else {
         ret = OB_EAGAIN;
       }

@@ -86,13 +86,15 @@ int ObDeadLockDetectorMgr::InnerAllocHandle::InnerFactory::create(const UserBina
 {
   int ret = OB_SUCCESS;
 
+  ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+  SET_USE_500(attr);
   int64_t alived_count = ATOMIC_LOAD(&create_count_) - ATOMIC_LOAD(&release_count_);
   if (alived_count > 50 * 1000) {// limit in 5w active nodes
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "too many detector", K(alived_count), KR(ret));
   } else if (nullptr ==
      (p_detector =
-     (ObIDeadLockDetector *)ob_malloc(sizeof(ObLCLNode), MEMORY_LABEL))) {
+     (ObIDeadLockDetector *)ob_malloc(sizeof(ObLCLNode), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     DETECT_LOG(WARN, "DetectorFactory alloc new detector failed", KR(ret));
   } else {
@@ -166,13 +168,15 @@ int ObDeadLockDetectorMgr::init()
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(ERROR, "proxy_ or rpc_ is not null", PRINT_WRAPPER);
   } else {
+    ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+    SET_USE_500(attr);
     if (nullptr ==
        (proxy_ =
-       (obrpc::ObDetectorRpcProxy *)ob_malloc(sizeof(obrpc::ObDetectorRpcProxy), MEMORY_LABEL))) {
+       (obrpc::ObDetectorRpcProxy *)ob_malloc(sizeof(obrpc::ObDetectorRpcProxy), attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       DETECT_LOG(WARN, "alloc proxy_ memory failed", KR(ret));
     } else if (nullptr == (rpc_ = (ObDeadLockDetectorRpc *)ob_malloc(sizeof(ObDeadLockDetectorRpc),
-                                                                     MEMORY_LABEL))) {
+                                                                     attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       DETECT_LOG(WARN, "alloc rpc_ memory failed", KR(ret));
     } else {
@@ -187,7 +191,7 @@ int ObDeadLockDetectorMgr::init()
       DETECT_LOG(WARN, "req_transport init failed", PRINT_WRAPPER);
     } else if (OB_FAIL(rpc_->init(proxy_, GCTX.self_addr()))) {
       DETECT_LOG(WARN, "rpc_ init faile", PRINT_WRAPPER);
-    } else if (OB_FAIL(detector_map_.init())) {
+    } else if (OB_FAIL(detector_map_.init(attr))) {
       DETECT_LOG(WARN, "detector_map_ init failed", PRINT_WRAPPER);
     } else if (OB_FAIL(sender_thread_.init())) {
       DETECT_LOG(WARN, "ObLCLBatchSenderThread init failed", PRINT_WRAPPER);
@@ -384,6 +388,8 @@ int ObDeadLockDetectorMgr::process_notify_parent_message(
     ret = common::OB_ENTRY_EXIST;
     detector_map_.revert(p_detector);
   } else {
+    ObMemAttr attr(OB_SERVER_TENANT_ID, MEMORY_LABEL);
+    SET_USE_500(attr);
     ObDeadLockDetectorMgr *p_deadlock_detector_mgr = MTL(ObDeadLockDetectorMgr *);
     if (OB_ISNULL(p_deadlock_detector_mgr)) {
       DETECT_LOG(ERROR, "can not get ObDeadLockDetectorMgr", KP(p_deadlock_detector_mgr), K(MTL_ID()));
@@ -391,11 +397,11 @@ int ObDeadLockDetectorMgr::process_notify_parent_message(
                                                             [](const common::ObIArray<ObDetectorInnerReportInfo> &,
                                                                const int64_t) -> int { DETECT_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "should not kill inner node");
                                                                                        return common::OB_ERR_UNEXPECTED; },
-                                                            [binary_key](ObDetectorUserReportInfo& report_info) -> int {
+                                                            [binary_key,attr](ObDetectorUserReportInfo& report_info) -> int {
                                                               ObSharedGuard<char> ptr;
                                                               ptr.assign((char*)"detector", [](char*){});
                                                               report_info.set_module_name(ptr);
-                                                              char *buffer = (char*)ob_malloc(sizeof(char) * 128, MEMORY_LABEL);
+                                                              char *buffer = (char*)ob_malloc(sizeof(char) * 128, attr);
                                                               if (OB_NOT_NULL(buffer)) {
                                                                 binary_key.to_string(buffer, 128);
                                                                 ptr.assign(buffer, [](char* p){ ob_free(p); });

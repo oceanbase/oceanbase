@@ -914,6 +914,7 @@ struct ObArchiveLSMetaType final
 
   bool is_valid() const;
   uint64_t hash() const { return static_cast<uint64_t>(type_); }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   int compare(const ObArchiveLSMetaType &other) const;
   bool operator==(const ObArchiveLSMetaType &other) const { return 0 == compare(other); }
   bool operator!=(const ObArchiveLSMetaType &other) const { return !operator==(other); }

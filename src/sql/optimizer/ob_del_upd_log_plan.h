@@ -24,7 +24,9 @@ class ObDelUpdLogPlan: public ObLogPlan
 {
 public:
   ObDelUpdLogPlan(ObOptimizerContext &ctx, const ObDelUpdStmt *del_upd_stmt)
-      : ObLogPlan(ctx, del_upd_stmt)
+      : ObLogPlan(ctx, del_upd_stmt),
+        max_dml_parallel_(ObGlobalHint::UNSET_PARALLEL),
+        use_pdml_(false)
     {}
   virtual ~ObDelUpdLogPlan() {}
 
@@ -55,6 +57,7 @@ public:
                                ObTablePartitionInfo &table_partition_info);
 
   int compute_exchange_info_for_pdml_del_upd(const ObShardingInfo &source_sharding,
+                                             const ObTablePartitionInfo &target_table_partition,
                                              const IndexDMLInfo &index_dml_info,
                                              bool is_index_maintenance,
                                              ObExchangeInfo &exch_info);
@@ -63,6 +66,7 @@ public:
                                                const IndexDMLInfo &dml_info);
 
   int compute_exchange_info_for_pdml_insert(const ObShardingInfo &source_sharding,
+                                            const ObTablePartitionInfo &target_table_partition,
                                             const IndexDMLInfo &index_dml_info,
                                             bool is_index_maintenance,
                                             ObExchangeInfo &exch_info);
@@ -163,6 +167,7 @@ public:
                                   IndexDMLInfo *index_dml_info);
 
   int check_need_exchange_for_pdml_del_upd(ObLogicalOperator *top,
+                                           const ObExchangeInfo &exch_info,
                                            uint64_t table_id,
                                            bool &need_exchange);
 
@@ -222,6 +227,10 @@ public:
   int check_update_part_key(const ObTableSchema* index_schema,
                             IndexDMLInfo*& index_dml_info) const;
   int allocate_link_dml_as_top(ObLogicalOperator *&old_top);
+  bool use_pdml() const { return use_pdml_; }
+  int compute_dml_parallel();
+  int get_parallel_info_from_candidate_plans(int64_t &dop) const;
+  int get_pdml_parallel_degree(const int64_t target_part_cnt, int64_t &dop) const;
 
 protected:
   virtual int generate_normal_raw_plan() override;
@@ -233,6 +242,8 @@ private:
 protected:
   ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> index_dml_infos_;
   ObSEArray<share::schema::ObSchemaObjVersion, 4, common::ModulePageAllocator, true> extra_dependency_tables_;
+  int64_t max_dml_parallel_;
+  int64_t use_pdml_;
 };
 
 } /* namespace sql */

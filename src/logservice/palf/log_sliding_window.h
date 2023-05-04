@@ -159,6 +159,7 @@ public:
                    LogEngine *log_engine,
                    palf::PalfFSCbWrapper *palf_fs_cb,
                    common::ObILogAllocator *alloc_mgr,
+                   LogPlugins *plugins,
                    const PalfBaseInfo &palf_base_info,
                    const bool is_normal_replica);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
@@ -242,15 +243,13 @@ public:
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();
+  virtual bool is_in_period_freeze_mode() const;
   virtual int period_freeze_last_log();
   virtual int inc_update_scn_base(const share::SCN &scn);
   virtual int get_server_ack_info(const common::ObAddr &server, LsnTsInfo &ack_info) const;
   virtual int get_ack_info_array(LogMemberAckInfoList &ack_info_array) const;
   virtual int pre_check_before_degrade_upgrade(const LogMemberAckInfoList &servers,
                                                bool is_degrade);
-  // location cache will be removed TODO by yunlong
-  virtual int set_location_cache_cb(PalfLocationCacheCb *lc_cb);
-  virtual int reset_location_cache_cb();
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn);
   virtual int try_send_committed_info(const common::ObAddr &server,
                                       const LSN &log_lsn,
@@ -307,6 +306,8 @@ private:
                                       const int64_t &proposal_id,
                                       const int64_t accum_checksum);
   int try_advance_committed_lsn_(const LSN &end_lsn);
+  int try_advance_log_task_committed_ts_();
+  int try_advance_log_task_first_ack_ts_(const LSN &end_lsn);
   void get_last_submit_log_info_(LSN &lsn,
                                  LSN &end_lsn,
                                  int64_t &log_id,
@@ -436,6 +437,7 @@ private:
   LogConfigMgr *mm_;
   LogModeMgr *mode_mgr_;
   LogEngine *log_engine_;
+  LogPlugins *plugins_;
   palf::PalfFSCbWrapper *palf_fs_cb_;
   LSNAllocator lsn_allocator_;
   LogGroupBuffer group_buffer_;
@@ -509,9 +511,6 @@ private:
   // last_renew_leader_ts in fetch_log
   mutable int64_t last_fetch_log_renew_leader_ts_us_;
   int64_t end_lsn_stat_time_us_;
-  // location ptr, will be removed. TODO by yunlong
-  mutable common::ObSpinLock lc_cb_lock_;
-  PalfLocationCacheCb *lc_cb_;
   // fetch log dest server for reconfirm
   common::ObAddr reconfirm_fetch_dest_;
   // whether sw is executing trucnation
@@ -522,7 +521,11 @@ private:
   LSN last_record_end_lsn_;
   ObMiniStat::ObStatItem fs_cb_cost_stat_;
   ObMiniStat::ObStatItem log_life_time_stat_;
-  ObMiniStat::ObStatItem log_submit_wait_stat_;
+  ObMiniStat::ObStatItem log_gen_to_freeze_cost_stat_;
+  ObMiniStat::ObStatItem log_gen_to_submit_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_first_ack_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_flush_cost_stat_;
+  ObMiniStat::ObStatItem log_submit_to_commit_cost_stat_;
   ObMiniStat::ObStatItem log_submit_to_slide_cost_stat_;
   int64_t group_log_stat_time_us_;
   int64_t accum_log_cnt_;

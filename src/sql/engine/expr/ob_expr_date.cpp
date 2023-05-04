@@ -23,7 +23,7 @@ namespace sql
 {
 
 ObExprDate::ObExprDate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_DATE, N_DATE, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_DATE, N_DATE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

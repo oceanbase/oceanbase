@@ -41,7 +41,7 @@ class ObExprTimeBase : public ObFuncExprOperator
 {
 public:
   explicit ObExprTimeBase(common::ObIAllocator &alloc, int32_t date_type, ObExprOperatorType type,
-                          const char *name);
+                          const char *name, ObValidForGeneratedColFlag valid_for_generated_col);
   virtual ~ObExprTimeBase();
   virtual int calc_result_type1(ObExprResType &type,
                                 ObExprResType &type1,
@@ -51,6 +51,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum,
                   int32_t type, bool with_date, bool is_dayofmonth = false);
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
 private :
   int32_t dt_type_;
   //disallow copy

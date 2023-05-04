@@ -29,6 +29,7 @@ namespace common {
   class ObLDHandle;
   class ObTenantIOManager;
   template<typename T> class ObServerObjectPool;
+  class ObDetectManager;
 }
 namespace omt {
  class ObPxPools;
@@ -129,6 +130,8 @@ namespace rootserver
   class ObRestoreService;
   class ObRecoveryLSService;
   class ObArbitrationService;
+  class ObHeartbeatService;
+  class ObStandbySchemaRefreshTrigger;
 }
 namespace observer
 {
@@ -198,7 +201,8 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
-      rootserver::ObTenantInfoLoader*,         \
+      rootserver::ObStandbySchemaRefreshTrigger*,    \
+      rootserver::ObTenantInfoLoader*,               \
       rootserver::ObPrimaryLSService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \
@@ -243,7 +247,9 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
       ObTestModule*,                                 \
-      oceanbase::common::sqlclient::ObTenantOciEnvs* \
+      oceanbase::common::sqlclient::ObTenantOciEnvs*, \
+      rootserver::ObHeartbeatService*,              \
+      oceanbase::common::ObDetectManager*            \
   )
 
 
@@ -331,6 +337,7 @@ public:
     }
     return hash_value;
   }
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   DynamicType get_type() { return type_; }
   int64_t get_tg_id() { return tg_id_; }
   lib::Threads *get_user_thread() { return user_thread_; }

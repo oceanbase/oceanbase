@@ -30,7 +30,7 @@ const int32_t COMPRESS_HEADER_MASK = 0x3FFFFFFF;
 
 
 ObExprCompress::ObExprCompress(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_COMPRESS, N_COMPRESS, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_COMPRESS, N_COMPRESS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -96,7 +96,7 @@ int ObExprCompress::eval_compress(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
 }
 
 ObExprUncompress::ObExprUncompress(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UNCOMPRESS, N_UNCOMPRESS, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UNCOMPRESS, N_UNCOMPRESS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -198,7 +198,7 @@ int ObExprUncompress::eval_uncompress(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 }
 
 ObExprUncompressedLength::ObExprUncompressedLength(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_UNCOMPRESSED_LENGTH, N_UNCOMPRESSED_LENGTH, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_UNCOMPRESSED_LENGTH, N_UNCOMPRESSED_LENGTH, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

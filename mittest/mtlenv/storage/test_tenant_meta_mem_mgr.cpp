@@ -279,6 +279,25 @@ void TestConcurrentT3M::run1()
   }
 }
 
+TEST_F(TestTenantMetaMemMgr, test_bucket_cnt)
+{
+  const int64_t unify_bucket_num = common::hash::cal_next_prime(t3m_.cal_adaptive_bucket_num());
+  const int64_t t3m_lock_bkt_cnt = t3m_.bucket_lock_.bucket_cnt_;
+  const int64_t t3m_map_bkt_cnt = t3m_.tablet_map_.map_.bucket_count();
+  const int64_t t3m_map_lock_bkt_cnt = t3m_.tablet_map_.bucket_lock_.bucket_cnt_;
+  ASSERT_NE(unify_bucket_num, 0);
+  // ASSERT_EQ(unify_bucket_num, t3m_lock_bkt_cnt);
+  ASSERT_EQ(unify_bucket_num, t3m_map_bkt_cnt);
+  ASSERT_EQ(unify_bucket_num, t3m_map_lock_bkt_cnt);
+
+  const int64_t unify_pin_set_bkt_cnt = common::hash::cal_next_prime(ObTenantMetaMemMgr::DEFAULT_BUCKET_NUM);
+  const int64_t pin_set_lock_bkt_cnt = t3m_.pin_set_lock_.bucket_cnt_;
+  const int64_t pin_set_bkt_cnt = t3m_.pinned_tablet_set_.ht_.get_bucket_count();
+  ASSERT_NE(unify_pin_set_bkt_cnt, 0);
+  ASSERT_EQ(unify_pin_set_bkt_cnt, pin_set_lock_bkt_cnt);
+  ASSERT_EQ(unify_pin_set_bkt_cnt, pin_set_bkt_cnt);
+}
+
 TEST_F(TestTenantMetaMemMgr, test_sstable)
 {
   int ret = OB_SUCCESS;

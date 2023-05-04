@@ -108,7 +108,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
   }
   virtual inline uint64_t hash() const
   {
-    uint64_t hash_ret = name_.hash(0);
+    uint64_t hash_ret = name_.hash();
     hash_ret = common::murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
@@ -345,17 +345,6 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     }
 
     return ret;
-  }
-
-  uint64_t get_normalized_pattern_digest() const
-  {
-    common::ObString normalized_pattern;
-    if (mode_ == PC_PS_MODE || mode_ == PC_PL_MODE || fp_result_.pc_key_.name_.empty()) {
-      normalized_pattern = raw_sql_;
-    } else {
-      normalized_pattern = fp_result_.pc_key_.name_;
-    }
-    return normalized_pattern.hash();
   }
 
   int is_retry(bool &v) const;  //是否在重试之中

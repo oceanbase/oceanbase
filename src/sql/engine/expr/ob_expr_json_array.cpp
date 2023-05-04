@@ -30,7 +30,7 @@ ObExprJsonArray::ObExprJsonArray(ObIAllocator &alloc)
       T_FUN_SYS_JSON_ARRAY,
       N_JSON_ARRAY, 
       PARAM_NUM_UNKNOWN,
-      NOT_ROW_DIMENSION)
+      VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

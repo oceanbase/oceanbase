@@ -29,6 +29,7 @@ public:
   virtual int compute_sharding_info() override;
   virtual int compute_op_ordering() override;
   virtual int est_cost() override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost);
   virtual bool is_block_op() const override { return true; }
   inline void set_temp_table_id(uint64_t temp_table_id) { temp_table_id_ = temp_table_id; }
   uint64_t get_temp_table_id() const { return temp_table_id_; }

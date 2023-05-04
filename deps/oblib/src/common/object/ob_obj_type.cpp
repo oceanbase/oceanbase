@@ -95,6 +95,7 @@ const char *ob_sql_type_str(ObObjType type)
       "LOB",
       "JSON",
       "GEOMETRY",
+      "UDT",
       ""
     },
     {
@@ -149,6 +150,7 @@ const char *ob_sql_type_str(ObObjType type)
       "LOB",
       "JSON",
       "GEOMETRY",
+      "UDT",
       ""
     }
   };
@@ -503,6 +505,20 @@ int ob_geometry_sub_type_str(char *buff, int64_t buff_length, int64_t &pos, cons
   return ret;
 }
 
+int ob_udt_sub_type_str(char *buff, int64_t buff_length, int64_t &pos, const uint64_t sub_type, bool is_sql_type = false)
+{
+  int ret = OB_SUCCESS;
+  if (is_sql_type && sub_type == ObXMLSqlType) {
+    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
+  } else if (sub_type == T_OBJ_XML) {
+    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("undefined geometry type", K(ret), K(sub_type), K(is_sql_type));
+  }
+  return ret;
+}
+
 int ob_enum_or_set_str(const ObObjMeta &obj_meta, const common::ObIArray<ObString> &type_info, char *buff, int64_t buff_length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -622,7 +638,7 @@ int ob_sql_type_str(char *buff,
     int64_t precision,
     int64_t scale,
     ObCollationType coll_type,
-    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
   static ObSqlTypeStrFunc sql_type_name[ObMaxType+1] =
@@ -687,10 +703,14 @@ int ob_sql_type_str(char *buff,
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
-  if (ob_is_geometry_tc(type) && geo_type != common::ObGeoType::GEOMETRY) {
-    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
-      LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
+  if (ob_is_geometry_tc(type) && static_cast<common::ObGeoType>(sub_type) != common::ObGeoType::GEOMETRY) {
+    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, static_cast<common::ObGeoType>(sub_type)))) {
+      LOG_WARN("fail to get geometry sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
+  } else if (lib::is_oracle_mode() && ob_is_user_defined_sql_type(type)) {
+     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, sub_type, true))) {
+       LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
+     }
   } else {
     ret = sql_type_name[OB_LIKELY(type < ObMaxType) ? type : ObMaxType](buff, buff_length, pos, length, precision, scale, coll_type);
   }
@@ -791,7 +811,7 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     char *buff,
     int64_t buff_length,
     int64_t &pos,
-    const common::ObGeoType geo_type/* common::ObGeoType::GEOTYPEMAX */)
+    const uint64_t sub_type/* common::ObGeoType::GEOTYPEMAX */)
 {
   int ret = OB_SUCCESS;
   int16_t precision_or_length_semantics = accuracy.get_precision();
@@ -803,10 +823,14 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     if (OB_FAIL(ob_enum_or_set_str(obj_meta, type_info, buff, buff_length, pos))) {
       LOG_WARN("fail to get enum_or_set str", K(ret), K(obj_meta), K(accuracy), K(buff_length), K(pos));
     }
-  } else if (obj_meta.is_geometry() && geo_type != common::ObGeoType::GEOMETRY) {
-    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, geo_type))) {
-      LOG_WARN("fail to get geometry sub type str", K(ret), K(geo_type), K(buff), K(buff_length), K(pos));
+  } else if (obj_meta.is_geometry() && static_cast<common::ObGeoType>(sub_type) != common::ObGeoType::GEOMETRY) {
+    if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, static_cast<common::ObGeoType>(sub_type)))) {
+      LOG_WARN("fail to get geometry sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
+  } else if (lib::is_oracle_mode() && obj_meta.is_ext()) {
+     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, sub_type))) {
+       LOG_WARN("fail to get udt sub type str", K(ret), K(accuracy.get_accuracy()), K(buff), K(buff_length), K(pos));
+     }
   } else {
     ObObjType datatype = obj_meta.get_type();
     ObCollationType coll_type = obj_meta.get_collation_type();
@@ -820,7 +844,7 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
     if (OB_FAIL(ob_sql_type_str(buff, buff_length, pos,
                                 datatype, length,
                                 precision_or_length_semantics,
-                                accuracy.get_scale(), coll_type, geo_type))) {
+                                accuracy.get_scale(), coll_type, sub_type))) {
       LOG_WARN("fail to print sql type", K(ret), K(obj_meta), K(accuracy));
     }
   }
@@ -856,6 +880,7 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "LOB",
     "JSON",
     "GEOMETRY",
+    "UDT",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");

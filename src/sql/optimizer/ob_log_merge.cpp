@@ -104,12 +104,13 @@ int ObLogMerge::get_plan_item_info(PlanText &plan_text,
 int ObLogMerge::compute_sharding_info()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan())) {
+  ObMergeLogPlan *merge_log_plan = NULL;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(merge_log_plan = dynamic_cast<ObMergeLogPlan*>(get_plan()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
+    LOG_WARN("get unexpected null", K(ret), K(merge_log_plan));
   } else if (NULL != get_sharding()) {
     is_partition_wise_ = true;
-  } else if (get_plan()->get_optimizer_context().use_pdml() && is_multi_part_dml()) {
+  } else if (merge_log_plan->use_pdml() && is_multi_part_dml()) {
     // pdml merge
     strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
   } else if (is_multi_part_dml()) {

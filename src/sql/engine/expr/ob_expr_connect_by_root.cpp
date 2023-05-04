@@ -18,7 +18,7 @@
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 ObExprConnectByRoot::ObExprConnectByRoot(common::ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_OP_CONNECT_BY_ROOT, N_CONNECT_BY_ROOT, 1, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE) {};
+  : ObExprOperator(alloc, T_OP_CONNECT_BY_ROOT, N_CONNECT_BY_ROOT, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE) {};
 int ObExprConnectByRoot::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;

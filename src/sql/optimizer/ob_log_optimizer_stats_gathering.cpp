@@ -37,11 +37,7 @@ const char *ObLogOptimizerStatsGathering::get_name() const
     "OPTIMIZER STATS MERGE",
     "OPTIMIZER STATS GATHER",
   };
-  int name_idx = 1;
-  if (osg_type_ == OSG_TYPE::MERGE_OSG) {
-    name_idx = 0;
-  }
-  return stats_gathering_name_[name_idx];
+  return stats_gathering_name_[osg_type_ == OSG_TYPE::MERGE_OSG ? 0 : 1];
 }
 int ObLogOptimizerStatsGathering::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {

@@ -101,6 +101,9 @@ public:
   virtual int feedup(ObDtlLinkedBuffer *&buffer) override;
   virtual int send_message(ObDtlLinkedBuffer *&buf);
 
+  bool recv_sqc_fin_res() { return recv_sqc_fin_res_; }
+private:
+  bool recv_sqc_fin_res_;
 };
 
 }  // dtl

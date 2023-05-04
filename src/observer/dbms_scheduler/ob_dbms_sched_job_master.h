@@ -30,7 +30,6 @@
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_ddl_service.h"
 
 
@@ -168,7 +167,6 @@ public:
       running_(false),
       trace_id_(NULL),
       rand_(),
-      server_mgr_(NULL),
       schema_service_(NULL),
       job_rpc_proxy_(NULL),
       self_addr_(),
@@ -181,8 +179,7 @@ public:
 
   bool is_inited() { return inited_; }
 
-  int init(rootserver::ObServerManager *server_mgr,
-           rootserver::ObUnitManager *unit_mgr,
+  int init(rootserver::ObUnitManager *unit_mgr,
            common::ObISQLClient *sql_client,
            share::schema::ObMultiVersionSchemaService *schema_service);
 
@@ -215,7 +212,7 @@ public:
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;
-  const static int MIN_SCHEDULER_INTERVAL = 5 * 1000 * 1000;
+  const static int MIN_SCHEDULER_INTERVAL = 20 * 1000 * 1000;
 
   bool inited_;
   bool stoped_;
@@ -224,7 +221,6 @@ private:
   const uint64_t *trace_id_;
 
   common::ObRandom rand_; // for random pick server
-  rootserver::ObServerManager *server_mgr_;
   rootserver::ObUnitManager *unit_mgr_;
   share::schema::ObMultiVersionSchemaService *schema_service_; // for got all tenant info
   obrpc::ObDBMSSchedJobRpcProxy *job_rpc_proxy_;

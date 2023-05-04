@@ -212,6 +212,7 @@ int ObResourceMap<Key, Value>::init(
     const int64_t page_size)
 {
   int ret = common::OB_SUCCESS;
+  auto attr = SET_USE_500(ObMemAttr(tenant_id, label));
   const int64_t bkt_num = common::hash::cal_next_prime(bucket_num);
   if (OB_UNLIKELY(is_inited_)) {
     ret = common::OB_INIT_TWICE;
@@ -223,7 +224,7 @@ int ObResourceMap<Key, Value>::init(
         K(page_size), K(tenant_id));
   } else if (OB_FAIL(bucket_lock_.init(bkt_num))) {
     STORAGE_LOG(WARN, "fail to init bucket lock", K(ret), K(bkt_num));
-  } else if (OB_FAIL(map_.create(bkt_num, label, label, tenant_id))) {
+  } else if (OB_FAIL(map_.create(bkt_num, attr, attr))) {
     STORAGE_LOG(WARN, "fail to create map", K(ret));
   } else if (OB_UNLIKELY(bkt_num != map_.bucket_count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -232,7 +233,7 @@ int ObResourceMap<Key, Value>::init(
   } else if (OB_FAIL(allocator_.init(total_limit, hold_limit, page_size))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else {
-    allocator_.set_label(label);
+    allocator_.set_attr(attr);
     is_inited_ = true;
     STORAGE_LOG(INFO, "init resource map success", K(ret), K(tenant_id), K(bkt_num));
   }
@@ -243,9 +244,16 @@ template <typename Key, typename Value>
 template <typename Callback>
 int ObResourceMap<Key, Value>::get(const Key &key, ObResourceHandle<Value> &handle, Callback callback)
 {
-  common::ObBucketHashRLockGuard guard(bucket_lock_, hash_func_(key));
-  handle.reset();
-  return get_without_lock(key, handle, callback);
+  int ret = OB_SUCCESS;
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to do hash", K(ret));
+  } else {
+    common::ObBucketHashRLockGuard guard(bucket_lock_, hash_val);
+    handle.reset();
+    ret = get_without_lock(key, handle, callback);
+  }
+  return ret;
 }
 
 template <typename Key,
@@ -291,28 +299,33 @@ int ObResourceMap<Key, Value>::set(const Key &key, Value &value, Callback callba
   ValueStore *value_store = NULL;
   const int64_t buf_size = value.get_deep_copy_size() + sizeof(ValueStore);
   char *buf = NULL;
-  common::ObBucketHashWLockGuard guard(bucket_lock_, hash_func_(key));
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = common::OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
-    ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buf_size));
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to do hash", K(ret));
   } else {
-    value_store = new (buf) ValueStore();
-    if (OB_FAIL(value.deep_copy(buf + sizeof(ValueStore), buf_size - sizeof(ValueStore), ptr))) {
-      STORAGE_LOG(WARN, "fail to deep copy value", K(ret));
+    common::ObBucketHashWLockGuard guard(bucket_lock_, hash_val);
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = common::OB_NOT_INIT;
+      STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(buf_size)))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to allocate memory", K(ret), K(buf_size));
     } else {
-      value_store->set_value_ptr(ptr);
-      common::hash::HashMapPair<Key, Value *> pair;
-      pair.first = key;
-      pair.second = value_store->get_value_ptr();
-      if (OB_FAIL(callback(pair))) {
-        STORAGE_LOG(WARN, "fail to callback", K(ret));
-      } else if (OB_FAIL(inc_handle_ref(value_store))) {
-        STORAGE_LOG(WARN, "fail to inc handle reference count", K(ret));
-      } else if (OB_FAIL(map_.set_refactored(key, value_store))) {
-        STORAGE_LOG(WARN, "fail to set to map", K(ret));
+      value_store = new (buf) ValueStore();
+      if (OB_FAIL(value.deep_copy(buf + sizeof(ValueStore), buf_size - sizeof(ValueStore), ptr))) {
+        STORAGE_LOG(WARN, "fail to deep copy value", K(ret));
+      } else {
+        value_store->set_value_ptr(ptr);
+        common::hash::HashMapPair<Key, Value *> pair;
+        pair.first = key;
+        pair.second = value_store->get_value_ptr();
+        if (OB_FAIL(callback(pair))) {
+          STORAGE_LOG(WARN, "fail to callback", K(ret));
+        } else if (OB_FAIL(inc_handle_ref(value_store))) {
+          STORAGE_LOG(WARN, "fail to inc handle reference count", K(ret));
+        } else if (OB_FAIL(map_.set_refactored(key, value_store))) {
+          STORAGE_LOG(WARN, "fail to set to map", K(ret));
+        }
       }
     }
   }
@@ -328,23 +341,28 @@ template <typename Callback>
 int ObResourceMap<Key, Value>::erase(const Key &key, Callback callback)
 {
   int ret = common::OB_SUCCESS;
-  common::ObBucketHashWLockGuard guard(bucket_lock_, hash_func_(key));
-  ValueStore *ptr = NULL;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = common::OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
-  } else if (OB_FAIL(map_.get_refactored(key, ptr))) {
-    STORAGE_LOG(WARN, "fail to get from map", K(ret));
-  } else if (OB_FAIL(map_.erase_refactored(key))) {
-    STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+  uint64_t hash_val = 0;
+  if (OB_FAIL(hash_func_(key, hash_val))) {
+    STORAGE_LOG(WARN, "fail to do hash", K(ret));
   } else {
-    common::hash::HashMapPair<Key, Value *> pair;
-    pair.first = key;
-    pair.second = ptr->get_value_ptr();
-    if (OB_FAIL(callback(pair))) {
-      STORAGE_LOG(WARN, "fail to callback", K(ret));
-    } else if (OB_FAIL(dec_handle_ref(ptr))) {
-      STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+    common::ObBucketHashWLockGuard guard(bucket_lock_, hash_val);
+    ValueStore *ptr = NULL;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = common::OB_NOT_INIT;
+      STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
+    } else if (OB_FAIL(map_.get_refactored(key, ptr))) {
+      STORAGE_LOG(WARN, "fail to get from map", K(ret));
+    } else if (OB_FAIL(map_.erase_refactored(key))) {
+      STORAGE_LOG(WARN, "fail to erase from map", K(ret));
+    } else {
+      common::hash::HashMapPair<Key, Value *> pair;
+      pair.first = key;
+      pair.second = ptr->get_value_ptr();
+      if (OB_FAIL(callback(pair))) {
+        STORAGE_LOG(WARN, "fail to callback", K(ret));
+      } else if (OB_FAIL(dec_handle_ref(ptr))) {
+        STORAGE_LOG(WARN, "fail to dec handle ref", K(ret));
+      }
     }
   }
   return ret;

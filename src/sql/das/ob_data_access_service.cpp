@@ -232,6 +232,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
         is_partition_change_error(ret) ||
         OB_REPLICA_NOT_READABLE == ret)
           && !is_virtual_table(task_op.get_ref_table_id())) {
+    int tmp_ret = ret;
     if (!can_fast_fail(task_op)) {
       task_op.in_part_retry_ = true;
       das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
@@ -240,7 +241,7 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
       } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
         LOG_WARN("query is timeout, terminate retry", K(ret));
       } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
-        LOG_WARN("refresh partition location failed", K(ret));
+        LOG_WARN("refresh partition location failed", K(ret), "ori_err_code", tmp_ret, K(lbt()));
       } else if (FALSE_IT(das_task_wrapper.reuse())) {
       } else if (FALSE_IT(task_op.set_task_status(ObDasTaskStatus::UNSTART))) {
       } else if (OB_FAIL(das_task_wrapper.push_back_task(&task_op))) {
@@ -370,7 +371,7 @@ int ObDataAccessService::do_async_remote_das_task(
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
   int64_t timeout_ts = plan_ctx->get_timeout_timestamp();
-  int64_t current_ts = ObTimeUtility::current_time();
+  int64_t current_ts = ObClockGenerator::getClock();
   int64_t timeout = timeout_ts - current_ts;
   int64_t simulate_timeout = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_ASYNC_RPC_TIMEOUT);
   if (OB_UNLIKELY(simulate_timeout > 0)) {
@@ -465,7 +466,7 @@ int ObDataAccessService::do_sync_remote_das_task(
   FLTSpanGuard(do_sync_remote_das_task);
   ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
   ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
-  int64_t timeout = plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time();
+  int64_t timeout = plan_ctx->get_timeout_timestamp() - ObClockGenerator::getClock();
   uint64_t tenant_id = session->get_rpc_tenant_id();
   common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
   ObIDASTaskResult *op_result = nullptr;

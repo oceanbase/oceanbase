@@ -18,6 +18,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat_cache.h"
 #include "share/stat/ob_opt_column_stat_cache.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase {
 namespace common {
@@ -106,7 +107,23 @@ public:
     common::ObIArray<ObOptColumnStatHandle> &history_col_handles,
     common::ObIArray<ObOptColumnStat*> &dst_column_stat);
 
-  static int check_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id, bool &is_valid);
+  static bool is_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id);
+
+  static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
+
+  static int get_part_infos(const ObTableSchema &table_schema,
+                            ObIArray<PartInfo> &part_infos,
+                            ObIArray<PartInfo> &subpart_infos,
+                            ObIArray<int64_t> &part_ids,
+                            ObIArray<int64_t> &subpart_ids,
+                            OSGPartMap *part_map = NULL);
+
+  static int get_subpart_infos(const share::schema::ObTableSchema &table_schema,
+                               const share::schema::ObPartition *part,
+                               ObIArray<PartInfo> &subpart_infos,
+                               ObIArray<int64_t> &subpart_ids,
+                               OSGPartMap *part_map = NULL);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

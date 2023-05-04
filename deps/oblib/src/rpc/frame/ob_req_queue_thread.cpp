@@ -33,6 +33,7 @@ using namespace oceanbase::lib;
 
 ObReqQueue::ObReqQueue(int queue_capacity)
     : wait_finish_(true),
+      push_worker_count_(0),
       queue_(),
       qhandler_(NULL),
       host_()
@@ -71,6 +72,17 @@ bool ObReqQueue::push(ObRequest *req, int max_queue_len, bool block)
     bret = OB_LIKELY(OB_SUCCESS == queue_.push(req));
   }
   return bret;
+}
+
+oceanbase::rpc::ObRequest *ObReqQueue::pop()
+{
+  void *task = NULL;
+  int64_t timeout = 0;
+  ObRequest *req = NULL;
+  if (queue_.size() > 0 && OB_LIKELY(OB_SUCCESS == queue_.pop(task, timeout)) && OB_NOT_NULL(task)) {
+    req = reinterpret_cast<ObRequest *>(task);
+  }
+  return req;
 }
 
 void ObReqQueue::set_host(const ObAddr &host)
@@ -142,7 +154,7 @@ int ObReqQueue::process_task(void *task)
 void ObReqQueue::loop()
 {
   int ret = OB_SUCCESS;
-  int64_t timeout = 300 * 1000;
+  int64_t timeout = 3000 * 1000;
   void *task = NULL;
   if (OB_ISNULL(qhandler_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -165,6 +177,7 @@ void ObReqQueue::loop()
     if (!wait_finish_) {
       LOG_INFO("exiting queue thread without wait finish", K(queue_.size()));
     } else {
+      while(get_push_worker_count() != 0); // wait to push finish
       LOG_INFO("exiting queue thread and wait remain finish", K(queue_.size()));
       // Process remains if we should wait until all task has been
       // processed before exiting this thread. Previous return code

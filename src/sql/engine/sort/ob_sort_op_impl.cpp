@@ -416,11 +416,12 @@ bool ObSortOpImpl::Compare::operator()(
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();
     int cmp = 0;
-    for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_; i++) {
+    for (int64_t i = cmp_start_; 0 == cmp && i < cmp_end_ && OB_SUCC(ret); i++) {
       const ObSortFieldCollation& sort_collation = sort_collations_->at(i);
       const int64_t idx = sort_collation.field_idx_;
-      cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
-      if (cmp < 0) {
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp < 0) {
         less = sort_collation.is_ascending_;
       } else if (cmp > 0) {
         less = !sort_collation.is_ascending_;
@@ -453,8 +454,9 @@ bool ObSortOpImpl::Compare::operator()(
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(l->at(idx)->eval(eval_ctx, other_datum))) {
         LOG_WARN("failed to eval expr", K(ret));
+      } else if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(*other_datum, rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
       } else {
-        cmp = sort_cmp_funs_->at(i).cmp_func_(*other_datum, rcells[idx]);
         if (cmp < 0) {
           less = sort_collations_->at(i).is_ascending_;
         } else if (cmp > 0) {
@@ -486,8 +488,9 @@ int ObSortOpImpl::Compare::with_ties_cmp(const common::ObIArray<ObExpr*> *l,
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(l->at(idx)->eval(eval_ctx, other_datum))) {
         LOG_WARN("failed to eval expr", K(ret));
+      } else if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(*other_datum, rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
       } else {
-        cmp = sort_cmp_funs_->at(i).cmp_func_(*other_datum, rcells[idx]);
         cmp = sort_collations_->at(i).is_ascending_ ? -cmp : cmp;
       }
     }
@@ -511,8 +514,11 @@ int ObSortOpImpl::Compare::with_ties_cmp(const ObChunkDatumStore::StoredRow *l,
     const int64_t cnt = sort_cmp_funs_->count();
     for (int64_t i = 0; 0 == cmp && i < cnt && OB_SUCC(ret); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
-      cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
-      cmp = sort_collations_->at(i).is_ascending_ ? -cmp : cmp;
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else {
+        cmp = sort_collations_->at(i).is_ascending_ ? -cmp : cmp;
+      }
     }
   }
   return cmp;
@@ -1210,10 +1216,12 @@ int ObSortOpImpl::add_stored_row(const ObChunkDatumStore::StoredRow &input_row)
   return ret;
 }
 
-bool ObSortOpImpl::is_equal_part(const ObChunkDatumStore::StoredRow *l,
-                                 const ObChunkDatumStore::StoredRow *r)
+int ObSortOpImpl::is_equal_part(const ObChunkDatumStore::StoredRow *l,
+                                 const ObChunkDatumStore::StoredRow *r,
+                                 bool &is_equal)
 {
-  bool is_equal = true;
+  int ret = OB_SUCCESS;
+  is_equal = true;
   if (OB_ISNULL(l) && OB_ISNULL(r)) {
     // do nothing
   } else if (OB_ISNULL(l) || OB_ISNULL(r)
@@ -1221,18 +1229,21 @@ bool ObSortOpImpl::is_equal_part(const ObChunkDatumStore::StoredRow *l,
                  != r->cells()[sort_collations_->at(0).field_idx_].get_uint64())) {
     is_equal = false; // offest 0 is hash value.
   } else {
+    int cmp_ret = 0;
     for (int64_t i = 1; is_equal && i <= part_cnt_; ++i) {
       int64_t idx = sort_collations_->at(i).field_idx_;
       const ObDatum &ld = l->cells()[idx];
       const ObDatum &rd = r->cells()[idx];
       if (ld.pack_ == rd.pack_ && 0 == memcmp(ld.ptr_, rd.ptr_, ld.len_)) {
         // do nothing
+      } else if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(ld, rd, cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret));
       } else {
-        is_equal = (0 == sort_cmp_funs_->at(i).cmp_func_(ld, rd));
+        is_equal = (0 == cmp_ret);
       }
     }
   }
-  return is_equal;
+  return ret;
 }
 
 int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRow *> &rows,
@@ -1304,14 +1315,18 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
       PartHashNode *&bucket = buckets_[pos];
       insert_node.store_row_ = rows.at(i);
       PartHashNode *exist = bucket;
-      while (NULL != exist) {
-        if (is_equal_part(exist->store_row_, rows.at(i))) {
+      bool equal = false;
+      while (NULL != exist && OB_SUCC(ret)) {
+        if (OB_FAIL(is_equal_part(exist->store_row_, rows.at(i), equal))) {
+          LOG_WARN("failed to check equal", K(ret));
+        } else if (equal) {
           break;
         } else {
           exist = exist->hash_node_next_;
         }
       }
-      if (NULL == exist) { // insert at first node with hash_node_next.
+      if (OB_FAIL(ret)) {
+      } else if (NULL == exist) { // insert at first node with hash_node_next.
         insert_node.part_row_next_ = NULL;
         insert_node.hash_node_next_ = bucket;
         bucket = &insert_node;
@@ -2460,12 +2475,15 @@ int ObPrefixSortImpl::fetch_rows(const common::ObIArray<ObExpr *> &all_exprs)
         if (NULL != prev_row_) {
           const ObDatum *rcells = prev_row_->cells();
           ObDatum *l_datum = nullptr;
+          int cmp_ret = 0;
           for (int64_t i = 0; same_prefix && i < prefix_pos_ && OB_SUCC(ret); i++) {
             const int64_t idx = full_sort_collations_->at(i).field_idx_;
             if (OB_FAIL(all_exprs.at(idx)->eval(*eval_ctx_, l_datum))) {
               LOG_WARN("failed to eval expr", K(ret));
+            } else if (OB_FAIL(full_sort_cmp_funs_->at(i).cmp_func_(*l_datum, rcells[idx], cmp_ret))) {
+              LOG_WARN("failed to compare", K(ret));
             } else {
-              same_prefix = (0 == full_sort_cmp_funs_->at(i).cmp_func_(*l_datum, rcells[idx]));
+              same_prefix = (0 == cmp_ret);
             }
           }
         }
@@ -2522,38 +2540,54 @@ int ObPrefixSortImpl::get_next_row(const common::ObIArray<ObExpr*> &exprs)
   return ret;
 }
 
-bool ObPrefixSortImpl::is_same_prefix(const ObChunkDatumStore::StoredRow *store_row,
+int ObPrefixSortImpl::is_same_prefix(const ObChunkDatumStore::StoredRow *store_row,
                                       const common::ObIArray<ObExpr *> &all_exprs,
-                                      const int64_t datum_idx)
+                                      const int64_t datum_idx,
+                                      bool &same)
 {
-  bool same = true;
-  for (int64_t i = 0; i < prefix_pos_ && same; i++) {
+  int ret = OB_SUCCESS;
+  same = true;
+  int cmp_ret = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < prefix_pos_ && same; i++) {
     const int64_t idx = full_sort_collations_->at(i).field_idx_;
     ObExpr *e = all_exprs.at(idx);
     // for non batch result expression, datum should always be the same.
     if (e->is_batch_result()) {
-      same = (0 == full_sort_cmp_funs_->at(i).cmp_func_(
-              store_row->cells()[idx], e->locate_batch_datums(*eval_ctx_)[datum_idx]));
+      if (OB_FAIL(full_sort_cmp_funs_->at(i).cmp_func_(store_row->cells()[idx],
+                                                       e->locate_batch_datums(*eval_ctx_)[datum_idx],
+                                                       cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else {
+        same = (0 == cmp_ret);
+      }
     }
   }
-  return same;
+  return ret;
 }
 
-bool ObPrefixSortImpl::is_same_prefix(const common::ObIArray<ObExpr *> &all_exprs,
+int ObPrefixSortImpl::is_same_prefix(const common::ObIArray<ObExpr *> &all_exprs,
                                       const int64_t datum_idx1,
-                                      const int64_t datum_idx2)
+                                      const int64_t datum_idx2,
+                                      bool &same)
 {
-  bool same = true;
-  for (int64_t i = 0; i < prefix_pos_ && same; i++) {
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  same = true;
+  for (int64_t i = 0; OB_SUCC(ret) && i < prefix_pos_ && same; i++) {
     const int64_t idx = full_sort_collations_->at(i).field_idx_;
     ObExpr *e = all_exprs.at(idx);
     if (e->is_batch_result()) {
-      same = (0 == full_sort_cmp_funs_->at(i).cmp_func_(
+      if (OB_FAIL(full_sort_cmp_funs_->at(i).cmp_func_(
               e->locate_batch_datums(*eval_ctx_)[datum_idx1],
-              e->locate_batch_datums(*eval_ctx_)[datum_idx2]));
+              e->locate_batch_datums(*eval_ctx_)[datum_idx2],
+              cmp_ret))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else {
+        same = (0 == cmp_ret);
+      }
     }
   }
-  return same;
+  return ret;
 }
 
 int ObPrefixSortImpl::add_immediate_prefix(const common::ObIArray<ObExpr *> &all_exprs)
@@ -2646,9 +2680,12 @@ int ObPrefixSortImpl::fetch_rows_batch(const common::ObIArray<ObExpr *> &all_exp
         }
         *sort_row_count_ += 1;
         if (new_prefix < 0) {
-          if (NULL != prev_row_
-              ? is_same_prefix(prev_row_, all_exprs, i)
-              : is_same_prefix(all_exprs, 0, i)) {
+          bool is_same = false;
+          if (NULL != prev_row_ && OB_FAIL(is_same_prefix(prev_row_, all_exprs, i, is_same))) {
+            LOG_WARN("check same prefix failed", K(ret));
+          } else if (NULL == prev_row_ && OB_FAIL(is_same_prefix(all_exprs, 0, i, is_same))) {
+            LOG_WARN("check same prefix failed", K(ret));
+          } else if (is_same) {
             selector_[selector_size_++] = i;
           } else {
             if (0 == selector_size_) {
@@ -2667,7 +2704,10 @@ int ObPrefixSortImpl::fetch_rows_batch(const common::ObIArray<ObExpr *> &all_exp
           continue;
         }
         if (new_prefix >= 0) {
-          if (!is_same_prefix(all_exprs, new_prefix, i)) {
+          bool is_same = false;
+          if (OB_FAIL(is_same_prefix(all_exprs, new_prefix, i, is_same))) {
+            LOG_WARN("check same prefix failed", K(ret));
+          } else if (!is_same) {
             if (OB_FAIL(add_immediate_prefix(all_exprs))) {
               LOG_WARN("add immediate prefix failed", K(ret));
             } else {
@@ -2795,12 +2835,15 @@ int ObUniqueSortImpl::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
                                   : stored_rows_[nth_row - 1]->cells();
           const ObDatum *rcells = cur_row->cells();
           int cmp = 0;
-          for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+          for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < sort_cmp_funs_->count(); i++) {
             const int64_t idx = sort_collations_->at(i).field_idx_;
-            cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
+            if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+              LOG_WARN("compare failed", K(ret));
+            }
           }
           LOG_DEBUG("debug cmp unique key", K(cmp));
-          if (0 == cmp) {
+          if (OB_FAIL(ret)) {
+          } else if (0 == cmp) {
           } else {
             free_prev_row();
             if (nth_row != tmp_read_rows) {
@@ -2850,9 +2893,11 @@ int ObUniqueSortImpl::get_next_row(const common::ObIArray<ObExpr*> &exprs)
         const ObDatum *lcells = prev_row_->cells();
         const ObDatum *rcells = sr->cells();
         int cmp = 0;
-        for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+        for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < sort_cmp_funs_->count(); i++) {
           const int64_t idx = sort_collations_->at(i).field_idx_;
-          cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
+          if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+            LOG_WARN("compare failed", K(ret));
+          }
         }
         if (0 == cmp) {
           continue;
@@ -2884,9 +2929,11 @@ int ObUniqueSortImpl::get_next_stored_row(const ObChunkDatumStore::StoredRow *&s
         const ObDatum *lcells = prev_row_->cells();
         const ObDatum *rcells = sr->cells();
         int cmp = 0;
-        for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+        for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < sort_cmp_funs_->count(); i++) {
           const int64_t idx = sort_collations_->at(i).field_idx_;
-          cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
+          if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+            LOG_WARN("compare failed", K(ret));
+          }
         }
         if (0 == cmp) {
           continue;

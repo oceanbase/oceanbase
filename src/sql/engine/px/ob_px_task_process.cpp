@@ -134,8 +134,6 @@ int ObPxTaskProcess::process()
   ObSQLSessionInfo *session = (NULL == arg_.exec_ctx_
                                ? NULL
                                : arg_.exec_ctx_->get_my_session());
-  const bool enable_perf_event = lib::is_diagnose_info_enabled();
-  bool enable_sql_audit = GCONF.enable_sql_audit;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session is NULL", K(ret));
@@ -143,6 +141,10 @@ int ObPxTaskProcess::process()
     LOG_WARN("store query string to session failed", K(ret));
   } else {
     // 设置诊断功能环境
+    const bool enable_perf_event = lib::is_diagnose_info_enabled();
+    const bool enable_sql_audit =
+        GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
+    ObAuditRecordData &audit_record = session->get_raw_audit_record();
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     ObSessionStatEstGuard stat_est_guard(session->get_effective_tenant_id(), session->get_sessid());
@@ -161,23 +163,33 @@ int ObPxTaskProcess::process()
 
     ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
     ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
-    enable_sql_audit = enable_sql_audit && session->get_local_ob_enable_sql_audit();
+
     if (enable_perf_event) {
-      if (enable_sql_audit) {
-        exec_record.record_start();
-      }
-      exec_start_timestamp_ = enqueue_timestamp_;
+      exec_record.record_start();
     }
+
+    //监控项统计开始
+    exec_start_timestamp_ = enqueue_timestamp_;
+
     if (OB_FAIL(do_process())) {
       LOG_WARN("failed to process", K(get_tenant_id()), K(ret));
     }
 
+    //监控项统计结束
+    exec_end_timestamp_ = ObTimeUtility::current_time();
+
+    // some statistics must be recorded for plan stat, even though sql audit disabled
+    record_exec_timestamp(true, exec_timestamp);
+    audit_record.exec_timestamp_ = exec_timestamp;
+    audit_record.exec_timestamp_.update_stage_time();
+
     if (enable_perf_event) {
-      exec_end_timestamp_ = ObTimeUtility::current_time();
-      if (enable_sql_audit) {
-        exec_record.record_end();
-      }
-      record_exec_timestamp(true, exec_timestamp);
+      exec_record.record_end();
+      exec_record.max_wait_event_ = max_wait_desc;
+      exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+      exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+      audit_record.exec_record_ = exec_record;
+      audit_record.update_event_stage_state();
     }
 
     if (enable_sql_audit) {
@@ -185,7 +197,6 @@ int ObPxTaskProcess::process()
       if ( OB_ISNULL(phy_plan)) {
         LOG_WARN("invalid argument", K(ret), K(phy_plan));
       } else {
-        ObAuditRecordData &audit_record = session->get_raw_audit_record();
         audit_record.try_cnt_++;
         audit_record.seq_ = 0;  //don't use now
         audit_record.status_ = (OB_SUCCESS == ret || common::OB_ITER_END == ret)
@@ -204,26 +215,16 @@ int ObPxTaskProcess::process()
         audit_record.affected_rows_ = 0;
         audit_record.return_rows_ = 0;
 
-        exec_record.max_wait_event_ = max_wait_desc;
-        exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-        exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-
         audit_record.plan_id_ =  phy_plan->get_plan_id();
         audit_record.plan_type_ =  phy_plan->get_plan_type();
         audit_record.is_executor_rpc_ = true;
         audit_record.is_inner_sql_ = session->is_inner();
         audit_record.is_hit_plan_cache_ = true;
         audit_record.is_multi_stmt_ = false;
-
-        audit_record.exec_timestamp_ = exec_timestamp;
-        audit_record.exec_record_ = exec_record;
-
-        //更新阶段累加时间
-        audit_record.update_stage_stat();
-
-        ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session);
+        audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       }
     }
+    ObSQLUtils::handle_audit_record(false, EXECUTE_DIST, *session);
   }
   release();
   ObActiveSessionGuard::get_stat().in_px_execution_ = false;
@@ -604,14 +605,13 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       input->set_sqc_id(sqc_id_);
       input->set_dfo_id(dfo_id_);
     }
-  } else if (IS_PX_BLOOM_FILTER(op.get_type())) {
+  } else if (IS_PX_JOIN_FILTER(op.get_type())) {
     ObJoinFilterSpec *filter_spec = reinterpret_cast<ObJoinFilterSpec *>(&op);
     if (OB_ISNULL(kit->input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator is NULL", K(ret), K(op.id_), KP(kit));
     } else {
       ObJoinFilterOpInput *input = static_cast<ObJoinFilterOpInput *>(kit->input_);
-      input->set_px_sequence_id(task_->px_int_id_.px_interrupt_id_.first_);
       if (!filter_spec->is_shared_join_filter()) {
         input->set_task_id(task_id_);
       }

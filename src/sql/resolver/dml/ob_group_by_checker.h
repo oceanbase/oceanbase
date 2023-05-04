@@ -27,11 +27,13 @@ public:
   ObGroupByChecker(const ParamStore *param_store,
                    ObIArray<ObRawExpr*> *group_by_exprs,
                    ObIArray<ObRawExpr*> *rollup_exprs = nullptr,
+                   ObIArray<ObRawExpr*> *cube_exprs = nullptr,
                    ObIArray<ObGroupbyExpr> *groupby_exprs = nullptr)
     : ObRawExprVisitor(),
       level_(-1),
       group_by_exprs_(group_by_exprs),
       rollup_exprs_(rollup_exprs),
+      cube_exprs_(cube_exprs),
       grouping_sets_exprs_(groupby_exprs),
       cur_stmts_(),
       skip_expr_(nullptr),
@@ -71,6 +73,7 @@ private:
   int64_t level_;
   ObIArray<ObRawExpr*> *group_by_exprs_;
   ObIArray<ObRawExpr*> *rollup_exprs_;
+  ObIArray<ObRawExpr*> *cube_exprs_;
   ObIArray<ObGroupbyExpr> *grouping_sets_exprs_;
   ObArray<const ObSelectStmt*> cur_stmts_;
   ObRawExpr *skip_expr_;
@@ -90,6 +93,7 @@ private:
   void set_query_ctx(ObQueryCtx *query_ctx) { query_ctx_ = query_ctx; }
   bool find_in_group_by(ObRawExpr &expr);
   bool find_in_rollup(ObRawExpr &expr);
+  bool find_in_cube(ObRawExpr &expr);
   bool find_in_grouping_sets(ObRawExpr &expr);
   int add_abs_equal_constraint_in_grouping_sets(ObConstRawExpr &expr);
   bool check_obj_abs_equal(const ObObj &obj1, const ObObj &obj2);

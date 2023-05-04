@@ -118,10 +118,11 @@ bool ObDatumRowCompare::operator()(
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();
     int cmp = 0;
-    for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < sort_cmp_funs_->count(); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
-      cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
-      if (cmp < 0) {
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp < 0) {
         cmp_ret = !sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
         cmp_ret = sort_collations_->at(i).is_ascending_;
@@ -175,10 +176,11 @@ bool ObMaxDatumRowCompare::operator()(
     const ObDatum *lcells = l->cells();
     const ObDatum *rcells = r->cells();
     int cmp = 0;
-    for (int64_t i = 0; 0 == cmp && i < sort_cmp_funs_->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && 0 == cmp && i < sort_cmp_funs_->count(); i++) {
       const int64_t idx = sort_collations_->at(i).field_idx_;
-      cmp = sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx]);
-      if (cmp < 0) {
+      if (OB_FAIL(sort_cmp_funs_->at(i).cmp_func_(lcells[idx], rcells[idx], cmp))) {
+        LOG_WARN("failed to compare", K(ret));
+      } else if (cmp < 0) {
         cmp_ret = !sort_collations_->at(i).is_ascending_;
       } else if (cmp > 0) {
         cmp_ret = sort_collations_->at(i).is_ascending_;

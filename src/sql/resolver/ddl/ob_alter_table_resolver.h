@@ -36,9 +36,10 @@ typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper,
 
 class ObAlterTableResolver : public ObDDLResolver
 {
-  static const int64_t ALTER_TABLE_NODE_COUNT = 2;
+  static const int64_t ALTER_TABLE_NODE_COUNT = 3;
   static const int64_t TABLE = 0;         // 0. table_node
   static const int64_t ACTION_LIST = 1;   // 1. alter table action list
+  static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
   virtual ~ObAlterTableResolver();
@@ -79,6 +80,8 @@ public:
   int resolve_modify_all_trigger(const ParseNode &node);
   int resolve_set_interval(ObAlterTableStmt *stmt, const ParseNode &node);
 
+  int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, const AlterColumnSchema &column_schema);
+
 private:
   int check_dup_foreign_keys_exist(
       share::schema::ObSchemaGetterGuard *schema_guard,
@@ -88,7 +91,8 @@ private:
   int resolve_index_column_list(const ParseNode &node,
                                 obrpc::ObCreateIndexArg &index_arg,
                                 const int64_t index_name_value,
-                                ObIArray<ObString> &input_index_columns_name);
+                                ObIArray<ObString> &input_index_columns_name,
+                                bool &cnt_func_index);
 
   int add_sort_column(const obrpc::ObColumnSortItem &sort_column,
                       obrpc::ObCreateIndexArg &index_arg);

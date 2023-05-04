@@ -33,6 +33,11 @@ public:
   {
     return common::murmurhash(&user_id_, sizeof(user_id_), tenant_id_);
   };
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  };
   int compare(const ObTenantUserKey& r) const
   {
     int cmp = 0;

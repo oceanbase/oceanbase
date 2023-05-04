@@ -259,7 +259,14 @@ int ObVariableSetExecutor::execute(ObExecContext &ctx, ObVariableSetStmt &stmt)
                           "Compatibility mode be changed not in session scope");
                 }
               } else {}
-                
+
+              if (OB_SUCC(ret) && 0 == set_var.var_name_.case_compare(OB_SV_ENABLE_SHOW_TRACE)) {
+                // if set enable show trace, resend control info
+                if (OB_NOT_NULL(ctx.get_my_session())) {
+                  ctx.get_my_session()->set_send_control_info(false);
+                }
+              }
+
               if (OB_SUCC(ret) && 0 == set_var.var_name_.case_compare(OB_SV_SECURE_FILE_PRIV)) {
                 ObAddr addr = OBSERVER.get_self();
                 char buf[MAX_IP_ADDR_LENGTH + 1];

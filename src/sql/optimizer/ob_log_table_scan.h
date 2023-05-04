@@ -53,7 +53,6 @@ public:
         limit_count_expr_(NULL),
         limit_offset_expr_(NULL),
         sample_info_(),
-        parallel_(-1),
         est_cost_info_(NULL),
         table_row_count_(0),
         output_row_count_(0),
@@ -75,10 +74,12 @@ public:
         use_batch_(false),
         access_path_(NULL),
         tablet_id_expr_(NULL),
+        tablet_id_type_(0),
         calc_part_id_expr_(NULL),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
-        has_index_lookup_filter_(false)
+        has_index_lookup_filter_(false),
+        table_type_(share::schema::MAX_TABLE_TYPE)
   {
   }
 
@@ -248,6 +249,12 @@ public:
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
   { return ddl_output_column_ids_; }
 
+  inline common::ObIArray<ObRawExpr *> &get_ext_file_column_exprs()
+  { return ext_file_column_exprs_; }
+
+  inline common::ObIArray<ObRawExpr *> &get_ext_column_convert_exprs()
+  { return ext_column_convert_exprs_; }
+
   ObRawExpr* get_real_expr(const ObRawExpr *col) const;
   /**
    *  Get pushdown aggr expressions
@@ -276,8 +283,7 @@ public:
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
 
 
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int re_est_cost(EstimateCostInfo &param, double &card, double &index_back_cost, double &cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx);
@@ -414,10 +420,14 @@ public:
   inline const AccessPath* get_access_path() const { return access_path_; }
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *expr) { tablet_id_expr_ = expr; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() const { return tablet_id_expr_; }
+  void set_tablet_id_type(int64_t type) { tablet_id_type_ = type; }
+  int64_t get_tablet_id_type() const { return tablet_id_type_; }
   const common::ObIArray<ObRawExpr*> &get_rowkey_exprs() const { return rowkey_exprs_; }
   const common::ObIArray<ObRawExpr*> &get_part_exprs() const { return part_exprs_; }
   inline const ObRawExpr *get_calc_part_id_expr() const { return calc_part_id_expr_; }
   int init_calc_part_id_expr();
+  void set_table_type(share::schema::ObTableType table_type) { table_type_ = table_type; }
+  share::schema::ObTableType get_table_type() const { return table_type_; }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   int get_plan_object_info(PlanText &plan_text,
@@ -441,6 +451,7 @@ public:
                                       uint64_t scan_table_id);
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
+  int extract_file_column_exprs_recursively(ObRawExpr *expr);
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -491,6 +502,9 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
+  //for external table
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
   // for oracle-mapping, map access expr to a real column expr
   common::ObArray<std::pair<ObRawExpr *, ObRawExpr *>, common::ModulePageAllocator, true> real_expr_map_;
   // aggr func pushdwon to table scan
@@ -513,7 +527,6 @@ protected: // memeber variables
   ObRawExpr *limit_offset_expr_;
   // 记录该表是否采样、采样方式、比例等信息
   SampleInfo sample_info_;
-  int64_t parallel_; // -1 means not set. used for showing table parallel hint
   ObCostTableScanInfo *est_cost_info_;
   /* only used to remember how index are selected */
   int64_t table_row_count_;
@@ -547,6 +560,9 @@ protected: // memeber variables
   bool use_batch_;
   AccessPath *access_path_;
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
+  // decide tablet_id_expr should reture which id
+  // 0 for tablet id, 1 for logical part id, 2 for logical subpart id
+  int64_t tablet_id_type_;
   ObRawExpr *calc_part_id_expr_;
 
   // begin for global index lookup
@@ -555,6 +571,7 @@ protected: // memeber variables
   bool has_index_lookup_filter_;
   // end for global index lookup
 
+  share::schema::ObTableType table_type_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

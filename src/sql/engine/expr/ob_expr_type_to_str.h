@@ -30,10 +30,10 @@ class ObExprTypeToStr : public ObFuncExprOperator
   OB_UNIS_VERSION_V(1);
 public:
     ObExprTypeToStr(common::ObIAllocator &alloc, ObExprOperatorType type,
-                    const char *name, int32_t param_num, int32_t dimension,
+                    const char *name, int32_t param_num, ObValidForGeneratedColFlag valid_for_generated_col, int32_t dimension,
                     bool is_internal_for_mysql = false,
                     bool is_internal_for_oracle = false)
-      : ObFuncExprOperator(alloc, type, name, param_num, dimension, is_internal_for_mysql, is_internal_for_oracle),
+      : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, dimension, is_internal_for_mysql, is_internal_for_oracle),
       alloc_(alloc), str_values_(alloc)
   {
     disable_operand_auto_cast();

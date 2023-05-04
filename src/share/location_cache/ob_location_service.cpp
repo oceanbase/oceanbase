@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "share/location_cache/ob_location_service.h"
+#include "share/inner_table/ob_inner_table_schema.h"
 
 namespace oceanbase
 {
@@ -246,6 +247,17 @@ int ObLocationService::vtable_get(
         K(table_id), K(expire_renew_time), K(is_cache_hit), K(locations));
   }
   return ret;
+}
+
+int ObLocationService::external_table_get(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObIArray<ObAddr> &locations)
+{
+  UNUSED(table_id);
+  bool is_cache_hit = false;
+  //using the locations from any distributed virtual table
+  return vtable_get(tenant_id, OB_ALL_VIRTUAL_PROCESSLIST_TID, 0, is_cache_hit, locations);
 }
 
 int ObLocationService::vtable_nonblock_renew(

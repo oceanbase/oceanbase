@@ -63,6 +63,7 @@ public:
   inline bool is_mini_task_type() const { return ob_job_id_.is_mini_task_type(); }
 
   inline int64_t hash() const { return ob_job_id_.hash() + task_id_; }
+  inline int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   inline bool equal(const ObTaskID &id) const
   {
     return id.ob_job_id_.equal(ob_job_id_) && id.task_id_ == task_id_;

@@ -35,7 +35,7 @@ inline uint64_t dispatch_hash(const K &key, TrueType)
 template <typename K>
 inline uint64_t do_hash(const K &key)
 {
-  return dispatch_hash(key, BoolType<HAS_MEMBER(K, hash)>());
+  return dispatch_hash(key, BoolType<HAS_HASH(K)>());
 }
 
 template <typename K>
@@ -48,13 +48,15 @@ inline uint64_t dispatch_hash(const K &key, uint64_t seed, FalseType)
 template <typename K>
 inline uint64_t dispatch_hash(const K &key, uint64_t seed, TrueType)
 {
-  return key.hash(seed);
+  uint64_t hash_val;
+  key.hash(hash_val, seed);
+  return hash_val;
 }
 
 template <typename K>
 inline uint64_t do_hash(const K &key, uint64_t seed)
 {
-  return dispatch_hash(key, seed, BoolType<HAS_MEMBER(K, hash)>());
+  return dispatch_hash(key, seed, BoolType<HAS_HASH(K)>());
 }
 
 template <typename K>

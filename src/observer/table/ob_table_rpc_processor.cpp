@@ -199,7 +199,7 @@ int ObTableLoginP::generate_credential(uint64_t tenant_id,
   } else {
     credential_.expire_ts_ = 0;
   }
-  credential_.hash_val_ = credential_.hash(user_token);
+  credential_.hash(credential_.hash_val_, user_token);
   int64_t pos = 0;
   if (OB_FAIL(serialization::encode(credential_buf_, CREDENTIAL_BUF_SIZE, pos, credential_))) {
     LOG_WARN("failed to serialize credential", K(ret), K(pos));
@@ -565,14 +565,11 @@ bool ObTableApiProcessorBase::need_audit() const
 
 void ObTableApiProcessorBase::start_audit(const rpc::ObRequest *req)
 {
-  audit_record_.exec_record_.record_start();
-  audit_record_.exec_timestamp_.before_process_ts_ = ObTimeUtility::current_time();
+
   if (OB_LIKELY(NULL != req)) {
     audit_record_.user_client_addr_ = RPC_REQ_OP.get_peer(req);
     audit_record_.trace_id_ = req->get_trace_id();
-    audit_record_.exec_timestamp_.rpc_send_ts_ = req->get_send_timestamp();
-    audit_record_.exec_timestamp_.receive_ts_ = req->get_receive_timestamp();
-    audit_record_.exec_timestamp_.enter_queue_ts_ = req->get_enqueue_timestamp();
+
     save_request_string();
     generate_sql_id();
   }
@@ -602,7 +599,6 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
 
 void ObTableApiProcessorBase::end_audit()
 {
-  audit_record_.exec_record_.record_end();
   // credential info
 //  audit_record_.server_addr_; // not necessary, because gv_sql_audit_iterator use local addr automatically
 //  audit_record_.client_addr_; // not used for now
@@ -691,23 +687,18 @@ void ObTableApiProcessorBase::end_audit()
   audit_record_.request_id_ = 0; // not used for table api
   audit_record_.seq_ = 0; // not used
   audit_record_.session_id_ = 0; // not used  for table api
-  audit_record_.exec_timestamp_.exec_type_ = RpcProcessor;
 
   const int64_t elapsed_time = common::ObTimeUtility::current_time() - audit_record_.exec_timestamp_.receive_ts_;
   if (elapsed_time > GCONF.trace_log_slow_query_watermark) {
     FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
   }
-  // update audit info and push
-  audit_record_.exec_timestamp_.net_t_ = audit_record_.exec_timestamp_.receive_ts_ - audit_record_.exec_timestamp_.rpc_send_ts_;
-  audit_record_.exec_timestamp_.net_wait_t_ = audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
-  audit_record_.update_stage_stat();
 
   MTL_SWITCH(credential_.tenant_id_) {
     obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
     if (nullptr == req_manager) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get request manager for current tenant", K(ret));
-    } else if (OB_FAIL(req_manager->record_request(audit_record_))) {
+    } else if (OB_FAIL(req_manager->record_request(audit_record_, true))) {
       if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
         LOG_DEBUG("cannot allocate mem for record", K(ret));
         ret = OB_SUCCESS;
@@ -785,8 +776,10 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
       audit_on_finish();
     }
   }
-  audit_record_.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-  audit_record_.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+  if (lib::is_diagnose_info_enabled()) {
+    audit_record_.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
+    audit_record_.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
+  }
   audit_record_.status_ = ret;
   return ret;
 }
@@ -834,15 +827,22 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template<class T>
 int ObTableRpcProcessor<T>::deserialize()
 {
-  if (need_audit()) {
-    audit_record_.exec_timestamp_.run_ts_ = ObTimeUtility::current_time();
-  }
+  audit_record_.exec_timestamp_.run_ts_ = ObTimeUtility::current_time();
   return RpcProcessor::deserialize();
 }
 
 template<class T>
 int ObTableRpcProcessor<T>::before_process()
 {
+  if (lib::is_diagnose_info_enabled()) {
+    audit_record_.exec_record_.record_start();
+  }
+  audit_record_.exec_timestamp_.before_process_ts_ = ObTimeUtility::current_time();
+  if (OB_LIKELY(NULL != RpcProcessor::req_)) {
+    audit_record_.exec_timestamp_.rpc_send_ts_ = RpcProcessor::req_->get_send_timestamp();
+    audit_record_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp();
+    audit_record_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp();
+  }
   if (need_audit()) {
     start_audit(RpcProcessor::req_);
   }
@@ -873,11 +873,11 @@ int ObTableRpcProcessor<T>::process()
 template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
+  const int64_t curr_time = ObTimeUtility::current_time();
+  audit_record_.exec_timestamp_.executor_end_ts_ = curr_time;
+  // timestamp of start get plan, no need for table_api, set euqal to process_executor_ts_
+  audit_record_.exec_timestamp_.single_process_ts_ = audit_record_.exec_timestamp_.process_executor_ts_;
   if (need_audit()) {
-    const int64_t curr_time = ObTimeUtility::current_time();
-    audit_record_.exec_timestamp_.executor_end_ts_ = curr_time;
-    // timestamp of start get plan, no need for table_api, set euqal to process_executor_ts_
-    audit_record_.exec_timestamp_.single_process_ts_ = audit_record_.exec_timestamp_.process_executor_ts_;
     const int64_t elapsed_us = curr_time - RpcProcessor::get_receive_timestamp();
     ObTableRpcProcessorUtil::record_stat(audit_record_, stat_event_type_, elapsed_us, audit_row_count_);
     // todo: distinguish hbase rows and ob rows.
@@ -900,6 +900,17 @@ template<class T>
 int ObTableRpcProcessor<T>::after_process(int error_code)
 {
   NG_TRACE(process_end); // print trace log if necessary
+  // some statistics must be recorded for plan stat, even though sql audit disabled
+  audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
+  audit_record_.exec_timestamp_.net_t_ =
+      audit_record_.exec_timestamp_.receive_ts_ - audit_record_.exec_timestamp_.rpc_send_ts_;
+  audit_record_.exec_timestamp_.net_wait_t_ =
+      audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
+  audit_record_.exec_timestamp_.update_stage_time();
+  if (lib::is_diagnose_info_enabled()) {
+    audit_record_.exec_record_.record_end();
+    audit_record_.update_event_stage_state();
+  }
   if (need_audit()) {
     end_audit();
   }

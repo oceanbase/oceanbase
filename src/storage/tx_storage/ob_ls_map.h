@@ -48,6 +48,7 @@ public:
   // allow_multi_true is used during replay
   int add_ls(ObLS &ls);
   int del_ls(const share::ObLSID &ls_id);
+  int get_all_ls_id(ObIArray<ObLSID> &ls_id_array);
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
              ObLSGetMod mod) const;

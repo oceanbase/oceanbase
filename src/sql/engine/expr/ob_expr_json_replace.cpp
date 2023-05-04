@@ -23,7 +23,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonReplace::ObExprJsonReplace(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_REPLACE, N_JSON_REPLACE, MORE_THAN_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_REPLACE, N_JSON_REPLACE, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

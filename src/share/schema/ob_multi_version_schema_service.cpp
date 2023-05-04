@@ -79,6 +79,7 @@ const char *ObMultiVersionSchemaService::print_refresh_schema_mode(const Refresh
 
 ObSchemaConstructTask::ObSchemaConstructTask()
 {
+  schema_tasks_.set_attr(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "SchemaTasks")));
   (void)pthread_mutex_init(&schema_mutex_, NULL);
   (void)pthread_cond_init(&schema_cond_, NULL);
 }
@@ -2195,19 +2196,33 @@ int ObMultiVersionSchemaService::async_refresh_schema(
                  && (!check_formal || ObSchemaService::is_formal_version(local_schema_version))) {
         // success
         break;
-      } else if (OB_ISNULL(GCTX.ob_service_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("observice is null", K(ret));
       } else {
-        if (0 != retry_cnt % 20) {
+        if (0 == retry_cnt % 20) {
           // try refresh schema each 2s
-        } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(
-                           tenant_id, schema_version))) {
-          if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to submit async refresh schema task",
-                     K(ret), K(tenant_id), K(schema_version));
+          {
+            bool is_dropped = false;
+            ObSchemaGetterGuard guard;
+            if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+              LOG_WARN("fail to get schema guard", KR(ret));
+            } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+              LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
+            } else if (is_dropped) {
+              ret = OB_TENANT_HAS_BEEN_DROPPED;
+              LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(GCTX.ob_service_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("observice is null", K(ret));
+          } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(
+                             tenant_id, schema_version))) {
+            if (OB_EAGAIN == ret || OB_SIZE_OVERFLOW == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to submit async refresh schema task",
+                       K(ret), K(tenant_id), K(schema_version));
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -3679,8 +3694,8 @@ int ObMultiVersionSchemaService::get_new_schema_version(uint64_t tenant_id, int6
 }
 
 int ObMultiVersionSchemaService::get_tenant_mem_info(
-    const uint64_t &tenant_id, 
-    common::ObIArray<ObSchemaMemory> &tenant_mem_infos) 
+    const uint64_t &tenant_id,
+    common::ObIArray<ObSchemaMemory> &tenant_mem_infos)
 {
   int ret = OB_SUCCESS;
   ObSchemaMemMgr *mem_mgr = NULL;
@@ -3697,19 +3712,19 @@ int ObMultiVersionSchemaService::get_tenant_mem_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mem_mgr is NULL", KR(ret), K(tenant_id));
   } else if (OB_FAIL(mem_mgr->get_all_alloc_info(tenant_mem_infos))) {
-    LOG_WARN("fail to get mem_mgr alloc info", KR(ret), K(tenant_id));   
+    LOG_WARN("fail to get mem_mgr alloc info", KR(ret), K(tenant_id));
   }
   return ret;
 }
 
 int ObMultiVersionSchemaService::get_tenant_slot_info(
-    common::ObIAllocator &allocator, 
-    const uint64_t &tenant_id, 
+    common::ObIAllocator &allocator,
+    const uint64_t &tenant_id,
     common::ObIArray<ObSchemaSlot> &tenant_slot_infos)
 {
   int ret = OB_SUCCESS;
   ObSchemaStore * schema_store = NULL;
-  
+
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
@@ -3735,7 +3750,7 @@ int ObMultiVersionSchemaService::get_schema_store_tenants(common::ObIArray<uint6
 
 bool ObMultiVersionSchemaService::check_schema_store_tenant_exist(const uint64_t &tenant_id) {
   bool exist = true;
-  ObSchemaStore* schema_store = NULL; 
+  ObSchemaStore* schema_store = NULL;
   if (OB_ISNULL(schema_store = schema_store_map_.get(tenant_id))) {
     exist = false;
   }

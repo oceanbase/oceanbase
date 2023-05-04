@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprSysPrivilegeCheck::ObExprSysPrivilegeCheck(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_SYS_PRIVILEGE_CHECK, N_SYS_PRIVILEGE_CHECK, 4, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_SYS_PRIVILEGE_CHECK, N_SYS_PRIVILEGE_CHECK, 4, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

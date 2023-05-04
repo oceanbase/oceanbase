@@ -71,19 +71,19 @@ struct Deep_Copy_EarlyStopCondition
 
 ObSAuditMgr::ObSAuditMgr()
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(local_allocator_),
-      audit_infos_(0, NULL, ObModIds::OB_SCHEMA_SECURITY_AUDIT),
-      audit_map_(ObModIds::OB_SCHEMA_SECURITY_AUDIT)
+      audit_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SECURITY_AUDIT)),
+      audit_map_(SET_USE_500(ObModIds::OB_SCHEMA_SECURITY_AUDIT))
 {
 }
 
 ObSAuditMgr::ObSAuditMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
       allocator_(allocator),
-      audit_infos_(0, NULL, ObModIds::OB_SCHEMA_SECURITY_AUDIT),
-      audit_map_(ObModIds::OB_SCHEMA_SECURITY_AUDIT)
+      audit_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SECURITY_AUDIT)),
+      audit_map_(SET_USE_500(ObModIds::OB_SCHEMA_SECURITY_AUDIT))
 {
 }
 

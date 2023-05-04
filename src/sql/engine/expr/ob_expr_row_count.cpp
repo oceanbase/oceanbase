@@ -21,7 +21,7 @@ namespace sql
 {
 
 ObExprRowCount::ObExprRowCount(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_ROW_COUNT, N_ROW_COUNT, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_ROW_COUNT, N_ROW_COUNT, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

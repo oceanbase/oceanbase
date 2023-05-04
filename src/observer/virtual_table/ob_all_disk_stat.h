@@ -45,7 +45,8 @@ private:
     USED_SIZE,
     FREE_SIZE,
     IS_DISK_VALID,
-    DISK_ERROR_BEGIN_TS
+    DISK_ERROR_BEGIN_TS,
+    ALLOCATED_SIZE
   };
   common::ObAddr *addr_;
   common::ObString ipstr_;
@@ -57,4 +58,3 @@ private:
 }
 }
 #endif /* OCEANBASE_OBSERVER_VIRTUAL_TABLE_OB_DISK_STAT_TABLE */
-

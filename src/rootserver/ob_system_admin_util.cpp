@@ -197,6 +197,12 @@ int ObAdminSwitchReplicaRole::execute(const ObAdminSwitchReplicaRoleArg &arg)
     LOG_WARN("get ls info from GCTX.lst_operator_ failed", K(arg), KR(ret), K(tenant_id));
   } else if (OB_FAIL(update_ls_election_reference_info_table(arg, tenant_id, ls_info))) {
     LOG_WARN("fail to update ls election reference info", K(arg), KR(ret), K(tenant_id));
+  } else {
+    int tmp_ret = OB_SUCCESS;//ignore ret
+    if (OB_TMP_FAIL(ObRootUtils::try_notify_switch_ls_leader(ctx_.rpc_proxy_, ls_info,
+          obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment::MANUAL_SWITCH))) {
+      LOG_WARN("failed to notify switch ls leader", KR(ret), K(ls_info));
+    }
   }
   LOG_INFO("switch leader done", KR(ret), K(arg), K(tenant_id), K(ls_info));
   return ret;
@@ -249,7 +255,7 @@ int ObAdminSwitchReplicaRole::get_tenants_of_zone(const ObZone &zone,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(zone),
         "tenant_id_set created", tenant_id_set.created(), KR(ret));
-  } else if (OB_FAIL(ctx_.server_mgr_->get_alive_servers(zone, server_array))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, server_array))) {
     LOG_WARN("get alive servers failed", K(zone), KR(ret));
   } else {
     FOREACH_CNT_X(server, server_array, OB_SUCCESS == ret) {
@@ -314,7 +320,7 @@ int ObAdminCallServer::get_server_list(const ObServerZoneArg &arg, ObIArray<ObAd
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (arg.server_.is_valid()) {
     bool is_alive = false;
-    if (OB_FAIL(ctx_.server_mgr_->check_server_alive(arg.server_, is_alive))) {
+    if (OB_FAIL(SVR_TRACER.check_server_alive(arg.server_, is_alive))) {
       LOG_WARN("fail to check server alive", KR(ret), "server", arg.server_);
     } else if (!is_alive) {
       ret = OB_INVALID_ARGUMENT;
@@ -329,7 +335,7 @@ int ObAdminCallServer::get_server_list(const ObServerZoneArg &arg, ObIArray<ObAd
     } else if (!zone_exist) {
       ret = OB_ZONE_INFO_NOT_EXIST;
       LOG_WARN("zone info not exist", KR(ret), K(arg.zone_));
-    } else if (OB_FAIL(ctx_.server_mgr_->get_alive_servers(arg.zone_, server_list))) {
+    } else if (OB_FAIL(SVR_TRACER.get_alive_servers(arg.zone_, server_list))) {
       LOG_WARN("get alive servers failed", KR(ret), K(arg));
     }
   }
@@ -468,6 +474,9 @@ int ObAdminReloadServer::execute()
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(ctx_.server_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx_.server_mgr_ is null", KR(ret), KP(ctx_.server_mgr_));
   } else if (OB_FAIL(ctx_.server_mgr_->load_server_manager())) {
     LOG_WARN("build server status failed", KR(ret));
   }
@@ -926,7 +935,7 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
           if (false == addr.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port))){
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("set addr fail", KR(ret), "svr_ip", svr_ip, K(svr_port));
-          } else if (OB_FAIL(ctx_.server_mgr_->is_server_exist(addr, is_server_exist))) {
+          } else if (OB_FAIL(SVR_TRACER.is_server_exist(addr, is_server_exist))) {
             LOG_WARN("check server exist fail", K(addr));
           } else if (!is_server_exist) {
             ret = OB_INVALID_ARGUMENT;
@@ -1489,10 +1498,7 @@ int ObAdminRollingUpgradeCmd::execute(const obrpc::ObAdminRollingUpgradeArg &arg
     } else if (obrpc::OB_UPGRADE_STAGE_POSTUPGRADE == arg.stage_) {
       // end rolling upgrade, should raise min_observer_version
       const char *min_obs_version_name = "min_observer_version";
-      if (OB_ISNULL(ctx_.server_mgr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("server_mgr is null", KR(ret));
-      } else if (OB_FAIL(ctx_.server_mgr_->get_min_server_version(min_server_version))) {
+      if (OB_FAIL(SVR_TRACER.get_min_server_version(min_server_version))) {
         LOG_WARN("failed to get the min server version", KR(ret));
       } else if (OB_FAIL(item.name_.assign(min_obs_version_name))) {
         LOG_WARN("assign min_observer_version config name failed",
@@ -1745,6 +1751,7 @@ int ObAdminRootInspection::execute(const obrpc::ObRunJobArg &arg)
 {
   int ret = OB_SUCCESS;
   LOG_INFO("execute root inspection request", K(arg));
+  ObAddr rs_addr;
   if (!ctx_.is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -1754,19 +1761,24 @@ int ObAdminRootInspection::execute(const obrpc::ObRunJobArg &arg)
   } else if (ROOT_INSPECTION != get_inner_job_value(arg.job_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("job to run not root inspection", K(arg), KR(ret));
-  } else if (!ctx_.server_mgr_->is_inited()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("server_mgr_ not inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.rs_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.rs_mgr_ is null", KR(ret), KP(GCTX.rs_mgr_));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("fail to get master root server", KR(ret));
+  } else if (OB_UNLIKELY(!rs_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rs_addr is invalid", KR(ret), K(rs_addr));
   } else if (!ctx_.root_inspection_->is_inited()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("root_inspection not inited", KR(ret));
   } else if (!arg.zone_.is_empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("root inspection can't execute by zone", K(arg), KR(ret));
-  } else if (arg.server_.is_valid() && arg.server_ != ctx_.server_mgr_->get_rs_addr()) {
+  } else if (arg.server_.is_valid() && arg.server_ != rs_addr) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("only rs can execute root inspection", K(arg),
-        "rs", ctx_.server_mgr_->get_rs_addr(), KR(ret));
+        "rs", rs_addr, KR(ret));
   } else if (OB_FAIL(ctx_.root_inspection_->check_all())) {
     LOG_WARN("root_inspection check_all failed", KR(ret));
   }
@@ -1884,13 +1896,12 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
     }
   } else {
     ObArray<uint64_t> pool_ids;
-    if (OB_ISNULL(ctx_.server_mgr_) || OB_ISNULL(ctx_.unit_mgr_)) {
+    if (OB_ISNULL(ctx_.unit_mgr_)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ctx_.server_mgr_), K(ctx_.unit_mgr_), KR(ret));
-    } else if (!ctx_.server_mgr_->has_build() || !ctx_.unit_mgr_->check_inner_stat()) {
+      LOG_WARN("invalid argument", K(ctx_.unit_mgr_), KR(ret));
+    } else if (!SVR_TRACER.has_build() || !ctx_.unit_mgr_->check_inner_stat()) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server manager or unit manager hasn't built",
-               "server_mgr built", ctx_.server_mgr_->has_build(),
                "unit_mgr built", ctx_.unit_mgr_->check_inner_stat(), KR(ret));
     } else if (OB_FAIL(ctx_.unit_mgr_->get_pool_ids_of_tenant(tenant_id, pool_ids))) {
       LOG_WARN("get_pool_ids_of_tenant failed", K(tenant_id), KR(ret));
@@ -1904,7 +1915,7 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
           for (int64_t j = 0; OB_SUCC(ret) && j < unit_infos.count(); ++j) {
             bool is_alive = false;
             const ObUnit &unit = unit_infos.at(j).unit_;
-            if (OB_FAIL(ctx_.server_mgr_->check_server_alive(unit.server_, is_alive))) {
+            if (OB_FAIL(SVR_TRACER.check_server_alive(unit.server_, is_alive))) {
               LOG_WARN("check_server_alive failed", "server", unit.server_, KR(ret));
             } else if (is_alive) {
               if (OB_FAIL(servers.push_back(unit.server_))) {
@@ -1913,7 +1924,7 @@ int ObTenantServerAdminUtil::get_tenant_servers(const uint64_t tenant_id, common
             }
             if (OB_SUCC(ret)) {
               if (unit.migrate_from_server_.is_valid()) {
-                if (OB_FAIL(ctx_.server_mgr_->check_server_alive(
+                if (OB_FAIL(SVR_TRACER.check_server_alive(
                     unit.migrate_from_server_, is_alive))) {
                   LOG_WARN("check_server_alive failed", "server",
                       unit.migrate_from_server_, KR(ret));
@@ -1937,10 +1948,7 @@ int ObTenantServerAdminUtil::get_all_servers(common::ObIArray<ObAddr> &servers)
 {
   int ret = OB_SUCCESS;
   ObZone empty_zone;
-  if (OB_ISNULL(ctx_.server_mgr_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ctx_.server_mgr_), KR(ret));
-  } else if (OB_FAIL(ctx_.server_mgr_->get_alive_servers(empty_zone, servers))){
+  if (OB_FAIL(SVR_TRACER.get_alive_servers(empty_zone, servers))) {
     //if zone is empty, get all servers
     LOG_WARN("fail to get all servers", KR(ret));
   }

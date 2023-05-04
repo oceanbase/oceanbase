@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprFromTz::ObExprFromTz(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_TZ, N_FROM_TZ, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_FROM_TZ, N_FROM_TZ, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

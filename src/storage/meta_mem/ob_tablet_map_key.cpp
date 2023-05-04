@@ -42,6 +42,12 @@ void ObTabletMapKey::reset()
   tablet_id_.reset();
 }
 
+int ObTabletMapKey::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 uint64_t ObTabletMapKey::hash() const
 {
   uint64_t hash_val = 0;

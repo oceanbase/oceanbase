@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprPrivSTBestsrid::ObExprPrivSTBestsrid(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_BESTSRID, N_PRIV_ST_BESTSRID, ONE_OR_TWO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_BESTSRID, N_PRIV_ST_BESTSRID, ONE_OR_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

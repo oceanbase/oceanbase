@@ -176,6 +176,12 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         } else if (1 == parse_tree.value_ && OB_ISNULL(index_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
+        } else if (table_schema_->is_external_table() !=
+                  (OB_NOT_NULL(parse_tree.children_[SPECIAL_TABLE_TYPE])
+                   && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
+          SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
         } else if (ObSchemaChecker::is_ora_priv_check()) {
           OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                                   session_info_->get_priv_user_id(),
@@ -528,6 +534,9 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
+      } else if (table_schema_->is_external_table()) {
+        alter_table_stmt->set_alter_external_table_type(action_node->type_);
+        OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
       } else {
         switch (action_node->type_) {
         //deal with alter table option
@@ -992,7 +1001,8 @@ int ObAlterTableResolver::resolve_drop_column_nodes_for_mysql(const ParseNode& n
 int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
                                                     obrpc::ObCreateIndexArg &index_arg,
                                                     const int64_t index_name_value,
-                                                    ObIArray<ObString> &input_index_columns_name)
+                                                    ObIArray<ObString> &input_index_columns_name,
+                                                    bool &cnt_func_index)
 {
   int ret = OB_SUCCESS;
   if (T_INDEX_COLUMN_LIST != node.type_ || node.num_child_ <= 0 ||
@@ -1003,6 +1013,7 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
     obrpc::ObColumnSortItem sort_item;
     //reset sort column set
     sort_column_array_.reset();
+    cnt_func_index = false;
     for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *sort_column_node = node.children_[i];
       if (OB_ISNULL(sort_column_node) ||
@@ -1016,6 +1027,11 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
         } else {
+          //if the type of node is not identifiter, the index is considered as a fuctional index
+          if (is_mysql_mode() && sort_column_node->children_[0]->type_ != T_IDENT) {
+            sort_item.is_func_index_ = true;
+            cnt_func_index = true;
+          }
           sort_item.column_name_.assign_ptr(sort_column_node->children_[0]->str_value_,
               static_cast<int32_t>(sort_column_node->children_[0]->str_len_));
         }
@@ -1040,7 +1056,7 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           bool is_explicit_order = (NULL != sort_column_node->children_[2]
               && 1 != sort_column_node->children_[2]->is_empty_);
           if (OB_FAIL(resolve_spatial_index_constraint(*table_schema_, sort_item.column_name_,
-              node.num_child_, index_name_value, is_explicit_order))) {
+              node.num_child_, index_name_value, is_explicit_order, sort_item.is_func_index_))) {
             SQL_RESV_LOG(WARN, "check spatial index constraint fail",K(ret),
                 K(sort_item.column_name_), K(node.num_child_));
           }
@@ -1069,6 +1085,20 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
             SQL_RESV_LOG(WARN, "add column name to input_index_columns_name failed",K(sort_item.column_name_), K(ret));
           }
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
+      uint64_t tenant_data_version = 0;
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
       }
     }
   }
@@ -1166,6 +1196,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
           obrpc::ObCreateIndexArg *create_index_arg = NULL;
           void *tmp_ptr = NULL;
           ObSEArray<ObString, 8> input_index_columns_name;
+          bool cnt_func_index = false;
           if (NULL == (tmp_ptr = (ObCreateIndexArg *)allocator_->alloc(
                   sizeof(obrpc::ObCreateIndexArg)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1178,7 +1209,8 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
             } else if (OB_FAIL(resolve_index_column_list(*column_list_node,
                                                          *create_index_arg,
                                                          node.value_,
-                                                         input_index_columns_name))) {
+                                                         input_index_columns_name,
+                                                         cnt_func_index))) {
               SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
             }
           }
@@ -1232,7 +1264,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 ret = OB_ERR_UNEXPECTED;
                 SQL_RESV_LOG(WARN, "size of index columns is less than 1", K(ret));
               } else {
-                ObString first_column_name = input_index_columns_name.at(0);
+                ObString first_column_name = cnt_func_index ? ObString::make_string("functional_index") : input_index_columns_name.at(0);
                 if (lib::is_oracle_mode()) {
                   if (OB_FAIL(ObTableSchema::create_cons_name_automatically(index_name, table_name_, *allocator_, CONSTRAINT_TYPE_UNIQUE_KEY, lib::is_oracle_mode()))) {
                     SQL_RESV_LOG(WARN, "create cons name automatically failed", K(ret));
@@ -1240,9 +1272,9 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                 } else { // mysql mode
                   if (OB_FAIL(generate_index_name(index_name, current_index_name_set_, first_column_name))) {
                     SQL_RESV_LOG(WARN, "failed to generate index name", K(first_column_name));
-                   }
-                 }
-                 if (OB_SUCC(ret)) {
+                  }
+                }
+                if (OB_SUCC(ret)) {
                   ObIndexNameHashWrapper index_key(index_name);
                   if (OB_FAIL(current_index_name_set_.set_refactored(index_key))) {
                     LOG_WARN("fail to push back current_index_name_set_", K(ret), K(index_name));
@@ -4154,6 +4186,28 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
+int ObAlterTableResolver::add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, const AlterColumnSchema &column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (column_schema.is_xmltype()) {
+    AlterColumnSchema hidden_blob;
+    hidden_blob.reset();
+    hidden_blob.alter_type_ = OB_DDL_ADD_COLUMN;
+    hidden_blob.set_data_type(ObLongTextType);
+    hidden_blob.set_nullable(column_schema.is_nullable());
+    hidden_blob.set_is_hidden(true);
+    hidden_blob.set_charset_type(CHARSET_BINARY);
+    hidden_blob.set_collation_type(CS_TYPE_BINARY);
+    hidden_blob.set_udt_set_id(1);
+    if (OB_FAIL(hidden_blob.set_column_name("SYS_NC"))) {
+      SQL_RESV_LOG(WARN, "failed to set column name", K(ret));
+    } else if (OB_FAIL(alter_table_stmt->add_column(hidden_blob))) {
+      SQL_RESV_LOG(WARN, "add column to table_schema failed", K(ret), K(hidden_blob));
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -4229,6 +4283,8 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node)
         if (OB_SUCC(ret)) {
           if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
+          } else if (OB_FAIL(add_udt_hidden_column(alter_table_stmt, alter_column_schema))) {
+            SQL_RESV_LOG(WARN, "Add alter udt hidden column schema failed!", K(ret));
           }
         }
       }

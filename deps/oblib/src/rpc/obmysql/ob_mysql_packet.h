@@ -159,6 +159,8 @@ union ObProxyCapabilityFlags
   bool is_session_var_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC
                                                         && is_ob_protocol_v2_support(); }
   bool is_weak_stale_feedback() const { return 1 == cap_flags_.OB_CAP_PROXY_WEAK_STALE_FEEDBACK; }
+  bool is_flt_show_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT
+                                                        && is_ob_protocol_v2_support(); }
 
   uint64_t capability_;
   struct CapabilityFlags
@@ -189,7 +191,8 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_NEW_EXTRA_INFO:              1;
     uint64_t OB_CAP_PROXY_SESSION_VAR_SYNC:            1;
     uint64_t OB_CAP_PROXY_WEAK_STALE_FEEDBACK:         1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 46;
+    uint64_t OB_CAP_PROXY_FULL_LINK_TRACING_EXT:       1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 45;
   } cap_flags_;
 };
 
@@ -339,10 +342,13 @@ public:
   // add key name
   static constexpr const char SYNC_SESSION_INFO[] = "sess_inf";
   static constexpr const char FULL_LINK_TRACE[] = "full_trc";
+  static constexpr const char OB_SESSION_INFO_VERI[] = "sess_ver";
+
 
   // def value
   ObString sync_sess_info_;
   ObString full_link_trace_;
+  ObString sess_info_veri_;
 
 public:
   Ob20ExtraInfo() : extra_len_(0), exist_trace_info_(false) {}
@@ -353,22 +359,31 @@ public:
     trace_info_.reset();
     sync_sess_info_.reset();
     full_link_trace_.reset();
+    sess_info_veri_.reset();
   }
   bool exist_sync_sess_info() { return !sync_sess_info_.empty(); }
   bool exist_full_link_trace() { return !full_link_trace_.empty(); }
+  bool exist_sess_info_veri() { return !sess_info_veri_.empty(); }
   ObString& get_sync_sess_info() { return sync_sess_info_; }
   ObString& get_full_link_trace() { return full_link_trace_; }
+  ObString& get_sess_info_veri() { return sess_info_veri_; }
   bool exist_sync_sess_info() const { return !sync_sess_info_.empty(); }
   bool exist_full_link_trace() const { return !full_link_trace_.empty(); }
+  bool exist_sess_info_veri() const { return !sess_info_veri_.empty(); }
   const ObString& get_sync_sess_info() const { return sync_sess_info_; }
   const ObString& get_full_link_trace() const { return full_link_trace_; }
-  bool exist_extra_info() {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
-  bool exist_extra_info() const {return !sync_sess_info_.empty() || !full_link_trace_.empty() || exist_trace_info_;}
+  const ObString& get_sess_info_veri() const { return sess_info_veri_; }
+  bool exist_extra_info() {return !sync_sess_info_.empty() || !full_link_trace_.empty()
+                            || !sess_info_veri_.empty() || exist_trace_info_;}
+  bool exist_extra_info() const {return !sync_sess_info_.empty() || !full_link_trace_.empty()
+                            || !sess_info_veri_.empty() || exist_trace_info_;}
   int assign(const Ob20ExtraInfo &other, char* buf, int64_t len);
-  int64_t get_total_len() {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
-  int64_t get_total_len() const {return trace_info_.length() + sync_sess_info_.length() + full_link_trace_.length();}
+  int64_t get_total_len() {return trace_info_.length() + sync_sess_info_.length() +
+                                full_link_trace_.length() + sess_info_veri_.length();}
+  int64_t get_total_len() const {return trace_info_.length() + sync_sess_info_.length() +
+                                full_link_trace_.length() + sess_info_veri_.length();}
   TO_STRING_KV(K_(extra_len), K_(exist_trace_info), K_(trace_info),
-               K_(sync_sess_info), K_(full_link_trace));
+               K_(sync_sess_info), K_(full_link_trace), K_(sync_sess_info));
 };
 
 typedef ObCommonKV<common::ObString, common::ObString> ObStringKV;
@@ -490,6 +505,7 @@ public:
                        can_reroute_pkt_(false),
                        is_weak_read_(false),
                        txn_free_route_(false),
+                       proxy_switch_route_(false),
                        extra_info_()
   {}
 
@@ -498,6 +514,7 @@ public:
       can_reroute_pkt_(false),
       is_weak_read_(false),
       txn_free_route_(false),
+      proxy_switch_route_(false),
       extra_info_()
   {}
 
@@ -515,6 +532,9 @@ public:
   inline void set_is_weak_read(const bool v) { is_weak_read_ = v; }
   inline bool is_weak_read() const { return is_weak_read_; }
 
+  inline void set_proxy_switch_route(const bool v) { proxy_switch_route_ = v; }
+  inline bool is_proxy_switch_route() const { return proxy_switch_route_; }
+
   inline void set_txn_free_route(const bool txn_free_route);
   inline bool txn_free_route() const;
 
@@ -530,6 +550,7 @@ public:
     can_reroute_pkt_ = false;
     is_weak_read_ = false;
     txn_free_route_ = false;
+    proxy_switch_route_ = false;
     extra_info_.reset();
   }
 
@@ -541,9 +562,11 @@ public:
     is_weak_read_ = other.is_weak_read_;
     txn_free_route_ = other.txn_free_route_;
     extra_info_ = other.extra_info_;
+    proxy_switch_route_ = other.proxy_switch_route_;
   }
 
-  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_, "weak_read", is_weak_read_);
+  TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_, "weak_read", is_weak_read_,
+            "txn_free_route_", txn_free_route_, "proxy_switch_route", proxy_switch_route_);
 protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;
 
@@ -554,6 +577,7 @@ private:
   bool can_reroute_pkt_;
   bool is_weak_read_;
   bool txn_free_route_;
+  bool proxy_switch_route_;
 public:
   Ob20ExtraInfo extra_info_;
 };

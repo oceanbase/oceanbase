@@ -3,6 +3,7 @@ ob_set_subtarget(ob_rootserver ALONE
   ob_root_service.cpp
   ddl_task/ob_ddl_redefinition_task.cpp
   ob_unit_manager.cpp
+  ob_heartbeat_service.cpp
 )
 
 ob_set_subtarget(ob_rootserver backup
@@ -54,6 +55,7 @@ ob_set_subtarget(ob_rootserver common
   ob_empty_server_checker.cpp
   ob_lost_replica_checker.cpp
   ob_server_manager.cpp
+  ob_server_zone_op_service.cpp
   ob_snapshot_info_manager.cpp
   ob_tablet_creator.cpp
   ob_tablet_drop.cpp
@@ -67,6 +69,7 @@ ob_set_subtarget(ob_rootserver common
   ob_zone_manager.cpp
   ob_zone_unit_provider.cpp
   ob_tenant_recovery_reportor.cpp
+  ob_standby_schema_refresh_trigger.cpp
   ob_tenant_info_loader.cpp
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp

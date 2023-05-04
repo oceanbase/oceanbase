@@ -351,7 +351,6 @@ TEST_F(TestOptimizer, scan_cost) {
   est_cost_info.table_meta_info_->table_rowkey_count_ = 3;
   est_cost_info.table_meta_info_->table_row_count_ = 100000;
   est_cost_info.table_meta_info_->part_count_ = 1;
-  est_cost_info.table_meta_info_->cost_est_type_ = OB_DEFAULT_STAT_EST;
   est_cost_info.index_meta_info_.index_part_size_ = OB_EST_DEFAULT_DATA_SIZE;
   est_cost_info.index_meta_info_.index_micro_block_size_ = 16384;
   est_cost_info.batch_type_ = common::ObSimpleBatch::T_SCAN;

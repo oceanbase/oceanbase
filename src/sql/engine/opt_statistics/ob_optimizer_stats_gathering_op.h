@@ -19,6 +19,7 @@
 #include "sql/engine/px/datahub/components/ob_dh_opt_stats_gather.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/stat/ob_basic_stats_estimator.h"
 #include "share/stat/ob_dbms_stats_executor.h"
@@ -59,7 +60,6 @@ public:
 class ObOptimizerStatsGatheringOp : public ObOperator
 {
 public:
-
   // store global/part/subpart part_id.
   struct PartIds {
     PartIds() : global_part_id_(common::OB_INVALID_ID),
@@ -84,9 +84,9 @@ public:
     ObOptTableStat *global_tab_stat_;
     ObOptTableStat *part_tab_stat_;
     ObOptTableStat *first_part_tab_stat_;
-    ObOptColumnStat *global_col_stat_;
-    ObOptColumnStat *part_col_stat_;
-    ObOptColumnStat *first_part_col_stat_;
+    ObOptOSGColumnStat *global_col_stat_;
+    ObOptOSGColumnStat *part_col_stat_;
+    ObOptOSGColumnStat *first_part_col_stat_;
   };
 
 public:
@@ -103,12 +103,11 @@ public:
   int on_piece_msg(const ObOptStatsGatherPieceMsg &piece_msg);
   // after dh receive all piece_msg, msg_end will be called.
   int msg_end();
-
+  inline const TabStatIndMap& get_tab_stat_map() const { return table_stats_map_;};
+  int get_col_stat_map(ColStatIndMap &col_stat_map);
 private:
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 100;
   void reuse_stats();
-  inline TabStatIndMap& get_tab_stat_map() { return table_stats_map_;};
-  inline ColStatIndMap& get_col_stat_map() { return column_stats_map_;};
 
   // set piece_msg's basic info, copy tab/column stats from stat_map to piece_msg's array.
   int build_piece_msg(ObOptStatsGatherPieceMsg &piece,
@@ -123,7 +122,6 @@ private:
                         PartIds &part_ids,
                         StatItems &all_stats,
                         int64_t &row_len);
-  int init_part_map();
   // generate stat_param that is used to write inner_table.
   int generate_stat_param(ObTableStatParam &param);
   int generate_part_ids(PartIds &part_ids);
@@ -132,14 +130,13 @@ private:
   int get_col_stats_by_partinfo(PartIds &part_ids, uint64_t column_id, StatItems &stat_item);
 
   // get stat by part_ids
-  int set_col_stats(StatItems &all_stat, common::ObObj &obj);
-  void set_col_stats_avg_len(StatItems &all_stats, int64_t avg_len);
+  int set_col_stats(StatItems &all_stat, ObDatum *datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int set_tab_stats(StatItems &all_stat, int64_t row_len);
 
   // get tab stat by key(tenant_id, table_id, partition_id), if NOT_EXISTS, alloc a new one.
   int get_tab_stat_by_key(ObOptTableStat::Key &key, ObOptTableStat *&tab_stat);
   // get tab stat by key(tenant_id, table_id, partition_id, column_id), if NOT_EXISTS, alloc a new one.
-  int get_col_stat_by_key(ObOptColumnStat::Key &key, ObOptColumnStat *&col_stat);
+  int get_col_stat_by_key(ObOptColumnStat::Key &key, ObOptOSGColumnStat *&osg_col_stat);
 
   int merge_tab_stat(ObOptTableStat *src_tab_stat);
   int merge_col_stat(ObOptColumnStat *src_col_stat);
@@ -151,14 +148,9 @@ private:
   uint64_t tenant_id_;
 
   TabStatIndMap table_stats_map_;
-  ColStatIndMap column_stats_map_;
+  OSGColStatIndMap osg_col_stats_map_;
 
-  // store all part information:
-  //     1. all part/subpart ids
-  //     2. the map between subpart_id and part_id.
-  //     3. the map tetween part_id and tablet_id.
   OSGPartMap part_map_;
-
   // ------- data struct for piece msg;
   ObOptStatsGatherPieceMsg piece_msg_;
   ObArenaAllocator arena_;

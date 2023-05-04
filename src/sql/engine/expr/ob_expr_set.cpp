@@ -31,7 +31,7 @@ namespace sql
 }
 
 ObExprSet::ObExprSet(ObIAllocator &alloc)
-  :ObFuncExprOperator(alloc, T_FUN_SYS_SET, N_SET, 1, NOT_ROW_DIMENSION)
+  :ObFuncExprOperator(alloc, T_FUN_SYS_SET, N_SET, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

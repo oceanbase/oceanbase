@@ -215,7 +215,8 @@ public:
                    LogStateMgr *state_mgr,
                    election::Election *election,
                    LogModeMgr *mode_mgr,
-                   LogReconfirm *reconfirm);
+                   LogReconfirm *reconfirm,
+                   LogPlugins *plugins);
   virtual void destroy();
 
   // require caller holds WLock in PalfHandleImpl
@@ -425,12 +426,14 @@ private:
                                      const LogConfigVersion &config_version,
                                      const int64_t conn_timeout_us,
                                      const bool force_remote_check,
+                                     const bool need_purge_throttling,
                                      LSN &max_flushed_end_lsn,
                                      bool &has_same_version,
                                      int64_t &last_slide_log_id) const;
   int sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
+                                  const bool need_purge_throttling,
                                   const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
                                   bool &added_member_has_new_version,
@@ -557,6 +560,7 @@ private:
   election::Election* election_;
   LogModeMgr *mode_mgr_;
   LogReconfirm *reconfirm_;
+  LogPlugins *plugins_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(LogConfigMgr);
 };

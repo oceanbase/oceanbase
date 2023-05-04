@@ -428,29 +428,6 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   PALF_LOG(INFO, "end exception_path");
 }
 
-class IOTaskCond : public LogIOTask {
-public:
-	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
-  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
-  {
-    PALF_LOG(INFO, "before cond_wait");
-    cond_.wait();
-    PALF_LOG(INFO, "after cond_wait");
-    return OB_SUCCESS;
-  };
-  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
-  {
-    return OB_SUCCESS;
-  }
-  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
-  int init(int64_t palf_id)
-  {
-    palf_id_ = palf_id;
-    return OB_SUCCESS;
-  };
-  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
-  ObCond cond_;
-};
 
 class IOTaskVerify : public LogIOTask {
 public:
@@ -463,6 +440,8 @@ public:
   virtual int after_consume_(IPalfEnvImpl *palf_env_impl) { return OB_SUCCESS; }
   virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
   virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
   int init(int64_t palf_id)
   {
     palf_id_ = palf_id;
@@ -485,7 +464,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_1, leader_idx_1, leader_1));
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx_1, palf_env));
 
-  LogIOWorker *log_io_worker = &palf_env->palf_env_impl_.log_io_worker_;
+  LogIOWorker *log_io_worker = &palf_env->palf_env_impl_.log_io_worker_wrapper_.user_log_io_worker_;
 
   int64_t prev_log_id_1 = 0;
   int64_t prev_has_batched_size = 0;

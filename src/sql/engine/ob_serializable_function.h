@@ -95,6 +95,8 @@ typedef void (*ser_eval_batch_function)(ObBatchEvalFuncTag &);
   OB_SFA_DATUM_NULLSAFE_STR_TEXT_CMP,            \
   OB_SFA_DATUM_NULLSAFE_JSON_CMP,                \
   OB_SFA_DATUM_NULLSAFE_GEO_CMP,                 \
+  OB_SFA_EXPR_UDT_BASIC_PART1,                   \
+  OB_SFA_EXPR_UDT_BASIC_PART2,                   \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

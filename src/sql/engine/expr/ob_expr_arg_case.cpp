@@ -25,7 +25,7 @@ namespace sql
 
 ObExprArgCase::ObExprArgCase(ObIAllocator &alloc)
     : ObExprOperator(alloc, T_OP_ARG_CASE,
-                     N_ARG_CASE, MORE_THAN_ONE, NOT_ROW_DIMENSION,
+                     N_ARG_CASE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                      INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE), need_cast_(true)
 {
   disable_operand_auto_cast();
@@ -131,7 +131,10 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
     int64_t val_type_count = param_num / 2;
     ObExprResType tmp_res_type;
     const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
-    if (OB_FAIL(aggregate_result_type_for_case(
+    if (lib::is_oracle_mode() && types_stack[0].is_xml_sql_type()) {
+      ret = OB_ERR_NO_ORDER_MAP_SQL;
+      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+    } else if (OB_FAIL(aggregate_result_type_for_case(
                   tmp_res_type,
                   types_stack,
                   cond_type_count,

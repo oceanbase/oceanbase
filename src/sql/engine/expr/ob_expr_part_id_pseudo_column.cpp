@@ -21,7 +21,7 @@ namespace sql
 using namespace oceanbase::common;
 
 ObExprPartIdPseudoColumn::ObExprPartIdPseudoColumn(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_PDML_PARTITION_ID, N_PDML_PARTITION_ID, 0, NOT_ROW_DIMENSION,
+  : ObFuncExprOperator(alloc, T_PDML_PARTITION_ID, N_PDML_PARTITION_ID, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                        INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE)
 {
   // do nothing

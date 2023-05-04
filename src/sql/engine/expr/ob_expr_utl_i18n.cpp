@@ -30,7 +30,7 @@ namespace sql
 // UTL_I18N.STRING_TO_RAW begin
 ObExprUtlI18nStringToRaw::ObExprUtlI18nStringToRaw(ObIAllocator &alloc)
     : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_STRING_TO_RAW, N_UTL_I18N_STRING_TO_RAW, 2,
-                           false, INTERNAL_IN_ORACLE_MODE)
+                           VALID_FOR_GENERATED_COL, false, INTERNAL_IN_ORACLE_MODE)
 {
 }
 
@@ -119,7 +119,7 @@ int ObExprUtlI18nStringToRaw::calc(
 
 // UTL_I18N.RAW_TO_CHAR begin
 ObExprUtlI18nRawToChar::ObExprUtlI18nRawToChar(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_RAW_TO_CHAR, N_UTL_I18N_RAW_TO_CHAR, 2,
+    : ObStringExprOperator(alloc, T_FUN_SYS_UTL_I18N_RAW_TO_CHAR, N_UTL_I18N_RAW_TO_CHAR, 2, VALID_FOR_GENERATED_COL,
                            false, INTERNAL_IN_ORACLE_MODE)
 {
 }

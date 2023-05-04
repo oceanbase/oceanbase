@@ -36,8 +36,9 @@ public:
   {}
   ~ObLogSubPlanFilter() {}
   virtual int est_cost() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double &first_child_card, double &op_cost);
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  // re est children cost and gather cost infos
+  int get_re_est_cost_infos(const EstimateCostInfo &param, ObIArray<ObBasicCostInfo> &cost_infos);
 
   inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
   {
@@ -76,6 +77,8 @@ public:
 
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
+
   bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
   bool is_my_exec_expr(const ObRawExpr *expr);
   bool is_my_onetime_expr(const ObRawExpr *expr);
@@ -85,8 +88,6 @@ public:
   virtual int inner_replace_op_exprs(
       const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>   >&to_replace_exprs) override;
 
-  // 从子节点中抽取估算代价相关的信息，存入children_cost_info中
-  int get_children_cost_info(double &first_child_refine_card, common::ObIArray<ObBasicCostInfo> &children_cost_info);
   void set_update_set(bool update_set)
   { update_set_ = update_set; }
   bool is_update_set() { return update_set_; }
@@ -132,6 +133,7 @@ public:
                                    EqualSets &input_esets,
                                    ObShardingInfo *&out_sharding);
 
+  virtual int compute_op_parallel_and_server_info() override;
 private:
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);

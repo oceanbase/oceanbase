@@ -32,6 +32,12 @@ uint64_t ObLSID::hash() const
   return id_;
 }
 
+int ObLSID::hash(uint64_t &hash_val) const
+{
+  hash_val = hash();
+  return OB_SUCCESS;
+}
+
 int ObLSID::serialize(char* buf, const int64_t buf_len, int64_t& pos) const
 {
   int ret = OB_SUCCESS;

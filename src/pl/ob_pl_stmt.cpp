@@ -3136,6 +3136,43 @@ int ObPLBlockNS::get_cursor_by_name(const ObExprResolveContext &ctx,
   return ret;
 }
 
+int ObPLBlockNS::expand_data_type_once(const ObUserDefinedType *user_type,
+                                      ObIArray<ObDataType> &types,
+                                      ObIArray<bool> *not_null_flags,
+                                      ObIArray<int64_t> *pls_ranges) const
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(user_type));
+  for (int64_t i = 0; OB_SUCC(ret) && i < user_type->get_member_count(); ++i) {
+    const ObPLDataType *member = user_type->get_member(i);
+    CK (OB_NOT_NULL(member));
+    if (OB_FAIL(ret)) {
+    } else if (member->is_obj_type()) {
+      CK (OB_NOT_NULL(member->get_data_type()));
+      OZ (types.push_back(*member->get_data_type()), i);
+      if (OB_NOT_NULL(not_null_flags)) {
+        OZ (not_null_flags->push_back(member->get_not_null()));
+      }
+      if (OB_NOT_NULL(pls_ranges)) {
+        ObPLIntegerRange range;
+        OZ (pls_ranges->push_back(member->is_pl_integer_type() ? member->get_range() : range.range_));
+      }
+    } else {
+      ObDataType ext_type;
+      ext_type.set_obj_type(ObExtendType);
+      OZ (types.push_back(ext_type), i);
+      if (OB_NOT_NULL(not_null_flags)) {
+        OZ (not_null_flags->push_back(false));
+      }
+      if (OB_NOT_NULL(pls_ranges)) {
+        ObPLIntegerRange range;
+        OZ (pls_ranges->push_back(range.range_));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLBlockNS::expand_data_type(const ObUserDefinedType *user_type,
                                   ObIArray<ObDataType> &types,
                                   ObIArray<bool> *not_null_flags,
@@ -3389,82 +3426,122 @@ int64_t ObPLBlockNS::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+
+  pl::ObPLDataType final_type;
+  pl::ObPLDataType pl_data_type;
+  // T_OBJ_ACCESS_REF expr, access obj type (not user defined type)
+  bool access_obj_type = false;
+  if (expr.is_obj_access_expr()) {
+    // case:
+    //   type num_table is table of number;
+    //   ...
+    //   num_table nums;
+    //   ...
+    //   fetch c_cursor into nums(1);
+    //
+    // We got `num(1)` by T_OBJ_ACCESS_REF expression for write. T_OBJ_ACCESS_REF return
+    // the address of ObObj by extend value in execution, so %expr's result type is set to
+    // ObExtendType. We get the obj type from final type of T_OBJ_ACCESS_REF here.
+    const auto &access_expr = static_cast<const ObObjAccessRawExpr &>(expr);
+    OZ(access_expr.get_final_type(final_type));
+    OX(access_obj_type = !final_type.is_user_type());
+    if (bulk_ && !access_obj_type && final_type.is_collection_type()) {
+      const pl::ObUserDefinedType *user_type = NULL;
+      OZ (ns.get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+      if (OB_SUCC(ret)) {
+        const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(user_type);
+        CK (OB_NOT_NULL(coll_type));
+        OX (final_type = coll_type->get_element_type());
+        OX(access_obj_type = !final_type.is_user_type());
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (expr.get_result_type().is_ext() && !access_obj_type) {
+    const pl::ObUserDefinedType *user_type = NULL;
+    if (expr.is_obj_access_expr()) {
+      // do nothing, %final_type already fetched
+    } else if (T_QUESTIONMARK == expr.get_expr_type()) {
+      CK (OB_NOT_NULL(ns.get_symbol_table()));
+      int64_t var_index = static_cast<const ObConstRawExpr&>(expr).get_value().get_int();
+      const ObPLVar *var = ns.get_symbol_table()->get_symbol(var_index);
+      CK (OB_NOT_NULL(var));
+      OX (final_type = var->get_pl_data_type());
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Invalid expr type used in INTO clause", K(expr), K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (final_type.is_cursor_type() || final_type.is_opaque_type()) {
+        ObDataType ext_type;
+        ext_type.set_obj_type(ObExtendType);
+        OZ (data_type_.push_back(ext_type));
+        OZ (not_null_flags_.push_back(false));
+        ObPLIntegerRange range;
+        OZ (pl_integer_ranges_.push_back(range.range_));
+        OX (pl_data_type.set_data_type(ext_type));
+        OX (pl_data_type.set_type(PL_OBJ_TYPE));
+        OZ (into_data_type_.push_back(pl_data_type));
+      } else {
+        if (final_type.is_type_record()) {
+          ObArray<ObDataType> basic_types;
+          ObArray<bool> not_null_flags;
+          ObArray<int64_t> pls_ranges;
+          is_type_record_ = true;
+          OZ (ns.get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
+          CK (OB_NOT_NULL(user_type));
+          // 只能展一层
+          OZ (ns.expand_data_type_once(user_type, basic_types, &not_null_flags, &pls_ranges));
+          OZ (append(data_type_, basic_types));
+          OZ (append(not_null_flags_, not_null_flags));
+          OZ (append(pl_integer_ranges_, pls_ranges));
+        } else {
+          ObDataType ext_type;
+          ObDataType type;
+          ObPLIntegerRange range;
+          ext_type.set_obj_type(ObExtendType);
+          OZ (data_type_.push_back(ext_type));
+          OZ (not_null_flags_.push_back(false));
+          OZ (pl_integer_ranges_.push_back(range.range_));
+        }
+        OZ (into_data_type_.push_back(final_type));
+      }
+    }
+  } else {
+    ObDataType type;
+    ObPLIntegerRange range;
+    bool flag = false;
+    if (access_obj_type) {
+      type.set_meta_type(final_type.get_data_type()->get_meta_type());
+      type.set_accuracy(final_type.get_data_type()->get_accuracy());
+    } else {
+      type.set_meta_type(expr.get_result_type().get_obj_meta());
+      type.set_accuracy(expr.get_result_type().get_accuracy());
+    }
+    OZ (calc_type_constraint(expr, ns, flag, range), expr);
+    OZ (data_type_.push_back(type), type);
+    OZ (not_null_flags_.push_back(flag), type, flag);
+    OZ (pl_integer_ranges_.push_back(range.range_));
+    OX (pl_data_type.set_data_type(type));
+    OX (pl_data_type.set_type(PL_OBJ_TYPE));
+    OZ (into_data_type_.push_back(pl_data_type));
+  }
+
+  return ret;
+}
+
 int ObPLInto::add_into(int64_t idx, ObPLBlockNS &ns, const ObRawExpr &expr)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(into_.push_back(idx))) {
     LOG_WARN("Failed to add into", K(idx), K(ret));
   } else {
-    pl::ObPLDataType final_type;
-    // T_OBJ_ACCESS_REF expr, access obj type (not user defined type)
-    bool access_obj_type = false;
-    if (expr.is_obj_access_expr()) {
-      // case:
-      //   type num_table is table of number;
-      //   ...
-      //   num_table nums;
-      //   ...
-      //   fetch c_cursor into nums(1);
-      //
-      // We got `num(1)` by T_OBJ_ACCESS_REF expression for write. T_OBJ_ACCESS_REF return
-      // the address of ObObj by extend value in execution, so %expr's result type is set to
-      // ObExtendType. We get the obj type from final type of T_OBJ_ACCESS_REF here.
-      const auto &access_expr = static_cast<const ObObjAccessRawExpr &>(expr);
-      OZ(access_expr.get_final_type(final_type));
-      OX(access_obj_type = !final_type.is_user_type());
-    }
-    if (OB_FAIL(ret)) {
-    } else if (expr.get_result_type().is_ext() && !access_obj_type) {
-      const pl::ObUserDefinedType *user_type = NULL;
-      if (expr.is_obj_access_expr()) {
-        // do nothing, %final_type already fetched
-      } else if (T_QUESTIONMARK == expr.get_expr_type()) {
-        CK (OB_NOT_NULL(ns.get_symbol_table()));
-        int64_t var_index = static_cast<const ObConstRawExpr&>(expr).get_value().get_int();
-        const ObPLVar *var = ns.get_symbol_table()->get_symbol(var_index);
-        CK (OB_NOT_NULL(var));
-        OX (final_type = var->get_pl_data_type());
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("Invalid expr type used in INTO clause", K(idx), K(expr), K(ret));
-      }
-
-      if (OB_SUCC(ret)) {
-        if (final_type.is_cursor_type() || final_type.is_opaque_type()) {
-          ObDataType ext_type;
-          ext_type.set_obj_type(ObExtendType);
-          OZ (data_type_.push_back(ext_type));
-          OZ (not_null_flags_.push_back(false));
-          ObPLIntegerRange range;
-          OZ (pl_integer_ranges_.push_back(range.range_));
-        } else {
-          ObArray<ObDataType> basic_types;
-          ObArray<bool> not_null_flags;
-          ObArray<int64_t> pls_ranges;
-          OZ (ns.get_pl_data_type_by_id(final_type.get_user_type_id(), user_type));
-          CK (OB_NOT_NULL(user_type));
-          OZ (ns.expand_data_type(user_type, basic_types, &not_null_flags, &pls_ranges));
-          OZ (append(data_type_, basic_types));
-          OZ (append(not_null_flags_, not_null_flags));
-          OZ (append(pl_integer_ranges_, pls_ranges));
-        }
-      }
-    } else {
-      ObDataType type;
-      ObPLIntegerRange range;
-      bool flag = false;
-      if (access_obj_type) {
-        type.set_meta_type(final_type.get_data_type()->get_meta_type());
-        type.set_accuracy(final_type.get_data_type()->get_accuracy());
-      } else {
-        type.set_meta_type(expr.get_result_type().get_obj_meta());
-        type.set_accuracy(expr.get_result_type().get_accuracy());
-      }
-      OZ (calc_type_constraint(expr, ns, flag, range), expr);
-      OZ (data_type_.push_back(type), type);
-      OZ (not_null_flags_.push_back(flag), type, flag);
-      OZ (pl_integer_ranges_.push_back(range.range_));
-    }
+    OZ (generate_into_variable_info(ns, expr));
   }
   return ret;
 }
@@ -3596,9 +3673,7 @@ int ObPLInto::check_into(ObPLFunctionAST &func, ObPLBlockNS &ns, bool is_bulk)
       }
     }
   }
-  if (OB_SUCC(ret) && is_bulk) {
-    set_bulk();
-  }
+
   return ret;
 }
 
@@ -4358,6 +4433,13 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
     }
   }
     break;
+  case PL_CASE: {
+    stmt = static_cast<ObPLStmt *>(allocator_.alloc(sizeof(ObPLCaseStmt)));
+    if (NULL != stmt) {
+      stmt = new(stmt)ObPLCaseStmt(allocator_);
+    }
+  }
+    break;
   default:{
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected stmt type", K(ret), K(type));
@@ -4518,6 +4600,10 @@ int ObPLTrimStmt::accept(ObPLStmtVisitor &visitor) const
   return visitor.visit(*this);
 }
 int ObPLDoStmt::accept(ObPLStmtVisitor &visitor) const
+{
+  return visitor.visit(*this);
+}
+int ObPLCaseStmt::accept(ObPLStmtVisitor &visitor) const
 {
   return visitor.visit(*this);
 }

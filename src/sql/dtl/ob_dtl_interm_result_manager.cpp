@@ -16,6 +16,7 @@
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_msg_type.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -187,11 +188,11 @@ ObDTLIntermResultManager &ObDTLIntermResultManager::getInstance()
 int ObDTLIntermResultManager::init()
 {
   int ret = OB_SUCCESS;
+  auto attr = SET_USE_500("HashBuckDTLINT");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(map_.create(BUCKET_NUM,
-        "HashBuckDTLINT",
-        "HashNodeDTLINT"))) {
+                                 attr, attr))) {
     LOG_WARN("create hash table failed", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer, gc_,
       ObDTLIntermResultGC::REFRESH_INTERVAL, true))) {
@@ -300,13 +301,17 @@ void ObDTLIntermResultManager::free_interm_result_info(ObDTLIntermResultInfo *re
   }
 }
 
-int ObDTLIntermResultManager::erase_interm_result_info(ObDTLIntermResultKey &key)
+int ObDTLIntermResultManager::erase_interm_result_info(ObDTLIntermResultKey &key,
+    bool need_unregister_check_item_from_dm)
 {
   int ret = OB_SUCCESS;
   ObDTLIntermResultInfo *result_info = NULL;
   if (OB_FAIL(map_.erase_refactored(key, &result_info))) {
     LOG_TRACE("fail to get row store in result manager", K(key), K(ret));
   } else {
+    if (need_unregister_check_item_from_dm) {
+      ObDetectManagerUtils::intern_result_unregister_check_item_from_dm(result_info);
+    }
     dec_interm_result_ref_count(result_info);
   }
   return ret;
@@ -492,6 +497,16 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
         LOG_WARN("fail to init buffer", K(ret));
       } else if (OB_FAIL(ObDTLIntermResultManager::getInstance().insert_interm_result_info(key, result_info_guard.result_info_))) {
         LOG_WARN("fail to insert row store", K(ret));
+      } else {
+        int reg_dm_ret = ObDetectManagerUtils::single_dfo_register_check_item_into_dm(
+            buffer.get_register_dm_info(), key, result_info_guard.result_info_);
+        if (OB_SUCCESS != reg_dm_ret) {
+          LOG_WARN("[DM] single dfo fail to register_check_item_into_dm",
+                   K(reg_dm_ret), K(buffer.get_register_dm_info()), K(key));
+        }
+        LOG_TRACE("register_check_item_into_dm", K(reg_dm_ret),
+            K(buffer.get_register_dm_info()), K(key),
+            K(result_info_guard.result_info_->unregister_dm_info_.node_sequence_id_));
       }
     }
   }

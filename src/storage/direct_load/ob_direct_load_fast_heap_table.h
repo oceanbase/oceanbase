@@ -7,6 +7,7 @@
 #include "common/ob_tablet_id.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 
 namespace oceanbase
 {
@@ -23,7 +24,7 @@ public:
 public:
   common::ObTabletID tablet_id_;
   int64_t row_count_;
-  common::ObArray<common::ObOptColumnStat*> *column_stat_array_;
+  common::ObArray<common::ObOptOSGColumnStat*> *column_stat_array_;
 };
 
 struct ObDirectLoadFastHeapTableMeta
@@ -39,7 +40,7 @@ public:
   ObDirectLoadFastHeapTable();
   virtual ~ObDirectLoadFastHeapTable();
   int init(const ObDirectLoadFastHeapTableCreateParam &param);
-  const common::ObIArray<ObOptColumnStat*> &get_column_stat_array() const
+  const common::ObIArray<ObOptOSGColumnStat*> &get_column_stat_array() const
   {
     return column_stat_array_;
   }
@@ -53,7 +54,7 @@ private:
 private:
   ObDirectLoadFastHeapTableMeta meta_;
   common::ObArenaAllocator allocator_;
-  common::ObArray<common::ObOptColumnStat*> column_stat_array_;
+  common::ObArray<common::ObOptOSGColumnStat*> column_stat_array_;
   bool is_inited_;
   DISABLE_COPY_ASSIGN(ObDirectLoadFastHeapTable);
 };

@@ -314,15 +314,16 @@ int ObLockMemCtx::check_lock_exist(
   } else {
     RDLockGuard guard(list_rwlock_);
     DLIST_FOREACH(curr, lock_list_) {
-      if (curr->lock_op_.lock_id_ == lock_id &&
-          curr->lock_op_.owner_id_ == owner_id &&
-          curr->lock_op_.op_type_ == op_type &&   // different op type may lock twice.
-          curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
-        if (curr->lock_op_.lock_mode_ == mode) {
+      if (curr->lock_op_.lock_id_ == lock_id) {
+        // BE CAREFUL: get all the lock mode curr trans has got.
+        lock_mode_in_same_trans |= curr->lock_op_.lock_mode_;
+        // check exist.
+        if (curr->lock_op_.lock_mode_ == mode &&
+            curr->lock_op_.owner_id_ == owner_id &&
+            curr->lock_op_.op_type_ == op_type && /* different op type may lock twice */
+            curr->lock_op_.lock_op_status_ == LOCK_OP_DOING) {
           is_exist = true;
           break;
-        } else {
-          lock_mode_in_same_trans |= curr->lock_op_.lock_mode_;
         }
       }
     }

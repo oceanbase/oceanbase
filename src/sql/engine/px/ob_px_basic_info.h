@@ -41,7 +41,7 @@ namespace sql
 #define IS_PX_GI(type) \
   ((type) == PHY_GRANULE_ITERATOR)
 
-#define IS_PX_BLOOM_FILTER(type) \
+#define IS_PX_JOIN_FILTER(type) \
   ((type) == PHY_JOIN_FILTER)
 
 
@@ -98,7 +98,7 @@ enum JoinFilterMode
   CREATE,
   USE,
 };
-enum JoinFilterType
+enum JoinFilterSharedType
 {
   INVALID_TYPE,
   SHARED_JOIN_FILTER,  // broadcast/hash

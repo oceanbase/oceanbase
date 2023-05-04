@@ -645,6 +645,8 @@ DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
 //DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
+DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
+
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -1107,12 +1109,19 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DEFAULT_VALUE_PROVIDED, -5486, -1, "42000", "
 DEFINE_ORACLE_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL, -5487, -1, "42000", "path expression not a literal", 40454, "path expression not a literal");
 DEFINE_PLS_ERROR_EXT(OB_ERR_INVALID_ARGUMENT_FOR_JSON_CALL, -5488, -1, "HY000", "invalid argument for JSON call", "invalid argument for %s call", 185, "invalid argument for JSON call", "invalid argument for %s call");
 DEFINE_ERROR(OB_ERR_SCHEMA_HISTORY_EMPTY, -5489, -1, "HY000", "Schema history is empty");
-DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list"));
+DEFINE_ORACLE_ERROR(OB_ERR_TABLE_NAME_NOT_IN_LIST, -5490, -1, "42000", "table name not in FROM list", 964, "table name not in FROM list");
 DEFINE_ORACLE_ERROR(OB_ERR_DEFAULT_NOT_AT_LAST_IN_LIST_PART, -5491, -1, "42000", "DEFAULT partition must be last partition specified", 14318, "DEFAULT partition must be last partition specified");
 DEFINE_ERROR_EXT(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, -5492, ER_CHARACTER_SET_MISMATCH, "HY000", "Character set cannot be used in conjunction with binary collations in function call", "Character set '%.*s' cannot be used in conjunction with '%.*s' in regexp function call.");
+
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_RENAME_PARTITION_NAME_DUPLICATE, -5493, ER_SAME_NAME_PARTITION, "HY000", "Duplicate partition name", "Duplicate partition name %.*s", 14082, "New partition name must differ from that of any other partition or subpartition of the object.", "New partition name %.*s must differ from that of any other partition or subpartition of the object.");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_RENAME_SUBPARTITION_NAME_DUPLICATE, -5494, ER_SAME_NAME_PARTITION, "HY000", "Duplicate partition name", "Duplicate partition name %.*s", 14263, "New subpartition name must differ from that of any other partition or subpartition of the object.", "New subpartition name %.*s must differ from that of any other partition or subpartition of the object.");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_WAIT_INTERVAL, -5495, -1, "HY000", "missing or invalid WAIT interval", 30005, "missing or invalid WAIT interval");
+
+//for functional index in mysql mode
+DEFINE_ERROR_EXT(OB_ERR_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, -5496, ER_FUNCTIONAL_INDEX_REF_AUTO_INCREMENT, "HY000", "Functional index cannot refer to an auto-increment column.", "Functional index '%.*s' cannot refer to an auto-increment column.");
+DEFINE_ERROR_EXT(OB_ERR_DEPENDENT_BY_FUNCTIONAL_INDEX, -5497, ER_DEPENDENT_BY_FUNCTIONAL_INDEX, "HY000", "Column has a functional index dependency and cannot be dropped.", "Column '%.*s' has a functional index dependency and cannot be dropped.");
+DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_LOB, -5498, ER_FUNCTIONAL_INDEX_ON_LOB, "HY000", "Cannot create a functional index on an expression that returns a BLOB or TEXT. Please consider using CAST.");
+DEFINE_ERROR(OB_ERR_FUNCTIONAL_INDEX_ON_FIELD, -5499, ER_FUNCTIONAL_INDEX_ON_FIELD, "HY000", "Functional index on a column is not supported. Consider using a regular index instead.");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
@@ -1480,7 +1489,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_A_VIEW_NOT_APPROPRIATE_HERE, -5901, -1, "HY000", "a v
 DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_NO_KEY_PRESERVED, -5902, -1, "HY000", "cannot select ROWID from, or sample, a join view without a key-preserved table", 1445, "cannot select ROWID from, or sample, a join view without a key-preserved table");
 DEFINE_ORACLE_ERROR(OB_ROWID_VIEW_HAS_DISTINCT_ETC, -5903, -1, "HY000", "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc", 1446, "cannot select ROWID from, or sample, a view with DISTINCT, GROUP BY, etc");
 DEFINE_ORACLE_ERROR(OB_ERR_AT_LEAST_ONE_COLUMN_NOT_VIRTUAL, -5904, ER_TABLE_MUST_HAVE_COLUMNS, "42000", "A table must have at least 1 column", 54037, "table must have at least 1 column that is not virtual");
-DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED, -5905, -1, "HY000", "only pure functions can be indexed", 1743, "only pure functions can be indexed");
+DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED, -5905, ER_FUNCTIONAL_INDEX_FUNCTION_IS_NOT_ALLOWED, "HY000", "Expression of functional index contains a disallowed function.", 1743, "only pure functions can be indexed");
 DEFINE_ORACLE_ERROR(OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION, -5906, 3102, "HY000", "Expression of generated column contains a disallowed function", 54002, "only pure functions can be specified in a virtual column expression");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_OPERATION_ON_VIRTUAL_COLUMNS, -5907, -1, "HY000", "UPDATE operation disallowed on virtual columns", 54017, "UPDATE operation disallowed on virtual columns");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_COLUMN_EXPRESSION, -5908, -1, "HY000", "Invalid column expression was specified", 54016, "Invalid column expression was specified");
@@ -1686,6 +1695,7 @@ DEFINE_ORACLE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, 6279, "HY000", "Qu
 
 DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost too much without commit or rollback");
 DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");
+DEFINE_ORACLE_ERROR(OB_TRANS_TOO_MANY_PARTICIPANTS, -6282, 6002, "40000", "too many transaction participants", 24761, "transaction rolled back: too many transaction participants");
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");
@@ -1863,6 +1873,18 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_EMPTY, -7285, ER_SRS_NOT_FOUND, "SR001", 
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY, -7286, ER_INVALID_OPTION_KEY, "22023", "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.", 600, "Invalid option key in function.", "Invalid option key \'%.192s\' in function %.192s.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_VALUE, -7287, ER_INVALID_OPTION_VALUE, "22023", "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.", 600, "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_GEOMETRY_TYPE, -7288, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).", 600, "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_INVALID_XML_DATATYPE, -7402, -1, "22000", "Invalid data type for the operation", "inconsistent datatypes: expected %s got %s", 932, "inconsistent datatypes", "inconsistent datatypes: expected %s got %s");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_MISSING_COMMA, -7403, -1, "42000", "missing comma", 917, "missing comma");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, -1, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
+DEFINE_ORACLE_ERROR(OB_ERR_EXTRACTVALUE_MULTI_NODES, -7405, -1, "42000", "EXTRACTVALUE cannot extract values of multiple nodes", 19025, "EXTRACTVALUE cannot extract values of multiple nodes");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_FRAMENT_CONVERT, -7406, -1, "42000", "Cannot convert XML fragment to the required datatype", 19012, "Cannot convert XML fragment to the required datatype");
+DEFINE_ORACLE_ERROR(OB_INVALID_PRINT_OPTION, -7407, -1, "42000", "The specified printing option is invalid", 31188, "The specified printing option is invalid");
+DEFINE_ORACLE_ERROR(OB_XML_CHAR_LEN_TOO_SMALL, -7408, -1, "42000", "character length specified for XMLSerialize is too small.", 19044, "character length specified for XMLSerialize is too small.");
+DEFINE_ORACLE_ERROR(OB_XPATH_EXPRESSION_UNSUPPORTED, -7409, -1, "42000", "Given XPATH expression not supported", 31012, "Given XPATH expression not supported");
+DEFINE_ORACLE_ERROR(OB_EXTRACTVALUE_NOT_LEAF_NODE, -7410, -1, "42000", "EXTRACTVALUE can only retrieve value of leaf node", 19026, "EXTRACTVALUE can only retrieve value of leaf node");
+DEFINE_ORACLE_ERROR(OB_XML_INSERT_FRAGMENT, -7411, -1, "42000", "Cannot insert XML fragments", 19010, "Cannot insert XML fragments");
+DEFINE_ORACLE_ERROR(OB_ERR_NO_ORDER_MAP_SQL, -7412, -1, "42000", "cannot ORDER objects without MAP or ORDER method", 22950, "cannot ORDER objects without MAP or ORDER method");
+
 
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
@@ -1964,6 +1986,8 @@ DEFINE_ERROR_DEP(OB_BACKUP_PWRITE_CONTENT_NOT_MATCH, -9084, -1, "HY000", "the co
 DEFINE_ERROR(OB_BACKUP_MAJOR_NOT_COVER_MINOR, -9085, -1, "HY000", "backup major sstable range not cover minor sstable");
 DEFINE_ERROR(OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT, -9086, -1, "HY000", "backup advance checkpoint by flush timeout");
 DEFINE_ERROR(OB_CLOG_RECYCLE_BEFORE_ARCHIVE, -9087, -1, "HY000", "observer clog is recycled before archive");
+DEFINE_ERROR(OB_SOURCE_TENANT_STATE_NOT_MATCH, -9088, -1, "HY000", "log restore source tenant state not match when switchover to primary");
+DEFINE_ERROR(OB_SOURCE_LS_STATE_NOT_MATCH, -9089, -1, "HY000", "log restore source ls state not match when switchover to primary");
 
 
 DEFINE_ERROR(OB_ESI_SESSION_NOT_EXIST, -9090, -1, "HY000", "obesi process session not exist");

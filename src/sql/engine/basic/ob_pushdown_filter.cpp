@@ -1433,7 +1433,9 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     pushdown_filters_(alloc),
     pd_storage_flag_(0),
     pd_storage_filters_(alloc),
-    pd_storage_aggregate_output_(alloc)
+    pd_storage_aggregate_output_(alloc),
+    ext_file_column_exprs_(alloc),
+    ext_column_convert_exprs_(alloc)
 {
 }
 
@@ -1451,7 +1453,9 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               pd_storage_flag_,
               pd_storage_filters_,
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
-              pd_storage_aggregate_output_);
+              pd_storage_aggregate_output_,
+              ext_file_column_exprs_,
+              ext_column_convert_exprs_);
   return ret;
 }
 
@@ -1469,7 +1473,9 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               pd_storage_flag_,
               pd_storage_filters_,
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
-              pd_storage_aggregate_output_);
+              pd_storage_aggregate_output_,
+              ext_file_column_exprs_,
+              ext_column_convert_exprs_);
   return ret;
 }
 
@@ -1487,7 +1493,9 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               pd_storage_flag_,
               pd_storage_filters_,
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
-              pd_storage_aggregate_output_);
+              pd_storage_aggregate_output_,
+              ext_file_column_exprs_,
+              ext_column_convert_exprs_);
   return len;
 }
 

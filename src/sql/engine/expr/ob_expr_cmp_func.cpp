@@ -81,6 +81,19 @@ int def_relational_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL, Args &...args)
   return ret;
 }
 
+template <typename DatumFunc, ObCmpOp CMP_OP>
+int def_oper_cmp_func(ObDatum &res, const ObDatum &l, const ObDatum &r)
+{
+  int cmp_ret = 0;
+  int ret = DatumFunc::cmp(l, r, cmp_ret);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fail to compare", K(ret));
+  } else {
+    res.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+  }
+  return ret;
+}
+
 struct ObDummyRelationalFunc
 {
   inline static int eval(const ObExpr &, ObEvalCtx &, ObDatum &) { return 0;};
@@ -104,8 +117,7 @@ struct ObRelationalTypeFunc<true, L_T, R_T, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(datum_cmp::ObDatumTypeCmp<L_T, R_T>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumTypeCmp<L_T, R_T>, CMP_OP>(res, l, r);
     }
   };
 
@@ -134,8 +146,7 @@ struct ObRelationalTCFunc<true, L_TC, R_TC, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(datum_cmp::ObDatumTCCmp<L_TC, R_TC>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumTCCmp<L_TC, R_TC>, CMP_OP>(res, l, r);
     }
   };
 
@@ -164,9 +175,7 @@ struct ObRelationalStrFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumStrCmp<CS_TYPE, WITH_END_SPACE>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumStrCmp<CS_TYPE, WITH_END_SPACE>, CMP_OP>(res, l, r);
     }
   };
 
@@ -196,8 +205,7 @@ struct ObRelationFixedDoubleFunc<true, SCALE, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(datum_cmp::ObFixedDoubleCmp<SCALE>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObFixedDoubleCmp<SCALE>, CMP_OP>(res, l, r);
     }
   };
 
@@ -225,9 +233,7 @@ struct ObRelationalTextFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumTextCmp<CS_TYPE, WITH_END_SPACE>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumTextCmp<CS_TYPE, WITH_END_SPACE>, CMP_OP>(res, l, r);
     }
   };
 
@@ -250,9 +256,7 @@ struct ObRelationalTextStrFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumTextStringCmp<CS_TYPE, WITH_END_SPACE>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumTextStringCmp<CS_TYPE, WITH_END_SPACE>, CMP_OP>(res, l, r);
     }
   };
 
@@ -275,9 +279,7 @@ struct ObRelationalStrTextFunc<true, CS_TYPE, WITH_END_SPACE, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumStringTextCmp<CS_TYPE, WITH_END_SPACE>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumStringTextCmp<CS_TYPE, WITH_END_SPACE>, CMP_OP>(res, l, r);
     }
   };
 
@@ -300,9 +302,7 @@ struct ObRelationalJsonFunc<true, HAS_LOB_HEADER, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumJsonCmp<HAS_LOB_HEADER>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumJsonCmp<HAS_LOB_HEADER>, CMP_OP>(res, l, r);
     }
   };
 
@@ -325,9 +325,7 @@ struct ObRelationalGeoFunc<true, HAS_LOB_HEADER, CMP_OP>
   {
     int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r) const
     {
-      res.set_int(get_cmp_ret<CMP_OP>(
-              datum_cmp::ObDatumGeoCmp<HAS_LOB_HEADER>::cmp(l, r)));
-      return OB_SUCCESS;
+      return def_oper_cmp_func<datum_cmp::ObDatumGeoCmp<HAS_LOB_HEADER>, CMP_OP>(res, l, r);
     }
   };
 
@@ -350,16 +348,18 @@ struct ObRelationalExtraFunc
       ObObjType rt = expr.args_[1]->datum_meta_.type_;
       int cmp_ret = 0;
       if (ObExtendType == lt && ObExtendType == rt) {
-        cmp_ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObExtendTC>::cmp(l, r);
+        ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObExtendTC>::cmp(l, r, cmp_ret);
       } else if (ObExtendType == lt) {
-        cmp_ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObIntTC>::cmp(l, r);
+        ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObIntTC>::cmp(l, r, cmp_ret);
       } else if (ObExtendType == rt) {
-        cmp_ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObIntTC>::cmp(r, l);
+        ret = datum_cmp::ObDatumTCCmp<ObExtendTC, ObIntTC>::cmp(r, l, cmp_ret);
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("only extend type should reach here", K(ret));
       }
-      res.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+      if (OB_SUCC(ret)) {
+        res.set_int(get_cmp_ret<CMP_OP>(cmp_ret));
+      }
       return ret;
     }
   };
@@ -999,6 +999,8 @@ ObExpr::EvalFunc ObExprCmpFuncsHelper::get_eval_expr_cmp_func(const ObObjType ty
     func_ptr = EVAL_GEO_CMP_FUNCS[cmp_op][has_lob_header];
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = EVAL_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
+  } else if (tc1 == ObUserDefinedSQLTC || tc2 == ObUserDefinedSQLTC) {
+    func_ptr = NULL; //?
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = EVAL_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
@@ -1051,6 +1053,8 @@ ObExpr::EvalBatchFunc ObExprCmpFuncsHelper::get_eval_batch_expr_cmp_func(
     }
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = EVAL_BATCH_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)][cmp_op];
+  } else if (tc1 == ObUserDefinedSQLTC || tc2 == ObUserDefinedSQLTC) {
+    func_ptr = NULL; //?
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = EVAL_BATCH_TYPE_CMP_FUNCS[type1][type2][cmp_op];
   } else {
@@ -1100,6 +1104,8 @@ DatumCmpFunc ObExprCmpFuncsHelper::get_datum_expr_cmp_func(const ObObjType type1
     func_ptr = DATUM_GEO_CMP_FUNCS[has_lob_header];
   } else if (IS_FIXED_DOUBLE) {
     func_ptr = DATUM_FIXED_DOUBLE_CMP_FUNCS[MAX(scale1, scale2)];
+  } else if (tc1 == ObUserDefinedSQLTC || tc2 == ObUserDefinedSQLTC) {
+    func_ptr = NULL; //?
   } else if (!ObDatumFuncs::is_string_type(type1) || !ObDatumFuncs::is_string_type(type2)) {
     func_ptr = DATUM_TYPE_CMP_FUNCS[type1][type2];
     if (NULL == func_ptr) {

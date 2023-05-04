@@ -19,7 +19,6 @@
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_table_operator.h"
 #include "ob_unit_manager.h"
-#include "ob_server_manager.h"
 #include "ob_zone_manager.h"
 
 using namespace oceanbase::common;
@@ -29,7 +28,6 @@ using namespace oceanbase::rootserver;
 ObMigrateUnitFinishChecker::ObMigrateUnitFinishChecker(volatile bool &stop)
     : inited_(false),
       unit_mgr_(nullptr),
-      server_mgr_(nullptr),
       zone_mgr_(nullptr),
       schema_service_(nullptr),
       sql_proxy_(nullptr),
@@ -54,7 +52,6 @@ int ObMigrateUnitFinishChecker::check_stop() const
 
 int ObMigrateUnitFinishChecker::init(
     ObUnitManager &unit_mgr,
-    ObServerManager &server_mgr,
     ObZoneManager &zone_mgr,
     share::schema::ObMultiVersionSchemaService &schema_service,
     common::ObMySQLProxy &sql_proxy,
@@ -66,7 +63,6 @@ int ObMigrateUnitFinishChecker::init(
     LOG_WARN("init twice", KR(ret));
   } else {
     unit_mgr_ = &unit_mgr;
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     schema_service_ = &schema_service;
     sql_proxy_ = &sql_proxy;
@@ -211,7 +207,6 @@ int ObMigrateUnitFinishChecker::try_check_migrate_unit_finish_by_tenant(
     LOG_INFO("try check migrate unit finish by tenant", K(tenant_id));
     DRLSInfo dr_ls_info(gen_user_tenant_id(tenant_id),
                         unit_mgr_,
-                        server_mgr_,
                         zone_mgr_,
                         schema_service_);
     common::ObArray<share::ObLSStatusInfo> ls_status_info_array;

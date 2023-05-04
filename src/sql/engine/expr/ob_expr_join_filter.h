@@ -14,31 +14,55 @@
 #define SRC_SQL_ENGINE_EXPR_OB_EXPR_JOIN_FILTER_H_
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/engine/px/ob_px_bloom_filter.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
 namespace oceanbase
 {
 namespace sql
 {
 
+class ObP2PDatahubMsgBase;
+enum RuntimeFilterType
+{
+  NOT_INIT_RUNTIME_FILTER_TYPE = 0,
+  BLOOM_FILTER = 1,
+  RANGE = 2,
+  IN = 3
+};
 class ObExprJoinFilter : public ObExprOperator
 {
 public:
+  #define FUNCTION_CNT 4
+  #define GET_FUNC(i, j) (((i) * (FUNCTION_CNT)) + (j))
+  enum FunctionIndex{
+    HASH_ROW = 0,
+    HASH_BATCH = 1,
+    NULL_FIRST_COMPARE = 2,
+    NULL_LAST_COMPARE = 3
+  };
   class ObExprJoinFilterContext : public ObExprOperatorCtx
   {
     public:
       ObExprJoinFilterContext() : ObExprOperatorCtx(),
-          bloom_filter_ptr_(NULL), bf_key_(), filter_count_(0), total_count_(0), check_count_(0),
-          n_times_(0), ready_ts_(0), next_check_start_pos_(0), window_cnt_(0), window_size_(0),
+          rf_msg_(nullptr), rf_key_(), start_time_(0),
+          filter_count_(0), total_count_(0), check_count_(0),
+          n_times_(0), ready_ts_(0), next_check_start_pos_(0),
+          window_cnt_(0), window_size_(0),
           partial_filter_count_(0), partial_total_count_(0),
-          cur_pos_(total_count_), flag_(0) {}
-      virtual ~ObExprJoinFilterContext() {}
+          cur_pos_(total_count_), flag_(0)
+        {
+          need_wait_rf_ = true;
+          is_first_ = true;
+        }
+      virtual ~ObExprJoinFilterContext();
     public:
       bool is_ready() { return is_ready_; }
-      bool need_wait_ready() { return need_wait_bf_; }
+      bool need_wait_ready() { return need_wait_rf_; }
       bool dynamic_disable() {  return dynamic_disable_; }
       void reset_monitor_info();
     public:
-      ObPxBloomFilter *bloom_filter_ptr_;
-      ObPXBloomFilterHashWrapper bf_key_;
+      ObP2PDatahubMsgBase *rf_msg_;
+      ObP2PDhKey rf_key_;
+      int64_t start_time_;
       int64_t filter_count_;
       int64_t total_count_;
       int64_t check_count_;
@@ -55,10 +79,12 @@ public:
       union {
         uint64_t flag_;
         struct {
-          bool need_wait_bf_:1;
+          bool need_wait_rf_:1;
           bool is_ready_:1;
           bool dynamic_disable_:1;
-          uint64_t reserved_:61;
+          bool is_first_:1;
+          int32_t max_wait_time_ms_:32;
+          int32_t reserved_:28;
         };
       };
   };
@@ -71,24 +97,43 @@ public:
                                 common::ObExprTypeCtx& type_ctx)
                                 const override;
   static int eval_bloom_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  static int eval_range_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  static int eval_in_filter(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
   static int eval_bloom_filter_batch(
              const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  static int eval_range_filter_batch(
+             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  static int eval_in_filter_batch(
+             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+
+
+  static int eval_filter_internal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+
+  static int eval_filter_batch_internal(
+             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
   // hard code seed, 32 bit max prime number
   static const int64_t JOIN_FILTER_SEED = 4294967279;
-private:
-  static int check_bf_ready(
-    ObExecContext &exec_ctx,
-    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
-  static int collect_sample_info(
+  static void collect_sample_info(
     ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
     bool is_match);
-  static int check_need_dynamic_diable_bf(
+private:
+  static int check_rf_ready(
+    ObExecContext &exec_ctx,
+    ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
+
+  static void check_need_dynamic_diable_bf(
       ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
 private:
   static const int64_t CHECK_TIMES = 127;
+private:
   DISALLOW_COPY_AND_ASSIGN(ObExprJoinFilter);
 };
 

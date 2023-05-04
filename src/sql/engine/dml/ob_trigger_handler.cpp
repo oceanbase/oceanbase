@@ -406,6 +406,8 @@ int TriggerHandle::calc_trigger_routine(
   OZ (exec_ctx.get_pl_engine()->execute(
     exec_ctx, exec_ctx.get_allocator(), trigger_id, routine_id, path, params, nocopy_params, result),
       trigger_id, routine_id, params);
+  CK (OB_NOT_NULL(exec_ctx.get_my_session()));
+  OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
   return ret;
 }
 

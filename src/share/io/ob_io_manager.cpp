@@ -69,6 +69,9 @@ int ObIOManager::init(const int64_t memory_limit,
   } else if (OB_FAIL(fault_detector_.init())) {
     LOG_WARN("init io fault detector failed", K(ret));
   } else {
+    ObMemAttr attr(OB_SERVER_TENANT_ID, "IO_MGR");
+    SET_USE_500(attr);
+    allocator_.set_attr(attr);
     io_config_.set_default_value();
     is_inited_ = true;
   }

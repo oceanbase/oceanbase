@@ -313,7 +313,7 @@ int ObStmtResolver::get_column_schema(const uint64_t table_id,
     if (OB_FAIL(schema_checker_->get_column_schema(
         session_info_->get_effective_tenant_id(), table_id, column_name, column_schema, true, is_link))) {
       LOG_WARN("fail to get column schema", K(table_id), K(column_name), K(ret));
-    } else if (!hidden && column_schema->is_hidden() && !column_schema->is_generated_column()) {
+    } else if (!hidden && column_schema->is_hidden() && !column_schema->is_generated_column() && !column_schema->is_udt_hidden_column()) {
       ret = OB_ERR_BAD_FIELD_ERROR;
       LOG_INFO("do not get hidden column", K(table_id), K(column_name), K(ret));
     }

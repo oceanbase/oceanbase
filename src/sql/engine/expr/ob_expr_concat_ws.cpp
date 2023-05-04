@@ -28,7 +28,7 @@ namespace sql
 {
 
 ObExprConcatWs::ObExprConcatWs(ObIAllocator &alloc)
-    :ObStringExprOperator(alloc, T_FUN_CNN_WS, N_CONCAT_WS, PARAM_NUM_UNKNOWN)
+    :ObStringExprOperator(alloc, T_FUN_CNN_WS, N_CONCAT_WS, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL)
 {
   need_charset_convert_ = false;
 }

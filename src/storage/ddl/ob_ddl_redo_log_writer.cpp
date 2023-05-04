@@ -261,7 +261,8 @@ void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
 }
 
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), allocator_("DDLClogCtrl"), bucket_lock_(), refreshTimerTask_()
+  : is_inited_(false), speed_handle_map_(), allocator_(SET_USE_500("DDLClogCtrl")),
+    bucket_lock_(), refreshTimerTask_()
 {
 }
 
@@ -283,6 +284,8 @@ ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
 int ObDDLCtrlSpeedHandle::init()
 {
   int ret = OB_SUCCESS;
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "DDLSpeedCtrl");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
@@ -291,7 +294,7 @@ int ObDDLCtrlSpeedHandle::init()
     LOG_WARN("unexpected error, speed handle map is created", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(MAP_BUCKET_NUM))) {
     LOG_WARN("init bucket lock failed", K(ret));
-  } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, "DDLSpeedCtrl"))) {
+  } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, attr, attr))) {
     LOG_WARN("fail to create speed handle map", K(ret));
   } else {
     is_inited_ = true;
@@ -610,6 +613,8 @@ int ObDDLRedoLogWriter::write(
                               + log.get_serialize_size();
   int64_t pos = 0;
   ObDDLMacroBlockClogCb *cb = nullptr;
+  ObDDLRedoLog tmp_log;
+  int64_t log_start_pos = 0;
 
   palf::LSN lsn;
   const bool need_nonblock= false;
@@ -630,14 +635,18 @@ int ObDDLRedoLogWriter::write(
   } else if (OB_ISNULL(cb = op_alloc(ObDDLMacroBlockClogCb))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
-  } else if (OB_FAIL(cb->init(ls_id, log.get_redo_info(), macro_block_id, ddl_kv_mgr_handle))) {
-    LOG_WARN("init ddl clog callback failed", K(ret));
   } else if (OB_FAIL(base_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("failed to serialize log base header", K(ret));
   } else if (OB_FAIL(ddl_header.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl redo log", K(ret));
+  } else if (FALSE_IT(log_start_pos = pos)) {
   } else if (OB_FAIL(log.serialize(buffer, buffer_size, pos))) {
     LOG_WARN("fail to seriaize ddl redo log", K(ret));
+  } else if (OB_FAIL(tmp_log.deserialize(buffer, buffer_size, log_start_pos))) {
+    LOG_WARN("fail to deserialize ddl redo log", K(ret));
+  /* use the ObString data_buffer_ in tmp_log.redo_info_, do not rely on the macro_block_buf in original log*/
+  } else if (OB_FAIL(cb->init(ls_id, tmp_log.get_redo_info(), macro_block_id, ddl_kv_mgr_handle))) {
+    LOG_WARN("init ddl clog callback failed", K(ret));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
                                          base_scn,
@@ -1382,6 +1391,7 @@ ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
 
 ObDDLRedoLogWriterCallback::~ObDDLRedoLogWriterCallback()
 {
+  (void)wait();
   if (nullptr != block_buffer_) {
     ob_free(block_buffer_);
     block_buffer_ = nullptr;

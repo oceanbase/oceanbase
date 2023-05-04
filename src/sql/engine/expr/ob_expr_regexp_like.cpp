@@ -29,7 +29,7 @@ namespace sql
 {
 
 ObExprRegexpLike::ObExprRegexpLike(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_REGEXP_LIKE, N_REGEXP_LIKE, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_REGEXP_LIKE, N_REGEXP_LIKE, MORE_THAN_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

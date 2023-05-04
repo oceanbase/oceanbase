@@ -79,7 +79,7 @@ public:
   virtual int get_type(const int64_t col_idx, ObObjMeta &type) const override;
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
                            oceanbase::common::ObString &name, ObObjMeta &meta,
-                           int16_t &precision, int16_t &scale, int32_t &length) const override;
+                           ObAccuracy &acc) const override;
   virtual int64_t get_column_count() const override;
   virtual int get_obj(const int64_t col_idx, ObObj &obj,
                       const common::ObTimeZoneInfo *tz_info = NULL,

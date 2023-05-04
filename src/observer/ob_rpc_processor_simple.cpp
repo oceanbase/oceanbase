@@ -57,6 +57,8 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_sess_info_verify.h"
 
 namespace oceanbase
 {
@@ -68,6 +70,7 @@ using namespace share;
 using namespace sql;
 using namespace obmysql;
 using namespace omt;
+using namespace logservice::coordinator;
 
 namespace rpc
 {
@@ -409,6 +412,56 @@ int ObRpcNotifyTenantServerUnitResourceP::process()
       LOG_WARN("failed to notify update tenant", K(ret), K_(arg));
     }
   }
+  return ret;
+}
+
+int ObRpcNotifySwitchLeaderP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null of GCTX.omt_", KR(ret));
+  } else if (OB_INVALID_TENANT_ID != tenant_id) {
+    // only refresh the status of specified tenant
+    if (GCTX.omt_->is_available_tenant(tenant_id)) {
+      MTL_SWITCH(tenant_id) {
+        ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+        if (OB_ISNULL(coordinator)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("unexpected null of leader coordinator", KR(ret), K_(arg));
+        } else if (OB_FAIL(coordinator->schedule_refresh_priority_task())) {
+          LOG_WARN("failed to schedule refresh priority task", KR(ret), K_(arg));
+        }
+      }
+    }
+  } else {
+    // refresh the status of all tenants
+    common::ObArray<uint64_t> tenant_ids;
+    if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+      LOG_WARN("fail to get_mtl_tenant_ids", KR(ret));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      for (int64_t i = 0; i < tenant_ids.size(); i++) {
+        if (GCTX.omt_->is_available_tenant(tenant_ids.at(i))) {
+          MTL_SWITCH(tenant_ids.at(i)) {
+            ObLeaderCoordinator* coordinator = MTL(ObLeaderCoordinator*);
+            if (OB_ISNULL(coordinator)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("unexpected null of leader coordinator", KR(ret), K_(arg));
+            } else if (OB_FAIL(coordinator->schedule_refresh_priority_task())) {
+              LOG_WARN("failed to schedule refresh priority task", KR(ret), K_(arg));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+          tmp_ret = ret;
+        }
+      }
+      ret = tmp_ret;
+    }
+  }
+  LOG_INFO("receive notify switch leader", KR(ret), K_(arg));
   return ret;
 }
 
@@ -757,6 +810,18 @@ int ObRpcIsEmptyServerP::process()
   } else {
     ret = gctx_.ob_service_->is_empty_server(arg_, result_);
   }
+  return ret;
+}
+
+int ObRpcCheckServerForAddingServerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->check_server_for_adding_server(arg_, result_))) {
+    LOG_WARN("fail to call check_server_for_adding_server", KR(ret), K(arg_));
+  } else {}
   return ret;
 }
 
@@ -2251,6 +2316,18 @@ int ObRefreshTenantInfoP::process()
   return ret;
 }
 
+int ObUpdateTenantInfoCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->update_tenant_info_cache(arg_, result_))) {
+    COMMON_LOG(WARN, "failed to update_tenant_info_cache", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
 int ObSyncRewriteRulesP::process()
 {
   int ret = OB_SUCCESS;
@@ -2271,7 +2348,87 @@ int ObSyncRewriteRulesP::process()
     } else if (OB_FAIL(rule_mgr->sync_rule_from_inner_table())) {
       LOG_WARN("failed to sync rewrite rules from inner table", K(ret));
     }
+    }
+  return ret;
+}
+
+int ObRpcSendHeartbeatP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->handle_heartbeat(arg_, result_))) {
+    LOG_WARN("fail to call handle_heartbeat in ob service", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObSessInfoVerificationP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObString str_result;
+  LOG_TRACE("veirfy process start", K(ret), K(arg_.get_sess_id()));
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_session(arg_.get_sess_id(), session))) {
+    COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+  } else {
+    // consider 3 scene that no need verify:
+    // 1. Broken link reuse session，need verify proxy sess id
+    // 2. Mixed running scene, need verify version
+    // 3. Routing without synchronizing session information, judge is_has_query_executed
+    if (arg_.get_proxy_sess_id() == session->get_proxy_sessid() &&
+        GET_MIN_CLUSTER_VERSION() == CLUSTER_CURRENT_VERSION &&
+        session->is_has_query_executed()
+        ) {
+      if (OB_FAIL(ObSessInfoVerify::fetch_verify_session_info(*session,
+          str_result, result_.allocator_))) {
+        COMMON_LOG(WARN, "fetch session check info failed", KR(ret), K(result_));
+      } else {
+        char *ptr = nullptr;
+        if (OB_ISNULL(ptr = static_cast<char *> (result_.allocator_.alloc(str_result.length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc mem for client identifier", K(ret));
+        } else {
+          result_.verify_info_buf_.assign_buffer(ptr, str_result.length());
+          result_.verify_info_buf_.write(str_result.ptr(), str_result.length());
+          result_.need_verify_ = true;
+          LOG_TRACE("need verify is true", K(ret), K(result_.need_verify_));
+        }
+      }
+    } else {
+      result_.need_verify_ = false;
+      LOG_TRACE("no need self verification", K(arg_.get_proxy_sess_id()),
+                K(session->get_proxy_sessid()), K(GET_MIN_CLUSTER_VERSION()),
+                K(CLUSTER_CURRENT_VERSION));
+    }
+    if (NULL != session) {
+      gctx_.session_mgr_->revert_session(session);
+    }
+  }
+  return ret;
+}
+
+int ObSessInfoVerificationP::after_process(int err_code)
+{
+  int ret = OB_SUCCESS;
+  result_.allocator_.reset();
+  ObRpcProcessorBase::after_process(err_code);
+  return ret;
+}
+
+int ObRpcGetServerResourceInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid argument", KR(ret), KP(gctx_.ob_service_));
+  } else if (OB_FAIL(gctx_.ob_service_->get_server_resource_info(arg_, result_))) {
+    LOG_WARN("fail to call get_server_resource_info in ob service", KR(ret), K(arg_));
+  } else {}
   return ret;
 }
 

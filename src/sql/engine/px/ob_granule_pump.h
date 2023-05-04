@@ -16,15 +16,18 @@
 #include "lib/allocator/page_arena.h"
 #include "lib/string/ob_string.h"
 #include "lib/lock/ob_spin_lock.h"
+#include "share/external_table/ob_external_table_file_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/engine/px/ob_granule_util.h"
 #include "sql/engine/ob_engine_op_traits.h"
 
-
 namespace oceanbase
 {
+namespace share {
+  struct ObExternalFileInfo;
+}
 namespace sql
 {
 
@@ -79,6 +82,7 @@ public :
     op_info_.reset();
     tablet_arrays_.reset();
     run_time_pruning_flags_.reset();
+    external_table_files_.reset();
   }
 
 
@@ -93,6 +97,7 @@ public :
   PruningStatus pruning_status_;
   //-----end
   common::ObArray<ObPxTabletInfo> partitions_info_;
+  common::ObArray<share::ObExternalFileInfo> external_table_files_;
   int64_t parallelism_;
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
@@ -484,6 +489,7 @@ public:
                            ObIArray<const ObTableScanSpec*> &scan_ops,
                            const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                            common::ObIArray<ObPxTabletInfo> &partitions_info,
+                           common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                            const ObTableModifySpec* modify_op,
                            int64_t parallelism,
                            int64_t tablet_size,
@@ -493,6 +499,7 @@ public:
                       ObIArray<const ObTableScanSpec*> &scan_ops,
                       const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                       common::ObIArray<ObPxTabletInfo> &partitions_info,
+                      common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                       const ObTableModifySpec* modify_op,
                       int64_t parallelism,
                       int64_t tablet_size,
@@ -556,6 +563,7 @@ private:
                ObIArray<const ObTableScanSpec*> &scan_ops,
                const common::ObIArray<DASTabletLocArray> &tablet_arrays,
                common::ObIArray<ObPxTabletInfo> &partitions_info,
+               const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                const ObTableModifySpec* modify_op,
                int64_t parallelism,
                int64_t tablet_size,

@@ -43,7 +43,7 @@ void ObExprRandom::ObExprRandomCtx::get_next_random(int64_t &res)
 }
 
 ObExprRandom::ObExprRandom(common::ObIAllocator &alloc)
-	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM, "random", ZERO_OR_ONE, NOT_ROW_DIMENSION),
+	: ObFuncExprOperator(alloc, T_FUN_SYS_RANDOM, "random", ZERO_OR_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION),
 		is_seed_const_(true)
 {
 }

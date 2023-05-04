@@ -299,7 +299,11 @@ public:
                             ObRawExprFactory &expr_factory,
                             const ObDMLStmt *stmt,
                             ObDMLStmt *&new_stmt);
-
+  static int create_udt_hidden_columns(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       const ObColumnRefRawExpr &udt_expr,
+                                       ObColumnRefRawExpr *&col_expr,
+                                       bool &need_transform);
   /**
    * @brief joined_table需要维护一个基表的table id列表
    * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；
@@ -877,10 +881,7 @@ public:
                                       ObIArray<ObRawExpr*> &set_exprs,
                                       ObIArray<ObRawExpr*> &equal_conds);
 
-  static int get_expr_in_cast(ObIArray<ObRawExpr*> &input_exprs,
-                              ObIArray<ObRawExpr*> &output_exprs);
-  static ObRawExpr* get_expr_in_cast(ObRawExpr *expr);
-
+  static int extract_udt_exprs(ObRawExpr *expr, ObIArray<ObRawExpr *> &udt_exprs);
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,
@@ -1105,7 +1106,27 @@ public:
                                 ObAliasRefRawExpr *alias_expr = NULL);
 
   static int pushdown_pseudo_column_like_exprs(ObDMLStmt &upper_stmt,
+                                               bool push_group_by,
                                                ObIArray<ObRawExpr*> &pushdown_exprs);
+  static int check_need_pushdown_pseudo_column(const ObRawExpr &expr,
+                                               const bool push_group_by,
+                                               bool &need_pushdown);
+
+  static int create_view_with_groupby_items(ObSelectStmt *stmt,
+                                            TableItem *&view_stmt_item,
+                                            ObTransformerCtx *ctx);
+
+  static int transform_aggregation_exprs(ObTransformerCtx *ctx,
+                                         ObSelectStmt *select_stmt,
+                                         TableItem &view_item);
+  static int transform_aggregation_expr(ObTransformerCtx *ctx,
+                                        ObSelectStmt *select_stmt,
+                                        TableItem &view_item,
+                                        ObAggFunRawExpr &aggr_expr,
+                                        ObRawExpr *&new_aggr_expr);
+  static int create_view_with_pre_aggregate(ObSelectStmt *stmt,
+                                            ObSelectStmt *&view_stmt,
+                                            ObTransformerCtx *ctx);
 
   static int adjust_updatable_view(ObRawExprFactory &expr_factory,
                                    ObDelUpdStmt *stmt,
@@ -1330,7 +1351,8 @@ public:
   static int extract_shared_expr(ObDMLStmt *upper_stmt,
                                  ObDMLStmt *child_stmt,
                                  ObIArray<ObRawExpr*> &shared_exprs,
-                                 ObIArray<DmlStmtScope> *scopes = NULL);
+                                 ObIArray<DmlStmtScope> *upper_scopes = NULL,
+                                 ObIArray<DmlStmtScope> *child_scopes = NULL);
 
   static int check_for_update_validity(ObSelectStmt *stmt);
 
@@ -1677,7 +1699,8 @@ public:
   static int generate_select_list(ObTransformerCtx *ctx,
                                   ObDMLStmt *stmt,
                                   TableItem *table,
-                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL);
+                                  ObIArray<ObRawExpr *> *basic_select_exprs = NULL,
+                                  bool remove_const_expr = true);
 
   static int remove_const_exprs(ObIArray<ObRawExpr *> &input_exprs,
                                 ObIArray<ObRawExpr *> &output_exprs);
@@ -1700,6 +1723,27 @@ public:
                                                ObRawExpr *aggr,
                                                ObTransformerCtx *ctx,
                                                ObRawExpr *&out_expr);
+
+  static int get_view_column(ObTransformerCtx *ctx,
+                             ObDMLStmt &stmt,
+                             TableItem *table_item,
+                             bool is_outer_join_table,
+                             ObRawExpr *aggr_expr,
+                             ObRawExpr *&aggr_column);
+  static int convert_aggr_expr(ObTransformerCtx *ctx_,
+                               ObDMLStmt *stmt,
+                               ObAggFunRawExpr *aggr_expr,
+                               ObRawExpr *&output_expr);
+  static int wrap_case_when_for_count(ObTransformerCtx *ctx,
+                                      ObDMLStmt *stmt,
+                                      ObColumnRefRawExpr *view_count,
+                                      ObRawExpr *&output,
+                                      bool is_count_star = false);
+  static int refresh_select_items_name(ObIAllocator &allocator, ObSelectStmt *select_stmt);
+  static int refresh_column_items_name(ObSelectStmt *stmt, int64_t table_id);
+
+  static int get_real_alias_name(ObSelectStmt *stmt, int64_t sel_idx, ObString& alias_name);
+
   template <typename T>
   static int remove_dup_expr(ObIArray<T *> &check,
                              ObIArray<T *> &base);
@@ -1758,7 +1802,6 @@ private:
                                 ObIArray<ObRawExpr *> &new_column_exprs);
 
   static int is_scalar_expr(ObRawExpr* expr, bool &is_scalar);
-
 };
 
 

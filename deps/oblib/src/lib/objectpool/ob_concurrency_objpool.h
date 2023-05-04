@@ -403,11 +403,11 @@ public:
     }
     return blk_size;
   }
-  
+
   static ObFixedClassAllocator<T> *get(const char* label = "ConcurObjPool")
   {
     static ObFixedClassAllocator<T> instance(sizeof(T),
-                                             ObMemAttr(common::OB_SERVER_TENANT_ID, label),
+                                             SET_USE_500(ObMemAttr(common::OB_SERVER_TENANT_ID, label)),
                                              choose_blk_size(sizeof(T)),
                                              common::get_cpu_count());
     return &instance;

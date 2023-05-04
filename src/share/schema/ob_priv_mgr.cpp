@@ -74,28 +74,28 @@ const char *ObPrivMgr::priv_names_[] = {
 };
 
 ObPrivMgr::ObPrivMgr()
-  : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    db_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_DB_PRIVS),
-    table_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_TABLE_PRIVS),
-    table_priv_map_(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIV_MAP),
-    obj_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS),
-    obj_priv_map_(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP),
-    sys_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS)
+    db_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_DB_PRIVS)),
+    table_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIVS)),
+    table_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIV_MAP)),
+    obj_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS)),
+    obj_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP)),
+    sys_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS))
 {
   static_assert(ARRAYSIZEOF(ObPrivMgr::priv_names_) == OB_PRIV_MAX_SHIFT_PLUS_ONE,
                 "incomplete array priv_names_");
 }
 
 ObPrivMgr::ObPrivMgr(ObIAllocator &allocator)
-  : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    db_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_DB_PRIVS),
-    table_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_TABLE_PRIVS),
-    table_priv_map_(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIV_MAP),
-    obj_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS),
-    obj_priv_map_(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP),
-    sys_privs_(0, NULL, ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS)
+    db_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_DB_PRIVS)),
+    table_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIVS)),
+    table_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_TABLE_PRIV_MAP)),
+    obj_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIVS)),
+    obj_priv_map_(SET_USE_500(ObModIds::OB_SCHEMA_PRIV_OBJ_PRIV_MAP)),
+    sys_privs_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PRIV_SYS_PRIVS))
 {}
 
 ObPrivMgr::~ObPrivMgr()

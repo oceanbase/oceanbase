@@ -22,6 +22,7 @@
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 namespace oceanbase
 {
@@ -345,6 +346,14 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
     }
     loop_.set_interm_result(use_interm_result);
     int64_t thread_id = GETTID();
+
+    ObPxSqcHandler *handler = ctx_.get_sqc_handler();
+    bool should_reg_dm = use_interm_result && OB_NOT_NULL(handler) && handler->get_phy_plan().is_enable_px_fast_reclaim();
+    common::ObRegisterDmInfo register_dm_info;
+    if (should_reg_dm) {
+      ObDetectManagerUtils::prepare_register_dm_info(register_dm_info, handler);
+    }
+
     ARRAY_FOREACH_X(channels, idx, cnt, OB_SUCC(ret)) {
       dtl::ObDtlChannel *ch = channels.at(idx);
       if (OB_ISNULL(ch)) {
@@ -353,6 +362,11 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
       } else {
         ch->set_audit(enable_audit);
         ch->set_interm_result(use_interm_result);
+        // if use_interm_result, set register_dm_info in dtl channel
+        // so that the peer rpc processor can use this information to register check item into dm
+        if (should_reg_dm) {
+          ch->set_register_dm_info(register_dm_info);
+        }
         ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         ch->set_batch_id(px_batch_id);
         ch->set_compression_type(dfc_.get_compressor_type());
@@ -590,6 +604,10 @@ int ObPxTransmitOp::send_rows_one_by_one(ObSliceIdxCalc &slice_calc)
                        get_spec().output_, eval_ctx_, slice_idx_array))) {
       LOG_WARN("fail get slice idx", K(ret));
     } else if (dfc_.all_ch_drained()) {
+      int tmp_ret = drain_exch();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("drain exchange data failed", K(tmp_ret));
+      }
       ret = OB_ITER_END;
       LOG_DEBUG("all channel has been drained");
     } else if (NULL != spec.tablet_id_expr_

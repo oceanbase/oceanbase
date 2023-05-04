@@ -62,6 +62,7 @@ public:
   bool operator ==(const ObBackupPath &path) const;
   ObBackupPath &operator=(const ObBackupPath &path);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   TO_STRING_KV(K_(cur_pos), K_(path));
 private:
   int64_t cur_pos_;
@@ -183,6 +184,10 @@ struct ObBackupPathUtil
 
   // file:///obbackup/backup_set_1_full/infos/meta_info/ls_meta_infos.obbak
   static int get_ls_meta_infos_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/infos/meta_info/root_key.obbak
+  static int get_backup_root_key_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/tenant_backup_set_infos.obbak
   static int get_tenant_backup_set_infos_path(const share::ObBackupDest &backup_set_dest,

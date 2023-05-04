@@ -48,15 +48,13 @@ struct DefaultPageAllocator: public ObIAllocator
 {
   DefaultPageAllocator(const lib::ObLabel &label = ObModIds::OB_PAGE_ARENA,
                        uint64_t tenant_id = OB_SERVER_TENANT_ID)
-      : label_(label), tenant_id_(tenant_id), ctx_id_(ObCtxIds::DEFAULT_CTX_ID) {};
+    : attr_(tenant_id, label) {};
+  DefaultPageAllocator(const lib::ObMemAttr &attr)
+    : attr_(attr) {};
   virtual ~DefaultPageAllocator() {};
   void *alloc(const int64_t sz)
   {
-    ObMemAttr malloc_attr;
-    malloc_attr.label_ = label_;
-    malloc_attr.tenant_id_ = tenant_id_;
-    malloc_attr.ctx_id_ = ctx_id_;
-    return alloc(sz, malloc_attr);
+    return alloc(sz, attr_);
   }
   void *alloc(const int64_t size, const ObMemAttr &attr)
   {
@@ -64,21 +62,19 @@ struct DefaultPageAllocator: public ObIAllocator
   }
   void free(void *p) { ob_free(p); }
   void freed(const int64_t sz) {UNUSED(sz); /* mostly for effcient bulk stat reporting */ }
-  void set_label(const lib::ObLabel &label) {label_ = label;};
-  void set_tenant_id(uint64_t tenant_id) {tenant_id_ = tenant_id;};
-  void set_ctx_id(int64_t ctx_id) { ctx_id_ = ctx_id; }
-  lib::ObLabel get_label() const { return label_; };
+  void set_label(const lib::ObLabel &label) {attr_.label_ = label;};
+  void set_tenant_id(uint64_t tenant_id) {attr_.tenant_id_ = tenant_id;};
+  void set_ctx_id(int64_t ctx_id) { attr_.ctx_id_ = ctx_id; }
+  void set_attr(const lib::ObMemAttr &attr) { attr_ = attr; }
+  lib::ObLabel get_label() const { return attr_.label_; };
   void *mod_alloc(const int64_t sz, const lib::ObLabel &label)
   {
-    ObMemAttr malloc_attr;
+    ObMemAttr malloc_attr = attr_;
     malloc_attr.label_ = label;
-    malloc_attr.tenant_id_ = tenant_id_;
     return ob_malloc(sz, malloc_attr);
   }
 private:
-  lib::ObLabel label_;
-  uint64_t tenant_id_;
-  int64_t ctx_id_;
+  lib::ObMemAttr attr_;
 };
 
 struct ModulePageAllocator: public ObIAllocator
@@ -86,25 +82,26 @@ struct ModulePageAllocator: public ObIAllocator
   ModulePageAllocator(const lib::ObLabel &label = ObModIds::OB_MODULE_PAGE_ALLOCATOR,
                       int64_t tenant_id = OB_SERVER_TENANT_ID,
                       int64_t ctx_id = 0)
-      : allocator_(NULL),
-        label_(label),
-        tenant_id_(tenant_id),
-        ctx_id_(ctx_id) {}
+    : ModulePageAllocator(ObMemAttr(tenant_id, label, ctx_id)) {}
+  ModulePageAllocator(const lib::ObMemAttr &attr)
+    : allocator_(NULL) { attr_ = attr; }
   explicit ModulePageAllocator(ObIAllocator &allocator,
                                const lib::ObLabel &label = ObModIds::OB_MODULE_PAGE_ALLOCATOR)
-      : allocator_(&allocator),
-        label_(label),
-        tenant_id_(OB_SERVER_TENANT_ID),
-        ctx_id_(0) {}
+      : allocator_(&allocator)
+   {
+     attr_.label_ = label;
+     attr_.tenant_id_ = OB_SERVER_TENANT_ID;
+     attr_.ctx_id_ = 0;
+   }
   virtual ~ModulePageAllocator() {}
-  void set_label(const lib::ObLabel &label) { label_ = label; }
-  void set_tenant_id(uint64_t tenant_id) {tenant_id_ = tenant_id;};
-  void set_ctx_id(int64_t ctx_id) { ctx_id_ = ctx_id; }
-  lib::ObLabel get_label() const { return label_; }
+  void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
+  void set_tenant_id(uint64_t tenant_id) {attr_.tenant_id_ = tenant_id;};
+  void set_ctx_id(int64_t ctx_id) { attr_.ctx_id_ = ctx_id; }
+  void set_attr(const lib::ObMemAttr &attr) { attr_ = attr; }
+  lib::ObLabel get_label() const { return attr_.label_; }
   void *alloc(const int64_t sz)
   {
-    ObMemAttr malloc_attr(tenant_id_, label_, ctx_id_);
-    return alloc(sz, malloc_attr);
+    return alloc(sz, attr_);
   }
   void *alloc(const int64_t size, const ObMemAttr &attr)
   {
@@ -116,17 +113,13 @@ struct ModulePageAllocator: public ObIAllocator
   ModulePageAllocator &operator=(const ModulePageAllocator &that) {
     if (this != &that) {
       allocator_ = that.allocator_;
-      label_ = that.label_;
-      tenant_id_ = that.tenant_id_;
-      ctx_id_ = that.ctx_id_;
+      attr_ = that.attr_;
     }
     return *this;
   }
 protected:
   ObIAllocator *allocator_;
-  lib::ObLabel label_;
-  uint64_t tenant_id_;
-  uint64_t ctx_id_;
+  lib::ObMemAttr attr_;
 };
 
 /**
@@ -530,6 +523,7 @@ public: // API
   lib::ObLabel get_label() const { return page_allocator_.get_label(); }
   void set_tenant_id(uint64_t tenant_id) { page_allocator_.set_tenant_id(tenant_id); }
   void set_ctx_id(int64_t ctx_id) { page_allocator_.set_ctx_id(ctx_id); }
+  void set_attr(const lib::ObMemAttr &attr) { page_allocator_.set_attr(attr); }
   /** allocate sz bytes */
   CharT *_alloc(const int64_t sz)
   {
@@ -1041,6 +1035,9 @@ public:
   ObArenaAllocator(ObIAllocator &allocator, const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE,
                    const bool enable_sanity = false)
     : arena_(page_size, ModulePageAllocator(allocator), enable_sanity) {};
+  ObArenaAllocator(const lib::ObMemAttr &attr,
+                   const int64_t page_size = OB_MALLOC_NORMAL_BLOCK_SIZE)
+    : arena_(page_size, ModulePageAllocator(attr), true) {}
   virtual ~ObArenaAllocator() {};
 public:
   virtual void *alloc(const int64_t sz) { return arena_.alloc_aligned(sz); }
@@ -1068,9 +1065,7 @@ public:
   void set_ctx_id(int64_t ctx_id) { arena_.set_ctx_id(ctx_id); }
   void set_attr(const ObMemAttr &attr) override
   {
-    arena_.set_tenant_id(attr.tenant_id_);
-    arena_.set_ctx_id(attr.ctx_id_);
-    arena_.set_label(attr.label_);
+    arena_.set_attr(attr);
   }
   ModuleArena &get_arena() { return arena_; }
   int64_t to_string(char *buf, int64_t len) const
@@ -1165,9 +1160,7 @@ public:
 
   virtual void set_attr(const ObMemAttr &attr) override
   {
-    arena_.set_tenant_id(attr.tenant_id_);
-    arena_.set_ctx_id(attr.ctx_id_);
-    arena_.set_label(attr.label_);
+    arena_.set_attr(attr);
   }
 private:
   ModuleArena arena_;

@@ -2522,6 +2522,14 @@ int ObTableSqlService::gen_table_dml(
              && OB_UNLIKELY((OB_INVALID_VERSION != table.get_truncate_version()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate version is not support before 4.1", K(ret), K(table));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_2_0_0
+                         && (table.is_external_table()
+                             || !table.get_external_file_location().empty()
+                             || !table.get_external_file_format().empty()
+                             || !table.get_external_file_location_access_info().empty()
+                             || !table.get_external_file_pattern().empty()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("external table is not support before 4.2", K(ret), K(table));
   } else {
     const ObPartitionOption &part_option = table.get_part_option();
     const ObPartitionOption &sub_part_option = table.get_sub_part_option();
@@ -2631,6 +2639,14 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("table_flags", table.get_table_flags())))
         || (data_version >= DATA_VERSION_4_1_0_0
             && OB_FAIL(dml.add_column("truncate_version", table.get_truncate_version())))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_location", ObHexEscapeSqlStr(table.get_external_file_location()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_location_access_info", ObHexEscapeSqlStr(table.get_external_file_location_access_info()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_format", ObHexEscapeSqlStr(table.get_external_file_format()))))
+        || (data_version >= DATA_VERSION_4_2_0_0
+            && OB_FAIL(dml.add_column("external_file_pattern", ObHexEscapeSqlStr(table.get_external_file_pattern()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3627,6 +3643,11 @@ int ObTableSqlService::gen_column_dml(
   uint64_t tenant_data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (tenant_data_version < DATA_VERSION_4_2_0_0 &&
+             (column.is_xmltype() || column.get_udt_set_id() != 0 || column.get_sub_data_type() != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.2, xmltype type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, xmltype");
   } else if (tenant_data_version < DATA_VERSION_4_1_0_0 && ob_is_json(column.get_data_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.1, json type is not supported", K(ret), K(tenant_data_version), K(column));
@@ -3750,6 +3771,9 @@ int ObTableSqlService::gen_column_dml(
                          || OB_FAIL(dml.add_column("extended_type_info", ObHexEscapeSqlStr(bin_extended_type_info)))
                          || OB_FAIL(dml.add_column("prev_column_id", column.get_prev_column_id()))
                          || (tenant_data_version >= DATA_VERSION_4_1_0_0 && OB_FAIL(dml.add_column("srs_id", column.get_srs_id())))
+                            // todo : tenant_data_version >= DATA_VERSION_4_2_0_0
+                         || (tenant_data_version >= DATA_VERSION_4_2_0_0 && OB_FAIL(dml.add_column("udt_set_id", column.get_udt_set_id())))
+                         || (tenant_data_version >= DATA_VERSION_4_2_0_0 &&OB_FAIL(dml.add_column("sub_data_type", column.get_sub_data_type())))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {
       LOG_WARN("dml add column failed", K(ret));

@@ -37,7 +37,7 @@ struct MyPageAllocator: public ObIAllocator
   void freed(const int64_t sz) { UNUSED(sz); }
   void set_label(const oceanbase::lib::ObLabel &label) { UNUSED(label); }
   void set_tenant_id(uint64_t tenant_id) { UNUSED(tenant_id); }
-  oceanbase::lib::ObLabel get_label() const { return 0; }
+  oceanbase::lib::ObLabel get_label() const { return "test"; }
 
   static int64_t alloc_count_;
   static int64_t free_count_;

@@ -234,12 +234,14 @@ private:
   int check_if_union_all_match_set_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
                                                   bool &is_match_set_pw);
 
+  int check_sharding_inherit_from_access_all(ObLogicalOperator* op, bool &is_inherit_from_access_all);
+
   int check_if_union_all_match_extended_partition_wise(const ObIArray<ObLogicalOperator*> &child_ops,
                                                        bool &is_match_ext_pw);
 
   int get_largest_sharding_child(const ObIArray<ObLogicalOperator*> &child_ops,
                                  const int64_t candi_pos,
-                                 int64_t &largest_pos);
+                                 ObLogicalOperator *&largest_op);
 
   int allocate_union_all_as_top(const ObIArray<ObLogicalOperator*> &child_plans,
                                 DistAlgo dist_set_method,
@@ -266,8 +268,6 @@ private:
                                           ObLogicalOperator *&top);
 
   int candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans);
-
-  int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs);
 
   int get_allowed_branch_order(const bool ignore_hint,
                                const ObSelectStmt::SetOperator set_op,
@@ -354,6 +354,22 @@ private:
                                 bool &best_need_sort,
                                 int64_t &best_prefix_pos,
                                 const bool can_ignore_merge_plan);
+  int decide_merge_set_sort_key(const ObIArray<OrderItem> &set_order_items,
+                                const ObIArray<OrderItem> &input_ordering,
+                                const ObFdItemSet &fd_item_set,
+                                const EqualSets &equal_sets,
+                                const ObIArray<ObRawExpr*> &const_exprs,
+                                const ObIArray<ObRawExpr*> &exec_ref_exprs,
+                                const bool is_at_most_one_row,
+                                const ObIArray<ObRawExpr*> &merge_exprs,
+                                const ObIArray<ObOrderDirection> &default_directions,
+                                MergeKeyInfo &merge_key);
+  int convert_set_order_item(const ObDMLStmt *stmt, const ObIArray<ObRawExpr*> &select_exprs, ObIArray<OrderItem> &order_items);
+  int create_merge_set_key(const ObIArray<OrderItem> &set_order_items,
+                           const ObIArray<ObRawExpr*> &merge_exprs,
+                           const EqualSets &equal_sets,
+                           MergeKeyInfo &merge_key);
+
   /**
    * @brief create_merge_set
    * create merge-based set operation
@@ -678,6 +694,8 @@ private:
                                     ObLogicalOperator *&top,
                                     bool use_part_sort,
                                     bool can_ignore_merge = false);
+
+  int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
 
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };

@@ -183,6 +183,7 @@ public:
   static int get_workarea_size(
     const ObSqlWorkAreaType wa_type,
     const int64_t tenant_id,
+    ObExecContext *exec_ctx,
     int64_t &value
   );
 };

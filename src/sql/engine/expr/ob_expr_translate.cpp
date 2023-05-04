@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprTranslate::ObExprTranslate(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_TRANSLATE, N_TRANSLATE, MORE_THAN_ONE)
+    : ObStringExprOperator(alloc, T_FUN_SYS_TRANSLATE, N_TRANSLATE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL)
 {
 }
 

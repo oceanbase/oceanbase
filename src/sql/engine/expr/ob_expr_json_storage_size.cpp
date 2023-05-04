@@ -28,7 +28,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonStorageSize::ObExprJsonStorageSize(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_STORAGE_SIZE, N_JSON_STORAGE_SIZE, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_STORAGE_SIZE, N_JSON_STORAGE_SIZE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

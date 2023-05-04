@@ -1149,7 +1149,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
                                     s.get_index(),
                                     static_cast<int64_t>(INT64_MAX),
                                     s.get_user_type(),
-                                    s.get_expand_user_types(),
                                     ret_err));
       OZ (generator_.get_helper().create_icmp_eq(ret_err, OB_READ_NOTHING, is_not_found));
       OZ (generator_.get_helper().stack_restore(stack));
@@ -1446,7 +1445,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, p_result_obj));
       if (OB_SUCC(ret) && lib::is_oracle_mode()) { // check logic need before store function ret value
         if (generator_.get_ast().is_autonomous() &&
-            s.get_level() <= 1 &&
             OB_FAIL(generator_.generate_check_autonomos(s))) {
           LOG_WARN("failed to generate_check_autonomos", K(ret));
         }
@@ -1646,7 +1644,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
     ObLLVMValue exprs_not_null_array_value;
     ObLLVMValue pl_integer_range_array_value;
     ObLLVMValue is_bulk;
-    ObLLVMValue is_returning;
+    ObLLVMValue is_returning, is_type_record;
     ObLLVMValue ret_err;
 
     OZ (generator_.get_helper().set_insert_point(generator_.get_current()));
@@ -1739,6 +1737,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
     OZ (args.push_back(is_bulk));
     OZ (generator_.get_helper().get_int8(s.get_is_returning(), is_returning));
     OZ (args.push_back(is_returning));
+    OZ (generator_.get_helper().get_int8(s.is_type_record(), is_type_record));
+    OZ (args.push_back(is_type_record));
 
     // execution
     OZ (generator_.get_helper().create_call(
@@ -2736,7 +2736,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLFetchStmt &s)
                                         s.get_index(),
                                         s.get_limit(),
                                         s.get_user_type(),
-                                        s.get_expand_user_types(),
                                         ret_err))) {
     LOG_WARN("failed to generate fetch", K(ret));
   } else if (lib::is_mysql_mode()) { //Mysql模式直接检查抛出异常
@@ -3006,9 +3005,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLInterfaceStmt &s)
   int ret = OB_SUCCESS;
   ObSEArray<ObLLVMValue, 2> args;
   ObLLVMValue entry;
+  ObLLVMValue interface_name_length;
   ObLLVMValue ret_err;
+  const ObString interface_name = s.get_entry();
+  CK (!interface_name.empty());
   OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
-  OZ (generator_.get_helper().get_int64(s.get_entry(), entry));
+  OZ (generator_.generate_string(interface_name, entry, interface_name_length));
   OZ (args.push_back(entry));
   OZ (generator_.get_helper().create_call(ObString("spi_interface_impl"),
       generator_.get_spi_service().spi_interface_impl_,
@@ -3040,6 +3042,100 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDoStmt &s)
         ObLLVMValue p_result_obj;
         CK(OB_NOT_NULL(value_expr));
         OZ(generator_.generate_expr(s.get_value_index(i), s, result_idx,p_result_obj));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLCodeGenerateVisitor::visit(const ObPLCaseStmt &s)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == generator_.get_current().get_v()) {
+    //控制流已断，后面的语句不再处理
+  } else if (OB_FAIL(generator_.get_helper().set_insert_point(generator_.get_current()))) {
+    LOG_WARN("failed to set insert point", K(ret));
+  } else if (OB_FAIL(generator_.set_debug_location(s))) {
+    LOG_WARN("failed to set debug location", K(ret));
+  } else if (OB_FAIL(generator_.generate_goto_label(s))) {
+    LOG_WARN("failed to generate goto label", K(ret));
+  } else {
+    // generate case expr, if any
+    if (s.get_case_expr() != OB_INVALID_ID) {
+      int64_t case_expr_idx = s.get_case_expr();
+      int64_t case_var_idx = s.get_case_var();
+      ObLLVMValue p_result_obj;
+      if (OB_FAIL(generator_.generate_expr(case_expr_idx, s, case_var_idx, p_result_obj))) {
+        LOG_WARN("failed to generate calc_expr func", K(ret));
+      }
+    }
+
+    // generate when clause
+    ObLLVMBasicBlock continue_branch;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(generator_.get_helper().create_block(
+              ObString("continue"), generator_.get_func(), continue_branch))) {
+        LOG_WARN("faild to create continue branch for case stmt", K(ret));
+      } else {
+        const ObPLCaseStmt::WhenClauses &when = s.get_when_clauses();
+        for (int64_t i = 0; OB_SUCC(ret) && i < when.count(); ++i) {
+          const ObPLCaseStmt::WhenClause &current_when = when.at(i);
+          const sql::ObRawExpr *expr = s.get_expr(current_when.expr_);
+          ObLLVMBasicBlock current_then;
+          ObLLVMBasicBlock current_else;
+          ObLLVMValue p_cond;
+          ObLLVMValue cond;
+          ObLLVMValue is_false;
+          if (OB_ISNULL(expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr to when expr", K(i), K(current_when));
+          } else if (OB_FAIL(generator_.get_helper().create_block(
+                         ObString("then"), generator_.get_func(), current_then))) {
+            LOG_WARN("failed to create then branch for case stmt", K(ret));
+          } else if (OB_FAIL(generator_.get_helper().create_block(
+                         ObString("else"), generator_.get_func(), current_else))) {
+            LOG_WARN("failed to create else branch for case stmt", K(ret));
+          } else if (OB_FAIL(generator_.generate_expr(
+                         current_when.expr_, s, OB_INVALID_INDEX, p_cond))) {
+            LOG_WARN("failed to generate calc_expr func", K(ret));
+          } else if (OB_FAIL(generator_.extract_value_from_objparam(
+                         p_cond, expr->get_data_type(), cond))) {
+            LOG_WARN("failed to extract_value_from_objparam", K(ret));
+          } else if (OB_FAIL(generator_.get_helper().create_icmp_eq(
+                         cond, FALSE, is_false))) {
+            LOG_WARN("failed to create_icmp_eq", K(ret));
+          } else if (OB_FAIL(generator_.get_helper().create_cond_br(
+                         is_false, current_else, current_then))) {
+            LOG_WARN("failed to create_cond_br", K(ret));
+          } else if (OB_FAIL(generator_.set_current(current_then))) {
+            LOG_WARN("failed to set current to current_then branch", K(ret));
+          } else if (OB_FAIL(visit(*current_when.body_))) {
+            LOG_WARN("failed to visit then clause for case stmt", K(ret));
+          } else if (OB_FAIL(generator_.finish_current(continue_branch))) {
+            LOG_WARN("failed to finish current", K(ret));
+          } else if (OB_FAIL(generator_.set_current(current_else))) {
+            LOG_WARN("failed to set current to current_else branch", K(ret));
+          } else {
+            // do nothing
+          }
+        }
+      }
+    }
+
+    // generate else
+    if (OB_SUCC(ret)) {
+      const ObPLStmtBlock *else_clause = s.get_else_clause();
+      if (OB_ISNULL(else_clause)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("else in CASE stmt is NULL in CG", K(s), K(ret));
+      } else if (OB_FAIL(visit(*else_clause))) {
+        LOG_WARN("failed to visit else clause for case stmt", K(ret));
+      } else if (OB_FAIL(generator_.finish_current(continue_branch))) {
+        LOG_WARN("failed to finish current", K(ret));
+      } else if (OB_FAIL(generator_.set_current(continue_branch))) {
+        LOG_WARN("failed to set current", K(ret));
+      } else {
+        // do nohting
       }
     }
   }
@@ -3392,6 +3488,8 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_set_variable"), ft, spi_service_.spi_set_variable_))) {
@@ -3418,6 +3516,8 @@ int ObPLCodeGenerator::init_spi_service()
     } else if (OB_FAIL(arg_types.push_back(bool_type_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -3469,6 +3569,8 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
       LOG_WARN("failed to get function type", K(ret));
     } else if (OB_FAIL(helper_.create_function(ObString("spi_execute"), ft, spi_service_.spi_execute_))) {
@@ -3499,6 +3601,8 @@ int ObPLCodeGenerator::init_spi_service()
     } else if (OB_FAIL(arg_types.push_back(bool_type_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int_pointer_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -3659,6 +3763,7 @@ int ObPLCodeGenerator::init_spi_service()
     OZ (arg_types.push_back(int64_type));//limit
     OZ (arg_types.push_back(data_type_pointer_type));//return_type
     OZ (arg_types.push_back(int64_type));//return_type_count
+    OZ (arg_types.push_back(bool_type));//is_type_record
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_cursor_fetch"), ft, spi_service_.spi_cursor_fetch_));
   }
@@ -3819,7 +3924,7 @@ int ObPLCodeGenerator::init_spi_service()
   if (OB_SUCC(ret)) {
     arg_types.reset();
     OZ (arg_types.push_back(pl_exec_context_pointer_type));
-    OZ (arg_types.push_back(int64_type));
+    OZ (arg_types.push_back(char_type));
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_interface_impl"),
                                 ft, spi_service_.spi_interface_impl_));
@@ -4619,7 +4724,6 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
                                       const int64_t &cursor_index,
                                       const int64_t &limit,
                                       const ObUserDefinedType *user_defined_type,
-                                      const ObIArray<ObDataType> &user_types,
                                       jit::ObLLVMValue &ret_err)
 {
   int ret = OB_SUCCESS;
@@ -4649,7 +4753,7 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
     ObLLVMValue type_count_value;
     ObLLVMValue exprs_not_null_array_value;
     ObLLVMValue pl_integer_array_value;
-    ObLLVMValue is_bulk;
+    ObLLVMValue is_bulk, is_type_record;
     OZ (generate_into(into, into_array_value, into_count_value,
                             type_array_value, type_count_value,
                             exprs_not_null_array_value,
@@ -4707,31 +4811,46 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
       OZ (ObLLVMHelper::get_null_const(data_type_pointer, return_type_array_value));
       OZ (helper_.get_int64(0, return_type_count_value));
     } else {
+      const ObRecordType *return_type = static_cast<const ObRecordType*>(user_defined_type);
+      const ObPLDataType *pl_data_type = nullptr;
+      CK (OB_NOT_NULL(return_type));
       OZ (adt_service_.get_data_type(data_type));
       OZ (data_type.get_pointer_to(data_type_pointer));
       OZ (ObLLVMHelper::get_array_type(data_type,
-                                      user_types.count(),
+                                      return_type->get_record_member_count(),
                                       array_type));
       OZ (helper_.create_alloca(ObString("datatype_array"),
                               array_type,
                               return_type_array_value));
 
-      for (int64_t i = 0; OB_SUCC(ret) && i < user_types.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < return_type->get_record_member_count(); ++i) {
         type_value.reset();
         OZ (helper_.create_gep(ObString("extract_datatype"),
                                 return_type_array_value,
                                 i, type_value));
-        OZ (store_data_type(user_types.at(i), type_value));
+        pl_data_type = return_type->get_record_member_type(i);
+        CK (OB_NOT_NULL(pl_data_type));
+        if (OB_SUCC(ret)) {
+          if (pl_data_type->is_obj_type()) {
+            OZ (store_data_type(*(pl_data_type->get_data_type()), type_value));
+          } else { // 构造函数场景
+            ObDataType ext_type;
+            ext_type.set_obj_type(ObExtendType);
+            OZ (store_data_type(ext_type, type_value));
+          }
+        }
       }
 
       OZ (helper_.create_bit_cast(ObString("datatype_array_to_pointer"),
               return_type_array_value, data_type_pointer, return_type_array_value));
-      OZ (helper_.get_int64(static_cast<int64_t>(user_types.count()),
+      OZ (helper_.get_int64(static_cast<int64_t>(return_type->get_record_member_count()),
                             return_type_count_value));
     }
 
     OZ (args.push_back(return_type_array_value));
     OZ (args.push_back(return_type_count_value));
+    OZ (helper_.get_int8(static_cast<int64_t>(into.is_type_record()), is_type_record));
+    OZ (args.push_back(is_type_record));
 
     OZ (get_helper().create_call(ObString("spi_cursor_fetch"),
                                  get_spi_service().spi_cursor_fetch_,
@@ -5155,7 +5274,7 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     ObLLVMValue for_update;
     ObLLVMValue hidden_rowid;
     ObLLVMValue params;
-    ObLLVMValue count;
+    ObLLVMValue count, is_type_record;
     OZ (args.push_back(get_vars().at(CTX_IDX)));
     OZ (generate_sql(s, str, len, ps_sql, type, for_update, hidden_rowid, params, count));
     if (OB_SUCC(ret)) {
@@ -5192,12 +5311,16 @@ int ObPLCodeGenerator::generate_sql(const ObPLSqlStmt &s, ObLLVMValue &ret_err)
     }
     if (OB_SUCC(ret)) {
       if (s.get_params().empty()) {
+        OZ (get_helper().get_int8(static_cast<int64_t>(s.is_type_record()), is_type_record));
+        OZ (args.push_back(is_type_record));
         OZ (args.push_back(for_update));
         OZ (get_helper().create_call(ObString("spi_query"), get_spi_service().spi_query_, args, ret_err));
       } else { //有外部变量，走prepare/execute接口
         ObLLVMValue is_forall;
         OZ (get_helper().get_int8(static_cast<int64_t>(s.is_forall_sql()), is_forall));
         OZ (args.push_back(is_forall));
+        OZ (get_helper().get_int8(static_cast<int64_t>(s.is_type_record()), is_type_record));
+        OZ (args.push_back(is_type_record));
         OZ (args.push_back(for_update));
         OZ (get_helper().create_call(ObString("spi_execute"), get_spi_service().spi_execute_, args, ret_err));
       }
@@ -6423,6 +6546,9 @@ int ObPLCodeGenerator::generate_into(const ObPLInto &into,
              K(into.get_data_type()),
              K(into.get_not_null_flags()),
              K(into.get_pl_integer_ranges()));
+  } else if (into.is_type_record() && 1 != into.get_into_data_type().count()) {
+    ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+    LOG_WARN("coercion into multiple record targets not supported", K(ret));
   } else {
     ObLLVMType data_type;
     ObLLVMType data_type_pointer;
@@ -6560,7 +6686,7 @@ int ObPLCodeGenerator::generate_set_variable(int64_t expr,
   int ret = OB_SUCCESS;
   ObSEArray<ObLLVMValue, 5> args;
   ObLLVMValue expr_addr;
-  ObLLVMValue is_default_value;
+  ObLLVMValue is_default_value, need_copy;
   ObLLVMValue result;
   if (OB_FAIL(args.push_back(get_vars().at(CTX_IDX)))) { //PL的执行环境
     LOG_WARN("push_back error", K(ret));
@@ -6573,6 +6699,10 @@ int ObPLCodeGenerator::generate_set_variable(int64_t expr,
   } else if (OB_FAIL(helper_.get_int8(is_default, is_default_value))) {
     LOG_WARN("failed tio get int8", K(is_default), K(ret));
   } else if (OB_FAIL(args.push_back(is_default_value))) { //is_default
+    LOG_WARN("push_back error", K(ret));
+  } else if (OB_FAIL(helper_.get_int8(false, need_copy))) {
+    LOG_WARN("failed tio get int8", K(ret));
+  } else if (OB_FAIL(args.push_back(need_copy))) {
     LOG_WARN("push_back error", K(ret));
   } else if (OB_FAIL(get_helper().create_call(ObString("spi_set_variable"), get_spi_service().spi_set_variable_, args, result))) {
     LOG_WARN("failed to create call", K(ret));

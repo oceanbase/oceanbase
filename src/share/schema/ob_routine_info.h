@@ -80,6 +80,11 @@ enum ObRoutineFlag
   SP_FLAG_READS_SQL_DATA = 65536,
   SP_FLAG_MODIFIES_SQL_DATA = 131072,
   SP_FLAG_CONTAINS_SQL = 262144,
+  SP_FLAG_WPS = SP_FLAG_CONTAINS_SQL * 2,
+  SP_FLAG_RPS = SP_FLAG_WPS * 2,
+  SP_FLAG_HAS_SEQUENCE = SP_FLAG_RPS * 2,
+  SP_FLAG_HAS_OUT_PARAM = SP_FLAG_HAS_SEQUENCE * 2,
+  SP_FLAG_EXTERNAL_STATE = SP_FLAG_HAS_OUT_PARAM * 2,
 };
 
 namespace oceanbase
@@ -152,7 +157,16 @@ public:
   virtual bool is_modifies_sql_data() const = 0;
   virtual void set_contains_sql() = 0;
   virtual bool is_contains_sql() const = 0;
-
+  virtual bool is_wps() const = 0;
+  virtual bool is_rps() const = 0;
+  virtual bool is_has_sequence() const = 0;
+  virtual bool is_has_out_param() const = 0;
+  virtual bool is_external_state() const = 0;
+  virtual void set_wps() = 0;
+  virtual void set_rps() = 0;
+  virtual void set_has_sequence() = 0;
+  virtual void set_has_out_param() = 0;
+  virtual void set_external_state() = 0;
   TO_STRING_EMPTY();
 };
 
@@ -469,7 +483,26 @@ public:
   OB_INLINE void set_no_sql() { flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA; flag_ |= SP_FLAG_NO_SQL;}
   OB_INLINE void set_reads_sql_data() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA; flag_ |= SP_FLAG_READS_SQL_DATA;}
   OB_INLINE void set_modifies_sql_data() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ |= SP_FLAG_MODIFIES_SQL_DATA;}
-  OB_INLINE void set_contains_sql() { flag_ &= ~SP_FLAG_NO_SQL; flag_ &= ~SP_FLAG_READS_SQL_DATA; flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA;}
+  OB_INLINE void set_contains_sql()
+  {
+    flag_ &= ~SP_FLAG_NO_SQL;
+    flag_ &= ~SP_FLAG_READS_SQL_DATA;
+    flag_ &= ~SP_FLAG_MODIFIES_SQL_DATA;
+    flag_ |= SP_FLAG_CONTAINS_SQL;
+  }
+
+
+  OB_INLINE bool is_wps() const { return SP_FLAG_WPS == (flag_ & SP_FLAG_WPS); }
+  OB_INLINE bool is_rps() const { return SP_FLAG_RPS == (flag_ & SP_FLAG_RPS); }
+  OB_INLINE bool is_has_sequence() const { return SP_FLAG_HAS_SEQUENCE == (flag_ & SP_FLAG_HAS_SEQUENCE); }
+  OB_INLINE bool is_has_out_param() const { return SP_FLAG_HAS_OUT_PARAM == (flag_ & SP_FLAG_HAS_OUT_PARAM); }
+  OB_INLINE bool is_external_state() const { return SP_FLAG_EXTERNAL_STATE == (flag_ & SP_FLAG_EXTERNAL_STATE); }
+
+  OB_INLINE void set_wps() { flag_ |= SP_FLAG_WPS;}
+  OB_INLINE void set_rps() { flag_ |= SP_FLAG_RPS;}
+  OB_INLINE void set_has_sequence() { flag_ |= SP_FLAG_HAS_SEQUENCE;}
+  OB_INLINE void set_has_out_param() { flag_ |= SP_FLAG_HAS_OUT_PARAM;}
+  OB_INLINE void set_external_state() { flag_ |= SP_FLAG_EXTERNAL_STATE;}
 
   OB_INLINE bool is_aggregate() const { return SP_FLAG_AGGREGATE == (flag_ & SP_FLAG_AGGREGATE); }
 

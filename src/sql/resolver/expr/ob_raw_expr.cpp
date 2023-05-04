@@ -56,7 +56,7 @@ ObRawExpr *USELESS_POINTER = NULL;
       SQL_RESV_LOG(WARN, "failed to create raw expr", K(ret), K(expr_type)); \
     }                                                                   \
   }
-  
+
 template <>
 int ObRawExprFactory::create_raw_expr<ObSysFunRawExpr>(ObItemType expr_type, ObSysFunRawExpr *&raw_expr)
 {
@@ -398,7 +398,13 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
 int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(extract_info())) {
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("fail to check stack overflow", K(ret), K(is_stack_overflow));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
+  } else if (OB_FAIL(extract_info())) {
     LOG_WARN("failed to extract info", K(*this));
   } else if (OB_FAIL(deduce_type(session_info))) {
     LOG_WARN("failed to deduce type", K(*this));
@@ -533,6 +539,11 @@ bool ObRawExpr::is_spatial_expr() const
 bool ObRawExpr::is_geo_expr() const
 {
   return IS_GEO_OP(get_expr_type());
+}
+
+bool ObRawExpr::is_xml_expr() const
+{
+  return IS_XML_OP(get_expr_type());
 }
 
 bool ObRawExpr::is_mysql_geo_expr() const
@@ -939,7 +950,9 @@ void ObConstRawExpr::reset_is_date_unit()
 
 uint64_t ObConstRawExpr::hash_internal(uint64_t seed) const
 {
-  return value_.hash(seed);
+  uint64_t hash_val = seed;
+  value_.hash(hash_val, seed);
+  return hash_val;
 }
 
 bool ObConstRawExpr::inner_same_as(
@@ -1160,7 +1173,7 @@ void ObUserVarIdentRawExpr::reset()
 
 uint64_t ObUserVarIdentRawExpr::hash_internal(uint64_t seed) const
 {
-  seed = value_.hash(seed);
+  value_.hash(seed, seed);
   seed = common::do_hash(is_contain_assign_, seed);
   return seed;
 }
@@ -2348,9 +2361,21 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
     }
-  } else if (T_OP_JOIN_BLOOM_FILTER == get_expr_type()) {
-    if (OB_FAIL(BUF_PRINTF("SYS_OP_BLOOM_FILTER("))) {
-      LOG_WARN("fail to BUF_PRINTF", K(ret));
+  } else if (T_OP_RUNTIME_FILTER == get_expr_type()) {
+    if (RuntimeFilterType::BLOOM_FILTER == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_BLOOM_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    } else if (RuntimeFilterType::RANGE == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_RANGE_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    } else if (RuntimeFilterType::IN == runtime_filter_type_) {
+      if (OB_FAIL(BUF_PRINTF("RF_IN_FILTER("))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count() ; ++i) {
         if (OB_ISNULL(get_param_expr(i))) {
@@ -3666,7 +3691,7 @@ ObExprOperator *ObSysFunRawExpr::get_op()
     }
   }
   if (OB_UNLIKELY(NULL == (op = ObOpRawExpr::get_op()))) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "make function failed", K_(func_name));
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "make function failed", K_(func_name));
   }
   return op;
 }
@@ -5425,6 +5450,7 @@ int ObPseudoColumnRawExpr::assign(const ObRawExpr &other)
       cte_cycle_value_ = tmp.cte_cycle_value_;
       cte_cycle_default_value_ = tmp.cte_cycle_default_value_;
       table_id_ = tmp.table_id_;
+      table_name_ = tmp.table_name_;
     }
   }
   return ret;
@@ -5498,6 +5524,13 @@ int ObPseudoColumnRawExpr::get_name_internal(char *buf, const int64_t buf_len, i
     case T_PSEUDO_STMT_ID:
     case T_PSEUDO_GROUP_PARAM:
       if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
+        LOG_WARN("failed to print expr name", K(ret));
+      }
+      break;
+    case T_PSEUDO_EXTERNAL_FILE_COL:
+      if (!table_name_.empty() && OB_FAIL(BUF_PRINTF("%.*s.", table_name_.length(), table_name_.ptr()))) {
+          LOG_WARN("failed to print table name", K(ret));
+      } else if (OB_FAIL(databuff_print_obj(buf, buf_len, pos, expr_name_))) {
         LOG_WARN("failed to print expr name", K(ret));
       }
       break;

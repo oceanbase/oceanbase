@@ -46,7 +46,6 @@ class ObString;
     ACT(OBSERVICE_GET_LEADER_CANDIDATES,)                          \
     ACT(CHECK_NEW_TENANT,)                                         \
     ACT(BEFORE_CHECK_MAJOR_FREEZE_DONE,)                           \
-    ACT(SET_FORCE_STOP_HB_DONE,)                                   \
     ACT(UPDATE_WITH_PARTITION_FLAG_DONE,)                          \
     ACT(MAJOR_FREEZE_AFTER_SYS_COMMIT,)                            \
     ACT(MAJOR_FREEZE_AFTER_ROOTSERVER_COMMIT,)                     \
@@ -454,8 +453,11 @@ class ObString;
     ACT(AFTER_LS_GC_DELETE_ALL_TABLETS,)\
     ACT(BEFORE_ARCHIVE_ADD_LS_TASK,)\
     ACT(AFTER_UPDATE_INDEX_STATUS,)\
+    ACT(END_DELETE_SERVER_BEFORE_CHECK_META_TABLE,)\
     ACT(BEFORE_MIGRATION_DISABLE_VOTE,)\
     ACT(MEMBERLIST_CHANGE_MEMBER,)\
+    ACT(BEFORE_CHECK_CLEAN_DRTASK,)\
+    ACT(BEFORE_UNIQ_TASK_RUN,)\
     ACT(MAX_DEBUG_SYNC_POINT,)
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);

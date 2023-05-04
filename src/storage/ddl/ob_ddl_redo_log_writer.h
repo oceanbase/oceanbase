@@ -102,6 +102,7 @@ private:
         : tenant_id_(OB_INVALID_TENANT_ID), ls_id_() {}
       ~SpeedHandleKey() {}
       int64_t hash() const {return tenant_id_ + ls_id_.hash();}
+      int hash(uint64_t &hash_val) const {hash_val = hash(); return OB_SUCCESS;}
       bool is_valid() const {
         return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid();}
       bool operator == (const SpeedHandleKey &other) const {

@@ -30,18 +30,18 @@ namespace sql
 {
 
 ObIExprSTGeomFromWKB::ObIExprSTGeomFromWKB(common::ObIAllocator &alloc, ObExprOperatorType type,
-                                           const char *name, int32_t param_num, int32_t dimension)
-  : ObFuncExprOperator(alloc, type, name, param_num, dimension)
+                                           const char *name, int32_t param_num, ObValidForGeneratedColFlag valid_for_generated_col, int32_t dimension)
+  : ObFuncExprOperator(alloc, type, name, param_num, valid_for_generated_col, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 
 ObExprSTGeomFromWKB::ObExprSTGeomFromWKB(ObIAllocator &alloc)
-    : ObIExprSTGeomFromWKB(alloc, T_FUN_SYS_ST_GEOMFROMWKB, N_ST_GEOMFROMWKB, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObIExprSTGeomFromWKB(alloc, T_FUN_SYS_ST_GEOMFROMWKB, N_ST_GEOMFROMWKB, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
 ObExprSTGeometryFromWKB::ObExprSTGeometryFromWKB(ObIAllocator &alloc)
-    : ObIExprSTGeomFromWKB(alloc, T_FUN_SYS_ST_GEOMETRYFROMWKB, N_ST_GEOMETRYFROMWKB, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObIExprSTGeomFromWKB(alloc, T_FUN_SYS_ST_GEOMETRYFROMWKB, N_ST_GEOMETRYFROMWKB, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

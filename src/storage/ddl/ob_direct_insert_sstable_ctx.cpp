@@ -1299,19 +1299,22 @@ int ObSSTableInsertManager::init()
   int ret = OB_SUCCESS;
   const int64_t bucket_num = 1000L * 100L; // 10w
   const int64_t memory_limit = 1024L * 1024L * 1024L * 10L; // 10GB
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "DInsSstMgr");
+  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else if (OB_FAIL(allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                    lib::ObLabel("DInsSstMgr"),
-                                    OB_SERVER_TENANT_ID,
-                                    memory_limit))) {
+                                     attr.label_,
+                                     OB_SERVER_TENANT_ID,
+                                     memory_limit))) {
     LOG_WARN("init alloctor failed", K(ret));
   } else if (OB_FAIL(bucket_lock_.init(bucket_num))) {
     LOG_WARN("init bucket lock failed", K(ret), K(bucket_num));
-  } else if (OB_FAIL(table_ctx_map_.create(bucket_num, lib::ObLabel("DInsSstMgr")))) {
+  } else if (OB_FAIL(table_ctx_map_.create(bucket_num, attr, attr))) {
     LOG_WARN("create context map failed", K(ret));
   } else {
+    allocator_.set_attr(attr);
     context_id_generator_ = ObTimeUtility::current_time();
     is_inited_ = true;
   }

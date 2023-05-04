@@ -311,7 +311,7 @@ int ObQueryHint::init_query_hint(ObIAllocator *allocator,
   } else if (OB_FAIL(distribute_hint_to_orig_stmt(stmt))) {
     LOG_WARN("faild to distribute hint to orig stmt", K(ret));
   } else {
-    LOG_DEBUG("finish init query hint", K(*this));
+    LOG_TRACE("finish init query hint", K(*this));
   }
   return ret;
 }
@@ -1111,7 +1111,7 @@ int ObStmtHint::init_stmt_hint(const ObDMLStmt &stmt,
         LOG_WARN("failed to merge hint", K(ret));
       }
     }
-    LOG_DEBUG("finish init stmt hint", K(stmt.get_stmt_id()), K(qb_name), K(*this));
+    LOG_TRACE("finish init stmt hint", K(stmt.get_stmt_id()), K(qb_name), K(*this));
   }
   return ret;
 }
@@ -1393,7 +1393,8 @@ int ObStmtHint::merge_hint(ObHint &hint,
   if (hint.is_access_path_hint()
       || hint.is_join_hint()
       || hint.is_join_filter_hint()
-      || hint.is_table_parallel_hint()) {
+      || hint.is_table_parallel_hint()
+      || hint.is_table_dynamic_sampling_hint()) {
     if (OB_FAIL(add_var_to_array_no_dup(other_opt_hints_, &hint))) {
       LOG_WARN("failed to add var to array", K(ret));
     }
@@ -1509,7 +1510,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                                           stmt_hint.other_opt_hints_))) {
     LOG_WARN("failed to init other opt hints", K(ret));
   } else {
-    LOG_TRACE("finish init log plan hint", K(stmt.get_stmt_id()), K(*this));
+    LOG_TRACE("finish init log plan hint", K(stmt.get_stmt_id()), K(*this), K(stmt_hint.normal_hints_), K(stmt_hint.other_opt_hints_));
   }
   return ret;
 }
@@ -1558,6 +1559,11 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
       if (OB_FAIL(add_join_hint(stmt, query_hint, *static_cast<const ObJoinHint*>(hint)))) {
         LOG_WARN("failed to add join hint", K(ret));
       }
+    } else if (hint->is_table_dynamic_sampling_hint()) {
+      if (OB_FAIL(add_table_dynamic_sampling_hint(stmt, query_hint,
+                                                  *static_cast<const ObTableDynamicSamplingHint*>(hint)))) {
+        LOG_WARN("failed to add dynamic sampling hint", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type in other_opt_hints_", K(ret), K(*hint));
@@ -1576,6 +1582,7 @@ int ObLogPlanHint::init_other_opt_hints(ObSqlSchemaGuard &schema_guard,
 //  1. index hints;
 //  2. imc hints;
 //  3. table parallel hints;
+//  4. dynamic sampling hint;
 int ObLogPlanHint::init_log_table_hints(ObSqlSchemaGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -1632,6 +1639,28 @@ int ObLogPlanHint::add_table_parallel_hint(const ObDMLStmt &stmt,
   } else if (NULL == log_table_hint->parallel_hint_ ||
              table_parallel_hint.get_parallel() > log_table_hint->parallel_hint_->get_parallel()) {
     log_table_hint->parallel_hint_ = &table_parallel_hint;
+  }
+  return ret;
+}
+
+int ObLogPlanHint::add_table_dynamic_sampling_hint(const ObDMLStmt &stmt,
+                                                   const ObQueryHint &query_hint,
+                                                   const ObTableDynamicSamplingHint &table_ds_hint)
+{
+  int ret = OB_SUCCESS;
+  LogTableHint *log_table_hint = NULL;
+  if (OB_FAIL(get_log_table_hint_for_update(stmt, query_hint, table_ds_hint.get_table(),
+                                            true, log_table_hint))) {
+    LOG_WARN("failed to get log table hint by hint", K(ret));
+  } else if (NULL == log_table_hint) {
+    /* do nothing */
+  } else if (NULL == log_table_hint->dynamic_sampling_hint_ && !log_table_hint->is_ds_hint_conflict_) {
+    log_table_hint->dynamic_sampling_hint_ = &table_ds_hint;
+  } else if (log_table_hint->dynamic_sampling_hint_->get_dynamic_sampling() != table_ds_hint.get_dynamic_sampling() ||
+             log_table_hint->dynamic_sampling_hint_->get_sample_block_cnt() != table_ds_hint.get_sample_block_cnt()) {
+    //conflict will cause reset origin state compatible Oracle.
+    log_table_hint->dynamic_sampling_hint_ = NULL;
+    log_table_hint->is_ds_hint_conflict_ = true;
   }
   return ret;
 }
@@ -1807,10 +1836,16 @@ const LogTableHint* ObLogPlanHint::get_index_hint(uint64_t table_id) const
   return NULL != log_table_hint && !log_table_hint->index_hints_.empty() ? log_table_hint : NULL;
 }
 
-const ObTableParallelHint *ObLogPlanHint::get_parallel_hint(uint64_t table_id) const
+int64_t ObLogPlanHint::get_parallel(uint64_t table_id) const
 {
+  int64_t table_parallel = ObGlobalHint::UNSET_PARALLEL;
   const LogTableHint *log_table_hint = get_log_table_hint(table_id);
-  return NULL == log_table_hint ? NULL : log_table_hint->parallel_hint_;
+  if (NULL == log_table_hint || NULL == log_table_hint->parallel_hint_) {
+    table_parallel = is_outline_data_ ? ObGlobalHint::DEFAULT_PARALLEL : ObGlobalHint::UNSET_PARALLEL;
+  } else {
+    table_parallel = log_table_hint->parallel_hint_->get_parallel();
+  }
+  return table_parallel;
 }
 
 int ObLogPlanHint::check_use_das(uint64_t table_id, bool &force_das, bool &force_no_das) const
@@ -1855,6 +1890,12 @@ int ObLogPlanHint::check_use_skip_scan(uint64_t table_id,
     force_no_skip_scan = true;
   }
   return ret;
+}
+
+const ObTableDynamicSamplingHint *ObLogPlanHint::get_dynamic_sampling_hint(uint64_t table_id) const
+{
+  const LogTableHint *log_table_hint = get_log_table_hint(table_id);
+  return NULL == log_table_hint ? NULL : log_table_hint->dynamic_sampling_hint_;
 }
 
 int ObLogPlanHint::check_use_join_filter(uint64_t filter_table_id,

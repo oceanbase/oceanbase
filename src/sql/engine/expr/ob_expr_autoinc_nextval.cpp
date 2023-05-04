@@ -30,7 +30,7 @@ ObExprAutoincNextval::ObExprAutoincNextval(ObIAllocator &alloc)
                          T_FUN_SYS_AUTOINC_NEXTVAL,
                          N_AUTOINC_NEXTVAL,
                          ZERO_OR_ONE,
-                         NOT_ROW_DIMENSION)
+                         NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
   /* NextVal是一个人肉生成的FuncOp */
   disable_operand_auto_cast();

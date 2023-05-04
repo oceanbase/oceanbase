@@ -23,6 +23,8 @@
 #include "sql/engine/px/ob_px_target_mgr.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/dtl/ob_dtl_basic_channel.h"
+#include "share/detect/ob_detect_callback.h"
+#include "share/detect/ob_detect_manager_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -90,6 +92,9 @@ int ObInitSqcP::process()
     LOG_WARN("Worker thread res not enough", K_(result));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("Failed to link qc sqc channel", K(ret));
+  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+    LOG_WARN("[DM] sqc failed to register_into_dm");
   } else {
     /*do nothing*/
   }
@@ -395,6 +400,9 @@ int ObInitFastSqcP::process()
     LOG_WARN("Session can't be null", K(ret));
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("fail to link qc sqc channel", K(ret));
+  } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
+      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+    LOG_WARN("[DM] sqc failed to register_into_dm");
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();
     arg.sqc_.set_task_count(1);
@@ -634,14 +642,44 @@ int ObPxTenantTargetMonitorP::process()
           LOG_INFO("reset statistics succeed", K(tenant_id), K(leader_version));
         }
       } else {
-        const hash::ObHashMap<ObAddr, ServerTargetUsage> *global_target_usage = NULL;
-        if (OB_FAIL(OB_PX_TARGET_MGR.get_global_target_usage(tenant_id, global_target_usage))) {
+        ObPxGlobalResGather gather(result_);
+        if (OB_FAIL(OB_PX_TARGET_MGR.gather_global_target_usage(tenant_id, gather))) {
           LOG_WARN("get global thread count failed", K(ret), K(tenant_id));
-        } else {
-          for (hash::ObHashMap<ObAddr, ServerTargetUsage>::const_iterator it = global_target_usage->begin();
-              OB_SUCC(ret) && it != global_target_usage->end(); ++it) {
-            if (OB_FAIL(result_.push_peer_target_usage(it->first, it->second.get_peer_used()))) {
-              COMMON_LOG(WARN, "push_back peer_used failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPxCleanDtlIntermResP::process()
+{
+  int ret = OB_SUCCESS;
+  dtl::ObDTLIntermResultKey key;
+  int64_t batch_size = 0 == arg_.batch_size_ ? 1 : arg_.batch_size_;
+  for (int64_t i = 0; i < arg_.info_.count(); i++) {
+    ObPxCleanDtlIntermResInfo &info = arg_.info_.at(i);
+    for (int64_t task_id = 0; task_id < info.task_count_; task_id++) {
+      ObPxTaskChSet ch_set;
+      if (OB_FAIL(ObDtlChannelUtil::get_receive_dtl_channel_set(info.sqc_id_, task_id,
+            info.ch_total_info_, ch_set))) {
+        LOG_WARN("get receive dtl channel set failed", K(ret));
+      } else {
+        LOG_TRACE("ObPxCleanDtlIntermResP process", K(i), K(arg_.batch_size_), K(info), K(task_id), K(ch_set));
+        for (int64_t ch_idx = 0; ch_idx < ch_set.count(); ch_idx++) {
+          key.channel_id_ = ch_set.get_ch_info_set().at(ch_idx).chid_;
+          for (int64_t batch_id = 0; batch_id < batch_size && OB_SUCC(ret); batch_id++) {
+            key.batch_id_= batch_id;
+            if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                // interm result is written from batch_id = 0 to batch_size,
+                // if some errors happen when batch_id = i, no interm result of batch_id > i will be written.
+                // so if erase failed, just break and continue to erase interm result of next channel.
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("fail to release recieve internal result", K(ret), K(ret));
+              }
             }
           }
         }

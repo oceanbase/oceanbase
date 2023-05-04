@@ -48,10 +48,13 @@ struct ObHashPartCols
     return hash_value_;
   }
 
-  bool equal(
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
+  int equal(
       const ObHashPartCols &other,
       const common::ObIArray<ObSortFieldCollation> *sort_collations,
-      const common::ObIArray<ObCmpFunc> *cmp_funcs) const;
+      const common::ObIArray<ObCmpFunc> *cmp_funcs,
+      bool &result) const;
   int equal_distinct(
         const common::ObIArray<ObExpr *> *exprs,
         const ObHashPartCols &other,
@@ -269,6 +272,9 @@ public:
 
     uint64_t hash() const
     { return common::murmurhash(&part_key_, sizeof(part_key_), 0); }
+
+    int hash(uint64_t &hash_val) const
+    { hash_val = hash(); return OB_SUCCESS; }
 
     bool operator==(const ObIntraPartKey &other) const
     {
@@ -1715,8 +1721,8 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::calc_hash_value(
       const int64_t idx = sort_collations_->at(i).field_idx_;
       if (OB_FAIL(exprs.at(idx)->eval(*eval_ctx_, datum))) {
         SQL_ENG_LOG(WARN, "failed to eval expr", K(ret));
-      } else {
-        hash_value = hash_funcs_->at(i).hash_func_(*datum, hash_value);
+      } else if (OB_FAIL(hash_funcs_->at(i).hash_func_(*datum, hash_value, hash_value))) {
+        SQL_ENG_LOG(WARN, "failed to do hash", K(ret));
       }
     }
   }
@@ -2699,10 +2705,13 @@ int ObHashPartitionExtendHashTable<Item>::get(
   } else {
     common::hash::hash_func<Item> hf;
     bool equal_res = false;
+    uint64_t bucket_hash_val = 0;
     Item *bucket = buckets_->at(hash_value & (get_bucket_num() - 1));
     ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx_);
     while (OB_SUCC(ret) && NULL != bucket) {
-      if (hash_value == hf(*bucket)) {
+      if (OB_FAIL(hf(*bucket, bucket_hash_val))) {
+        SQL_ENG_LOG(WARN, "fail to get bucket hash val", K(ret));
+      } else if (hash_value == bucket_hash_val) {
         if (OB_FAIL(bucket->equal_distinct(exprs_, part_cols, sort_collations_,
                                            cmp_funcs_, eval_ctx_, equal_res, guard))) {
           SQL_ENG_LOG(WARN, "compare info is null", K(ret));
@@ -2721,6 +2730,7 @@ template <typename Item>
 int ObHashPartitionExtendHashTable<Item>::set(Item &item)
 {
   int ret = common::OB_SUCCESS;
+  uint64_t hash_val = 0;
   common::hash::hash_func<Item> hf;
   if (!is_push_down_ && size_ >= get_bucket_num() * SIZE_BUCKET_PERCENT / 100) {
     int64_t extend_bucket_num =
@@ -2738,8 +2748,10 @@ int ObHashPartitionExtendHashTable<Item>::set(Item &item)
   } else if (item.use_expr_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_ENG_LOG(WARN, "unexpected status: store_row is null", K(ret));
+  } else if (OB_FAIL(hf(item, hash_val))) {
+    SQL_ENG_LOG(WARN, "hash failed", K(ret));
   } else {
-    Item *&bucket = buckets_->at(hf(item) & (get_bucket_num() - 1));
+    Item *&bucket = buckets_->at(hash_val & (get_bucket_num() - 1));
     item.next() = bucket;
     bucket = &item;
     size_ += 1;
@@ -2757,18 +2769,23 @@ int ObHashPartitionExtendHashTable<Item>::set_distinct(Item &item, uint64_t hash
   Item *&insert_bucket = buckets_->at(hash_value & (get_bucket_num() - 1));
   Item *bucket = insert_bucket;
   ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx_);
+  uint64_t bucket_hash_val = 0;
   if (OB_NOT_NULL(bucket)) {
     while(OB_SUCC(ret) && OB_NOT_NULL(bucket)) {
-      bool equal_res = (hash_value == hf(*bucket));
-      if (equal_res &&
-          OB_FAIL(bucket->equal_distinct(exprs_, item, sort_collations_,
-                                         cmp_funcs_, eval_ctx_, equal_res, guard))) {
-        SQL_ENG_LOG(WARN, "failed to compare items", K(ret));
-      } else if (equal_res) {
-        need_insert = false;
-        ret = OB_HASH_EXIST;
+      if (OB_FAIL(hf(*bucket, bucket_hash_val))) {
+        SQL_ENG_LOG(WARN, "failed to do bucket hash", K(ret));
       } else {
-        bucket = bucket->next();
+        bool equal_res = (hash_value == bucket_hash_val);
+        if (equal_res &&
+            OB_FAIL(bucket->equal_distinct(exprs_, item, sort_collations_,
+                                          cmp_funcs_, eval_ctx_, equal_res, guard))) {
+          SQL_ENG_LOG(WARN, "failed to compare items", K(ret));
+        } else if (equal_res) {
+          need_insert = false;
+          ret = OB_HASH_EXIST;
+        } else {
+          bucket = bucket->next();
+        }
       }
     }
   }
@@ -2808,6 +2825,7 @@ int ObHashPartitionExtendHashTable<Item>::extend(const int64_t new_bucket_num)
 {
   int ret = common::OB_SUCCESS;
   common::hash::hash_func<Item> hf;
+  uint64_t hash_val = 0;
   BucketArray *new_buckets = NULL;
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(buckets_)) {
@@ -2820,7 +2838,7 @@ int ObHashPartitionExtendHashTable<Item>::extend(const int64_t new_bucket_num)
     const int64_t tmp_new_bucket_num = new_buckets->count();
     const int64_t old_bucket_num = get_bucket_num();
     const int64_t BATCH_SIZE = 1024;
-    for (int64_t i = 0; i < old_bucket_num; i += BATCH_SIZE) {
+    for (int64_t i = 0; i < old_bucket_num && OB_SUCC(ret); i += BATCH_SIZE) {
       int64_t batch_size = min(old_bucket_num - i, BATCH_SIZE);
       for (int64_t j = 0; j < batch_size; ++j) {
         Item *bucket = buckets_->at(i + j);
@@ -2832,16 +2850,20 @@ int ObHashPartitionExtendHashTable<Item>::extend(const int64_t new_bucket_num)
           __builtin_prefetch(bucket->next(), 0/* read */, 2 /*high temp locality*/);
         }
       }
-      for (int64_t j = 0; j < batch_size; ++j) {
+      for (int64_t j = 0; j < batch_size && OB_SUCC(ret); ++j) {
         Item *bucket = buckets_->at(i + j);
         if (nullptr != bucket) {
           do {
             Item *item = bucket;
             bucket = bucket->next();
-            Item *&new_bucket = new_buckets->at(hf(*item) & (tmp_new_bucket_num - 1));
-            item->next() = new_bucket;
-            new_bucket = item;
-          } while (nullptr != bucket);
+            if (OB_FAIL(hf(*item, hash_val))) {
+              SQL_ENG_LOG(WARN, "fail to get item hash val", K(ret));
+            } else {
+              Item *&new_bucket = new_buckets->at(hash_val & (tmp_new_bucket_num - 1));
+              item->next() = new_bucket;
+              new_bucket = item;
+            }
+          } while (nullptr != bucket && OB_SUCC(ret));
         }
       }
     }

@@ -48,7 +48,12 @@ int ObSelectStmtPrinter::do_print()
       LOG_WARN("column_list size should be equal select_item size", K(ret),
           K(column_list_->count()), K(select_stmt->get_select_item_size()));
     } else {
-      expr_printer_.init(buf_, buf_len_, pos_, schema_guard_, print_params_, param_store_);
+      expr_printer_.init(buf_,
+                        buf_len_,
+                        pos_,
+                        schema_guard_,
+                        print_params_,
+                        param_store_);
       if (stmt_->is_unpivot_select()) {
         if (OB_FAIL(print_unpivot())) {
           LOG_WARN("fail to print_unpivot",
@@ -276,6 +281,7 @@ int ObSelectStmtPrinter::print_set_op_stmt()
                                        child_stmts.at(0),
                                        schema_guard_,
                                        print_params_,
+                                       param_store_,
                                        /*force_col_alias*/true);
       stmt_printer.set_column_list(column_list_);
       ObString set_op_str = ObString::make_string(
@@ -605,12 +611,14 @@ int ObSelectStmtPrinter::print_group_by()
     const ObIArray<ObRawExpr*> &group_exprs = select_stmt->get_group_exprs();
     const ObIArray<ObRawExpr*> &rollup_exprs = select_stmt->get_rollup_exprs();
     const ObIArray<ObGroupingSetsItem> &groupingsets_items = select_stmt->get_grouping_sets_items();
-    const ObIArray<ObMultiRollupItem> &multi_rollup_items = select_stmt->get_multi_rollup_items();
+    const ObIArray<ObRollupItem> &rollup_items = select_stmt->get_rollup_items();
+    const ObIArray<ObCubeItem> &cube_items = select_stmt->get_cube_items();
     int64_t group_exprs_size = group_exprs.count();
     int64_t rollup_exprs_size = rollup_exprs.count();
     int64_t grouping_sets_size = groupingsets_items.count();
-    int64_t multi_rollup_size = multi_rollup_items.count();
-    if (group_exprs_size + rollup_exprs_size + grouping_sets_size + multi_rollup_size > 0) {
+    int64_t rollup_size = rollup_items.count();
+    int64_t cube_size = cube_items.count();
+    if (group_exprs_size + rollup_exprs_size + grouping_sets_size + rollup_size + cube_size > 0) {
       DATA_PRINTF(" group by ");
       if (OB_SUCC(ret) && grouping_sets_size > 0) {
         for (int64_t i = 0; OB_SUCC(ret) && i < grouping_sets_size; ++i) {
@@ -630,8 +638,13 @@ int ObSelectStmtPrinter::print_group_by()
             DATA_PRINTF("),");
           }
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(print_multi_rollup_items(groupingsets_items.at(i).multi_rollup_items_))) {
-              LOG_WARN("failed to print multi rollup items", K(ret));
+            if (OB_FAIL(print_rollup_items(groupingsets_items.at(i).rollup_items_))) {
+              LOG_WARN("failed to print rollup items", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(print_cube_items(groupingsets_items.at(i).cube_items_))) {
+              LOG_WARN("failed to print cube items", K(ret));
             }
           }
           if (OB_SUCC(ret)) {
@@ -640,46 +653,61 @@ int ObSelectStmtPrinter::print_group_by()
           DATA_PRINTF("),");
         }
       }
+      // print cube
+      if (OB_SUCC(ret) && cube_size > 0) {
+        if (OB_FAIL(print_cube_items(cube_items))) {
+          LOG_WARN("failed to print cube items", K(ret));
+        }
+      }
+      // print exprs
       for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs_size; ++i) {
         if (OB_FAIL(print_expr_except_const_number(group_exprs.at(i), T_GROUP_SCOPE))) {
           LOG_WARN("fail to print group expr", K(ret));
         }
         DATA_PRINTF(",");
       }
+      // print rollup
       if (OB_SUCC(ret)) {
-        if (rollup_exprs_size > 0) {
-          if (lib::is_oracle_mode()) {
-            DATA_PRINTF(" rollup( ");
-          } else { /* do nothing. */ }
+        if (lib::is_mysql_mode() && rollup_exprs_size > 0) {
           for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
             if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
               LOG_WARN("fail to print group expr", K(ret));
             }
             DATA_PRINTF(",");
           }
-        } else if (multi_rollup_size > 0) {
-          if (OB_FAIL(print_multi_rollup_items(multi_rollup_items))) {
-            LOG_WARN("failed to print multi rollup items", K(ret));
+          if (OB_SUCC(ret)) {
+            --*pos_;
+          }
+          DATA_PRINTF(" with rollup ");
+        } else if (lib::is_oracle_mode() && (rollup_size > 0 || rollup_exprs_size > 0)) {
+          if (OB_FAIL(print_rollup_items(rollup_items))) {
+            LOG_WARN("failed to print rollup items", K(ret));
+          } else if (rollup_exprs_size > 0) {
+            DATA_PRINTF(" rollup( ");
+            for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs_size; ++i) {
+              if (OB_FAIL(print_expr_except_const_number(rollup_exprs.at(i), T_GROUP_SCOPE))) {
+                LOG_WARN("fail to print group expr", K(ret));
+              }
+              DATA_PRINTF(",");
+            }
+            if (OB_SUCC(ret)) {
+              --*pos_;
+            }
+            DATA_PRINTF("),");
           }
         }
-        if (OB_SUCC(ret)) {
-          --*pos_;
-        }
-        if (rollup_exprs_size > 0) {
-          if (lib::is_oracle_mode()) {
-            DATA_PRINTF(" ) ");
-          } else {
-            DATA_PRINTF(" with rollup ");
-          }
-        } else { /* do nothing. */ }
       }
-    } else { /* do nothing. */ }
+      // remove ","
+      if (OB_SUCC(ret)) {
+        --*pos_;
+      }
+    }
   }
 
   return ret;
 }
 
-int ObSelectStmtPrinter::print_multi_rollup_items(const ObIArray<ObMultiRollupItem> &rollup_items)
+int ObSelectStmtPrinter::print_rollup_items(const ObIArray<ObRollupItem> &rollup_items)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < rollup_items.count(); ++i) {
@@ -696,6 +724,33 @@ int ObSelectStmtPrinter::print_multi_rollup_items(const ObIArray<ObMultiRollupIt
         }
       }
       if (j < rollup_list_exprs.count() - 1) {
+        DATA_PRINTF("),");
+      } else {
+        DATA_PRINTF(")");
+      }
+    }
+    DATA_PRINTF("),");
+  }
+  return ret;
+}
+
+int ObSelectStmtPrinter::print_cube_items(const ObIArray<ObCubeItem> &cube_items)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < cube_items.count(); ++i) {
+    const ObIArray<ObGroupbyExpr> &cube_list_exprs = cube_items.at(i).cube_list_exprs_;
+    DATA_PRINTF(" cube (");
+    for (int64_t j = 0; OB_SUCC(ret) && j < cube_list_exprs.count(); ++j) {
+      const ObIArray<ObRawExpr*> &groupby_exprs = cube_list_exprs.at(j).groupby_exprs_;
+      DATA_PRINTF("(");
+      for (int64_t k = 0; OB_SUCC(ret) && k < groupby_exprs.count(); ++k) {
+        if (OB_FAIL(expr_printer_.do_print(groupby_exprs.at(k), T_GROUP_SCOPE))) {
+          LOG_WARN("fail to print group expr", K(ret));
+        } else if (k < groupby_exprs.count() - 1) {
+          DATA_PRINTF(",");
+        }
+      }
+      if (j < cube_list_exprs.count() - 1) {
         DATA_PRINTF("),");
       } else {
         DATA_PRINTF(")");

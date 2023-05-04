@@ -16,7 +16,6 @@
 #include "ob_backup_schedule_task.h"
 #include "ob_backup_task_scheduler.h"
 #include "rootserver/ob_root_utils.h"
-#include "rootserver/ob_server_manager.h"
 
 namespace oceanbase 
 {
@@ -50,7 +49,6 @@ ObBackupService::ObBackupService()
 }
 
 int ObBackupService::init(
-    ObServerManager &server_mgr, 
     common::ObMySQLProxy &sql_proxy, 
     obrpc::ObSrvRpcProxy &rpc_proxy,
     schema::ObMultiVersionSchemaService &schema_service, 
@@ -68,12 +66,12 @@ int ObBackupService::init(
   } else if (OB_FAIL(register_job_(&backup_data_scheduler_))) {
     LOG_WARN("fail to regist job", K(ret), "job_type", backup_data_scheduler_.get_job_type());
   } else if (OB_FAIL(backup_clean_scheduler_.init(
-      server_mgr, sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
+      sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
     LOG_WARN("fail to init backup clean scheduler", K(ret));
   } else if (OB_FAIL(register_job_(&backup_clean_scheduler_))) {
     LOG_WARN("fail to regist job", K(ret), "job_type", backup_clean_scheduler_.get_job_type());
   } else if (OB_FAIL(backup_auto_obsolete_delete_trigger_.init(
-      server_mgr, sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
+      sql_proxy, rpc_proxy, schema_service, lease_service, task_scheduler, *this))) {
     LOG_WARN("fail to init backup auto obsolete delete trigger", K(ret));
   } else if (OB_FAIL(register_trigger_(&backup_auto_obsolete_delete_trigger_))) {
     LOG_WARN("fail to regist job", K(ret), "job_type", backup_auto_obsolete_delete_trigger_.get_trigger_type());

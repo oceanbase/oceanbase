@@ -181,6 +181,7 @@ struct TableItem
     ddl_schema_version_ = 0;
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
+    table_type_ = MAX_TABLE_TYPE;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -202,7 +203,7 @@ struct TableItem
                K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
-               KPC_(function_table_expr));
+               KPC_(function_table_expr), K_(table_type));
 
   enum TableType
   {
@@ -216,6 +217,7 @@ struct TableItem
     TEMP_TABLE,
     LINK_TABLE,
     JSON_TABLE,
+    EXTERNAL_TABLE,
   };
 
   /**
@@ -308,6 +310,7 @@ struct TableItem
   bool is_index_table_; //just for index table resolver
   bool is_view_table_; //for VIEW privilege check
   bool is_recursive_union_fake_table_; //mark whether this table is a tmp fake table for resolve the recursive cte table
+  share::schema::ObTableType table_type_;
   CTEType cte_type_;
   common::ObString database_name_;
   /* FOR UPDATE clause */
@@ -793,16 +796,12 @@ public:
   int pull_all_expr_relation_id();
   int formalize_stmt(ObSQLSessionInfo *session_info);
   int formalize_relation_exprs(ObSQLSessionInfo *session_info);
-  int adjust_subquery_exec_params(ObSQLSessionInfo *session_info);
-  int remove_const_exec_param(ObDMLStmt *stmt, ObSQLSessionInfo *session_info, bool &is_happened);
-  int do_remove_const_exec_param(ObRawExpr *&expr, bool &is_happened);
   int formalize_stmt_expr_reference();
   int formalize_child_stmt_expr_reference();
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr();
-  virtual int remove_useless_exec_param();
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
@@ -1115,13 +1114,22 @@ public:
   int collect_temp_table_infos(ObIArray<TempTableInfo> &temp_table_infos);
   int get_stmt_rowid_exprs(ObIArray<ObRawExpr *> &rowid_exprs);
   int check_and_get_same_rowid_expr(const ObRawExpr *expr, ObRawExpr *&same_rowid_expr);
-
   int add_cte_definition(TableItem * table_item) { return cte_definitions_.push_back(table_item); }
   int64_t get_cte_definition_size() const { return cte_definitions_.count(); }
   common::ObIArray<TableItem *>& get_cte_definitions() { return cte_definitions_; }
   const common::ObIArray<TableItem *>& get_cte_definitions() const { return cte_definitions_; }
 
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
+
+  int disable_writing_external_table();
+  int formalize_query_ref_exprs();
+
+  int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,
+                                      bool need_replace);
+
+  int do_formalize_query_ref_exprs_pre();
+
+  int do_formalize_query_ref_exprs_post();
 
 protected:
   int create_table_item(TableItem *&table_item);

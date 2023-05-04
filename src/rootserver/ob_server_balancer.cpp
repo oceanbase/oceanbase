@@ -21,6 +21,9 @@
 #include "rootserver/ob_root_utils.h"
 #include "rootserver/ob_root_service.h"
 #include "storage/ob_file_system_router.h"
+#include "share/ob_all_server_tracer.h"
+#include "share/ob_server_table_operator.h"
+#include "rootserver/ob_heartbeat_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -62,6 +65,41 @@ int ObServerBalancer::init(
   return ret;
 }
 
+int ObServerBalancer::get_active_servers_info_and_resource_info_of_zone(
+      const ObZone &zone,
+      ObIArray<share::ObServerInfoInTable> &servers_info,
+      ObIArray<obrpc::ObGetServerResourceInfoResult> &server_resources_info)
+{
+  int ret = OB_SUCCESS;
+  servers_info.reset();
+  server_resources_info.reset();
+  ObServerResourceInfo resource_info_in_server_status;
+  obrpc::ObGetServerResourceInfoResult resource_info_result;
+  if (OB_FAIL(SVR_TRACER.get_active_servers_info(zone, servers_info))) {
+    LOG_WARN("fail to execute get_active_servers_info", KR(ret), K(zone));
+  } else if (OB_ISNULL(server_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server_mgr_ is null", KR(ret), KP(server_mgr_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+      const ObAddr &server = servers_info.at(i).get_server();
+      resource_info_result.reset();
+      resource_info_in_server_status.reset();
+      if (OB_FAIL(server_mgr_->get_server_resource_info(server, resource_info_in_server_status))) {
+        LOG_WARN("fail to get resource_info_in_server_status", KR(ret), K(server));
+      } else if (OB_UNLIKELY(!resource_info_in_server_status.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid resource_info_in_server_status", KR(ret), K(server), K(resource_info_in_server_status));
+      } else if (OB_FAIL(resource_info_result.init(server,resource_info_in_server_status))) {
+        LOG_WARN("fail to init", KR(ret), K(server), K(resource_info_in_server_status));
+      } else if (OB_FAIL(server_resources_info.push_back(resource_info_result))) {
+        LOG_WARN("fail to push an element into server_resources_info", KR(ret), K(resource_info_result));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObServerBalancer::tenant_group_balance()
 {
   int ret = OB_SUCCESS;
@@ -95,82 +133,6 @@ int ObServerBalancer::tenant_group_balance()
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObServerBalancer::check_if_ofs_rs_without_sys_unit(
-    const share::ObServerStatus &status,
-    const share::ObUnitInfo &unit_info,
-    bool &ofs_rs_without_sys_unit)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(status);
-  common::ObArray<ObUnitManager::ObUnitLoad> *unit_load_array;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_UNLIKELY(nullptr == unit_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr ptr is null", KR(ret), KP(unit_mgr_));
-  } else {
-    ofs_rs_without_sys_unit = true;
-    if (OB_SYS_TENANT_ID != unit_info.pool_.tenant_id_) {
-      ofs_rs_without_sys_unit = false;
-    } else if (OB_FAIL(unit_mgr_->get_loads_by_server(GCTX.self_addr(), unit_load_array))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS; // server load empty, no need to distribute
-      } else {
-        LOG_WARN("fail to get loads by server", KR(ret));
-      }
-    } else if (OB_UNLIKELY(nullptr == unit_load_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unit load array ptr is null", KR(ret));
-    } else {
-      for (int64_t i = 0;
-           OB_SUCC(ret) && i < unit_load_array->count() && ofs_rs_without_sys_unit;
-           ++i) {
-        const ObUnit *unit = unit_load_array->at(i).unit_;
-        const share::ObResourcePool *pool = unit_load_array->at(i).pool_;
-        // some certain unit exists on observer with rs
-        if (OB_UNLIKELY(nullptr == unit || nullptr == pool)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unit ptr is null", KR(ret), KP(unit), K(pool));
-        } else if (OB_SYS_TENANT_ID != pool->tenant_id_) {
-          // bypass
-        } else if (unit->server_ == GCTX.self_addr()
-                   || unit->migrate_from_server_ == GCTX.self_addr()) {
-          ofs_rs_without_sys_unit = false;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObServerBalancer::distribute_for_ofs_sys_unit(
-    const share::ObServerStatus &status,
-    const share::ObUnitInfo &unit_info)
-{
-  int ret = OB_SUCCESS;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (!status.is_valid() || !unit_info.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(status), K(unit_info));
-  } else if (OB_UNLIKELY(nullptr == unit_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit mgr ptr is null", KR(ret));
-  } else if (OB_SYS_TENANT_ID != unit_info.pool_.tenant_id_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit info tenant unexpected", KR(ret), "tenant_id", unit_info.pool_.tenant_id_);
-  } else if (!status.is_taken_over_by_rs()) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("server not taken over by rs", KR(ret), K(status));
-  } else if (OB_FAIL(unit_mgr_->migrate_unit(
-          unit_info.unit_.unit_id_, GCTX.self_addr(), false/*not manual*/))) {
-    LOG_WARN("fail to migrate unit", KR(ret), K(unit_info));
   }
   return ret;
 }
@@ -268,28 +230,34 @@ int ObServerBalancer::distribute_pool_for_standalone_sys_unit(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unit config ptr is null", K(ret), K(pool));
   } else {
-    ObServerStatus status;
+    ObServerInfoInTable server_info;
     ObUnitStat unit_stat;
     ObArray<ObUnitStat> in_migrate_unit_stat;
     common::ObArray<common::ObAddr> excluded_servers;
     common::ObAddr migrate_server;
     std::string resource_not_enough_reason;
+    ObArray<ObServerInfoInTable> servers_info_of_zone;
+    ObArray<ObServerInfoInTable> active_servers_info_of_zone;
+    ObArray<obrpc::ObGetServerResourceInfoResult> active_servers_resource_info_of_zone;
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_unit_array->count(); ++i) {
       excluded_servers.reset();
-      status.reset();
+      server_info.reset();
       unit_stat.reset();
       migrate_server.reset();
+      servers_info_of_zone.reset();
+      active_servers_resource_info_of_zone.reset();
+      active_servers_info_of_zone.reset();
       share::ObUnit *unit = pool_unit_array->at(i);
       if (OB_UNLIKELY(nullptr == unit)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unit ptr is null", K(ret));
       } else if (unit->migrate_from_server_.is_valid()) {
         // unit in migrate, bypass
-      } else if (OB_FAIL(server_mgr_->get_server_status(unit->server_, status))) {
+      } else if (OB_FAIL(SVR_TRACER.get_server_info(unit->server_, server_info))) {
         LOG_WARN("fail to get server status", K(ret), "server", unit->server_);
-      } else if (!status.is_active()) {
+      } else if (!server_info.is_active()) {
         // Only process servers that are active, skip non-active servers
-        LOG_INFO("unit server status not active", K(ret), K(status), K(*unit));
+        LOG_INFO("unit server status not active", K(ret), K(server_info), K(*unit));
       } else if (!has_exist_in_array(sys_unit_server_array, unit->server_)) {
         // bypass
       } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
@@ -297,14 +265,32 @@ int ObServerBalancer::distribute_pool_for_standalone_sys_unit(
               unit->zone_,
               unit_stat))) {
         LOG_WARN("fail to locate unit", K(ret), "unit", *unit);
-      } else if (OB_FAIL(unit_mgr_->get_excluded_servers(*unit, unit_stat, module, excluded_servers))) {
-        LOG_WARN("fail to get exclude servers", K(ret), "unit", *unit);
+      } else if (OB_FAIL(SVR_TRACER.get_servers_info(unit->zone_, servers_info_of_zone))) {
+        LOG_WARN("fail to servers_info_of_zone", KR(ret), K(unit->zone_));
+      } else if (OB_FAIL(get_active_servers_info_and_resource_info_of_zone(
+          unit->zone_,
+          active_servers_info_of_zone,
+          active_servers_resource_info_of_zone))) {
+        LOG_WARN("fail to execute get_active_servers_info_and_resource_info_of_zone", KR(ret), K(unit->zone_));
+      } else if (OB_FAIL(unit_mgr_->get_excluded_servers(
+          *unit,
+          unit_stat,
+          module,
+          servers_info_of_zone,
+          active_servers_resource_info_of_zone,
+          excluded_servers))) {
+        LOG_WARN("fail to get exclude servers", K(ret), KPC(unit), K(servers_info_of_zone),
+            K(active_servers_resource_info_of_zone));
       } else if (OB_FAIL(append(excluded_servers, sys_unit_server_array))) {
         LOG_WARN("fail tp append sys unit server array", K(ret));
-      } else if (OB_FAIL(unit_mgr_->choose_server_for_unit(unit_config->unit_resource(), unit->zone_,
-                                                           excluded_servers, module,
-                                                           migrate_server,
-                                                           resource_not_enough_reason))) {
+      } else if (OB_FAIL(unit_mgr_->choose_server_for_unit(
+          unit_config->unit_resource(), unit->zone_,
+          excluded_servers,
+          module,
+          active_servers_info_of_zone,
+          active_servers_resource_info_of_zone,
+          migrate_server,
+          resource_not_enough_reason))) {
         if (OB_ZONE_RESOURCE_NOT_ENOUGH == ret || OB_ZONE_SERVER_NOT_ENOUGH == ret) {
           LOG_WARN("has no place to migrate unit", K(module), KR(ret), "unit", *unit,
               K(excluded_servers), "resource_not_enough_reason", resource_not_enough_reason.c_str());
@@ -479,34 +465,21 @@ int ObServerBalancer::distribute_zone_unit(const ObUnitManager::ZoneUnit &zone_u
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(zone_unit), K(ret));
   } else {
-    ObServerStatus status;
+    ObServerInfoInTable server_info;
     FOREACH_CNT_X(unit_info, zone_unit.unit_infos_, OB_SUCCESS == ret) {
-      status.reset();
+      server_info.reset();
       if (ObUnit::UNIT_STATUS_ACTIVE != unit_info->unit_.status_) {
         // ignore the unit that is in deleting
-      } else if (OB_FAIL(server_mgr_->get_server_status(unit_info->unit_.server_, status))) {
-        LOG_WARN("get_server_status failed", "server", unit_info->unit_.server_, K(ret));
-      } else if (status.is_active()) {
-        if (OB_FAIL(distribute_for_active(status, *unit_info))) {
-          LOG_WARN("distribute_for_active failed", K(status), "unit_info", *unit_info, K(ret));
+      } else if (OB_FAIL(SVR_TRACER.get_server_info(unit_info->unit_.server_, server_info))) {
+        LOG_WARN("get_server_info failed", "server", unit_info->unit_.server_, KR(ret));
+      } else if (server_info.is_active()) {
+        if (OB_FAIL(distribute_for_active(server_info, *unit_info))) {
+          LOG_WARN("distribute_for_active failed", K(server_info), "unit_info", *unit_info, K(ret));
         }
-      } else if (status.is_permanent_offline()
-                 || status.is_deleting()
-                 || status.is_taken_over_by_rs()) {
-        bool ofs_rs_without_sys_unit = false;
-        if (OB_FAIL(check_if_ofs_rs_without_sys_unit(
-                status, *unit_info, ofs_rs_without_sys_unit))) {
-          LOG_WARN("fail to check if rs without sys unit", KR(ret));
-        } else if (ofs_rs_without_sys_unit) {
-          if (OB_FAIL(distribute_for_ofs_sys_unit(status, *unit_info))) {
-            LOG_WARN("distribute for ofs sys unit", KR(ret),
-                     K(status), "unit_info", *unit_info);
-          }
-        } else {
-          if (OB_FAIL(distribute_for_permanent_offline_or_delete(status, *unit_info))) {
-            LOG_WARN("distribute for permanent offline or delete failed",
-                     K(status), "unit_info", *unit_info, K(ret));
-          }
+      } else if (server_info.is_permanent_offline() || server_info.is_deleting()) {
+        if (OB_FAIL(distribute_for_permanent_offline_or_delete(server_info, *unit_info))) {
+          LOG_WARN("distribute for permanent offline or delete failed",
+                    K(server_info), "unit_info", *unit_info, KR(ret));
         }
       }
     }
@@ -514,20 +487,24 @@ int ObServerBalancer::distribute_zone_unit(const ObUnitManager::ZoneUnit &zone_u
   return ret;
 }
 
-int ObServerBalancer::distribute_for_active(const ObServerStatus &status,
-                                            const ObUnitInfo &unit_info)
+int ObServerBalancer::distribute_for_active(
+    const ObServerInfoInTable &server_info,
+    const ObUnitInfo &unit_info)
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed", K_(inited), K(ret));
-  } else if (!status.is_valid() || !status.is_active() || !unit_info.is_valid()) {
+  } else if (!server_info.is_valid()
+      || !server_info.is_active()
+      || !unit_info.is_valid()
+      || unit_info.unit_.server_ != server_info.get_server()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(status), K(unit_info), K(ret));
+    LOG_WARN("invalid argument", K(server_info), K(unit_info), K(ret));
   } else {
     //When the destination is blocked, cancel this migration
     //Temporary offline does not cancel the task, need to wait for permanent offline
-    if ((status.is_migrate_in_blocked())
+    if ((server_info.is_migrate_in_blocked())
         && unit_info.unit_.migrate_from_server_.is_valid()) {
       LOG_INFO("find unit server active but can't migrate in, "
           "migrate_from_server is set", "unit", unit_info.unit_);
@@ -539,55 +516,34 @@ int ObServerBalancer::distribute_for_active(const ObServerStatus &status,
   return ret;
 }
 
-int ObServerBalancer::check_is_ofs_zone_zombie_unit(
-    const ObUnitInfo &unit_info,
-    bool &is_ofs_zone_zombie_unit)
-{
-  int ret = OB_SUCCESS;
-  if (!check_inner_stat()) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("fail to check inner stat", K(ret), K_(inited));
-  } else if (OB_UNLIKELY(!unit_info.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(unit_info));
-  } else {
-    is_ofs_zone_zombie_unit = false;
-    const common::ObZone &zone = unit_info.unit_.zone_;
-    const common::ObAddr &dst_server = unit_info.unit_.server_;
-    const common::ObAddr &src_server = unit_info.unit_.migrate_from_server_;
-    if (OB_UNLIKELY(zone.is_empty())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(zone));
-    }
-  }
-  return ret;
-}
-
 //When the migration destination is permanently offline,
 //need to change to another destination
 //Need to make sure that the member has been kicked out after being permanently offline
 int ObServerBalancer::distribute_for_permanent_offline_or_delete(
-    const ObServerStatus &status,
+    const share::ObServerInfoInTable &server_info,
     const ObUnitInfo &unit_info)
 {
   int ret = OB_SUCCESS;
   const char *module = "UNIT_BALANCE_FOR_SERVER_PERMANENT_OFFLINE_OR_DELETE";
 
   LOG_INFO("find unit server permanent offline or delete, need distribute unit",
-           K(module), "unit", unit_info.unit_, "server", status.server_);
+           K(module), "unit", unit_info.unit_, K(server_info));
   const bool enable_sys_unit_standalone = GCONF.enable_sys_unit_standalone;
   bool need_migrate_unit = false;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed", K_(inited), K(ret));
-  } else if (!status.is_valid() || !unit_info.is_valid()) {
+  } else if (!server_info.is_valid()
+      || !unit_info.is_valid()
+      || unit_info.unit_.server_ != server_info.get_server()
+      || (!server_info.is_deleting() && !server_info.is_permanent_offline())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(status), K(unit_info), K(ret));
+    LOG_WARN("invalid argument", K(server_info), K(unit_info), KR(ret));
   } else if (!unit_info.unit_.migrate_from_server_.is_valid()) {
     //The current unit is in a stable state, move it out
     need_migrate_unit = true;
     LOG_INFO("server is permanent offline or in deleting status, need migrate unit",
-             K(unit_info), K(status));
+             K(unit_info), K(server_info));
   } else {
     //Currently moving in, try to cancel
     bool is_canceled = false;
@@ -597,19 +553,21 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
       //If cancel fails, wait for the result of the check-in process
       //If the move-in process cannot be ended,
       //the delete server lasts for too long, and manual intervention should be required
-      if (!status.is_with_partition()) {
-        //If there is no local replica, cancel this migration directly
-        const ObUnitManager::EndMigrateOp op = ObUnitManager::ABORT;
-        if (OB_FAIL(unit_mgr_->end_migrate_unit(unit_info.unit_.unit_id_, op))) {
-          LOG_WARN("end_migrate_unit failed", "unit_id", unit_info.unit_.unit_id_, K(op), K(ret));
-        } else {
-          need_migrate_unit = true;
-          LOG_INFO("unit has no partition, abort the migration",
-                   K(ret), K(unit_info), K(op), K(status));
-        }
-      }
+      // ** FIXME (linqiucen): now we do not do the following commented process due to the deprecated variable with_partition
+      // ** FIXME (linqiucen): in the future, we can do this process again by directly looking up the related table
+      // if (!status.is_with_partition()) {
+      //   //If there is no local replica, cancel this migration directly
+      //   const ObUnitManager::EndMigrateOp op = ObUnitManager::ABORT;
+      //   if (OB_FAIL(unit_mgr_->end_migrate_unit(unit_info.unit_.unit_id_, op))) {
+      //     LOG_WARN("end_migrate_unit failed", "unit_id", unit_info.unit_.unit_id_, K(op), K(ret));
+      //   } else {
+      //     need_migrate_unit = true;
+      //     LOG_INFO("unit has no partition, abort the migration",
+      //              K(ret), K(unit_info), K(op), K(status));
+      //   }
+      // }
     } else {
-      LOG_INFO("revert migrate unit success", K(ret), K(unit_info), K(status));
+      LOG_INFO("revert migrate unit success", K(ret), K(unit_info), K(server_info));
     }
   }
   ObUnitStat unit_stat;
@@ -617,17 +575,44 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
   const ObZone zone = unit_info.unit_.zone_;
   ObAddr migrate_server;
   std::string resource_not_enough_reason;
+  ObArray<ObServerInfoInTable> servers_info_of_zone;
+  ObArray<ObServerInfoInTable> active_servers_info_of_zone;
+  ObArray<obrpc::ObGetServerResourceInfoResult> active_servers_resource_info_of_zone;
   if (OB_FAIL(ret) || !need_migrate_unit) {
     //nothing todo
+  } else if (OB_ISNULL(unit_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unit_mgr_ is null", KR(ret), KP(unit_mgr_));
   } else if (OB_FAIL(unit_stat_mgr_->get_unit_stat(
           unit_info.unit_.unit_id_,
           unit_info.unit_.zone_,
           unit_stat))) {
     LOG_WARN("fail to locate unit", K(ret), "unit", unit_info.unit_);
-  } else if (OB_FAIL(unit_mgr_->get_excluded_servers(unit_info.unit_, unit_stat, module, excluded_servers))) {
-    LOG_WARN("get_excluded_servers failed", "unit", unit_info.unit_, K(ret));
-  } else if (OB_FAIL(unit_mgr_->choose_server_for_unit(unit_info.config_.unit_resource(), zone, excluded_servers, module,
-      migrate_server, resource_not_enough_reason))) {
+  } else if (OB_FAIL(SVR_TRACER.get_servers_info(unit_info.unit_.zone_, servers_info_of_zone))) {
+    LOG_WARN("fail to servers_info_of_zone", KR(ret), K(unit_info.unit_.zone_));
+  } else if (OB_FAIL(get_active_servers_info_and_resource_info_of_zone(
+          unit_info.unit_.zone_,
+          active_servers_info_of_zone,
+          active_servers_resource_info_of_zone))) {
+        LOG_WARN("fail to execute get_active_servers_info_and_resource_info_of_zone", KR(ret), K(unit_info.unit_.zone_));
+  } else if (OB_FAIL(unit_mgr_->get_excluded_servers(
+      unit_info.unit_,
+      unit_stat,
+      module,
+      servers_info_of_zone,
+      active_servers_resource_info_of_zone,
+      excluded_servers))) {
+    LOG_WARN("get_excluded_servers failed", "unit", unit_info.unit_, KR(ret), K(servers_info_of_zone),
+        K(active_servers_resource_info_of_zone));
+  } else if (OB_FAIL(unit_mgr_->choose_server_for_unit(
+      unit_info.config_.unit_resource(),
+      zone,
+      excluded_servers,
+      module,
+      active_servers_info_of_zone,
+      active_servers_resource_info_of_zone,
+      migrate_server,
+      resource_not_enough_reason))) {
     if (OB_ZONE_RESOURCE_NOT_ENOUGH == ret || OB_ZONE_SERVER_NOT_ENOUGH == ret) {
       LOG_WARN("has no place to migrate unit", K(module), KR(ret), K(zone), K(excluded_servers),
           K(unit_info), "resource_not_enough_reason", resource_not_enough_reason.c_str());
@@ -650,7 +635,7 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
         migrate_server))) {
       LOG_WARN("fail to try migrate unit", "unit", unit_info.unit_, K(migrate_server), K(ret));
     } else {
-      LOG_INFO("migrate unit success", K(module), K(unit_info), K(status), "dest_server", migrate_server);
+      LOG_INFO("migrate unit success", K(module), K(unit_info), K(server_info), "dest_server", migrate_server);
     }
   }
   return ret;
@@ -664,21 +649,21 @@ int ObServerBalancer::distribute_for_permanent_offline_or_delete(
 int ObServerBalancer::distribute_for_migrate_in_blocked(const ObUnitInfo &unit_info)
 {
   int ret = OB_SUCCESS;
-  ObServerStatus status;
+  ObServerInfoInTable server_info;
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check inner stat failed", K_(inited), K(ret));
   } else if (!unit_info.is_valid() || !unit_info.unit_.migrate_from_server_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(unit_info), K(ret));
-  } else if (OB_FAIL(server_mgr_->get_server_status(
-              unit_info.unit_.migrate_from_server_, status))) {
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(
+              unit_info.unit_.migrate_from_server_, server_info))) {
     LOG_WARN("get_server_status failed",
              "server", unit_info.unit_.migrate_from_server_, K(ret));
   } else if (ObUnit::UNIT_STATUS_ACTIVE != unit_info.unit_.status_) {
     // ignore the unit which is in deleting
   } else {
-    if (status.can_migrate_in()) {
+    if (server_info.can_migrate_in()) {
       LOG_INFO("unit migrate_from_server can migrate in, "
           "migrate unit back to migrate_from_server", "unit", unit_info.unit_);
       const ObUnitManager::EndMigrateOp op = ObUnitManager::REVERSE;
@@ -690,7 +675,7 @@ int ObServerBalancer::distribute_for_migrate_in_blocked(const ObUnitInfo &unit_i
       //nothing todo
       LOG_WARN("NOTICE: unit migration is hung. dest server is blocked "
           "and source server can not migrate in. NEED to be involved manually.",
-               "unit", unit_info.unit_, "migrate_from_server", status);
+               "unit", unit_info.unit_, "migrate_from_server", server_info);
     }
 
     /*
@@ -781,11 +766,23 @@ int ObServerBalancer::try_migrate_unit(const uint64_t unit_id,
                                        const ObAddr &dst)
 {
   int ret = OB_SUCCESS;
+  ObServerResourceInfo dst_resource_info;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("server balancer not init", K_(inited), K(ret));
+  } else if (OB_ISNULL(server_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server_mgr_ is null", KR(ret), KP(server_mgr_));
+  } else if (OB_FAIL(server_mgr_->get_server_resource_info(dst, dst_resource_info))) {
+    LOG_WARN("fail to get dst_resource_info", KR(ret), K(dst));
   } else {
-    ret = unit_mgr_->try_migrate_unit(unit_id, tenant_id, unit_stat, migrating_unit_stat, dst);
+    ret = unit_mgr_->try_migrate_unit(
+        unit_id,
+        tenant_id,
+        unit_stat,
+        migrating_unit_stat,
+        dst,
+        dst_resource_info);
     unit_migrated_ = true;
   }
   return ret;
@@ -843,17 +840,15 @@ int ObServerBalancer::check_can_execute_rebalance(
     } else if (OB_UNLIKELY(zone.is_empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(zone));
-    } else if (OB_UNLIKELY(NULL == server_mgr_
-                           || NULL == unit_mgr_
-                           || NULL == zone_mgr_)) {
+    } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(zone_mgr_) || OB_ISNULL(server_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("server_mgr_ or unit_mgr_ ptr is null", K(ret), KP(server_mgr_), KP(unit_mgr_));
+      LOG_WARN("unit_mgr_, zone_mgr_ or server_mgr_ is null", KR(ret), KP(unit_mgr_), KP(zone_mgr_), KP(server_mgr_));
     } else if (OB_FAIL(zone_mgr_->get_zone(zone, zone_info))) {
       LOG_WARN("fail to get zone info", K(ret), K(zone));
     } else if (ObZoneStatus::ACTIVE != zone_info.status_) {
       can_execute_rebalance = false;
       LOG_INFO("cannot execute server rebalance since zone inactive", K(zone));
-    } else if (OB_FAIL(server_mgr_->get_servers_of_zone(zone, server_list))) {
+    } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
     } else if (OB_FAIL(unit_mgr_->inner_get_unit_ids(unit_ids))) {
       LOG_WARN("fail to get unit ids", K(ret));
@@ -862,7 +857,8 @@ int ObServerBalancer::check_can_execute_rebalance(
       share::ObUnitConfig sum_load;
       for (int64_t i = 0; can_execute_rebalance && OB_SUCC(ret) && i < server_list.count(); ++i) {
         const common::ObAddr &server = server_list.at(i);
-        share::ObServerStatus server_status;
+        ObServerInfoInTable server_info;
+        ObServerResourceInfo resource_info;
         ObArray<ObUnitManager::ObUnitLoad> *unit_loads = nullptr;
         sum_load.reset();
         if (OB_FAIL(unit_mgr_->get_loads_by_server(server, unit_loads))) {
@@ -879,18 +875,18 @@ int ObServerBalancer::check_can_execute_rebalance(
         }
         if (OB_FAIL(ret)) {
           // failed
-        } else if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
+        } else if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
           LOG_WARN("fail to get server status", K(ret));
-        } else if (server_status.is_temporary_offline()
-                   || server_status.is_stopped()
-                   || ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS == server_status.admin_status_) {
+        } else if (server_info.is_temporary_offline() || server_info.is_stopped()) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", K(server_status));
-        } else if (fabs(server_status.resource_info_.report_cpu_assigned_ - sum_load.min_cpu()) > CPU_EPSILON
-            || fabs(server_status.resource_info_.report_cpu_max_assigned_ - sum_load.max_cpu()) > CPU_EPSILON
-            || server_status.resource_info_.report_mem_assigned_ != sum_load.memory_size()) {
+          LOG_INFO("cannot execute server rebalance", K(server_info));
+        } else if (OB_FAIL(server_mgr_->get_server_resource_info(server_info.get_server(), resource_info))) {
+          LOG_WARN("fail to execute get_server_resource_info", KR(ret), K(server_info.get_server()));
+        } else if (fabs(resource_info.report_cpu_assigned_ - sum_load.min_cpu()) > CPU_EPSILON
+            || fabs(resource_info.report_cpu_max_assigned_ - sum_load.max_cpu()) > CPU_EPSILON
+            || resource_info.report_mem_assigned_ != sum_load.memory_size()) {
           can_execute_rebalance = false;
-          LOG_INFO("cannot execute server rebalance", K(server_status), K(sum_load));
+          LOG_INFO("cannot execute server rebalance", K(resource_info), K(sum_load));
         } else {} // no more to do
       }
       for (int64_t j = 0; can_execute_rebalance && OB_SUCC(ret) && j < unit_ids.count(); ++j) {
@@ -1225,15 +1221,15 @@ int ObServerBalancer::generate_available_servers(
     } else if (OB_UNLIKELY(zone.is_empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(zone));
-    } else if (OB_UNLIKELY(NULL == server_mgr_ || NULL == zone_mgr_ || NULL == unit_mgr_)) {
+    } else if (OB_ISNULL(zone_mgr_) || OB_ISNULL(unit_mgr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("server_mgr_ or zone_mgr_ ptr is null", K(ret), KP(server_mgr_), KP(zone_mgr_));
+      LOG_WARN("zone_mgr_ or unit_mgr_ is null", K(ret), KP(unit_mgr_), KP(zone_mgr_));
     } else if (OB_FAIL(zone_mgr_->get_zone(zone, zone_info))) {
       LOG_WARN("fail to get zone info", K(ret), K(zone));
     } else if (ObZoneStatus::ACTIVE != zone_info.status_) {
       ret = OB_STATE_NOT_MATCH;
       LOG_WARN("zone is not in active", K(ret), K(zone_info));
-    } else if (OB_FAIL(server_mgr_->get_servers_of_zone(zone, server_list))) {
+    } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
       LOG_WARN("fail to get servers of zone", K(ret), K(zone));
     } else if (OB_FAIL(unit_mgr_->get_tenant_unit_servers(
             OB_SYS_TENANT_ID, zone, sys_unit_server_array))) {
@@ -1241,19 +1237,18 @@ int ObServerBalancer::generate_available_servers(
     } else {
       available_servers.reset();
       for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
-        share::ObServerStatus server_status;
-        if (OB_FAIL(server_mgr_->get_server_status(server_list.at(i), server_status))) {
+        share::ObServerInfoInTable server_info;
+        if (OB_FAIL(SVR_TRACER.get_server_info(server_list.at(i), server_info))) {
           LOG_WARN("fail to get server status", K(ret));
-        } else if (server_status.is_temporary_offline()
-                   || server_status.is_stopped()) {
+        } else if (server_info.is_temporary_offline() || server_info.is_stopped()) {
           ret = OB_STATE_NOT_MATCH;
-          LOG_WARN("server in zone is not stable, stop balance servers", K(ret), K(server_status),
-                   "is_temporary_offline", server_status.is_temporary_offline(),
-                   "is_stopped", server_status.is_stopped());
+          LOG_WARN("server in zone is not stable, stop balance servers", K(ret), K(server_info),
+                   "is_temporary_offline", server_info.is_temporary_offline(),
+                   "is_stopped", server_info.is_stopped());
         } else if (excluded_sys_unit_server
                    && has_exist_in_array(sys_unit_server_array, server_list.at(i))) {
           // bypass
-        } else if (server_status.is_active()) {
+        } else if (server_info.is_active()) {
           if (OB_FAIL(available_servers.push_back(server_list.at(i)))) {
             LOG_WARN("fail to push back", K(ret));
           }
@@ -2698,9 +2693,9 @@ int ObServerBalancer::calc_inter_ttg_weights(
         || NULL == info_need_amend)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(info_need_amend));
-  } else if (OB_UNLIKELY(NULL == server_mgr_)) {
+  } else if (OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server_mgr_ ptr is null", K(ret));
+    LOG_WARN("server_mgr_ is null", KR(ret), KP(server_mgr_));
   } else {
     LoadSum load_sum;
     for (int64_t i = 0;
@@ -2747,10 +2742,10 @@ int ObServerBalancer::calc_inter_ttg_weights(
     ResourceSum resource_sum;
     for (int64_t i = 0; OB_SUCC(ret) && i < available_servers.count(); ++i) {
       const common::ObAddr &server = available_servers.at(i);
-      share::ObServerStatus server_status;
-      if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
-        LOG_WARN("fail to get server status", K(ret), K(server));
-      } else if (OB_FAIL(resource_sum.append_resource(server_status.resource_info_))) {
+      share::ObServerResourceInfo resource_info;
+      if (OB_FAIL(server_mgr_->get_server_resource_info(server, resource_info))) {
+        LOG_WARN("fail to get server resource_info", KR(ret), K(server));
+      } else if (OB_FAIL(resource_sum.append_resource(resource_info))) {
         LOG_WARN("fail to append resource", K(ret));
       } else {} // no more to do
     }
@@ -3352,7 +3347,7 @@ int ObServerBalancer::do_migrate_unit_task(
       if (!unit_migrate_stat.unit_load_.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), "unit_load", unit_migrate_stat.unit_load_);
-      } else if (OB_FAIL(unit_mgr_->check_can_migrate_in(
+      } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(
               unit_migrate_stat.arranged_pos_, can_migrate_in))) {
         LOG_WARN("fail to check can migrate in", K(ret));
       } else if (!can_migrate_in) {
@@ -3408,8 +3403,9 @@ int ObServerBalancer::do_migrate_unit_task(
       } else if (!unit_migrate_stat->unit_load_.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), "unit_load", unit_migrate_stat->unit_load_);
-      } else if (OB_FAIL(unit_mgr_->check_can_migrate_in(
-              unit_migrate_stat->arranged_pos_, can_migrate_in))) {
+      } else if (OB_FAIL(SVR_TRACER.check_server_can_migrate_in(
+          unit_migrate_stat->arranged_pos_,
+          can_migrate_in))) {
         LOG_WARN("fail to check can migrate in", K(ret));
       } else if (!can_migrate_in) {
         // bypass
@@ -3574,9 +3570,9 @@ int ObServerBalancer::check_servers_resource_enough(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == server_mgr_)) {
+  } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or server_mgr_ or unit_stat_mgr_ is null", K(ret));
+    LOG_WARN("unit_mgr_ or server_mgr_ is null", KR(ret), KP(unit_mgr_), KP(server_mgr_));
   } else if (OB_FAIL(unit_mgr_->get_hard_limit(hard_limit))) {
     LOG_WARN("fail to hard limit", K(ret));
   } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
@@ -3585,15 +3581,16 @@ int ObServerBalancer::check_servers_resource_enough(
     enough = true;
     for (int64_t i = 0; OB_SUCC(ret) && enough && i < server_load_sums.count(); ++i) {
       ObArray<ObUnitManager::ObUnitLoad> *unit_loads = NULL;
-      share::ObServerStatus server_status;
+      share::ObServerResourceInfo server_resource_info;
       const common::ObAddr &server = server_load_sums.at(i).server_;
       LoadSum load_sum = server_load_sums.at(i).load_sum_;
       int64_t disk_in_use = server_load_sums.at(i).disk_in_use_;
       ServerDiskStatistic disk_statistic;
       if (OB_FAIL(zone_disk_statistic_.get_server_disk_statistic(server, disk_statistic))) {
         LOG_WARN("fail to get disk statistic", K(ret), K(server));
-      } else if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
-        LOG_WARN("fail to get server status", K(ret));
+      } else if (OB_FAIL(server_mgr_->get_server_resource_info(server, server_resource_info))) {
+        // **TODO (linqiucen.lqc): temp.solution
+        LOG_WARN("fail to get server resource info", KR(ret), K(server));
       } else if (OB_FAIL(unit_mgr_->get_loads_by_server(server, unit_loads))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get loads by server", K(ret));
@@ -3617,13 +3614,13 @@ int ObServerBalancer::check_servers_resource_enough(
       }
       if (OB_SUCC(ret)) {
         if (load_sum.load_sum_.max_cpu()
-                 > server_status.resource_info_.cpu_ * hard_limit
+                 > server_resource_info.cpu_ * hard_limit
             || load_sum.load_sum_.min_cpu()
-                 > server_status.resource_info_.cpu_
+                 > server_resource_info.cpu_
             || static_cast<double>(load_sum.load_sum_.memory_size())
-                 > static_cast<double>(server_status.resource_info_.mem_total_)
+                 > static_cast<double>(server_resource_info.mem_total_)
             || static_cast<double>(load_sum.load_sum_.log_disk_size())
-                 > static_cast<double>(server_status.resource_info_.log_disk_total_)
+                 > static_cast<double>(server_resource_info.log_disk_total_)
             || static_cast<double>(disk_in_use + disk_statistic.disk_in_use_)
                  > static_cast<double>(disk_statistic.disk_total_) * disk_waterlevel) {
           enough = false;
@@ -4433,25 +4430,22 @@ int ObServerBalancer::generate_complete_server_loads(
                          || zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(resource_weights), K(weights_count));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == server_mgr_)) {
+  } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or server_mgr_ ptr is null", K(ret), KP(unit_mgr_), KP(server_mgr_));
-  } else if (OB_FAIL(server_mgr_->get_servers_of_zone(zone, zone_servers))) {
+    LOG_WARN("unit_mgr_ or server_mgr_ is null", K(ret), KP(unit_mgr_), KP(server_mgr_));
+  } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, zone_servers))) {
     LOG_WARN("fail to get servers of zone", K(ret), K(zone));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < zone_servers.count(); ++i) {
       const common::ObAddr &server = zone_servers.at(i);
       ServerTotalLoad server_load;
       server_load.server_ = server;
-      share::ObServerStatus server_status;
+      share::ObServerResourceInfo server_resource_info;
       ObArray<ObUnitManager::ObUnitLoad> *unit_loads = NULL;
       LoadSum load_sum;
-      ResourceSum resource_sum;
       server_load.wild_server_ = !has_exist_in_array(available_servers, server);
-      if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
+      if (OB_FAIL(server_mgr_->get_server_resource_info(server, server_resource_info))) {
         LOG_WARN("fail to get server status", K(ret), K(server));
-      } else if (OB_FAIL(resource_sum.append_resource(server_status.resource_info_))) {
-        LOG_WARN("fail to append resource", K(ret));
       } else if (OB_FAIL(unit_mgr_->get_loads_by_server(server, unit_loads))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("get loads by server failed", K(ret), K(server));
@@ -4469,7 +4463,7 @@ int ObServerBalancer::generate_complete_server_loads(
           server_load.resource_weights_[i] = resource_weights[i];
         }
         server_load.load_sum_ = load_sum;
-        server_load.resource_info_ = server_status.resource_info_;
+        server_load.resource_info_ = server_resource_info;
         if (OB_FAIL(server_load.update_load_value())) {
           LOG_WARN("fail to update load value", K(ret));
         } else if (OB_FAIL(server_loads.push_back(server_load))) {
@@ -5585,10 +5579,10 @@ int ObServerBalancer::calc_global_balance_resource_weights(
                          || RES_MAX != weights_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(zone));
-  } else if (OB_UNLIKELY(NULL == unit_mgr_ || NULL == server_mgr_)) {
+  } else if (OB_ISNULL(unit_mgr_) || OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit_mgr_ or server_mgr_ is null", K(ret));
-  } else if (OB_FAIL(server_mgr_->get_servers_of_zone(zone, zone_servers))) {
+    LOG_WARN("unit_mgr_ or server_mgr_ is null", KR(ret), KP(unit_mgr_), KP(server_mgr_));
+  } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, zone_servers))) {
     LOG_WARN("fail to get zone servers", K(ret), K(zone));
   } else {
     LoadSum load_sum;
@@ -5610,10 +5604,10 @@ int ObServerBalancer::calc_global_balance_resource_weights(
     ResourceSum resource_sum;
     for (int64_t i = 0; OB_SUCC(ret) && i < available_servers.count(); ++i) {
       const common::ObAddr &server = available_servers.at(i);
-      share::ObServerStatus server_status;
-      if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
-        LOG_WARN("fail to get server status", K(ret), K(server));
-      } else if (OB_FAIL(resource_sum.append_resource(server_status.resource_info_))) {
+      share::ObServerResourceInfo resource_info;
+      if (OB_FAIL(server_mgr_->get_server_resource_info(server, resource_info))) {
+        LOG_WARN("fail to get resource_info", KR(ret), K(server));
+      } else if (OB_FAIL(resource_sum.append_resource(resource_info))) {
         LOG_WARN("fail to append resource", K(ret));
       } else {} // no more to do
     }
@@ -6262,30 +6256,31 @@ int ObServerBalancer::generate_server_load(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == server_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server_mgr_ ptr is null", K(ret), KP(server_mgr_));
   } else if (available_servers.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(available_servers));
+  } else if (OB_ISNULL(server_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server_mgr_ is null", KR(ret), KP(server_mgr_));
   } else {
     // Place the generated unitgroup load into the corresponding server load
     server_loads.reset();
     ServerLoad server_load;
-    share::ObServerStatus server_status;
+    share::ObServerResourceInfo resource_info;
     share::ObServerResourceInfo intra_ttg_resource_info;
     // Pre-fill the server first, and fill in the server resource info
     for (int64_t i = 0; OB_SUCC(ret) && i < available_servers.count(); ++i) {
       server_load.reset();
-      server_status.reset();
+      resource_info.reset();
       server_load.server_ = available_servers.at(i);
-      if (OB_FAIL(server_mgr_->get_server_status(server_load.server_, server_status))) {
-        LOG_WARN("fail to get server status", K(ret));
+      if (OB_FAIL(server_mgr_->get_server_resource_info(server_load.server_, resource_info))) {
+        LOG_WARN("fail to get server status", KR(ret), K(server_load.server_));
       } else if (OB_FAIL(try_regulate_intra_ttg_resource_info(
-              server_status.resource_info_, intra_ttg_resource_info))) {
+          resource_info,
+          intra_ttg_resource_info))) {
         LOG_WARN("fail to try regulate intra resource info", K(ret));
       } else {
-        server_load.resource_info_ = server_status.resource_info_;
+        server_load.resource_info_ = resource_info;
         if (OB_FAIL(server_loads.push_back(server_load))) {
           LOG_WARN("fail to push back", K(ret));
         } else {} // no more to do
@@ -7866,11 +7861,11 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
   } else if (OB_UNLIKELY(zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(zone));
-  } else if (OB_UNLIKELY(NULL == server_mgr_)) {
+  } else if (OB_ISNULL(server_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server_mgr_ ptr is null", K(ret));
-  } else if (OB_FAIL(server_mgr_->get_servers_of_zone(zone, server_list))) {
-    LOG_WARN("fail to get servers of zone", K(ret));
+    LOG_WARN("server_mgr_ ptr is null", KR(ret), KP(server_mgr_));
+  } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(zone, server_list))) {
+    LOG_WARN("fail to get servers of zone", KR(ret), K(zone));
   } else if (OB_FAIL(get_server_balance_critical_disk_waterlevel(disk_waterlevel))) {
     LOG_WARN("fail to get server balance disk water level", K(ret));
   } else {
@@ -7878,36 +7873,36 @@ int ObServerBalancer::generate_zone_server_disk_statistic(
     zone_disk_statistic_.zone_ = zone;
     for (int64_t i = 0; OB_SUCC(ret) && i < server_list.count(); ++i) {
       const common::ObAddr &server = server_list.at(i);
-      share::ObServerStatus server_status;
+      share::ObServerResourceInfo server_resource_info;
+      share::ObServerInfoInTable server_info;
       ServerDiskStatistic disk_statistic;
-      if (OB_FAIL(server_mgr_->get_server_status(server, server_status))) {
-        LOG_WARN("fail to get server status", K(ret));
-      } else if (server_status.is_temporary_offline()
-                 || server_status.is_stopped()) {
+      if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
+        LOG_WARN("fail to get server info", KR(ret), K(server));
+      } else if (server_info.is_temporary_offline() || server_info.is_stopped()) {
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("server is not stable, stop balance servers in this zone",
-                 K(ret), K(server), K(zone),
-                 "is_temporary_offline", server_status.is_temporary_offline(),
-                 "is_stopped", server_status.is_stopped());
-      } else if (server_status.is_active()) {
+            KR(ret), K(server), K(zone),
+            "is_temporary_offline", server_info.is_temporary_offline(),
+            "is_stopped", server_info.is_stopped());
+      } else if (OB_FAIL(server_mgr_->get_server_resource_info(server, server_resource_info))) {
+        LOG_WARN("fail to get server resource info", KR(ret), K(server));
+      } else if (server_info.is_active()) {
         disk_statistic.server_ = server;
         disk_statistic.wild_server_ = false;
-        disk_statistic.disk_in_use_ = server_status.resource_info_.disk_in_use_;
-        disk_statistic.disk_total_ = server_status.resource_info_.disk_total_;
+        disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
+        disk_statistic.disk_total_ = server_resource_info.disk_total_;
         if (static_cast<double>(disk_statistic.disk_in_use_)
             > disk_waterlevel * static_cast<double>(disk_statistic.disk_total_)) {
           zone_disk_statistic_.over_disk_waterlevel_ = true;
         }
-      } else if (ObServerStatus::OB_SERVER_ADMIN_DELETING == server_status.admin_status_
-                 || ObServerStatus::OB_SERVER_ADMIN_TAKENOVER_BY_RS == server_status.admin_status_
-                 || server_status.is_permanent_offline()) {
+      } else if (server_info.is_deleting() || server_info.is_permanent_offline()) {
         disk_statistic.server_ = server;
         disk_statistic.wild_server_ = true;
-        disk_statistic.disk_in_use_ = server_status.resource_info_.disk_in_use_;
-        disk_statistic.disk_total_ = server_status.resource_info_.disk_total_;
+        disk_statistic.disk_in_use_ = server_resource_info.disk_in_use_;
+        disk_statistic.disk_total_ = server_resource_info.disk_total_;
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknow server status", K(ret), K(server_status));
+        LOG_WARN("unknow server_info", K(ret), K(server_info));
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(zone_disk_statistic_.append(disk_statistic))) {

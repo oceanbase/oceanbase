@@ -49,6 +49,7 @@
 <NULL, LOB> : defined
 <NULL, JSON> : defined
 <NULL, GEOMETRY> : defined
+<NULL, UDT> : not defined
 
 /**************** TINYINT ****************/
 
@@ -101,6 +102,7 @@
 <TINYINT, LOB> : not defined
 <TINYINT, JSON> : not defined
 <TINYINT, GEOMETRY> : not defined
+<TINYINT, UDT> : not defined
 
 /**************** SMALLINT ****************/
 
@@ -153,6 +155,7 @@
 <SMALLINT, LOB> : not defined
 <SMALLINT, JSON> : not defined
 <SMALLINT, GEOMETRY> : not defined
+<SMALLINT, UDT> : not defined
 
 /**************** MEDIUMINT ****************/
 
@@ -205,6 +208,7 @@
 <MEDIUMINT, LOB> : not defined
 <MEDIUMINT, JSON> : not defined
 <MEDIUMINT, GEOMETRY> : not defined
+<MEDIUMINT, UDT> : not defined
 
 /**************** INT ****************/
 
@@ -257,6 +261,7 @@
 <INT, LOB> : not defined
 <INT, JSON> : not defined
 <INT, GEOMETRY> : not defined
+<INT, UDT> : not defined
 
 /**************** BIGINT ****************/
 
@@ -309,6 +314,7 @@
 <BIGINT, LOB> : not defined
 <BIGINT, JSON> : not defined
 <BIGINT, GEOMETRY> : not defined
+<BIGINT, UDT> : not defined
 
 /**************** TINYINT UNSIGNED ****************/
 
@@ -361,6 +367,7 @@
 <TINYINT UNSIGNED, LOB> : not defined
 <TINYINT UNSIGNED, JSON> : not defined
 <TINYINT UNSIGNED, GEOMETRY> : not defined
+<TINYINT UNSIGNED, UDT> : not defined
 
 /**************** SMALLINT UNSIGNED ****************/
 
@@ -413,6 +420,7 @@
 <SMALLINT UNSIGNED, LOB> : not defined
 <SMALLINT UNSIGNED, JSON> : not defined
 <SMALLINT UNSIGNED, GEOMETRY> : not defined
+<SMALLINT UNSIGNED, UDT> : not defined
 
 /**************** MEDIUMINT UNSIGNED ****************/
 
@@ -465,6 +473,7 @@
 <MEDIUMINT UNSIGNED, LOB> : not defined
 <MEDIUMINT UNSIGNED, JSON> : not defined
 <MEDIUMINT UNSIGNED, GEOMETRY> : not defined
+<MEDIUMINT UNSIGNED, UDT> : not defined
 
 /**************** INT UNSIGNED ****************/
 
@@ -517,6 +526,7 @@
 <INT UNSIGNED, LOB> : not defined
 <INT UNSIGNED, JSON> : not defined
 <INT UNSIGNED, GEOMETRY> : not defined
+<INT UNSIGNED, UDT> : not defined
 
 /**************** BIGINT UNSIGNED ****************/
 
@@ -569,6 +579,7 @@
 <BIGINT UNSIGNED, LOB> : not defined
 <BIGINT UNSIGNED, JSON> : not defined
 <BIGINT UNSIGNED, GEOMETRY> : not defined
+<BIGINT UNSIGNED, UDT> : not defined
 
 /**************** FLOAT ****************/
 
@@ -621,6 +632,7 @@
 <FLOAT, LOB> : not defined
 <FLOAT, JSON> : not defined
 <FLOAT, GEOMETRY> : not defined
+<FLOAT, UDT> : not defined
 
 /**************** DOUBLE ****************/
 
@@ -673,6 +685,7 @@
 <DOUBLE, LOB> : not defined
 <DOUBLE, JSON> : not defined
 <DOUBLE, GEOMETRY> : not defined
+<DOUBLE, UDT> : not defined
 
 /**************** FLOAT UNSIGNED ****************/
 
@@ -725,6 +738,7 @@
 <FLOAT UNSIGNED, LOB> : not defined
 <FLOAT UNSIGNED, JSON> : not defined
 <FLOAT UNSIGNED, GEOMETRY> : not defined
+<FLOAT UNSIGNED, UDT> : not defined
 
 /**************** DOUBLE UNSIGNED ****************/
 
@@ -777,6 +791,7 @@
 <DOUBLE UNSIGNED, LOB> : not defined
 <DOUBLE UNSIGNED, JSON> : not defined
 <DOUBLE UNSIGNED, GEOMETRY> : not defined
+<DOUBLE UNSIGNED, UDT> : not defined
 
 /**************** DECIMAL ****************/
 
@@ -829,6 +844,7 @@
 <DECIMAL, LOB> : not defined
 <DECIMAL, JSON> : not defined
 <DECIMAL, GEOMETRY> : not defined
+<DECIMAL, UDT> : not defined
 
 /**************** DECIMAL UNSIGNED ****************/
 
@@ -881,6 +897,7 @@
 <DECIMAL UNSIGNED, LOB> : not defined
 <DECIMAL UNSIGNED, JSON> : not defined
 <DECIMAL UNSIGNED, GEOMETRY> : not defined
+<DECIMAL UNSIGNED, UDT> : not defined
 
 /**************** DATETIME ****************/
 
@@ -933,6 +950,7 @@
 <DATETIME, LOB> : not defined
 <DATETIME, JSON> : not defined
 <DATETIME, GEOMETRY> : not defined
+<DATETIME, UDT> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -985,6 +1003,7 @@
 <TIMESTAMP, LOB> : not defined
 <TIMESTAMP, JSON> : not defined
 <TIMESTAMP, GEOMETRY> : not defined
+<TIMESTAMP, UDT> : not defined
 
 /**************** DATE ****************/
 
@@ -1037,6 +1056,7 @@
 <DATE, LOB> : not defined
 <DATE, JSON> : not defined
 <DATE, GEOMETRY> : not defined
+<DATE, UDT> : not defined
 
 /**************** TIME ****************/
 
@@ -1089,6 +1109,7 @@
 <TIME, LOB> : not defined
 <TIME, JSON> : not defined
 <TIME, GEOMETRY> : not defined
+<TIME, UDT> : not defined
 
 /**************** YEAR ****************/
 
@@ -1141,6 +1162,7 @@
 <YEAR, LOB> : not defined
 <YEAR, JSON> : not defined
 <YEAR, GEOMETRY> : not defined
+<YEAR, UDT> : not defined
 
 /**************** VARCHAR ****************/
 
@@ -1193,6 +1215,7 @@
 <VARCHAR, LOB> : not defined
 <VARCHAR, JSON> : not defined
 <VARCHAR, GEOMETRY> : not defined
+<VARCHAR, UDT> : not defined
 
 /**************** CHAR ****************/
 
@@ -1245,6 +1268,7 @@
 <CHAR, LOB> : not defined
 <CHAR, JSON> : not defined
 <CHAR, GEOMETRY> : not defined
+<CHAR, UDT> : not defined
 
 /**************** HEX_STRING ****************/
 
@@ -1297,6 +1321,7 @@
 <HEX_STRING, LOB> : not defined
 <HEX_STRING, JSON> : not defined
 <HEX_STRING, GEOMETRY> : not defined
+<HEX_STRING, UDT> : not defined
 
 /**************** EXT ****************/
 
@@ -1349,6 +1374,7 @@
 <EXT, LOB> : defined
 <EXT, JSON> : defined
 <EXT, GEOMETRY> : defined
+<EXT, UDT> : not defined
 
 /**************** UNKNOWN ****************/
 
@@ -1401,6 +1427,7 @@
 <UNKNOWN, LOB> : not defined
 <UNKNOWN, JSON> : not defined
 <UNKNOWN, GEOMETRY> : not defined
+<UNKNOWN, UDT> : not defined
 
 /**************** TINYTEXT ****************/
 
@@ -1453,6 +1480,7 @@
 <TINYTEXT, LOB> : not defined
 <TINYTEXT, JSON> : not defined
 <TINYTEXT, GEOMETRY> : not defined
+<TINYTEXT, UDT> : not defined
 
 /**************** TEXT ****************/
 
@@ -1505,6 +1533,7 @@
 <TEXT, LOB> : not defined
 <TEXT, JSON> : not defined
 <TEXT, GEOMETRY> : not defined
+<TEXT, UDT> : not defined
 
 /**************** MEDIUMTEXT ****************/
 
@@ -1557,6 +1586,7 @@
 <MEDIUMTEXT, LOB> : not defined
 <MEDIUMTEXT, JSON> : not defined
 <MEDIUMTEXT, GEOMETRY> : not defined
+<MEDIUMTEXT, UDT> : not defined
 
 /**************** LONGTEXT ****************/
 
@@ -1609,6 +1639,7 @@
 <LONGTEXT, LOB> : not defined
 <LONGTEXT, JSON> : not defined
 <LONGTEXT, GEOMETRY> : not defined
+<LONGTEXT, UDT> : not defined
 
 /**************** BIT ****************/
 
@@ -1661,6 +1692,7 @@
 <BIT, LOB> : not defined
 <BIT, JSON> : not defined
 <BIT, GEOMETRY> : not defined
+<BIT, UDT> : not defined
 
 /**************** ENUM ****************/
 
@@ -1713,6 +1745,7 @@
 <ENUM, LOB> : not defined
 <ENUM, JSON> : not defined
 <ENUM, GEOMETRY> : not defined
+<ENUM, UDT> : not defined
 
 /**************** SET ****************/
 
@@ -1765,6 +1798,7 @@
 <SET, LOB> : not defined
 <SET, JSON> : not defined
 <SET, GEOMETRY> : not defined
+<SET, UDT> : not defined
 
 /**************** ENUM_INNER ****************/
 
@@ -1817,6 +1851,7 @@
 <ENUM_INNER, LOB> : not defined
 <ENUM_INNER, JSON> : not defined
 <ENUM_INNER, GEOMETRY> : not defined
+<ENUM_INNER, UDT> : not defined
 
 /**************** SET_INNER ****************/
 
@@ -1869,6 +1904,7 @@
 <SET_INNER, LOB> : not defined
 <SET_INNER, JSON> : not defined
 <SET_INNER, GEOMETRY> : not defined
+<SET_INNER, UDT> : not defined
 
 /**************** TIMESTAMP_WITH_TIME_ZONE ****************/
 
@@ -1921,6 +1957,7 @@
 <TIMESTAMP_WITH_TIME_ZONE, LOB> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, JSON> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, GEOMETRY> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, UDT> : not defined
 
 /**************** TIMESTAMP_WITH_LOCAL_TIME_ZONE ****************/
 
@@ -1973,6 +2010,7 @@
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, LOB> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, JSON> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, GEOMETRY> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, UDT> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -2025,6 +2063,7 @@
 <TIMESTAMP, LOB> : not defined
 <TIMESTAMP, JSON> : not defined
 <TIMESTAMP, GEOMETRY> : not defined
+<TIMESTAMP, UDT> : not defined
 
 /**************** RAW ****************/
 
@@ -2077,6 +2116,7 @@
 <RAW, LOB> : not defined
 <RAW, JSON> : not defined
 <RAW, GEOMETRY> : not defined
+<RAW, UDT> : not defined
 
 /**************** INTERVAL_YEAR_TO_MONTH ****************/
 
@@ -2129,6 +2169,7 @@
 <INTERVAL_YEAR_TO_MONTH, LOB> : not defined
 <INTERVAL_YEAR_TO_MONTH, JSON> : not defined
 <INTERVAL_YEAR_TO_MONTH, GEOMETRY> : not defined
+<INTERVAL_YEAR_TO_MONTH, UDT> : not defined
 
 /**************** INTERVAL_DAY_TO_SECOND ****************/
 
@@ -2181,6 +2222,7 @@
 <INTERVAL_DAY_TO_SECOND, LOB> : not defined
 <INTERVAL_DAY_TO_SECOND, JSON> : not defined
 <INTERVAL_DAY_TO_SECOND, GEOMETRY> : not defined
+<INTERVAL_DAY_TO_SECOND, UDT> : not defined
 
 /**************** NUMBER_FLOAT ****************/
 
@@ -2233,6 +2275,7 @@
 <NUMBER_FLOAT, LOB> : not defined
 <NUMBER_FLOAT, JSON> : not defined
 <NUMBER_FLOAT, GEOMETRY> : not defined
+<NUMBER_FLOAT, UDT> : not defined
 
 /**************** NVARCHAR2 ****************/
 
@@ -2285,6 +2328,7 @@
 <NVARCHAR2, LOB> : not defined
 <NVARCHAR2, JSON> : not defined
 <NVARCHAR2, GEOMETRY> : not defined
+<NVARCHAR2, UDT> : not defined
 
 /**************** NCHAR ****************/
 
@@ -2337,6 +2381,7 @@
 <NCHAR, LOB> : not defined
 <NCHAR, JSON> : not defined
 <NCHAR, GEOMETRY> : not defined
+<NCHAR, UDT> : not defined
 
 /**************** ROWID ****************/
 
@@ -2389,6 +2434,7 @@
 <ROWID, LOB> : not defined
 <ROWID, JSON> : not defined
 <ROWID, GEOMETRY> : not defined
+<ROWID, UDT> : not defined
 
 /**************** LOB ****************/
 
@@ -2441,6 +2487,7 @@
 <LOB, LOB> : not defined
 <LOB, JSON> : not defined
 <LOB, GEOMETRY> : not defined
+<LOB, UDT> : not defined
 
 /**************** JSON ****************/
 
@@ -2493,6 +2540,7 @@
 <JSON, LOB> : not defined
 <JSON, JSON> : defined
 <JSON, GEOMETRY> : not defined
+<JSON, UDT> : not defined
 
 /**************** GEOMETRY ****************/
 
@@ -2545,4 +2593,58 @@
 <GEOMETRY, LOB> : not defined
 <GEOMETRY, JSON> : not defined
 <GEOMETRY, GEOMETRY> : defined
+<GEOMETRY, UDT> : not defined
+
+/**************** UDT ****************/
+
+<UDT, NULL> : not defined
+<UDT, TINYINT> : not defined
+<UDT, SMALLINT> : not defined
+<UDT, MEDIUMINT> : not defined
+<UDT, INT> : not defined
+<UDT, BIGINT> : not defined
+<UDT, TINYINT UNSIGNED> : not defined
+<UDT, SMALLINT UNSIGNED> : not defined
+<UDT, MEDIUMINT UNSIGNED> : not defined
+<UDT, INT UNSIGNED> : not defined
+<UDT, BIGINT UNSIGNED> : not defined
+<UDT, FLOAT> : not defined
+<UDT, DOUBLE> : not defined
+<UDT, FLOAT UNSIGNED> : not defined
+<UDT, DOUBLE UNSIGNED> : not defined
+<UDT, DECIMAL> : not defined
+<UDT, DECIMAL UNSIGNED> : not defined
+<UDT, DATETIME> : not defined
+<UDT, TIMESTAMP> : not defined
+<UDT, DATE> : not defined
+<UDT, TIME> : not defined
+<UDT, YEAR> : not defined
+<UDT, VARCHAR> : not defined
+<UDT, CHAR> : not defined
+<UDT, HEX_STRING> : not defined
+<UDT, EXT> : not defined
+<UDT, UNKNOWN> : not defined
+<UDT, TINYTEXT> : not defined
+<UDT, TEXT> : not defined
+<UDT, MEDIUMTEXT> : not defined
+<UDT, LONGTEXT> : not defined
+<UDT, BIT> : not defined
+<UDT, ENUM> : not defined
+<UDT, SET> : not defined
+<UDT, ENUM_INNER> : not defined
+<UDT, SET_INNER> : not defined
+<UDT, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<UDT, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<UDT, TIMESTAMP> : not defined
+<UDT, RAW> : not defined
+<UDT, INTERVAL_YEAR_TO_MONTH> : not defined
+<UDT, INTERVAL_DAY_TO_SECOND> : not defined
+<UDT, NUMBER_FLOAT> : not defined
+<UDT, NVARCHAR2> : not defined
+<UDT, NCHAR> : not defined
+<UDT, ROWID> : not defined
+<UDT, LOB> : not defined
+<UDT, JSON> : not defined
+<UDT, GEOMETRY> : not defined
+<UDT, UDT> : not defined
 

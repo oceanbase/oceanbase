@@ -29,7 +29,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprPrivSTAsEwkt::ObExprPrivSTAsEwkt(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_ASEWKT, N_PRIV_ST_ASEWKT, MORE_THAN_ZERO, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_ASEWKT, N_PRIV_ST_ASEWKT, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

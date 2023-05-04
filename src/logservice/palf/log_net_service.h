@@ -174,6 +174,7 @@ public:
   int submit_config_change_pre_check_req(
       const common::ObAddr &server,
       const LogConfigVersion &config_version,
+      const bool need_purge_throttling,
       const int64_t timeout_us,
       LogGetMCStResp &resp);
 

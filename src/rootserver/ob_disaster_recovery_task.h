@@ -123,6 +123,7 @@ public:
   bool operator==(const ObDRTaskKey &that) const;
   ObDRTaskKey &operator=(const ObDRTaskKey &that);
   uint64_t hash() const;
+  int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
   int init(const uint64_t key_1,
            const uint64_t key_2,
            const uint64_t key_3,
@@ -331,8 +332,6 @@ public:
   virtual int clone(void *input_ptr, ObDRTask *&output_task) const = 0;
   int deep_copy(const ObDRTask &that);
 public:
-  int update_with_partition(
-      const common::ObAddr &dst_server) const;
   void set_schedule();
   bool is_manual_task() const { return obrpc::ObAdminClearDRTaskArg::TaskType::MANUAL == invoked_source_; }
 public:

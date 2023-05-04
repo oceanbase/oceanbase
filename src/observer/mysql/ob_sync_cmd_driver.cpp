@@ -305,10 +305,12 @@ int ObSyncCmdDriver::response_query_result(ObMySQLResultSet &result)
                 && OB_FAIL(convert_text_value_charset(value, result))) {
         LOG_WARN("convert text value charset failed", K(ret));
       }
-      if (OB_SUCC(ret)
-          && (value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
-          && OB_FAIL(process_lob_locator_results(value, result))) {
+      if (OB_FAIL(ret)) {
+      } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
+                  && OB_FAIL(process_lob_locator_results(value, result))) {
         LOG_WARN("convert lob locator to longtext failed", K(ret));
+      } else if (value.is_user_defined_sql_type() && OB_FAIL(process_sql_udt_results(value, result))) {
+        LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
       }
     }
 

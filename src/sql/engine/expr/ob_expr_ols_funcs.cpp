@@ -669,7 +669,7 @@ int ObExprOLSBase::get_schema_guard(ObExecContext *exec_ctx, ObSchemaGetterGuard
 }
 
 ObExprOLSPolicyCreate::ObExprOLSPolicyCreate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_CREATE, N_OLS_POLICY_CREATE, 3, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_CREATE, N_OLS_POLICY_CREATE, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -697,7 +697,7 @@ int ObExprOLSPolicyCreate::calc_result_type3(ObExprResType &type,
 }
 
 ObExprOLSPolicyAlter::ObExprOLSPolicyAlter(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_ALTER, N_OLS_POLICY_ALTER, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_ALTER, N_OLS_POLICY_ALTER, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -722,7 +722,7 @@ int ObExprOLSPolicyAlter::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSPolicyDisable::ObExprOLSPolicyDisable(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_DISABLE, N_OLS_POLICY_DISABLE, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_DISABLE, N_OLS_POLICY_DISABLE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -753,7 +753,7 @@ int ObExprOLSPolicyDisable::calc_result_type1(ObExprResType &type,
 }
 
 ObExprOLSPolicyEnable::ObExprOLSPolicyEnable(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_ENABLE, N_OLS_POLICY_ENABLE, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_ENABLE, N_OLS_POLICY_ENABLE, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -784,7 +784,7 @@ int ObExprOLSPolicyEnable::calc_result_type1(ObExprResType &type,
 }
 
 ObExprOLSPolicyDrop::ObExprOLSPolicyDrop(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_DROP, N_OLS_POLICY_DROP, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_POLICY_DROP, N_OLS_POLICY_DROP, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -818,7 +818,7 @@ int ObExprOLSPolicyDrop::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSLevelCreate::ObExprOLSLevelCreate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_CREATE, N_OLS_LEVEL_CREATE, 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_CREATE, N_OLS_LEVEL_CREATE, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -850,7 +850,7 @@ int ObExprOLSLevelCreate::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSLevelAlter::ObExprOLSLevelAlter(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_ALTER, N_OLS_LEVEL_ALTER, 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_ALTER, N_OLS_LEVEL_ALTER, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -882,7 +882,7 @@ int ObExprOLSLevelAlter::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSLevelDrop::ObExprOLSLevelDrop(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_DROP, N_OLS_LEVEL_DROP, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LEVEL_DROP, N_OLS_LEVEL_DROP, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -907,7 +907,7 @@ int ObExprOLSLevelDrop::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSLabelCreate::ObExprOLSLabelCreate(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_CREATE, N_OLS_LABEL_CREATE, 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_CREATE, N_OLS_LABEL_CREATE, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -939,7 +939,7 @@ int ObExprOLSLabelCreate::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSLabelAlter::ObExprOLSLabelAlter(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_ALTER, N_OLS_LABEL_ALTER, 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_ALTER, N_OLS_LABEL_ALTER, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -971,7 +971,7 @@ int ObExprOLSLabelAlter::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSLabelDrop::ObExprOLSLabelDrop(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_DROP, N_OLS_LABEL_DROP, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_DROP, N_OLS_LABEL_DROP, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -996,7 +996,7 @@ int ObExprOLSLabelDrop::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSTablePolicyApply::ObExprOLSTablePolicyApply(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_APPLY, N_OLS_TABLE_POLICY_APPLY, 6, NOT_ROW_DIMENSION, 
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_APPLY, N_OLS_TABLE_POLICY_APPLY, 6,VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1022,7 +1022,7 @@ int ObExprOLSTablePolicyApply::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSTablePolicyRemove::ObExprOLSTablePolicyRemove(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_REMOVE, N_OLS_TABLE_POLICY_REMOVE, 4, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_REMOVE, N_OLS_TABLE_POLICY_REMOVE, 4, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1051,7 +1051,7 @@ int ObExprOLSTablePolicyRemove::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSTablePolicyDisable::ObExprOLSTablePolicyDisable(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_DISABLE, N_OLS_TABLE_POLICY_DISABLE, 3, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_DISABLE, N_OLS_TABLE_POLICY_DISABLE, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1078,7 +1078,7 @@ int ObExprOLSTablePolicyDisable::calc_result_type3(ObExprResType &type,
 }
 
 ObExprOLSTablePolicyEnable::ObExprOLSTablePolicyEnable(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_ENABLE, N_OLS_TABLE_POLICY_ENABLE, 3, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_TABLE_POLICY_ENABLE, N_OLS_TABLE_POLICY_ENABLE, 3, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1105,7 +1105,7 @@ int ObExprOLSTablePolicyEnable::calc_result_type3(ObExprResType &type,
 }
 
 ObExprOLSUserSetLevels::ObExprOLSUserSetLevels(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_USER_SET_LEVELS, N_OLS_USER_SET_LEVELS, 6, NOT_ROW_DIMENSION, 
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_USER_SET_LEVELS, N_OLS_USER_SET_LEVELS, 6, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1133,7 +1133,7 @@ int ObExprOLSUserSetLevels::calc_result_typeN(ObExprResType &type,
 }
 
 ObExprOLSSessionSetLabel::ObExprOLSSessionSetLabel(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_SET_LABEL, N_OLS_SESSION_SET_LABEL, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_SET_LABEL, N_OLS_SESSION_SET_LABEL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1158,7 +1158,7 @@ int ObExprOLSSessionSetLabel::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSSessionSetRowLabel::ObExprOLSSessionSetRowLabel(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_SET_ROW_LABEL, N_OLS_SESSION_SET_ROW_LABEL, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_SET_ROW_LABEL, N_OLS_SESSION_SET_ROW_LABEL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1183,7 +1183,7 @@ int ObExprOLSSessionSetRowLabel::calc_result_type2(ObExprResType &type,
 }
 
 ObExprOLSSessionRestoreDefaultLabels::ObExprOLSSessionRestoreDefaultLabels(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_RESTORE_DEFAULT_LABEL, N_OLS_SESSION_RESTORE_DEFAULT_LABEL, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_RESTORE_DEFAULT_LABEL, N_OLS_SESSION_RESTORE_DEFAULT_LABEL, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1205,7 +1205,7 @@ int ObExprOLSSessionRestoreDefaultLabels::calc_result_type1(ObExprResType &type,
 }
 
 ObExprOLSSessionLabel::ObExprOLSSessionLabel(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_LABEL, N_OLS_SESSION_LABEL, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_LABEL, N_OLS_SESSION_LABEL, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -1243,7 +1243,7 @@ int ObExprOLSSessionLabel::eval_label(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
 }
 
 ObExprOLSSessionRowLabel::ObExprOLSSessionRowLabel(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_ROW_LABEL, N_OLS_SESSION_ROW_LABEL, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_SESSION_ROW_LABEL, N_OLS_SESSION_ROW_LABEL, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -1281,7 +1281,7 @@ int ObExprOLSSessionRowLabel::eval_row_label(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 ObExprOLSLabelCmpLE::ObExprOLSLabelCmpLE(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_VALUE_CMP_LE, N_OLS_LABEL_VALUE_CMP_LE, 2, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_VALUE_CMP_LE, N_OLS_LABEL_VALUE_CMP_LE, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1327,7 +1327,7 @@ int ObExprOLSLabelCmpLE::eval_cmple(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
 
 
 ObExprOLSLabelCheck::ObExprOLSLabelCheck(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_VALUE_CHECK, N_OLS_LABEL_VALUE_CHECK, 1, NOT_ROW_DIMENSION,
+    : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_VALUE_CHECK, N_OLS_LABEL_VALUE_CHECK, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                          false, INTERNAL_IN_ORACLE_MODE)
 {
 }
@@ -1371,7 +1371,7 @@ int ObExprOLSLabelCheck::eval_label_check(const ObExpr &expr, ObEvalCtx &ctx, Ob
 
 ObExprOLSLabelToChar::ObExprOLSLabelToChar(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_LABEL_VALUE_TO_CHAR,
-                         N_OLS_LABEL_VALUE_TO_CHAR, 1, NOT_ROW_DIMENSION)
+                         N_OLS_LABEL_VALUE_TO_CHAR, 1, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -1416,7 +1416,7 @@ int ObExprOLSLabelToChar::eval_label_to_char(const ObExpr &expr, ObEvalCtx &ctx,
 
 ObExprOLSCharToLabel::ObExprOLSCharToLabel(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_LABEL_SE_CHAR_TO_LABEL_VALUE,
-                         N_OLS_CHAR_TO_LABEL_VALUE, 2, NOT_ROW_DIMENSION)
+                         N_OLS_CHAR_TO_LABEL_VALUE, 2, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

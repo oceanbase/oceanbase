@@ -20,6 +20,7 @@
 #include "sql/optimizer/ob_storage_estimator.h"
 #include "sql/ob_sql_trans_control.h"
 #include "storage/tx/ob_trans_service.h"
+#include "share/detect/ob_detect_manager_utils.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
@@ -316,7 +317,10 @@ int ObPxSqcHandler::destroy_sqc()
     LOG_WARN("end ddl failed", K(tmp_ret));
     end_ret = OB_SUCCESS == end_ret ? tmp_ret : end_ret;
   }
-
+  if (OB_NOT_NULL(des_phy_plan_) && des_phy_plan_->is_enable_px_fast_reclaim()) {
+    (void) ObDetectManagerUtils::sqc_unregister_check_item_from_dm(
+        sqc_init_args_->sqc_.get_px_detectable_ids().qc_detectable_id_, node_sequence_id_);
+  }
   if (has_flag(OB_SQC_HANDLER_QC_SQC_LINKED)) {
     /**
      * sqc-qc通道的连接是rpc中process的最后一步，如果link成功就会有这个flag。
@@ -327,6 +331,10 @@ int ObPxSqcHandler::destroy_sqc()
      */
     if (OB_FAIL(sub_coord_->report_sqc_finish(end_ret))) {
       LOG_WARN("fail report sqc to qc", K(ret));
+    }
+    if (OB_NOT_NULL(des_phy_plan_) && des_phy_plan_->is_enable_px_fast_reclaim()) {
+      (void) ObDetectManagerUtils::sqc_unregister_detectable_id_from_dm(
+          sqc_init_args_->sqc_.get_px_detectable_ids().sqc_detectable_id_);
     }
     ObPxSqcMeta &sqc = sqc_init_args_->sqc_;
     LOG_TRACE("sqc send report to qc", K(sqc));
@@ -342,9 +350,6 @@ int ObPxSqcHandler::destroy_sqc()
     if (OB_NOT_NULL(ch) && OB_FAIL(dtl::ObDtlChannelGroup::unlink_channel(ci))) {
       LOG_WARN("Failed to unlink channel", K(ret));
     }
-  }
-  if (has_flag(OB_SQC_HANDLER_BLOOM_FILTER_NEED_CLEAR)) {
-    sub_coord_->destroy_bloom_filter();
   }
   return ret;
 }

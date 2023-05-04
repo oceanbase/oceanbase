@@ -31,7 +31,7 @@ namespace sql
 {
 
 ObExprSTWithin::ObExprSTWithin(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_WITHIN, N_ST_WITHIN, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_ST_WITHIN, N_ST_WITHIN, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

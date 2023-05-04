@@ -28,7 +28,7 @@ namespace sql
 const int64_t ORACLE_TZ_OFFSET_MAX_LENGTH = 7;//[+|-]TZH:TZM
 
 ObExprTzOffset::ObExprTzOffset(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TZ_OFFSET, N_TZ_OFFSET, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TZ_OFFSET, N_TZ_OFFSET, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

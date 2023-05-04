@@ -46,14 +46,14 @@ int ObTenantTimezone::init(ObTenantTimezoneMgr *tz_mgr)
   int ret = OB_SUCCESS;
   tenant_tz_mgr_ = tz_mgr;
   is_inited_ = true;
-  tz_info_map_ = OB_NEW(ObTZInfoMap, "TZInfoMap");
-  tz_info_mgr_ = OB_NEW(ObTimeZoneInfoManager, "TZInfoMgr", OBSERVER.get_common_rpc_proxy(),
+  tz_info_map_ = OB_NEW(ObTZInfoMap, SET_USE_500("TZInfoMap"));
+  tz_info_mgr_ = OB_NEW(ObTimeZoneInfoManager, SET_USE_500("TZInfoMgr"), OBSERVER.get_common_rpc_proxy(),
                     OBSERVER.get_mysql_proxy(), OBSERVER.get_root_service(),
                     *tz_info_map_, tenant_id_);
   if (OB_ISNULL(tz_info_map_) || OB_ISNULL(tz_info_mgr_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate mem for tz_info", K(ret), K(tz_info_map_), K(tz_info_mgr_));
-  } else if (OB_FAIL(tz_info_map_->init("TZInfoMap"))) {
+  } else if (OB_FAIL(tz_info_map_->init(SET_USE_500("TZInfoMap")))) {
     LOG_WARN("fail to init tz_info_map_", K(ret));
   } else if (OB_FAIL(tz_info_mgr_->init())) {
     LOG_WARN("fail to init tz_info_mgr_", K(ret));

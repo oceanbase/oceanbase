@@ -32,7 +32,8 @@ SqlInfo::SqlInfo() :
   total_(0),
   last_active_time_(0),
   hit_count_(0),
-  ps_need_parameterized_(true)
+  ps_need_parameterized_(true),
+  need_check_fp_(false)
 {
 }
 
@@ -184,6 +185,7 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
     ctx.mode_ = execution_mode;
     ctx.assign_father_level_ = NO_VALUES;
     ctx.is_from_pl_ = is_from_pl;
+
     if (OB_FAIL(transform_tree(ctx, session))) {
       if (OB_NOT_SUPPORTED != ret) {
         SQL_PC_LOG(WARN, "fail to transform syntax tree", K(ret));
@@ -246,6 +248,9 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
           || (T_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_CAST_ARGUMENT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_DOUBLE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_IEEE754_INFINITE == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_IEEE754_NAN == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
+          || (T_SFU_INT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)
           || (T_FLOAT == ctx.tree_->type_ && true == ctx.tree_->is_hidden_const_)) {
         ctx.is_fast_parse_const_ = false;
       } else {
@@ -490,6 +495,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
         ObString func_name_is_serving_tenant(N_IS_SERVING_TENANT);
         if (func_name == func_name_is_serving_tenant) {
           ret = OB_NOT_SUPPORTED;
+          LOG_WARN("is_serving_tenant is not supported", K(ret));
         }
       }
     }
@@ -601,7 +607,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             // for hard parsing. In this case, the param store has been constructed in advance
             // so the constant cannot be resolved as a question mark, and there is no need to
             // add it to the param store.
+            ObItemType node_type;
             if (!is_execute_mode(ctx.mode_)) {
+              node_type = ctx.tree_->type_;
               ctx.tree_->type_ = T_QUESTIONMARK;
               ctx.tree_->raw_param_idx_ = ctx.sql_info_->total_;
               ctx.tree_->value_ = ctx.question_num_;
@@ -620,6 +628,24 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
               const ParseNode *node = ctx.raw_params_->at(ctx.tree_->raw_param_idx_)->node_;
               value.set_raw_text_info(static_cast<int32_t>(node->raw_sql_offset_),
                                       static_cast<int32_t>(node->text_len_));
+              if (ctx.sql_info_->need_check_fp_) {
+                ObPCParseInfo p_info;
+                p_info.param_idx_ = ctx.sql_info_->total_ - 1;
+                p_info.flag_ = NORMAL_PARAM;
+                p_info.raw_text_pos_ = ctx.tree_->sql_str_off_;
+                if (ctx.tree_->sql_str_off_ == -1) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("invlid str off", K(lbt()), K(ctx.tree_),
+                      K(ctx.tree_->raw_param_idx_), K(get_type_name(node_type)),
+                      K(session_info.get_current_query_string()),
+                      "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+                }
+                if (OB_FAIL(ret)) {
+                  // do nothing
+                } else if (OB_FAIL(ctx.sql_info_->parse_infos_.push_back(p_info))) {
+                  SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+                }
+              }
             }
             if (OB_FAIL(ret)) {
               //do nothing
@@ -631,6 +657,10 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
           }
         } else if (OB_FAIL(add_not_param_flag(ctx.tree_, *ctx.sql_info_))) { //not param
           SQL_PC_LOG(WARN, "fail to add not param flag", K(ret));
+        }
+        if (ctx.sql_info_->need_check_fp_ && ret == OB_NOT_SUPPORTED) {
+          LOG_WARN("print tree", K(session_info.get_current_query_string()),
+              "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
         }
       } //if is_fast_parse_const end
     }
@@ -834,7 +864,24 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                 } else if (OB_FAIL(add_varchar_charset(root, *ctx.sql_info_))) {
                   SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
                 } else {
-                  // do nothing
+                  if (ctx.sql_info_->need_check_fp_) {
+                    ObPCParseInfo p_info;
+                    p_info.param_idx_ = ctx.sql_info_->total_ - 1;
+                    p_info.flag_ = NOT_PARAM;
+                    p_info.raw_text_pos_ = root->sql_str_off_;
+                    if (root->sql_str_off_ == -1) {
+                      ret = OB_NOT_SUPPORTED;
+                      LOG_WARN("invlid str off", K(lbt()), K(ctx.tree_),
+                          K(root->raw_param_idx_), K(get_type_name(root->type_)),
+                          K(session_info.get_current_query_string()),
+                          "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+                    }
+                    if (OB_FAIL(ret)) {
+                      // do nithing
+                    } else if (OB_FAIL(ctx.sql_info_->parse_infos_.push_back(p_info))) {
+                      SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+                    }
+                  }
                 }
               } // for end
             } else {
@@ -858,46 +905,71 @@ int ObSqlParameterization::check_and_generate_param_info(const ObIArray<ObPCPara
   int ret = OB_SUCCESS;
   if (sql_info.total_ != raw_params.count()) {
     ret = OB_NOT_SUPPORTED;
-#if !defined(NDEBUG)
-    SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
-               "fast_parse_const_num", raw_params.count(),
-               "normal_parse_const_num", sql_info.total_);
-#endif
+    if (sql_info.need_check_fp_) {
+      SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
+                "fast_parse_const_num", raw_params.count(),
+                "normal_parse_const_num", sql_info.total_);
+    }
   }
-  ObPCParam *pc_param = NULL;
-  for (int32_t i = 0; OB_SUCC(ret) && i < raw_params.count(); i ++) {
-    //not param 和neg param不可能是同一个param, 在transform_tree时已保证
-    pc_param = raw_params.at(i);
-    if (OB_ISNULL(pc_param)) {
-      ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid argument", K(ret));
-    } else if (OB_ISNULL(pc_param->node_)) {
-      ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid argument", K(pc_param->node_), K(ret));
-    } else if (sql_info.not_param_index_.has_member(i)) { //not param
-      pc_param->flag_ = NOT_PARAM;
-      if (OB_FAIL(special_params.push_back(pc_param))) {
-        SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
-      }
-    } else if (sql_info.neg_param_index_.has_member(i)) {//neg param
-      //如果是T_VARCHAR则不需要记录为负数, ?sql也不需要合并-?
-      if (T_VARCHAR == pc_param->node_->type_) {
-        //do nothing
-      } else {
-        pc_param->flag_ = NEG_PARAM;
+
+  if (OB_FAIL(ret)) {
+
+  } else {
+    ObPCParam *pc_param = NULL;
+    for (int32_t i = 0; OB_SUCC(ret) && i < raw_params.count(); i ++) {
+      //not param 和neg param不可能是同一个param, 在transform_tree时已保证
+      pc_param = raw_params.at(i);
+      if (OB_ISNULL(pc_param)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_PC_LOG(WARN, "invalid argument", K(ret));
+      } else if (OB_ISNULL(pc_param->node_)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_PC_LOG(WARN, "invalid argument", K(pc_param->node_), K(ret));
+      } else if (sql_info.not_param_index_.has_member(i)) { //not param
+        pc_param->flag_ = NOT_PARAM;
         if (OB_FAIL(special_params.push_back(pc_param))) {
           SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
         }
+      } else if (sql_info.neg_param_index_.has_member(i)) {//neg param
+        //如果是T_VARCHAR则不需要记录为负数, ?sql也不需要合并-?
+        if (T_VARCHAR == pc_param->node_->type_) {
+          //do nothing
+        } else {
+          pc_param->flag_ = NEG_PARAM;
+          if (OB_FAIL(special_params.push_back(pc_param))) {
+            SQL_PC_LOG(WARN, "fail to push item to array", K(ret));
+          }
+        }
+      } else if (sql_info.trans_from_minus_index_.has_member(i)) {
+        pc_param->flag_ = TRANS_NEG_PARAM;
+        if (OB_FAIL(special_params.push_back(pc_param))) {
+          SQL_PC_LOG(WARN, "failed to push back item to array", K(ret));
+        }
+      } else {
+        pc_param->flag_ = NORMAL_PARAM;
       }
-    } else if (sql_info.trans_from_minus_index_.has_member(i)) {
-      pc_param->flag_ = TRANS_NEG_PARAM;
-      if (OB_FAIL(special_params.push_back(pc_param))) {
-        SQL_PC_LOG(WARN, "failed to push back item to array", K(ret));
+    } // for end
+
+    if (sql_info.need_check_fp_) {
+      // do nothing
+      int last_pos = -1;
+      int last_param_idx = -1;
+
+      for (int i = 0; OB_SUCC(ret) && i < sql_info.parse_infos_.count(); i++) {
+        if (last_pos > sql_info.parse_infos_.at(i).raw_text_pos_ ||
+            last_param_idx > sql_info.parse_infos_.at(i).param_idx_) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_PC_LOG(ERROR, "invalid parse order", K(last_param_idx), K(last_pos),
+                                                   K(sql_info.parse_infos_.at(i).raw_text_pos_),
+                                                   K(sql_info.parse_infos_.at(i).param_idx_),
+                                                   K(sql_info.parse_infos_), K(ret));
+        } else {
+          last_pos = sql_info.parse_infos_.at(i).raw_text_pos_;
+          last_param_idx = sql_info.parse_infos_.at(i).param_idx_;
+        }
       }
-    } else {
-      pc_param->flag_ = NORMAL_PARAM;
     }
-  } // for end
+  }
 
   return ret;
 }
@@ -919,6 +991,12 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
   ObSQLSessionInfo *session = NULL;
   ObSEArray<ObPCParam *, OB_PC_SPECIAL_PARAM_COUNT> special_params;
   ObSEArray<ObString, 4> user_var_names;
+
+  int tmp_ret = OB_SUCCESS;
+  tmp_ret = OB_E(EventTable::EN_SQL_PARAM_FP_NP_NOT_SAME_ERROR) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    sql_info.need_check_fp_ = true;
+  }
   int64_t reserved_cnt = 0;
   if (OB_ISNULL(session = pc_ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -986,6 +1064,8 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
                                               special_params))) {
       if (OB_NOT_SUPPORTED != ret) {
         SQL_PC_LOG(WARN, "fail to check and generate param info", K(ret));
+      } else if (sql_info.need_check_fp_) {
+        SQL_PC_LOG(INFO, "print tree", K(session->get_current_query_string()), "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
       } else {
         // do nothing
       }
@@ -1465,12 +1545,44 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
       } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
         SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
       }
+      if (sql_info.need_check_fp_) {
+        ObPCParseInfo p_info;
+        p_info.param_idx_ = sql_info.total_ - 1;
+        p_info.flag_ = NOT_PARAM;
+        p_info.raw_text_pos_ = node->sql_str_off_;
+        if (node->sql_str_off_ == -1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("invlid str off", K(lbt()), K(node),
+              K(node->raw_param_idx_), K(get_type_name(node->type_)));
+        }
+        if (OB_FAIL(ret)) {
+
+        } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
+          SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+        }
+      }
     }
   } else {
     if (OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
       SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
     } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
       SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
+    }
+    if (sql_info.need_check_fp_) {
+      ObPCParseInfo p_info;
+      p_info.param_idx_ = sql_info.total_ - 1;
+      p_info.flag_ = NOT_PARAM;
+      p_info.raw_text_pos_ = node->sql_str_off_;
+      if (node->sql_str_off_ == -1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("invlid str off", K(lbt()), K(node),
+            K(node->raw_param_idx_), K(get_type_name(node->type_)));
+      }
+      if (OB_FAIL(ret)) {
+
+      } else if (OB_FAIL(sql_info.parse_infos_.push_back(p_info))) {
+        SQL_PC_LOG(WARN, "fail to push parser info", K(ret));
+      }
     }
   }
 

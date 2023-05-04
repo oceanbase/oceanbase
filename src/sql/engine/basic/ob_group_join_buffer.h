@@ -35,6 +35,7 @@ struct ObBatchRowDatums
     saved_size_ = 0;
     is_inited_ = false;
   }
+  void clear_saved_size() { saved_size_ = 0; }
   void from_exprs(ObEvalCtx &ctx, ObBitVector *skip, int64_t size);
   void extend_save(ObEvalCtx &ctx, int64_t size);
   void to_exprs(ObEvalCtx &ctx);
@@ -43,9 +44,11 @@ struct ObBatchRowDatums
   {
     return datums_[col_id * batch_size_ + row_id];
   }
+  ObBitVector *get_skip() { return skip_; }
+  int32_t get_size() { return size_; }
   bool is_inited() const { return is_inited_; }
 
-public:
+private:
   common::ObIAllocator *alloc_;
   const ObExprPtrIArray *exprs_;
   int32_t batch_size_;
@@ -53,7 +56,6 @@ public:
   ObBitVector *skip_;
   int32_t size_;
   int32_t saved_size_; // record  the saved size, include extend saved size
-private:
   bool is_inited_;
 };
 
@@ -88,8 +90,7 @@ private:
   int deep_copy_dynamic_obj();
   int bind_group_params_to_store();
   int prepare_rescan_params();
-  int get_next_left_row();
-  int get_next_left_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows);
+  int get_next_left_iter();
   int add_row_to_store();
   int build_above_group_params(const common::ObIArray<ObDynamicParamSetter> &above_rescan_params,
                                common::ObIArray<ObSqlArrayObj *> &above_group_params,
@@ -111,7 +112,7 @@ private:
   const common::ObIArray<ObDynamicParamSetter> *rescan_params_;
   const common::ObIArray<ObDynamicParamSetter> *left_rescan_params_;
   const common::ObIArray<ObDynamicParamSetter> *right_rescan_params_;
-  lib::MemoryContext mem_context_;
+  lib::MemoryContext mem_context_; // for dynamic param copying, will reset after each group rescan
   // buffer for rows read from left child
   ObChunkDatumStore left_store_;
   ObChunkDatumStore::Iterator left_store_iter_;

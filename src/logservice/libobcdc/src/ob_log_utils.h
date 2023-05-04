@@ -237,6 +237,7 @@ const char *get_ctype_string(int ctype);
 bool is_lob_type(const int ctype);
 bool is_json_type(const int ctype);
 bool is_geometry_type(const int ctype);
+bool is_xml_type(const int ctype);
 int64_t get_non_hidden_column_count(const oceanbase::share::schema::ObTableSchema &table_schema);
 
 double get_delay_sec(const int64_t tstamp);
@@ -560,6 +561,49 @@ struct CDCLSNComparator
 // sort and unique lsn arr.
 // NOT THREAD_SAFE
 int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr);
+
+// sort arr and remove duplicate item in arr
+// 1. Item in array should impl copy-assign
+// 2. comparator should compare Item in array, and should obey rule of std::sort
+template<class ARRAY, class Comparator>
+int sort_and_unique_array(ARRAY &arr, Comparator &comparator)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> duplicated_item_idx_arr;
+
+  if (arr.count() > 1) {
+    // sort lsn_arr
+    std::sort(arr.begin(), arr.end(), comparator);
+    auto prev = arr.at(0);
+    // get duplicate misslog lsn idx
+    for(int64_t idx = 1; OB_SUCC(ret) && idx < arr.count(); idx++) {
+      auto &cur = arr.at(idx);
+      if (prev == cur) {
+        if (OB_FAIL(duplicated_item_idx_arr.push_back(idx))) {
+          OBLOG_LOG(WARN, "push_back_duplicate_item_arr fail", KR(ret), K(cur), K(prev), K(idx));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        prev = cur;
+      }
+    }
+
+    // remove duplicate misslog lsn
+    for(int64_t idx = duplicated_item_idx_arr.count() - 1; OB_SUCC(ret) && idx >= 0; idx--) {
+      int64_t duplicate_item_idx = duplicated_item_idx_arr[idx];
+      if (OB_UNLIKELY(0 > duplicate_item_idx || duplicate_item_idx > arr.count())) {
+        ret = OB_INVALID_ARGUMENT;
+        OBLOG_LOG(WARN, "invalid duplicate_cur_lsn_idx", KR(ret), K(arr), K(duplicated_item_idx_arr), K(idx), K(duplicate_item_idx));
+      } else if (OB_FAIL(arr.remove(duplicate_item_idx))) {
+        OBLOG_LOG(WARN, "remove_duplicate_item failed", KR(ret), K(arr), K(duplicate_item_idx));
+      } else {
+      }
+    }
+    OBLOG_LOG(DEBUG, "sort_and_unique_array", KR(ret), K(duplicated_item_idx_arr), K(arr));
+  }
+
+  return ret;
+}
 
 typedef int32_t offset_t;
 

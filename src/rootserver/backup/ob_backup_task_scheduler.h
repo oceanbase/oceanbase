@@ -27,8 +27,6 @@ class ObMutex;
 }
 namespace rootserver 
 {
-  
-class ObServerManager;
 class ObZoneManager;
 class ObBackupTaskScheduler;
 class ObBackupService;
@@ -43,8 +41,7 @@ public:
   virtual ~ObBackupTaskSchedulerQueue();
 
   int init(ObTenantBackupScheduleTaskStatMap &tenant_stat_map,
-           ObServerBackupScheduleTaskStatMap &server_stat_map, 
-           ObServerManager &server_manager,
+           ObServerBackupScheduleTaskStatMap &server_stat_map,
            ObZoneManager &zone_manager,
 	         ObBackupService &backup_mgr,
            const int64_t bucket_num, 
@@ -129,7 +126,6 @@ private:
   TaskMap task_map_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   ObBackupService *backup_service_;
   common::ObMySQLProxy *sql_proxy_; 
@@ -155,8 +151,7 @@ public:
 public:
   ObBackupTaskScheduler();
 
-  int init(ObServerManager *server_mgr, 
-           ObZoneManager *zone_mgr_,
+  int init(ObZoneManager *zone_mgr_,
            obrpc::ObSrvRpcProxy *rpc_proxy,
            ObBackupService *backup_mgr,
            common::ObMySQLProxy &sql_proxy,
@@ -202,7 +197,6 @@ private:
   ObBackupTaskSchedulerQueue queue_;
   // scheduler's self server addr
   common::ObAddr self_;
-  ObServerManager *server_mgr_;
   ObZoneManager *zone_mgr_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupService *backup_service_;

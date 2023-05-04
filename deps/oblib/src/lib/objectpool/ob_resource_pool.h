@@ -93,10 +93,8 @@ public:
       allocator_(allocator),
       inner_allocated_num_(0),
       inner_used_num_(0),
-      free_list_allocator_("PoolFreeList",
-                           OB_MALLOC_NORMAL_BLOCK_SIZE,
-                           mem_attr.tenant_id_,
-                           mem_attr.ctx_id_),
+      free_list_allocator_(SET_USE_500(ObMemAttr(mem_attr.tenant_id_, "PoolFreeList", mem_attr.ctx_id_)),
+                           OB_MALLOC_NORMAL_BLOCK_SIZE),
       slice_max_used_num_(0),
       max_idle_num_(0),
       last_check_ts_(0),
@@ -301,14 +299,14 @@ template <class T, class RPLabel>
 ObResourcePool<T, RPLabel>::ObResourcePool()
   : ObBaseResourcePool<T, RPLabel>(MAX_FREE_LIST_NUM,
                                    &allocator_,
-                                   lib::ObMemAttr(OB_SERVER_TENANT_ID, RPLabel::LABEL))
+                                   SET_USE_500(lib::ObMemAttr(OB_SERVER_TENANT_ID, RPLabel::LABEL)))
 {
   int ret = OB_SUCCESS;
   const int64_t page_size =
     MIN(OB_MALLOC_BIG_BLOCK_SIZE, MAX(8 * sizeof(T), OB_MALLOC_MIDDLE_BLOCK_SIZE));
   if (OB_FAIL(allocator_.init(lib::ObMallocAllocator::get_instance(),
                               page_size,
-                              lib::ObMemAttr(OB_SERVER_TENANT_ID, RPLabel::LABEL)))) {
+                              ObBaseResourcePool<T, RPLabel>::mem_attr_))) {
     _COMMON_LOG(INFO,
                 "init fifo failed, ret=%d", ret);
   }

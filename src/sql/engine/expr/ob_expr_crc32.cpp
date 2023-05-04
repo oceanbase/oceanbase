@@ -26,8 +26,9 @@ using namespace common;
 
 namespace sql {
 ObExprCrc32::ObExprCrc32(ObIAllocator& alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CRC32, N_CRC32, 1, NOT_ROW_DIMENSION)
-{}
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CRC32, N_CRC32, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+{
+}
 
 int ObExprCrc32::calc_result_type1(ObExprResType& type, ObExprResType& type1, ObExprTypeCtx& type_ctx) const
 {

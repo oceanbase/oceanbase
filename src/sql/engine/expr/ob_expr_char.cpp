@@ -47,7 +47,7 @@ namespace sql
 
 
 ObExprChar::ObExprChar(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_CHAR, N_CHAR, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_CHAR, N_CHAR, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

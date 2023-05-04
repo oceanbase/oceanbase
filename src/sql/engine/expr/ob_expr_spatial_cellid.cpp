@@ -29,6 +29,7 @@ ObExprSpatialCellid::ObExprSpatialCellid(common::ObIAllocator &alloc)
                          T_FUN_SYS_SPATIAL_CELLID,
                          N_SPATIAL_CELLID,
                          1,
+                         NOT_VALID_FOR_GENERATED_COL,
                          NOT_ROW_DIMENSION)
 {
 

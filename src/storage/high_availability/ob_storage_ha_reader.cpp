@@ -552,8 +552,8 @@ ObCopyMacroBlockObProducer::ObCopyMacroBlockObProducer()
     sstable_(nullptr),
     meta_(nullptr),
     datum_range_(),
-    second_meta_iterator_(),
-    allocator_("CopyMacroBlock")
+    allocator_("CopyMacroBlock"),
+    second_meta_iterator_()
 {
 }
 
@@ -2288,8 +2288,8 @@ ObCopySSTableMacroRangeObProducer::ObCopySSTableMacroRangeObProducer()
     table_handle_(),
     tablet_handle_(),
     datum_range_(),
-    second_meta_iterator_(),
-    allocator_("CopySSTMacro")
+    allocator_("CopySSTMacro"),
+    second_meta_iterator_()
 {
 }
 

@@ -228,7 +228,7 @@ int ObTxLogBlockBuilder::fill_redo(ObTxRedoLog &redo_log)
 
     if (OB_FAIL(mmw.append_row_buf(row_str.ptr(), row_str.length()))) {
       LOG_ERROR("append_row failed", KR(ret));
-    } else if (OB_FAIL(mmw.serialize(tmp_flag, mutator_pos))) {
+    } else if (OB_FAIL(mmw.serialize(tmp_flag, mutator_pos, encrypt_info))) {
       LOG_ERROR("serialize memtable_mutator failed", KR(ret));
     } else if (OB_FAIL(tx_log_block_.finish_mutator_buf(redo_log, mutator_pos))) {
       LOG_ERROR("finish_mutator_buf failed", KR(ret), K_(tx_log_block), K(redo_log));

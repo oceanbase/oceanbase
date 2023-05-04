@@ -151,7 +151,7 @@ public:
     int ret = common::OB_SUCCESS;
     common::ObLength length = accuracy_.get_length();
     if (!is_string_type() && !is_enum_or_set() && !is_enumset_inner_type()
-                          && !is_ext() && !is_lob_locator()) {
+        && !is_ext() && !is_lob_locator() && !is_user_defined_sql_type()) {
       if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        common::CS_TYPE_INVALID,

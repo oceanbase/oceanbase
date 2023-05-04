@@ -24,7 +24,7 @@ namespace sql
 
 
 ObExprMySQLPort::ObExprMySQLPort(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MYSQL_PORT, N_MYSQL_PORT, 0, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MYSQL_PORT, N_MYSQL_PORT, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

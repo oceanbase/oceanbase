@@ -46,12 +46,14 @@ struct ObRollupAdaptiveInfo
   : rollup_id_expr_(NULL),
     rollup_status_(ObRollupStatus::NONE_ROLLUP),
     sort_keys_(),
+    ecd_sort_keys_(),
     enable_encode_sort_(false)
   {}
 
   ObRawExpr *rollup_id_expr_;
   ObRollupStatus rollup_status_;
   ObArray<OrderItem, common::ModulePageAllocator, true> sort_keys_;
+  ObArray<OrderItem, common::ModulePageAllocator, true> ecd_sort_keys_;
   bool enable_encode_sort_;
 
   int assign(const ObRollupAdaptiveInfo &info);
@@ -103,6 +105,7 @@ public:
   int set_rollup_info(const ObRollupStatus rollup_status,
                       ObRawExpr *rollup_id_expr,
                       ObIArray<OrderItem> &sort_keys,
+                      ObIArray<OrderItem> &ecd_sort_keys,
                       bool enable_encode_sort);
 
   const ObIArray<ObDistinctAggrBatch> &get_distinct_aggr_batch()
@@ -133,15 +136,17 @@ public:
   int set_aggr_exprs(const common::ObIArray<ObAggFunRawExpr *> &aggr_exprs);
   ObSelectLogPlan *get_plan() { return static_cast<ObSelectLogPlan *>(my_plan_); }
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
+  virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
   virtual uint64_t hash(uint64_t seed) const override;
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
-  int inner_est_cost(double child_card,
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  int inner_est_cost(const int64_t parallel,
+                     double child_card,
                      double &child_ndv,
                      double &per_dop_ndv,
                      double &op_cost);
-  int get_child_est_info(double &child_card, double &child_ndv, double &selectivity);
+  int get_child_est_info(const int64_t parallel, double &child_card, double &child_ndv, double &selectivity);
   int get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs);
   virtual bool is_block_op() const override
   { return (MERGE_AGGREGATE != get_algo() && !is_adaptive_aggregate())
@@ -193,6 +198,8 @@ public:
   { return rollup_adaptive_info_.rollup_id_expr_; }
   inline ObIArray<OrderItem> &get_inner_sort_keys()
   { return rollup_adaptive_info_.sort_keys_; }
+  inline ObIArray<OrderItem> &get_inner_ecd_sort_keys()
+  { return rollup_adaptive_info_.ecd_sort_keys_; }
   inline bool has_encode_sort()
   { return rollup_adaptive_info_.enable_encode_sort_; }
   inline bool is_rollup_distributor() const

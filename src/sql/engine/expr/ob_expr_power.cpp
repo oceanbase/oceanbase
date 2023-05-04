@@ -25,7 +25,7 @@ using namespace oceanbase::common;
 namespace sql
 {
 ObExprPower::ObExprPower(ObIAllocator &alloc)
-    : ObExprOperator(alloc, T_FUN_SYS_POWER, N_POWER, 2, NOT_ROW_DIMENSION)
+    : ObExprOperator(alloc, T_FUN_SYS_POWER, N_POWER, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

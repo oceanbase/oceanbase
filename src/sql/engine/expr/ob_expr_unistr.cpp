@@ -22,7 +22,7 @@ using namespace common;
 namespace sql
 {
 ObExprUnistr::ObExprUnistr(common::ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_UNISTR, N_UNISTR, 1)
+  : ObStringExprOperator(alloc, T_FUN_UNISTR, N_UNISTR, 1, VALID_FOR_GENERATED_COL)
 {
 }
 ObExprUnistr::~ObExprUnistr()
@@ -171,7 +171,7 @@ int ObExprUnistr::cg_expr(ObExprCGCtx &op_cg_ctx,
 }
 
 ObExprAsciistr::ObExprAsciistr(common::ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_ASCIISTR, N_ASCIISTR, 1)
+  : ObStringExprOperator(alloc, T_FUN_ASCIISTR, N_ASCIISTR, 1, VALID_FOR_GENERATED_COL)
 {
 }
 ObExprAsciistr::~ObExprAsciistr()

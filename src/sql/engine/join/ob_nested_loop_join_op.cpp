@@ -236,8 +236,8 @@ void ObNestedLoopJoinOp::reset_buf_state()
   save_last_batch_ = false;
   need_switch_iter_ = false;
   iter_end_ = false;
-  left_batch_.saved_size_ = 0;
-  last_save_batch_.saved_size_ = 0;
+  left_batch_.clear_saved_size();
+  last_save_batch_.clear_saved_size();
   match_left_batch_end_ = false;
   match_right_batch_end_ = false;
   l_idx_ = 0;
@@ -509,9 +509,7 @@ int ObNestedLoopJoinOp::group_read_left_operate()
     // das group rescan
     bool has_next = false;
     if (OB_FAIL(group_join_buffer_.fill_group_buffer())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fill group buffer failed", KR(ret));
-      }
+      LOG_WARN("fill group buffer failed", KR(ret));
     } else if (OB_FAIL(group_join_buffer_.has_next_left_row(has_next))) {
       LOG_WARN("check has next failed", KR(ret));
     } else if (has_next) {
@@ -919,18 +917,18 @@ int ObNestedLoopJoinOp::output()
   if (IS_LEFT_SEMI_ANTI_JOIN(MY_SPEC.join_type_)) {
     reset_batchrows();
     if (LEFT_SEMI_JOIN == MY_SPEC.join_type_) {
-      brs_.skip_->bit_calculate(*left_batch_.skip_, *left_matched_, left_batch_.size_,
+      brs_.skip_->bit_calculate(*left_batch_.get_skip(), *left_matched_, left_batch_.get_size(),
                                 [](const uint64_t l, const uint64_t r) { return (l | (~r)); });
     } else if (LEFT_ANTI_JOIN == MY_SPEC.join_type_) {
-      brs_.skip_->bit_calculate(*left_batch_.skip_, *left_matched_, left_batch_.size_,
+      brs_.skip_->bit_calculate(*left_batch_.get_skip(), *left_matched_, left_batch_.get_size(),
                                 [](const uint64_t l, const uint64_t r) { return (l | r); });
     }
     if (MY_SPEC.enable_px_batch_rescan_) {
-      last_save_batch_.extend_save(eval_ctx_, left_batch_.size_);
+      last_save_batch_.extend_save(eval_ctx_, left_batch_.get_size());
     }
     left_batch_.to_exprs(eval_ctx_);
-    brs_.size_ = left_batch_.size_;
-    left_matched_->reset(left_batch_.size_);
+    brs_.size_ = left_batch_.get_size();
+    left_matched_->reset(left_batch_.get_size());
   } else {
     // do nothing.
   }

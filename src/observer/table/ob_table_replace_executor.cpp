@@ -206,7 +206,10 @@ int ObTableApiReplaceExecutor::check_values(bool &is_equal,
       } else {
         const ObDatum &insert_datum = replace_row->cells()[i];
         const ObDatum &del_datum = delete_row->cells()[i];
-        if (0 != new_row.at(i)->basic_funcs_->null_first_cmp_(insert_datum, del_datum)) {
+        int cmp_ret = 0;
+        if (OB_FAIL(new_row.at(i)->basic_funcs_->null_first_cmp_(insert_datum, del_datum, cmp_ret))) {
+          LOG_WARN("fail to compare", K(ret));
+        } else if (0 != cmp_ret) {
           is_equal = false;
         }
       }

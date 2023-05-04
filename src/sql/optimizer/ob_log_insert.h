@@ -80,7 +80,7 @@ public:
   virtual int compute_plan_type() override;
   virtual int compute_sharding_info() override;
   virtual int est_cost() override;
-  virtual int re_est_cost(EstimateCostInfo &param, double &card, double &cost) override;
+  virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int inner_est_cost(double child_card, double &op_cost);
   inline void set_append_table_id(const uint64_t append_table_id)
   {

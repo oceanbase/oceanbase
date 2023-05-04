@@ -274,9 +274,11 @@ ObTabletAutoincrementService &ObTabletAutoincrementService::get_instance()
 int ObTabletAutoincrementService::init()
 {
   int ret = OB_SUCCESS;
+  lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "AutoincMgr");
+  SET_USE_500(attr);
   if (OB_FAIL(node_allocator_.init(sizeof(ObTabletAutoincMgr), ObModIds::OB_AUTOINCREMENT))) {
     LOG_WARN("failed to init table node allocator", K(ret));
-  } else if (OB_FAIL(tablet_autoinc_mgr_map_.init())) {
+  } else if (OB_FAIL(tablet_autoinc_mgr_map_.init(attr))) {
     LOG_WARN("failed to init table node map", K(ret));
   } else {
     for (int64_t i = 0; i < INIT_NODE_MUTEX_NUM; ++i) {

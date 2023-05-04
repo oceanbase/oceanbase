@@ -226,6 +226,15 @@ private:
       ObLobDataOutRowCtxList *new_lob_ctx_cols,
       bool &cur_stmt_need_callback,
       volatile bool &stop_flag);
+
+  int group_udt_column_values_(
+      const ColumnSchemaInfo &column_schema_info,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      const bool is_new_value,
+      DmlStmtTask &stmt_task,
+      ObLobDataOutRowCtxList &ob_ctx_cols,
+      ColValue &cv);
+
   template<class TABLE_SCHEMA>
   int fill_normal_cols_(
       DmlStmtTask &stmt_task,

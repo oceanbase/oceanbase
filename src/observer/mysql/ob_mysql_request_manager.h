@@ -106,7 +106,9 @@ public:
   common::ObConcurrentFIFOAllocator *get_allocator() { return &allocator_; }
   int64_t get_request_id() { ATOMIC_INC(&request_id_); return request_id_; }
 
-  int record_request(const ObAuditRecordData &audit_record, bool is_sensitive = false);
+  int record_request(const ObAuditRecordData &audit_record,
+                     const bool enable_query_response_time_stats,
+                     bool is_sensitive = false);
 
   int64_t get_start_idx() const { return (int64_t)queue_.get_pop_idx(); }
   int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }

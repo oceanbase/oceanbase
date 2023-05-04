@@ -506,36 +506,51 @@ enum DominateRelation
 // https://docs.oracle.com/cd/E11882_01/server.112/e41573/hintsref.htm#PFGRF94937
 enum PXParallelRule
 {
-  NOT_USE_PX = 0, // Plan执行不使用PX框架
-  USE_PX_DEFAULT, // Plan执行使用PX框架，使用默认方式
+  USE_PX_DEFAULT = 0, // default disable parallel
   MANUAL_HINT, // /*+ parallel(3) */
-  MANUAL_TABLE_HINT, // /*+ parallel(t1 3) */
   SESSION_FORCE_PARALLEL, // alter session force parallel query parallel 3;
   MANUAL_TABLE_DOP, // create table t1 (...) parallel 3;
+  AUTO_DOP, // /*+ parallel(auto) */ or alter session set parallel_degree_policy = 'auto';
+  // force disable parallel below
   PL_UDF_DAS_FORCE_SERIALIZE, //stmt has_pl_udf will use das, force serialize;
+  DBLINK_FORCE_SERIALIZE, //stmt has dblink will use das, force seialize;
   MAX_OPTION
 };
 
 inline const char *ob_px_parallel_rule_str(PXParallelRule px_parallel_ruel)
 {
-  const char *ret = "NOT_USE_PX";
+  const char *ret = "USE_PX_DEFAULT";
   static const char *parallel_rule_type_to_str[] =
   {
-    "NOT_USE_PX",
     "USE_PX_DEFAULT",
     "MANUAL_HINT",
-    "MANUAL_TABLE_HINT",
     "SESSION_FORCE_PARALLEL",
     "MANUAL_TABLE_DOP",
+    "AUTO_DOP",
     "PL_UDF_DAS_FORCE_SERIALIZE",
+    "DBLINK_FORCE_SERIALIZE",
     "MAX_OPTION",
   };
-  if (OB_LIKELY(px_parallel_ruel >= NOT_USE_PX)
+  if (OB_LIKELY(px_parallel_ruel >= USE_PX_DEFAULT)
       && OB_LIKELY(px_parallel_ruel <= MAX_OPTION)) {
     ret = parallel_rule_type_to_str[px_parallel_ruel];
   }
   return ret;
 }
+
+static const int64_t PDML_DOP_LIMIT_PER_PARTITION = 10;
+static const int64_t ROW_COUNT_THRESHOLD_PER_DOP = 10000;  // zhanyuetodo: need adjust this by test
+
+enum OpParallelRule
+{
+  OP_GLOBAL_DOP = 0, /* use DOP from global parallel rule except MANUAL_TABLE_DOP or AUTO_DOP */
+  OP_DAS_DOP, /*+ DAS use DOP = 1 */
+  OP_HINT_DOP, /* use parallel hint for table: parallel(t1, 3) */
+  OP_TABLE_DOP, /*+ use table parallel property: create table t1 (...) parallel 3; */
+  OP_AUTO_DOP, /*+ DOP is calculated by AUTO_DOP */
+  OP_INHERIT_DOP, /*+ inherited from other op or determined by other op in the same DFO */
+  OP_DOP_RULE_MAX
+};
 
 typedef common::ObDmlEventType ObDmlEventType;
 

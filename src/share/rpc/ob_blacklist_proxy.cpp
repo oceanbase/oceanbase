@@ -98,7 +98,7 @@ int ObBlacklistRpcProxy::send_req(const common::ObAddr &dst, const int64_t dst_c
     ret = OB_INVALID_ARGUMENT;
   } else {
     static BlacklistReqCallBack cb;
-    ret = this->to(dst).dst_cluster_id(dst_cluster_id).by(OB_SVR_BLACKLIST_TENANT_ID).as(OB_SERVER_TENANT_ID).timeout(BLACK_LIST_MSG_TIMEOUT).post_request(req, &cb);
+    ret = this->to(dst).dst_cluster_id(dst_cluster_id).by(OB_SERVER_TENANT_ID).timeout(BLACK_LIST_MSG_TIMEOUT).post_request(req, &cb);
   }
   return ret;
 }
@@ -110,7 +110,7 @@ int ObBlacklistRpcProxy::send_resp(const common::ObAddr &dst, const int64_t dst_
     ret = OB_INVALID_ARGUMENT;
   } else {
     static BlacklistRespCallBack cb;
-    ret = this->to(dst).dst_cluster_id(dst_cluster_id).by(OB_SVR_BLACKLIST_TENANT_ID).as(OB_SERVER_TENANT_ID).timeout(BLACK_LIST_MSG_TIMEOUT).post_response(resp, &cb);
+    ret = this->to(dst).dst_cluster_id(dst_cluster_id).by(OB_SERVER_TENANT_ID).timeout(BLACK_LIST_MSG_TIMEOUT).post_response(resp, &cb);
   }
   return ret;
 }

@@ -191,6 +191,8 @@ public:
       return uval;
     }
 
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+
     bool operator== (const ObRangeWrapper &other) const
     {
       bool is_equal = false;
@@ -414,14 +416,14 @@ public:
   // This function can not be used untill physical plan is opened.
 
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
-                                ObGetMethodArray &get_methods,
+                                bool &all_single_value_ranges,
                                 const common::ObDataTypeCastParams &dtc_params);
 
-  int get_tablet_ranges(common::ObIAllocator &allocator,
-                        ObExecContext &exec_ctx,
-                        ObQueryRangeArray &ranges,
-                        ObGetMethodArray &get_methods,
-                        const common::ObDataTypeCastParams &dtc_params) const;
+  int direct_get_tablet_ranges(common::ObIAllocator &allocator,
+                              ObExecContext &exec_ctx,
+                              ObQueryRangeArray &ranges,
+                              bool &all_single_value_ranges,
+                              const common::ObDataTypeCastParams &dtc_params) const;
   int get_ss_tablet_ranges(common::ObIAllocator &allocator,
                            ObExecContext &exec_ctx,
                            ObQueryRangeArray &ss_ranges,
@@ -510,14 +512,6 @@ public:
   bool is_contain_geo_filters() const { return contain_geo_filters_; }
 private:
 
-  //  @brief this function to initialize query range context
-  //  @param range_columns[in], columns group with the range order
-  //  @return if success, return OB_SUCCESS
-  int inner_get_tablet_ranges(common::ObIAllocator &allocator,
-                              const ParamsIArray &params,
-                              ObQueryRangeArray &ranges,
-                              ObGetMethodArray &get_methods,
-                              const common::ObDataTypeCastParams &dtc_params) const;
   int init_query_range_ctx(common::ObIAllocator &allocator,
                            const ColumnIArray &range_columns,
                            ObExecContext *exec_ctx,
@@ -762,18 +756,18 @@ private:
   int and_first_search(ObSearchState &search_state,
                        ObKeyPart *cur,
                        ObQueryRangeArray &ranges,
-                       ObGetMethodArray &get_methods,
+                       bool &all_single_value_ranges,
                        const common::ObDataTypeCastParams &dtc_params);
   int and_first_in_key(ObSearchState &search_state,
                        ObKeyPart *cur,
                        ObQueryRangeArray &ranges,
-                       ObGetMethodArray &get_methods,
+                       bool &all_single_value_ranges,
                        const ObDataTypeCastParams &dtc_params);
   int generate_cur_range(ObSearchState &search_state,
                          const int64_t copy_depth,
                          const bool copy_produce_range,
                          ObQueryRangeArray &ranges,
-                         ObGetMethodArray &get_methods,
+                         bool &all_single_value_ranges,
                          const bool is_phy_rowid_range);
   inline int generate_single_range(ObSearchState &search_state,
                                    int64_t column_num,
@@ -786,7 +780,7 @@ private:
                   bool is_get_range,
                   ObSearchState &search_state,
                   ObQueryRangeArray &ranges,
-                  ObGetMethodArray &get_methods);
+                  bool &all_single_value_ranges);
   int alloc_empty_key_part(ObKeyPart *&out_key_part);
   int alloc_full_key_part(ObKeyPart *&out_key_part);
   int deep_copy_range_graph(ObKeyPart *src, ObKeyPart *&dest);
@@ -834,12 +828,12 @@ private:
                            common::ObIAllocator &allocator,
                            ObExecContext &exec_ctx,
                            ObQueryRangeArray &ranges,
-                           ObGetMethodArray &get_methods,
+                           bool &all_single_value_ranges,
                            const common::ObDataTypeCastParams &dtc_params) const;
   int gen_simple_scan_range(common::ObIAllocator &allocator,
                             ObExecContext &exec_ctx,
                             ObQueryRangeArray &ranges,
-                            ObGetMethodArray &get_methods,
+                            bool &all_single_value_ranges,
                             const common::ObDataTypeCastParams &dtc_params) const;
 
   const ObKeyPart* get_ss_key_part_head() const;
@@ -889,6 +883,7 @@ private:
                                     uint64_t &part_column_id);
   int get_calculable_expr_val(const ObRawExpr *expr, ObObj &val, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
+  int add_prefix_pattern_constraint(const ObRawExpr *expr);
   int get_final_expr_val(const ObRawExpr *expr, ObObj &val);
   int generate_expr_final_info();
   int check_null_param_compare_in_row(const ObRawExpr *l_expr,

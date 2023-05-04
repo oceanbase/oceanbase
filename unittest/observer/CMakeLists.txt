@@ -3,5 +3,6 @@ storage_unittest(test_hfilter_parser table/test_hfilter_parser.cpp)
 storage_unittest(test_query_response_time mysql/test_query_response_time.cpp)
 storage_unittest(test_create_executor table/test_create_executor.cpp)
 storage_unittest(test_table_sess_pool table/test_table_sess_pool.cpp)
+ob_unittest(test_uniq_task_queue)
 
 add_subdirectory(rpc EXCLUDE_FROM_ALL)

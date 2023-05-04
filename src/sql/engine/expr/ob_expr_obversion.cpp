@@ -20,7 +20,7 @@ namespace sql
 {
 
 ObExprObVersion::ObExprObVersion(ObIAllocator &alloc)
-  : ObStringExprOperator(alloc, T_FUN_SYS_OB_VERSION, N_OB_VERSION, 0)
+  : ObStringExprOperator(alloc, T_FUN_SYS_OB_VERSION, N_OB_VERSION, 0, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 

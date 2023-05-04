@@ -47,6 +47,7 @@ namespace libobcdc
 class ObLogSchemaGuard;
 class IObLogSchemaGetter;
 class TableSchemaInfo;
+class ColumnSchemaInfo;
 class ObDictTenantInfo;
 class ObDictTenantInfoGuard;
 
@@ -231,6 +232,11 @@ private:
       hash_val = common::murmurhash(&id_, sizeof(id_), hash_val);
       return hash_val;
     }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
+    }
     bool operator==(const MetaKey &other) const
     { return (tenant_id_ == other.tenant_id_) && (id_ == other.id_); }
 
@@ -260,6 +266,11 @@ private:
       hash_val = common::murmurhash(&table_id_, sizeof(table_id_), hash_val);
 
       return hash_val;
+    }
+    int hash(uint64_t &hash_val) const
+    {
+      hash_val = hash();
+      return OB_SUCCESS;
     }
     bool operator==(const MulVerTableKey &other) const
     { return (version_ == other.version_) && (tenant_id_ == other.tenant_id_) && (table_id_ == other.table_id_); }
@@ -346,6 +357,17 @@ private:
       ITableMeta *table_meta,
       const TABLE_SCHEMA*schema,
       const TableSchemaInfo &tb_schema_info);
+  template<class TABLE_SCHEMA>
+  int get_logic_primary_keys_for_heap_table_(
+      const TABLE_SCHEMA &table_schema,
+      ObIArray<uint64_t> &pk_list);
+  template<class TABLE_SCHEMA>
+  int fill_primary_key_info_(
+      const TABLE_SCHEMA &table_schema,
+      const ColumnSchemaInfo &column_schema_info,
+      ObLogAdaptString &pks,
+      ObLogAdaptString &pk_info,
+      int64_t &valid_pk_num);
   template<class SCHEMA_GUARD, class TABLE_SCHEMA>
   int set_unique_keys_(
       ITableMeta *table_meta,

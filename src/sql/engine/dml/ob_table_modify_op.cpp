@@ -466,7 +466,12 @@ int ForeignKeyHandle::is_self_ref_row(ObEvalCtx &eval_ctx,
     //   != row.at(val_idx)->basic_funcs_->null_first_cmp_);
     OZ(row.at(name_idx)->eval(eval_ctx, name_col));
     OZ(row.at(val_idx)->eval(eval_ctx, val_col));
-    OX(is_self_ref = (0 == cmp_func(*name_col, *val_col)));
+    int cmp_ret = 0;
+    if (OB_FAIL(cmp_func(*name_col, *val_col, cmp_ret))) {
+      LOG_WARN("cmp failed", K(ret), K(i));
+    } else {
+      is_self_ref = (0 == cmp_ret);
+    }
   }
   return ret;
 }
@@ -1111,6 +1116,9 @@ int ObTableModifyOp::discharge_das_write_buffer()
              "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(dml_rtctx_.get_row_buffer_size()));
     ret = submit_all_dml_task();
   } else if (execute_single_row_) {
+    if (REACH_COUNT_INTERVAL(100)) { // print log per 100 times.
+      LOG_TRACE("DML task excute single row", K(execute_single_row_));
+    }
     ret = submit_all_dml_task();
   }
   return ret;

@@ -26,9 +26,8 @@ namespace sql
 {
 
 ObExprTimeFormat::ObExprTimeFormat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_TIME_FORMAT, N_TIME_FORMAT, 2)
-{
-}
+    : ObStringExprOperator(alloc, T_FUN_SYS_TIME_FORMAT, N_TIME_FORMAT, 2, VALID_FOR_GENERATED_COL)
+{}
 
 ObExprTimeFormat::~ObExprTimeFormat()
 {

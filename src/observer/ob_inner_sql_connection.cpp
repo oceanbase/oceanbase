@@ -201,7 +201,7 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     tid_ = GETTID();
     if (NULL == extern_session || 0 != EVENT_CALL(EventTable::EN_INNER_SQL_CONN_LEAK_CHECK)) {
       // Only backtrace internal used connection to avoid performance problems.
-      bt_size_ = backtrace(bt_addrs_, MAX_BT_SIZE);
+      bt_size_ = ob_backtrace(bt_addrs_, MAX_BT_SIZE);
     }
     config_ = config;
     associated_client_ = client_addr;
@@ -505,6 +505,50 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                          bool is_from_pl)
 {
   int ret = OB_SUCCESS;
+  const bool enable_perf_event = lib::is_diagnose_info_enabled();
+  const bool enable_sql_audit = GCONF.enable_sql_audit && session.get_local_ob_enable_sql_audit();
+  ObAuditRecordData &audit_record = session.get_raw_audit_record();
+
+  // some statistics must be recorded for plan stat, even though sql audit disabled
+  bool first_record = (1 == audit_record.try_cnt_);
+  ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
+  audit_record.exec_timestamp_ = exec_timestamp;
+  audit_record.exec_timestamp_.update_stage_time();
+
+  if (enable_perf_event) {
+    record_stat(session, result_set.get_stmt_type(), is_from_pl);
+    exec_record.max_wait_event_ = max_wait_desc;
+    exec_record.wait_time_end_ = total_wait_desc.time_waited_;
+    exec_record.wait_count_end_ = total_wait_desc.total_waits_;
+    audit_record.exec_record_ = exec_record;
+    audit_record.update_event_stage_state();
+    if (OB_NOT_NULL(result_set.get_physical_plan())) {
+      const int64_t time_cost = ObTimeUtility::current_time() - session.get_query_start_time();
+      ObSQLUtils::record_execute_time(result_set.get_physical_plan()->get_plan_type(), time_cost);
+    }
+  }
+  if (enable_sql_audit) {
+    ret = process_audit_record(result_set, sql_ctx, session, last_ret, execution_id,
+              ps_stmt_id, has_tenant_resource, ps_sql, is_from_pl);
+  }
+  ObSQLUtils::handle_audit_record(false, sql::PSCursor == audit_record.exec_timestamp_.exec_type_
+                                         ? EXECUTE_PS_EXECUTE :
+                                           (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
+                                  session, sql_ctx.is_sensitive_);
+  return ret;
+}
+
+int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
+                                               sql::ObSqlCtx &sql_ctx,
+                                               sql::ObSQLSessionInfo &session,
+                                               int last_ret,
+                                               int64_t execution_id,
+                                               int64_t ps_stmt_id,
+                                               bool has_tenant_resource,
+                                               const ObString &ps_sql,
+                                               bool is_from_pl)
+{
+  int ret = OB_SUCCESS;
 
   if (has_tenant_resource) {
     ObAuditRecordData &audit_record = session.get_raw_audit_record();
@@ -533,11 +577,6 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
                                                     .get_related_tablet_cnt();
     }
 
-
-    exec_record.max_wait_event_ = max_wait_desc;
-    exec_record.wait_time_end_ = total_wait_desc.time_waited_;
-    exec_record.wait_count_end_ = total_wait_desc.total_waits_;
-
     if (NULL != result_set.get_physical_plan()) {
       audit_record.plan_type_ = result_set.get_physical_plan()->get_plan_type();
       audit_record.table_scan_ = result_set.get_physical_plan()->contain_table_scan();
@@ -550,11 +589,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
     audit_record.is_inner_sql_ = !is_from_pl;
     audit_record.is_hit_plan_cache_ = result_set.get_is_from_plan_cache();
     audit_record.is_multi_stmt_ = false; //是否是multi sql
-
-    bool first_record = (1 == audit_record.try_cnt_);
-    ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
-    audit_record.exec_timestamp_ = exec_timestamp;
-    audit_record.exec_record_ = exec_record;
+    audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
 
     ObIArray<ObTableRowCount> *table_row_count_list = NULL;
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(result_set.get_exec_context());
@@ -563,9 +598,6 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
       audit_record.table_scan_stat_ = plan_ctx->get_table_scan_stat();
       table_row_count_list = &(plan_ctx->get_table_row_count_list());
     }
-
-    //更新阶段累加时间
-    audit_record.update_stage_stat();
 
     //update v$sql statistics
     if (OB_SUCC(last_ret) && session.get_local_ob_enable_plan_cache()) {
@@ -583,16 +615,6 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
         }
       }
     }
-
-    record_stat(session, result_set.get_stmt_type(), is_from_pl);
-    if (lib::is_diagnose_info_enabled() && OB_NOT_NULL(result_set.get_physical_plan())) {
-      const int64_t time_cost = ObTimeUtility::current_time() - session.get_query_start_time();
-      ObSQLUtils::record_execute_time(result_set.get_physical_plan()->get_plan_type(), time_cost);
-    }
-    ObSQLUtils::handle_audit_record(false, sql::PSCursor == exec_timestamp.exec_type_
-                                                  ? EXECUTE_PS_EXECUTE :
-                                                  (is_from_pl ? EXECUTE_PL_EXECUTE : EXECUTE_INNER),
-                                    session);
   }
   return ret;
 }
@@ -734,6 +756,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
         int64_t local_sys_schema_version = -1;
         ObWaitEventDesc max_wait_desc;
         ObWaitEventStat total_wait_desc;
+        ObInnerSQLTimeRecord time_record(get_session());
         const bool enable_perf_event = lib::is_diagnose_info_enabled();
         const bool enable_sql_audit =
           GCONF.enable_sql_audit && get_session().get_local_ob_enable_sql_audit();
@@ -741,8 +764,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
           ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
 
-          //监控项统计开始
-          if (enable_sql_audit) {
+          if (enable_perf_event) {
             exec_record.record_start();
           }
 
@@ -790,28 +812,28 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             }
           }
           get_session().set_session_in_retry(need_retry, ret_code);
+          //监控项统计开始
           execute_start_timestamp_ = (res.get_execute_start_ts() > 0)
                                       ? res.get_execute_start_ts()
                                       : ObTimeUtility::current_time();
+          //监控项统计结束
           execute_end_timestamp_ = (res.get_execute_end_ts() > 0)
                                     ? res.get_execute_end_ts()
                                     : ObTimeUtility::current_time();
 
-          //监控项统计结束
-          if (enable_sql_audit) {
+          time_record.set_execute_start_timestamp(execute_start_timestamp_);
+          time_record.set_execute_end_timestamp(execute_end_timestamp_);
+          if (enable_perf_event) {
             exec_record.record_end();
           }
         }
 
-        if (enable_sql_audit && res.is_inited()) {
-          ObInnerSQLTimeRecord time_record(get_session());
+        if (res.is_inited()) {
           ObString dummy_ps_sql;
-          time_record.set_execute_start_timestamp(execute_start_timestamp_);
-          time_record.set_execute_end_timestamp(execute_end_timestamp_);
-          int record_ret = process_record(res.result_set(), res.sql_ctx(), get_session(), time_record, ret,
-                                          execution_id, OB_INVALID_ID,
-                                          max_wait_desc, total_wait_desc, exec_record, exec_timestamp,
-                                          res.has_tenant_resource(), dummy_ps_sql);
+          int record_ret = process_record(res.result_set(), res.sql_ctx(), get_session(),
+                                time_record, ret, execution_id, OB_INVALID_ID,
+                                max_wait_desc, total_wait_desc, exec_record, exec_timestamp,
+                                res.has_tenant_resource(), dummy_ps_sql);
           if (OB_SUCCESS != record_ret) {
             LOG_WARN("failed to process record",  K(executor), K(record_ret), K(ret));
           }
@@ -2317,13 +2339,7 @@ void ObInnerSQLConnection::dump_conn_bt_info()
   int64_t pos = 0;
   (void)ObTimeUtility2::usec_to_str(init_timestamp_, buf_time, OB_MAX_TIMESTAMP_LENGTH, pos);
   pos = 0;
-  for (int i = 0; i < bt_size_; ++i) {
-    if (OB_UNLIKELY(pos + 1 > BUF_SIZE)) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "buf is not large enough", K(pos), K(BUF_SIZE));
-    } else {
-      (void)databuff_printf(buf_bt, BUF_SIZE, pos, "%p ", bt_addrs_[i]);
-    }
-  }
+  parray(buf_bt, BUF_SIZE, (int64_t*)*&bt_addrs_, bt_size_);
   LOG_WARN_RET(OB_SUCCESS, "dump inner sql connection backtrace", "tid", tid_, "init time", buf_time, "backtrace", buf_bt);
 }
 

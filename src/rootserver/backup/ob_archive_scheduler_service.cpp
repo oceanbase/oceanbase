@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX ARCHIVE
 #include "rootserver/backup/ob_archive_scheduler_service.h"
 #include "rootserver/backup/ob_tenant_archive_scheduler.h"
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_unit_manager.h"
 #include "storage/tx/ob_ts_mgr.h"
@@ -73,14 +72,13 @@ void ObArchiveThreadIdling::set_checkpoint_interval(const int64_t interval_us)
  */
 ObArchiveSchedulerService::ObArchiveSchedulerService()
   : is_inited_(false), is_working_(false), idling_(stop_),
-    server_mgr_(nullptr), zone_mgr_(nullptr), unit_mgr_(nullptr),
+    zone_mgr_(nullptr), unit_mgr_(nullptr),
     rpc_proxy_(nullptr), sql_proxy_(nullptr), schema_service_(nullptr), backup_lease_service_(nullptr)
 {
 
 }
 
 int ObArchiveSchedulerService::init(
-  ObServerManager &server_mgr,
   ObZoneManager &zone_mgr,
   ObUnitManager &unit_manager,
   share::schema::ObMultiVersionSchemaService *schema_service,
@@ -100,7 +98,6 @@ int ObArchiveSchedulerService::init(
   } else if (OB_FAIL(create(thread_cnt, "LOG_ARCHIVE_SERVICE"))) {
     LOG_WARN("failed to create log archive thread", K(ret));
   } else {
-    server_mgr_ = &server_mgr;
     zone_mgr_ = &zone_mgr;
     unit_mgr_ = &unit_manager;
     schema_service_ = schema_service;
@@ -311,7 +308,7 @@ int ObArchiveSchedulerService::start_tenant_archive_(const uint64_t tenant_id)
   ObArchiveHandler archive_handler;
   // Only one dest is supported.
   const int64_t dest_no = 0;
-  if (OB_FAIL(archive_handler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(archive_handler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret));
   } else if (OB_FAIL(archive_handler.enable_archive(dest_no))) {
     LOG_WARN("failed to enable archive tenant", K(ret), K(tenant_id), K(dest_no));
@@ -328,7 +325,7 @@ int ObArchiveSchedulerService::stop_tenant_archive_(const uint64_t tenant_id)
   ObArchiveHandler archive_handler;
   // Only one dest is supported.
   const int64_t dest_no = 0;
-  if (OB_FAIL(archive_handler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(archive_handler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init archive_handler", K(ret), K(tenant_id));
   } else if (OB_FAIL(archive_handler.disable_archive(dest_no))) {
     LOG_WARN("failed to disable tenant archive", K(ret), K(tenant_id), K(dest_no));
@@ -375,7 +372,7 @@ int ObArchiveSchedulerService::inner_process_(const uint64_t tenant_id)
   bool no_round = false;
 
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_TMP_FAIL(tenant_scheduler.checkpoint())) {
     LOG_WARN("failed to checkpoint", K(tmp_ret), K(tenant_id));
@@ -526,7 +523,7 @@ int ObArchiveSchedulerService::open_tenant_archive_mode_(const uint64_t tenant_i
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_scheduler.open_archive_mode())) {
     LOG_WARN("failed to open archive mode", K(ret), K(tenant_id));
@@ -588,7 +585,7 @@ int ObArchiveSchedulerService::close_tenant_archive_mode_(const uint64_t tenant_
 {
   int ret = OB_SUCCESS;
   ObArchiveHandler tenant_scheduler;
-  if (OB_FAIL(tenant_scheduler.init(tenant_id, *server_mgr_, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
+  if (OB_FAIL(tenant_scheduler.init(tenant_id, *zone_mgr_, *unit_mgr_, schema_service_, *rpc_proxy_, *sql_proxy_))) {
     LOG_WARN("failed to init tenant archive scheduler", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant_scheduler.close_archive_mode())) {
     LOG_WARN("failed to close archive mode", K(ret), K(tenant_id));

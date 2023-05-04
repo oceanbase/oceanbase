@@ -153,6 +153,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
     if (OB_FAIL(add_new_indexkey_for_oracle_temp_table())) {
       SQL_RESV_LOG(WARN, "add session id key failed", K(ret));
     }
+    bool cnt_func_index = false;
     for (int32_t i = 0; OB_SUCC(ret) && i < index_column_node->num_child_; ++i) {
       ParseNode *col_node = index_column_node->children_[i];
       ObColumnSortItem sort_item;
@@ -166,6 +167,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
         //如果此node类型不是identifier,那么认为是函数索引.
         if (col_node->children_[0]->type_ != T_IDENT) {
           sort_item.is_func_index_ = true;
+          cnt_func_index = true;
         }
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
@@ -190,7 +192,7 @@ int ObCreateIndexResolver::resolve_index_column_node(
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
-            index_column_node->num_child_, index_keyname_value, is_explicit_order))) {
+            index_column_node->num_child_, index_keyname_value, is_explicit_order, sort_item.is_func_index_))) {
           LOG_WARN("fail to resolve spatial index constraint", K(ret), K(sort_item.column_name_));
         }
       }
@@ -240,6 +242,21 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
       }
     }
+
+    if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
+      uint64_t tenant_data_version = 0;
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_2_0_0){
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant version is less than 4.2, functional index is not supported in mysql mode", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "version is less than 4.2, functional index in mysql mode not supported");
+      }
+    }
+
     // In oracle mode, we need to check if the new index is on the same cols with old indexes.
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -479,6 +496,9 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(tbl_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is NULL", K(ret));
+  } else if (tbl_schema->is_external_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
   } else {
     is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;

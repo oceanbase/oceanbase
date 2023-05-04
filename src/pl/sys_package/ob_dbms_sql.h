@@ -170,6 +170,17 @@ private:
 class ObDbmsCursorInfo : public ObPLCursorInfo, public ObDbmsInfo
 {
 public:
+  // cursor id in OB
+  /* ps cursor : always equal with stmt id, always smaller than candidate_cursor_id_
+   * ref cursor : always start with CANDIDATE_CURSOR_ID, user can't get ref cursor id by SQL
+   *              only client and server use the id when interacting
+   * dbms sql cursor : always start with CANDIDATE_CURSOR_ID, user can get cursor id by SQL
+   *              CANDIDATE_CURSOR_ID may be out of precision.
+   *              so we should use get_dbms_id and convert_to_dbms_cursor_id to provide a vaild id for user
+   */
+  static const int64_t CANDIDATE_CURSOR_ID = 1LL << 31;
+
+public:
   ObDbmsCursorInfo(common::ObIAllocator &alloc)
     : ObPLCursorInfo(true),
       ObDbmsInfo(alloc),
@@ -189,6 +200,8 @@ public:
   int64_t get_affected_rows() const { return affected_rows_; }
   int prepare_entity(sql::ObSQLSessionInfo &session);
   int64_t search_array(const ObString &name, ObIArray<ObString> &array);
+  int64_t get_dbms_id();
+  static int64_t convert_to_dbms_cursor_id(int64_t id);
 
 private:
   // affected_rows_ 在每次 open 都会被重置

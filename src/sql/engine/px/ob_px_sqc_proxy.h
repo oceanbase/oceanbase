@@ -14,6 +14,7 @@
 #define __OB_SQL_PX_SQC_PROXY_H__
 
 #include "lib/lock/ob_spin_lock.h"
+#include "lib/hash/ob_hashmap.h"
 #include "sql/engine/px/ob_px_dtl_msg.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_task.h"
@@ -23,6 +24,7 @@
 #include "sql/engine/px/datahub/ob_dh_dtl_proc.h"
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
+
 
 namespace oceanbase
 {
@@ -62,41 +64,43 @@ class ObBloomFilterSendCtx
 public:
   ObBloomFilterSendCtx() :
     bloom_filter_ready_(false),
-    bf_ch_set_(),
     filter_data_(NULL),
     filter_indexes_(),
-    per_channel_bf_count_(0),
-    filter_channel_idx_(0),
-    bf_compressor_type_(common::ObCompressorType::NONE_COMPRESSOR)
+    per_addr_bf_count_(0),
+    filter_addr_idx_(0),
+    bf_compressor_type_(common::ObCompressorType::NONE_COMPRESSOR),
+    each_group_size_(0)
   {}
   ~ObBloomFilterSendCtx() {}
   bool bloom_filter_ready() const { return bloom_filter_ready_; }
   void set_bloom_filter_ready(bool flag) { bloom_filter_ready_ = flag; }
-  int64_t &get_filter_channel_idx() { return filter_channel_idx_; }
+  int64_t &get_filter_addr_idx() { return filter_addr_idx_; }
   common::ObIArray<BloomFilterIndex> &get_filter_indexes() { return filter_indexes_; }
   void set_filter_data(ObPxBloomFilterData *data) { filter_data_ = data; }
   ObPxBloomFilterData *get_filter_data() { return filter_data_; }
-  int generate_filter_indexes(int64_t each_group_size, int64_t channel_count);
-  void set_per_channel_bf_count(int64_t count) { per_channel_bf_count_ = count; }
-  int64_t get_per_channel_bf_count() { return per_channel_bf_count_; }
+  int generate_filter_indexes(int64_t each_group_size, int64_t addr_count);
+  void set_per_addr_bf_count(int64_t count) { per_addr_bf_count_ = count; }
+  int64_t get_per_addr_bf_count() { return per_addr_bf_count_; }
   void set_bf_compress_type(common::ObCompressorType type)
       { bf_compressor_type_ = type; }
   common::ObCompressorType get_bf_compress_type() { return bf_compressor_type_; }
-  int assign_bf_ch_set(ObPxBloomFilterChSet &bf_ch_set) { return bf_ch_set_.assign(bf_ch_set); }
-  ObPxBloomFilterChSet &get_bf_ch_set() { return bf_ch_set_; }
+  int64_t &get_each_group_size() { return each_group_size_; }
   TO_STRING_KV(K_(bloom_filter_ready));
 private:
   bool bloom_filter_ready_;
-  ObPxBloomFilterChSet bf_ch_set_;
   ObPxBloomFilterData *filter_data_;
   common::ObArray<BloomFilterIndex> filter_indexes_;
-  int64_t per_channel_bf_count_;
-  int64_t filter_channel_idx_;
+  int64_t per_addr_bf_count_;
+  int64_t filter_addr_idx_;
   common::ObCompressorType bf_compressor_type_;
+  int64_t each_group_size_;
 };
 
 class ObPxSQCProxy
 {
+public:
+  typedef hash::ObHashMap<int64_t, common::ObSArray<ObAddr> *,
+      hash::NoPthreadDefendMode> SQCP2PDhMap;
 public:
   ObPxSQCProxy(ObSqcCtx &sqc_ctx, ObPxRpcInitSqcArgs &arg);
   virtual ~ObPxSQCProxy();
@@ -179,6 +183,9 @@ public:
   int64_t get_dh_msg_cnt() const;
   void atomic_inc_dh_msg_cnt();
   int64_t atomic_add_and_fetch_dh_msg_cnt();
+  int construct_p2p_dh_map(ObP2PDhMapInfo &map_info);
+  SQCP2PDhMap &get_p2p_dh_map()  { return p2p_dh_map_; }
+  int check_is_local_dh(int64_t p2p_dh_id, bool &is_local_dh, int64_t msg_cnt);
 private:
   /* functions */
   int setup_loop_proc(ObSqcCtx &sqc_ctx);
@@ -204,9 +211,9 @@ private:
       bool send_piece,
       bool need_wait_whole_msg);
   /* variables */
-  public:
+public:
   ObSqcCtx &sqc_ctx_;
-  private:
+private:
   ObPxRpcInitSqcArgs &sqc_arg_;
   // 所有 worker 都抢这个锁，抢到者为 leader，负责推进 msg loop
   common::ObSpinLock leader_token_lock_;
@@ -218,7 +225,9 @@ private:
   common::ObArray<ObBloomFilterSendCtx> bf_send_ctx_array_; // record bloom filters ready to be sent
   ObDynamicSamplePieceMsg sample_msg_;
   ObInitChannelPieceMsg init_channel_msg_;
-  common::ObThreadCond msg_ready_cond_; // msg cond is shared by transmit && rescive && bloom filter
+  // msg cond is shared by transmit && rescive && bloom filter
+  common::ObThreadCond msg_ready_cond_;
+  SQCP2PDhMap p2p_dh_map_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSQCProxy);
 };
 

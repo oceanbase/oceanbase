@@ -309,11 +309,18 @@ int ObDirectReceiveOp::setup_next_scanner()
 int ObDirectReceiveOp::get_next_row_from_cur_scanner()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(scanner_iter_.get_next_row(MY_SPEC.output_, eval_ctx_))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail get next row", K(ret));
-    } else {}
+  const ObChunkDatumStore::StoredRow *tmp_sr = NULL;
+  if (OB_FAIL(scanner_iter_.get_next_row(tmp_sr))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next stored row failed", K(ret));
+    }
+  } else if (OB_ISNULL(tmp_sr) || (tmp_sr->cnt_ != MY_SPEC.output_.count())) {
+    ret = OB_ERR_UNEXPECTED;
   } else {
+    for (uint32_t i = 0; i < tmp_sr->cnt_; ++i) {
+      MY_SPEC.output_.at(i)->locate_expr_datum(eval_ctx_) = tmp_sr->cells()[i];
+      MY_SPEC.output_.at(i)->set_evaluated_projected(eval_ctx_);
+    }
     LOG_DEBUG("direct receive next row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.output_));
   }
   return ret;

@@ -89,6 +89,8 @@ enum ObObjType
   ObLobType           = 46, // Oracle Lob
   ObJsonType          = 47, // Json Type
   ObGeometryType      = 48, // Geometry type
+
+  ObUserDefinedSQLType = 49, // User defined type in SQL
   ObMaxType                 // invalid type, or count of obj type
 };
 
@@ -120,6 +122,8 @@ enum ObObjOType
   ObOURowIDType       = 22,
   ObOLobLocatorType   = 23,
   ObOJsonType         = 24,
+  ObOGeometryType     = 25,
+  ObOUDTSqlType       = 26,
   ObOMaxType          //invalid type, or count of ObObjOType
 };
 
@@ -193,6 +197,8 @@ static ObObjOType OBJ_TYPE_TO_O_TYPE[ObMaxType+1] = {
   ObOURowIDType,             //ObURowID=45
   ObOLobLocatorType,         //ObLobType = 46,
   ObOJsonType,               //ObJsonType = 47,
+  ObOGeometryType,           //ObGeometryType = 48,
+  ObOUDTSqlType,             //ObUserDefinedSQLType = 49,
   ObONotSupport              //ObMaxType,
 };
 
@@ -223,6 +229,7 @@ enum ObObjTypeClass
   ObLobTC           = 21, //oracle lob typeclass
   ObJsonTC          = 22, // json type class 
   ObGeometryTC      = 23, // geometry type class
+  ObUserDefinedSQLTC = 24, // user defined type class in SQL
   ObMaxTC,
   // invalid type classes are below, only used as the result of XXXX_type_promotion()
   // to indicate that the two obj can't be promoted to the same type.
@@ -282,7 +289,8 @@ enum ObObjTypeClass
     (ObURowIDType, ObRowIDTC),                 \
     (ObLobType, ObLobTC),                      \
     (ObJsonType, ObJsonTC),                    \
-    (ObGeometryType, ObGeometryTC)
+    (ObGeometryType, ObGeometryTC),            \
+    (ObUserDefinedSQLType, ObUserDefinedSQLTC)
 
 #define SELECT_SECOND(x, y) y
 #define SELECT_TC(arg) SELECT_SECOND arg
@@ -321,6 +329,7 @@ const ObObjType OBJ_DEFAULT_TYPE[ObActualMaxTC] =
   ObLobType,        // lob
   ObJsonType,       // json
   ObGeometryType,   // geometry
+  ObUserDefinedSQLType, // user defined type in sql
   ObMaxType,        // maxtype
   ObUInt64Type,     // int&uint
   ObMaxType,        // lefttype
@@ -355,6 +364,8 @@ static ObObjTypeClass OBJ_O_TYPE_TO_CLASS[ObOMaxType + 1] =
   ObRowIDTC,      // ObOURowID
   ObLobTC,        // ObOLobLocator
   ObJsonTC,       // ObOJsonType
+  ObGeometryTC,   // ObOGeometryType
+  ObUserDefinedSQLTC, // ObOUDTSqlType
   ObMaxTC
 };
 
@@ -1055,6 +1066,18 @@ enum ObExtObjType
   T_EXT_SQL_END = 200
 };
 
+enum ObUDTType
+{
+  T_OBJ_XML = 300001,
+};
+
+// reserved sub schema id for system defined types
+enum ObSystemUDTSqlType
+{
+  ObXMLSqlType = 0,
+  ObMaxSystemUDTSqlType = 16
+};
+
 OB_INLINE bool is_valid_obj_type(const ObObjType type)
 {
   return ObNullType <= type && type < ObMaxType;
@@ -1112,7 +1135,8 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
   return (ObIntTC <= tc && tc <= ObStringTC) || ObLeftTypeTC == tc || ObRightTypeTC == tc
       || ObBitTC == tc || ObEnumSetTC == tc || ObEnumSetInnerTC == tc || ObTextTC == tc
       || ObOTimestampTC == tc || ObRawTC == tc || ObIntervalTC == tc
-      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc;
+      || ObRowIDTC == tc || ObLobTC == tc || ObJsonTC == tc || ObGeometryTC == tc
+      || ObUserDefinedSQLTC == tc;
 }
 
 //used for arithmetic
@@ -1134,14 +1158,14 @@ int ob_sql_type_str(char *buff,
                     int64_t precision,
                     int64_t scale,
                     ObCollationType coll_type,
-                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
+                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
 
 int ob_sql_type_str(const common::ObObjMeta &obj_meta,
                     const common::ObAccuracy &accuracy,
                     const common::ObIArray<ObString> &type_info,
                     const int16_t default_length_semantics,
                     char *buff, int64_t buff_length, int64_t &pos,
-                    const common::ObGeoType geo_type = common::ObGeoType::GEOTYPEMAX);
+                    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
 
 
 //such as "double". without any accuracy.
@@ -1345,6 +1369,18 @@ inline bool ob_is_var_len_type(const ObObjType type) {
 }
 inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type) || ob_is_json_tc(type) || ob_is_geometry_tc(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
+
+inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }
+inline bool ob_is_user_defined_pl_type(const ObObjType type) { return ObExtendType == type; }
+
+// xml type without schema
+inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_id) {
+  return (ObUserDefinedSQLType == type) && (sub_schema_id == ObXMLSqlType);
+}
+
+inline bool ob_is_xml_pl_type(const ObObjType type, const uint64_t udt_id) {
+  return (ObExtendType == type) && (udt_id == static_cast<uint64_t>(T_OBJ_XML));
+}
 
 // to_string adapter
 template<>

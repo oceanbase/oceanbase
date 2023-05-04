@@ -31,7 +31,7 @@ static bool is_mul_overflow(int64_t x, int64_t y, int64_t &result)
 }
 
 ObExprToYMInterval::ObExprToYMInterval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_YMINTERVAL, N_TO_YMINTERVAL, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_YMINTERVAL, N_TO_YMINTERVAL, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprToYMInterval::~ObExprToYMInterval()
@@ -104,7 +104,7 @@ int ObExprToYMInterval::calc_to_yminterval(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 ObExprToDSInterval::ObExprToDSInterval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DSINTERVAL, N_TO_DSINTERVAL, 1, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_TO_DSINTERVAL, N_TO_DSINTERVAL, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 ObExprToDSInterval::~ObExprToDSInterval()
@@ -177,7 +177,7 @@ int ObExprToDSInterval::calc_to_dsinterval(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 ObExprNumToYMInterval::ObExprNumToYMInterval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_NUMTOYMINTERVAL, N_NUMTOYMINTERVAL, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_NUMTOYMINTERVAL, N_NUMTOYMINTERVAL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
@@ -318,7 +318,7 @@ int ObExprNumToYMInterval::calc_num_to_yminterval(const ObExpr &expr, ObEvalCtx 
 }
 
 ObExprNumToDSInterval::ObExprNumToDSInterval(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_NUMTODSINTERVAL, N_NUMTODSINTERVAL, 2, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_NUMTODSINTERVAL, N_NUMTODSINTERVAL, 2, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

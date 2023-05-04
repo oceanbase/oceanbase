@@ -17,6 +17,8 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/engine/px/ob_px_basic_info.h"
+#include "sql/engine/join/ob_join_filter_op.h"
+#include "sql/engine/expr/ob_expr_join_filter.h"
 namespace oceanbase
 {
 namespace sql
@@ -26,11 +28,15 @@ class ObLogJoinFilter : public ObLogicalOperator
 {
 public:
   ObLogJoinFilter(ObLogPlan &plan) :
-  ObLogicalOperator(plan), is_create_(false), filter_id_(common::OB_INVALID_ID),
+  ObLogicalOperator(plan), is_create_(false),
+      filter_id_(common::OB_INVALID_ID),
       filter_len_(0), join_exprs_(),
       is_use_filter_shuffle_(false),
-      join_filter_expr_(NULL),
-      filter_type_(JoinFilterType::INVALID_TYPE),
+      join_filter_exprs_(),
+      join_filter_types_(),
+      p2p_sequence_ids_(),
+      is_null_safe_cmps_(),
+      filter_type_(JoinFilterSharedType::INVALID_TYPE),
       calc_tablet_id_expr_(NULL),
       skip_subpart_(false)
   { }
@@ -57,23 +63,41 @@ public:
   inline void set_is_use_filter_shuffle(bool flag) { is_use_filter_shuffle_ = flag; }
   inline bool is_use_filter_shuffle() { return is_use_filter_shuffle_; }
   inline bool is_partition_filter() const
-  { return filter_type_ == JoinFilterType::NONSHARED_PARTITION_JOIN_FILTER ||
-           filter_type_ == JoinFilterType::SHARED_PARTITION_JOIN_FILTER; };
+  { return filter_type_ == JoinFilterSharedType::NONSHARED_PARTITION_JOIN_FILTER ||
+           filter_type_ == JoinFilterSharedType::SHARED_PARTITION_JOIN_FILTER; };
   common::ObIArray<ObRawExpr *> &get_join_exprs()
   { return join_exprs_; }
-  inline void set_join_filter_expr(ObRawExpr *filter_expr) { join_filter_expr_ = filter_expr; }
-  const ObRawExpr *get_join_filter_expr() { return join_filter_expr_; }
+  int add_join_filter_expr(ObRawExpr *filter_expr)
+      { return join_filter_exprs_.push_back(filter_expr); }
+  const common::ObIArray<ObRawExpr *> &get_join_filter_exprs()
+      { return join_filter_exprs_; }
+common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
+      { return join_filter_exprs_; }
+  common::ObIArray<bool> &get_is_null_safe_cmps()
+      { return is_null_safe_cmps_; }
+  const common::ObIArray<RuntimeFilterType> &get_join_filter_types()
+      { return join_filter_types_; }
+  int add_join_filter_type(RuntimeFilterType type)
+      { return join_filter_types_.push_back(type); }
+  const common::ObIArray<int64_t> &get_p2p_sequence_ids()
+      { return p2p_sequence_ids_; }
+  int add_p2p_sequence_id(int64_t id)
+      { return p2p_sequence_ids_.push_back(id); }
   inline void set_tablet_id_expr(ObRawExpr *tablet_id_expr) { calc_tablet_id_expr_ = tablet_id_expr; }
   const ObRawExpr *get_tablet_id_expr() { return calc_tablet_id_expr_; }
   inline void set_is_shared_join_filter()
-  { filter_type_ = JoinFilterType::SHARED_JOIN_FILTER; }
+  { filter_type_ = JoinFilterSharedType::SHARED_JOIN_FILTER; }
   inline void set_is_non_shared_join_filter()
-  { filter_type_ = JoinFilterType::NONSHARED_JOIN_FILTER; }
+  { filter_type_ = JoinFilterSharedType::NONSHARED_JOIN_FILTER; }
+  inline bool is_shared_join_filter() {
+    return filter_type_ == JoinFilterSharedType::SHARED_JOIN_FILTER ||
+           filter_type_ == JoinFilterSharedType::SHARED_PARTITION_JOIN_FILTER;
+  }
   inline void set_is_shared_partition_join_filter()
-  { filter_type_ = JoinFilterType::SHARED_PARTITION_JOIN_FILTER; }
+  { filter_type_ = JoinFilterSharedType::SHARED_PARTITION_JOIN_FILTER; }
   inline void set_is_no_shared_partition_join_filter()
-  { filter_type_ = JoinFilterType::NONSHARED_PARTITION_JOIN_FILTER; }
-  JoinFilterType get_filter_type() { return filter_type_; }
+  { filter_type_ = JoinFilterSharedType::NONSHARED_PARTITION_JOIN_FILTER; }
+  JoinFilterSharedType get_filter_type() { return filter_type_; }
   virtual int inner_replace_op_exprs(
         const common::ObIArray<std::pair<ObRawExpr *, ObRawExpr*>> &to_replace_exprs) override;
   virtual int get_plan_item_info(PlanText &plan_text,
@@ -85,8 +109,11 @@ private:
   //equal join condition expr
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_exprs_;
   bool is_use_filter_shuffle_; // 标记use端filter是否有shuffle
-  ObRawExpr *join_filter_expr_;
-  JoinFilterType filter_type_;
+  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_filter_exprs_;
+  common::ObSEArray<RuntimeFilterType, 8, common::ModulePageAllocator, true> join_filter_types_;
+  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> p2p_sequence_ids_;
+  common::ObSEArray<bool, 8, common::ModulePageAllocator, true> is_null_safe_cmps_;
+  JoinFilterSharedType filter_type_;
   ObRawExpr *calc_tablet_id_expr_; // 计算tablet_id的expr
   bool skip_subpart_; // Ignore 2-level subpart_id when calculating partition id
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);

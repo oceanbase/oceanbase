@@ -23,7 +23,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprJsonRemove::ObExprJsonRemove(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_REMOVE, N_JSON_REMOVE, MORE_THAN_ONE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_JSON_REMOVE, N_JSON_REMOVE, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

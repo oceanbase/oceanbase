@@ -16,8 +16,9 @@
 
 #include "lib/container/ob_array_serialization.h"
 #include "lib/container/ob_array_iterator.h"
-#include "rootserver/ob_server_manager.h"
 #include "rootserver/ob_unit_manager.h"
+#include "share/ob_all_server_tracer.h"
+#include "rootserver/ob_root_utils.h"
 
 namespace oceanbase
 {
@@ -25,10 +26,7 @@ using namespace common;
 using namespace share;
 namespace rootserver
 {
-ObVTableLocationGetter::ObVTableLocationGetter(ObServerManager &server_mgr,
-                                               ObUnitManager &unit_mgr)
-  : server_mgr_(server_mgr),
-    unit_mgr_(unit_mgr)
+ObVTableLocationGetter::ObVTableLocationGetter(ObUnitManager &unit_mgr) : unit_mgr_(unit_mgr)
 {
 }
 
@@ -37,6 +35,8 @@ ObVTableLocationGetter::~ObVTableLocationGetter()
 {
 }
 
+// **FIXME (linqiucen.lqc): in the future, we can remove unit_mgr_,
+// **                       then this func can be executed locally on observers
 int ObVTableLocationGetter::get(const ObVtableLocationType &vtable_type,
                                 ObSArray<common::ObAddr> &servers)
 {
@@ -64,7 +64,7 @@ int ObVTableLocationGetter::get(const ObVtableLocationType &vtable_type,
   }
   if (OB_SUCC(ret) && OB_UNLIKELY(servers.count() <= 0)) {
     ret = OB_LOCATION_NOT_EXIST;
-    LOG_WARN("servers from server_mgr_ are empty", KR(ret), K(vtable_type), K(servers));
+    LOG_WARN("servers are empty", KR(ret), K(vtable_type), K(servers));
   }
   return ret;
 }
@@ -75,11 +75,20 @@ int ObVTableLocationGetter::get_only_rs_vtable_location_(
 {
   int ret = OB_SUCCESS;
   servers.reuse();
+  ObAddr rs_addr;
   if (OB_UNLIKELY(!vtable_type.is_only_rs())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("vtable_type is invalid", K(vtable_type), KR(ret));
-  } else if (OB_FAIL(servers.push_back(server_mgr_.get_rs_addr()))) {
-    LOG_WARN("push_back failed", KR(ret));
+  } else if (OB_ISNULL(GCTX.rs_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.rs_mgr_ is null", KP(GCTX.rs_mgr_));
+  } else if (OB_FAIL(GCTX.rs_mgr_->get_master_root_server(rs_addr))) {
+    LOG_WARN("fail to get master root server", KR(ret), KP(GCTX.rs_mgr_));
+  } else if (OB_UNLIKELY(!rs_addr.is_valid() || rs_addr != GCTX.self_addr())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("rs_addr is invalid or not equal to self_addr", KR(ret), K(rs_addr), K(GCTX.self_addr()));
+  } else if (OB_FAIL(servers.push_back(rs_addr))) {
+    LOG_WARN("push_back failed", KR(ret), K(rs_addr));
   }
   return ret;
 }
@@ -94,12 +103,8 @@ int ObVTableLocationGetter::get_global_vtable_location_(
   if (OB_UNLIKELY(!(vtable_type.is_cluster_distributed()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("vtable_type is invalid", K(vtable_type), KR(ret));
-  } else if (!server_mgr_.has_build()) {
-    ret = OB_SERVER_IS_INIT;
-    LOG_WARN("server manager hasn't built",
-        "server_mgr built", server_mgr_.has_build(), KR(ret));
-  } else if (OB_FAIL(server_mgr_.get_alive_servers(zone, servers))) {
-    LOG_WARN("get_alive_servers failed", KR(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, servers))) {
+    LOG_WARN("get_alive_servers failed", KR(ret), KP(GCTX.sql_proxy_));
   }
   return ret;
 }
@@ -112,16 +117,15 @@ int ObVTableLocationGetter::get_tenant_vtable_location_(
   servers.reuse();
   ObArray<ObAddr> unit_servers;
   ObArray<uint64_t> pool_ids;
+  bool unit_mgr_check = unit_mgr_.check_inner_stat();
   if (OB_UNLIKELY(!vtable_type.is_valid()
       || !vtable_type.is_tenant_distributed()
       || is_sys_tenant(vtable_type.get_tenant_id()))) { // sys_tenant should get cluster location
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("vtable_type is invalid", KR(ret), K(vtable_type));
-  } else if (!server_mgr_.has_build() || !unit_mgr_.check_inner_stat()) {
+  } else if (OB_UNLIKELY(!unit_mgr_check)) {
     ret = OB_SERVER_IS_INIT;
-    LOG_WARN("server manager or unit manager hasn't built",
-        "server_mgr built", server_mgr_.has_build(),
-        "unit_mgr built", unit_mgr_.check_inner_stat(), KR(ret));
+    LOG_WARN("unit manager hasn't built", "unit_mgr built", unit_mgr_check, KR(ret));
   } else if (OB_FAIL(unit_mgr_.get_pool_ids_of_tenant(vtable_type.get_tenant_id(), pool_ids))) {
     LOG_WARN("get_pool_ids_of_tenant failed", KR(ret), K(vtable_type));
   } else {
@@ -134,8 +138,8 @@ int ObVTableLocationGetter::get_tenant_vtable_location_(
         for (int64_t j = 0; OB_SUCC(ret) && j < unit_infos.count(); ++j) {
           bool is_alive = false;
           const ObUnit &unit = unit_infos.at(j).unit_;
-          if (OB_FAIL(server_mgr_.check_server_alive(unit.server_, is_alive))) {
-            LOG_WARN("check_server_alive failed", "server", unit.server_, KR(ret));
+          if (OB_FAIL(SVR_TRACER.check_server_alive(unit.server_, is_alive))) {
+            LOG_WARN("check_server_alive failed", KR(ret), K(unit.server_));
           } else if (is_alive) {
             if (OB_FAIL(unit_servers.push_back(unit.server_))) {
               LOG_WARN("push_back failed", KR(ret));
@@ -144,10 +148,8 @@ int ObVTableLocationGetter::get_tenant_vtable_location_(
 
           if (OB_SUCC(ret)) {
             if (unit.migrate_from_server_.is_valid()) {
-              if (OB_FAIL(server_mgr_.check_server_alive(
-                  unit.migrate_from_server_, is_alive))) {
-                LOG_WARN("check_server_alive failed", "server",
-                    unit.migrate_from_server_, KR(ret));
+              if (OB_FAIL(SVR_TRACER.check_server_alive(unit.migrate_from_server_, is_alive))) {
+                LOG_WARN("check_server_alive failed", KR(ret), K(unit.migrate_from_server_));
               } else if (is_alive) {
                 if (OB_FAIL(unit_servers.push_back(unit.migrate_from_server_))) {
                   LOG_WARN("push_back failed", KR(ret));

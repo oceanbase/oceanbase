@@ -265,7 +265,7 @@ private:
 };
 
 
-typedef uint64_t (*ObExprHashFuncType)(const common::ObDatum &datum, const uint64_t seed);
+typedef int (*ObExprHashFuncType)(const common::ObDatum &datum, const uint64_t seed, uint64_t &res);
 
 // batch datum hash functions, %seeds, %hash_values may be the same.
 typedef void (*ObBatchDatumHashFunc)(uint64_t *hash_values,
@@ -276,7 +276,7 @@ typedef void (*ObBatchDatumHashFunc)(uint64_t *hash_values,
                                      const uint64_t *seeds,
                                      const bool is_batch_seed);
 
-typedef int (*ObExprCmpFuncType)(const common::ObDatum &datum1, const common::ObDatum &datum2);
+typedef int (*ObExprCmpFuncType)(const common::ObDatum &datum1, const common::ObDatum &datum2, int& cmp_ret);
 struct ObExprBasicFuncs
 {
   // Default hash method:
@@ -330,7 +330,8 @@ struct ObDynReserveBuf
            || common::ObRowIDTC == tc
            || common::ObLobTC == tc
            || common::ObJsonTC == tc
-           || common::ObGeometryTC == tc;
+           || common::ObGeometryTC == tc
+           || common::ObUserDefinedSQLTC == tc;
   }
 
   ObDynReserveBuf() = default;

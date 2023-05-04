@@ -152,6 +152,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_hash_partitioning_infrastructure_op.cpp
   engine/basic/ob_json_table_op.cpp
   engine/basic/ob_limit_op.cpp
+  engine/basic/ob_material_op_impl.cpp
   engine/basic/ob_material_op.cpp
   engine/basic/ob_monitoring_dump_op.cpp
   engine/basic/ob_pushdown_filter.cpp
@@ -628,6 +629,17 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_contains.cpp
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
+  engine/expr/ob_expr_prefix_pattern.cpp
+  engine/expr/ob_expr_sys_makexml.cpp
+  engine/expr/ob_expr_xmlparse.cpp
+  engine/expr/ob_expr_xml_element.cpp
+  engine/expr/ob_expr_xml_attributes.cpp
+  engine/expr/ob_expr_xml_serialize.cpp
+  engine/expr/ob_expr_priv_xml_binary.cpp
+  engine/expr/ob_expr_extract_value.cpp
+  engine/expr/ob_expr_extract_xml.cpp
+  engine/expr/ob_expr_xmlcast.cpp
+  engine/expr/ob_expr_update_xml.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join
@@ -708,6 +720,11 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_init_channel.cpp
   engine/px/datahub/components/ob_dh_second_stage_reporting_wf.cpp
   engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_mgr.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_msg.cpp
+  engine/px/p2p_datahub/ob_p2p_dh_rpc_process.cpp
+  engine/px/p2p_datahub/ob_runtime_filter_msg.cpp
 )
 
 ob_set_subtarget(ob_sql engine_set
@@ -731,6 +748,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_table_scan_op.cpp
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
+  engine/table/ob_external_table_access_service.cpp
 )
 
 ob_set_subtarget(ob_sql executor
@@ -867,6 +885,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/ob_update_log_plan.cpp
   optimizer/ob_log_stat_collector.cpp
   optimizer/ob_log_optimizer_stats_gathering.cpp
+  optimizer/ob_dynamic_sampling.cpp
 )
 
 ob_set_subtarget(ob_sql plan_cache
@@ -1165,6 +1184,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sql_session_mgr.cpp
   session/ob_sys_params_mgr.cpp
   session/ob_user_resource_mgr.cpp
+  session/ob_sess_info_verify.cpp
 )
 
 

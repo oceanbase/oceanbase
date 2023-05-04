@@ -94,6 +94,11 @@ public:
     hash_value = common::murmurhash(&sessid_, sizeof(sessid_), hash_value);
     return hash_value;
   };
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  };
   int compare(const SessionInfoKey & r)
   {
     int cmp = 0;
@@ -217,6 +222,16 @@ public:
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) = 0;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) = 0;
   virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const = 0;
+  // When implementing new information synchronization,
+  // it is necessary to add a self-verification interface
+  // include fetch, compare, and error display.
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                              const int64_t length, int64_t &pos) = 0;
+  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess)= 0;
+  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                const char* last_sess_buf, int64_t last_sess_length) = 0;
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+        int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) = 0;
   bool is_changed_;
 };
 
@@ -227,6 +242,12 @@ public:
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
   int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
+  int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
+  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                              const char* last_sess_buf, int64_t last_sess_length);
+  int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+            int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
 };
 
 class ObAppInfoEncoder : public ObSessInfoEncoder {
@@ -236,6 +257,12 @@ public:
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos);
   int64_t get_serialize_size(ObSQLSessionInfo& sess) const;
+  int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
+  int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
+  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                              const char* last_sess_buf, int64_t last_sess_length);
+  int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+          int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   int set_client_info(ObSQLSessionInfo* sess, const ObString &client_info);
   int set_module_name(ObSQLSessionInfo* sess, const ObString &mod);
   int set_action_name(ObSQLSessionInfo* sess, const ObString &act);
@@ -258,6 +285,13 @@ public:
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_serialize_size(ObSQLSessionInfo& sess) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                              const int64_t length, int64_t &pos);
+  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
+  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+          int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
 };
 class ObClientIdInfoEncoder : public ObSessInfoEncoder {
 public:
@@ -266,6 +300,13 @@ public:
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                              const int64_t length, int64_t &pos);
+  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
+  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+          int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
 };
 
 class ObControlInfoEncoder : public ObSessInfoEncoder {
@@ -275,6 +316,13 @@ public:
   virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                              const int64_t length, int64_t &pos);
+  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
+  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                    const char* last_sess_buf, int64_t last_sess_length);
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+          int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   static const int16_t CONINFO_BY_SESS = 0xC078;
 };
 
@@ -284,6 +332,10 @@ public:                                                                 \
   int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
   int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override; \
   int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;    \
+  int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
+  int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
+  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
+  int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
 };
 DEF_SESSION_TXN_ENCODER(ObTxnStaticInfoEncoder);
 DEF_SESSION_TXN_ENCODER(ObTxnDynamicInfoEncoder);
@@ -344,6 +396,22 @@ struct ObInnerContextMap {
       }
     }
     return ret;
+  }
+  inline bool operator==(const ObInnerContextMap &other) const {
+    bool equal1 =  context_name_ == other.context_name_ &&
+                  context_map_->size() == other.context_map_->size();
+    bool equal2 = true;
+    if (equal1) {
+      auto it2 = other.context_map_->begin();
+      for (auto it1 = context_map_->begin(); it1 != context_map_->end() &&
+          it2 != other.context_map_->end(); ++it1, ++it2) {
+        if (it1->second != it2->second) {
+          equal2 = false;
+        }
+      }
+    }
+
+    return equal1 && equal2;
   }
   ObString context_name_;
   ObInnerContextHashMap *context_map_;
@@ -490,6 +558,8 @@ public:
                                  px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
                                  sort_area_size_(128*1024*1024),
+                                 hash_area_size_(128*1024*1024),
+                                 enable_query_response_time_stats_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
@@ -503,6 +573,8 @@ public:
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
+    int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
+    bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
@@ -517,6 +589,8 @@ public:
     int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
     int64_t sort_area_size_;
+    int64_t hash_area_size_;
+    bool enable_query_response_time_stats_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -536,6 +610,7 @@ public:
     }
     TO_STRING_KV(K_(module_name), K_(action_name), K_(client_info));
   };
+
 
 public:
   ObSQLSessionInfo();
@@ -557,6 +632,13 @@ public:
   const common::ObWarningBuffer &get_show_warnings_buffer() const { return show_warnings_buf_; }
   const common::ObWarningBuffer &get_warnings_buffer() const { return warnings_buf_; }
   common::ObWarningBuffer &get_warnings_buffer() { return warnings_buf_; }
+
+  // self-verification add.
+  bool is_has_query_executed() {return has_query_executed_; }
+  void set_has_query_executed(bool has_query_executed) {
+                            has_query_executed_ = has_query_executed; }
+
+
   void reset_warnings_buf()
   {
     warnings_buf_.reset();
@@ -789,7 +871,8 @@ public:
   //字段初始化
   const ObAuditRecordData &get_final_audit_record(ObExecuteMode mode);
   ObSessionStat &get_session_stat() { return session_stat_; }
-  void update_stat_from_audit_record();
+  void update_stat_from_exec_record();
+  void update_stat_from_exec_timestamp();
   void update_alive_time_stat();
   void handle_audit_record(bool need_retry, ObExecuteMode exec_mode);
 
@@ -822,6 +905,7 @@ public:
   void reset_pl_debugger_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
+  int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
   int reset_all_serially_package_state();
   bool is_package_state_changed() const;
   bool get_changed_package_state_num() const;
@@ -865,6 +949,9 @@ public:
   int set_module_name(const common::ObString &mod);
   int set_action_name(const common::ObString &act);
   int set_client_info(const common::ObString &client_info);
+  int set_verify_info_sess_id(const uint32_t sess_id);
+  int set_verify_info_proxy_sess_id(const uint64_t proxy_sess_id);
+  int set_verify_info_addr(const ObAddr addr);
   ApplicationInfo& get_client_app_info() { return client_app_info_; }
   int get_sess_encoder(const SessionSyncInfoType sess_sync_info_type, ObSessInfoEncoder* &encoder);
   const common::ObString& get_module_name() const { return client_app_info_.module_name_; }
@@ -873,6 +960,7 @@ public:
   const FLTControlInfo& get_control_info() const { return flt_control_info_; }
   FLTControlInfo& get_control_info() { return flt_control_info_; }
   void set_flt_control_info(const FLTControlInfo &con_info);
+  void set_flt_control_info_no_sync(const FLTControlInfo &con_info);
   bool is_send_control_info() { return is_send_control_info_; }
   void set_send_control_info(bool is_send) { is_send_control_info_ = is_send; }
   bool is_coninfo_set_by_sess() { return coninfo_set_by_sess_; }
@@ -967,10 +1055,20 @@ public:
     at_type = cached_tenant_config_info_.get_at_type();
     return common::OB_SUCCESS;
   }
+  int64_t get_tenant_hash_area_size()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_hash_area_size();
+  }
   int64_t get_tenant_sort_area_size()
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
+  }
+  bool enable_query_response_time_stats()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_query_response_time_stats();
   }
   int64_t get_tenant_print_sample_ppm()
   {
@@ -1147,6 +1245,9 @@ private:
   // To customize the memory length, you need to use malloc_alloctor of mem_context
   lib::MemoryContext mem_context_;
   ApplicationInfo client_app_info_;
+  // There is a scenario, when the connection is established for the first time,
+  // the route is immediately switched and no request is initiated, and no verification is required at this time
+  bool has_query_executed_;  //add for routing without synchronizing session information
   char module_buf_[common::OB_MAX_MOD_NAME_LENGTH];
   char action_buf_[common::OB_MAX_ACT_NAME_LENGTH];
   char client_info_buf_[common::OB_MAX_CLIENT_INFO_LENGTH];

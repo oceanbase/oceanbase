@@ -20,11 +20,11 @@
 #include "share/ls/ob_ls_table_operator.h"
 #include "share/ob_cluster_version.h"
 #include "ob_rs_event_history_table_operator.h"
-#include "ob_server_manager.h"
 #include "ob_disaster_recovery_task_mgr.h"
 #include "ob_disaster_recovery_task.h"
 #include "observer/ob_server.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {
@@ -35,8 +35,7 @@ namespace rootserver
 
 int ObDRTaskExecutor::init(
     share::ObLSTableOperator &lst_operator,
-    obrpc::ObSrvRpcProxy &rpc_proxy,
-    ObServerManager &server_mgr)
+    obrpc::ObSrvRpcProxy &rpc_proxy)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
@@ -45,7 +44,6 @@ int ObDRTaskExecutor::init(
   } else {
     lst_operator_ = &lst_operator;
     rpc_proxy_ = &rpc_proxy;
-    server_mgr_ = &server_mgr;
     inited_ = true;
   }
   return ret;
@@ -57,18 +55,16 @@ int ObDRTaskExecutor::execute(
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
+  const ObAddr &dst_server = task.get_dst_server();
+  ObServerInfoInTable server_info;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_ISNULL(server_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("server mgr ptr is null", KR(ret), KP(server_mgr_));
+  } else if (OB_FAIL(SVR_TRACER.get_server_info(dst_server, server_info))) {
+    LOG_WARN("fail to get server_info", KR(ret), K(dst_server));
   } else {
-    const ObAddr &dst_server = task.get_dst_server();
-    bool is_dst_server_alive = false;
-    if (OB_FAIL(server_mgr_->check_server_alive(dst_server, is_dst_server_alive))) {
-      LOG_WARN("fail to check server alive", KR(ret), K(dst_server));
-    } else if (!is_dst_server_alive) {
+    const bool is_dst_server_alive = server_info.is_alive();
+    if (!is_dst_server_alive) {
       ret = OB_REBALANCE_TASK_CANT_EXEC;
       ret_comment = ObDRTaskRetComment::CANNOT_EXECUTE_DUE_TO_SERVER_NOT_ALIVE;
       LOG_WARN("dst server not alive", KR(ret), K(dst_server));

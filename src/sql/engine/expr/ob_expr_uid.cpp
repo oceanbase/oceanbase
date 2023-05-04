@@ -32,7 +32,7 @@ namespace sql
 
 
 ObExprUid::ObExprUid(ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_UID, N_UID, 0, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_UID, N_UID, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

@@ -13,12 +13,14 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_column_stat.h"
+#include "share/stat/ob_opt_osg_column_stat.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/schema/ob_schema_struct.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_item.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {
@@ -208,15 +210,15 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
   } else if (OB_ISNULL(table_schema)) {
     //do nothing
   } else {//check user table
-    is_valid = table_schema->is_user_table();
+    is_valid = table_schema->is_user_table() || table_schema->is_external_table();
   }
   return ret;
 }
 
 int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &schema_guard,
-                                            const uint64_t tenant_id,
-                                            const int64_t table_id,
-                                            bool &is_valid)
+                                         const uint64_t tenant_id,
+                                         const int64_t table_id,
+                                         bool &is_valid)
 {
   bool ret = OB_SUCCESS;
   const ObSimpleTenantSchema *tenant = NULL;
@@ -229,7 +231,10 @@ int ObDbmsStatsUtils::check_is_sys_table(share::schema::ObSchemaGetterGuard &sch
       table_id == share::OB_ALL_HISTOGRAM_STAT_TID ||
       table_id == share::OB_ALL_TABLE_STAT_HISTORY_TID ||
       table_id == share::OB_ALL_COLUMN_STAT_HISTORY_TID ||
-      table_id == share::OB_ALL_HISTOGRAM_STAT_HISTORY_TID) {
+      table_id == share::OB_ALL_HISTOGRAM_STAT_HISTORY_TID ||
+      table_id == share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TID ||//circular dependency
+      table_id == share::OB_ALL_OPTSTAT_USER_PREFS_TID ||
+      table_id == share::OB_ALL_MONITOR_MODIFIED_TID) {
     is_valid = false;
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
@@ -253,6 +258,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_TENANT_VIRTUAL_CURRENT_TENANT_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_TABLES_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_TID ||
+         table_id == share::OB_ALL_VIRTUAL_SESSTAT_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_SCHEMA_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_INFO_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_TID ||
@@ -262,6 +268,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TRIGGER_TID ||
          table_id == share::OB_TENANT_VIRTUAL_ALL_TABLE_AGENT_TID ||
          table_id == share::OB_ALL_VIRTUAL_INFORMATION_COLUMNS_TID ||
+         table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TABLE_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_ORA_TID ||
@@ -278,7 +285,8 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_TRACE_SPAN_INFO_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_LOCK_WAIT_STAT_ORA_TID ||
-         table_id == share::OB_ALL_VIRTUAL_TRANS_STAT_ORA_TID;
+         table_id == share::OB_ALL_VIRTUAL_TRANS_STAT_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_ORA_TID;
 }
 
 bool ObDbmsStatsUtils::is_virtual_index_table(const int64_t table_id)
@@ -562,11 +570,7 @@ int ObDbmsStatsUtils::merge_tab_stats(const ObTableStatParam &param,
 
   // put all stats into array for future use.
   FOREACH_X(it, online_table_stats, OB_SUCC(ret)) {
-    bool is_valid = false;
-    if (OB_FAIL(check_part_id_valid(param, it->second->get_partition_id(), is_valid))) {
-      // if partition is locked, shouldn't gather.
-      LOG_WARN("fail to check part id valid", K(ret));
-    } else if (is_valid) {
+    if (is_part_id_valid(param, it->second->get_partition_id())) {
       if (OB_FAIL(dst_tab_stats.push_back(it->second))) {
         LOG_WARN("fail to push back table stats", K(ret));
       }
@@ -583,75 +587,188 @@ int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
                                       common::ObIArray<ObOptColumnStat*> &dst_col_stats)
 {
   int ret = OB_SUCCESS;
-  ObOptColumnStat *tmp_col_stat;
-
+  ObOptColumnStat *tmp_col_stat = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < old_col_handles.count(); i++) {
-    ObOptColumnStat * old_col_stat = const_cast<ObOptColumnStat *>(old_col_handles.at(i).stat_);
-    ObOptColumnStat::Key key(param.tenant_id_, old_col_stat->get_table_id(),
-                            old_col_stat->get_partition_id(), old_col_stat->get_column_id());
+    ObOptColumnStat *old_col_stat = const_cast<ObOptColumnStat *>(old_col_handles.at(i).stat_);
+    ObOptColumnStat::Key key(param.tenant_id_,
+                             old_col_stat->get_table_id(),
+                             old_col_stat->get_partition_id(),
+                             old_col_stat->get_column_id());
     if (OB_FAIL(online_column_stats.get_refactored(key, tmp_col_stat))) {
-      if (OB_HASH_NOT_EXIST != ret) {
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("failed to find in hashmap", K(ret));
-      } else {
-        if (OB_FAIL(dst_col_stats.push_back(old_col_stat))) {
-          LOG_WARN("fail to push back table stats", K(ret));
-        }
+      } else if (OB_FAIL(dst_col_stats.push_back(old_col_stat))) {
+        LOG_WARN("fail to push back table stats", K(ret));
       }
     } else if (OB_FAIL(tmp_col_stat->merge_column_stat(*old_col_stat))) {
-      //merge
       LOG_WARN("fail to merge new table stat with old table stat", K(ret));
     }
   }
 
   FOREACH_X(it, online_column_stats, OB_SUCC(ret)) {
-    // after merge, we need to re-calc ndv from llc.
+    // after merge, we need to re-calc ndv from llc
     bool is_valid = false;
-    if (OB_ISNULL(it->second)) {
+    ObOptColumnStat *col_stat = NULL;
+    if (OB_ISNULL(col_stat = it->second)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null pointer", K(ret));
-    } else if (OB_FAIL(check_part_id_valid(param, it->second->get_partition_id(), is_valid))) {
-      // if partition is locked, shouldn't gather.
-      LOG_WARN("fail to check part id valid", K(ret));
-    } else if (is_valid) {
-      it->second->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(it->second->get_llc_bitmap()));
-      if (OB_FAIL(dst_col_stats.push_back(it->second))) {
+    } else if (is_part_id_valid(param, col_stat->get_partition_id())) {
+      col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
+      if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
         LOG_WARN("fail to push back table stats", K(ret));
       }
     }
   }
   LOG_DEBUG("OSG debug", K(dst_col_stats));
-
   return ret;
 }
 
-int ObDbmsStatsUtils::check_part_id_valid(const ObTableStatParam &param,
-                                          const ObObjectID part_id,
-                                          bool &is_valid)
+bool ObDbmsStatsUtils::is_part_id_valid(const ObTableStatParam &param,
+                                           const ObObjectID part_id)
 {
-  int ret = OB_SUCCESS;
-  bool found = false;
-  LOG_DEBUG("check part_id valid", K(param), K(part_id));
-  is_valid = false;
+  bool is_valid = false;
   if (param.global_stat_param_.need_modify_) {
     if (part_id == param.global_part_id_) {
       is_valid = true;
     }
   }
   if (!is_valid && param.part_stat_param_.need_modify_) {
-    for (int64_t i = 0; !found && i < param.part_infos_.count(); i++) {
+    for (int64_t i = 0; !is_valid && i < param.part_infos_.count(); i++) {
       if (part_id == param.part_infos_.at(i).part_id_) {
-        found = true;
         is_valid = true;
       }
     }
   }
   if (!is_valid && param.subpart_stat_param_.need_modify_) {
-    for (int64_t i = 0; !found && i < param.subpart_infos_.count(); i++) {
+    for (int64_t i = 0; !is_valid && i < param.subpart_infos_.count(); i++) {
       if (part_id == param.subpart_infos_.at(i).part_id_) {
-        found = true;
         is_valid = true;
       }
     }
+  }
+  return is_valid;
+}
+
+int ObDbmsStatsUtils::get_part_ids_from_param(const ObTableStatParam &param,
+                                              common::ObIArray<int64_t> &part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (param.global_stat_param_.need_modify_) {
+    if (OB_FAIL(part_ids.push_back(param.global_part_id_))) {
+      LOG_WARN("failed to push back partition id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
+      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back partition id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_part_infos(const ObTableSchema &table_schema,
+                                     ObIArray<PartInfo> &part_infos,
+                                     ObIArray<PartInfo> &subpart_infos,
+                                     ObIArray<int64_t> &part_ids,
+                                     ObIArray<int64_t> &subpart_ids,
+                                     OSGPartMap *part_map/*default null*/)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *part = NULL;
+  const bool is_twopart = (table_schema.get_part_level() == share::schema::PARTITION_LEVEL_TWO);
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  if (table_schema.is_partitioned_table()) {
+    ObPartIterator iter(table_schema, check_partition_mode);
+    while (OB_SUCC(ret) && OB_SUCC(iter.next(part))) {
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null partition", K(ret), K(part));
+      } else {
+        PartInfo part_info;
+        part_info.part_name_ = part->get_part_name();
+        part_info.part_id_ = part->get_part_id();
+        part_info.tablet_id_ = part->get_tablet_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = part->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(part->get_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(part->get_part_id()));
+          }
+        }
+        int64_t origin_cnt = subpart_infos.count();
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(part_infos.push_back(part_info))) {
+          LOG_WARN("failed to push back part info", K(ret));
+        } else if (OB_FAIL(part_ids.push_back(part_info.part_id_))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else if (is_twopart &&
+                   OB_FAIL(get_subpart_infos(table_schema, part, subpart_infos, subpart_ids, part_map))) {
+          LOG_WARN("failed to get subpart info", K(ret));
+        } else {
+          part_infos.at(part_infos.count() - 1).subpart_cnt_ = subpart_infos.count() - origin_cnt;
+          LOG_TRACE("succeed to get table part infos", K(part_info));
+        }
+      }
+    }
+    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
+  }
+  return ret;
+}
+
+int ObDbmsStatsUtils::get_subpart_infos(const ObTableSchema &table_schema,
+                                        const ObPartition *part,
+                                        ObIArray<PartInfo> &subpart_infos,
+                                        ObIArray<int64_t> &subpart_ids,
+                                        OSGPartMap *part_map/*default NULL*/)
+{
+  int ret = OB_SUCCESS;
+  ObCheckPartitionMode check_partition_mode = CHECK_PARTITION_MODE_NORMAL;
+  if (OB_ISNULL(part) ||
+      OB_UNLIKELY(table_schema.get_part_level() != share::schema::PARTITION_LEVEL_TWO)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition is null", K(ret), K(table_schema.get_part_level()));
+  } else {
+    const ObSubPartition *subpart = NULL;
+    ObSubPartIterator sub_iter(table_schema, *part, check_partition_mode);
+    while (OB_SUCC(ret) && OB_SUCC(sub_iter.next(subpart))) {
+      if (OB_ISNULL(subpart)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null subpartition", K(ret));
+      } else {
+        PartInfo subpart_info;
+        subpart_info.part_name_ = subpart->get_part_name();
+        subpart_info.part_id_ = subpart->get_sub_part_id(); // means object_id
+        subpart_info.tablet_id_ = subpart->get_tablet_id();
+        subpart_info.first_part_id_ = part->get_part_id();
+        if (OB_NOT_NULL(part_map)) {
+          OSGPartInfo part_info;
+          part_info.part_id_ = part->get_part_id();
+          part_info.tablet_id_ = subpart->get_tablet_id();
+          if (OB_FAIL(part_map->set_refactored(subpart->get_sub_part_id(), part_info))) {
+            LOG_WARN("fail to add part info to hashmap", K(ret), K(part_info), K(subpart->get_sub_part_id()));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(subpart_infos.push_back(subpart_info))) {
+          LOG_WARN("failed to push back subpart_info", K(ret));
+        } else if (OB_FAIL(subpart_ids.push_back(subpart_info.part_id_))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        } else {
+          LOG_TRACE("succeed to get table part infos", K(subpart_info)) ;
+        }
+      }
+    }
+    ret = (ret == OB_ITER_END ? OB_SUCCESS : ret);
   }
   return ret;
 }

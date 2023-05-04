@@ -193,7 +193,8 @@ private:
   {
   public:
     ValueAlloc()
-      : session_pool_map_(allocator_),
+      : allocator_(SET_USE_500("SessMap")),
+        session_pool_map_(allocator_),
         alloc_total_count_(0),
         alloc_from_pool_count_(0),
         free_total_count_(0),

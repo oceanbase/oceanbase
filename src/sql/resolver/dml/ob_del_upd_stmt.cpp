@@ -308,6 +308,8 @@ int ObMergeTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to visit insert condition exprs", K(ret));
   } else if (OB_FAIL(visitor.visit(delete_condition_exprs_, SCOPE_DMLINFOS))) {
     LOG_WARN("failed to visit delete condition exprs", K(ret));
+  } else if (OB_FAIL(visitor.visit(values_vector_, SCOPE_INSERT_VECTOR))) {
+    LOG_WARN("failed to add expr to expr checker", K(ret));
   }
   return ret;
 }

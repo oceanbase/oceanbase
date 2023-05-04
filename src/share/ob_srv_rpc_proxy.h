@@ -18,6 +18,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
+#include "share/ob_heartbeat_struct.h"
 
 namespace oceanbase
 {
@@ -90,6 +91,7 @@ public:
   RPC_S(PR5 wash_memory_fragmentation, OB_WASH_MEMORY_FRAGMENTATION);
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));
   RPC_S(PR5 is_empty_server, OB_IS_EMPTY_SERVER, (ObCheckServerEmptyArg), Bool);
+  RPC_S(PR5 check_server_for_adding_server, OB_CHECK_SERVER_FOR_ADDING_SERVER, (ObCheckServerForAddingServerArg), ObCheckServerForAddingServerResult);
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
   RPC_S(PR5 report_replica, OB_REPORT_REPLICA);
   RPC_S(PR5 recycle_replica, OB_RECYCLE_REPLICA);
@@ -185,6 +187,11 @@ public:
   RPC_AP(PR5 refresh_tenant_info, OB_REFRESH_TENANT_INFO, (obrpc::ObRefreshTenantInfoArg), obrpc::ObRefreshTenantInfoRes);
   RPC_S(PR5 sync_rewrite_rules, OB_SYNC_REWRITE_RULES, (ObSyncRewriteRuleArg));
   RPC_S(PR5 force_set_ls_as_single_replica, OB_LOG_FORCE_SET_LS_AS_SINGLE_REPLICA, (obrpc::ObForceSetLSAsSingleReplicaArg));
+  RPC_S(PR5 session_info_verification, OB_SESS_INFO_VERIFICATION, (ObSessInfoVerifyArg), ObSessionInfoVeriRes);
+  RPC_AP(PRZ handle_heartbeat, OB_SEND_HEARTBEAT, (share::ObHBRequest), share::ObHBResponse);
+  RPC_AP(PR5 get_server_resource_info, OB_GET_SERVER_RESOURCE_INFO, (obrpc::ObGetServerResourceInfoArg), obrpc::ObGetServerResourceInfoResult);
+  RPC_AP(PR5 notify_switch_leader, OB_NOTIFY_SWITCH_LEADER, (obrpc::ObNotifySwitchLeaderArg));
+  RPC_AP(PR5 update_tenant_info_cache, OB_UPDATE_TENANT_INFO_CACHE, (obrpc::ObUpdateTenantInfoCacheArg), obrpc::ObUpdateTenantInfoCacheRes);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

@@ -189,7 +189,17 @@ private:
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
 };
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 0, 0)
+// DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 0, 0)
+class ObUpgradeFor4200Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4200Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4200Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_heartbeat_and_server_zone_op_service();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

@@ -177,11 +177,11 @@ struct ObSysVarInPC
 
   int64_t hash(int64_t seed) const
   {
-    int64_t hash_val = seed;
+    uint64_t hash_val = seed;
     for (int64_t i = 0; i < system_variables_.count(); ++i) {
-      hash_val = system_variables_.at(i).hash(hash_val);
+      system_variables_.at(i).hash(hash_val, hash_val);
     }
-    return hash_val;
+    return static_cast<int64_t>(hash_val);
   }
 
   void reset()
@@ -266,6 +266,17 @@ struct ObPCParam
   {
   }
   TO_STRING_KV(KP_(node), K_(flag));
+};
+
+struct ObPCParseInfo
+{
+  int64_t raw_text_pos_;
+  int64_t param_idx_;
+  ParamProperty flag_;
+  ObPCParseInfo() : raw_text_pos_(-1), param_idx_(-1), flag_(INVALID_PARAM)
+  {
+  }
+  TO_STRING_KV(K_(raw_text_pos), K_(param_idx), K_(flag));
 };
 
 struct ObPCConstParamInfo
@@ -772,8 +783,7 @@ struct ObPlanStat
 
   inline void update_cache_stat(const ObTableScanStat &stat)
   {
-    const int64_t current_time = common::ObTimeUtility::current_time();
-    if (current_time > gen_time_ + CACHE_POLICY_UPDATE_INTERVAL) {
+    if (ObClockGenerator::getClock() > gen_time_ + CACHE_POLICY_UPDATE_INTERVAL) {
       const int64_t update_times = ATOMIC_AAF(&cache_stat_update_times_, 1);
       ATOMIC_AAF(&bf_filter_cnt_, stat.bf_filter_cnt_);
       ATOMIC_AAF(&bf_access_cnt_, stat.bf_access_cnt_);
@@ -966,6 +976,7 @@ public:
     px_join_skew_handling_(true),
     px_join_skew_minfreq_(30),
     min_cluster_version_(0),
+    is_enable_px_fast_reclaim_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1005,6 +1016,7 @@ public:
   bool px_join_skew_handling_;
   int8_t px_join_skew_minfreq_;
   uint64_t min_cluster_version_;
+  bool is_enable_px_fast_reclaim_;
 
 private:
   // current cluster config version_

@@ -178,7 +178,7 @@ ObThWorker::Status ObThWorker::check_throttle()
   Status st = WS_NOWAIT;
   if (!OB_ISNULL(tenant_) && !OB_ISNULL(session_) &&
       !static_cast<sql::ObSQLSessionInfo*>(session_)->is_inner()) {
-    const int64_t curr_time = ObTimeUtility::current_time();
+    const int64_t curr_time = common::ObClockGenerator::getClock();
     auto &st_metrics = tenant_->get_sql_throttle_metrics();
     if (st_current_priority_ != -1 && st_current_priority_ <= st_metrics.priority_) {
       if ((st_metrics.rt_ >= .0) &&
@@ -213,7 +213,7 @@ ObThWorker::Status ObThWorker::check_rate_limiter()
 ObThWorker::Status ObThWorker::check_wait()
 {
   const int64_t threshold = GCONF.large_query_threshold;
-  const int64_t curr_time = ObTimeUtility::current_time();
+  const int64_t curr_time = common::ObClockGenerator::getClock();
   Status st = WS_NOWAIT;
   if (OB_UNLIKELY(tenant_->has_stopped())) {
     st = WS_INVALID;
@@ -266,7 +266,7 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
       if (retry_times == 1) {
         LOG_WARN("tenant push retry request to wait queue", "tenant", tenant_->id(), K(req));
       }
-      uint64_t curr_timestamp = ObTimeUtility::current_time();
+      uint64_t curr_timestamp = common::ObClockGenerator::getClock();
       uint64_t delta_us = curr_timestamp - req.get_receive_timestamp();
       uint64_t timestamp = curr_timestamp + min(delta_us, 100 * 1000UL);
       if (OB_FAIL(tenant_->push_retry_queue(req, timestamp))) {
@@ -389,7 +389,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
               /// get request from tenant
               {
                 ObWaitEventGuard wait_guard(ObWaitEventIds::OMT_IDLE, 0, wait_start_time, 0, 0);
-                ret = tenant_->get_new_request(*this, REQUEST_WAIT_TIME, req);
+                ret = tenant_->get_new_request(*this, is_level_worker() ? NESTING_REQUEST_WAIT_TIME : REQUEST_WAIT_TIME, req);
                 wait_end_time = ObTimeUtility::current_time();
               }
 

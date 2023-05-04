@@ -55,7 +55,7 @@ OB_SERIALIZE_MEMBER((ObExprObjAccess, ObExprOperator),
                     // extend_size_ is not needed here, we got extend size from result_type_
 
 ObExprObjAccess::ObExprObjAccess(ObIAllocator &alloc)
-  : ObExprOperator(alloc, T_OBJ_ACCESS_REF, N_OBJ_ACCESS, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION,
+  : ObExprOperator(alloc, T_OBJ_ACCESS_REF, N_OBJ_ACCESS, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
                    INTERNAL_IN_MYSQL_MODE, INTERNAL_IN_ORACLE_MODE),
     info_(alloc, T_OBJ_ACCESS_REF)
 {

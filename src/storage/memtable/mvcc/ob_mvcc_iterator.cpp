@@ -37,7 +37,6 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
 {
   int ret = OB_SUCCESS;
   skip_compact_ = skip_compact;
-  bool enable_sql_audit = GCONF.enable_sql_audit;;
   reset();
   int64_t lock_for_read_start = ObClockGenerator::getClock();
   ctx_ = &ctx;
@@ -59,11 +58,6 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
     }
   }
 
-  if (OB_SUCC(ret) && enable_sql_audit) {
-    // stat lock for read time : FIXME: (yunxing.cyx) feedback via ..
-    // const_cast<ObIMvccCtx&>(ctx).add_lock_for_read_elapse(
-    //   ObClockGenerator::getClock() -  lock_for_read_start);
-  }
   TRANS_LOG(TRACE, "value_iter.init", K(ret),
             KPC(value),
             KPC_(version_iter),
@@ -78,12 +72,10 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
 int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
 {
   int ret = OB_SUCCESS;
-  int64_t lock_start_time = OB_INVALID_TIMESTAMP;
   // the head of the read position
   ObMvccTransNode *iter = value_->get_list_head();
   // the resolved mvcc read position
   version_iter_ = NULL;
-  lock_begin(lock_start_time);
 
   while (OB_SUCC(ret) && NULL != iter && NULL == version_iter_) {
     if (OB_FAIL(lock_for_read_inner_(flag, iter))) {
@@ -95,37 +87,15 @@ int ObMvccValueIterator::lock_for_read_(const ObQueryFlag &flag)
   if (NULL != version_iter_) {
     if (ctx_->is_weak_read()) {
       version_iter_->set_safe_read_barrier(true);
-      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
-    }
-    if (!flag.is_prewarm()
-        && !version_iter_->is_elr()) {
-      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_);
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_,
+                                                  ObMvccTransNode::WEAK_READ_BIT);
+    } else if (!flag.is_prewarm() && !version_iter_->is_elr()) {
+      version_iter_->set_snapshot_version_barrier(ctx_->snapshot_.version_,
+                                                  ObMvccTransNode::NORMAL_READ_BIT);
     }
   }
 
-  lock_for_read_end(lock_start_time, ret);
   return ret;
-}
-
-void ObMvccValueIterator::lock_begin(int64_t &lock_start_time) const
-{
-  if (GCONF.enable_sql_audit) {
-    lock_start_time = OB_TSC_TIMESTAMP.current_time();
-  }
-}
-
-void ObMvccValueIterator::lock_for_read_end(const int64_t lock_start_time, int64_t ret) const
-{
-  // TODO: Add ELR check back
-  if (GCONF.enable_sql_audit && OB_INVALID_TIMESTAMP != lock_start_time) {
-    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - lock_start_time;
-    EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
-    if (OB_FAIL(ret)) {
-      EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);
-    } else {
-      EVENT_INC(MEMSTORE_READ_LOCK_SUCC_COUNT);
-    }
-  }
 }
 
 int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,

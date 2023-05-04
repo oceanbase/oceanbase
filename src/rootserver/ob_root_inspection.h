@@ -47,7 +47,6 @@ namespace rootserver
 class ObZoneManager;
 class ObRootService;
 class ObFetchPrimaryDDLOperator;
-class ObServerManager;
 
 // Interface of all the inspection task
 class ObInspectionTask

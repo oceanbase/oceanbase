@@ -35,6 +35,7 @@ public:
   bool operator ==(const ObTabletMapKey &other) const;
   bool operator !=(const ObTabletMapKey &other) const;
   bool operator <(const ObTabletMapKey &other) const;
+  int hash(uint64_t &hash_val) const;
   uint64_t hash() const;
 
   TO_STRING_KV(K_(ls_id), K_(tablet_id));

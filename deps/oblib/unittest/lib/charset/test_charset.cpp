@@ -200,6 +200,13 @@ TEST_F(TestCharset, case_insensitive_equal)
   ASSERT_FALSE(yy);
   yy = ObCharset::case_insensitive_equal(y3, y4, CS_TYPE_UTF8MB4_GENERAL_CI);
   ASSERT_TRUE(yy);
+
+  yy = ObCharset::case_insensitive_equal(y1, y2, CS_TYPE_GB18030_2022_PINYIN_CI);
+  ASSERT_TRUE(yy);
+  yy = ObCharset::case_insensitive_equal(y2, y3, CS_TYPE_GB18030_2022_PINYIN_CI);
+  ASSERT_FALSE(yy);
+  yy = ObCharset::case_insensitive_equal(y3, y4, CS_TYPE_GB18030_2022_PINYIN_CI);
+  ASSERT_TRUE(yy);
 }
 
 TEST_F(TestCharset, hash_sort)
@@ -369,6 +376,23 @@ TEST_F(TestCharset, test_find_gb18030_case_prob)
       }
     }
   }
+  cs_type = CS_TYPE_GB18030_2022_BIN;
+  for (int i = 0; i < 256; i++) {
+    const ObUnicaseInfoChar *info = ObCharset::get_charset(cs_type)->caseinfo->page[i];
+    if (NULL != info) {
+      for (int j = 0; j < 256; j++) {
+        ASSERT_TRUE(OB_SUCCESS == ObCharset::wc_mb(cs_type, info[j].tolower, buf1, buf_len, length1));
+        ASSERT_TRUE(OB_SUCCESS == ObCharset::wc_mb(cs_type, info[j].toupper, buf2, buf_len, length2));
+        buf1[length1] = '\0';
+        buf2[length2] = '\0';
+        if (length1 != length2) {
+          ASSERT_TRUE(OB_SUCCESS == to_hex_cstr(buf1, length1, hex_buf1, buf_len));
+          ASSERT_TRUE(OB_SUCCESS == to_hex_cstr(buf2, length2, hex_buf2, buf_len));
+          std::cout<< info[j].tolower <<"," << info[j].toupper << "," << hex_buf1 << "," << hex_buf2 << std::endl;
+        }
+      }
+    }
+  }
 }
 
 /*
@@ -417,7 +441,8 @@ TEST_F(TestCharset, test_zh_0900_as_cs)
   };
 
   ObCollationType coll_types[] = {CS_TYPE_UTF8MB4_ZH_0900_AS_CS, CS_TYPE_GBK_ZH_0900_AS_CS,
-                                 CS_TYPE_GB18030_ZH_0900_AS_CS, CS_TYPE_UTF16_ZH_0900_AS_CS};
+                                 CS_TYPE_GB18030_ZH_0900_AS_CS, CS_TYPE_UTF16_ZH_0900_AS_CS,
+                                 CS_TYPE_GB18030_2022_ZH_0900_AS_CS};
 
   for (int i = 0; i < array_elements(coll_types); i++) {
     ObCollationType coll_type = coll_types[i];
@@ -472,7 +497,7 @@ TEST_F(TestCharset, test_zh2_0900_as_cs)
     return output;
   };
 
-  ObCollationType coll_types[] = {CS_TYPE_UTF8MB4_ZH2_0900_AS_CS};
+  ObCollationType coll_types[] = {CS_TYPE_UTF8MB4_ZH2_0900_AS_CS, CS_TYPE_GB18030_2022_ZH2_0900_AS_CS};
 
   for (int i = 0; i < array_elements(coll_types); i++) {
     ObCollationType coll_type = coll_types[i];
@@ -564,6 +589,170 @@ TEST_F(TestCharset, toupper)
     fprintf(stdout, "charset=%s, src:%.*s, src_upper:%.*s, dst:%.*s\n", cs_name,
             y2.length(), y2.ptr(), y2_res.length(), y2_res.ptr(), y3.length(), y3.ptr());
     EXPECT_TRUE(y2_res == y3);
+  }
+}
+
+static uint get_magic_gb18030_2022_uni(uint code)
+{
+  switch (code) {
+    case 0xFE59 : return 0x9FB4;
+    case 0xFE61 : return 0x9FB5;
+    case 0xFE66 : return 0x9FB6;
+    case 0xFE67 : return 0x9FB7;
+    case 0xFE6D : return 0x9FB8;
+    case 0xFE7E : return 0x9FB9;
+    case 0xFE90 : return 0x9FBA;
+    case 0xFEA0 : return 0x9FBB;
+    case 0xA6D9 : return 0xFE10;
+    case 0xA6DA : return 0xFE12;
+    case 0xA6DB : return 0xFE11;
+    case 0xA6DC : return 0xFE13;
+    case 0xA6DD : return 0xFE14;
+    case 0xA6DE : return 0xFE15;
+    case 0xA6DF : return 0xFE16;
+    case 0xA6EC : return 0xFE17;
+    case 0xA6ED : return 0xFE18;
+    case 0xA6F3 : return 0xFE19;
+    case 0x82359037 : return 0xE81E;
+    case 0x82359038 : return 0xE826;
+    case 0x82359039 : return 0xE82B;
+    case 0x82359130 : return 0xE82C;
+    case 0x82359131 : return 0xE832;
+    case 0x82359132 : return 0xE843;
+    case 0x82359133 : return 0xE854;
+    case 0x82359134 : return 0xE864;
+    case 0x84318236 : return 0xE78D;
+    case 0x84318238 : return 0xE78E;
+    case 0x84318237 : return 0xE78F;
+    case 0x84318239 : return 0xE790;
+    case 0x84318330 : return 0xE791;
+    case 0x84318331 : return 0xE792;
+    case 0x84318332 : return 0xE793;
+    case 0x84318333 : return 0xE794;
+    case 0x84318334 : return 0xE795;
+    case 0x84318335 : return 0xE796;
+    default: return 0;
+  }
+}
+
+static uint get_magic_uni_gb18030_2022(uint code)
+{
+  switch (code) {
+    case 0x9FB4 : return 0xFE59;
+    case 0x9FB5 : return 0xFE61;
+    case 0x9FB6 : return 0xFE66;
+    case 0x9FB7 : return 0xFE67;
+    case 0x9FB8 : return 0xFE6D;
+    case 0x9FB9 : return 0xFE7E;
+    case 0x9FBA : return 0xFE90;
+    case 0x9FBB : return 0xFEA0;
+    case 0xFE10 : return 0xA6D9;
+    case 0xFE12 : return 0xA6DA;
+    case 0xFE11 : return 0xA6DB;
+    case 0xFE13 : return 0xA6DC;
+    case 0xFE14 : return 0xA6DD;
+    case 0xFE15 : return 0xA6DE;
+    case 0xFE16 : return 0xA6DF;
+    case 0xFE17 : return 0xA6EC;
+    case 0xFE18 : return 0xA6ED;
+    case 0xFE19 : return 0xA6F3;
+    case 0xE81E : return 0x82359037;
+    case 0xE826 : return 0x82359038;
+    case 0xE82B : return 0x82359039;
+    case 0xE82C : return 0x82359130;
+    case 0xE832 : return 0x82359131;
+    case 0xE843 : return 0x82359132;
+    case 0xE854 : return 0x82359133;
+    case 0xE864 : return 0x82359134;
+    case 0xE78D : return 0x84318236;
+    case 0xE78E : return 0x84318238;
+    case 0xE78F : return 0x84318237;
+    case 0xE790 : return 0x84318239;
+    case 0xE791 : return 0x84318330;
+    case 0xE792 : return 0x84318331;
+    case 0xE793 : return 0x84318332;
+    case 0xE794 : return 0x84318333;
+    case 0xE795 : return 0x84318334;
+    case 0xE796 : return 0x84318335;
+    default: return 0;
+  }
+}
+
+static inline uint gb18030_chs_to_code(const uchar *src, size_t srclen) {
+  uint r = 0;
+
+  ob_charset_assert(srclen == 1 || srclen == 2 || srclen == 4);
+
+  switch (srclen) {
+    case 1:
+      r = src[0];
+      break;
+    case 2:
+      r = (src[0] << 8) + src[1];
+      break;
+    case 4:
+      r = (src[0] << 24) + (src[1] << 16) + (src[2] << 8) + src[3];
+      break;
+    default:
+      ob_charset_assert(0);
+  }
+
+  return r;
+}
+
+TEST_F(TestCharset, check_gb18030_2022)
+{
+  int ret = 0;
+  uchar s[4];
+
+  ob_charset_conv_mb_wc ob_mb_wc_gb18030_2022 = ob_charset_gb18030_2022_pinyin_ci.cset->mb_wc;
+  ob_charset_conv_mb_wc ob_mb_wc_gb18030 = ob_charset_gb18030_chinese_ci.cset->mb_wc;
+  ob_charset_conv_wc_mb ob_wc_mb_gb18030_2022 = ob_charset_gb18030_2022_pinyin_ci.cset->wc_mb;
+  ob_charset_conv_wc_mb ob_wc_mb_gb18030 = ob_charset_gb18030_chinese_ci.cset->wc_mb;
+
+  for (s[0] = 0x81; s[0] <= 0xFE; s[0]++) {
+    for (s[1] = 0x40; s[1] <= 0xFE; s[1]++) {
+      if (s[1] == 0x7F) {
+        continue;
+      }
+      uint gb_code = gb18030_chs_to_code(s, 2);
+      ob_wc_t uni_gb18030_2022;
+      ob_mb_wc_gb18030_2022(NULL, &uni_gb18030_2022, s, s + 4);
+      ulong target = get_magic_gb18030_2022_uni(gb_code);
+      if (target == 0) {
+        ob_mb_wc_gb18030(NULL, &target, s, s + 4);
+      }
+      ASSERT_TRUE(target = uni_gb18030_2022);
+    }
+  }
+  for (s[0] = 0x81; s[0] <= 0xFE; s[0]++) {
+    for (s[1] = 0x30; s[1] <= 0x39; s[1]++) {
+      for (s[2] = 0x81; s[2] <= 0xFE; s[2]++) {
+        for (s[3] = 0x30; s[3] <= 0x39; s[3]++) {
+          uint gb_code = gb18030_chs_to_code(s, 4);
+          ob_wc_t uni_gb18030_2022;
+          ob_mb_wc_gb18030_2022(NULL, &uni_gb18030_2022, s, s + 4);
+          ulong target = get_magic_gb18030_2022_uni(gb_code);
+          if (target == 0) {
+            ob_mb_wc_gb18030(NULL, &target, s, s + 4);
+          }
+          ASSERT_TRUE(target = uni_gb18030_2022);
+        }
+      }
+    }
+  }
+
+  for (uint i=0; i <= 0x10FFFF; i ++) {
+    uchar s_gb18030[4];
+    uchar s_gb18030_2022[4];
+    uint target = get_magic_uni_gb18030_2022(i);
+    if (target == 0) {
+      int len_gb18030 = ob_wc_mb_gb18030(NULL, i, s_gb18030, s_gb18030 + 4);
+      target = (len_gb18030 == 0) ? 0 : gb18030_chs_to_code(s_gb18030, len_gb18030);
+    }
+    int len_gb18030_2022 = ob_wc_mb_gb18030_2022(NULL, i, s_gb18030_2022, s_gb18030_2022 + 4);
+    uint code_gb18030_2022 = (len_gb18030_2022 == 0) ? 0 : gb18030_chs_to_code(s_gb18030_2022, len_gb18030_2022);
+    ASSERT_TRUE(target == code_gb18030_2022);
   }
 }
 

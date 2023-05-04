@@ -28,20 +28,20 @@ using namespace common;
 using namespace common::hash;
 
 ObDbLinkMgr::ObDbLinkMgr()
-  : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(local_allocator_),
-    dblink_schemas_(0, NULL, "DBLINK_MGR"),
-    dblink_id_map_("DBLINK_MGR"),
-    dblink_name_map_("DBLINK_MGR"),
+    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR")),
+    dblink_id_map_(SET_USE_500("DBLINK_MGR")),
+    dblink_name_map_(SET_USE_500("DBLINK_MGR")),
     is_inited_(false)
 {}
 
 ObDbLinkMgr::ObDbLinkMgr(ObIAllocator &allocator)
-  : local_allocator_(ObModIds::OB_SCHEMA_GETTER_GUARD),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
     allocator_(allocator),
-    dblink_schemas_(0, NULL, "DBLINK_MGR"),
-    dblink_id_map_("DBLINK_MGR"),
-    dblink_name_map_("DBLINK_MGR"),
+    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR")),
+    dblink_id_map_(SET_USE_500("DBLINK_MGR")),
+    dblink_name_map_(SET_USE_500("DBLINK_MGR")),
     is_inited_(false)
 {}
 

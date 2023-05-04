@@ -49,7 +49,6 @@ int ObHJPartition::init(
   } else if (OB_FAIL(batch_->init())) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id_), K(is_left));
   } else {
-    batch_->get_chunk_row_store().set_block_size(buf_mgr_->get_page_size());
     batch_->get_chunk_row_store().set_callback(callback);
     batch_->get_chunk_row_store().set_dir_id(dir_id);
   }

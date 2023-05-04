@@ -25,7 +25,7 @@ class ObExprGetSubprogramVar : public ObFuncExprOperator
 public:
   explicit ObExprGetSubprogramVar(common::ObIAllocator &alloc)
     : ObFuncExprOperator(
-        alloc, T_OP_GET_SUBPROGRAM_VAR, N_GET_SUBPROGRAM_VAR, PARAM_NUM_UNKNOWN, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
+        alloc, T_OP_GET_SUBPROGRAM_VAR, N_GET_SUBPROGRAM_VAR, PARAM_NUM_UNKNOWN, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION, INTERNAL_IN_MYSQL_MODE)
   {}
 
   virtual ~ObExprGetSubprogramVar() {};

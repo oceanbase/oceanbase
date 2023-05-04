@@ -35,7 +35,7 @@ const int64_t MAX_FORMAT_BUFFER_SIZE = 512;
 const int64_t MAX_TEXT_BUFFER_SIZE = 16359;
 
 ObExprFormat::ObExprFormat(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_FORMAT, N_FORMAT, TWO_OR_THREE, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_FORMAT, N_FORMAT, TWO_OR_THREE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

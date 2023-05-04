@@ -154,9 +154,8 @@ protected:
                             common::ObIArray<ObRawExpr*> &rollup_exprs,
                             common::ObIArray<OrderItem> &order_items,
                             bool &has_explicit_dir);
-  int resolve_rollup_list(const ParseNode *node,
-                          ObMultiRollupItem &rollup_item,
-                          bool &can_conv_multi_rollup);
+  int resolve_rollup_list(const ParseNode *node, ObRollupItem &rollup_item);
+  int resolve_cube_list(const ParseNode *node, ObCubeItem &cube_item);
   int resolve_grouping_sets_list(const ParseNode *node,
                                  ObGroupingSetsItem &grouping_sets_item);
   int resolve_with_rollup_clause(const ParseNode *node,
@@ -321,15 +320,19 @@ private:
                             bool &can_find,
                             ObStmtCompareContext *check_context = NULL);
   int can_find_group_column(ObRawExpr *&col_expr,
-                            const ObIArray<ObMultiRollupItem> &multi_rollup_items,
+                            const ObIArray<ObRollupItem> &rollup_items,
+                            bool &can_find,
+                            ObStmtCompareContext *check_context = NULL);
+  int can_find_group_column(ObRawExpr *&col_expr,
+                            const ObIArray<ObCubeItem> &cube_items,
                             bool &can_find,
                             ObStmtCompareContext *check_context = NULL);
   int check_subquery_return_one_column(const ObRawExpr &expr, bool is_exists_param = false);
 
   int mark_nested_aggr_if_required(const ObIArray<ObAggFunRawExpr*> &aggr_exprs);
 
-  int check_multi_rollup_items_valid(const common::ObIArray<ObMultiRollupItem> &multi_rollup_items);
-
+  int check_rollup_items_valid(const common::ObIArray<ObRollupItem> &rollup_items);
+  int check_cube_items_valid(const common::ObIArray<ObCubeItem> &cube_items);
   int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr);
 
   int add_name_for_anonymous_view();

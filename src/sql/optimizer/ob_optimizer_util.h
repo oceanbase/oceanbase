@@ -1055,6 +1055,7 @@ public:
                                bool &is_match);
 
   static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless);
+  static bool is_lossless_type_conv(const ObExprResType &child_type, const ObExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
   static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr);
   static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
@@ -1308,11 +1309,10 @@ public:
                                               const int64_t reselected_pos,
                                               ObShardingInfo *&target_sharding);
 
-  static int get_join_style_parallel(ObOptimizerContext &opt_ctx,
-                                     int64_t left_parallel,
-                                     int64_t right_parallel,
-                                     const DistAlgo join_dist_algo,
-                                     int64_t &parallel);
+  static int64_t get_join_style_parallel(const int64_t left_parallel,
+                                         const int64_t right_parallel,
+                                         const DistAlgo join_dist_algo,
+                                         const bool use_left = false);
 
   static bool is_left_need_exchange(const ObShardingInfo &sharding, const DistAlgo dist_algo);
   static bool is_right_need_exchange(const ObShardingInfo &sharding, const DistAlgo dist_algo);
@@ -1425,11 +1425,6 @@ public:
                                                 ObIArray<ObRawExpr*> &candi_left_quals,
                                                 ObIArray<ObRawExpr*> &candi_right_quals);
 
-  static int init_calc_part_id_expr(ObLogPlan * log_plan,
-                                    const uint64_t table_id,
-                                    const uint64_t ref_table_id,
-                                    ObRawExpr *&calc_part_id_expr);
-
   static int replace_gen_column(ObLogPlan *log_plan,
                                 ObRawExpr *part_expr,
                                 ObRawExpr *&new_part_expr);
@@ -1442,7 +1437,7 @@ public:
 
   static int truncate_string_for_opt_stats(const ObObj *old_obj,
                                            ObIAllocator &alloc,
-                                           const ObObj *&new_obj);
+                                           ObObj *&new_obj);
 
 private:
   //disallow construct
