@@ -397,7 +397,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
         if (OB_FAIL(ret)) {
           const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
           const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-          medium_info.medium_snapshot_ = MAX(MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
+          medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
           if (medium_info.medium_snapshot_ > max_sync_medium_scn) {
             FLOG_INFO("set schedule medium with errsim", KPC(this));
             ret = OB_SUCCESS;
