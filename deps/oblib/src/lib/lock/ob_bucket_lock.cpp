@@ -82,7 +82,7 @@ void ObBucketLock::destroy()
 {
   is_inited_ = false;
   if (NULL != latches_) {
-    for (uint64_t i = 0; i < latch_cnt_; ++i) {
+    for (int64_t i = latch_cnt_ - 1; i >= 0; --i) {
       latches_[i].~ObLatch();
     }
     ob_free(latches_);
@@ -240,7 +240,7 @@ int ObBucketLock::wrlock_all()
     }
 
     if (OB_FAIL(ret)) {
-      for (int64_t i = 0; i <= last_succ_idx; ++i) {
+      for (int64_t i = last_succ_idx; i >= 0; --i) {
         latches_[i].unlock();
       }
     }
@@ -287,7 +287,7 @@ int ObBucketLock::try_lock_all(const bool is_write_lock)
     }
 
     if (OB_FAIL(ret)) {
-      for (int64_t i = 0; i <= last_succ_idx; ++i) {
+      for (int64_t i = last_succ_idx; i >= 0; --i) {
         latches_[i].unlock();
       }
     }
@@ -306,7 +306,7 @@ int ObBucketLock::unlock_all()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "The ObBucketLock has not been inited, ", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < latch_cnt_; ++i) {
+    for (int64_t i = latch_cnt_ - 1; OB_SUCC(ret) && i >= 0; --i) {
       latches_[i].unlock();
     }
   }

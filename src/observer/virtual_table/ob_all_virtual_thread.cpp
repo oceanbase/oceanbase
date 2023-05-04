@@ -138,7 +138,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                   ObCharset::get_default_collation(ObCharset::get_default_charset()));
               break;
             }
-            case LATCH_WAIT_ADDR: {
+            case LATCH_WAIT: {
               if (OB_ISNULL(wait_addr)) {
                 cells[i].set_varchar("");
               } else {
@@ -149,19 +149,20 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                   ObCharset::get_default_collation(ObCharset::get_default_charset()));
               break;
             }
-            case LATCH_HOLD_ADDR: {
+            case LATCH_HOLD: {
               GET_OTHER_TSI_ADDR(uint32_t**, locks_addr, &ObLatch::current_locks);
+              GET_OTHER_TSI_ADDR(int8_t, slot_cnt, &ObLatch::max_lock_slot_idx)
               locks_addr = (uint32_t**)(thread_base + locks_addr_offset);
               locks_addr_[0] = 0;
-              for (auto i = 0, j = 0; i < sizeof(ObLatch::current_locks) / sizeof(uint32_t*); ++i) {
+              for (auto i = 0, j = 0; i < slot_cnt; ++i) {
                 if (OB_NOT_NULL(locks_addr[i])) {
                   bool has_segv = false;
                   uint32_t val = 0;
                   do_with_crash_restore([&] {
                     val = *locks_addr[i];
                   }, has_segv);
-                  if (!has_segv && 0 != val) {
-                    j = snprintf(locks_addr_ + j, 256 - j, "%p ", locks_addr[i]);
+                  if (!has_segv && 0 != val && j < 256) {
+                    j += snprintf(locks_addr_ + j, 256 - j, "%p ", locks_addr[i]);
                   }
                 }
               }

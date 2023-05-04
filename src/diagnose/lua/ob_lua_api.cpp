@@ -1894,12 +1894,13 @@ int dump_thread_info(lua_State *L)
         // latch_hold
         {
           GET_OTHER_TSI_ADDR(uint32_t**, locks_addr, &ObLatch::current_locks);
+          GET_OTHER_TSI_ADDR(int8_t, slot_cnt, &ObLatch::max_lock_slot_idx)
           locks_addr = (uint32_t**)(thread_base + locks_addr_offset);
           char addrs[256];
           addrs[0] = 0;
-          for (auto i = 0, offset1 = 0; i < sizeof(ObLatch::current_locks) / sizeof(uint32_t*); ++i) {
-            if (OB_NOT_NULL(locks_addr[i])) {
-              offset1 = snprintf(addrs + offset1, 256 - offset1, "%p ", locks_addr[i]);
+          for (auto i = 0, offset1 = 0; i < slot_cnt; ++i) {
+            if (OB_NOT_NULL(locks_addr[i]) && offset1 < 256) {
+              offset1 += snprintf(addrs + offset1, 256 - offset1, "%p ", locks_addr[i]);
             }
           }
           if (0 == addrs[0]) {
