@@ -13942,12 +13942,12 @@ int ObPLResolver::check_params_legal_in_body_routine(ObPLFunctionAST &routine_as
             } else {
               ObRawExpr* body_default = routine_ast.get_expr(var->get_default());
               ObRawExpr* parent_default = parent_ast.get_expr(parent_ast.get_expr_count()-1);
-              // ObExprEqualCheckContext check_ctx;
-              // check_ctx.override_const_compare_ = true;
+              ObExprEqualCheckContext check_ctx;
+              check_ctx.need_check_deterministic_ = false;
               if (NULL == parent_default || NULL == body_default) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("default expr is null.", K(ret), K(parent_default), K(body_default));
-              } else if (!body_default->same_as(*parent_default)) {
+              } else if (!body_default->same_as(*parent_default, &check_ctx)) {
                 ret = OB_ERR_DEFAULT_NOT_MATCH;
                 LOG_WARN("PLS-00593:"
                         " default value of parameter 'string' in body must match that of spec",
