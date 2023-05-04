@@ -266,7 +266,8 @@ int ObPxCoordOp::rescan()
     } else if (OB_FAIL(register_interrupt())) {
       LOG_WARN("fail to register interrupt", K(ret));
     } else if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()
-        && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_, GET_TENANT_ID()))) {
+        && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_,
+                                                                           GET_TENANT_ID(), coord_info_))) {
       LOG_WARN("fail to register detectable_id", K(ret));
     } else if (OB_FAIL(init_dfo_mgr(
                 ObDfoInterruptIdGen(interrupt_id_,
@@ -363,7 +364,8 @@ int ObPxCoordOp::inner_open()
   } else if (OB_FAIL(register_interrupt())) {
     LOG_WARN("fail to register interrupt", K(ret));
   } else if (OB_NOT_NULL(get_spec().get_phy_plan()) && get_spec().get_phy_plan()->is_enable_px_fast_reclaim()
-      && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_, GET_TENANT_ID()))) {
+      && OB_FAIL(ObDetectManagerUtils::qc_register_detectable_id_into_dm(detectable_id_, register_detectable_id_,
+                                                                         GET_TENANT_ID(), coord_info_))) {
     LOG_WARN("fail to register detectable_id", K(ret));
   } else if (OB_FAIL(init_dfo_mgr(
               ObDfoInterruptIdGen(interrupt_id_,

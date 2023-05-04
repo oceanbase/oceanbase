@@ -19,6 +19,7 @@ namespace sql {
 class ObDfo;
 class ObPxSqcHandler;
 class ObPxSqcMeta;
+class ObPxCoordInfo;
 namespace dtl {
 class ObDTLIntermResultKey;
 class ObDTLIntermResultInfo;
@@ -39,7 +40,8 @@ public:
   static void prepare_register_dm_info(common::ObRegisterDmInfo &register_dm_info, sql::ObPxSqcHandler *handler);
 
   static int qc_register_detectable_id_into_dm(common::ObDetectableId &detectable_id,
-                                               bool &register_detectable_id, uint64_t tenant_id);
+                                               bool &register_detectable_id, uint64_t tenant_id,
+                                               sql::ObPxCoordInfo& coord_info);
   static void qc_unregister_detectable_id_from_dm(const common::ObDetectableId &detectable_id,
                                                   bool &register_detectable_id);
   static int qc_register_check_item_into_dm(sql::ObDfo &dfo,
