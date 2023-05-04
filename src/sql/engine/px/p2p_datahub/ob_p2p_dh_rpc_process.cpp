@@ -29,6 +29,7 @@ int ObPxP2pDhMsgP::process()
   } else if (OB_FAIL(PX_P2P_DH.process_msg(*arg_.msg_))) {
     LOG_WARN("failed to process px p2p datahub msg on dh mgr", K(ret));
   }
+  arg_.destroy_arg();
   return ret;
 }
 

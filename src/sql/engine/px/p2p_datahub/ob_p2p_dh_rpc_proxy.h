@@ -22,6 +22,8 @@ struct ObPxP2PDatahubArg
 {
   OB_UNIS_VERSION(1);
 public:
+  void destroy_arg();
+public:
   ObP2PDatahubMsgBase *msg_;
   TO_STRING_KV(KP(msg_));
 };
