@@ -100,6 +100,9 @@ function get_os_release() {
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
         ;;
+      ubuntu)
+        version_ge "16.04" && compat_centos7 && return
+        ;;
     esac
   elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
     case "$ID" in
