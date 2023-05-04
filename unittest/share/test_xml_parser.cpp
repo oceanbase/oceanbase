@@ -2699,6 +2699,23 @@ TEST_F(TestXmlParser, test_xml_bin_to_binary)
   std::cout << "total " << text.length() << std::endl;
 }
 
+TEST_F(TestXmlParser, test_endtags_content)
+{
+  int ret = 0;
+  common::ObString xml_text(
+  "<customerName> Acme Enterprises</customerName>"
+  "<itemNo>32987457</itemNo>"
+  "</aseOrder>"
+  );
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObXmlDocument* doc = nullptr;
+  ObMulModeMemCtx* ctx = nullptr;
+  ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
+  ret = ObXmlParserUtils::parse_content_text(ctx, xml_text, doc);
+  ASSERT_EQ(OB_ERR_PARSER_SYNTAX, ret);
+}
+
+
 // class TestMemoryXmlParser : public ::testing::Test {
 // public:
 //   TestMemoryXmlParser()
