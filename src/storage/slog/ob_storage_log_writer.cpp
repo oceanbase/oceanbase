@@ -151,6 +151,12 @@ void ObStorageLogWriter::destroy()
   is_inited_ = false;
 }
 
+ObLogCursor ObStorageLogWriter::get_cur_cursor()
+{
+  ObSpinLockGuard guard(cursor_lock_);
+  return cursor_;
+}
+
 int ObStorageLogWriter::start_log(const ObLogCursor &start_cursor)
 {
   int ret = OB_SUCCESS;
@@ -555,6 +561,7 @@ int ObStorageLogWriter::advance_file_id()
 {
   int ret = OB_SUCCESS;
 
+  ObSpinLockGuard guard(cursor_lock_);
   if (file_handler_.is_opened() && OB_FAIL(file_handler_.close())) {
     STORAGE_REDO_LOG(WARN, "Fail to close file", K(ret), K(cursor_.file_id_));
   } else if (OB_FAIL(file_handler_.open(cursor_.file_id_ + 1))) {
@@ -609,6 +616,7 @@ int ObStorageLogWriter::update_log_item_cursor(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("Invalid argument", K(ret), KP(log_item));
   } else {
+    ObSpinLockGuard guard(cursor_lock_);
     log_item->start_cursor_.file_id_ = cursor_.file_id_;
     log_item->start_cursor_.log_id_ = log_item->get_seq();
     log_item->start_cursor_.offset_ = begin_offset;
