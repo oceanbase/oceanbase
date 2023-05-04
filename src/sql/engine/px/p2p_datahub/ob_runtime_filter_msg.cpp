@@ -887,9 +887,6 @@ int ObRFRangeFilterMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &target, i
   int64_t need_size = src.len_;
   if (src.is_null()) {
     target.null_ = 1;
-  } else if (OB_UNLIKELY(0 == src.len_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null src datum", K(ret));
   } else {
     if (need_size > cell_size) {
       need_size = need_size * 2;
