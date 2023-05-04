@@ -194,6 +194,11 @@ int ObMPQuery::process()
       } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
                   OB_SYS_TENANT_ID, sys_version))) {
         LOG_WARN("fail get tenant broadcast version", K(ret));
+      } else if (pkt.exist_trace_info()
+                 && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
+                                                        pkt.get_trace_info()))) {
+        LOG_WARN("fail to update trace info", K(ret));
+      } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
       } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
         LOG_WARN("fail get process extra info", K(ret));
       } else if (FALSE_IT(session.post_sync_session_info())) {
