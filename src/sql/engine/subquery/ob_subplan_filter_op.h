@@ -165,7 +165,7 @@ public:
   bool exec_param_idxs_inited_;
   // 标记每个子查询是否可以做px batch rescan
   common::ObFixedArray<bool, common::ObIAllocator> enable_px_batch_rescans_;
-  bool enable_das_batch_rescans_;
+  bool enable_das_group_rescan_;
   ExprFixedArray filter_exprs_;
   ExprFixedArray output_exprs_;
   common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> left_rescan_params_;
@@ -208,7 +208,7 @@ public:
   int fill_cur_row_das_batch_param(ObEvalCtx& eval_ctx, uint64_t current_group) const;
   int bind_das_batch_params_to_store() const;
   void get_current_group(uint64_t& current_group) const;
-  bool enable_left_das_batch() const {return MY_SPEC.enable_das_batch_rescans_;}
+  bool enable_left_das_batch() const {return MY_SPEC.enable_das_group_rescan_;}
   //for DAS batch SPF end
 
   const ObSubPlanFilterSpec &get_spec() const
