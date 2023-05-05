@@ -144,27 +144,29 @@ void ObTenantWeakReadService::wait()
 
 void ObTenantWeakReadService::destroy()
 {
-  LOG_INFO("tenant weak read service destroy", K_(tenant_id));
+  if (inited_) {
+    LOG_INFO("tenant weak read service destroy", K_(tenant_id));
 
-  cluster_service_.destroy();
+    cluster_service_.destroy();
 
-  inited_ = false;
-  tenant_id_ = OB_INVALID_ID;
-  wrs_rpc_ = NULL;
-  self_.reset();
-  last_refresh_locaction_cache_tstamp_ = 0;
-  last_post_cluster_heartbeat_tstamp_ = 0;
-  post_cluster_heartbeat_count_ = 0;
-  last_succ_cluster_heartbeat_tstamp_ = 0;
-  succ_cluster_heartbeat_count_ = 0;
-  cluster_heartbeat_interval_ = 0;
-  cluster_service_master_.reset();
-  last_self_check_tstamp_ = 0;
-  last_generate_cluster_version_tstamp_ = 0;
-  local_cluster_version_.reset();
-  force_self_check_ = false;
-  server_version_epoch_tstamp_ = 0;
-  TG_DESTROY(tg_id_);
+    inited_ = false;
+    tenant_id_ = OB_INVALID_ID;
+    wrs_rpc_ = NULL;
+    self_.reset();
+    last_refresh_locaction_cache_tstamp_ = 0;
+    last_post_cluster_heartbeat_tstamp_ = 0;
+    post_cluster_heartbeat_count_ = 0;
+    last_succ_cluster_heartbeat_tstamp_ = 0;
+    succ_cluster_heartbeat_count_ = 0;
+    cluster_heartbeat_interval_ = 0;
+    cluster_service_master_.reset();
+    last_self_check_tstamp_ = 0;
+    last_generate_cluster_version_tstamp_ = 0;
+    local_cluster_version_.reset();
+    force_self_check_ = false;
+    server_version_epoch_tstamp_ = 0;
+    TG_DESTROY(tg_id_);
+  }
 }
 
 SCN ObTenantWeakReadService::get_server_version() const
