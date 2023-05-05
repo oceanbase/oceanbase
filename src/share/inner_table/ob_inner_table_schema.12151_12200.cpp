@@ -5329,7 +5329,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
@@ -5345,7 +5345,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
@@ -5361,7 +5361,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
@@ -5377,7 +5377,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_schema(ObTableSchema &table
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
   }
@@ -5993,7 +5993,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
@@ -6011,7 +6011,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
@@ -6029,7 +6029,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
@@ -6047,7 +6047,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_all_virtual_sql_plan_monito
       sizeof(ObPreciseDateTime), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false, //is_autoincrement
       false, //is_on_update_for_timestamp
       false, //is_hidden
