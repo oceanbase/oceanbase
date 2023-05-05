@@ -2152,7 +2152,7 @@ int cast_not_expected(const sql::ObExpr &expr,
                   sql::ObEvalCtx &ctx,
                   sql::ObDatum &res_datum)
 {
-  int ret = OB_ERR_UNEXPECTED;
+  int ret = lib::is_oracle_mode() ? OB_ERR_INVALID_TYPE_FOR_OP : OB_ERR_UNEXPECTED;
   UNUSED(ctx);
   UNUSED(res_datum);
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;

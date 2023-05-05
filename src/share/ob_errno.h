@@ -1403,6 +1403,10 @@ constexpr int OB_EXTRACTVALUE_NOT_LEAF_NODE = -7410;
 constexpr int OB_XML_INSERT_FRAGMENT = -7411;
 constexpr int OB_ERR_NO_ORDER_MAP_SQL = -7412;
 constexpr int OB_ERR_XMLELEMENT_ALIASED = -7413;
+constexpr int OB_INVALID_ALTERATIONG_DATATYPE = -7414;
+constexpr int OB_INVALID_MODIFICATION_OF_COLUMNS = -7415;
+constexpr int OB_ERR_NULL_FOR_XML_CONSTRUCTOR = -7416;
+constexpr int OB_ERR_XML_INDEX = -7417;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -3451,6 +3455,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_XML_INSERT_FRAGMENT__USER_ERROR_MSG "Cannot insert XML fragments"
 #define OB_ERR_NO_ORDER_MAP_SQL__USER_ERROR_MSG "cannot ORDER objects without MAP or ORDER method"
 #define OB_ERR_XMLELEMENT_ALIASED__USER_ERROR_MSG "parameter 1 of function XMLELEMENT must be aliased"
+#define OB_INVALID_ALTERATIONG_DATATYPE__USER_ERROR_MSG "invalid alteration of datatype"
+#define OB_INVALID_MODIFICATION_OF_COLUMNS__USER_ERROR_MSG "invalid modification of columns"
+#define OB_ERR_NULL_FOR_XML_CONSTRUCTOR__USER_ERROR_MSG "Expected XML tag , got no content"
+#define OB_ERR_XML_INDEX__USER_ERROR_MSG "cannot create index on expression with datatype ADT '%.*s'"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -5521,6 +5529,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_XML_INSERT_FRAGMENT__ORA_USER_ERROR_MSG "ORA-19010: Cannot insert XML fragments"
 #define OB_ERR_NO_ORDER_MAP_SQL__ORA_USER_ERROR_MSG "ORA-22950: cannot ORDER objects without MAP or ORDER method"
 #define OB_ERR_XMLELEMENT_ALIASED__ORA_USER_ERROR_MSG "ORA-19208: parameter 1 of function XMLELEMENT must be aliased"
+#define OB_INVALID_ALTERATIONG_DATATYPE__ORA_USER_ERROR_MSG "ORA-22858: invalid alteration of datatype"
+#define OB_INVALID_MODIFICATION_OF_COLUMNS__ORA_USER_ERROR_MSG "ORA-22859: invalid modification of columns"
+#define OB_ERR_NULL_FOR_XML_CONSTRUCTOR__ORA_USER_ERROR_MSG "ORA-19032: Expected XML tag , got no content"
+#define OB_ERR_XML_INDEX__ORA_USER_ERROR_MSG "ORA-02327: cannot create index on expression with datatype ADT '%.*s'"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -5877,7 +5889,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2066];
+extern int g_all_ob_errnos[2070];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

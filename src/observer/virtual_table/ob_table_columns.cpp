@@ -761,6 +761,8 @@ int ObTableColumns::deduce_column_attributes(
       }
     } else if (result_type.is_user_defined_sql_type()) {
       sub_type = result_type.get_subschema_id();
+    } else if (result_type.get_udt_id() == T_OBJ_XML) {
+      sub_type = T_OBJ_XML;
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
