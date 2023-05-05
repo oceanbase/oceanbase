@@ -177,7 +177,7 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     TRANS_LOG(WARN, "tx log adapter init error", KR(ret));
   } else if (OB_NOT_NULL(log_adapter) && OB_FALSE_IT(tx_log_adapter_ = log_adapter)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ls_log_writer_.init(ls_id, tx_log_adapter_, this))) {
+  } else if (OB_FAIL(ls_log_writer_.init(tenant_id, ls_id, tx_log_adapter_, this))) {
     TRANS_LOG(WARN, "ls_log_writer init fail", KR(ret));
   } else {
     is_inited_ = true;
