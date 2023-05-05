@@ -9814,7 +9814,7 @@ int ObDDLResolver::resolve_hash_partition_elements(ObPartitionedStmt *stmt,
           LOG_WARN("failed to add partition", K(ret));
         } else if (stmt->use_def_sub_part() &&
                    OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_INVALID_SUB_PARTITION_TYPE;
           LOG_WARN("individual subpartition with sub part template", K(ret));
         } else if (!stmt->use_def_sub_part()) {
           // resolve non template
