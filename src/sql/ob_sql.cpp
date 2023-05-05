@@ -1537,7 +1537,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ectx.set_is_ps_prepare_stage(true);
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare stmtement", "sess_id", session.get_sessid(),
+    LOG_INFO("Begin to handle prepare statement", "sess_id", session.get_sessid(),
              "proxy_sess_id", session.get_proxy_sessid(), K(stmt));
 #endif
 
@@ -2007,7 +2007,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
 #ifndef NDEBUG
-      LOG_INFO("Begin to handle execute stmtement", "sess_id", session.get_sessid(),
+      LOG_INFO("Begin to handle execute statement", "sess_id", session.get_sessid(),
                "proxy_sess_id", session.get_proxy_sessid(), K(sql));
 #endif
 
