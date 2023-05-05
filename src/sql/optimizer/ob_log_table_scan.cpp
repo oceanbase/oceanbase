@@ -719,36 +719,12 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
   } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
     LOG_WARN("failed to check whether stmt has mbr column", K(ret));
-  } else if (has_lob_column || (is_index_global_ && index_back_) || get_index_back()) {
-    if (is_heap_table && is_index_global_ && index_back_) {
-      if (OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
-        LOG_WARN("failed to get part column exprs", K(ret));
-      }
-    } else if (has_lob_column) {
-      ObSEArray<ObRawExpr*, 8> tmp_part_exprs;
-      if (OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, tmp_part_exprs))) {
-        LOG_WARN("failed to get part column exprs", K(ret));
-      } else if ((is_index_global_ && index_back_) || get_index_back()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_part_exprs.count(); ++i) {
-          ObRawExpr *expr = tmp_part_exprs.at(i);
-          if (OB_ISNULL(expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (expr->is_column_ref_expr() &&
-                     static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
-            // do nothing
-          } else if (OB_FAIL(part_exprs_.push_back(expr))) {
-            LOG_WARN("failed to push back part expr", K(ret));
-          }
-        }
-      } else if (OB_FAIL(append(part_exprs_, tmp_part_exprs))) {
-        LOG_WARN("failed to appen part exprs", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
-      LOG_WARN("failed to generate rowkey exprs", K(ret));
-    } else { /*do nothing*/ }
+  } else if (is_heap_table && is_index_global_ && index_back_ &&
+             OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
+    LOG_WARN("failed to get part column exprs", K(ret));
+  } else if ((has_lob_column || index_back_) &&
+             OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
+    LOG_WARN("failed to generate rowkey exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
