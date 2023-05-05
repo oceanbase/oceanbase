@@ -258,93 +258,58 @@ int ObLogPartTransParser::parse_stmts_(
           LOG_ERROR("failed to filter mutator table lock data", KR(ret), K(redo_data_len), K(pos));
         }
       } else if (MutatorType::MUTATOR_ROW == mutator_type) {
+        bool is_ignored = false;
+        MutatorRow *row = NULL;
         ObCDCTableInfo table_info;
 
-        if (OB_FAIL(get_table_info_of_tablet_(tenant, task, tablet_id, table_info))) {
-          LOG_ERROR("get_table_info_of_tablet_ failed", KR(ret), KPC(tenant), K(task), K(redo_log_entry_task), K(tablet_id));
-        }
-        // handle MutatorType::MUTATOR_ROWDATA
-        else if (OB_FAIL(filter_row_data_(tenant, redo_data, redo_data_len, pos, table_info, task, need_filter_row, row_size, stop_flag))) {
-          LOG_ERROR("filter_row_data_ fail", KR(ret), KPC(tenant), K(pos), K(task),
-              K(tablet_id), K(table_info), K(need_filter_row), K(row_size));
-        } else if (need_filter_row) {
-          // filter this row and move pos to next row
-          pos += row_size;
-        } else {
-          // Deserialising row data
-          void *mutator_row_buf = NULL;
-          MutatorRow *row = NULL;
+        if (OB_FAIL(parse_mutator_row_(
+            tenant,
+            tablet_id,
+            redo_data,
+            redo_data_len,
+            pos,
+            task,
+            redo_log_entry_task,
+            row,
+            table_info,
+            is_ignored))) {
+          LOG_ERROR("parse_mutator_row_ failed", KR(ret),
+              "tls_id", task.get_tls_id(),
+              "trans_id", task.get_trans_id(),
+              K(tablet_id), K(redo_log_entry_task), K(row_index));
+        } else if (! is_ignored) {
+          // parse row data
           if (is_ddl_trans) {
-            mutator_row_buf = task.alloc(sizeof(MutatorRow));
-          } else {
-            mutator_row_buf = redo_log_entry_task.alloc(sizeof(MutatorRow));
+            if (is_all_ddl_operation_lob_aux_tablet(task.get_ls_id(), tablet_id)) {
+              LOG_INFO("is_all_ddl_operation_lob_aux_tablet", "tls_id", task.get_tls_id(),
+                  "trans_id", task.get_trans_id(), K(tablet_id));
+
+              if (OB_FAIL(parse_ddl_lob_aux_stmts_(table_info.get_table_id(), row_index, *row, task))) {
+                LOG_ERROR("parse_ddl_lob_aux_stmts_ failed", KR(ret), "tls_id", task.get_tls_id(),
+                  "trans_id", task.get_trans_id(), K(tablet_id));
+              }
+              // data in non ddl table already filtered while parse_mutator_row_
+            } else if (OB_FAIL(parse_ddl_stmts_(
+                row_index,
+                tenant->get_all_ddl_operation_schema_info(),
+                *row,
+                task,
+                stop_flag))) {
+              LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(row_index), K(tablet_id), K(*row), K(task));
+            }
+          } else if (OB_FAIL(parse_dml_stmts_(
+              table_info.get_table_id(),
+              row_index,
+              *row,
+              redo_log_entry_task,
+              task))) {
+            LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index), K(*row), K(redo_log_entry_task), K(task));
           }
 
-          if (OB_ISNULL(row = static_cast<MutatorRow *>(mutator_row_buf))) {
-            LOG_ERROR("alloc memory for MutatorRow fail", K(sizeof(MutatorRow)));
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-          } else {
-            bool need_rollback = false;
-            // FIXME: Destroy MutatorRow from regular channels and free memory
-            // Currently destroyed in DmlStmtTask and DdlStmtTask, but no memory is freed
-            // Since this memory is allocated by the Allocator of the PartTransTask, it is guaranteed not to leak
-            if (is_ddl_trans) {
-              new (row) MutatorRow(task.get_allocator());
-            } else {
-              new (row) MutatorRow(redo_log_entry_task.get_allocator());
-            }
-
-            // Deserialising row data
-            if (OB_FAIL(row->deserialize(redo_data, redo_data_len, pos))) {
-              LOG_ERROR("deserialize mutator row fail", KR(ret), KPC(row), K(redo_data_len), K(pos));
-            }
-            // First determine if it is a rollback savepoint by the Row
-            else if (OB_FAIL(check_row_need_rollback_(task, *row, need_rollback))) {
-              LOG_ERROR("check_row_need_rollback_ failed", KR(ret), K(task), K(need_rollback), KPC(row));
-            } else if (need_rollback) {
-              LOG_DEBUG("rollback row by RollbackToSavepoint", KPC(row), K(redo_log_node), K(task));
-              row->~MutatorRow();
-              task.free(row);
-              row = NULL;
-//            }
-            // For DDL partitions, only parse data from the same table and filter data from other unrelated
-            // tables such as index tables; prevent the generation of non-DDL type statements.
-            //
-            // For DML partitioning, you cannot parse only the table data, because Sequencer needs the data
-            // of the unique index table for dependency analysis and to ensure data consistency.
-// TODO revert row that not belons to ddl_table and ls_table
-//            else if (is_ddl_trans && task.get_partition().get_table_id() != row->table_id_) {
-//              row->~MutatorRow();
-//              task.free(row);
-//              row = NULL;
-            } else {
-              // parse row data
-              if (is_ddl_trans) {
-                if (is_all_ddl_operation_lob_aux_tablet(task.get_ls_id(), tablet_id)) {
-                  LOG_INFO("is_all_ddl_operation_lob_aux_tablet", "tls_id", task.get_tls_id(),
-                      "trans_id", task.get_trans_id(), K(tablet_id));
-
-                  if (OB_FAIL(parse_ddl_lob_aux_stmts_(table_info.get_table_id(), row_index, *row, task))) {
-                    LOG_ERROR("parse_ddl_lob_aux_stmts_ failed", KR(ret), "tls_id", task.get_tls_id(),
-                      "trans_id", task.get_trans_id(), K(tablet_id));
-                  }
-                } else if (! is_ddl_tablet(task.get_ls_id(), tablet_id)) {
-                  LOG_DEBUG("filter non-__all_ddl_operation table data", "tls_id", task.get_tls_id(),
-                      "trans_id", task.get_trans_id(), K(tablet_id));
-                } else if (OB_FAIL(parse_ddl_stmts_(row_index, tenant->get_all_ddl_operation_schema_info(),
-                        *row, task, stop_flag))) {
-                  LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(row_index), K(tablet_id), K(*row), K(task));
-                }
-              } else if (OB_FAIL(parse_dml_stmts_(table_info.get_table_id(), row_index, *row, redo_log_entry_task, task))) {
-                LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index), K(*row), K(redo_log_entry_task), K(task));
-              }
-
-              if (OB_SUCC(ret)) {
-                ++row_index;
-              }
-            }
+          if (OB_SUCC(ret)) {
+            ++row_index;
           }
-        } // need_filter_row=false
+        } // need_ignore_row=false
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_ERROR("not support mutator type", KR(ret), K(mutator_type));
@@ -402,6 +367,127 @@ int ObLogPartTransParser::filter_mutator_table_lock_(const char *buf, const int6
     cur_pos = pos;
   }
   return ret;
+}
+
+int ObLogPartTransParser::parse_mutator_row_(
+    ObLogTenant *tenant,
+    const ObTabletID &tablet_id,
+    const char *redo_data,
+    const int64_t redo_data_len,
+    int64_t &pos,
+    PartTransTask &part_trans_task,
+    ObLogEntryTask &redo_log_entry_task,
+    MutatorRow *&row,
+    ObCDCTableInfo &table_info,
+    bool &is_ignored)
+{
+  int ret = OB_SUCCESS;
+  IObLogPartMgr &part_mgr = tenant->get_part_mgr();
+  is_ignored = false;
+  row = NULL;
+  bool need_rollback = false;
+  bool need_filter = false;
+  bool is_in_table_id_cache = false;
+  const char *filter_reason = NULL;
+
+  if (OB_FAIL(alloc_mutator_row_(part_trans_task, redo_log_entry_task, row))) {
+    LOG_ERROR("alloc_mutator_row_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task));
+  } else if (OB_FAIL(row->deserialize(redo_data, redo_data_len, pos))) {
+    LOG_ERROR("deserialize mutator row fail", KR(ret), KPC(row), K(redo_data_len), K(pos));
+  } else if (OB_FAIL(check_row_need_rollback_(part_trans_task, *row, need_rollback))) {
+    LOG_ERROR("check_row_need_rollback_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task), KPC(row));
+  } else if (need_rollback) {
+    LOG_DEBUG("rollback row by RollbackToSavepoint",
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id(),
+        "row_seq_no", row->seq_no_);
+  } else if (OB_FAIL(get_table_info_of_tablet_(tenant, part_trans_task, tablet_id, table_info))) {
+    LOG_ERROR("get_table_info_of_tablet_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task), KPC(row));
+  } else if (table_info.is_index_table()) {
+    need_filter = true;
+    filter_reason = "INDEX_TABLE";
+  } else if (part_trans_task.is_ddl_trans() && ! is_ddl_tablet(part_trans_task.get_ls_id(), tablet_id)) {
+    need_filter = true;
+    filter_reason = "NON_DDL_TABLE_DATA";
+  } else if (OB_FAIL(part_mgr.is_exist_table_id_cache(table_info.get_table_id(), is_in_table_id_cache))) {
+    LOG_ERROR("check is_exist_table_id_cache failed", KR(ret),
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id(),
+        K(tablet_id), K(table_info));
+  } else {
+    need_filter = ! is_in_table_id_cache;
+    filter_reason = "NOT_EXIST_IN_TB_ID_CACHE";
+  }
+
+  if (need_filter) {
+    LOG_DEBUG("filter mutator row",
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id(),
+        K(tablet_id),
+        K(table_info),
+        K(filter_reason));
+  }
+
+  if (OB_SUCC(ret)) {
+    is_ignored = need_rollback || need_filter;
+  }
+
+  if (OB_FAIL(ret) || is_ignored) {
+    free_mutator_row_(part_trans_task, redo_log_entry_task, row);
+  } else if (OB_ISNULL(row)) {
+    ret = OB_INVALID_DATA;
+  }
+
+  return ret;
+}
+
+int ObLogPartTransParser::alloc_mutator_row_(
+    PartTransTask &part_trans_task,
+    ObLogEntryTask &redo_log_entry_task,
+    MutatorRow *&row)
+{
+  int ret = OB_SUCCESS;
+  void *mutator_row_buf = NULL;
+  row = NULL;
+  const bool is_ddl_trans = part_trans_task.is_ddl_trans();
+
+  if (is_ddl_trans) {
+    mutator_row_buf = part_trans_task.alloc(sizeof(MutatorRow));
+  } else {
+    mutator_row_buf = redo_log_entry_task.alloc(sizeof(MutatorRow));
+  }
+
+  if (OB_ISNULL(row = static_cast<MutatorRow *>(mutator_row_buf))) {
+    LOG_ERROR("alloc memory for MutatorRow fail", K(sizeof(MutatorRow)));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    // FIXME: Destroy MutatorRow from regular channels and free memory
+    // Currently destroyed in DmlStmtTask and DdlStmtTask, but no memory is freed
+    // Since this memory is allocated by the Allocator of the PartTransTask, it is guaranteed not to leak
+    if (is_ddl_trans) {
+      new (row) MutatorRow(part_trans_task.get_allocator());
+    } else {
+      new (row) MutatorRow(redo_log_entry_task.get_allocator());
+    }
+  }
+
+  return ret;
+}
+
+void ObLogPartTransParser::free_mutator_row_(
+    PartTransTask &part_trans_task,
+    ObLogEntryTask &redo_log_entry_task,
+    MutatorRow *&row)
+{
+  if (OB_NOT_NULL(row)) {
+    row->~MutatorRow();
+    if (part_trans_task.is_ddl_trans()) {
+      part_trans_task.free(row);
+    } else {
+      redo_log_entry_task.free(row);
+    }
+    row = NULL;
+  }
 }
 
 int ObLogPartTransParser::get_table_info_of_tablet_(
