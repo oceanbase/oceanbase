@@ -745,14 +745,14 @@ int ObTransformAggrSubquery::get_trans_param(
     // do nothing
   } else if (stmt.is_select_stmt()) {
     ObSelectStmt& sel_stmt = static_cast<ObSelectStmt&>(stmt);
-    if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_group_exprs()))) {
+    if (sel_stmt.has_rollup()) {
+      // we can create spj view with group-by pushed down for normal group by
+    } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_group_exprs()))) {
       LOG_WARN("failed to append group by exprs", K(ret));
     } else if (OB_FAIL(append(pre_group_by_exprs, sel_stmt.get_aggr_items()))) {
       LOG_WARN("failed to append aggr items", K(ret));
-    } else if (sel_stmt.has_rollup() || sel_stmt.is_scala_group_by()) {
-      // do nothing
-      // 1. there is no group by clause, we can directly pullup subqueries
-      // 1. there is normal group by, we can create spj view with group-by pushed down
+    } else if (sel_stmt.is_scala_group_by()) {
+      // there is no group by clause, we can directly pullup subqueries
     } else if (OB_FAIL(append(post_group_by_exprs, sel_stmt.get_having_exprs()))) {
       LOG_WARN("failed to append having exprs", K(ret));
     } else if (OB_FAIL(sel_stmt.get_select_exprs(post_group_by_exprs))) {
