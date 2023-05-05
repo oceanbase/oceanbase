@@ -120,6 +120,7 @@ int ObLockWaitMgr::init()
     TRANS_LOG(WARN, "can't init row_holder", KR(ret));
   } else {
     share::ObThreadPool::set_run_wrapper(MTL_CTX());
+    last_check_session_idle_ts_ = ObClockGenerator::getClock();
     is_inited_ = true;
   }
   TRANS_LOG(INFO, "LockWaitMgr.init", K(ret));
@@ -423,7 +424,6 @@ ObLink* ObLockWaitMgr::check_timeout()
   ObLink* tail = NULL;
   Node* iter = NULL;
   Node* node2del = NULL;
-  static int64_t last_check_session_idle_ts = 0;
   bool need_check_session = false;
   const int64_t MAX_WAIT_TIME_US = 10 * 1000 * 1000;
   DeadlockedSessionArray *deadlocked_session = NULL;
@@ -431,9 +431,9 @@ ObLink* ObLockWaitMgr::check_timeout()
   // FIX:
   // lower down session idle check frequency to 10s
   int64_t curr_ts = ObClockGenerator::getClock();
-  if (curr_ts - last_check_session_idle_ts > MAX_WAIT_TIME_US) {
+  if (curr_ts - last_check_session_idle_ts_ > MAX_WAIT_TIME_US) {
     need_check_session = true;
-    last_check_session_idle_ts = curr_ts;
+    last_check_session_idle_ts_ = curr_ts;
   }
   {
     CriticalGuard(get_qs());

@@ -332,6 +332,7 @@ private:
   Hash hash_;
   int64_t sequence_[LOCK_BUCKET_COUNT];
   char hash_buf_[sizeof(SpHashNode) * LOCK_BUCKET_COUNT];
+  int64_t last_check_session_idle_ts_;
 
 public:
   int fullfill_row_key(uint64_t hash, char *row_key, int64_t length);
