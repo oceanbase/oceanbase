@@ -367,7 +367,6 @@ int ObVariableSetExecutor::calc_subquery_expr_value(ObExecContext &ctx,
       ObSqlString tmp_expr_subquery;
       ObSqlString expr_subquery;
       ObObjPrintParams print_params(session_info->get_timezone_info());
-      print_params.need_print_converter_ = false;
       ObRawExprPrinter expr_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH,
                                     &pos, ctx.get_sql_ctx()->schema_guard_, print_params);
       if (OB_FAIL(expr_printer.do_print(expr, T_NONE_SCOPE, true, true))) {

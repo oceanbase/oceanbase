@@ -3030,36 +3030,15 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
       case T_FUN_SYS_JSON_MERGE_PATCH:
       case T_FUN_SYS_JSON_EXISTS: {
         if (lib::is_mysql_mode() && (expr_type == T_FUN_SYS_JSON_ARRAY || expr_type == T_FUN_SYS_JSON_MERGE_PATCH)) {
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
-                int64_t i = 0;
-          for (; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-            PRINT_EXPR(expr->get_param_expr(i));
-            DATA_PRINTF(",");
-          }
-          if (OB_SUCC(ret)) {
-            if (i > 0) {
-              --*pos_;
-            }
-            DATA_PRINTF(")");
-          }
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+          OZ(inner_print_fun_params(*expr));
         } else if(lib::is_oracle_mode() || T_FUN_SYS_JSON_VALUE == expr_type) {
           if (OB_FAIL(print_json_expr(expr))) {
             LOG_WARN("fail to print json expr", K(ret), K(*expr));
           }
         } else { // mysql default
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
-          int64_t param_count = expr->get_param_count();
-          int64_t i = 0;
-          for (; OB_SUCC(ret) && i < param_count; ++i) {
-            PRINT_EXPR(expr->get_param_expr(i));
-            DATA_PRINTF(",");
-          }
-          if (OB_SUCC(ret)) {
-            if (i > 0) {
-              --*pos_;
-            }
-            DATA_PRINTF(")");
-          }
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+          OZ(inner_print_fun_params(*expr));
         }
         break;
       }
@@ -3123,6 +3102,11 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_FUN_SYS_XML_EXTRACT: {
+        DATA_PRINTF("extract");
+        OZ(inner_print_fun_params(*expr));
+        break;
+      }
       case T_FUN_ENUM_TO_STR:
       case T_FUN_SET_TO_STR:
       case T_FUN_ENUM_TO_INNER_TYPE:
@@ -3135,56 +3119,51 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
-      default: {
-        // substr
-        // date, month
-        // cur_date, current_date, cur_time, current_time
-        // func_name
-        if (T_FUN_SYS_ORA_DECODE == expr->get_expr_type()) {
-          //同一个函数 在Oracle下名为decode， 在MySQL下名为ora_decode
-          // for
-          // 保证SQL反拼不会出错
-          if (lib::is_oracle_mode()) {
-            func_name = "decode";
+      case T_OP_CONV: {
+        DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
+        int64_t param_count = expr->get_param_count();
+        int64_t i = 0;
+        for (; OB_SUCC(ret) && i < param_count; ++i) {
+          if (i == 0) {
+            PRINT_EXPR(expr->get_param_expr(i));
+            DATA_PRINTF(",");
+          } else if (func_name.case_compare("BIN") == 0 || func_name.case_compare("OCT") == 0) {
+            // do nothing
           } else {
-            func_name = "ora_decode";
+            PRINT_EXPR(expr->get_param_expr(i));
+            DATA_PRINTF(",");
           }
-        }
-        if (T_FUN_SYS_XML_EXTRACT == expr->get_expr_type()) {
-          func_name = "extract";
-        }
-        if (T_FUN_UDF == expr->get_expr_type()) {
-          PRINT_QUOT;
-          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
-          PRINT_QUOT;
-          DATA_PRINTF("(");
-        } else {
-          DATA_PRINTF("%.*s(", LEN_AND_PTR(func_name));
         }
         if (OB_SUCC(ret)) {
-          int64_t param_count = expr->get_param_count();
-          int64_t i = 0;
-          for (; OB_SUCC(ret) && i < param_count; ++i) {
-            if (i == 0) {
-              PRINT_EXPR(expr->get_param_expr(i));
-              DATA_PRINTF(",");
-            } else if (func_name.compare("BIN") == 0 || func_name.compare("OCT") == 0) {
-              if (print_params_.need_print_converter_) {
-                PRINT_EXPR(expr->get_param_expr(i));
-                DATA_PRINTF(",");
-              }
-            } else {
-              PRINT_EXPR(expr->get_param_expr(i));
-              DATA_PRINTF(",");
-            }
+          if (i > 0) {
+            --*pos_;
           }
-          if (OB_SUCC(ret)) {
-            if (i > 0) {
-              --*pos_;
-            }
-            DATA_PRINTF(")");
-          }
+          DATA_PRINTF(")");
         }
+        break;
+      }
+      case T_FUN_SYS_ORA_DECODE: {
+        //同一个函数 在Oracle下名为decode， 在MySQL下名为ora_decode
+        // for
+        // 保证SQL反拼不会出错
+        if (lib::is_oracle_mode()) {
+          DATA_PRINTF("decode");
+        } else {
+          DATA_PRINTF("ora_decode");
+        }
+        OZ(inner_print_fun_params(*expr));
+        break;
+      }
+      case T_FUN_UDF: {
+        PRINT_QUOT;
+        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        PRINT_QUOT;
+        OZ(inner_print_fun_params(*expr));
+        break;
+      }
+      default: {
+        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        OZ(inner_print_fun_params(*expr));
         break;
       }
     }
