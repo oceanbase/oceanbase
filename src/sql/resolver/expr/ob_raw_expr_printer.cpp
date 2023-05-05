@@ -4596,11 +4596,14 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
             DATA_PRINTF(",");
           }
           PRINT_EXPR(expr->get_param_expr(i));
-          ObString attr_key = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 1))->get_value().get_string();
-          if (!attr_key.empty()) {
+          ObObj attr_key_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 1))->get_value();
+          if (attr_key_obj.get_type() == ObObjType::ObUnknownType) {
+            DATA_PRINTF(" as evalname ");
+            PRINT_EXPR(expr->get_param_expr(i + 1));
+          } else if (!attr_key_obj.get_string().empty()) {
             // While the result obtained during anti-spelling has been parsed,
             // so adding all double quotes can achieve the desired result
-            DATA_PRINTF(" as \"%.*s\"", LEN_AND_PTR(attr_key));
+            DATA_PRINTF(" as \"%.*s\"", LEN_AND_PTR(attr_key_obj.get_string()));
           }
         }
         DATA_PRINTF(")");

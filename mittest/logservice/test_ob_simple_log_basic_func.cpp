@@ -491,23 +491,20 @@ TEST_F(TestObSimpleLogClusterBasicFunc, out_of_disk_space)
   EXPECT_EQ(OB_SUCCESS, get_palf_env(server_idx, palf_env));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, create_scn, leader_idx, leader));
   update_disk_options(leader_idx, MIN_DISK_SIZE_PER_PALF_INSTANCE/PALF_PHY_BLOCK_SIZE);
-
-  LSN max_lsn;
-  for (int64_t i =0; i< 20;++i)
-  {
-    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, MAX_LOG_BODY_SIZE));
-    max_lsn = leader.palf_handle_impl_->get_max_lsn();
-    wait_lsn_until_flushed(max_lsn, leader);
-    usleep(50*1000);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 6*31+1, id, MAX_LOG_BODY_SIZE));
+  LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
+  while (LSN(6*PALF_BLOCK_SIZE) > log_storage->log_tail_) {
+    usleep(500);
   }
-
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 7, id, MAX_LOG_BODY_SIZE));
-  max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, MAX_LOG_BODY_SIZE));
+  while (LSN(6*PALF_BLOCK_SIZE + 20 * MAX_LOG_BODY_SIZE) > log_storage->log_tail_) {
+    usleep(500);
+  }
+  LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
   wait_lsn_until_flushed(max_lsn, leader);
-  usleep(10*1000);
-
-  PALF_LOG(INFO, " out of disk max_lsn", K(max_lsn));
-  ASSERT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
+  PALF_LOG(INFO, "out of disk max_lsn", K(max_lsn));
+  usleep(palf::BlockGCTimerTask::BLOCK_GC_TIMER_INTERVAL_MS + 5*10000);
+  EXPECT_EQ(OB_LOG_OUTOF_DISK_SPACE, submit_log(leader, 1, id, MAX_LOG_BODY_SIZE));
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_ = 5 * MIN_DISK_SIZE_PER_PALF_INSTANCE;
 }
 

@@ -1,0 +1,16 @@
+{
+    "name": "OceanBase",
+    "dockerFile": "Dockerfile",
+    "postAttachCommand": "bash",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "cschleiden.vscode-github-actions",
+                "vadimcn.vscode-lldb"
+            ],
+            "settings": {
+                "editor.formatOnSave": true
+            }
+        }
+    }
+}

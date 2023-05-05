@@ -342,12 +342,12 @@ Query Plan
 |1 |└─PX COORDINATOR                        |        |
 |2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
 |3 |    └─SHARED HASH JOIN                  |        |
-|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|4 |      ├─PART JOIN FILTER CREATE         |:RF0000 |
 |5 |      │ └─EXCHANGE IN DISTR             |        |
 |6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
 |7 |      │     └─PX BLOCK ITERATOR         |        |
 |8 |      │       └─TABLE RANGE SCAN        |t_p4    |
-|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:RF0000 |
 |10|        └─TABLE RANGE SCAN              |t_p     |
 ======================================================
 Outputs & filters:
@@ -360,6 +360,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c1]), other_conds(nil)
   4 - output([t_p4.c1]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_p4.c1]
   5 - output([t_p4.c1]), filter(nil), rowset=256
   6 - output([t_p4.c1]), filter(nil), rowset=256
       dop=10
@@ -398,12 +399,12 @@ Query Plan
 |1 |└─PX COORDINATOR                        |        |
 |2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
 |3 |    └─SHARED HASH JOIN                  |        |
-|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|4 |      ├─PART JOIN FILTER CREATE         |:RF0000 |
 |5 |      │ └─EXCHANGE IN DISTR             |        |
 |6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
 |7 |      │     └─PX BLOCK ITERATOR         |        |
 |8 |      │       └─TABLE FULL SCAN         |t_p4    |
-|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:RF0000 |
 |10|        └─TABLE RANGE SCAN              |t_p     |
 ======================================================
 Outputs & filters:
@@ -416,6 +417,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_p4.c2]
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
       dop=10
@@ -439,12 +441,12 @@ Query Plan
 |1 |└─PX COORDINATOR                        |        |
 |2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
 |3 |    └─SHARED HASH JOIN                  |        |
-|4 |      ├─PART JOIN FILTER CREATE         |:BF0000 |
+|4 |      ├─PART JOIN FILTER CREATE         |:RF0000 |
 |5 |      │ └─EXCHANGE IN DISTR             |        |
 |6 |      │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000|
 |7 |      │     └─PX BLOCK ITERATOR         |        |
 |8 |      │       └─TABLE FULL SCAN         |t_p4    |
-|9 |      └─PX BLOCK HASH JOIN-FILTER       |:BF0000 |
+|9 |      └─PX BLOCK HASH JOIN-FILTER       |:RF0000 |
 |10|        └─TABLE RANGE SCAN              |t_p     |
 ======================================================
 Outputs & filters:
@@ -457,6 +459,7 @@ Outputs & filters:
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_p4.c2]), other_conds(nil)
   4 - output([t_p4.c2]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_p4.c2]
   5 - output([t_p4.c2]), filter(nil), rowset=256
   6 - output([t_p4.c2]), filter(nil), rowset=256
       dop=10
@@ -630,12 +633,13 @@ Query Plan
 |1 |└─PX COORDINATOR                        |        |
 |2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
 |3 |    └─HASH JOIN                         |        |
-|4 |      ├─PX BLOCK ITERATOR               |        |
-|5 |      │ └─TABLE FULL SCAN               |t_s     |
-|6 |      └─EXCHANGE IN DISTR               |        |
-|7 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
-|8 |          └─PX BLOCK ITERATOR           |        |
-|9 |            └─TABLE FULL SCAN           |t_p     |
+|4 |      ├─PART JOIN FILTER CREATE         |:RF0000 |
+|5 |      │ └─PX BLOCK ITERATOR             |        |
+|6 |      │   └─TABLE FULL SCAN             |t_s     |
+|7 |      └─EXCHANGE IN DISTR               |        |
+|8 |        └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |          └─PX BLOCK HASH JOIN-FILTER   |:RF0000 |
+|10|            └─TABLE FULL SCAN           |t_p     |
 ======================================================
 Outputs & filters:
 -------------------------------------
@@ -647,15 +651,17 @@ Outputs & filters:
   3 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       equal_conds([t_p.c1 = t_s.c1]), other_conds(nil)
   4 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_s.c1]
   5 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
+  6 - output([t_s.c1], [t_s.c2], [t_s.c3]), filter(nil), rowset=256
       access([t_s.c1], [t_s.c2], [t_s.c3]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([t_s.c1]), range(MIN ; MAX)always true
-  6 - output([t_p.c1]), filter(nil), rowset=256
   7 - output([t_p.c1]), filter(nil), rowset=256
-      dop=10
   8 - output([t_p.c1]), filter(nil), rowset=256
+      dop=10
   9 - output([t_p.c1]), filter(nil), rowset=256
+ 10 - output([t_p.c1], [PARTITION_ID]), filter(nil), rowset=256
       access([t_p.c1]), partitions(p[0-3])
       is_index_back=false, is_global_index=false,
       range_key([t_p.c1]), range(MIN ; MAX)always true
@@ -1910,12 +1916,12 @@ Query Plan
 |2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
 |3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
 |4 |      └─SHARED HASH JOIN                  |               |
-|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|5 |        ├─PART JOIN FILTER CREATE         |:RF0000        |
 |6 |        │ └─EXCHANGE IN DISTR             |               |
 |7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
 |8 |        │     └─PX BLOCK ITERATOR         |               |
 |9 |        │       └─TABLE FULL SCAN         |t_temp_p5      |
-|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:RF0000        |
 |11|          └─TABLE FULL SCAN               |t_temp_p       |
 ===============================================================
 Outputs & filters:
@@ -1932,6 +1938,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_temp_p5.c1]
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
       dop=10
@@ -1955,12 +1962,12 @@ Query Plan
 |2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
 |3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
 |4 |      └─SHARED HASH JOIN                  |               |
-|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|5 |        ├─PART JOIN FILTER CREATE         |:RF0000        |
 |6 |        │ └─EXCHANGE IN DISTR             |               |
 |7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
 |8 |        │     └─PX BLOCK ITERATOR         |               |
 |9 |        │       └─TABLE FULL SCAN         |t_temp_p5      |
-|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:RF0000        |
 |11|          └─TABLE FULL SCAN               |t_temp_p       |
 ===============================================================
 Outputs & filters:
@@ -1977,6 +1984,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p5.c1]), other_conds(nil)
   5 - output([t_temp_p5.c1]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_temp_p5.c1]
   6 - output([t_temp_p5.c1]), filter(nil), rowset=256
   7 - output([t_temp_p5.c1]), filter(nil), rowset=256
       dop=10
@@ -2074,12 +2082,12 @@ Query Plan
 |2 |  └─EXCHANGE OUT DISTR                    |:EX10001       |
 |3 |    └─SUBPLAN SCAN                        |ANONYMOUS_VIEW1|
 |4 |      └─SHARED HASH JOIN                  |               |
-|5 |        ├─PART JOIN FILTER CREATE         |:BF0000        |
+|5 |        ├─PART JOIN FILTER CREATE         |:RF0000        |
 |6 |        │ └─EXCHANGE IN DISTR             |               |
 |7 |        │   └─EXCHANGE OUT DISTR (BC2HOST)|:EX10000       |
 |8 |        │     └─PX BLOCK ITERATOR         |               |
 |9 |        │       └─TABLE FULL SCAN         |t_temp_p4      |
-|10|        └─PX BLOCK HASH JOIN-FILTER       |:BF0000        |
+|10|        └─PX BLOCK HASH JOIN-FILTER       |:RF0000        |
 |11|          └─TABLE FULL SCAN               |t_temp_p       |
 ===============================================================
 Outputs & filters:
@@ -2096,6 +2104,7 @@ Outputs & filters:
   4 - output([t_temp_p.c1], [t_temp_p.c2], [t_temp_p.c3]), filter(nil), rowset=256
       equal_conds([t_temp_p.c1 = t_temp_p4.c1]), other_conds(nil)
   5 - output([t_temp_p4.c1]), filter(nil), rowset=256
+      RF_TYPE(bloom), RF_EXPR[t_temp_p4.c1]
   6 - output([t_temp_p4.c1]), filter(nil), rowset=256
   7 - output([t_temp_p4.c1]), filter(nil), rowset=256
       dop=10

@@ -2807,6 +2807,15 @@ int ObCharset::charset_convert(const ObCollationType from_type,
   } else {
     ObCharsetInfo *from_cs = static_cast<ObCharsetInfo*>(ObCharset::charset_arr[from_type]);
     ObCharsetInfo *to_cs = static_cast<ObCharsetInfo*>(ObCharset::charset_arr[to_type]);
+    ObCharsetType src_cs = ObCharset::charset_type_by_coll(from_type);
+    ObCharsetType dst_cs = ObCharset::charset_type_by_coll(to_type);
+    if ((src_cs == CHARSET_GB18030 && dst_cs == CHARSET_GB18030_2022) ||
+        (src_cs == CHARSET_GB18030_2022 && dst_cs == CHARSET_GB18030)) {
+      /** GB18030 and GB18030_2022 have the same code points,
+        *  but they have different mapping to unicode.
+        *  So, we do charset_convert from the charset to the same charset*/
+      to_cs = from_cs;
+    }
     if (OB_ISNULL(from_cs) || OB_ISNULL(to_cs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected collation type", K(ret), K(from_type), K(to_type));

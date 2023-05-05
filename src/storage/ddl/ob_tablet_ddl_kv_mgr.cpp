@@ -32,7 +32,7 @@ using namespace oceanbase::storage;
 ObTabletDDLKvMgr::ObTabletDDLKvMgr()
   : is_inited_(false), success_start_scn_(SCN::min_scn()), ls_id_(), tablet_id_(), table_key_(), data_format_version_(0),
     start_scn_(SCN::min_scn()), commit_scn_(SCN::min_scn()), max_freeze_scn_(SCN::min_scn()),
-    table_id_(0), execution_id_(-1), ddl_task_id_(0), head_(0), tail_(0), lock_(), ref_cnt_(0)
+    execution_id_(-1), head_(0), tail_(0), lock_(), ref_cnt_(0)
 {
 }
 
@@ -64,9 +64,7 @@ void ObTabletDDLKvMgr::destroy()
   start_scn_.set_min();
   commit_scn_.set_min();
   max_freeze_scn_.set_min();
-  table_id_ = 0;
   execution_id_ = -1;
-  ddl_task_id_ = 0;
   success_start_scn_.set_min();
   is_inited_ = false;
 }
@@ -206,8 +204,6 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
         usleep(1000L);
       }
     }
-    table_id_ = table_id;
-    ddl_task_id_ = ddl_task_id;
 
     ObDDLTableMergeDagParam param;
     param.ls_id_ = ls_id_;
@@ -217,7 +213,7 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
     param.start_scn_ = start_scn;
     param.table_id_ = table_id;
     param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
+    param.ddl_task_id_ = ddl_task_id;
     const int64_t start_ts = ObTimeUtility::fast_current_time();
 
     while (OB_SUCC(ret) && is_started()) {
@@ -242,7 +238,7 @@ int ObTabletDDLKvMgr::ddl_commit(const SCN &start_scn,
   return ret;
 }
 
-int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn, const bool is_replay)
+int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &commit_scn, const bool is_replay, const uint64_t table_id, const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
@@ -264,9 +260,9 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
     param.rec_scn_ = commit_scn;
     param.is_commit_ = true;
     param.start_scn_ = start_scn;
-    param.table_id_ = table_id_;
+    param.table_id_ = table_id;
     param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
+    param.ddl_task_id_ = ddl_task_id;
     // retry submit dag in case of the previous dag failed
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW == ret || OB_EAGAIN == ret) {
@@ -291,7 +287,7 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(const SCN &start_scn, const SCN &c
   return ret;
 }
 
-int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &commit_scn)
+int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &commit_scn, const uint64_t table_id, const int64_t ddl_task_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -311,7 +307,7 @@ int ObTabletDDLKvMgr::wait_ddl_merge_success(const SCN &start_scn, const SCN &co
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn, false/*is_replay*/))) {
+      } else if (OB_FAIL(schedule_ddl_merge_task(start_scn, commit_scn, false/*is_replay*/, table_id, ddl_task_id))) {
         if (OB_EAGAIN == ret) {
           ob_usleep(10L * 1000L);
           ret = OB_SUCCESS; // retry
@@ -340,9 +336,11 @@ int ObTabletDDLKvMgr::get_ddl_major_merge_param(const ObTabletMeta &tablet_meta,
     param.rec_scn_ = get_commit_scn_nolock(tablet_meta);
     param.is_commit_ = true;
     param.start_scn_ = start_scn_;
-    param.table_id_ = table_id_;
-    param.execution_id_ = execution_id_;
-    param.ddl_task_id_ = ddl_task_id_;
+
+    // no checksum report
+    param.table_id_ = 0;
+    param.execution_id_ = -1;
+    param.ddl_task_id_ = 0;
   } else {
     ret = OB_EAGAIN;
   }
@@ -546,9 +544,7 @@ void ObTabletDDLKvMgr::cleanup_unlock()
   start_scn_.set_min();
   commit_scn_.set_min();
   max_freeze_scn_.set_min();
-  table_id_ = 0;
   execution_id_ = -1;
-  ddl_task_id_ = 0;
   success_start_scn_.set_min();
 }
 
