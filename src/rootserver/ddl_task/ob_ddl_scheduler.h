@@ -225,7 +225,7 @@ public:
   int finish_redef_table(const ObDDLTaskID &task_id);
   int start_redef_table(const obrpc::ObStartRedefTableArg &arg, obrpc::ObStartRedefTableRes &res);
   int update_ddl_task_active_time(const ObDDLTaskID &task_id);
-
+  int reschedule_ddl_task(const ObDDLTaskID &task_id, ObDDLTaskRecord &task_record);
   int prepare_alter_table_arg(const ObPrepareAlterTableArgParam &param,
                               const ObTableSchema *target_table_schema,
                               obrpc::ObAlterTableArg &alter_table_arg);
