@@ -72,6 +72,7 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
       type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       // length == OB_MAX_ORACLE_VARCHAR_LENGTH is not supported by generated key, use OB_MAX_VARCHAR_LENGTH_KEY instead
       type.set_length(OB_MAX_VARCHAR_LENGTH_KEY);
+      type.set_length_semantics(LS_BYTE);
     }
   }
   return ret;
