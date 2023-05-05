@@ -1058,7 +1058,6 @@ int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bo
       } else if (depth == 2 && OB_FAIL(check_column_udt_type(node))) {
         // cases like: a.b.fun(), a must be table alias, b must be col name, and b must be udt type
         LOG_WARN("not an object or REF", K(ret));
-        ret = OB_ERR_NOT_OBJ_REF; // error code compatible
       } else {
         exist_fun = true;
         is_fun_sys = true;
@@ -1433,7 +1432,7 @@ int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
     if (OB_FAIL(get_target_column_list(columns_list, tab_str, false, tab_has_alias, table_item, false))) {
       LOG_WARN("parse table fail");
     } else if (OB_ISNULL(table_item) || !tab_has_alias) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_ERR_BAD_FIELD_ERROR;
       LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
     } else {
       ColumnItem the_col_item;
@@ -1466,25 +1465,26 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
                                           bool &tab_has_alias, TableItem *&tab_item, bool is_col)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   int64_t num = 0;
+  ObDMLStmt *stmt = static_cast<ObDMLStmt *>(stmt_);
   ObArray<ColumnItem> column_items;
 
-  if (OB_ISNULL(select_stmt)) {
+  if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null");
   } else {
-    num = select_stmt->get_table_size();
+    num = stmt->get_table_size();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
-    const TableItem *tmp_table_item = select_stmt->get_table_item(i);
+    const TableItem *tmp_table_item = stmt->get_table_item(i);
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null");
     } else if (OB_NOT_NULL(tab_name.ptr()) && !is_col && !all_tab && tmp_table_item->table_name_ != tab_name && tmp_table_item->alias_name_ != tab_name) {
       // other table should chose
     } else {
-      if (tmp_table_item->alias_name_ == tab_name || (num > 1 && tmp_table_item->table_name_ == tab_name)) {
+      if (tmp_table_item->alias_name_ == tab_name ||
+          (num > 1 && tmp_table_item->table_name_ == tab_name && stmt->get_stmt_type() == stmt::T_SELECT)) {
         tab_has_alias = true;
       }
 
