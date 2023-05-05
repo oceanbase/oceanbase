@@ -809,7 +809,7 @@ TEST_F(TestXPath, test_seek_root)
       ASSERT_EQ(OB_SUCCESS, ret);
       ObStringBuffer buf_str(&allocator);
       ObXmlNode* xnode = static_cast<ObXmlNode*>(res);
-      xnode->print_document(buf_str, type, false);
+      xnode->print_document(buf_str, type, ObXmlFormatType::NO_FORMAT);
       ObString s(buf_str.ptr());
       ASSERT_EQ(s, seek_root[i]);
       std::cout<<i<<": "<<s.ptr()<<std::endl;

@@ -761,6 +761,8 @@ int ObDelUpdResolver::check_need_assignment(const common::ObIArray<ObAssignment>
   } else if (stmt->has_instead_of_trigger()) {
     // 兼容oracle,这里的列不级联更新
     // do nothing
+  } else if (column.is_udt_hidden_column()) {
+     // do nothing, will handle in udt transform
   } else if (column.is_generated_column()) {
     if (OB_FAIL(ObResolverUtils::check_whether_assigned(stmt, assigns, table_id, column.get_column_id(), exist))) {
       LOG_WARN("check column whether assigned failed", K(ret));
