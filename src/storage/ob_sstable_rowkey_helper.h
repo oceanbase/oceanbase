@@ -60,7 +60,9 @@ public:
   virtual OB_INLINE int32_t compare_semi_nullsafe(const common::ObObj& obj1, const common::ObObj& obj2)
   {
     int32_t cmp_ret = ObObjCmpFuncs::CR_EQ;
-    if (obj2.is_null()) {
+    if (obj1.is_null() && obj2.is_null()) {
+      cmp_ret = ObObjCmpFuncs::CR_EQ;
+    } else if (obj2.is_null()) {
       cmp_ret = ObObjCmpFuncs::CR_GT;
     } else {
       cmp_ret = cmp_func_(obj1, obj2, cmp_ctx_);
@@ -105,7 +107,9 @@ public:
   virtual OB_INLINE int32_t compare_semi_nullsafe(const common::ObObj& obj1, const common::ObObj& obj2) override
   {
     int32_t cmp_ret = ObObjCmpFuncs::CR_EQ;
-    if (obj2.is_null()) {
+    if (obj1.is_null() && obj2.is_null()) {
+      cmp_ret = ObObjCmpFuncs::CR_EQ;
+    } else if (obj2.is_null()) {
       cmp_ret = ObObjCmpFuncs::CR_LT;
     } else {
       cmp_ret = cmp_func_(obj1, obj2, cmp_ctx_);
