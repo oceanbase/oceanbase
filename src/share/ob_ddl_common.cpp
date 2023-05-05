@@ -1014,10 +1014,9 @@ int ObDDLUtil::get_ddl_rpc_timeout(const int64_t tenant_id, const int64_t table_
 void ObDDLUtil::get_ddl_rpc_timeout_for_database(const int64_t tenant_id, const int64_t database_id, int64_t &ddl_rpc_timeout_us)
 {
   int ret = OB_SUCCESS;
-  int64_t tablet_count = 0;
+  const int64_t cost_per_tablet = 100 * 1000L; // 100ms
   share::schema::ObSchemaGetterGuard schema_guard;
   ObArray<uint64_t> table_ids;
-  int64_t total_tablet_cnt = 0;
   if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == database_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(database_id));
@@ -1034,9 +1033,9 @@ void ObDDLUtil::get_ddl_rpc_timeout_for_database(const int64_t tenant_id, const 
     if (OB_SUCCESS != get_tablet_count(tenant_id, table_ids[i], tablet_count)) {
       tablet_count = 0;
     }
-    total_tablet_cnt += tablet_count;
+    ddl_rpc_timeout_us += tablet_count * cost_per_tablet;
   }
-  (void)get_ddl_rpc_timeout(total_tablet_cnt, ddl_rpc_timeout_us);
+  ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, get_default_ddl_rpc_timeout());
   ddl_rpc_timeout_us = max(ddl_rpc_timeout_us, GCONF._ob_ddl_timeout);
   return;
 }
