@@ -2113,7 +2113,7 @@ int ObLogicalOperator::check_need_pushdown_expr(const bool producer_id,
   } else if (OB_ISNULL(child_.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (log_op_def::LOG_EXPR_VALUES == child_.at(0)->get_type()) {
+  } else if (child_.at(0)->is_expr_operator() || is_dml_operator()) {
     need_pushdown = false;
   }
   return ret;
