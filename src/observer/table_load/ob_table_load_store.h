@@ -73,13 +73,13 @@ private:
 public:
   int px_start_trans(const table::ObTableLoadTransId &trans_id);
   int px_finish_trans(const table::ObTableLoadTransId &trans_id);
-  int px_abandon_trans(const table::ObTableLoadTransId &trans_id);
   int px_write(const table::ObTableLoadTransId &trans_id,
                const ObTabletID &tablet_id,
                const common::ObIArray<common::ObNewRow> &row_array);
+  static int px_abandon_trans(ObTableLoadTableCtx *ctx, const table::ObTableLoadTransId &trans_id);
 private:
-  int px_clean_up_trans(ObTableLoadStoreTrans *trans);
   int px_flush(ObTableLoadStoreTrans *trans);
+  static int px_clean_up_trans(ObTableLoadStoreTrans *trans);
 
 private:
   ObTableLoadTableCtx * const ctx_;
