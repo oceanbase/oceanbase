@@ -2626,7 +2626,7 @@ int ObOraSysChecker::check_ora_grant_role_priv(
         2. 对于每个role id，根据user info，或者下标
         3. 调用get nth role option获取option
         4. 调用get_admin_option 判断是否有 admin option */
-        for (int i = 0; i < OB_SUCC(ret) && role_granted_id_array.count(); i++) {
+        for (int i = 0; OB_SUCC(ret) && i < role_granted_id_array.count(); i++) {
           if (!user_info->role_exists(role_granted_id_array.at(i), ADMIN_OPTION)) {
             const ObUserInfo *user_info = NULL;            
             OZ (guard.get_user_info(tenant_id, role_granted_id_array.at(i), user_info));
