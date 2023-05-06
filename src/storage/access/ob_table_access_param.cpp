@@ -43,6 +43,7 @@ ObTableIterParam::ObTableIterParam()
       is_for_foreign_check_(false),
       limit_prefetch_(false),
       ss_rowkey_prefix_cnt_(0),
+      op_(nullptr),
       pd_storage_flag_(0)
 {
 }
@@ -72,6 +73,7 @@ void ObTableIterParam::reset()
   has_lob_column_out_ = false;
   is_for_foreign_check_ = false;
   limit_prefetch_ = false;
+  op_ = nullptr;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -122,6 +124,15 @@ bool ObTableIterParam::enable_fuse_row_cache(const ObQueryFlag &query_flag) cons
   return bret;
 }
 
+bool ObTableIterParam::need_trans_info() const
+{
+  bool bret = false;
+  if (OB_NOT_NULL(op_) && OB_NOT_NULL(op_->expr_spec_.trans_info_expr_)) {
+    bret = true;
+  }
+  return bret;
+}
+
 DEF_TO_STRING(ObTableIterParam)
 {
   int64_t pos = 0;
@@ -152,7 +163,6 @@ ObTableAccessParam::ObTableAccessParam()
       projector_size_(0),
       output_exprs_(NULL),
       aggregate_exprs_(NULL),
-      op_(NULL),
       op_filters_(NULL),
       row2exprs_projector_(NULL),
       output_sel_mask_(NULL),
@@ -171,7 +181,6 @@ void ObTableAccessParam::reset()
   padding_cols_ = NULL;
   projector_size_ = 0;
   output_exprs_ = NULL;
-  op_ = NULL;
   op_filters_ = NULL;
   row2exprs_projector_ = NULL;
   output_sel_mask_ = NULL;
@@ -204,7 +213,7 @@ int ObTableAccessParam::init(
 
     output_exprs_ = scan_param.output_exprs_;
     aggregate_exprs_ = scan_param.aggregate_exprs_;
-    op_ = scan_param.op_;
+    iter_param_.op_ = scan_param.op_;
     op_filters_ = scan_param.op_filters_;
     row2exprs_projector_ = scan_param.row2exprs_projector_;
     output_sel_mask_ = &table_param.get_output_sel_mask();
@@ -228,7 +237,7 @@ int ObTableAccessParam::init(
     }
     iter_param_.has_virtual_columns_ = table_param.has_virtual_column();
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
-    iter_param_.vectorized_enabled_ = nullptr != op_ && op_->is_vectorized();
+    iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
 
     if (OB_FAIL(iter_param_.check_read_info_valid())) {
@@ -338,7 +347,6 @@ DEF_TO_STRING(ObTableAccessParam)
       KPC_(padding_cols),
       K_(projector_size),
       KPC_(output_exprs),
-      KP_(op),
       KP_(op_filters),
       KP_(row2exprs_projector),
       KPC_(output_sel_mask),

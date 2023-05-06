@@ -180,6 +180,7 @@ int ObIDASTaskOp::start_das_task()
 {
   int &ret = errcode_;
   int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_OPEN_ERROR);
+  int need_dump = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
   if (OB_UNLIKELY(!is_in_retry() && OB_SUCCESS != simulate_error)) {
     ret = simulate_error;
   } else {
@@ -190,6 +191,8 @@ int ObIDASTaskOp::start_das_task()
         //dump das task data to help analysis defensive bug
         dump_data();
       }
+    } else if (OB_SUCCESS != need_dump) {
+      dump_data();
     }
   }
   // no need to advance state here because this function could be called on remote executor.
@@ -286,7 +289,8 @@ OB_DEF_DESERIALIZE(ObDASTaskArg)
   for (int64_t i = 0; OB_SUCC(ret) && i < count; i ++) {
     OB_UNIS_DECODE(op_type);
     OZ(das_factory->create_das_task_op(op_type, task_op));
-    OZ(task_op->init_task_info());
+    // Here you must init first, you need to set the allocator
+    OZ(task_op->init_task_info(ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE));
     if (OB_SUCC(ret)) {
       task_ops_.at(i) = task_op;
     }

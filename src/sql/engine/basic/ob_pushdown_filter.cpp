@@ -1435,7 +1435,8 @@ ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
     pd_storage_filters_(alloc),
     pd_storage_aggregate_output_(alloc),
     ext_file_column_exprs_(alloc),
-    ext_column_convert_exprs_(alloc)
+    ext_column_convert_exprs_(alloc),
+    trans_info_expr_(nullptr)
 {
 }
 
@@ -1455,7 +1456,8 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
-              ext_column_convert_exprs_);
+              ext_column_convert_exprs_,
+              trans_info_expr_);
   return ret;
 }
 
@@ -1475,7 +1477,8 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
-              ext_column_convert_exprs_);
+              ext_column_convert_exprs_,
+              trans_info_expr_);
   return ret;
 }
 
@@ -1495,7 +1498,8 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
               fake_pd_storage_index_back_filters, //mock a fake filters to compatible with 4.0
               pd_storage_aggregate_output_,
               ext_file_column_exprs_,
-              ext_column_convert_exprs_);
+              ext_column_convert_exprs_,
+              trans_info_expr_);
   return len;
 }
 
@@ -1520,6 +1524,49 @@ int ObPushdownOperator::init_pushdown_storage_filter()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter executor is null", K(ret));
       }
+    }
+  }
+  return ret;
+}
+
+int ObPushdownOperator::reset_trans_info_datum()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr_spec_.trans_info_expr_)) {
+    if (expr_spec_.trans_info_expr_->is_batch_result()) {
+      ObDatum *datums = expr_spec_.trans_info_expr_->locate_datums_for_update(eval_ctx_, expr_spec_.max_batch_size_);
+      for (int64_t i = 0; i < expr_spec_.max_batch_size_; i++) {
+        datums[i].set_null();
+      }
+    } else {
+      ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
+      datum.set_null();
+    }
+  }
+  return ret;
+}
+
+int ObPushdownOperator::write_trans_info_datum(blocksstable::ObDatumRow &out_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr_spec_.trans_info_expr_) &&
+      OB_NOT_NULL(out_row.trans_info_)) {
+    ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
+    char *dst_ptr = const_cast<char *>(datum.ptr_);
+    int64_t pos = 0;
+    if (OB_ISNULL(dst_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret));
+    } else if (OB_FAIL(databuff_memcpy(dst_ptr,
+                                       ObDASWriteBuffer::DAS_ROW_TRANS_STRING_SIZE,
+                                       pos,
+                                       strlen(out_row.trans_info_),
+                                       out_row.trans_info_))) {
+      LOG_WARN("fail to copy trans info to datum", K(ret));
+    } else {
+      datum.pack_ = pos;
+      // out_row.trans_info_ must be reset to nullptr to prevent affecting the next row
+      out_row.trans_info_ = nullptr;
     }
   }
   return ret;

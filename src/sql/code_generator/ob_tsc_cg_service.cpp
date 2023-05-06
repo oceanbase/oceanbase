@@ -224,7 +224,7 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
                                                                    scan_ctdef.aggregate_column_ids_))) {
     LOG_WARN("convert agg failed", K(ret), K(*table_schema),
               K(scan_ctdef.aggregate_column_ids_), K(op.get_index_back()));
-  } else if (OB_FAIL(generate_das_result_output(tsc_out_cols, scan_ctdef, pd_agg))) {
+  } else if (OB_FAIL(generate_das_result_output(tsc_out_cols, scan_ctdef, op.get_trans_info_expr(), pd_agg))) {
     LOG_WARN("failed to init result outputs", K(ret));
   }
   return ret;
@@ -232,7 +232,8 @@ int ObTscCgService::generate_table_param(const ObLogTableScan &op, ObDASScanCtDe
 
 int ObTscCgService::generate_das_result_output(const ObIArray<uint64_t> &output_cids,
                                                ObDASScanCtDef &scan_ctdef,
-                                                const bool include_agg)
+                                               const ObRawExpr *trans_info_expr,
+                                               const bool include_agg)
 {
   int ret = OB_SUCCESS;
   ExprFixedArray &access_exprs = scan_ctdef.pd_expr_spec_.access_exprs_;
@@ -240,10 +241,11 @@ int ObTscCgService::generate_das_result_output(const ObIArray<uint64_t> &output_
   int64_t access_column_cnt = scan_ctdef.access_column_ids_.count();
   int64_t access_expr_cnt = access_exprs.count();
   int64_t agg_expr_cnt = include_agg ? agg_exprs.count() : 0;
+  int64_t trans_expr_cnt = trans_info_expr == nullptr ? 0 : 1;
   if (OB_UNLIKELY(access_column_cnt != access_expr_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access column count is invalid", K(ret), K(access_column_cnt), K(access_expr_cnt));
-  } else if (OB_FAIL(scan_ctdef.result_output_.init(output_cids.count() + agg_expr_cnt))) {
+  } else if (OB_FAIL(scan_ctdef.result_output_.init(output_cids.count() + agg_expr_cnt + trans_expr_cnt))) {
     LOG_WARN("init result output failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < output_cids.count(); ++i) {
@@ -262,6 +264,19 @@ int ObTscCgService::generate_das_result_output(const ObIArray<uint64_t> &output_
       if (scan_ctdef.result_output_.push_back(agg_exprs.at(i))) {
         LOG_WARN("store agg expr to result output exprs failed", K(ret), K(agg_expr_cnt));
       }
+    }
+  }
+
+  // When the lookup occurs, the result_output of the das task
+  // during index_scan and the main table lookup will have trans_info_expr
+  if (OB_SUCC(ret) && trans_expr_cnt > 0) {
+    ObExpr *e = NULL;
+    if (OB_FAIL(cg_.generate_rt_expr(*trans_info_expr, e))) {
+      LOG_WARN("fail to generate rt exprt", K(ret), KPC(trans_info_expr));
+    } else if (OB_FAIL(scan_ctdef.result_output_.push_back(e))) {
+      LOG_WARN("fail to push back trans_info expr", K(ret));
+    } else {
+      scan_ctdef.trans_info_expr_ = e;
     }
   }
   return ret;
@@ -802,6 +817,18 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
       LOG_WARN("generate pushdown aggr ctdef failed", K(ret));
     }
   }
+
+  // 3. cg trans_info_expr
+  if (OB_SUCC(ret)) {
+    ObRawExpr *trans_info_expr = op.get_trans_info_expr();
+    if (OB_NOT_NULL(trans_info_expr)) {
+      if (OB_FAIL(cg_.generate_rt_expr(*op.get_trans_info_expr(),
+                                       scan_ctdef.pd_expr_spec_.trans_info_expr_))) {
+        LOG_WARN("generate trans info expr failed", K(ret));
+      }
+    }
+  }
+
   //4. generate batch scan ctdef
   if (OB_SUCC(ret) && op.use_batch()) {
     if (OB_FAIL(cg_.generate_rt_expr(*op.get_group_id_expr(), scan_ctdef.group_id_expr_))) {

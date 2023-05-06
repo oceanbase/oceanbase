@@ -40,6 +40,7 @@ struct ObTableAccessContext;
 namespace blocksstable
 {
 struct ObStorageDatum;
+struct ObDatumRow;
 };
 namespace sql
 {
@@ -532,7 +533,8 @@ public:
                K_(ext_column_convert_exprs),
                K_(max_batch_size),
                K_(pushdown_filters),
-               K_(pd_storage_flag));
+               K_(pd_storage_flag),
+               KPC_(trans_info_expr));
 
   int set_calc_exprs(const ExprFixedArray &calc_exprs, int64_t max_batch_size)
   {
@@ -554,6 +556,7 @@ public:
   // used by external table
   ExprFixedArray ext_file_column_exprs_;
   ExprFixedArray ext_column_convert_exprs_;
+  ObExpr *trans_info_expr_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx
@@ -577,10 +580,13 @@ public:
   // clear eval flag of all datums within a batch
   int clear_evaluated_flag();
   int deep_copy(const sql::ObExprPtrIArray *exprs, const int64_t batch_idx);
+  int reset_trans_info_datum();
+  int write_trans_info_datum(blocksstable::ObDatumRow &out_row);
 public:
   ObPushdownFilterExecutor *pd_storage_filters_;
   ObEvalCtx &eval_ctx_;
   const ObPushdownExprSpec &expr_spec_;
+  // The datum of the trans_info expression that records transaction information
 };
 
 // filter row for storage callback.

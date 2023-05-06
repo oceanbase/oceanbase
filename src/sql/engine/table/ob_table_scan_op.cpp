@@ -3159,6 +3159,22 @@ int ObGlobalIndexLookupOpImpl::process_data_table_rowkey()
       scan_param.is_get_ = true;
     }
   }
+
+  if (OB_SUCC(ret) && get_lookup_ctdef()->trans_info_expr_ != nullptr) {
+    void *buf = nullptr;
+    ObDatum *datum_ptr = nullptr;
+    if (OB_FAIL(build_trans_datum(get_lookup_ctdef()->trans_info_expr_,
+                                  &(table_scan_op_->get_eval_ctx()),
+                                  lookup_memctx_->get_arena_allocator(),
+                                  datum_ptr))) {
+
+    } else if (OB_ISNULL(datum_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(das_scan_op->trans_info_array_.push_back(datum_ptr))) {
+      LOG_WARN("fail to push back trans info array", K(ret), KPC(datum_ptr));
+    }
+  }
   return ret;
 }
 
@@ -3322,15 +3338,45 @@ int ObGlobalIndexLookupOpImpl::check_lookup_row_cnt()
                 "index_table_id", table_scan_op_->get_tsc_spec().get_ref_table_id(),
                 KPC(my_session->get_tx_desc()));
       //now to dump lookup das task info
+      int64_t rownum = 0;
       for (DASTaskIter task_iter = das_ref_.begin_task_iter(); !task_iter.is_end(); ++task_iter) {
         ObDASScanOp *das_op = static_cast<ObDASScanOp*>(*task_iter);
-        LOG_INFO("dump TableLookup DAS Task range",
-                 "scan_range", das_op->get_scan_param().key_ranges_,
-                 "range_array_pos", das_op->get_scan_param().range_array_pos_,
-                 "tablet_id", das_op->get_tablet_id());
+        if (das_op->trans_info_array_.count() == das_op->get_scan_param().key_ranges_.count()) {
+          for (int64_t i = 0; i < das_op->trans_info_array_.count(); i++) {
+            rownum++;
+            ObDatum *datum = das_op->trans_info_array_.at(i);
+            LOG_ERROR("dump TableLookup DAS Task range and trans_info",
+                K(rownum), KPC(datum),
+                K(das_op->get_scan_param().key_ranges_.at(i)),
+                K(das_op->get_tablet_id()));
+          }
+        } else {
+          for (int64_t i = 0; i < das_op->get_scan_param().key_ranges_.count(); i++) {
+            rownum++;
+            LOG_ERROR("dump TableLookup DAS Task range",
+                K(rownum),
+                K(das_op->get_scan_param().key_ranges_.at(i)),
+                K(das_op->get_tablet_id()));
+          }
+        }
       }
     }
   }
+
+  int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+  if (0 != simulate_error) {
+    for (DASTaskIter task_iter = das_ref_.begin_task_iter(); !task_iter.is_end(); ++task_iter) {
+      ObDASScanOp *das_op = static_cast<ObDASScanOp*>(*task_iter);
+      for (int64_t i = 0; i < das_op->trans_info_array_.count(); i++) {
+        ObDatum *datum = das_op->trans_info_array_.at(i);
+        LOG_INFO("dump TableLookup DAS Task trans info", K(i),
+            KPC(das_op->trans_info_array_.at(i)),
+            K(das_op->get_scan_param().key_ranges_.at(i)),
+            K(das_op->get_tablet_id()));
+      }
+    }
+  }
+
   return ret;
 }
 

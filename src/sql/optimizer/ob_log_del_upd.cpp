@@ -56,6 +56,10 @@ int IndexDMLInfo::deep_copy(ObIRawExprCopier &expr_copier, const IndexDMLInfo &o
     LOG_WARN("failed to copy exprs", K(ret));
   } else if (OB_FAIL(part_ids_.assign(other.part_ids_))) {
     LOG_WARN("failed to assign part ids", K(ret));
+  } else if (OB_NOT_NULL(other.trans_info_expr_)) {
+    if (OB_FAIL(expr_copier.copy(other.trans_info_expr_, trans_info_expr_))) {
+      LOG_WARN("failed to trans info exprs", K(ret), KPC(other.trans_info_expr_));
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other.assignments_.count(); ++i) {
     if (OB_FAIL(assignments_.at(i).deep_copy(expr_copier,
@@ -79,6 +83,7 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
+  trans_info_expr_ = other.trans_info_expr_;
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
   } else if (OB_FAIL(column_convert_exprs_.assign(other.column_convert_exprs_))) {
@@ -286,7 +291,8 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     pdml_is_returning_(false),
     err_log_define_(),
     need_alloc_part_id_expr_(false),
-    has_instead_of_trigger_(false)
+    has_instead_of_trigger_(false),
+    produced_trans_exprs_()
 {
 }
 
@@ -550,6 +556,80 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator &op,
   return ret;
 }
 
+int ObLogDelUpd::find_trans_info_producer() {
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0 ; OB_SUCC(ret) && i < index_dml_infos_.count(); i++) {
+    ObLogicalOperator *producer = NULL;
+    IndexDMLInfo *index_dml_info = index_dml_infos_.at(i);
+    if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if ((!is_pdml() && !index_dml_info->is_primary_index_)) {
+      // Don't worry about non-pdml and non-main tables
+      // Every operator in pdml needs to try to press down once
+    } else if (OB_ISNULL(index_dml_info->trans_info_expr_)) {
+      // do nothing
+    } else if (OB_FAIL(find_trans_info_producer(*this, index_dml_info->table_id_, producer))) {
+      LOG_WARN("fail to find trans info producer", K(ret), KPC(index_dml_info), K(get_name()));
+    } else if (NULL == producer) {
+      // No error can be reported here,
+      // the producer of the corresponding trans_info expression was not found, ignore these
+      LOG_TRACE("can not found trans debug info expr producer", K(ret), K(index_dml_info->table_id_));
+    } else if (OB_FAIL(add_var_to_array_no_dup(produced_trans_exprs_,
+                                               index_dml_info->trans_info_expr_))) {
+      LOG_WARN("fail to push trans_info_expr_", K(ret));
+    } else {
+      if (producer->get_type() == log_op_def::LOG_TABLE_SCAN) {
+        if (static_cast<ObLogTableScan *>(producer)->get_trans_info_expr() == index_dml_info->trans_info_expr_) {
+          LOG_DEBUG("this expr has find the producer", K(ret));
+        } else {
+          static_cast<ObLogTableScan *>(producer)->
+                      set_trans_info_expr(static_cast<ObOpPseudoColumnRawExpr *>(index_dml_info->trans_info_expr_));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected type of pdml partition id producer", K(ret), K(producer));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogDelUpd::find_trans_info_producer(ObLogicalOperator &op,
+                                          const uint64_t tid,
+                                          ObLogicalOperator *&producer)
+{
+  int ret = OB_SUCCESS;
+  producer = NULL;
+  if (op.get_type() == log_op_def::LOG_TABLE_SCAN) {
+    ObLogTableScan &tsc = static_cast<ObLogTableScan &>(op);
+    if (tid == tsc.get_table_id()) {
+      producer = &op;
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == producer && i < op.get_num_of_child(); i++) {
+    if (OB_ISNULL(op.get_child(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null child", K(ret));
+    } else if (log_op_def::LOG_JOIN == op.get_type()) {
+      ObLogJoin &join_op = static_cast<ObLogJoin&>(op);
+      if (IS_LEFT_SEMI_ANTI_JOIN(join_op.get_join_type()) &&
+          second_child == i) {
+        continue;
+      } else if (IS_RIGHT_SEMI_ANTI_JOIN(join_op.get_join_type()) &&
+                 first_child == i) {
+        continue;
+      }
+      if (OB_FAIL(SMART_CALL(find_trans_info_producer(*op.get_child(i), tid, producer)))) {
+        LOG_WARN("find pdml part id producer failed", K(ret));
+      }
+    } else if (OB_FAIL(SMART_CALL(find_trans_info_producer(*op.get_child(i), tid, producer)))) {
+      LOG_WARN("find pdml part id producer failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_column_expr)
 {
   int ret = OB_SUCCESS;
@@ -558,6 +638,8 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
   } else if (is_pdml() && need_alloc_part_id_expr_ &&
              OB_FAIL(generate_pdml_partition_id_expr())) {
     LOG_WARN("failed to allocate partition id expr", K(ret));
+  } else if (OB_FAIL(find_trans_info_producer())) {
+    LOG_WARN("failed to find trasn info producer", K(ret));
   } else if (OB_FAIL(generate_rowid_expr_for_trigger())) {
     LOG_WARN("failed to try add rowid col expr for trigger", K(ret));
   } else if (NULL != lock_row_flag_expr_ && OB_FAIL(all_exprs.push_back(lock_row_flag_expr_))) {
@@ -566,6 +648,8 @@ int ObLogDelUpd::inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_c
     LOG_WARN("failed to append exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ && OB_FAIL(all_exprs.push_back(pdml_partition_id_expr_))) {
     LOG_WARN("failed to push back exprs", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_exprs, produced_trans_exprs_))) {
+    LOG_WARN("failed to push back exprs", K(ret), K(produced_trans_exprs_));
   } else if (OB_FAIL(get_table_columns_exprs(get_index_dml_infos(), all_exprs, need_column_expr))) {
     LOG_WARN("failed to add table columns to ctx", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
@@ -1327,8 +1411,10 @@ int ObLogDelUpd::inner_replace_op_exprs(
   int ret = OB_SUCCESS;
   if (OB_FAIL(replace_dml_info_exprs(to_replace_exprs, get_index_dml_infos()))) {
     LOG_WARN("failed to replace dml info exprs", K(ret));
-  } else if(OB_FAIL(replace_exprs_action(to_replace_exprs, view_check_exprs_))) {
+  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, view_check_exprs_))) {
     LOG_WARN("failed to replace view check exprs", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(to_replace_exprs, produced_trans_exprs_))) {
+    LOG_WARN("failed to replace produced trans exprs", K(ret));
   } else if (NULL != pdml_partition_id_expr_ &&
     OB_FAIL(replace_expr_action(to_replace_exprs, pdml_partition_id_expr_))) {
     LOG_WARN("failed to replace pdml partition id expr", K(ret));

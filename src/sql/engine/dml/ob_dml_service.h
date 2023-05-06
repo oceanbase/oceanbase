@@ -92,18 +92,18 @@ public:
                         ObInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &dml_rtctx,
-                        ObChunkDatumStore::StoredRow* &stored_row);
+                        ObChunkDatumStore::StoredRow *&stored_row);
   static int insert_row(const ObDASInsCtDef &ins_ctdef,
                         ObDASInsRtDef &ins_rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &das_rtctx,
                         const ExprFixedArray &new_row,
-                        ObChunkDatumStore::StoredRow* &stored_row);
+                        ObChunkDatumStore::StoredRow *&stored_row);
   static int delete_row(const ObDelCtDef &del_ctdef,
                         ObDelRtDef &del_rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &dml_rtctx,
-                        ObChunkDatumStore::StoredRow* &stored_row);
+                        ObChunkDatumStore::StoredRow *&stored_row);
   static int update_row(const ObDASUpdCtDef &ctdef,
                         ObDASUpdRtDef &rtdef,
                         const ObDASTabletLoc *tablet_loc,
@@ -114,16 +114,16 @@ public:
                         const ObDASTabletLoc *old_tablet_loc,
                         const ObDASTabletLoc *new_tablet_loc,
                         ObDMLRtCtx &dml_rtctx,
-                        ObChunkDatumStore::StoredRow* &old_row,
-                        ObChunkDatumStore::StoredRow* &new_row,
-                        ObChunkDatumStore::StoredRow* &full_row);
+                        ObChunkDatumStore::StoredRow *&old_row,
+                        ObChunkDatumStore::StoredRow *&new_row,
+                        ObChunkDatumStore::StoredRow *&full_row);
 
   static int delete_row(const ObDASDelCtDef &ctdef,
                         ObDASDelRtDef &rtdef,
                         const ObDASTabletLoc *tablet_loc,
                         ObDMLRtCtx &das_rtctx,
                         const ExprFixedArray &old_row,
-                        ObChunkDatumStore::StoredRow* &stored_row);
+                        ObChunkDatumStore::StoredRow *&stored_row);
 
   static int lock_row(const ObDASLockCtDef &dlock_ctdef,
                       ObDASLockRtDef &dlock_rtdef,
@@ -226,11 +226,15 @@ public:
   static bool is_nested_dup_table(const uint64_t table_id,DASDelCtxList& del_ctx_list);
   static int get_nested_dup_table_ctx(const uint64_t table_id,
                                       DASDelCtxList& del_ctx_list,
-                                      SeRowkeyDistCtx* &rowkey_dist_ctx);
+                                      SeRowkeyDistCtx *&rowkey_dist_ctx);
   static int handle_after_row_processing_single(ObDMLModifyRowsList *dml_modify_rows);
   static int handle_after_row_processing_batch(ObDMLModifyRowsList *dml_modify_rows);
   static int handle_after_row_processing(bool execute_single_row, ObDMLModifyRowsList *dml_modify_rows);
   static int init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_cnt, ObRowkey &table_rowkey);
+  static int add_trans_info_datum(ObExpr *trans_info_expr,
+                                  ObEvalCtx &eval_ctx,
+                                  ObChunkDatumStore::StoredRow *stored_row);
+
 private:
   template <int N>
   static int write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
@@ -238,7 +242,8 @@ private:
                                  const ObDASTabletLoc *tablet_loc,
                                  ObDMLRtCtx &dml_rtctx,
                                  const ExprFixedArray &row,
-                                 ObChunkDatumStore::StoredRow* &stored_row);
+                                 ObExpr *trans_info_expr, // debug info for 4377 defensive check
+                                 ObChunkDatumStore::StoredRow *&stored_row);
   template <typename T>
   static const ObDASTableLocMeta *get_table_loc_meta(const T *multi_ctdef);
   static int check_nested_sql_legality(ObExecContext &ctx, common::ObTableID ref_table_id);
@@ -368,7 +373,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
     dsr.store_row_ = const_cast<ObDASWriteBuffer::DmlRow*>(dml_row);
     if (OB_FAIL(ObDMLService::create_anonymous_savepoint(*tx_desc_, savepoint_no))) {
       SQL_DAS_LOG(WARN, "create anonymous savepoint failed", K(ret));
-    } else if (OB_FAIL(single_row_buffer.init(*das_allocator_, ObIDASTaskOp::DAS_ROW_EXTEND_SIZE, MTL_ID()))) {
+    } else if (OB_FAIL(single_row_buffer.init(*das_allocator_, ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE, MTL_ID()))) {
       SQL_DAS_LOG(WARN, "init single row buffer failed", K(ret));
     } else if (OB_FAIL(single_row_buffer.try_add_row(dsr, das::OB_DAS_MAX_PACKET_SIZE, added, &store_row))) {
       SQL_DAS_LOG(WARN, "try add row to single row buffer failed", K(ret));

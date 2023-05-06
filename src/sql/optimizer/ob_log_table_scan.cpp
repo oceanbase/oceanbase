@@ -165,6 +165,10 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back expr", K(ret));
   } else if (NULL != calc_part_id_expr_ && OB_FAIL(all_exprs.push_back(calc_part_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (OB_FAIL(allocate_lookup_trans_info_expr())) {
+    LOG_WARN("failed to add lookup trans expr", K(ret));
+  } else if (NULL != trans_info_expr_ && OB_FAIL(all_exprs.push_back(trans_info_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
@@ -246,6 +250,10 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   } else if (use_batch() && nullptr != group_id_expr_
              && OB_FAIL(add_var_to_array_no_dup(exprs, group_id_expr_))) {
     LOG_WARN("failed to push back group id expr", K(ret));
+  } else if (index_back_ &&
+      nullptr != trans_info_expr_ &&
+      OB_FAIL(add_var_to_array_no_dup(exprs, trans_info_expr_))) {
+    LOG_WARN("fail to add lookup trans info expr", K(ret));
   } else if (OB_FAIL(dep_checker.check(exprs))) {
     LOG_WARN("failed to check op_exprs", K(ret));
   } else {
@@ -698,6 +706,38 @@ int ObLogTableScan::get_mbr_column_exprs(const uint64_t table_id,
     LOG_WARN("failed to append exprs", K(ret));
   }
 
+  return ret;
+}
+
+int ObLogTableScan::allocate_lookup_trans_info_expr()
+{
+  int ret = OB_SUCCESS;
+  // Is strict defensive check mode
+  // Is index_back (contain local lookup and global lookup)
+  // There is no trans_info_expr on the current table_scan operator
+  // Satisfy the three conditions, add trans_info_expr for lookup
+  // The result of Index_scan will contain the transaction information corresponding to each row
+  // The result of the lookup in the data table will also include the trans_info
+  // of the current row in the data table, But the trans_info will not be output to the upper operator
+  ObOptimizerContext *opt_ctx = nullptr;
+  ObOpPseudoColumnRawExpr *tmp_trans_info_expr = nullptr;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_ISNULL(opt_ctx = &(get_plan()->get_optimizer_context()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (index_back_ &&
+      opt_ctx->is_strict_defensive_check() &&
+      nullptr == trans_info_expr_) {
+    if (OB_FAIL(OB_FAIL(ObOptimizerUtil::generate_pseudo_trans_info_expr(*opt_ctx,
+                                                                         index_name_,
+                                                                         tmp_trans_info_expr)))) {
+      LOG_WARN("fail to generate pseudo trans info expr", K(ret), K(index_name_));
+    } else {
+      trans_info_expr_ = tmp_trans_info_expr;
+    }
+  }
   return ret;
 }
 

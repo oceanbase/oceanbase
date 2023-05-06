@@ -31,8 +31,8 @@ class ObDataAccessService
 public:
   ObDataAccessService();
   ~ObDataAccessService() = default;
-  static int mtl_init(ObDataAccessService* &das);
-  static void mtl_destroy(ObDataAccessService* &das);
+  static int mtl_init(ObDataAccessService *&das);
+  static void mtl_destroy(ObDataAccessService *&das);
   int init(rpc::frame::ObReqTransport *transport,
            const common::ObAddr &self_addr);
   //开启DAS Task分区相关的事务控制，并执行task对应的op

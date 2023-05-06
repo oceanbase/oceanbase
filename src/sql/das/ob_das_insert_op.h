@@ -34,11 +34,14 @@ public:
   virtual int release_op() override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
-  virtual int init_task_info() override;
+  virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return ins_ctdef_; }
   virtual ObDASBaseRtDef *get_rtdef() override { return ins_rtdef_; }
-  int write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full);
+  int write_row(const ExprFixedArray &row,
+                ObEvalCtx &eval_ctx,
+                ObChunkDatumStore::StoredRow *&stored_row,
+                bool &buffer_full);
   int64_t get_row_cnt() const { return insert_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASInsCtDef *ins_ctdef) { ins_ctdef_ = ins_ctdef; }
   void set_das_rtdef(ObDASInsRtDef *ins_rtdef) { ins_rtdef_ = ins_rtdef; }

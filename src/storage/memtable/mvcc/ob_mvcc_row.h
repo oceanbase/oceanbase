@@ -182,7 +182,9 @@ public:
       tx_end_scn_.atomic_store(tx_end_scn);
     }
   }
-  share::SCN get_tx_end_scn() { return tx_end_scn_.atomic_load(); }
+  share::SCN get_tx_end_scn() const { return tx_end_scn_.atomic_load(); }
+  share::SCN get_tx_version() const { return trans_version_.atomic_load(); }
+  share::SCN get_scn() const { return scn_.atomic_load(); }
 
 private:
   // the row flag of the mvcc tx node

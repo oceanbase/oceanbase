@@ -143,6 +143,7 @@ public:
   { use_iter_pool_ = 1; }
   OB_INLINE bool has_lob_column_out() const
   { return has_lob_column_out_; }
+  bool need_trans_info() const;
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -167,6 +168,7 @@ public:
   bool is_for_foreign_check_;
   bool limit_prefetch_;
   int64_t ss_rowkey_prefix_cnt_;
+  sql::ObPushdownOperator *op_;
   union {
     struct {
       int32_t pd_blockscan_:1;
@@ -202,7 +204,9 @@ public:
   // used for index back when query
   OB_INLINE int64_t get_out_col_cnt() const { return iter_param_.get_out_col_cnt(); }
   OB_INLINE int64_t get_max_out_col_cnt() const { return iter_param_.get_max_out_col_cnt(); }
-
+  // get push down operator
+  OB_INLINE sql::ObPushdownOperator *get_op() { return iter_param_.op_; }
+  OB_INLINE sql::ObPushdownOperator *get_op() const { return iter_param_.op_; }
 public:
   DECLARE_TO_STRING;
 public:
@@ -216,7 +220,6 @@ public:
   // output for sql static typing engine, NULL for old sql engine scan.
   const sql::ObExprPtrIArray *output_exprs_;
   const sql::ObExprPtrIArray *aggregate_exprs_;
-  sql::ObPushdownOperator *op_;
   const sql::ObExprPtrIArray *op_filters_;
   ObRow2ExprsProjector *row2exprs_projector_;
   const common::ObIArray<bool> *output_sel_mask_;

@@ -18,6 +18,7 @@
 #include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/memtable/mvcc/ob_query_engine.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/concurrency_control/ob_trans_stat_row.h"
 
 namespace oceanbase
 {
@@ -139,6 +140,7 @@ public:
   const ObMvccAccessCtx *get_mvcc_acc_ctx() const { return ctx_; }
   const ObMvccRow *get_mvcc_row() const { return value_; }
   const ObMvccTransNode *get_trans_node() const { return version_iter_; }
+  void get_trans_stat_row(concurrency_control::ObTransStatRow &row);
 private:
   int lock_for_read_(const ObQueryFlag &flag);
   int lock_for_read_inner_(const ObQueryFlag &flag, ObMvccTransNode *&iter);

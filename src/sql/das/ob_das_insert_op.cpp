@@ -340,11 +340,11 @@ int ObDASInsertOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_mor
   return ret;
 }
 
-int ObDASInsertOp::init_task_info()
+int ObDASInsertOp::init_task_info(uint32_t row_extend_size)
 {
   int ret = OB_SUCCESS;
   if (!insert_buffer_.is_inited()
-      && OB_FAIL(insert_buffer_.init(op_alloc_, DAS_ROW_EXTEND_SIZE, tenant_id_, "DASInsertBuffer"))) {
+      && OB_FAIL(insert_buffer_.init(op_alloc_, row_extend_size, MTL_ID(), "DASInsertBuffer"))) {
     LOG_WARN("init insert buffer failed", K(ret));
   }
   return ret;
@@ -361,12 +361,18 @@ int ObDASInsertOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASInsertOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
+int ObDASInsertOp::write_row(const ExprFixedArray &row,
+                             ObEvalCtx &eval_ctx,
+                             ObChunkDatumStore::StoredRow *&stored_row,
+                             bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(insert_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
+  if (!insert_buffer_.is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("buffer not inited", K(ret));
+  } else if (OB_FAIL(insert_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to insert buffer failed", K(ret), K(row), K(insert_buffer_));
   } else if (!added) {
     buffer_full = true;

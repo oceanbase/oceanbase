@@ -1439,6 +1439,10 @@ public:
                                            ObIAllocator &alloc,
                                            ObObj *&new_obj);
 
+  static int generate_pseudo_trans_info_expr(ObOptimizerContext &opt_ctx,
+                                             const common::ObString &table_name,
+                                             ObOpPseudoColumnRawExpr *&expr);
+
 private:
   //disallow construct
   ObOptimizerUtil();

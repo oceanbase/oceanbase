@@ -183,5 +183,34 @@ int ObIndexLookupOpImpl::get_next_rows(int64_t &count, int64_t capacity)
   return ret;
 }
 
+int ObIndexLookupOpImpl::build_trans_datum(ObExpr *expr,
+                                           ObEvalCtx *eval_ctx,
+                                           ObIAllocator &alloc,
+                                           ObDatum *&datum_ptr)
+{
+  int ret = OB_SUCCESS;
+  datum_ptr = nullptr;
+  if (OB_ISNULL(expr) || OB_ISNULL(eval_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K(ret), K(expr), K(eval_ctx));
+  }
+  if (OB_SUCC(ret)) {
+    void *buf = nullptr;
+    ObDatum &col_datum = expr->locate_expr_datum(*eval_ctx);
+    int64_t pos = sizeof(ObDatum);
+    int64_t len = sizeof(ObDatum) + col_datum.len_;
+    if (OB_ISNULL(buf = alloc.alloc(len))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate buffer failed", K(ret));
+    } else if (FALSE_IT(datum_ptr = new (buf) ObDatum)) {
+      // do nothing
+    } else if (OB_FAIL(datum_ptr->deep_copy(col_datum, static_cast<char *>(buf), sizeof(ObDatum) + col_datum.len_, pos))) {
+      LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+    }
+  }
+
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

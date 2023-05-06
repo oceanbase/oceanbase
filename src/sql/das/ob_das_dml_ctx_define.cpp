@@ -380,7 +380,7 @@ int ObDASWriteBuffer::init_dml_shadow_row(int64_t column_cnt, bool strip_lob_loc
 int ObDASWriteBuffer::try_add_row(const ObIArray<ObExpr*> &exprs,
                                   ObEvalCtx *ctx,
                                   const int64_t memory_limit,
-                                  DmlRow* &stored_row,
+                                  DmlRow *&stored_row,
                                   bool &row_added,
                                   bool strip_lob_locator)
 {
@@ -442,9 +442,9 @@ OB_INLINE int ObDASWriteBuffer::create_link_buffer(int64_t row_size, DmlRow *&ro
   char *buf = NULL;
   DmlRow *dml_row = nullptr;
   int64_t NODE_HEADER_SIZE = sizeof(LinkNode);
-  // 注意，这里 ObChunkDatumStore::StoredRow的长度包括两部分
-  // 本身存储ObDatum的长度row_size + 拓展的row_extend_size_长度
-  int64_t buffer_len = NODE_HEADER_SIZE + row_size + row_extend_size_;
+  // Note that whether it is a deserialization process or a local add_row, the length of row_size here includes two parts
+  // Store the length of ObDatum itself row_size + extended row_extend_size_length
+  int64_t buffer_len = NODE_HEADER_SIZE + row_size;
   if (OB_ISNULL(buf = reinterpret_cast<char*>(das_alloc_->alloc(buffer_len, mem_attr_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc buf failed", K(ret), K(buffer_len));
@@ -476,7 +476,7 @@ OB_INLINE int ObDASWriteBuffer::add_row_to_dlist(const ObIArray<ObExpr*> &exprs,
 {
   int ret = OB_SUCCESS;
   DmlRow *dml_row = nullptr;
-  if (OB_FAIL(create_link_buffer(row_size, dml_row))) {
+  if (OB_FAIL(create_link_buffer(row_size + row_extend_size_, dml_row))) {
     LOG_WARN("create link buffer failed", K(ret));
   } else if (OB_FAIL(DmlRow::build(dml_row, exprs, *ctx, (char *)dml_row, row_size))) {
     LOG_WARN("build stored row failed", K(ret));
@@ -493,7 +493,7 @@ OB_INLINE int ObDASWriteBuffer::add_row_to_dlist(const ObChunkDatumStore::Shadow
   int ret = OB_SUCCESS;
   DmlRow *dml_row = nullptr;
   const DmlRow *lsr = sr.get_store_row();
-  if (OB_FAIL(create_link_buffer(lsr->row_size_, dml_row))) {
+  if (OB_FAIL(create_link_buffer(lsr->row_size_ + row_extend_size_, dml_row))) {
     LOG_WARN("create link buffer failed", K(ret));
   } else {
     char *buf = dml_row->payload_;
@@ -619,13 +619,15 @@ int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
   const ObChunkDatumStore::StoredRow *store_row = NULL;
   int64_t rownum = 0;
   ObArenaAllocator tmp_alloc;
-
+  ObDatum *trans_info_datum = nullptr;
   ObDASWriteBuffer::Iterator write_iter_tmp;
+  ObString trans_info_str;
+
   if (OB_FAIL(const_cast<ObDASWriteBuffer*>(this)->begin(write_iter_tmp))) {
     LOG_WARN("get write iter failed", K(ret));
   }
-
   while (OB_SUCC(ret) && OB_SUCC(write_iter_tmp.get_next_row(store_row))) {
+    trans_info_str.reset();
     if (OB_ISNULL(store_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
@@ -663,9 +665,19 @@ int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
     }
 
     if (OB_SUCC(ret)) {
+      if (row_extend_size_ > ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE) {
+        // It means the payload contain trans_info string
+        char *buf = static_cast<char *>(store_row->get_extra_payload());
+        int32_t *str_len = reinterpret_cast<int32_t *>(store_row->get_extra_payload());
+        int64_t pos = sizeof(int32_t);
+        trans_info_str.assign(buf + pos, *str_len);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       // do print
       LOG_INFO("DASWriteBuffer dump", K(rownum), "task_type", das_base_ctdef.op_type_,
-               KPC(new_row), KPC(old_row), KPC(store_row));
+          K(trans_info_str), KPC(new_row), KPC(old_row), KPC(store_row));
       rownum++;
     }
   } // end while

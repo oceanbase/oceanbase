@@ -47,6 +47,7 @@ public:
                               ObDASTableLocMeta &loc_meta);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
                                  ObDASScanCtDef &scan_ctdef,
+                                 const ObRawExpr *trans_info_expr,
                                  const bool include_agg = false);
 private:
   int generate_access_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);

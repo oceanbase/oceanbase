@@ -165,7 +165,7 @@ int ObLobLocatorHelper::fill_lob_locator(ObDatumRow &row,
   } else if (!lib::is_oracle_mode() || is_sys_table(access_param.iter_param_.table_id_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Only oracle mode need build lob locator", K(ret));
-  } else if (OB_ISNULL(access_param.output_exprs_) || OB_ISNULL(access_param.op_)) {
+  } else if (OB_ISNULL(access_param.output_exprs_) || OB_ISNULL(access_param.get_op())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "output expr or op is null", K(ret), K(access_param));
   } else {
@@ -190,14 +190,14 @@ int ObLobLocatorHelper::fill_lob_locator(ObDatumRow &row,
         } else if (OB_UNLIKELY(i >= access_param.output_exprs_->count())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected index", K(ret), K(i), KPC(access_param.output_exprs_));
-        } else if (OB_ISNULL(access_param.op_)) {
+        } else if (OB_ISNULL(access_param.get_op())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("access_param.op is null", K(ret), K(access_param));
         } else {
           sql::ObExpr *expr = access_param.output_exprs_->at(i);
           if (is_lob_locator(expr->datum_meta_.type_)) {
             ObLobLocator *locator = NULL;
-            sql::ObDatum &datum = expr->locate_expr_datum(access_param.op_->get_eval_ctx());
+            sql::ObDatum &datum = expr->locate_expr_datum(access_param.get_op()->get_eval_ctx());
             if (datum.is_null()) {
               // do nothing.
             } else if (OB_FAIL(build_lob_locator(datum.get_string(), col_descs->at(idx).col_id_,

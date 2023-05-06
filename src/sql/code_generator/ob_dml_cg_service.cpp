@@ -275,7 +275,8 @@ int ObDmlCgService::generate_delete_ctdef(ObLogDelUpd &op,
   ObSEArray<ObRawExpr*, 64> new_row;
   if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
     LOG_WARN("fail to assign delete old row", K(ret));
-  } else if (OB_FAIL(generate_dml_base_ctdef(op, index_dml_info,
+  } else if (OB_FAIL(generate_dml_base_ctdef(op,
+                                             index_dml_info,
                                              del_ctdef,
                                              ObTriggerEvents::get_delete_event(),
                                              old_row,
@@ -988,7 +989,8 @@ int ObDmlCgService::generate_scan_ctdef(ObLogInsert &op,
                                                false))) {
       LOG_WARN("generate calc exprs failed", K(ret));
     } else if (OB_FAIL(cg_.tsc_cg_service_.generate_das_result_output(scan_ctdef.access_column_ids_,
-                                                                      scan_ctdef))) {
+                                                                      scan_ctdef,
+                                                                      nullptr))) {
       LOG_WARN("generate das result output failed", K(ret));
     }
   }
@@ -1627,13 +1629,26 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
   }
 
   if (OB_SUCC(ret) &&
+      op.is_dml_operator() &&
+      OB_NOT_NULL(index_dml_info.trans_info_expr_)) {
+      ObLogDelUpd &dml_op = static_cast<ObLogDelUpd&>(op);
+      // Cg is only needed when the current trans_info_expr_ has a producer operator
+    if (has_exist_in_array(dml_op.get_produced_trans_exprs(), index_dml_info.trans_info_expr_)) {
+      if (cg_.generate_rt_expr(*index_dml_info.trans_info_expr_, dml_base_ctdef.trans_info_expr_)) {
+        LOG_WARN("fail to cg trans_info expr", K(ret), KPC(index_dml_info.trans_info_expr_));
+      }
+    } else {
+      LOG_TRACE("this trans_info_expr not produced", K(ret), K(index_dml_info));
+    }
+  }
+
+  if (OB_SUCC(ret) &&
       log_op_def::LOG_INSERT == op.get_type()) {
     ObLogInsert &log_ins_op = static_cast<ObLogInsert &>(op);
     if (log_ins_op.get_insert_up()) {
       dml_base_ctdef.das_base_ctdef_.is_insert_up_ = true;
     }
   }
-
   return ret;
 }
 

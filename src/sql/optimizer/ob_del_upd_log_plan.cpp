@@ -811,7 +811,7 @@ int ObDelUpdLogPlan::compute_hash_dist_exprs_for_pdml_insert(ObExchangeInfo &exc
 }
 
 int ObDelUpdLogPlan::replace_assignment_expr_from_dml_info(const IndexDMLInfo &dml_info,
-                                                           ObRawExpr* &expr)
+                                                           ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   for (int64_t j = 0; OB_SUCC(ret) && j < dml_info.assignments_.count(); ++j) {
@@ -1751,6 +1751,35 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     } else {
       table_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
       table_dml_info->is_primary_index_ = true;
+      ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec_cts is null", K(ret));
+      } else if (exec_ctx->get_sql_ctx()->is_strict_defensive_check_ &&
+          !(optimizer_context_.get_session_info()->is_inner()) &&
+          (stmt_->is_update_stmt() || stmt_->is_delete_stmt()) &&
+          GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0) {
+        // 1: Is strict defensive check mode
+        // 2: Not inner_sql
+        // 3: Now only support delete and update statement
+        // 4: disable it when upgrade
+        // Only when the three conditions are met can the defensive_check information be added
+        TableItem *table_item = nullptr;
+        ObOpPseudoColumnRawExpr *trans_info_expr = nullptr;
+        if (OB_ISNULL(table_item = stmt_->get_table_item_by_id(table_info.table_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(table_info.table_id_), KPC(stmt_));
+        } else if (OB_FAIL(ObOptimizerUtil::generate_pseudo_trans_info_expr(get_optimizer_context(),
+                                                                            table_item->get_table_name(),
+                                                                            trans_info_expr))) {
+          LOG_WARN("fail to generate pseudo trans info expr", K(ret), K(table_item->get_table_name()));
+        } else if (OB_ISNULL(trans_info_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null pointer", K(ret));
+        } else {
+          table_dml_info->trans_info_expr_ = trans_info_expr;
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && !has_tg) {
@@ -1783,6 +1812,8 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
           index_dml_info->ref_table_id_ = index_tid[i];
           index_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
           index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
+          // Trans_info_expr_ on the main table is recorded in all index_dml_info
+          index_dml_info->trans_info_expr_ = table_dml_info->trans_info_expr_;
           ObSchemaObjVersion table_version;
           table_version.object_id_ = index_tid[i];
           table_version.object_type_ = DEPENDENCY_TABLE;

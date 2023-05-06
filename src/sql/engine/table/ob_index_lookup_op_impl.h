@@ -75,6 +75,7 @@ public:
   virtual ObEvalCtx & get_eval_ctx() = 0;
   virtual const ExprFixedArray & get_output_expr() = 0;
   virtual int switch_index_table_and_rowkey_group_id() { return OB_SUCCESS; }
+  int build_trans_datum(ObExpr *expr, ObEvalCtx *eval_ctx, ObIAllocator &alloc, ObDatum *&datum_ptr);
 
 protected:
   LookupType lookup_type_;

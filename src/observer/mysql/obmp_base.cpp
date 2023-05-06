@@ -350,7 +350,9 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
       ctx.can_reroute_sql_ = (pkt.can_reroute_pkt() && get_conn()->is_support_proxy_reroute());
     }
     ctx.is_protocol_weak_read_ = pkt.is_weak_read();
-    LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_));
+    ctx.is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
+    LOG_TRACE("protocol flag info", K(ctx.can_reroute_sql_), K(ctx.is_protocol_weak_read_),
+        K(ctx.is_strict_defensive_check_));
   }
   return ret;
 }
