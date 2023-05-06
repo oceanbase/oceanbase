@@ -1296,9 +1296,14 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
 {
   int ret = OB_SUCCESS;
   ObQualifiedName udt_col_func_q_name;
-  // Only support table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
-  // must have table alias name;
-  if (q_name.access_idents_.count() == 3
+  // Only support:
+  // 1. table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
+  // 2. table_alias.col_name.member_func.udf, for example: select a.c2.transfrom(xxx).getclobval() from t1 a;
+  // Notice:
+  // 1. must have table alias name;
+  // 2. table_alias.col_name.static_func.udf is not supported, for example:
+  //    select a.c2.createxml(xxx).getclobval() from t1 a; creatxml is an static function, not support
+  if (q_name.access_idents_.count() >= 3
         && q_name.access_idents_.at(0).type_ == UNKNOWN
         && q_name.access_idents_.at(1).type_ == UNKNOWN
         && q_name.access_idents_.at(2).type_ == PL_UDF) {
@@ -1326,12 +1331,17 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
       udt_col_func_q_name.ref_expr_= q_name.ref_expr_;
       if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
         LOG_WARN("push back col ref ident failed", K(ret));
-      } else if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(q_name.access_idents_.at(2)))) {
-        LOG_WARN("push back udt member function failed", K(ret), K(q_name.access_idents_.at(2)));
       } else {
-        udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
-        udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
-        q_name = udt_col_func_q_name;
+        for (int64_t i = 2; OB_SUCC(ret) && i < q_name.access_idents_.count(); i++) {
+          if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(q_name.access_idents_.at(i)))) {
+            LOG_WARN("push back udt member function failed", K(ret), K(i), K(q_name.access_idents_.at(i)));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
+          udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
+          q_name = udt_col_func_q_name;
+        }
       }
     }
   }
