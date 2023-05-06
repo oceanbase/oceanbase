@@ -636,7 +636,7 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         // commit log is replayed to empty memtable whitch is frozen after clog switch to follower gracefully, commit status mds will be lost.
         // so push max_end_scn to start_scn + 1
         else if (start_scn == get_end_scn()) {
-          if (OB_FAIL(set_max_end_scn(share::SCN::scn_inc(start_scn)))) {
+          if (OB_FAIL(set_end_scn(share::SCN::scn_inc(start_scn)))) {
             TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
           }
         }
