@@ -790,12 +790,11 @@ int ObTabletMergeCtx::get_schema_and_gene_from_result(const ObGetMergeTablesResu
     LOG_WARN("failed to set basic info to ctx", K(ret), K(get_merge_table_result), KPC(this));
   } else if (OB_FAIL(cal_minor_merge_param())) {
     LOG_WARN("failed to cal minor merge param", K(ret), KPC(this));
+  } else if (FALSE_IT(merge_scn_ = scn_range_.end_scn_)) {
   } else if (!is_minor_merge_type(get_merge_table_result.suggest_merge_type_)) {
   } else if (OB_UNLIKELY(scn_range_.is_empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexcepted empty scn range in minor merge", K(ret), K(scn_range_));
-  } else {
-    merge_scn_ = scn_range_.end_scn_;
   }
   return ret;
 }
