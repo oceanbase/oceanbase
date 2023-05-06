@@ -4489,6 +4489,22 @@ int ObDMLStmt::formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatt
   return ret;
 }
 
+int ObDMLStmt::check_has_cursor_expression(bool &has_cursor_expr) const
+{
+  int ret = OB_SUCCESS;
+  ObQueryRefRawExpr *ref_query = NULL;
+  has_cursor_expr = false;
+  for (int64_t j = 0; OB_SUCC(ret) && !has_cursor_expr && j < subquery_exprs_.count(); ++j) {
+    if (OB_ISNULL(ref_query = subquery_exprs_.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (ref_query->is_cursor()) {
+      has_cursor_expr = true;
+    }
+  }
+  return ret;
+}
+
 ObJtColBaseInfo::ObJtColBaseInfo()
   : col_type_(0),
     truncate_(0),

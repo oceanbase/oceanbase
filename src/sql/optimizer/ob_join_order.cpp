@@ -1509,6 +1509,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
                     get_plan()->get_optimizer_context().has_pl_udf() ||
                     get_plan()->get_optimizer_context().has_dblink() ||
                     get_plan()->get_optimizer_context().has_subquery_in_function_table() ||
+                    get_plan()->get_optimizer_context().has_cursor_expression() ||
                     is_batch_update_table;
     if (EXTERNAL_TABLE == table_item->table_type_) {
       create_das_path = false;
