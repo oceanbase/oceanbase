@@ -1880,6 +1880,8 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (log_op_def::LOG_LINK_SCAN == get_type()) {
+    // do not extract shared exprs for link op
   } else if (OB_FAIL(extract_shared_exprs(expr,
                                           ctx,
                                           0,

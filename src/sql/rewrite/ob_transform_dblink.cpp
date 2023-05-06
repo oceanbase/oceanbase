@@ -451,6 +451,19 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
         LOG_TRACE("succeed to pack one link stmt", K(helpers.at(i)));
       }
     }
+  } else if (stmt->is_set_stmt()) {
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_set_query().count(); ++i) {
+      ObSelectStmt *child_stmt = sel_stmt->get_set_query(i);
+      if (OB_ISNULL(child_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!child_stmt->is_dblink_stmt()) {
+        // do nothing
+      } else if (OB_FAIL(ObTransformUtils::pack_stmt(ctx_, static_cast<ObSelectStmt *>(child_stmt)))) {
+        LOG_WARN("failed to pack link stmt", K(ret));
+      }
+    }
   }
   return ret;
 }
