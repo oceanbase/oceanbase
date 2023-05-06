@@ -24,6 +24,8 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_global_info.cpp
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp
+  ob_cdc_server_endpoint_access_info.cpp
+  ob_cdc_tenant_endpoint_provider.cpp
   ob_cdc_udt.cpp
   ob_concurrent_seq_queue.cpp
   ob_log_adapt_string.cpp
@@ -54,7 +56,6 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_meta_data_fetcher_dispatcher.cpp
   ob_log_factory.cpp
   ob_log_fetch_log_rpc.cpp
-  ob_log_fetch_stat_info.cpp
   ob_log_fetch_stream_container.cpp
   ob_log_fetch_stream_container_mgr.cpp
   ob_log_fetch_stream_pool.cpp
@@ -75,7 +76,6 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_ls_fetch_stream.cpp
   ob_log_ls_fetch_mgr.cpp
   ob_log_part_mgr.cpp
-  ob_log_ls_define.cpp
   ob_log_ls_info.cpp
   ob_log_ls_getter.cpp
   ob_log_ls_mgr.cpp

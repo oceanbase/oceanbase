@@ -146,7 +146,7 @@ private:
   int handle_ddl_task_(PartTransTask *ddl_task);
   int handle_ddl_stmt_(DdlStmtTask &stmt_task);
   int revert_binlog_record_(ObLogBR *br);
-  int do_trans_stat_(const TenantLSID &pkey, const int64_t total_stmt_cnt);
+  int do_trans_stat_(const logservice::TenantLSID &pkey, const int64_t total_stmt_cnt);
   int commit_binlog_record_list_(TransCtx &trans_ctx,
       const uint64_t cluster_id,
       const int64_t part_trans_task_count,
@@ -166,7 +166,7 @@ private:
 private:
   struct CheckpointTask
   {
-    TenantLSID              tenant_ls_id_;  // tenant_id of corresponding PartTransTask
+    logservice::TenantLSID  tenant_ls_id_;  // tenant_id of corresponding PartTransTask
     PartTransTask::TaskType task_type_;     // PartTransTask::TaskType
     int64_t                 timestamp_;     // timestamp of task
 

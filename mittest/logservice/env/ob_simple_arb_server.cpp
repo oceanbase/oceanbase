@@ -157,8 +157,10 @@ int ObSimpleArbServer::simple_start(const bool is_bootstrat)
 {
   int ret = OB_SUCCESS;
   palflite::PalfEnvKey key(cluster_id_, OB_SERVER_TENANT_ID);
+  arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
   if (OB_FAIL(srv_network_frame_.start())) {
     CLOG_LOG(WARN, "start ObArbSrvNetWorkFrame failed", K(ret));
+  } else if (OB_FAIL(palf_env_mgr_.add_cluster(self_, cluster_id_, "arbserver_test", epoch))) {
   } else if (OB_FAIL(palf_env_mgr_.create_palf_env_lite(key))) {
     CLOG_LOG(WARN, "PalfEnvLiteMgr create_palf_env_lite failed", K(ret));
   } else if (OB_FAIL(timer_.start())) {

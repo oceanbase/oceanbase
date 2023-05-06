@@ -155,7 +155,8 @@ public:
   OB_INLINE bool is_normal() const { return share::schema::TENANT_STATUS_NORMAL == tenant_status_; }
   OB_INLINE bool is_creating() const { return share::schema::TENANT_STATUS_CREATING == tenant_status_; }
   OB_INLINE bool is_dropping() const { return share::schema::TENANT_STATUS_DROPPING == tenant_status_; }
-  OB_INLINE bool is_restore() const { return share::schema::TENANT_STATUS_RESTORE == tenant_status_; }
+  OB_INLINE bool is_restore() const { return share::schema::TENANT_STATUS_RESTORE == tenant_status_
+                                             || share::schema::TENANT_STATUS_CREATING_STANDBY == tenant_status_; }
   OB_INLINE common::ObCharsetType get_charset_type() const { return charset_type_; }
   OB_INLINE common::ObCollationType get_collation_type() const { return collation_type_; }
   OB_INLINE int64_t get_drop_tenant_time() const { return drop_tenant_time_; }
@@ -301,10 +302,12 @@ public:
 
   OB_INLINE uint64_t get_udt_set_id() const { return udt_set_id_; }
   OB_INLINE uint64_t get_sub_data_type() const { return sub_type_; }
-  OB_INLINE bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  OB_INLINE bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
+  OB_INLINE bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
   OB_INLINE bool is_xmltype() const {
-    return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
-        || meta_type_.is_xml_sql_type();
+    return is_udt_column()
+        && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
+            || meta_type_.is_xml_sql_type());
   }
 
   NEED_SERIALIZE_AND_DESERIALIZE_DICT;

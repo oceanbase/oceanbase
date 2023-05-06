@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX CLOG
+#include "share/restore/ob_log_restore_source.h"    //TODO delete
 
 #include "ob_log_restore_service.h"
 #include "lib/ob_errno.h"
@@ -35,6 +36,8 @@ ObLogRestoreService::ObLogRestoreService() :
   ls_svr_(NULL),
   proxy_(),
   location_adaptor_(),
+  archive_driver_(),
+  net_driver_(),
   fetch_log_impl_(),
   fetch_log_worker_(),
   error_reporter_(),
@@ -53,6 +56,7 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     ObLogService *log_service)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLogRestoreService init twice", K(ret), K(inited_));
@@ -61,19 +65,23 @@ int ObLogRestoreService::init(rpc::frame::ObReqTransport *transport,
     LOG_WARN("invalid argument", K(ret), K(transport), K(ls_svr), K(log_service));
   } else if (OB_FAIL(proxy_.init(transport))) {
     LOG_WARN("proxy_ init failed", K(ret));
-  } else if (OB_FAIL(restore_controller_.init(MTL_ID(), log_service))) {
+  } else if (OB_FAIL(restore_controller_.init(tenant_id, log_service))) {
     LOG_WARN("restore_controller_ init failed");
-  } else if (OB_FAIL(location_adaptor_.init(MTL_ID(), ls_svr))) {
+  } else if (OB_FAIL(location_adaptor_.init(tenant_id, ls_svr))) {
     LOG_WARN("location_adaptor_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_impl_.init(MTL_ID(), ls_svr, log_service, &fetch_log_worker_))) {
+  } else if (OB_FAIL(archive_driver_.init(tenant_id, ls_svr, log_service, &fetch_log_worker_))) {
+    LOG_WARN("archive_driver_ init failed");
+  } else if (OB_FAIL(net_driver_.init(tenant_id, &restore_controller_, ls_svr, log_service))) {
+    LOG_WARN("net_driver_ init failed");
+  } else if (OB_FAIL(fetch_log_impl_.init(tenant_id, &archive_driver_, &net_driver_))) {
     LOG_WARN("fetch_log_impl_ init failed", K(ret));
-  } else if (OB_FAIL(fetch_log_worker_.init(MTL_ID(), &allocator_, &restore_controller_, this, ls_svr))) {
+  } else if (OB_FAIL(fetch_log_worker_.init(tenant_id, &allocator_, &restore_controller_, this, ls_svr))) {
     LOG_WARN("fetch_log_worker_ init failed", K(ret));
-  } else if (OB_FAIL(error_reporter_.init(MTL_ID(), ls_svr))) {
+  } else if (OB_FAIL(error_reporter_.init(tenant_id, ls_svr))) {
     LOG_WARN("error_reporter_ init failed", K(ret));
-  } else if (OB_FAIL(allocator_.init(MTL_ID()))) {
+  } else if (OB_FAIL(allocator_.init(tenant_id))) {
     LOG_WARN("allocator_ init failed", K(ret));
-  } else if (OB_FAIL(scheduler_.init(MTL_ID(), &allocator_, &fetch_log_worker_))) {
+  } else if (OB_FAIL(scheduler_.init(tenant_id, &allocator_, &fetch_log_worker_))) {
     LOG_WARN("scheduler_ init failed", K(ret));
   } else {
     ls_svr_ = ls_svr;
@@ -91,6 +99,8 @@ void ObLogRestoreService::destroy()
   wait();
   restore_controller_.destroy();
   location_adaptor_.destroy();
+  archive_driver_.destroy();
+  net_driver_.destroy();
   fetch_log_impl_.destroy();
   error_reporter_.destroy();
   proxy_.destroy();
@@ -118,6 +128,7 @@ int ObLogRestoreService::start()
 
 void ObLogRestoreService::stop()
 {
+  net_driver_.stop();
   fetch_log_worker_.stop();
   ObThreadPool::stop();
   LOG_INFO("ObLogRestoreService thread stop", "tenant_id", MTL_ID());
@@ -125,6 +136,7 @@ void ObLogRestoreService::stop()
 
 void ObLogRestoreService::wait()
 {
+  net_driver_.wait();
   fetch_log_worker_.wait();
   ObThreadPool::wait();
   LOG_INFO("ObLogRestoreService thread wait", "tenant_id", MTL_ID());
@@ -160,15 +172,25 @@ void ObLogRestoreService::run1()
 
 void ObLogRestoreService::do_thread_task_()
 {
+  int ret = OB_SUCCESS;
   if (is_user_tenant(MTL_ID())) {
+    share::ObLogRestoreSourceItem source;
+    bool source_exist = false;
+
     update_restore_quota_();
 
-    update_upstream_();
-
-    schedule_fetch_log_();
+    if (OB_FAIL(update_upstream_(source, source_exist))) {
+      LOG_WARN("update_upstream_ failed");
+    } else if (source_exist) {
+      // log restore source exist, do schedule
+      // source_exist means tenant_role is standby or restore and log_restore_source exists
+      schedule_fetch_log_(source);
+    } else {
+      // tenant_role not match or log_restore_source not exist
+      clean_resource_();
+    }
 
     schedule_resource_();
-
     report_error_();
   }
 }
@@ -178,14 +200,19 @@ void ObLogRestoreService::update_restore_quota_()
   (void)restore_controller_.update_quota();
 }
 
-void ObLogRestoreService::update_upstream_()
+int ObLogRestoreService::update_upstream_(share::ObLogRestoreSourceItem &source, bool &source_exist)
 {
-  (void)location_adaptor_.update_upstream();
+  return location_adaptor_.update_upstream(source, source_exist);
 }
 
-void ObLogRestoreService::schedule_fetch_log_()
+void ObLogRestoreService::schedule_fetch_log_(share::ObLogRestoreSourceItem &source)
 {
-  (void)fetch_log_impl_.do_schedule();
+  (void)fetch_log_impl_.do_schedule(source);
+}
+
+void ObLogRestoreService::clean_resource_()
+{
+  (void)fetch_log_impl_.clean_resource();
 }
 
 void ObLogRestoreService::schedule_resource_()

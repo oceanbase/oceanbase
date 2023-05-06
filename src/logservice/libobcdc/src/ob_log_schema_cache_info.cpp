@@ -44,8 +44,8 @@ ColumnSchemaInfo::ColumnSchemaInfo()
       extended_type_info_size_(0),
       extended_type_info_(NULL),
       is_rowkey_(false),
-      udt_set_id_(OB_INVALID_ID),
-      sub_type_(OB_INVALID_ID)
+      udt_set_id_(0),
+      sub_type_(0)
 {
   // default column is delete
 }
@@ -144,8 +144,8 @@ void ColumnSchemaInfo::reset()
   extended_type_info_size_ = 0;
   extended_type_info_ = NULL;
   is_rowkey_ = false;
-  udt_set_id_ = OB_INVALID_ID;
-  sub_type_ = OB_INVALID_ID;
+  udt_set_id_ = 0;
+  sub_type_ = 0;
 }
 
 void ColumnSchemaInfo::get_extended_type_info(common::ObArrayHelper<common::ObString> &str_array) const
@@ -848,7 +848,7 @@ int TableSchemaInfo::set_user_column_idx_(
 int TableSchemaInfo::add_udt_column_(ColumnSchemaInfo *column_info)
 {
   int ret = OB_SUCCESS;
-  uint64_t udt_set_id = OB_INVALID_ID;
+  uint64_t udt_set_id = 0;
   ObCDCUdtSchemaInfo *udt_schema_info = nullptr;
   if (OB_ISNULL(column_info)) {
     ret = OB_ERR_UNEXPECTED;

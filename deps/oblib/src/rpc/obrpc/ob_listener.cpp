@@ -24,6 +24,11 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
+#define ussl_log(level, errcode, format, ...) _OB_LOG_RET(level, errcode, "[ussl] " format, ##__VA_ARGS__)
+extern "C" {
+#include "ussl-hook.h"
+};
+
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common::serialization;
@@ -59,6 +64,7 @@ int ObListener::listen_create(int port) {
   int no_block_flag = 1;
 
   memset(&sin, 0, sizeof(sin));
+  socklen_t ob_listener_gid_len = sizeof(OB_LISTENER_GID);
 
   if (port <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -82,12 +88,15 @@ int ObListener::listen_create(int port) {
     RPC_LOG(ERROR, "set reuse port fail!", K(fd), K(port), K(errno));
   }
 #endif
-  else if (bind(fd, (sockaddr*)make_unix_sockaddr(&sin, 0, port), sizeof(sin)) < 0) {
+  else if (ussl_setsockopt(fd, SOL_OB_SOCKET, SO_OB_SET_SERVER_GID, &OB_LISTENER_GID, ob_listener_gid_len) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "bind failed!", K(ret), K(fd), K(port), K(errno), KERRNOMSG(errno));
-  } else if (listen(fd, 1024) < 0) {
+    RPC_LOG(ERROR, "set ObListener gid failed", K(OB_LISTENER_GID));
+  } else if (bind(fd, (sockaddr*)make_unix_sockaddr(&sin, 0, port), sizeof(sin)) < 0) {
     ret = OB_SERVER_LISTEN_ERROR;
-    RPC_LOG(ERROR, "listen failed", K(ret), K(fd), K(port), K(errno), KERRNOMSG(errno));
+    RPC_LOG(ERROR, "bind failed!", K(errno));
+  } else if (ussl_listen(fd, 1024) < 0) {
+    ret = OB_SERVER_LISTEN_ERROR;
+    RPC_LOG(ERROR, "listen failed", K(errno));
   }
 
   if (OB_FAIL(ret)) {
@@ -197,8 +206,12 @@ static int read_client_magic(int fd, uint64_t &client_magic, uint8_t &index)
   while ((rcv_byte = recv(fd, (char *) recv_buf, sizeof(recv_buf), MSG_PEEK)) < 0 && EINTR == errno);
 
   if (rcv_byte < 0) {
-    ret = OB_IO_ERROR;
-    RPC_LOG(ERROR, "recv bytes is less than 0!", K(errno));
+    RPC_LOG(WARN, "recv bytes is less than 0!", K(errno));
+    if (EAGAIN == errno || EWOULDBLOCK == errno) {
+      ret = OB_EAGAIN;
+    } else {
+      ret = OB_IO_ERROR;
+    }
   } else if (0 == rcv_byte) {
     RPC_LOG(INFO, "peer closed connection!");
     ret = OB_IO_ERROR;
@@ -308,7 +321,7 @@ void ObListener::do_work()
         io_threads_pipefd_pool_t *pipefd_pool = NULL;
 
         if (accept_fd == listen_fd_) {
-          int conn_fd = accept(listen_fd_, NULL, NULL);
+          int conn_fd = ussl_accept(listen_fd_, NULL, NULL);
           if (conn_fd < 0) {
             RPC_LOG(ERROR, "accept failed!", K(errno));
           } else {
@@ -420,3 +433,7 @@ int ObListener::do_one_event(int accept_fd) {
 
    return ioth_index;
  }
+
+ extern "C" {
+   #include "ussl-hook.c"
+ };

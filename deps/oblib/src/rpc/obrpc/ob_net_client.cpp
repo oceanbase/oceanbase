@@ -20,6 +20,11 @@ extern "C" {
 #include "rpc/pnio/interface/group.h"
 };
 
+extern "C" {
+#include "ussl-hook.h"
+#include "auth-methods.h"
+}
+
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -97,7 +102,12 @@ int ObNetClient::load_ssl_config(const bool use_bkmi,
   } else {
     pkt_handler_.ez_handler()->is_ssl = 1;
     pkt_handler_.ez_handler()->is_ssl_opt = 0;
-    transport_->enable_use_ssl();
+    //USSL_AUTH_SSL_HANDSHAKE just use SSL handshake for authenticaion
+    //but not encrypt the channel
+    if (USSL_AUTH_SSL_HANDSHAKE == get_client_auth_methods()) {
+    } else {
+      transport_->enable_use_ssl();
+    }
 
     LOG_INFO("ObNetClient load_ssl_config succ", K(use_bkmi), K(use_sm));
   }

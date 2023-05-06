@@ -1,17 +1,21 @@
-str_t* sfl(link_t* l) { return (str_t*)(l+1); }
-int64_t cidfl(link_t* l) {return  *((int64_t*)l-1); }
-static int iov_from_blist(struct iovec* iov, int64_t limit, link_t* h) {
+str_t* sfl(dlink_t* l) { return (str_t*)(l+1); }
+int64_t cidfl(dlink_t* l) {return  *((int64_t*)l-1); }
+static int iov_from_blist(struct iovec* iov, int64_t limit, dlink_t* head) {
   int cnt = 0;
-  for(; cnt < limit && h; h = h->next, cnt++) {
-    iov_set_from_str(iov + cnt, sfl(h));
+  dlink_for(head, p) {
+    if (cnt >= limit) {
+      break;
+    }
+    iov_set_from_str(iov + cnt, sfl(p));
+    cnt++;
   }
   return cnt;
 }
 
-static int sk_flush_blist(sock_t* s, link_t* h, int64_t last_pos, int64_t* wbytes) {
+static int sk_flush_blist(sock_t* s, dlink_t* head, int64_t last_pos, int64_t* wbytes) {
   int err = 0;
   struct iovec iov[64];
-  int cnt = iov_from_blist(iov, arrlen(iov), h);
+  int cnt = iov_from_blist(iov, arrlen(iov), head);
   if (cnt > 0) {
     iov_consume_one(iov, last_pos);
     err = sk_writev(s, iov, cnt, wbytes);
@@ -19,7 +23,7 @@ static int sk_flush_blist(sock_t* s, link_t* h, int64_t last_pos, int64_t* wbyte
   return err;
 }
 
-void wq_inc(write_queue_t* wq, link_t* l) {
+void wq_inc(write_queue_t* wq, dlink_t* l) {
   int64_t bytes = sfl(l)->s;
   wq->cnt ++;
   wq->sz += bytes;
@@ -27,7 +31,7 @@ void wq_inc(write_queue_t* wq, link_t* l) {
   wq->categ_count_bucket[cid % arrlen(wq->categ_count_bucket)] ++;
 }
 
-void wq_dec(write_queue_t* wq, link_t* l) {
+void wq_dec(write_queue_t* wq, dlink_t* l) {
   int64_t bytes = sfl(l)->s;
   wq->cnt --;
   wq->sz -= bytes;
@@ -35,10 +39,10 @@ void wq_dec(write_queue_t* wq, link_t* l) {
   wq->categ_count_bucket[cid % arrlen(wq->categ_count_bucket)] --;
 }
 
-static link_t* wq_consume(write_queue_t* wq, int64_t bytes) {
+static dlink_t* wq_consume(write_queue_t* wq, int64_t bytes) {
   int64_t s = 0;
-  link_t* top = queue_top(&wq->queue);
-  link_t* h = top;
+  dlink_t* top = dqueue_top(&wq->queue);
+  dlink_t* h = top;
   if((s = sfl(h)->s - wq->pos) <= bytes) {
     bytes -= s;
     wq_dec(wq, h);
@@ -52,32 +56,42 @@ static link_t* wq_consume(write_queue_t* wq, int64_t bytes) {
   } else {
     wq->pos += bytes;
   }
-  queue_set(&wq->queue, h);
+  dqueue_set(&wq->queue, h);
   return top;
 }
 
 void wq_init(write_queue_t* wq) {
-  queue_init(&wq->queue);
+  dqueue_init(&wq->queue);
   wq->pos = 0;
   wq->cnt = 0;
   wq->sz = 0;
   memset(wq->categ_count_bucket, 0, sizeof(wq->categ_count_bucket));
 }
 
-inline void wq_push(write_queue_t* wq, link_t* l) {
-  str_t* msg = sfl(l);
+inline void wq_push(write_queue_t* wq, dlink_t* l) {
   wq_inc(wq, l);
-  queue_push(&wq->queue, l);
+  dqueue_push(&wq->queue, l);
 }
 
-int wq_flush(sock_t* s, write_queue_t* wq, link_t** old_head) {
-  int err = 0;
-  link_t* h = queue_top(&wq->queue);
-  if (NULL == h) {
-    return err;
+inline int wq_delete(write_queue_t* wq, dlink_t* l) {
+  int err = PNIO_OK;
+  if (dqueue_top(&wq->queue) == l) {
+    // not to delete the first req of write_queue
+    err = PNIO_ERROR;
+  } else if (l == l->prev) {
+    // req hasn't been inserted into flush_list
+    err = PNIO_ERROR;
+  } else {
+    wq_dec(wq, l);
+    dqueue_delete(&wq->queue, l);
   }
+  return err;
+}
+
+int wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
+  int err = 0;
   int64_t wbytes = 0;
-  err = sk_flush_blist((sock_t*)s, h, wq->pos, &wbytes);
+  err = sk_flush_blist((sock_t*)s, &wq->queue.head, wq->pos, &wbytes);
   if (0 == err) {
     *old_head = wq_consume(wq, wbytes);
   }

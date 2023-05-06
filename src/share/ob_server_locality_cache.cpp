@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/ob_server_locality_cache.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -241,11 +242,40 @@ int ObServerLocalityCache::get_server_zone(const common::ObAddr &server,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_EMPTY_LOCALITY_CACHE)
+int ObServerLocalityCache::get_server_zone_type(const common::ObAddr &server,
+                                           common::ObZoneType &zone_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ERRSIM_EMPTY_LOCALITY_CACHE)) {
+    ret = ERRSIM_EMPTY_LOCALITY_CACHE;
+  } else if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server));
+  } else {
+    SpinRLockGuard guard(rwlock_);
+    bool is_found = false;
+    for (int64_t i = 0; !is_found && i < server_locality_array_.count(); ++i) {
+      const share::ObServerLocality &server_locality = server_locality_array_.at(i);
+      if (server_locality.get_addr() == server) {
+        zone_type = server_locality.get_zone_type();
+        is_found = true;
+      }
+    }
+    if (!is_found) {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
+  }
+  return ret;
+}
+
 int ObServerLocalityCache::get_server_region(const common::ObAddr &server,
                                              common::ObRegion &region) const
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
+  if (OB_UNLIKELY(ERRSIM_EMPTY_LOCALITY_CACHE)) {
+    ret = ERRSIM_EMPTY_LOCALITY_CACHE;
+  } else if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else if (!server.is_valid()) {
     ret = OB_INVALID_ARGUMENT;

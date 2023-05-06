@@ -37,6 +37,17 @@ namespace oceanbase
 {
 namespace share
 {
+OB_SERIALIZE_MEMBER(ObMemberListFlag, flag_);
+
+int64_t ObMemberListFlag::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(flag));
+  J_OBJ_END();
+  return pos;
+}
+
 //////////ObLSStatusInfo
 bool ObLSStatusInfo::is_valid() const
 {
@@ -436,7 +447,8 @@ int ObLSStatusOperator::update_ls_status_in_trans_(
 
 int ObLSStatusOperator::update_init_member_list(
     const uint64_t tenant_id,
-    const ObLSID &id, const ObMemberList &member_list, ObISQLClient &client)
+    const ObLSID &id, const ObMemberList &member_list, ObISQLClient &client,
+    const ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
@@ -446,18 +458,18 @@ int ObLSStatusOperator::update_init_member_list(
     LOG_WARN("invalid_argument", KR(ret), K(id), K(member_list), K(tenant_id));
   } else {
     common::ObSqlString sql;
-    ObString visist_member_list;
+    ObSqlString visist_member_list;
     ObString hex_member_list;
     ObArenaAllocator allocator("MemberList");
-    if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visist_member_list))) {
+    if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visist_member_list, arb_member))) {
       LOG_WARN("failed to get visible member list", KR(ret), K(member_list));
-    } else if (OB_FAIL(get_member_list_hex_(member_list, allocator, hex_member_list))) {
+    } else if (OB_FAIL(get_member_list_hex_(member_list, allocator, hex_member_list, arb_member))) {
       LOG_WARN("faield to get member list hex", KR(ret), K(member_list));
     } else if (OB_FAIL(sql.assign_fmt(
             "UPDATE %s set init_member_list = '%.*s', b_init_member_list = '%.*s' "
             "where ls_id = %ld and tenant_id = %lu and b_init_member_list is null",
             OB_ALL_LS_STATUS_TNAME,
-            visist_member_list.length(), visist_member_list.ptr(),
+            static_cast<int>(visist_member_list.length()), visist_member_list.ptr(),
             hex_member_list.length(), hex_member_list.ptr(), id.id(), tenant_id))) {
       LOG_WARN("failed to assign sql", KR(ret), K(id), K(member_list), K(sql));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
@@ -529,16 +541,18 @@ int ObLSStatusOperator::get_all_ls_status_by_order_for_switch_tenant(
 int ObLSStatusOperator::get_ls_init_member_list(
     const uint64_t tenant_id,
     const ObLSID &id, ObMemberList &member_list,
-    share::ObLSStatusInfo &status_info, ObISQLClient &client)
+    share::ObLSStatusInfo &status_info, ObISQLClient &client,
+    ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
   status_info.reset();
+  arb_member.reset();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, true /*need_member_list*/,
-                                    member_list, status_info, client))) {
+                                    member_list, status_info, client, arb_member))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
   }
   return ret;
@@ -550,12 +564,13 @@ int ObLSStatusOperator::get_ls_status_info(
 {
   int ret = OB_SUCCESS;
   ObMemberList member_list;
+  ObMember arb_member;
   status_info.reset();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, false /*need_member_list*/,
-                                    member_list, status_info, client))) {
+                                    member_list, status_info, client, arb_member))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
   }
   return ret;
@@ -563,18 +578,23 @@ int ObLSStatusOperator::get_ls_status_info(
 
 int ObLSStatusOperator::get_visible_member_list_str_(const ObMemberList &member_list,
                                                     common::ObIAllocator &allocator,
-                                                    common::ObString &visible_member_list_str)
+                                                    common::ObSqlString &visible_member_list_str,
+                                                    const ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   char *member_list_str = NULL;
-  const int64_t length = member_list.get_serialize_size();
+  char *flag_str = NULL;
+  char *arb_member_str = NULL;
+  ObMemberListFlag arb_flag(ObMemberListFlag::HAS_ARB_MEMBER);
+  const int64_t length =  MAX_MEMBER_LIST_LENGTH;
+  const int64_t arb_member_length = arb_member.is_valid() ? MAX_MEMBER_LIST_LENGTH : 0;
+  const int64_t flag_length = arb_member.is_valid() ? MAX_MEMBERLIST_FLAG_LENGTH : 0;
   int64_t pos = 0;
+  int64_t pos_for_flag = 0;
+  int64_t pos_for_arb_member = 0;
   if (OB_UNLIKELY(!member_list.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("member list is not valid", KR(ret), K(member_list));
-  } else if (OB_UNLIKELY(length > OB_MAX_LONGTEXT_LENGTH + 1)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("member list too long", KR(ret), K(length), K(member_list));
   } else if (OB_ISNULL(member_list_str = static_cast<char *>(allocator.alloc(length)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", KR(ret), K(length));
@@ -583,19 +603,46 @@ int ObLSStatusOperator::get_visible_member_list_str_(const ObMemberList &member_
   } else if (OB_UNLIKELY(pos >= length)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("size overflow", KR(ret), K(pos), K(length));
+  } else if (OB_FAIL(visible_member_list_str.assign_fmt("%.*s", static_cast<int>(length), member_list_str))) {
+    LOG_WARN("fail to construct visible member list string", KR(ret), K(member_list));
+  } else if (0 == flag_length && 0 == arb_member_length) {
+    // do nothing
+  } else if (0 != flag_length && 0 != arb_member_length) {
+    if (OB_ISNULL(flag_str = static_cast<char *>(allocator.alloc(flag_length)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buf for flag", KR(ret), K(flag_length));
+    } else if (OB_ISNULL(arb_member_str = static_cast<char *>(allocator.alloc(arb_member_length)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc buf for arb member", KR(ret), K(arb_member_length));
+    } else if (FALSE_IT(pos_for_flag = arb_flag.to_string(flag_str, flag_length))) {
+    } else if (FALSE_IT(pos_for_arb_member = arb_member.to_string(arb_member_str, arb_member_length))) {
+    } else if (OB_UNLIKELY(pos_for_flag > flag_length || pos_for_arb_member > arb_member_length)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("size overflow", KR(ret), K(flag_length), K(pos_for_flag), K(arb_member_length), K(pos_for_arb_member));
+    } else if (OB_FAIL(visible_member_list_str.append_fmt("%.*s", static_cast<int>(flag_length), flag_str))) {
+      LOG_WARN("fail to construct flag", KR(ret), K(flag_length), K(arb_member));
+    } else if (OB_FAIL(visible_member_list_str.append_fmt("%.*s", static_cast<int>(arb_member_length), arb_member_str))) {
+      LOG_WARN("fail to construct visible arb member", KR(ret), K(arb_member));
+    }
   } else {
-    visible_member_list_str.assign(member_list_str, static_cast<int32_t>(pos));
+    // one of flag_length and arb_member_length is not 0
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("flag_length and arb_member_length unexpected", KR(ret), K(arb_member), K(flag_length), K(arb_member_length));
   }
   return ret;
 }
 
 int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
                                                     common::ObIAllocator &allocator,
-                                                    common::ObString &hex_str)
+                                                    common::ObString &hex_str,
+                                                    const ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   char *serialize_buf = NULL;
-  const int64_t serialize_size = member_list.get_serialize_size();
+  ObMemberListFlag arb_flag(ObMemberListFlag::HAS_ARB_MEMBER);
+  const int64_t flag_size = arb_member.is_valid() ? arb_flag.get_serialize_size() : 0;
+  const int64_t arb_member_serialize_size = arb_member.is_valid() ? arb_member.get_serialize_size() : 0;
+  const int64_t serialize_size = member_list.get_serialize_size() + flag_size + arb_member_serialize_size;
   int64_t serialize_pos = 0;
   char *hex_buf = NULL;
   const int64_t hex_size = 2 * serialize_size;
@@ -605,12 +652,16 @@ int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
     LOG_WARN("member_list is invlaid", KR(ret), K(member_list));
   } else if (OB_UNLIKELY(hex_size > OB_MAX_LONGTEXT_LENGTH + 1)) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("format str is too long", KR(ret), K(hex_size), K(member_list));
+    LOG_WARN("format str is too long", KR(ret), K(hex_size), K(member_list), K(arb_member));
   } else if (OB_ISNULL(serialize_buf = static_cast<char *>(allocator.alloc(serialize_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", KR(ret), K(serialize_size));
   } else if (OB_FAIL(member_list.serialize(serialize_buf, serialize_size, serialize_pos))) {
     LOG_WARN("failed to serialize set member list arg", KR(ret), K(member_list), K(serialize_size), K(serialize_pos));
+  } else if (0 != flag_size && OB_FAIL(arb_flag.serialize(serialize_buf, serialize_size, serialize_pos))) {
+    LOG_WARN("failed to serialize flag", KR(ret), K(arb_flag), K(serialize_size), K(serialize_pos));
+  } else if (0 != arb_member_serialize_size && OB_FAIL(arb_member.serialize(serialize_buf, serialize_size, serialize_pos))) {
+    LOG_WARN("failed to serialize set arb member arg", KR(ret), K(arb_member), K(serialize_size), K(serialize_pos));
   } else if (OB_UNLIKELY(serialize_pos > serialize_size)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("serialize error", KR(ret), K(serialize_pos), K(serialize_size));
@@ -623,20 +674,23 @@ int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
-    hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
+    hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_pos));
   }
   return ret;
 }
 
 int ObLSStatusOperator::set_member_list_with_hex_str_(const common::ObString &str,
-                                                                ObMemberList &member_list)
+                                                      ObMemberList &member_list,
+                                                      ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
+  arb_member.reset();
   char *deserialize_buf = NULL;
   const int64_t str_size = str.length();
   const int64_t deserialize_size = str.length() / 2 + 1;
   int64_t deserialize_pos = 0;
+  bool has_arb_member = false;
   ObArenaAllocator allocator("MemberList");
   if (OB_UNLIKELY(str.empty())) {
     ret = OB_INVALID_ARGUMENT;
@@ -652,6 +706,22 @@ int ObLSStatusOperator::set_member_list_with_hex_str_(const common::ObString &st
   } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+  } else if (deserialize_pos < deserialize_size) {
+    // have to parse flag
+    ObMemberListFlag flag;
+    if (OB_FAIL(flag.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
+      LOG_WARN("fail to deserialize flag", KR(ret), K(deserialize_pos), K(deserialize_size));
+    } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+    } else if (flag.is_arb_member()) {
+      if (OB_FAIL(arb_member.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
+        LOG_WARN("fail to deserialize arb member", KR(ret), K(deserialize_pos), K(deserialize_size));
+      } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+      }
+    }
   }
   return ret;
 
@@ -737,11 +807,13 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
                                        const bool need_member_list,
                                        ObMemberList &member_list,
                                        share::ObLSStatusInfo &status_info,
-                                       ObISQLClient &client)
+                                       ObISQLClient &client,
+                                       ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
   status_info.reset();
+  arb_member.reset();
   if (OB_UNLIKELY(!id.is_valid()
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -787,7 +859,7 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
               } else if (init_member_list_str.empty()) {
                 // maybe
               } else if (OB_FAIL(set_member_list_with_hex_str_(
-                             init_member_list_str, member_list))) {
+                             init_member_list_str, member_list, arb_member))) {
                 LOG_WARN("failed to set member list", KR(ret),
                          K(init_member_list_str));
               }

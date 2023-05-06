@@ -588,8 +588,8 @@ void ObDictColumnMeta::reset()
   cur_default_value_.reset();
   extended_type_info_.reset();
   column_ref_ids_.reset();
-  udt_set_id_ = OB_INVALID_ID;
-  sub_type_ = OB_INVALID_ID;
+  udt_set_id_ = 0;
+  sub_type_ = 0;
 }
 
 DEFINE_EQUAL(ObDictColumnMeta)
@@ -1163,33 +1163,35 @@ int ObDictTableMeta::build_index_info_(const ObDictTableMeta &src_table_meta)
   const int64_t alloc_size = sizeof(common::ObIndexColumn) * index_column_count_;
   const common::ObIndexColumn *src_index_cols = src_table_meta.get_index_cols();
 
-  if (OB_ISNULL(allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "invalid allocator_", KR(ret));
-  } else if (index_column_count_ <= 0) {
-    DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
-  } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
-  } else if (OB_ISNULL(src_index_cols)) {
-    ret = OB_ERR_UNEXPECTED;
-    DDLOG(WARN, "src_index_cols is nullptr", KR(ret), K(src_index_cols), K(src_table_meta));
-  } else {
+  if (src_table_meta.is_user_table()) {
     // build index_table_id_arr
     if (OB_FAIL(unique_index_tid_arr_.assign(src_table_meta.get_unique_index_table_id_arr()))) {
       DDLOG(WARN, "unique_index_tid_arr_ assign failed", KR(ret), K(unique_index_tid_arr_), K(src_table_meta));
     }
+  } else if (src_table_meta.is_unique_index()) {
+    if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      DDLOG(WARN, "invalid allocator_", KR(ret));
+    } else if (index_column_count_ <= 0) {
+      DDLOG(TRACE, "not found index_cols_, skip", KPC(this));
+    } else if (OB_ISNULL(index_cols_ = static_cast<ObIndexColumn*>(allocator_->alloc(alloc_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      DDLOG(WARN, "alloc for index_cols_ failed", KR(ret), K(alloc_size), KPC(this));
+    } else if (OB_ISNULL(src_index_cols)) {
+      ret = OB_ERR_UNEXPECTED;
+      DDLOG(WARN, "src_index_cols is nullptr", KR(ret), K(src_index_cols), K(src_table_meta));
+    } else {
+      // build index_columns
+      for (int idx = 0; OB_SUCC(ret) && idx < index_column_count_; idx++) {
+        ObIndexColumn *index_col = new (index_cols_ + idx) ObIndexColumn();
+        const ObIndexColumn *src_index_col = src_index_cols + idx;
 
-    // build index_columns
-    for (int idx = 0; OB_SUCC(ret) && idx < index_column_count_; idx++) {
-      ObIndexColumn *index_col = new (index_cols_ + idx) ObIndexColumn();
-      const ObIndexColumn *src_index_col = src_index_cols + idx;
-
-      if (OB_ISNULL(index_col) || OB_ISNULL(src_index_col)) {
-        ret = OB_INVALID_DATA;
-        DDLOG(WARN, "expect valid index_col", KR(ret), K(idx), K(index_col), K(src_index_col), KPC(this));
-      } else {
-        *index_col = *src_index_col;
+        if (OB_ISNULL(index_col) || OB_ISNULL(src_index_col)) {
+          ret = OB_INVALID_DATA;
+          DDLOG(WARN, "expect valid index_col", KR(ret), K(idx), K(index_col), K(src_index_col), KPC(this));
+        } else {
+          *index_col = *src_index_col;
+        }
       }
     }
   }

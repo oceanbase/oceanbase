@@ -34,6 +34,7 @@
 #include "io/evfd.c"
 #include "io/timerfd.c"
 #include "io/time_wheel.c"
+#include "io/rate_limit.c"
 
 #include "nio/addr.c"
 #include "nio/inet.c"

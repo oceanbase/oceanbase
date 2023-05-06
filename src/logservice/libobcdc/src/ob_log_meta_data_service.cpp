@@ -115,9 +115,9 @@ int ObLogMetaDataService::refresh_baseline_meta_data(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("sys tenant is unexpected", KR(ret), K(tenant_id));
   } else {
-    TenantLSID tls_id(tenant_id, share::SYS_LS);
-    DataDictionaryInLogInfo data_dict_in_log_info;
-    ObLogFetcherStartParameters start_parameters;
+    logservice::TenantLSID tls_id(tenant_id, share::SYS_LS);
+    logfetcher::DataDictionaryInLogInfo data_dict_in_log_info;
+    logfetcher::ObLogFetcherStartParameters start_parameters;
 
     if (OB_FAIL(baseline_loader_.add_tenant(tenant_id))) {
       LOG_ERROR("baseline_loader_ add_tenant success", KR(ret), K(tenant_id));
@@ -237,7 +237,7 @@ int ObLogMetaDataService::get_tenant_id_in_archive(
 
 int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
     const int64_t start_timestamp_ns,
-    DataDictionaryInLogInfo &data_dict_in_log_info)
+    logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info)
 {
   int ret = OB_SUCCESS;
   datadict::ObDataDictMetaInfo data_dict_meta_info;
@@ -344,7 +344,7 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
 int ObLogMetaDataService::get_data_dict_in_log_info_(
     const uint64_t tenant_id,
     const int64_t start_timstamp_ns,
-    DataDictionaryInLogInfo &data_dict_in_log_info)
+    logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info)
 {
   int ret = OB_SUCCESS;
   bool done = false;

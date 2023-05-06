@@ -1,6 +1,6 @@
 #define BUCKET_SIZE    1024
 typedef struct write_queue_t {
-  queue_t queue;
+  dqueue_t queue;
   int64_t pos;
   int64_t cnt;
   int64_t sz;
@@ -8,5 +8,6 @@ typedef struct write_queue_t {
 } write_queue_t;
 
 extern void wq_init(write_queue_t* wq);
-extern void wq_push(write_queue_t* wq, link_t* l);
-extern int wq_flush(sock_t* s, write_queue_t* wq, link_t** old_head);
+extern void wq_push(write_queue_t* wq, dlink_t* l);
+extern int wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head);
+extern int wq_delete(write_queue_t* wq, dlink_t* l);

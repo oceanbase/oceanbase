@@ -71,7 +71,7 @@ int ObLogTimeZoneInfoGetter::init(
     err_handler_ = &err_handler;
     inited_ = true;
 
-    LOG_INFO("init timezone info getter succ");
+    LOG_INFO("init timezone info getter succ", "is_online_tz_info_available", is_online_tz_info_available());
   }
 
   return ret;
@@ -96,9 +96,7 @@ int ObLogTimeZoneInfoGetter::start()
   int ret = OB_SUCCESS;
   int pthread_ret = 0;
 
-  if (TCTX.is_online_schema_not_avaliable()) {
-    // do nothing
-  } else {
+  if (is_online_tz_info_available()) {
     if (OB_UNLIKELY(0 != tz_tid_)) {
       LOG_ERROR("timezone info thread has been started", K(tz_tid_));
       ret = OB_NOT_SUPPORTED;
@@ -117,9 +115,7 @@ void ObLogTimeZoneInfoGetter::stop()
 {
   stop_flag_ = true;
 
-  if (TCTX.is_online_schema_not_avaliable()) {
-    // do nothing
-  } else {
+  if (is_online_tz_info_available()) {
     if (0 != tz_tid_) {
       tz_cond_.signal();
 
@@ -226,7 +222,7 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_(const uint64_t tenant
 {
   int ret = OB_SUCCESS;
 
-  if (TCTX.is_online_schema_not_avaliable()) {
+  if (! is_online_tz_info_available()) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("refresh tenant_timezone_info only avaliable when obcdc is using online schema", KR(ret));
   } else {
@@ -293,7 +289,7 @@ int ObLogTimeZoneInfoGetter::refresh_tenant_timezone_info_from_local_file_(
   ObDictTenantInfoGuard dict_tenant_info_guard;
   ObDictTenantInfo *tenant_info = nullptr;
 
-  if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+  if (is_online_tz_info_available()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("only effect in data_dict mode)", KR(ret));
   } else if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(
@@ -401,7 +397,7 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(
   if (OB_ISNULL(timezone_str_)) {
     LOG_ERROR("timezone_str is null", K(timezone_str_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+  } else if (is_online_tz_info_available()) {
     if (OB_FAIL(query_timezone_info_version_(tenant_id, tz_info_version))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         // Not present, normal, tenant has not imported time zone table
@@ -415,7 +411,7 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(
     } else {
       // succ
     }
-  } else if (is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
+  } else {
     if (OB_FAIL(refresh_tenant_timezone_info_from_local_file_(tenant_id, tz_info_map))) {
       if (OB_IO_ERROR == ret) {
         LOG_INFO("refresh_tenant_timezone_info_from_local_file_ tz_info may not exist "
@@ -427,9 +423,6 @@ int ObLogTimeZoneInfoGetter::init_tz_info_wrap(
     } else {
       LOG_INFO("refresh_tenant_timezone_info_from_local_file_ success", K(tenant_id));
     }
-  } else {
-    ret = OB_NOT_SUPPORTED;
-    LOG_ERROR("unknown refresh_mode to init tz_info_wrap", KR(ret), "refresh_mode", print_refresh_mode(TCTX.refresh_mode_));
   }
 
 
@@ -487,7 +480,7 @@ int ObLogTimeZoneInfoGetter::fetch_tenant_timezone_info_util_succ(
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  if (TCTX.is_online_schema_not_avaliable()) {
+  if (! is_online_tz_info_available()) {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("not support update timezone_info cause online schema is not support in current mode", KR(ret),
         "refresh_mode", TCTX.refresh_mode_,

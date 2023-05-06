@@ -1887,7 +1887,9 @@ private:
       share::schema::ObSysVariableSchema &sys_variable,
       const bool create_ls_with_palf,
       const palf::PalfBaseInfo &palf_base_info,
-      const common::ObIArray<common::ObConfigPairs> &init_configs);
+      const common::ObIArray<common::ObConfigPairs> &init_configs,
+      bool is_creating_standby,
+      const common::ObString &log_restore_source);
   int set_sys_ls_status(const uint64_t tenant_id);
   int create_tenant_sys_ls(
       const share::schema::ObTenantSchema &tenant_schema,
@@ -1907,7 +1909,13 @@ private:
       const share::SCN &recovery_until_scn,
       common::ObIArray<share::schema::ObTableSchema> &tables,
       share::schema::ObSysVariableSchema &sys_variable,
-      const common::ObIArray<common::ObConfigPairs> &init_configs);
+      const common::ObIArray<common::ObConfigPairs> &init_configs,
+      bool is_creating_standby,
+      const common::ObString &log_restore_source);
+  int set_log_restore_source(
+      const uint64_t tenant_id,
+      const common::ObString &log_restore_source,
+      common::ObMySQLTransaction &trans);
   int insert_restore_tenant_job(
       const uint64_t tenant_id,
       const ObString &tenant_name,

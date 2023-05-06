@@ -436,6 +436,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"logonly_replica_num", LOGONLY_REPLICA_NUM},
   {"log", LOG},
   {"logs", LOGS},
+  {"log_restore_source", LOG_RESTORE_SOURCE},
   {"long", MEDIUMTEXT},
   {"longblob", LONGBLOB},
   {"longtext", LONGTEXT},

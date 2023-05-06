@@ -93,15 +93,15 @@ public:
                                   election::ElectionChangeLeaderMsg,
                                   OB_LOG_ELECTION_CHANGE_LEADER_REQUEST);
   DECLARE_SYNC_RPC_PROXY_POST_FUNCTION(PR5,
-                                      get_mc_st,
-                                      LogGetMCStReq,
-                                      LogGetMCStResp,
-                                      OB_LOG_GET_MC_ST);
+                                       get_mc_st,
+                                       LogGetMCStReq,
+                                       LogGetMCStResp,
+                                       OB_LOG_GET_MC_ST);
   DECLARE_SYNC_RPC_PROXY_POST_FUNCTION(PR5,
-                                      get_log_stat,
-                                      LogGetStatReq,
-                                      LogGetStatResp,
-                                      OB_LOG_GET_STAT);
+                                       get_log_stat,
+                                       LogGetStatReq,
+                                       LogGetStatResp,
+                                       OB_LOG_GET_STAT);
 };
 } // end namespace obrpc
 } // end namespace oceanbase

@@ -15,7 +15,7 @@
 #ifndef  OCEANBASE_LIBOBCDC_DEFINE_H_
 #define  OCEANBASE_LIBOBCDC_DEFINE_H_
 
-#include "ob_log_ls_define.h"
+#include "logservice/common_util/ob_log_ls_define.h"
 #include "storage/tx/ob_tx_log.h"             // ObTransID
 
 namespace oceanbase
@@ -48,11 +48,11 @@ struct TenantTransID
 struct PartTransID
 {
   // TenentLSID
-  TenantLSID              tls_id_;
+  logservice::TenantLSID       tls_id_;
   // transaction::ObTransID(int64_t)
   transaction::ObTransID       trans_id_;
 
-  PartTransID(const TenantLSID &tls_id, const transaction::ObTransID &trans_id);
+  PartTransID(const logservice::TenantLSID &tls_id, const transaction::ObTransID &trans_id);
   ~PartTransID();
   bool operator==(const PartTransID &part_trans_id) const;
   uint64_t hash() const;
@@ -61,7 +61,7 @@ struct PartTransID
 
   bool is_valid() const { return tls_id_.is_valid() && trans_id_ > 0; }
   bool is_sys_ls() const { return tls_id_.is_sys_log_stream(); }
-  const TenantLSID &get_tls_id() const { return tls_id_; };
+  const logservice::TenantLSID &get_tls_id() const { return tls_id_; };
   uint64_t get_tenant_id() const { return tls_id_.get_tenant_id(); };
   const share::ObLSID &get_ls_id() const { return tls_id_.get_ls_id(); };
   const transaction::ObTransID &get_tx_id() const { return trans_id_; };

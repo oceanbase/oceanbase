@@ -860,7 +860,7 @@ int ObInnerTableSchema::gv_ob_units_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME     FROM oceanbase.__all_virtual_unit )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,            SVR_PORT,            UNIT_ID,            TENANT_ID,            ZONE,            ZONE_TYPE,            REGION,            MAX_CPU,            MIN_CPU,            MEMORY_SIZE,            MAX_IOPS,            MIN_IOPS,            IOPS_WEIGHT,            LOG_DISK_SIZE,            LOG_DISK_IN_USE,            DATA_DISK_IN_USE,            STATUS,            usec_to_time(create_time) AS CREATE_TIME     FROM oceanbase.__all_virtual_unit )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

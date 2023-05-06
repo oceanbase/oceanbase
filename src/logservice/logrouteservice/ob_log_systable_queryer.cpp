@@ -70,7 +70,7 @@ int ObLogSysTableQueryer::get_ls_log_info(
     ObLSLogInfo &ls_log_info)
 {
   int ret = OB_SUCCESS;
-  const char *select_fields = "svr_ip, svr_port, role, begin_lsn, end_lsn";
+  const char *select_fields = "SVR_IP, SVR_PORT, ROLE, BEGIN_LSN, END_LSN";
   const char *log_stat_view_name = OB_GV_OB_LOG_STAT_TNAME;
 
   if (IS_NOT_INIT) {
@@ -306,11 +306,11 @@ int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResul
   int64_t begin_lsn_int = 0;
   int64_t end_lsn_int = 0;
 
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "svr_ip", ip);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "svr_port", port);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "role", role_string);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "begin_lsn", begin_lsn_int);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "end_lsn", end_lsn_int);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "SVR_IP", ip);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "SVR_PORT", port);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "ROLE", role_string);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "BEGIN_LSN", begin_lsn_int);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "END_LSN", end_lsn_int);
 
   palf::LSN begin_lsn(static_cast<palf::offset_t>(begin_lsn_int));
   palf::LSN end_lsn(static_cast<palf::offset_t>(end_lsn_int));
@@ -318,7 +318,7 @@ int ObLogSysTableQueryer::parse_record_from_row_(common::sqlclient::ObMySQLResul
   if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(ip), K(port));
-  } else if (OB_FAIL(common::string_to_role(role_string.ptr(), role))) {
+  } else if (OB_FAIL(common::string_to_role(role_string, role))) {
     LOG_WARN("string_tor_role failed", KR(ret), K(role_string), K(role));
   } else {
     log_stat_record.reset(server, role, begin_lsn, end_lsn);

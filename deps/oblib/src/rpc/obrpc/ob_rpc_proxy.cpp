@@ -84,13 +84,14 @@ int ObRpcProxy::rpc_post(
     ObReqTransport::AsyncCB *cb,
     const ObRpcOpts &opts)
 {
-  POC_RPC_INTERCEPT(post, dst_, pcode, None, cb, opts);
   int ret = OB_SUCCESS;
 
   if (!active_) {
     ret = OB_INACTIVE_RPC_PROXY;
     LOG_WARN("Rpc proxy is inactive", K(ret));
   }
+  POC_RPC_INTERCEPT(post, dst_, pcode, None, cb, opts);
+
   int64_t pos = 0;
   const int64_t payload = calc_payload_size(0);
   ObReqTransport::Request req;

@@ -30,8 +30,9 @@
 #include "ob_log_config.h"                // ObLogConfig
 #include "ob_log_utils.h"                 // ob_cdc_malloc
 #include "ob_log_meta_manager.h"          // ObLogMetaManager
-#include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider
-#include "ob_cdc_tenant_sql_server_provider.h" // ObCDCTenantSQLServerProvider
+#include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider (for cluster sync mode)
+#include "ob_cdc_tenant_sql_server_provider.h"  // ObCDCTenantSQLServerProvider(for cluster sync mode)
+#include "ob_cdc_tenant_endpoint_provider.h"    // ObCDCEndpointProvider (for tenant sync mode)
 #include "ob_log_schema_getter.h"         // ObLogSchemaGetter
 #include "ob_log_timezone_info_getter.h"  // ObLogTimeZoneInfoGetter
 #include "ob_log_committer.h"             // ObLogCommitter
@@ -155,6 +156,7 @@ ObLogInstance::ObLogInstance() :
     working_mode_(WorkingMode::UNKNOWN_MODE),
     refresh_mode_(RefreshMode::UNKNOWN_REFRSH_MODE),
     fetching_mode_(ClientFetchingMode::FETCHING_MODE_UNKNOWN),
+    is_tenant_sync_mode_(false),
     global_info_(),
     mysql_proxy_(),
     tenant_sql_proxy_(),
@@ -480,6 +482,8 @@ int ObLogInstance::init_global_tenant_manager_()
   return ret;
 }
 
+// TODO: verify need invoke or not, and if still used by online schema, may neednoot invoke in
+// data_dict mode
 int ObLogInstance::init_global_kvcache_()
 {
   int ret = OB_SUCCESS;
@@ -503,6 +507,7 @@ int ObLogInstance::init_global_kvcache_()
   return ret;
 }
 
+// TODO verify and remove
 // FIXME: when refreshing the schema, construct "generated column" schema depends on the default system variables, require initialization
 // The specific function is: ObSchemaUtils::cascaded_generated_column()
 //
@@ -685,7 +690,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   int ret = OB_SUCCESS;
   IObLogErrHandler *err_handler = this;
   int64_t start_seq = DEFAULT_START_SEQUENCE_NUM;
-  const char *config_url = NULL;
   bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
   bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
   bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
@@ -695,18 +699,11 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
   bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
   const char *rs_list = TCONF.rootserver_list.str();
-  const char *cluster_user = TCONF.cluster_user.str();
-  const char *cluster_password = TCONF.cluster_password.str();
-  const char *cluster_db_name = TCONF.cluster_db_name.str();
   const char *tb_white_list = TCONF.tb_white_list.str();
   const char *tb_black_list = TCONF.tb_black_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
   int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
-  int64_t rs_sql_conn_timeout_us = TCONF.rs_sql_connect_timeout_sec * _SEC_;
-  int64_t rs_sql_query_timeout_us = TCONF.rs_sql_query_timeout_sec * _SEC_;
-  int64_t tenant_sql_conn_timeout_us = TCONF.tenant_sql_connect_timeout_sec * _SEC_;
-  int64_t tenant_sql_query_timeout_us = TCONF.tenant_sql_query_timeout_sec * _SEC_;
   const char *ob_trace_id_ptr = TCONF.ob_trace_id.str();
   const char *drc_message_factory_binlog_record_type_str = TCONF.drc_message_factory_binlog_record_type.str();
   // The starting schema version of the SYS tenant
@@ -782,42 +779,25 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // init self addr
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(init_self_addr_())) {
-    LOG_ERROR("init self addr error", KR(ret));
-  }
-  // format cluster_url
-  else  if (OB_FAIL(TCONF.format_cluster_url())) {
-    LOG_ERROR("format config url fail", KR(ret));
-  } else {
-    config_url = TCONF.cluster_url.str();
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObMemoryDump::get_instance().init())) {
       LOG_ERROR("init memory dump fail", K(ret));
+    // init self addr
+    } else if (OB_FAIL(init_self_addr_())) {
+      LOG_ERROR("init self addr error", KR(ret));
     }
   }
 
-  if (! is_online_schema_not_avaliable()) {
-    // init ObLogSQLServerProvider base on config_url or rs_list
-    INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
 
-    // init ObLogMysqlProxy
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(mysql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-              rs_sql_conn_timeout_us, rs_sql_query_timeout_us, enable_ssl_client_authentication, rs_server_provider_))) {
-        LOG_ERROR("mysql_proxy_ init fail", KR(ret), K(rs_server_provider_),
-            K(cluster_user), K(cluster_password), K(cluster_db_name), K(rs_sql_conn_timeout_us),
-            K(rs_sql_query_timeout_us), K(enable_ssl_client_authentication));
-      }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(init_sql_provider_())) {
+      LOG_ERROR("init_sql_provider_ failed", KR(ret));
     }
   }
 
   // init ObCompatModeGetter
   if (OB_SUCC(ret)) {
-    if (is_online_schema_not_avaliable()) {
+    if (is_online_sql_not_available()) {
       if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
         LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
@@ -842,25 +822,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   INIT(br_pool_, ObLogBRPool, TCONF.binlog_record_prealloc_count);
 
   INIT(trans_ctx_mgr_, ObLogTransCtxMgr, max_cached_trans_ctx_count, TCONF.sort_trans_participants);
-
-  if (! is_online_schema_not_avaliable()) {
-    INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
-        TCONF.access_systable_helper_thread_num, TCONF.cluster_user,
-        TCONF.cluster_password, TCONF.cluster_db_name);
-
-    INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
-
-    // init ObLogTenantSQLProxy
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(tenant_sql_proxy_.init(cluster_user, cluster_password, cluster_db_name,
-              tenant_sql_conn_timeout_us, tenant_sql_query_timeout_us, enable_ssl_client_authentication,
-              tenant_server_provider_, true/*is_tenant_server_provider*/))) {
-        LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret), K(tenant_server_provider_),
-            K(cluster_user), K(cluster_password), K(cluster_db_name), K(tenant_sql_conn_timeout_us),
-            K(tenant_sql_query_timeout_us), K(enable_ssl_client_authentication));
-      }
-    }
-  }
 
   INIT(meta_manager_, ObLogMetaManager, &obj2str_helper_, enable_output_hidden_primary_key);
 
@@ -1000,7 +961,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq);
 
   if (OB_SUCC(ret)) {
-    if (is_data_dict_refresh_mode(refresh_mode)) {
+    if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
               sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
               cluster_info.cluster_id_, TCONF, start_seq))) {
@@ -1017,7 +978,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   }
 
   if (OB_SUCC(ret)) {
-    if (is_online_schema_not_avaliable()) {
+    if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(set_all_tenant_compat_mode_())) {
         LOG_ERROR("set_all_tenant_compat_mode_ failed", KR(ret));
       }
@@ -1038,6 +999,124 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   LOG_INFO("init all components done", KR(ret), K(start_tstamp_ns), K(sys_start_schema_version),
       K(max_cached_trans_ctx_count), K_(is_schema_split_mode));
+
+  return ret;
+}
+
+// 1. check if is tenant sync mode
+// 2. check tb_white_list match tenant
+int ObLogInstance::check_sync_mode_()
+{
+  int ret = OB_SUCCESS;
+  const char *tenant_endpoint = TCONF.tenant_endpoint.str();
+  const char *tenant_user = TCONF.tenant_user.str();
+  const char *tenant_password = TCONF.tenant_password.str();
+
+  if (OB_NOT_NULL(tenant_endpoint) && strlen(tenant_endpoint) > 1
+      && OB_NOT_NULL(tenant_user) && strlen(tenant_user) > 1
+      && OB_NOT_NULL(tenant_password) && strlen(tenant_password) >= 1) {
+    is_tenant_sync_mode_ = true;
+
+    if (! is_data_dict_refresh_mode(refresh_mode_)) {
+      LOG_WARN("[NOTICE] detect tenant_sync mode but not using data_dict, will force to data_dict_refresh_mode");
+      refresh_mode_ = RefreshMode::DATA_DICT;
+    }
+  } else if (OB_UNLIKELY((OB_ISNULL(TCONF.cluster_url.str())) || OB_ISNULL(TCONF.rootserver_list.str())
+      || OB_ISNULL(TCONF.cluster_user.str())
+      || OB_ISNULL(TCONF.cluster_password.str()))) {
+    if (is_integrated_fetching_mode(fetching_mode_)) {
+      ret = OB_INVALID_CONFIG;
+      LOG_ERROR("invalid config for cluster_sync_mode", KR(ret));
+    }
+  }
+  LOG_INFO("[WORK_MODE]", K_(is_tenant_sync_mode),
+      "working_mode", print_working_mode(working_mode_),
+      "refresh_mode", print_refresh_mode(refresh_mode_),
+      "fetching_mode", print_fetching_mode(fetching_mode_));
+
+  return ret;
+}
+
+int ObLogInstance::init_sql_provider_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(check_sync_mode_())) {
+    LOG_ERROR("check_sync_mode_ failed", KR(ret));
+  } else if (! is_online_sql_not_available()) {
+    const char *ob_user = nullptr;
+    const char *ob_password = nullptr;
+
+    if (is_tenant_sync_mode()) {
+      ob_user = TCONF.tenant_user.str();
+      ob_password = TCONF.tenant_password.str();
+      const char *tenant_endpoint = TCONF.tenant_endpoint.str();
+      INIT(rs_server_provider_, ObCDCEndpointProvider, tenant_endpoint);
+    } else {
+      // cluster sync mode
+      ob_user = TCONF.cluster_user.str();
+      ob_password = TCONF.cluster_password.str();
+      // format cluster_url
+      if (OB_FAIL(TCONF.format_cluster_url())) {
+        LOG_ERROR("format config url fail", KR(ret));
+      } else {
+        const char *config_url = TCONF.cluster_url.str();
+        const char *rs_list = TCONF.rootserver_list.str();
+        // init ObLogSQLServerProvider base on config_url or rs_list
+        INIT(rs_server_provider_, ObLogSQLServerProvider, config_url, rs_list);
+      }
+    }
+
+    // init systable_helper_
+    if (OB_SUCC(ret)) {
+      INIT(systable_helper_, ObLogSysTableHelper, *rs_server_provider_,
+          TCONF.access_systable_helper_thread_num, ob_user,
+          ob_password, TCONF.cluster_db_name);
+    }
+    // init RSMysqlProxy
+    const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
+    if (OB_SUCC(ret)) {
+      const int64_t rs_sql_conn_timeout_us = TCONF.rs_sql_connect_timeout_sec * _SEC_;
+      const int64_t rs_sql_query_timeout_us = TCONF.rs_sql_query_timeout_sec * _SEC_;
+      if (OB_FAIL(mysql_proxy_.init(
+          ob_user,
+          ob_password,
+          rs_sql_conn_timeout_us,
+          rs_sql_query_timeout_us,
+          enable_ssl_client_authentication,
+          rs_server_provider_))) {
+        LOG_ERROR("mysql_proxy_ init fail", KR(ret),
+            K_(rs_server_provider),
+            K(ob_user),
+            K(ob_password),
+            K(enable_ssl_client_authentication));
+      }
+    }
+    // init tenant sql provider
+    if (! is_tenant_sync_mode()) {
+      INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
+
+      // init ObLogTenantSQLProxy
+      if (OB_SUCC(ret)) {
+        int64_t tenant_sql_conn_timeout_us = TCONF.tenant_sql_connect_timeout_sec * _SEC_;
+        int64_t tenant_sql_query_timeout_us = TCONF.tenant_sql_query_timeout_sec * _SEC_;
+        if (OB_FAIL(tenant_sql_proxy_.init(
+            ob_user,
+            ob_password,
+            tenant_sql_conn_timeout_us,
+            tenant_sql_query_timeout_us,
+            enable_ssl_client_authentication,
+            tenant_server_provider_,
+            true/*is_tenant_server_provider*/))) {
+          LOG_ERROR("tenant_sql_proxy_ init fail", KR(ret),
+              K(tenant_server_provider_),
+              K(tenant_sql_conn_timeout_us),
+              K(tenant_sql_query_timeout_us),
+              K(enable_ssl_client_authentication));
+        }
+      }
+    }
+  }
 
   return ret;
 }
@@ -1139,22 +1218,23 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
   // Add all tables for all tenants
   // Beforehand, make sure all callbacks are registered
   if (OB_SUCC(ret)) {
-    if (is_online_schema_not_avaliable()) {
+    if (is_online_sql_not_available()) {
       bool add_tenant_succ = false;
       const char *tenant_name = nullptr;
 
       if (OB_FAIL(tenant_mgr_->add_tenant(
-              start_tstamp_ns,
-              sys_schema_version,
-              tenant_name,
-              GET_SCHEMA_TIMEOUT_ON_START_UP,
-              add_tenant_succ))) {
+          start_tstamp_ns,
+          sys_schema_version,
+          tenant_name,
+          GET_SCHEMA_TIMEOUT_ON_START_UP,
+          add_tenant_succ))) {
         LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       }
     } else {
-      if (OB_FAIL(tenant_mgr_->add_all_tenants(start_tstamp_ns,
-              sys_schema_version,
-              GET_SCHEMA_TIMEOUT_ON_START_UP))) {
+      if (OB_FAIL(tenant_mgr_->add_all_tenants(
+          start_tstamp_ns,
+          sys_schema_version,
+          GET_SCHEMA_TIMEOUT_ON_START_UP))) {
         LOG_ERROR("add_all_tenants fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
       }
     }
@@ -1188,11 +1268,16 @@ void ObLogInstance::destroy_components_()
   if (is_online_refresh_mode(refresh_mode_)) {
     DESTROY(schema_getter_, ObLogSchemaGetter);
   }
-  if (! is_online_schema_not_avaliable()) {
-    tenant_sql_proxy_.destroy();
-    DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
-    mysql_proxy_.destroy();
-    DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+  if (! is_online_sql_not_available()) {
+    if (is_tenant_sync_mode()) {
+      mysql_proxy_.destroy();
+      DESTROY(rs_server_provider_, ObCDCEndpointProvider);
+    } else {
+      tenant_sql_proxy_.destroy();
+      DESTROY(tenant_server_provider_, ObCDCTenantSQLServerProvider);
+      mysql_proxy_.destroy();
+      DESTROY(rs_server_provider_, ObLogSQLServerProvider);
+    }
   }
   DESTROY(resource_collector_, ObLogResourceCollector);
   DESTROY(meta_manager_, ObLogMetaManager);
@@ -1263,6 +1348,7 @@ void ObLogInstance::destroy()
   working_mode_ = WorkingMode::UNKNOWN_MODE;
   refresh_mode_ = RefreshMode::UNKNOWN_REFRSH_MODE;
   fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;
+  is_tenant_sync_mode_ = false;
 }
 
 int ObLogInstance::launch()
@@ -1633,7 +1719,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
     ret = OB_INVALID_ARGUMENT;
   } else {
     // Adding a self-checking adjacent record is a different scenario
-    static TenantLSID last_tls_id;
+    static logservice::TenantLSID last_tls_id;
     static palf::LSN last_commit_log_lsn;
     static palf::LSN last_redo_log_lsn;
     static uint64_t last_row_index = OB_INVALID_ID;
@@ -1910,12 +1996,21 @@ void ObLogInstance::sql_thread_routine()
       // refresh SQL SERVER list
       if (REACH_TIME_INTERVAL(REFRESH_SERVER_LIST_INTERVAL)) {
         if (is_integrated_fetching_mode(fetching_mode_)) {
-          ObLogSQLServerProvider *rs_server_provider = static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
-          if (OB_ISNULL(rs_server_provider)) {
-            LOG_ERROR("rs_server_provider is NULL", K(rs_server_provider));
-            ret = OB_ERR_UNEXPECTED;
+          if (is_tenant_sync_mode()) {
+            if (OB_ISNULL(systable_helper_)) {
+              ret = OB_INVALID_DATA;
+              LOG_ERROR("invalid systable_helper_ while refresh tenant endpoint", KR(ret));
+            } else if (OB_FAIL(systable_helper_->refresh_tenant_endpoint())) {
+              LOG_ERROR("refresh_tenant_endpoint failed", KR(ret));
+            }
           } else {
-            rs_server_provider->call_refresh_server_list();
+            ObLogSQLServerProvider *rs_server_provider = static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
+            if (OB_ISNULL(rs_server_provider)) {
+              LOG_ERROR("rs_server_provider is NULL", K(rs_server_provider));
+              ret = OB_ERR_UNEXPECTED;
+            } else {
+              rs_server_provider->call_refresh_server_list();
+            }
           }
         }
       }
@@ -2158,17 +2253,27 @@ void ObLogInstance::reload_config_()
 
     // config rs_server_provider_
     if (OB_NOT_NULL(rs_server_provider_)) {
-      ObLogSQLServerProvider *oblog_rs_server_provider = static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
-      ObCDCTenantSQLServerProvider *obcdc_tenant_sql_server_provider =
-          static_cast<ObCDCTenantSQLServerProvider*>(tenant_server_provider_);
-
-      if (OB_ISNULL(oblog_rs_server_provider) || OB_ISNULL(obcdc_tenant_sql_server_provider)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("oblog_rs_server_provider or obcdc_tenant_sql_server_provider is NULL", KR(ret),
-            K(oblog_rs_server_provider), K(obcdc_tenant_sql_server_provider));
+      if (is_tenant_sync_mode()) {
+        ObCDCEndpointProvider *endpoint_provider = static_cast<ObCDCEndpointProvider*>(rs_server_provider_);
+        if (OB_ISNULL(endpoint_provider)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("endpoint_provider invalid", KR(ret));
+        } else {
+          endpoint_provider->configure(config);
+        }
       } else {
-        oblog_rs_server_provider->configure(config);
-        obcdc_tenant_sql_server_provider->configure(config);
+        ObLogSQLServerProvider *oblog_rs_server_provider = static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
+        ObCDCTenantSQLServerProvider *obcdc_tenant_sql_server_provider =
+            static_cast<ObCDCTenantSQLServerProvider*>(tenant_server_provider_);
+
+        if (OB_ISNULL(oblog_rs_server_provider) || OB_ISNULL(obcdc_tenant_sql_server_provider)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("oblog_rs_server_provider or obcdc_tenant_sql_server_provider is NULL", KR(ret),
+              K(oblog_rs_server_provider), K(obcdc_tenant_sql_server_provider));
+        } else {
+          oblog_rs_server_provider->configure(config);
+          obcdc_tenant_sql_server_provider->configure(config);
+        }
       }
     }
   }

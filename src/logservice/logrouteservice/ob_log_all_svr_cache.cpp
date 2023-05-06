@@ -13,11 +13,12 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_all_svr_cache.h"
+#include "logservice/common_util/ob_log_time_utils.h"
 
 #include "lib/allocator/ob_mod_define.h"      // ObModIds
 #include "lib/utility/ob_macro_utils.h"       // OB_ISNULL, ...
 #include "lib/oblog/ob_log_module.h"          // LOG_*
-#include "ob_log_utility.h"                   //
+#include "logservice/common_util/ob_log_time_utils.h"                   //
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -215,7 +216,8 @@ bool ObLogAllSvrCache::is_assign_region_(const common::ObRegion &region) const
   return bool_ret;
 }
 
-int ObLogAllSvrCache::init(ObLogSysTableQueryer &systable_queryer,
+int ObLogAllSvrCache::init(
+    ObLogSysTableQueryer &systable_queryer,
     const common::ObRegion &prefer_region,
     const int64_t all_server_cache_update_interval_sec,
     const int64_t all_zone_cache_update_interval_sec)
@@ -246,7 +248,6 @@ int ObLogAllSvrCache::init(ObLogSysTableQueryer &systable_queryer,
 void ObLogAllSvrCache::destroy()
 {
   systable_queryer_ = NULL;
-
   all_server_cache_update_interval_ = 0;
   all_zone_cache_update_interval_ = 0;
   cur_version_ = 0;
@@ -275,7 +276,7 @@ void ObLogAllSvrCache::query_and_update()
 
   if (OB_SUCC(ret)) {
     int64_t all_svr_cache_update_interval = ATOMIC_LOAD(&all_server_cache_update_interval_);
-    if (REACH_TIME_INTERVAL(all_svr_cache_update_interval)) {
+    if (REACH_TIME_INTERVAL_THREAD_LOCAL(all_svr_cache_update_interval)) {
       if (OB_FAIL(update_server_cache_())) {
         LOG_ERROR("update server cache error", KR(ret));
       } else if (OB_FAIL(purge_stale_records_())) {

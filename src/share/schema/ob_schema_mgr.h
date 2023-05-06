@@ -125,8 +125,10 @@ public:
   inline bool is_dropping() const { return TENANT_STATUS_DROPPING == status_; }
   inline bool is_in_recyclebin() const { return in_recyclebin_; }
   inline bool is_creating() const { return TENANT_STATUS_CREATING == status_;}
-  inline bool is_restore() const { return TENANT_STATUS_RESTORE == status_;}
+  inline bool is_restore() const { return TENANT_STATUS_RESTORE == status_
+                                          || TENANT_STATUS_CREATING_STANDBY == status_;}
   inline bool is_normal() const { return TENANT_STATUS_NORMAL == status_; }
+  inline bool is_creating_standby_tenant_status() const { return TENANT_STATUS_CREATING_STANDBY == status_; }
   inline bool is_arbitration_service_enabling() const { return arbitration_service_status_.is_enabling(); }
   inline bool is_arbitration_service_enabled() const { return arbitration_service_status_.is_enabled(); }
   inline bool is_arbitration_service_disabling() const { return arbitration_service_status_.is_disabling(); }

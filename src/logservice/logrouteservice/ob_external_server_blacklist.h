@@ -16,7 +16,7 @@
 #include "lib/container/ob_array.h"     // ObArray
 #include "lib/net/ob_addr.h"            // ObAddr
 #include "lib/lock/ob_spin_rwlock.h"    // SpinRWLock, SpinRLockGuard, SpinWLockGuard
-#include "ob_log_utility.h"             // _K_
+#include "logservice/common_util/ob_log_time_utils.h"             // _K_
 
 namespace oceanbase
 {

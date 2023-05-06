@@ -143,6 +143,7 @@ DEFINE_SYNC_RPC_PROCESSOR(LogGetStatP,
                           LogGetStatReq,
                           LogGetStatResp,
                           obrpc::OB_LOG_GET_STAT);
+
 } // end namespace palf
 } // end namespace oceanbase
 

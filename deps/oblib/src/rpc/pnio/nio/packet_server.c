@@ -10,8 +10,8 @@ void pkts_flush_cb(pkts_t* io, pkts_req_t* req) {
   req->flush_cb(req);
 }
 
-static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz) {
-  return sk_read_with_ib(b, (sock_t*)s, &s->ib, sz);
+static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes) {
+  return sk_read_with_ib(b, (sock_t*)s, &s->ib, sz, avail_bytes);
 }
 
 static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {

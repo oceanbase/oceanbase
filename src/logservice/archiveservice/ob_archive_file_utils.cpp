@@ -295,10 +295,10 @@ int ObArchiveFileUtils::locate_file_by_scn(share::ObBackupDest &dest,
   int64_t min_file_id = 0;
   int64_t max_file_id = 0;
   share::ObBackupPath piece_path;
-  if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(dest, dest_id, round, piece_id, piece_path))) {
-    ARCHIVE_LOG(WARN, "get piece dir failed", K(ret), K(dest_id), K(round), K(piece_id), K(dest));
+  if (OB_FAIL(share::ObArchivePathUtil::get_piece_ls_log_dir_path(dest, dest_id, round, piece_id, ls_id, piece_path))) {
+    ARCHIVE_LOG(WARN, "get piece dir failed", K(ret), K(dest_id), K(round), K(piece_id), K(ls_id), K(dest));
   } else if (OB_FAIL(get_file_range(piece_path.get_obstr(), dest.get_storage_info(), min_file_id, max_file_id))) {
-    ARCHIVE_LOG(WARN, "get file range failed", K(ret), K(dest_id), K(round), K(piece_id), K(dest));
+    ARCHIVE_LOG(WARN, "get file range failed", K(ret), K(dest_id), K(round), K(piece_id), K(dest), K(piece_path));
   } else {
     ret = locate_file_by_scn_in_piece(dest, dest_id, round, piece_id, ls_id, min_file_id, max_file_id, scn, file_id);
   }

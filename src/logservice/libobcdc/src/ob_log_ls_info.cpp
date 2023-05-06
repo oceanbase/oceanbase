@@ -14,6 +14,8 @@
 #include "ob_log_ls_info.h"
 #include "ob_log_config.h"            // TCONF
 
+using namespace oceanbase::logfetcher;
+
 namespace oceanbase
 {
 namespace libobcdc
@@ -26,7 +28,7 @@ void ObLogLSInfo::reset()
   serve_info_.reset();
 }
 
-int ObLogLSInfo::init(const TenantLSID &tls_id,
+int ObLogLSInfo::init(const logservice::TenantLSID &tls_id,
     const bool start_serve_from_create,
     const int64_t start_tstamp,
     const bool is_served)
@@ -159,7 +161,7 @@ const char *ObLogLSInfo::print_state() const
 }
 
 bool LSInfoPrinter::operator()(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     ObLogLSInfo *ls_info)
 {
   if (tls_id.get_tenant_id() == tenant_id_) {
@@ -175,6 +177,7 @@ bool LSInfoPrinter::operator()(
 
     // TODO name
     if (TCONF.print_ls_serve_info) {
+      // TODO
       LS_ISTAT(ls_info, "[SERVE_INFO]");
     }
   }
@@ -182,7 +185,7 @@ bool LSInfoPrinter::operator()(
 }
 
 bool LSInfoScannerByTenant::operator()(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     ObLogLSInfo *ls_info)
 {
   int ret = OB_SUCCESS;

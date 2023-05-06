@@ -33,6 +33,7 @@ namespace logservice
 using oceanbase::share::ObLogRestoreSourceType;
 //using oceanbase::share::DirArray;
 typedef common::ObSEArray<std::pair<share::ObBackupPathString, share::ObBackupPathString>, 1> DirArray;
+typedef share::ObRestoreSourceServiceAttr RestoreServiceAttr;
 // The management of remote log source, three types are supported, LOCATION/SERVICE/RAWPATH
 class ObRemoteLogParent
 {
@@ -78,16 +79,16 @@ public:
   virtual ~ObRemoteSerivceParent();
 
 public:
-  int set(const ObAddr &addr, const share::SCN &end_scn);
-  void get(ObAddr &addr, share::SCN &end_scn);
+  int set(const RestoreServiceAttr &attr, const share::SCN &end_scn);
+  void get(RestoreServiceAttr *&attr, share::SCN &end_scn);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
   int update_locate_info(ObRemoteLogParent &source) override { UNUSED(source); return OB_SUCCESS; }
-  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(server),
+  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(attr),
       K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn));
 
 private:
-  ObAddr server_;
+  RestoreServiceAttr attr_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteSerivceParent);

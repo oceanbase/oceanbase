@@ -19,6 +19,8 @@
 #include "lib/mysqlclient/ob_mysql_server_provider.h"     // ObMySQLServerProvider
 #include "ob_log_utils.h"                                 // is_mysql_client_errno
 #include "share/ob_thread_mgr.h"
+#include "ob_log_mysql_connector.h"                       // ObLogMySQLConnector
+#include "ob_log_config.h"                                // TCONF
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
@@ -28,14 +30,15 @@ namespace oceanbase
 namespace libobcdc
 {
 
-ObLogMysqlProxy::ObLogMysqlProxy() : inited_(false),
-                                     connection_pool_(),
-                                     mysql_proxy_(),
-                                     tg_id_(-1)
+ObLogMysqlProxy::ObLogMysqlProxy() :
+    inited_(false),
+    is_oracle_mode_(false),
+    connection_pool_(),
+    mysql_proxy_(),
+    tg_id_(-1)
 {
   cluster_user_[0] = '\0';
   cluster_password_[0] = '\0';
-  cluster_db_name_[0] = '\0';
 }
 
 ObLogMysqlProxy::~ObLogMysqlProxy()
@@ -46,7 +49,6 @@ ObLogMysqlProxy::~ObLogMysqlProxy()
 int ObLogMysqlProxy::init(
     const char *cluster_user,
     const char *cluster_password,
-    const char *cluster_db_name,
     const int64_t sql_conn_timeout_us,
     const int64_t sql_query_timeout_us,
     const bool enable_ssl_client_authentication,
@@ -64,11 +66,10 @@ int ObLogMysqlProxy::init(
   } else if (OB_ISNULL(server_provider)
       || OB_ISNULL(cluster_user)
       || OB_ISNULL(cluster_password)
-      || OB_ISNULL(cluster_db_name)
       || OB_UNLIKELY(sql_conn_timeout_us <= 0)
       || OB_UNLIKELY(sql_query_timeout_us <= 0)) {
     LOG_ERROR("invalid argument", K(server_provider),
-        K(cluster_user), K(cluster_password), K(cluster_db_name), K(sql_conn_timeout_us),
+        K(cluster_user), K(cluster_password), K(sql_conn_timeout_us),
         K(sql_query_timeout_us));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(TG_CREATE(lib::TGDefIDs::LogMysqlPool, tg_id_))) {
@@ -79,9 +80,18 @@ int ObLogMysqlProxy::init(
     LOG_ERROR("print cluster_user fail", KR(ret), K(user_pos), K(cluster_user));
   } else if (OB_FAIL(databuff_printf(cluster_password_, sizeof(cluster_password_), password_pos, "%s", cluster_password))) {
     LOG_ERROR("print cluster_password fail", KR(ret), K(password_pos), K(cluster_password));
-  } else if (OB_FAIL(databuff_printf(cluster_db_name_, sizeof(cluster_db_name_), db_pos, "%s", cluster_db_name))) {
-    LOG_ERROR("print cluster_db_name fail", KR(ret), K(db_pos), K(cluster_db_name));
   } else {
+    const char *db_name = nullptr;
+    if (is_tenant_server_provider) {
+      // tenant conn poll will always query via sys tenant
+      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE;
+    } else if (OB_FAIL(detect_tenant_mode_(server_provider))) {
+    LOG_ERROR("detect_tenant_mode_ failed", KR(ret), K(cluster_user), K(cluster_password));
+    } else if (is_oracle_mode_) {
+      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_ORACLE_MODE;
+    } else {
+      db_name = ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE;
+    }
     ObConnPoolConfigParam conn_pool_config;
     conn_pool_config.reset();
 
@@ -97,11 +107,11 @@ int ObLogMysqlProxy::init(
     _LOG_INFO("mysql connection pool: sql_conn_timeout_us=%ld us, "
         "sqlclient_wait_timeout=%ld sec, sql_query_timeout_us=%ld us, "
         "long_query_timeout=%ld us, connection_refresh_interval=%ld us, "
-        "connection_pool_warn_time=%ld us, sqlclient_per_observer_conn_limit=%ld",
+        "connection_pool_warn_time=%ld us, sqlclient_per_observer_conn_limit=%ld, is_oracle_mode=%d",
         sql_conn_timeout_us, conn_pool_config.sqlclient_wait_timeout_,
         sql_query_timeout_us, conn_pool_config.long_query_timeout_,
         conn_pool_config.connection_refresh_interval_, conn_pool_config.connection_pool_warn_time_,
-        conn_pool_config.sqlclient_per_observer_conn_limit_);
+        conn_pool_config.sqlclient_per_observer_conn_limit_, is_oracle_mode_);
 
     connection_pool_.update_config(conn_pool_config);
     connection_pool_.set_server_provider(server_provider);
@@ -113,9 +123,9 @@ int ObLogMysqlProxy::init(
     }
     if (OB_FAIL(connection_pool_.set_db_param(cluster_user_,
         cluster_password_,
-        cluster_db_name_))) {
-      LOG_ERROR("set connection pool db param fail", KR(ret), K(cluster_user_),
-          K(cluster_password_), K(cluster_db_name_));
+        db_name))) {
+      LOG_ERROR("set connection pool db param fail", KR(ret),
+          K(cluster_user_), K(cluster_password_), K_(is_oracle_mode));
     } else if (OB_FAIL(connection_pool_.start(tg_id_))) {
       // launch ConnectinPool
       LOG_ERROR("start connection pool fail", KR(ret));
@@ -139,13 +149,60 @@ void ObLogMysqlProxy::destroy()
 
   cluster_user_[0] = '\0';
   cluster_password_[0] = '\0';
-  cluster_db_name_[0] = '\0';
+  is_oracle_mode_ = false;
   tg_id_ = -1;
 }
 
 void ObLogMysqlProxy::stop()
 {
   connection_pool_.stop();
+}
+
+int ObLogMysqlProxy::detect_tenant_mode_(ServerProviderType *server_provider)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(server_provider)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid server_provider", KR(ret));
+  } else {
+    const int64_t svr_cnt = server_provider->get_server_count();
+
+    if (OB_UNLIKELY(0 >= svr_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("expect valid svr_cnt");
+    } else {
+      bool detect_succ = false;
+
+      for (int idx = 0; OB_SUCC(ret) && ! detect_succ && idx < svr_cnt; idx++) {
+        common::ObAddr server;
+        if (OB_FAIL(server_provider->get_server(idx, server))) {
+          LOG_ERROR("failed to get server", KR(ret), K(idx), K(svr_cnt));
+        } else {
+          const char *default_db_name = "";
+          const int64_t connect_timeout_sec = TCONF.rs_sql_connect_timeout_sec;
+          const int64_t query_timeout_sec = TCONF.rs_sql_query_timeout_sec;
+          const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
+          ObLogMySQLConnector conn;
+          MySQLConnConfig config;
+          config.reset(server, cluster_user_, cluster_password_, default_db_name, connect_timeout_sec, query_timeout_sec);
+
+          if (!config.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("invalid mysql_conn_config", KR(ret), K(config));
+          } else if (OB_FAIL(conn.init(config, enable_ssl_client_authentication))) {
+            LOG_ERROR("init ObLogMySQLConnector failed", KR(ret), K(config), K(enable_ssl_client_authentication));
+          } else {
+            is_oracle_mode_ = conn.is_oracle_mode();
+            detect_succ = true;
+            LOG_INFO("detect connection_pool mode success", KR(ret), K_(is_oracle_mode), K(config));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
 }
 
 } // namespace libobcdc

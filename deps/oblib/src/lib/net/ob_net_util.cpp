@@ -131,6 +131,18 @@ uint64_t ObNetUtil::ip_to_addr(uint32_t ip, int port)
     return ipport;
 }
 
+char *ObNetUtil::get_addr_by_hostname(const char *hostname)
+{
+  char *addr = nullptr;
+  hostent *host = gethostbyname(hostname);
+
+  if (nullptr != host) {
+      addr = inet_ntoa(**(in_addr**)host->h_addr_list);
+  }
+
+  return addr;
+}
+
 int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len)
 {
   int ret = OB_SUCCESS;

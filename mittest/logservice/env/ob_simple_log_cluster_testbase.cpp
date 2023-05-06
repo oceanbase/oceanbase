@@ -35,6 +35,7 @@ int64_t ObSimpleLogClusterTestBase::node_idx_base_ = 1002;
 char ObSimpleLogClusterTestBase::sig_buf_[sizeof(ObSignalWorker) + sizeof(observer::ObSignalHandle)];
 ObSignalWorker *ObSimpleLogClusterTestBase::sig_worker_ = new (sig_buf_) ObSignalWorker();
 observer::ObSignalHandle *ObSimpleLogClusterTestBase::signal_handle_ = new (sig_worker_ + 1) observer::ObSignalHandle();
+bool ObSimpleLogClusterTestBase::disable_hot_cache_ = false;
 
 void ObSimpleLogClusterTestBase::SetUpTestCase()
 {

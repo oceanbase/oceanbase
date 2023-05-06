@@ -5,8 +5,8 @@ typedef struct pktc_msg_t {
 static int64_t pktc_decode(char* b, int64_t s) { return eh_decode(b, s); }
 static uint64_t pktc_get_id(pktc_msg_t* m) { return eh_packet_id(m->payload); }
 
-static int pktc_sk_read(void** b, pktc_sk_t* s, int64_t sz) {
-  return sk_read_with_ib(b, (sock_t*)s, &s->ib, sz);
+static int pktc_sk_read(void** b, pktc_sk_t* s, int64_t sz, int64_t* read_bytes) {
+  return sk_read_with_ib(b, (sock_t*)s, &s->ib, sz, read_bytes);
 }
 
 static void pktc_flush_cb(pktc_t* io, pktc_req_t* req) {

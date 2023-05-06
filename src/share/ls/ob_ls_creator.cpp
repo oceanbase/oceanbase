@@ -196,7 +196,7 @@ int ObLSCreator::create_user_ls(
             zone_locality, addr))) {
       LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(status_info));
     } else if (OB_FAIL(ls_operator.get_ls_init_member_list(tenant_id_, id_, member_list,
-            exist_status_info, *proxy_))) {
+            exist_status_info, *proxy_, arbitration_service))) {
       LOG_WARN("failed to get ls init member list", KR(ret), K(tenant_id_), K(id_));
     } else if (status_info.ls_is_created()) {
     } else if (status_info.ls_group_id_ != exist_status_info.ls_group_id_
@@ -255,7 +255,7 @@ int ObLSCreator::create_tenant_sys_ls(
             zone_locality, addr))) {
       LOG_WARN("failed to alloc user ls addr", KR(ret), K(tenant_id_), K(pool_list));
     } else {
-      ret = ls_operator.get_ls_init_member_list(tenant_id_, id_, member_list, exist_status_info, *proxy_);
+      ret = ls_operator.get_ls_init_member_list(tenant_id_, id_, member_list, exist_status_info, *proxy_, arbitration_service);
       if (OB_FAIL(ret) && OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get log stream member list", KR(ret), K_(id), K(tenant_id_));
       } else if (OB_SUCC(ret) && status_info.ls_is_created()) {
@@ -307,9 +307,9 @@ int ObLSCreator::do_create_ls_(const ObLSAddr &addr,
                                compat_mode, create_with_palf, palf_base_info, member_list, arbitration_service))) {
    LOG_WARN("failed to create log stream", KR(ret), K_(id), K_(tenant_id), K(create_with_palf),
             K(addr), K(paxos_replica_num), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info));
- } else if (OB_FAIL(persist_ls_member_list_(member_list))) {
+ } else if (OB_FAIL(persist_ls_member_list_(member_list, arbitration_service))) {
    LOG_WARN("failed to persist log stream member list", KR(ret),
-            K(member_list));
+            K(member_list), K(arbitration_service));
  }
   return ret;
 }
@@ -331,6 +331,7 @@ int ObLSCreator::process_after_has_member_list_(
     LOG_WARN("sql proxy is null", KR(ret));
   } else {
     //create end
+    DEBUG_SYNC(BEFORE_PROCESS_AFTER_HAS_MEMBER_LIST);
     share::ObLSStatusOperator ls_operator;
     if (OB_FAIL(ls_operator.update_ls_status(
             tenant_id_, id_, share::OB_LS_CREATING, share::OB_LS_CREATED, 
@@ -469,7 +470,8 @@ int ObLSCreator::check_create_ls_result_(const int64_t rpc_count,
   return ret;
 }
 
-int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list)
+int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list,
+                                         const ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_SET_LS_MEMBER_LIST);
@@ -484,8 +486,8 @@ int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list
     LOG_WARN("sql proxy is null", KR(ret));
   } else {
     share::ObLSStatusOperator ls_operator;
-    if (OB_FAIL(ls_operator.update_init_member_list(tenant_id_, id_, member_list, *proxy_))) {
-      LOG_WARN("failed to insert ls", KR(ret), K(member_list));
+    if (OB_FAIL(ls_operator.update_init_member_list(tenant_id_, id_, member_list, *proxy_, arb_member))) {
+      LOG_WARN("failed to insert ls", KR(ret), K(member_list), K(arb_member));
     }
   }
   return ret;
@@ -591,7 +593,6 @@ int ObLSCreator::set_member_list_(const common::ObMemberList &member_list,
   }
   return ret;
 }
-
 
 int ObLSCreator::check_set_memberlist_result_(const int64_t rpc_count,
                             const ObIArray<int> &return_code_array,

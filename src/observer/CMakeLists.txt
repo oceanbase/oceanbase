@@ -99,6 +99,12 @@ ob_set_subtarget(ob_server mysql
   mysql/obsm_utils.cpp
 )
 
+ob_set_subtarget(ob_server net
+  net/ob_ingress_bw_alloc_service.cpp
+  net/ob_net_endpoint_ingress_rpc_proccessor.cpp
+  net/ob_net_endpoint_ingress_rpc_struct.cpp
+)
+
 ob_set_subtarget(ob_server omt
   omt/ob_multi_level_queue.cpp
   omt/ob_multi_tenant.cpp
@@ -294,6 +300,8 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tx_data_table.cpp
   virtual_table/ob_all_virtual_weak_read_stat.cpp
   virtual_table/ob_all_virtual_log_stat.cpp
+  virtual_table/ob_all_virtual_arbitration_member_info.cpp
+  virtual_table/ob_all_virtual_arbitration_service_status.cpp
   virtual_table/ob_all_virtual_apply_stat.cpp
   virtual_table/ob_all_virtual_replay_stat.cpp
   virtual_table/ob_all_virtual_ha_diagnose.cpp

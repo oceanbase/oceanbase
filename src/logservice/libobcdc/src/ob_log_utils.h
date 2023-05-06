@@ -428,8 +428,12 @@ private:
 ///
 /// @retval OB_SUCCESS          split success
 /// @retval other_error_code    Fail
-int split(char *str, const char *delimiter,
-    const int64_t expect_res_cnt, const char **res, int64_t &res_cnt);
+int split(
+    char *str,
+    const char *delimiter,
+    const int64_t expect_res_cnt,
+    const char **res,
+    int64_t &res_cnt);
 
 int split_int64(const common::ObString &str, const char delimiter, common::ObIArray<int64_t> &ret_array);
 

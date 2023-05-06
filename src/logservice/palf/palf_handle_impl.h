@@ -27,6 +27,7 @@
 #include "palf_callback_wrapper.h"
 #include "log_engine.h"                      // LogEngine
 #include "log_meta.h"
+#include "log_cache.h"
 #include "lsn.h"
 #include "log_config_mgr.h"
 #include "log_mode_mgr.h"
@@ -658,7 +659,10 @@ public:
   virtual int get_palf_epoch(int64_t &palf_epoch) const = 0;
   virtual int diagnose(PalfDiagnoseInfo &diagnose_info) const = 0;
   virtual int update_palf_stat() = 0;
-
+  virtual int read_data_from_buffer(const LSN &read_begin_lsn,
+                                    const int64_t in_read_size,
+                                    char *buf,
+                                    int64_t &out_read_size) const = 0;
   DECLARE_PURE_VIRTUAL_TO_STRING;
 };
 
@@ -757,6 +761,10 @@ public:
   bool is_vote_enabled() const override final;
   int disable_vote(const bool need_check_log_missing) override final;
   int enable_vote() override final;
+  int read_data_from_buffer(const LSN &read_begin_lsn,
+                            const int64_t in_read_size,
+                            char *buf,
+                            int64_t &out_read_size) const;
 public:
   int delete_block(const block_id_t &block_id) override final;
   int read_log(const LSN &lsn,
@@ -1108,6 +1116,7 @@ private:
   LogEngine log_engine_;
   ElectionMsgSender election_msg_sender_;
   election::ElectionImpl election_;
+  LogHotCache hot_cache_;
   FetchLogEngine *fetch_log_engine_;
   common::ObILogAllocator *allocator_;
   int64_t palf_id_;

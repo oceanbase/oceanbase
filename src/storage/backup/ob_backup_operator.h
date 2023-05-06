@@ -46,6 +46,12 @@ public:
   // __all_backup_ls_task
   static int report_ls_task_finish(const uint64_t tenant_id, const int64_t task_id, const share::ObLSID &ls_id,
       const int64_t turn_id, const int64_t retry_id, const int64_t result, common::ObISQLClient &sql_client);
+  static int get_all_backup_ls_id(const uint64_t tenant_id, const int64_t task_id,
+    common::ObIArray<share::ObLSID> &ls_array, common::ObISQLClient &sql_client);
+  static int get_all_archive_ls_id(const uint64_t tenant_id, const int64_t dest_id,
+    const share::SCN &start_scn, const share::SCN &end_scn, common::ObIArray<share::ObLSID> &ls_array,
+    common::ObISQLClient &sql_client);
+
   // __all_backup_skipped_tablet
   static int report_tablet_skipped(
       const uint64_t tenant_id, const ObBackupSkippedTablet &skipped_tablet, common::ObISQLClient &sql_client);
@@ -55,6 +61,16 @@ private:
   static int parse_ls_task_info_results_(
       sqlclient::ObMySQLResult &result, common::ObIArray<ObBackupLSTaskInfo> &task_info);
   static int fill_backup_skipped_tablet_(const ObBackupSkippedTablet &skipped_tablet, share::ObDMLSqlSplicer &splicer);
+  static int get_distinct_ls_id_(const uint64_t tenant_id, const common::ObSqlString &sql,
+      common::ObIArray<share::ObLSID> &ls_array, common::ObISQLClient &sql_client);
+  static int get_piece_id_(const uint64_t tenant_id, const common::ObSqlString &sql, int64_t &piece_id, common::ObISQLClient &sql_client);
+  static int get_start_piece_id_(const uint64_t tenant_id, const uint64_t dest_id,
+      const share::SCN &start_scn, common::ObISQLClient &sql_client, int64_t &start_piece_id);
+  static int get_end_piece_id_(const uint64_t tenant_id, const uint64_t dest_id, const share::SCN &end_scn,
+      common::ObISQLClient &sql_client, int64_t &end_piece_id);
+  static int construct_query_backup_sql_(const uint64_t tenant_id, const int64_t task_id, common::ObSqlString &sql);
+  static int construct_query_archive_sql_(const uint64_t tenant_id, const int64_t dest_id, const int64_t start_piece_id,
+      const int64_t end_piece_id, common::ObSqlString &sql);
 };
 
 }  // namespace backup

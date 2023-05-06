@@ -14,6 +14,7 @@
 #include "lib/net/ob_addr.h"
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
+#include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "logservice/palf/log_define.h"
@@ -42,5 +43,39 @@ void ObRestoreLogContext::reset()
   lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
 }
 
+void ObLogRestoreSourceTenant::reset()
+{
+  source_cluster_id_ = OB_INVALID_CLUSTER_ID;
+  source_tenant_id_ = OB_INVALID_TENANT_ID;
+  user_name_.reset();
+  user_passwd_.reset();
+  is_oracle_ = false;
+  ip_list_.reset();
+}
+
+int ObLogRestoreSourceTenant::set(const ObLogRestoreSourceTenant &other)
+{
+  int ret = OB_SUCCESS;
+  source_cluster_id_ = other.source_cluster_id_;
+  source_tenant_id_ = other.source_tenant_id_;
+  is_oracle_ = other.is_oracle_;
+  if (OB_FAIL(user_name_.assign(other.user_name_))) {
+    CLOG_LOG(WARN, "assign user_name_ failed", K(other));
+  } else if (OB_FAIL(user_passwd_.assign(other.user_passwd_))) {
+    CLOG_LOG(WARN, "assign user_passwd_ failed", K(other));
+  } else if (OB_FAIL(ip_list_.assign(other.ip_list_))) {
+    CLOG_LOG(WARN, "assign ip_list_ failed", K(other));
+  }
+  return ret;
+}
+
+bool ObLogRestoreSourceTenant::is_valid() const
+{
+  return OB_INVALID_CLUSTER_ID != source_cluster_id_
+    && OB_INVALID_TENANT_ID != source_tenant_id_
+    && !user_name_.is_empty()
+    && !user_passwd_.is_empty()
+    && ip_list_.count() > 0;
+}
 } // namespace logservice
 } // namespace oceanbase

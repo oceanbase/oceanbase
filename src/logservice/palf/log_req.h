@@ -396,6 +396,7 @@ public:
   LSN end_lsn_;
 };
 
+
 } // end namespace palf
 } // end namespace oceanbase
 

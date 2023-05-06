@@ -36,11 +36,19 @@ static int my_sk_flush(my_sk_t* s, int64_t time_limit) {
   return remain <= 0 && 0 == err? EAGAIN: err;
 }
 
-static int my_sk_consume(my_sk_t* s, int64_t time_limit) {
+int my_sk_consume(my_sk_t* s, int64_t time_limit, int64_t* avail_bytes) {
   int err = 0;
-  my_msg_t msg;
+  my_msg_t msg = (my_msg_t) { .sz = 0, .payload = NULL };
+  pn_comm_t* pn = get_current_pnio();
+  if (avail_bytes == NULL && skt(s, IN) && LOAD(&pn->pn_grp->rx_bw) != RATE_UNLIMITED) {
+    // push socket to ratelimit list
+    my_t* io = structof(s->fty, my_t, sf);
+    rl_sock_push(&io->ep->rl_impl, (sock_t*)s);
+    err = EAGAIN;
+  }
+  int64_t rbytes = 0;
   while(0 == err && !is_epoll_handle_timeout(time_limit)) {
-    if (0 != (err = my_sk_do_decode(s, &msg))) {
+    if (0 != (err = my_sk_do_decode(s, &msg, avail_bytes))) {
       if (EAGAIN != err) {
         rk_info("do_decode fail: %d", err);
       }
@@ -54,7 +62,7 @@ static int my_sk_consume(my_sk_t* s, int64_t time_limit) {
 }
 
 static int my_sk_handle_event_ready(my_sk_t* s) {
-  int consume_ret = my_sk_consume(s, get_epoll_handle_time_limit());
+  int consume_ret = my_sk_consume(s, get_epoll_handle_time_limit(), NULL);
   int flush_ret = my_sk_flush(s, get_epoll_handle_time_limit());
   return EAGAIN == consume_ret? flush_ret: consume_ret;
 }

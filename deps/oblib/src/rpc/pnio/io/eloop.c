@@ -7,6 +7,7 @@ struct epoll_event *__make_epoll_event(struct epoll_event *event, uint32_t event
 int eloop_init(eloop_t* ep) {
   ep->fd = epoll_create1(EPOLL_CLOEXEC);
   dlink_init(&ep->ready_link);
+  // dlink_init(&ep->rl_ready_link);
   return (ep->fd < 0)? errno: 0;
 }
 
@@ -27,9 +28,10 @@ int eloop_regist(eloop_t* ep, sock_t* s, uint32_t eflag) {
   uint32_t flag = eflag | EPOLLERR | EPOLLET;
   s->mask = 0;
   s->ready_link.next = NULL;
-  if (0 != epoll_ctl(ep->fd, EPOLL_CTL_ADD, s->fd, __make_epoll_event(&event, flag, s))) {
+  if (0 != ussl_epoll_ctl(ep->fd, EPOLL_CTL_ADD, s->fd, __make_epoll_event(&event, flag, s))) {
     err = -EIO;
   } else {
+    s->ep_fd = ep->fd;
     rk_info("sock regist: %p fd=%d", s, s->fd);
   }
   return err;
@@ -57,8 +59,18 @@ static void eloop_refire(eloop_t* ep, int64_t timeout) {
 
 static void sock_destroy(sock_t* s) {
   dlink_delete(&s->ready_link);
+  int err = 0;
+  if (s->ep_fd >= 0) {
+    err = epoll_ctl(s->ep_fd, EPOLL_CTL_DEL, s->fd, NULL);
+    if (0 != err) {
+      rk_error("epoll_ctl delete fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+    }
+  }
   if (s->fd >= 0) {
-    close(s->fd);
+    err = ussl_close(s->fd);
+    if (0 != err) {
+      rk_error("close sock fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+    }
   }
   if (s->fty) {
     s->fty->destroy(s->fty, s);
@@ -101,7 +113,20 @@ int eloop_run(eloop_t* ep) {
     dlink_for(&ep->ready_link, p) {
       eloop_handle_sock_event(structof(p, sock_t, ready_link));
     }
+
     PNIO_DELAY_WARN(eloop_delay_warn(start_us, ELOOP_WARN_US));
+    pn_comm_t* pn = get_current_pnio();
+    if (unlikely(NULL != pn && 0 == pn->tid && PNIO_REACH_TIME_INTERVAL(1000000))) {
+      static __thread uint64_t last_rx_bytes = 0;
+      static __thread uint64_t last_time = 0;
+      uint64_t rx_bytes = pn_get_rxbytes(pn->gid);
+      int64_t cur_time_us = rk_get_us();
+      uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
+      double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
+      rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
+      last_rx_bytes = rx_bytes;
+      last_time = cur_time_us;
+    }
   }
   return 0;
 }

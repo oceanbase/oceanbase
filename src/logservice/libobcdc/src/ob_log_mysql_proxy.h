@@ -48,7 +48,6 @@ public:
   int init(
       const char *cluster_user,
       const char *cluster_password,
-      const char *cluster_db_name,
       const int64_t sql_conn_timeout_us,
       const int64_t sql_query_timeout_us,
       const bool enable_ssl_client_authentication,
@@ -59,13 +58,17 @@ public:
 
   common::ObMySQLProxy &get_ob_mysql_proxy() { return mysql_proxy_; }
   void refresh_conn_pool() { connection_pool_.signal_refresh(); }
+  bool is_oracle_mode() const { return is_oracle_mode_; }
+
+private:
+  int detect_tenant_mode_(ServerProviderType *server_provider);
 
 private:
   bool                  inited_;
 
   char                  cluster_user_[common::OB_MAX_USER_NAME_BUF_LENGTH];
   char                  cluster_password_[common::OB_MAX_PASSWORD_LENGTH + 1];
-  char                  cluster_db_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH];
+  bool                  is_oracle_mode_;
 
   ConnectionPoolType    connection_pool_;
   // Thread-safe proxies, getting connections and locking

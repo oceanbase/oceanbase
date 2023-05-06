@@ -140,6 +140,15 @@ int ObCreateTenantStmt::set_tcp_invited_nodes(common::ObString value)
   return ret;
 }
 
+void ObCreateTenantStmt::set_create_standby_tenant()
+{
+  create_tenant_arg_.is_creating_standby_ = true;
+}
+
+void ObCreateTenantStmt::set_log_restore_source(const common::ObString &log_restore_source)
+{
+  create_tenant_arg_.log_restore_source_ = log_restore_source;
+}
 
 } /* sql */
 } /* oceanbase */

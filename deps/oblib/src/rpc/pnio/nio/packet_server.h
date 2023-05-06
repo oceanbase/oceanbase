@@ -16,7 +16,7 @@ typedef struct pkts_req_t {
   pkts_flush_cb_func_t flush_cb;
   uint64_t sock_id;
   int64_t categ_id;
-  link_t link;
+  dlink_t link;
   str_t msg;
 } pkts_req_t;
 

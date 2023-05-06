@@ -76,7 +76,7 @@ bool TenantTransID::is_valid() const
   return tenant_id_ != common::OB_INVALID_TENANT_ID && trans_id_ > 0;
 }
 
-PartTransID::PartTransID(const TenantLSID &tls_id, const transaction::ObTransID &trans_id) :
+PartTransID::PartTransID(const logservice::TenantLSID &tls_id, const transaction::ObTransID &trans_id) :
     tls_id_(tls_id), trans_id_(trans_id)
 {}
 

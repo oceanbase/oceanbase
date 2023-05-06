@@ -374,7 +374,7 @@ bool ObLSWorker::is_svr_avail_(IObLogAllSvrCache &all_svr_cache, const common::O
 int ObLSWorker::dispatch_fetch_task_to_svr_(LSFetchCtx &task, const common::ObAddr &request_svr)
 {
   int ret = OB_SUCCESS;
-  const TenantLSID &tls_id = task.get_tls_id();
+  const logservice::TenantLSID &tls_id = task.get_tls_id();
   IObFsContainerMgr *fs_container_mgr = nullptr;
   FetchStreamContainer *fsc = nullptr;
   IObLogFetcher *fetcher = static_cast<IObLogFetcher *>(fetcher_host_);

@@ -1998,6 +1998,31 @@ int ObMultiVersionSchemaService::check_if_tenant_has_been_dropped(
   return ret;
 }
 
+int ObMultiVersionSchemaService::check_is_creating_standby_tenant(
+    const uint64_t tenant_id,
+    bool &is_creating_standby)
+{
+  int ret = OB_SUCCESS;
+  is_creating_standby = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    SpinRLockGuard guard(schema_manager_rwlock_);
+    ObSchemaGetterGuard schema_guard;
+    if (!is_tenant_full_schema(OB_SYS_TENANT_ID)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("local schema not inited,", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+      LOG_WARN("get schema guard failed ", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.check_is_creating_standby_tenant(tenant_id, is_creating_standby))) {
+      LOG_WARN("failed to check if it is a creating standby tenant", KR(ret), K(tenant_id));
+    }
+  }
+  return ret;
+}
+
 int ObMultiVersionSchemaService::init_original_schema()
 {
   int ret = OB_SUCCESS;

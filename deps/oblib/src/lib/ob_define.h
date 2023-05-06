@@ -2105,6 +2105,8 @@ enum ObTraceGranularity
   TRANS_LEVEL = 1
 };
 
+const uint64_t OB_LISTENER_GID = 0;
+
 } // end namespace common
 } // end namespace oceanbase
 

@@ -3,6 +3,7 @@ add_library(oblib_base_base_base INTERFACE)
 
 get_property(EASY_INCLUDE_DIRS GLOBAL PROPERTY "EASY_INCLUDE_DIRS" )
 
+
 target_include_directories(
   oblib_base_base_base INTERFACE
   ${CMAKE_SOURCE_DIR}
@@ -11,6 +12,8 @@ target_include_directories(
   ${CMAKE_SOURCE_DIR}/deps/oblib/src
   ${CMAKE_SOURCE_DIR}/deps/oblib/src/common
   ${CMAKE_SOURCE_DIR}/deps/easy/src/include
+  ${CMAKE_SOURCE_DIR}/deps/ussl-hook
+  ${CMAKE_SOURCE_DIR}/deps/ussl-hook/loop
   ${CMAKE_SOURCE_DIR}/src/objit/include
   ${CMAKE_SOURCE_DIR}/src/objit/src
   ${DEP_DIR}/include
@@ -23,6 +26,7 @@ target_include_directories(
   ${DEP_3RD_DIR}/usr/local/include
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu/common
+  ${USSL_INCLUDE_DIRS}
   )
 
 if (OB_USE_CLANG)

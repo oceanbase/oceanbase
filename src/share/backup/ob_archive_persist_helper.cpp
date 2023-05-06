@@ -1090,6 +1090,82 @@ int ObArchivePersistHelper::get_dest_round_summary(common::ObISQLClient &proxy, 
   return ret;
 }
 
+int ObArchivePersistHelper::get_piece_by_scn(common::ObISQLClient &proxy, const int64_t dest_id,
+    const share::SCN &scn, ObTenantArchivePieceAttr &piece) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObArray<ObTenantArchivePieceAttr> piece_list;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret),  K(dest_id));
+  } else {
+    ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s asc limit 1",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_,
+          OB_STR_DEST_ID, dest_id, OB_STR_FILE_STATUS, OB_STR_DELETED,
+          OB_STR_CHECKPOINT_SCN, scn.get_val_for_inner_table_field(), OB_STR_PIECE_ID))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+        LOG_WARN("failed to parse result", K(ret));
+      } else if (piece_list.count() > 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("piece list should not greater than 1", K(ret), K(scn));
+      } else if (piece_list.empty()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("no piece exist", K(ret), K(dest_id), K(sql), K(scn));
+      } else {
+        piece = piece_list.at(0);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_pieces_by_range(common::ObISQLClient &proxy, const int64_t dest_id,
+    const int64_t start_piece_id, const int64_t end_piece_id, ObIArray<ObTenantArchivePieceAttr> &pieces) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret),  K(dest_id));
+  } else {
+    ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld and %s<=%ld order by %s asc",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID,
+          dest_id, OB_STR_FILE_STATUS, OB_STR_DELETED,
+          OB_STR_PIECE_ID, start_piece_id, OB_STR_PIECE_ID, end_piece_id, OB_STR_PIECE_ID))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(parse_piece_result_(*result, pieces))) {
+        LOG_WARN("failed to parse result", K(ret));
+      } else {
+        LOG_INFO("success get piece", K(sql));
+      }
+    }
+  }
+  return ret;
+}
 
 
 int ObArchivePersistHelper::parse_round_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const

@@ -2727,9 +2727,7 @@ ObIOFaultDetector::ObIOFaultDetector(const ObIOConfig &io_config)
     last_device_warning_ts_(0),
     is_device_error_(false),
     begin_device_error_ts_(0),
-    last_device_error_ts_(0),
-    write_failure_count_(0),
-    write_failure_ts_()
+    last_device_error_ts_(0)
 {
 
 }
@@ -2746,7 +2744,6 @@ int ObIOFaultDetector::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("io fault detector init twice", K(ret), K(!is_inited_));
   } else {
-    MEMSET(write_failure_ts_, 0, sizeof(write_failure_ts_));
     is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
@@ -2763,7 +2760,6 @@ void ObIOFaultDetector::destroy()
   is_device_error_ = false;
   begin_device_error_ts_ = 0;
   last_device_error_ts_ = 0;
-  write_failure_count_ = 0;
   is_inited_ = false;
 }
 
@@ -2899,9 +2895,8 @@ void ObIOFaultDetector::record_failure(const ObIORequest &req)
       LOG_WARN("record read failure failed", K(ret), K(req));
     }
   } else if (req.get_flag().is_write()) {
-    if (OB_FAIL(record_write_failure())) {
-      LOG_WARN("record write failure failed", K(ret), K(req));
-    }
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("write IORequest failed", K(ret), K(req));
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported io mode", K(ret), K(req));
@@ -2928,24 +2923,6 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
       retry_task = nullptr;
     }
   }
-  return ret;
-}
-
-int ObIOFaultDetector::record_write_failure()
-{
-  int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> guard(lock_);
-  write_failure_ts_[write_failure_count_ % WRITE_FAILURE_DETECT_EVENT_COUNT] = ObTimeUtility::fast_current_time();
-  if (write_failure_count_ >= WRITE_FAILURE_DETECT_EVENT_COUNT) {
-    const int64_t last_failure_ts = write_failure_ts_[write_failure_count_ % WRITE_FAILURE_DETECT_EVENT_COUNT];
-    const int64_t first_failure_ts = write_failure_ts_[(write_failure_count_ + 1) % WRITE_FAILURE_DETECT_EVENT_COUNT];
-    if (last_failure_ts - first_failure_ts <= io_config_.write_failure_detect_interval_) {
-      if (!is_device_error_) {
-        set_device_error();
-      }
-    }
-  }
-  write_failure_count_++;
   return ret;
 }
 

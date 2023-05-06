@@ -31,20 +31,6 @@ namespace libobcdc
 {
 int64_t PartTransDispatcher::g_part_trans_task_count = 0;
 
-//////////////////////////////////// PartTransDispatchInfo ///////////////////////////////////
-
-PartTransDispatchInfo::PartTransDispatchInfo() :
-    last_dispatch_log_lsn_(),
-    current_checkpoint_(OB_INVALID_VERSION),
-    pending_task_count_(0),
-    task_count_in_queue_(0),
-    next_task_type_("INVALID"),
-    next_trans_log_lsn_(),
-    next_trans_committed_(false),
-    next_trans_ready_to_commit_(false),
-    next_trans_global_version_(OB_INVALID_VERSION)
-{}
-
 //////////////////////////////////// TransCommitInfo ///////////////////////////////////
 
 void TransCommitInfo::reset()
@@ -103,7 +89,7 @@ PartTransDispatcher::~PartTransDispatcher()
   last_stat_time_ = 0;
 }
 
-int PartTransDispatcher::init(const TenantLSID &tls_id,
+int PartTransDispatcher::init(const logservice::TenantLSID &tls_id,
     const int64_t start_tstamp)
 {
   int ret = OB_SUCCESS;
@@ -421,10 +407,10 @@ struct TaskMapCleaner
     return bool_ret;
   }
 
-  TaskMapCleaner(const TenantLSID &tls_id) : count_(0), tls_id_(tls_id) {}
+  TaskMapCleaner(const logservice::TenantLSID &tls_id) : count_(0), tls_id_(tls_id) {}
 
   int64_t               count_;
-  const TenantLSID      &tls_id_;
+  const logservice::TenantLSID      &tls_id_;
 };
 
 // Iterate through all tasks, ready or not, and revert them directly
@@ -596,7 +582,7 @@ int PartTransDispatcher::get_task(const PartTransID &trans_id, PartTransTask *&t
 // 1. get progress based on last dispatch progress
 // 2. Update dispatch progress if there are tasks that are dispatching or ready to be dispatched
 int PartTransDispatcher::get_dispatch_progress(int64_t &dispatch_progress,
-    PartTransDispatchInfo &dispatch_info)
+    logfetcher::PartTransDispatchInfo &dispatch_info)
 {
   int ret = OB_SUCCESS;
 

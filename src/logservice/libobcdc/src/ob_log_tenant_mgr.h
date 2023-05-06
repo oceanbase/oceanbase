@@ -165,7 +165,7 @@ public:
 
   // Recycle the LS structure
   // This interface is called when the LS OFFLINE task is processed and the LS OFFLINE task is received, indicating that all data for the LS has been processed.
-  virtual int recycle_ls(const TenantLSID &tls_id) = 0;
+  virtual int recycle_ls(const logservice::TenantLSID &tls_id) = 0;
 
   // Set the same starting schema version for all tenants
   virtual int set_data_start_schema_version_for_all_tenant(const int64_t version) = 0;
@@ -233,7 +233,7 @@ public:
       const char *&tenant_name,
       bool &tenant_is_chosen);
 
-  int recycle_ls(const TenantLSID &tls_id);
+  int recycle_ls(const logservice::TenantLSID &tls_id);
 
   int filter_ddl_stmt(const uint64_t tenant_id, bool &chosen);
   int filter_tenant(const char *tenant_name, bool &chosen);

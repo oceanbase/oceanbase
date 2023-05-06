@@ -418,7 +418,7 @@ public:
   int64_t get_table_version() const { return row_.table_version_; }
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
-  const TenantLSID &get_tls_id() const;
+  const logservice::TenantLSID &get_tls_id() const;
   const common::ObStoreRowkey &get_rowkey() const { return row_.rowkey_; }
   blocksstable::ObDmlFlag get_dml_flag() const { return row_.dml_flag_; }
   bool is_insert() const { return blocksstable::ObDmlFlag::DF_INSERT == row_.dml_flag_; }
@@ -640,7 +640,7 @@ public:
 
 public:
   int init(
-      const TenantLSID &tls_id,
+      const logservice::TenantLSID &tls_id,
       const char *participant,
       const transaction::ObTransID &trans_id,
       DmlRedoLogNode *redo_node);
@@ -659,7 +659,7 @@ public:
   inline void *get_host() { return host_; }
   inline void set_host(void *host) { host_ = host; }
 
-  const TenantLSID &get_tls_id() const { return tls_id_; }
+  const logservice::TenantLSID &get_tls_id() const { return tls_id_; }
   uint64_t get_tenant_id() const { return tls_id_.get_tenant_id(); }
   const share::ObLSID &get_ls_id() const { return tls_id_.get_ls_id(); }
   bool is_sys_ls_task() const { return tls_id_.is_sys_log_stream(); }
@@ -715,7 +715,7 @@ private:
 
   const char             *participant_;
 
-  TenantLSID             tls_id_;           // TenantLSID
+  logservice::TenantLSID tls_id_;           // logservice::TenantLSID
   transaction::ObTransID trans_id_;         // Transaction ID
 
   DmlRedoLogNode     *redo_node_;           // dml redo log node
@@ -872,7 +872,7 @@ public:
   //
   /// @retval OB_SUCCESS            Success
   /// @retval Other error codes     Fail
-  int init_ls_heartbeat_info(const TenantLSID &tls_id, const int64_t timestamp);
+  int init_ls_heartbeat_info(const logservice::TenantLSID &tls_id, const int64_t timestamp);
 
   // Initialize global heartbeat task information, global heartbeat task is independent of tls_id
   // Set the type to: TASK_TYPE_GLOBAL_HEARTBEAT
@@ -890,7 +890,7 @@ public:
   //
   /// @retval OB_SUCCESS            Success
   /// @retval Other error codes     Fail
-  int init_offline_ls_task(const TenantLSID &tls_id);
+  int init_offline_ls_task(const logservice::TenantLSID &tls_id);
 
   // is task info valid or not
   bool is_task_info_valid() const;
@@ -931,15 +931,15 @@ public:
   bool is_not_served_trans() const { return TASK_TYPE_NOT_SERVED_TRANS == type_; }
   bool is_sys_ls_dml_trans() const { return is_dml_trans() && is_sys_ls_part_trans(); }
 
-  void set_task_info(const TenantLSID &tls_id, const char *info);
+  void set_task_info(const logservice::TenantLSID &tls_id, const char *info);
 
   void set_trans_id(const transaction::ObTransID &trans_id) { trans_id_ = trans_id; }
   const transaction::ObTransID &get_trans_id() const { return trans_id_; }
 
   uint64_t get_cluster_id() const { return cluster_id_; }
 
-  void set_tls_id(const TenantLSID &tls_id) { tls_id_ = tls_id; }
-  const TenantLSID &get_tls_id() const { return tls_id_; }
+  void set_tls_id(const logservice::TenantLSID &tls_id) { tls_id_ = tls_id; }
+  const logservice::TenantLSID &get_tls_id() const { return tls_id_; }
   uint64_t get_tenant_id() const { return tls_id_.get_tenant_id(); }
   const share::ObLSID &get_ls_id() const { return tls_id_.get_ls_id(); }
 
@@ -1231,7 +1231,7 @@ private:
   TaskType                type_;                  // task type
   uint64_t                exec_tenant_id_;        // record tenant_id for DDL task
 
-  TenantLSID              tls_id_;                // TenantLSID
+  logservice::TenantLSID  tls_id_;                // logservice::TenantLSID
   const char              *tls_str_;
   transaction::ObTransID  trans_id_;              // trans ID
   ObString                part_trans_info_str_;   // tls_str + tx_id

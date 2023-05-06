@@ -1699,21 +1699,8 @@ int ObBackupSetTaskMgr::calculate_start_replay_scn_(SCN &start_replay_scn)
     LOG_WARN("backup is not supported when archive is interrupted", K(ret), K(round_attr), K(set_task_attr_.start_scn_));
   } else if (OB_FAIL(store_.read_ls_meta_infos(ls_meta_infos))) {
     LOG_WARN("fail to read ls meta infos", K(ret));
-  } else {
-    // To ensure that restore can be successfully initiated,
-    // we need to avoid clearing too many logs and the start_replay_scn less than the start_scn of the first piece.
-    // so we choose the minimum palf_base_info.prev_log_info_.scn firstly, to ensure keep enough logs.
-    // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn,
-    // to ensure the start_replay_scn is greater than the start scn of first piece
-    SCN tmp_start_replay_scn = set_task_attr_.start_scn_;
-    ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
-      const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-      tmp_start_replay_scn = SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
-    }
-    if (OB_SUCC(ret)) {
-      start_replay_scn = SCN::max(tmp_start_replay_scn, round_attr.start_scn_);
-      LOG_INFO("calculate start replay scn finish", K(start_replay_scn), K(ls_meta_infos), K(round_attr));
-    }
+  } else if (OB_FAIL(ObBackupUtils::calc_start_replay_scn(set_task_attr_, ls_meta_infos, round_attr, start_replay_scn))) {
+    LOG_WARN("failed to calc start replay scn", K(ret), K_(set_task_attr), K(ls_meta_infos), K(round_attr));
   }
   return ret;
 }

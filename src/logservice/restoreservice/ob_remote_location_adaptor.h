@@ -43,10 +43,11 @@ public:
 public:
   int init(const uint64_t tenant_id, storage::ObLSService *ls_svr);
   void destroy();
-  int update_upstream();
+  int update_upstream(share::ObLogRestoreSourceItem &source, bool &source_exist);
 
 private:
-  int do_update_(storage::ObLS &ls);
+  bool is_tenant_primary_();
+  int do_update_(const bool is_add_source, const share::ObLogRestoreSourceItem &item);
   int get_source_(share::ObLogRestoreSourceItem &item, bool &exist);
   int check_replica_status_(storage::ObLS &ls, bool &need_update);
   int clean_source_(ObLogRestoreHandler &restore_handler);

@@ -10359,6 +10359,8 @@ def_table_schema(
       ('data_disk_in_use', 'int'),
       ('status', 'varchar:64'),
       ('create_time', 'int'),
+      ('zone_type', 'varchar:MAX_ZONE_TYPE_LENGTH'),
+      ('region', 'varchar:MAX_REGION_LENGTH'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11091,7 +11093,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12324',
   table_name = '__all_virtual_log_restore_source',
-  keywords = all_def_keywords['__all_log_restore_source']))
+  keywords = all_def_keywords['__all_log_restore_source'],
+  in_tenant_space = True))
 
 def_table_schema(
   owner = 'wangzelin.wzl',
@@ -11658,8 +11661,64 @@ def_table_schema(
 )
 
 # 12385: __all_virtual_arbitration_member_info
-# 12386: __all_virtual_server_storage
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name = '__all_virtual_arbitration_member_info',
+  table_id = '12385',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+  ('tenant_id', 'int'),
+  ('ls_id', 'int'),
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('proposal_id', 'int'),
+  ('config_version', 'varchar:128'),
+  ('access_mode', 'varchar:32'),
+  ('paxos_member_list', 'varchar:1024'),
+  ('paxos_replica_num', 'int'),
+  ('arbitration_member', 'varchar:128'),
+  ('degraded_list', 'varchar:1024'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12387: __all_virtual_arbitration_service_status
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name = '__all_virtual_arbitration_service_status',
+  table_id = '12387',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('arbitration_service_address', 'varchar:512'),
+  ('status', 'varchar:64'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+#
+# 12381: __all_virtual_task_opt_stat_gather_history
+# 12382: __all_virtual_table_opt_stat_gather_history
+# 12383: __all_virtual_opt_stat_gather_monitor
+
+
+# 12385: __all_virtual_arbitration_member_info
+# 12386: __all_virtual_server_storage
 # 12388: __all_virtual_wr_active_session_history
 # 12389: __all_virtual_wr_snapshot
 # 12390: __all_virtual_wr_statname
@@ -12002,13 +12061,20 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15290'
 # 15291: __all_virtual_backup_transferring_tablets
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15292', all_def_keywords['__all_external_table_file']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15293', all_def_keywords['__all_data_dictionary_in_log'])))
 
-# 15293: __all_data_dictionary_in_log
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15294', all_def_keywords['__all_virtual_task_opt_stat_gather_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295', all_def_keywords['__all_virtual_table_opt_stat_gather_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15296', all_def_keywords['__all_virtual_opt_stat_gather_monitor'])))
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
+# 15303: __all_virtual_arbitration_member_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
+# 15304: __all_virtual_arbitration_service_status
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
+# 15294: __all_task_opt_stat_gather_history
+# 15295: __all_table_opt_stat_gather_history
+# 15296: __all_virtual_opt_stat_gather_monitor
 
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
@@ -12016,6 +12082,13 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
+# 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
+
+# 15305: __all_virtual_obj_lock
+
+# [15306, 15375] for oracle inner_table index
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keywords['__all_virtual_log_restore_source']))
 # 15305: __all_virtual_obj_lock
 
 #######################################################################
@@ -20367,6 +20440,8 @@ def_table_schema(
            UNIT_ID,
            TENANT_ID,
            ZONE,
+           ZONE_TYPE,
+           REGION,
            MAX_CPU,
            MIN_CPU,
            MEMORY_SIZE,
@@ -26132,6 +26207,84 @@ def_table_schema(
 
 # 21370: GV$OB_TABLET_STATS
 # 21371: V$OB_TABLET_STATS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'DBA_OB_ACCESS_POINT',
+  table_id        = '21372',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT a.TENANT_ID,
+        TENANT_NAME,
+        SVR_IP,
+        SQL_PORT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
+  WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID and b.TENANT_ID = EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'CDB_OB_ACCESS_POINT',
+  table_id        = '21373',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT a.TENANT_ID,
+        TENANT_NAME,
+        SVR_IP,
+        SQL_PORT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE a, OCEANBASE.DBA_OB_TENANTS b
+  WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'bohou.ws',
+  table_name      = 'CDB_OB_DATA_DICTIONARY_IN_LOG',
+  table_id        = '21374',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+    SELECT
+        TENANT_ID,
+        SNAPSHOT_SCN,
+        GMT_CREATE AS REPORT_TIME,
+        START_LSN,
+        END_LSN
+    FROM OCEANBASE.__ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'bohou.ws',
+  table_name      = 'DBA_OB_DATA_DICTIONARY_IN_LOG',
+  table_id        = '21375',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+        SNAPSHOT_SCN,
+        GMT_CREATE AS REPORT_TIME,
+        START_LSN,
+        END_LSN
+    FROM OCEANBASE.__ALL_DATA_DICTIONARY_IN_LOG
+  """.replace("\n", " "),
+)
 # 21372: CDB_OB_ACCESS_POINT
 # 21373: DBA_OB_ACCESS_POINT
 # 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
@@ -26299,6 +26452,96 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 )
 
 # 21382: GV$OB_ARBITRATION_MEMBER_INFO
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_ARBITRATION_MEMBER_INFO',
+  table_id       = '21382',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
+  FROM oceanbase.__all_virtual_arbitration_member_info
+""".replace("\n", " "),
+)
+
+# 21383: V$OB_ARBITRATION_MEMBER_INFO
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_ARBITRATION_MEMBER_INFO',
+    table_id       = '21383',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT *
+  FROM oceanbase.GV$OB_ARBITRATION_MEMBER_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+# 21387: GV$OB_ARBITRATION_SERVICE_STATUS
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_ARBITRATION_SERVICE_STATUS',
+  table_id       = '21387',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    ARBITRATION_SERVICE_ADDRESS,
+    STATUS
+  FROM oceanbase.__all_virtual_arbitration_service_status
+""".replace("\n", " "),
+)
+
+# 21388: V$OB_ARBITRATION_SERVICE_STATUS
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_ARBITRATION_SERVICE_STATUS',
+    table_id       = '21388',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT *
+  FROM oceanbase.GV$OB_ARBITRATION_SERVICE_STATUS
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+# 21372: CDB_OB_ACCESS_POINT
+# 21373: DBA_OB_ACCESS_POINT
+# 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
+# 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
+# 21376: GV$OB_OPT_STAT_GATHER_MONITOR
+# 21377: V$OB_OPT_STAT_GATHER_MONITOR
+# 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
+# 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
+
+# 21382: GV$OB_ARBITRATION_MEMBER_INFO
 # 21383: V$OB_ARBITRATION_MEMBER_INFO
 # 21384: DBA_OB_ZONE_STORAGE
 # 21385: GV$OB_SERVER_STORAGE
@@ -26320,6 +26563,46 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
+
+def_table_schema(
+  owner           = 'shuning.tsn',
+  table_name      = 'CDB_OB_LOG_RESTORE_SOURCE',
+  table_id        = '21401',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    ID,
+    TYPE,
+    VALUE,
+    RECOVERY_UNTIL_SCN
+  FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'shuning.tsn',
+  table_name      = 'DBA_OB_LOG_RESTORE_SOURCE',
+  table_id        = '21402',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    ID,
+    TYPE,
+    VALUE,
+    RECOVERY_UNTIL_SCN
+  FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'lixinze.lxz',
@@ -44190,7 +44473,29 @@ def_table_schema(
 # 25230: DBA_WR_SNAPSHOT
 # 25231: DBA_WR_STAT_NAME
 # 25232: DBA_WR_SYSSTAT
-# 25233: DBA_OB_LOG_RESTORE_SOURCE
+
+def_table_schema(
+  owner           = 'shuning.tsn',
+  table_name      = 'DBA_OB_LOG_RESTORE_SOURCE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25233',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+    ID,
+    TYPE,
+    VALUE,
+    RECOVERY_UNTIL_SCN
+  FROM SYS.ALL_VIRTUAL_LOG_RESTORE_SOURCE
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner           = 'jim.wjh',
@@ -48465,6 +48770,8 @@ def_table_schema(
            UNIT_ID,
            TENANT_ID,
            ZONE,
+           ZONE_TYPE,
+           REGION,
            MIN_CPU,
            MAX_CPU,
            MEMORY_SIZE,
@@ -49519,6 +49826,7 @@ def_table_schema(
     WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
   """.replace("\n", " ")
 )
+
 def_table_schema(
   owner           = 'msy164651',
   table_name      = 'DBA_OB_LS',
@@ -50059,6 +50367,49 @@ def_table_schema(
 # 28178:  DBA_OB_LS_LOG_RESTORE_STAT
 # 28179:  GV$OB_LOCKS
 # 28180:  V$OB_LOCKS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'DBA_OB_ACCESS_POINT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28181',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT a.TENANT_ID,
+        TENANT_NAME,
+        SVR_IP,
+        SQL_PORT
+  FROM SYS.ALL_VIRTUAL_LS_META_TABLE a, SYS.DBA_OB_TENANTS b
+  WHERE LS_ID=1 and a.TENANT_ID = b.TENANT_ID;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'bohou.ws',
+  table_name      = 'DBA_OB_DATA_DICTIONARY_IN_LOG',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28182',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT
+        SNAPSHOT_SCN,
+        GMT_CREATE AS REPORT_TIME,
+        START_LSN,
+        END_LSN
+    FROM SYS.ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG_REAL_AGENT
+  """.replace("\n", " "),
+)
 # 28181:  DBA_OB_ACCESS_POINT
 # 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
 
@@ -50198,10 +50549,93 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
-# 28189:  GV$OB_ARBITRATION_MEMBER_INFO
-# 28190:  V$OB_ARBITRATION_MEMBER_INFO
-# 28191:  GV$OB_ARBITRATION_SERVICE_STATUS
-# 28192:  V$OB_ARBITRATION_SERVICE_STATUS
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_ARBITRATION_MEMBER_INFO',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28189',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    TENANT_ID,
+    LS_ID,
+    SVR_IP,
+    SVR_PORT,
+    PROPOSAL_ID,
+    CONFIG_VERSION,
+    ACCESS_MODE,
+    PAXOS_MEMBER_LIST,
+    PAXOS_REPLICA_NUM,
+    ARBITRATION_MEMBER,
+    DEGRADED_LIST
+  FROM SYS.ALL_VIRTUAL_ARBITRATION_MEMBER_INFO
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_ARBITRATION_MEMBER_INFO',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28190',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT *
+  FROM SYS.GV$OB_ARBITRATION_MEMBER_INFO
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'debin.jdb',
+  table_name     = 'GV$OB_ARBITRATION_SERVICE_STATUS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id       = '28191',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    ARBITRATION_SERVICE_ADDRESS,
+    STATUS
+  FROM SYS.ALL_VIRTUAL_ARBITRATION_SERVICE_STATUS
+""".replace("\n", " "),
+)
+
+def_table_schema(
+    owner = 'debin.jdb',
+    table_name     = 'V$OB_ARBITRATION_SERVICE_STATUS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28192',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    rowkey_columns = [],
+    normal_columns  = [],
+    in_tenant_space = True,
+    view_definition = """
+  SELECT *
+  FROM SYS.GV$OB_ARBITRATION_SERVICE_STATUS
+  WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+)
+
+# 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
+# 28184:  V$OB_OPT_STAT_GATHER_MONITOR
 
 def_table_schema(
   owner = 'zhenjiang.xzj',

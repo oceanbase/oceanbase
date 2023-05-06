@@ -94,6 +94,11 @@ const int64_t OB_ARCHIVE_INVALID_ROUND_ID = 0;
 const int64_t OB_INVALID_DEST_ID = -1;
 const int64_t OB_MAX_BACKUP_QUERY_TIMEOUT = 60 * 1000 * 1000; // 60s
 const int64_t OB_DEFAULT_RESTORE_CONCURRENCY = 8;
+const int64_t OB_MAX_RESTORE_SOURCE_SERVICE_CONFIG_LEN = 7;
+const int64_t OB_MAX_RESTORE_SOURCE_IP_LIST_LEN = MAX_IP_PORT_LENGTH * 6;
+const int64_t OB_MAX_COMPAT_MODE_STR_LEN = 6; //ORACLE/MYSQL
+const int64_t OB_MAX_RESTORE_USER_AND_TENANT_LEN = OB_MAX_ORIGINAL_NANE_LENGTH + OB_MAX_USER_NAME_LENGTH + 1;
+const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 
   // TODO add tenant BACKUP_META_TIMEOUT parameters in 4.1
 static const int64_t OB_MAX_BACKUP_META_TIMEOUT = 30 * 60 * 1000 * 1000; // 30 min
@@ -142,6 +147,7 @@ const char *const OB_STR_CLUSTER_BACKUP_SET_FILE_INFO = "cluster_backup_set_file
 const char *const OB_STR_TENANT_BACKUP_SET_FILE_INFO = "tenant_backup_set_file_info";
 const char *const OB_STR_CLUSTER_BACKUP_BACKUP_SET_FILE_INFO = "cluster_backup_backup_set_file_info";
 const char *const OB_STR_TENANT_BACKUP_BACKUP_SET_FILE_INFO = "tenant_backup_backup_set_file_info";
+const char *const OB_STR_LS_FILE_INFO = "ls_file_info";
 const char *const OB_STR_TMP_FILE_MARK = ".tmp.";
 const char *const Ob_STR_BACKUP_REGION = "backup_region";
 const char *const OB_STR_BACKUP_ZONE = "backup_zone";
@@ -316,7 +322,6 @@ const char *const OB_STR_START_TIME = "start_time";
 const char *const OB_STR_FINISH_TIME = "finish_time";
 const char *const OB_STR_ROLE = "role";
 const char *const OB_STR_USER_LS_START_SCN = "user_ls_start_scn";
-
 const char *const OB_STR_CHECKPOINT_SCN = "checkpoint_scn";
 const char *const OB_STR_MAX_SCN = "max_scn";
 const char *const OB_STR_BASE_PIECE_ID = "base_piece_id";
@@ -360,6 +365,12 @@ const char *const OB_STR_OPTIONAL = "optional";
 const char *const OB_STR_MANDATORY = "mandatory";
 const char *const OB_STR_LOCATION = "location";
 const char *const OB_STR_SERVICE = "service";
+const char *const OB_STR_USER = "user";
+const char *const OB_STR_PASSWORD = "password";
+const char *const OB_STR_IP_LIST = "ip_list";
+const char *const OB_STR_CLUSTER_ID = "cluster_id";
+const char *const OB_COMPATIBILITY_MODE = "compatibility_mode";
+const char *const OB_STR_IS_ENCRYPTED = "is_encrypted";
 const char *const OB_STR_LAG_TARGET = "lag_target";
 const char *const OB_STR_COMPRESSION = "compression";
 const char *const OB_STR_BINDING = "binding";
@@ -974,6 +985,9 @@ public:
 
 class ObBackupPath;
 class ObIBackupLeaseService;
+class ObBackupSetTaskAttr;
+class ObBackupLSMetaInfosDesc;
+class ObTenantArchiveRoundAttr;
 class ObBackupUtils
 {
 public:
@@ -999,6 +1013,11 @@ public:
   static bool can_backup_pieces_be_deleted(const ObBackupPieceStatus::STATUS &status);
   static int check_passwd(const char *passwd_array, const char *passwd);
   static int check_is_tmp_file(const common::ObString &file_name, bool &is_tmp_file);
+  static int calc_start_replay_scn(
+      const share::ObBackupSetTaskAttr &set_task_attr,
+      const share::ObBackupLSMetaInfosDesc &ls_meta_infos,
+      const share::ObTenantArchiveRoundAttr &round_attr,
+      share::SCN &start_replay_scn);
   static int get_backup_scn(const uint64_t &tenant_id, share::SCN &scn);
   static int check_tenant_data_version_match(const uint64_t tenant_id, const uint64_t data_version);
 private:
@@ -1627,6 +1646,73 @@ struct ObLogArchiveDestAtrr final
   int64_t piece_switch_interval_;
   int64_t lag_target_;
   ObLogArchiveDestState state_;
+};
+
+struct ObRestoreSourceServiceUser final
+{
+  ObRestoreSourceServiceUser();
+  ~ObRestoreSourceServiceUser() {}
+  void reset();
+  bool is_valid() const;
+  int assign(const ObRestoreSourceServiceUser &user);
+  char user_name_[OB_MAX_USER_NAME_LENGTH];
+  char tenant_name_[OB_MAX_ORIGINAL_NANE_LENGTH];
+  ObCompatibilityMode mode_;
+  uint64_t tenant_id_;
+  int64_t cluster_id_;
+  bool operator == (const ObRestoreSourceServiceUser &other) const;
+  TO_STRING_KV(K_(user_name), K_(tenant_name), K_(tenant_id), K_(cluster_id));
+};
+
+struct ObRestoreSourceServiceAttr final
+{
+  ObRestoreSourceServiceAttr();
+  ~ObRestoreSourceServiceAttr() {}
+  void reset();
+  int parse_service_attr_from_str(ObSqlString &str);
+  int do_parse_sub_service_attr(const char *sub_value);
+  int set_service_user_config(const char *user_tenant);
+  int set_service_user(const char *user, const char *tenant);
+  int set_service_tenant_id(const char *tenant_id);
+  int set_service_cluster_id(const char *cluster_id);
+  int set_service_compatibility_mode(const char *compatibility_mode);
+  // It need to convert password to encrypted password when pasre from log_restore_source config.
+  int set_service_passwd_to_encrypt(const char *passwd);
+  // There's no need to convert password to encrypted password when parse from __all_log_restore_source record.
+  int set_service_passwd_no_encrypt(const char *passwd);
+  int parse_ip_port_from_str(const char *buf, const char *delimiter);
+  bool is_valid() const;
+  bool service_user_is_valid() const;
+  bool service_host_is_valid() const;
+  bool service_password_is_valid() const;
+  int gen_config_items(common::ObIArray<BackupConfigItemPair> &items) const;
+  int gen_service_attr_str(char *buf, const int64_t buf_size) const;
+  int gen_service_attr_str(ObSqlString &str) const;
+  int get_ip_list_str_(char *buf, const int64_t buf_size) const;
+  int get_ip_list_str_(ObSqlString &str) const;
+  int get_user_str_(char *buf, const int64_t buf_size) const;
+  int get_user_str_(ObSqlString &str) const;
+  int get_password_str_(char *buf, const int64_t buf_size) const;
+  int get_password_str_(ObSqlString &str) const;
+  int get_tenant_id_str_(char *buf ,const int64_t buf_size) const;
+  int get_tenant_id_str_(ObSqlString &str) const;
+  int get_cluster_id_str_(char *buf, const int64_t buf_size) const;
+  int get_cluster_id_str_(ObSqlString &str) const;
+  int get_compatibility_mode_str_(char *buf, const int64_t buf_size) const;
+  int get_compatibility_mode_str_(ObSqlString &str) const;
+  int get_is_encrypted_str_(char *buf, const int64_t buf_size) const;
+  int get_is_encrypted_str_(ObSqlString &str) const;
+  int set_encrypt_password_key_(const char *encrypt_key);
+  int get_decrypt_password_key_(char *unencrypt_key, const int64_t buf_size) const;
+  // return the origion password
+  int get_password(char *passwd, const int64_t buf_size) const;
+  bool compare_addr_(common::ObArray<common::ObAddr> addr) const;
+  bool operator ==(const ObRestoreSourceServiceAttr &other) const;
+  int assign(const ObRestoreSourceServiceAttr &attr);
+  TO_STRING_KV(K_(addr), K_(user), K_(encrypt_passwd));
+  common::ObArray<common::ObAddr> addr_;
+  ObRestoreSourceServiceUser user_;
+  char encrypt_passwd_[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH];
 };
 
 // trim '/' from right until encouter a non backslash charactor.

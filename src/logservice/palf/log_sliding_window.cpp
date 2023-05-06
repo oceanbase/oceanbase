@@ -159,6 +159,7 @@ int LogSlidingWindow::flashback(const PalfBaseInfo &palf_base_info, const int64_
   const LogInfo &prev_log_info = palf_base_info.prev_log_info_;
   sw_.destroy();
   lsn_allocator_.reset();
+  WLockGuard guard(group_buffer_lock_);  // lock group_buffer_
   group_buffer_.destroy();
   checksum_.destroy();
   match_lsn_map_.destroy();
@@ -1303,6 +1304,7 @@ int LogSlidingWindow::after_rebuild(const LSN &lsn)
 
 int LogSlidingWindow::after_truncate(const TruncateLogCbCtx &truncate_cb_ctx)
 {
+  // Caller holds palf_handle_impl's wrlock.
   int ret = OB_SUCCESS;
   PALF_LOG(INFO, "after_truncate begin", K_(palf_id), K_(self), K(truncate_cb_ctx));
   if (IS_NOT_INIT) {
@@ -1319,7 +1321,7 @@ int LogSlidingWindow::after_truncate(const TruncateLogCbCtx &truncate_cb_ctx)
     // Set reuse_lsn here, because it may be advanced larger than last_truncate_lsn_ during flush cb.
     // New logs beyond last_truncate_lsn_ won't be processed before after_truncate called,
     // which ensures correctness.
-    (void) group_buffer_.set_reuse_lsn(last_truncate_lsn_);
+    (void) group_buffer_.truncate(last_truncate_lsn_);
     last_truncate_lsn_.reset();
     is_truncating_ = false;
     PALF_LOG(INFO, "after_truncate success", K_(palf_id), K_(self), K(truncate_cb_ctx));
@@ -2754,6 +2756,7 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
 
 int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
 {
+  // Caller holds palf_handle_impl's wrlock.
   int ret = OB_SUCCESS;
   const LogInfo &prev_log_info = palf_base_info.prev_log_info_;
   const int64_t new_start_log_id = prev_log_info.log_id_ + 1;
@@ -2835,7 +2838,7 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
       if (max_flushed_end_lsn <= palf_base_info.curr_lsn_) {
         (void) truncate_max_flushed_log_info_(prev_log_info.lsn_, palf_base_info.curr_lsn_,
             prev_log_info.log_proposal_id_);
-        (void) group_buffer_.set_reuse_lsn(palf_base_info.curr_lsn_);
+        (void) group_buffer_.truncate(palf_base_info.curr_lsn_);
       }
       const int64_t last_slide_log_id = get_last_slide_log_id_();
       if (last_slide_log_id <= prev_log_info.log_id_) {
@@ -2859,7 +2862,7 @@ int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
 int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const LSN &expected_prev_lsn,
     const int64_t expected_prev_log_pid)
 {
-  // caller holds palf_handle_impl's write lock
+  // Caller holds palf_handle_impl's wrlock.
   int ret = OB_SUCCESS;
   LogTask *log_task = NULL;
   LogTaskGuard guard(this);
@@ -2961,7 +2964,7 @@ int LogSlidingWindow::truncate(const TruncateLogInfo &truncate_log_info, const L
         if (max_flushed_end_lsn > truncate_begin_lsn) {
           // flush位点已推过，需要truncate
           (void) truncate_max_flushed_log_info_(prev_lsn, truncate_begin_lsn, prev_proposal_id);
-          (void) group_buffer_.set_reuse_lsn(truncate_begin_lsn);
+          (void) group_buffer_.truncate(truncate_begin_lsn);
           PALF_LOG(INFO, "truncate max_flushed_log_info_", K_(palf_id), K_(self), K(truncate_log_info), K(log_end_lsn),
               "old flushed_end_lsn", max_flushed_end_lsn);
         }
@@ -4100,6 +4103,11 @@ int LogSlidingWindow::append_disk_log(const LSN &lsn,
     PALF_LOG(WARN, "append_disk_log_to_sw_ failed", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry));
   } else if (OB_FAIL(try_update_max_lsn_(lsn, group_entry_header))){
     PALF_LOG(WARN, "try_update_max_lsn_ failed", K(ret), K_(palf_id), K_(self), K(lsn));
+  // Update group_buffer's readable_begin_lsn.
+  // Because these logs' data do not fill into group_buffer, so it cannot
+  // be read by hot cache.
+  } else if (OB_FAIL(group_buffer_.inc_update_readable_begin_lsn(log_end_lsn))) {
+    PALF_LOG(WARN, "inc_update_readable_begin_lsn failed", K(ret), K(log_end_lsn));
   } else if (OB_FAIL(group_buffer_.inc_update_reuse_lsn(log_end_lsn))) {
     PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K(log_end_lsn));
   } else {
@@ -4317,9 +4325,32 @@ int LogSlidingWindow::advance_reuse_lsn(const LSN &flush_log_end_lsn)
   } else if (!flush_log_end_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(group_buffer_.inc_update_reuse_lsn(flush_log_end_lsn))) {
-    PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K(flush_log_end_lsn));
+    PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K_(palf_id), K(flush_log_end_lsn));
   } else {
-    PALF_LOG(TRACE, "advance_reuse_lsn success", K(ret), K(flush_log_end_lsn));
+    PALF_LOG(TRACE, "advance_reuse_lsn success", K(ret), K_(palf_id), K(flush_log_end_lsn));
+  }
+  return ret;
+}
+
+int LogSlidingWindow::read_data_from_buffer(const LSN &read_begin_lsn,
+                                            const int64_t in_read_size,
+                                            char *buf,
+                                            int64_t &out_read_size) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!read_begin_lsn.is_valid() || in_read_size <= 0 || OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K(read_begin_lsn), K(in_read_size), KP(buf));
+  } else {
+    RLockGuard guard(group_buffer_lock_);  // protect group_buffer_ from destroy by flashback().
+    if (OB_FAIL(group_buffer_.read_data(read_begin_lsn, in_read_size, buf, out_read_size))) {
+      PALF_LOG(WARN, "read_data failed", K(ret), K_(palf_id), K(read_begin_lsn), K(in_read_size));
+    } else {
+      PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
+          K(in_read_size), K(out_read_size));
+    }
   }
   return ret;
 }

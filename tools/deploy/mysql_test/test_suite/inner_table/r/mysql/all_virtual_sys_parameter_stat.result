@@ -180,8 +180,10 @@ rootservice_list
 rootservice_memory_limit
 rootservice_ready_check_interval
 row_compaction_update_limit
+rpc_client_authentication_method
 rpc_memory_limit_percentage
 rpc_port
+rpc_server_authentication_method
 rpc_timeout
 schema_history_expire_time
 schema_history_recycle_interval
@@ -199,6 +201,7 @@ sql_work_area
 ssl_client_authentication
 ssl_external_kms_info
 stack_size
+standby_fetch_log_bandwidth_limit
 syslog_io_bandwidth_limit
 syslog_level
 system_memory
@@ -337,6 +340,7 @@ _rowsets_max_rows
 _rowsets_target_maxsize
 _rpc_checksum
 _send_bloom_filter_size
+_server_standby_fetch_log_bandwidth_limit
 _session_context_size
 _sort_area_size
 _sqlexec_disable_hash_based_distagg_tiv

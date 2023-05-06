@@ -14,7 +14,7 @@
 #define OCEANBASE_OB_LOG_META_SQL_QUERYER_H_
 
 #include "lib/mysqlclient/ob_isql_client.h"    // ObISQLClient
-#include "ob_log_data_dictionary_in_log_table.h"
+#include "logservice/logfetcher/ob_log_data_dictionary_in_log_table.h"
 
 namespace oceanbase
 {
@@ -45,7 +45,7 @@ public:
       const uint64_t tenant_id,
       const int64_t start_timstamp_ns,
       int64_t &record_count,
-      DataDictionaryInLogInfo &data_dict_in_log_info);
+      logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
 
 private:
   int do_query_(const uint64_t tenant_id,
@@ -59,12 +59,12 @@ private:
       const char *event,
       int64_t &record_count);
 
-  // DataDictionaryInLogInfo
+  // logfetcher::DataDictionaryInLogInfo
   // @param [in] res, result read from __all_virtual_data_dictionary_in_log
   // @param [out] data_dict_in_log_info
   int parse_record_from_row_(
       common::sqlclient::ObMySQLResult &res,
-      DataDictionaryInLogInfo &data_dict_in_log_info);
+      logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
 
 private:
   bool is_inited_;                     // whether this class is inited

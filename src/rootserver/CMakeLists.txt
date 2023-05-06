@@ -71,6 +71,7 @@ ob_set_subtarget(ob_rootserver common
   ob_tenant_recovery_reportor.cpp
   ob_standby_schema_refresh_trigger.cpp
   ob_tenant_info_loader.cpp
+  ob_create_standby_from_net_actor.cpp
   ob_primary_ls_service.cpp
   ob_recovery_ls_service.cpp
   ob_tenant_role_transition_service.cpp

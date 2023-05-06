@@ -78,22 +78,9 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
   }
   /* tenant name */
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(T_IDENT != parse_tree.children_[1]->type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid parse_tree", K(ret));
-    } else {
-      ObString tenant_name;
-      tenant_name.assign_ptr((char *)(parse_tree.children_[1]->str_value_),
-                             static_cast<int32_t>(parse_tree.children_[1]->str_len_));
-      if (tenant_name.length() >= OB_MAX_TENANT_NAME_LENGTH) {
-        ret = OB_ERR_TOO_LONG_IDENT;
-        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, tenant_name.length(), tenant_name.ptr());
-      } else if (ObString::make_string("seed") == tenant_name) {
-        ret = OB_ERR_INVALID_TENANT_NAME;
-        LOG_ERROR("invalid tenant name", K(tenant_name), K(ret));
-      } else {
-        mystmt->set_tenant_name(tenant_name);
-      }
+    ObTenantResolver<ObCreateTenantStmt> resolver;
+    if (OB_FAIL(resolver.resolve_tenant_name(mystmt, parse_tree.children_[1]))) {
+      LOG_WARN("resolve tenant name failed", KR(ret));
     }
   }
 

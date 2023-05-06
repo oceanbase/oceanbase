@@ -19,6 +19,7 @@
 #include "lib/container/ob_array_serialization.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "ob_backup_struct.h"
+#include "share/restore/ob_log_restore_source.h"
 #include "share/backup/ob_backup_store.h"
 
 namespace oceanbase
@@ -102,6 +103,10 @@ public:
   virtual int parse_from(const common::ObSqlString &value) = 0;
   virtual int update_inner_config_table(common::ObISQLClient &trans) = 0;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) = 0;
+  virtual int check_before_update_inner_config(
+    const bool for_verify,
+    ObCompatibilityMode &compat_mode) { return OB_NOT_SUPPORTED; }
+  virtual int get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode) { return OB_NOT_SUPPORTED; }
   TO_STRING_KV(K_(tenant_id), K_(type), K_(config_items));
 protected:
   uint64_t tenant_id_;
@@ -113,15 +118,18 @@ protected:
 class ObBackupConfigParserGenerator final
 {
 public:
-  ObBackupConfigParserGenerator(): is_setted_(false), config_parser_(nullptr), allocator_() {}
+  ObBackupConfigParserGenerator(): is_setted_(false), restore_source_type_(share::ObLogRestoreSourceType::INVALID),
+  config_parser_(nullptr), allocator_() {}
   ~ObBackupConfigParserGenerator() { reset(); }
-  int set(const ObBackupConfigType &type, const uint64_t tenant_id);
+  int set(const ObBackupConfigType &type, const uint64_t tenant_id, const common::ObSqlString &value);
   void reset();
   ObIBackupConfigItemParser *&get_parser() { return config_parser_; }
 private:
   int generate_parser_(const ObBackupConfigType &type, const uint64_t tenant_id);
+  int set_restore_source_type_(const common::ObSqlString &value);
 private:
   bool is_setted_;
+  share::ObLogRestoreSourceType restore_source_type_;
   ObIBackupConfigItemParser *config_parser_;
   common::ObArenaAllocator allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupConfigParserGenerator);
@@ -146,6 +154,7 @@ public:
   int init(const common::ObSqlString &name, const common::ObSqlString &value, const uint64_t tenant_id);
   int update_inner_config_table(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans);
   void reset();
+  int only_check_before_update(ObCompatibilityMode &compat_mode);
 private:
   bool is_inited_;
   ObBackupConfigParserGenerator parser_generator_; 
@@ -207,12 +216,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveDestStateConfigParser);
 };
 
-class ObLogArchiveRestoreSourceConfigParser : public ObLogArchiveDestConfigParser
+class ObLogRestoreSourceLocationConfigParser : public ObLogArchiveDestConfigParser
 {
 public:
-  ObLogArchiveRestoreSourceConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id, const int64_t dest_no)
+  ObLogRestoreSourceLocationConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id, const int64_t dest_no)
     : ObLogArchiveDestConfigParser(type, tenant_id, dest_no) {}
-  virtual ~ObLogArchiveRestoreSourceConfigParser() {}
+  virtual ~ObLogRestoreSourceLocationConfigParser() {}
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
 
@@ -220,7 +229,34 @@ protected:
   virtual int do_parse_sub_config_(const common::ObString &config_str) override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObLogArchiveRestoreSourceConfigParser);
+  DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceLocationConfigParser);
+};
+
+class ObLogRestoreSourceServiceConfigParser : public ObIBackupConfigItemParser
+{
+public:
+  ObLogRestoreSourceServiceConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id)
+    : ObIBackupConfigItemParser(type, tenant_id) {}
+  virtual ~ObLogRestoreSourceServiceConfigParser() {}
+  virtual int parse_from(const common::ObSqlString &value) override;
+  virtual int update_inner_config_table(common::ObISQLClient &trans) override;
+  virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
+  int check_before_update_inner_config(
+      const bool for_verify,
+      ObCompatibilityMode &compat_mode);
+  virtual int get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode);
+private:
+  int do_parse_sub_config_(const common::ObString &config_str);
+  int do_parse_restore_service_host_(const common::ObString &name, const common::ObString &value);
+  int do_parse_restore_service_user_(const common::ObString &name, const common::ObString &value);
+  int do_parse_restore_service_passwd_(const common::ObString &name, const common::ObString &value);
+  int check_doing_service_restore_(common::ObISQLClient &trans, bool &is_doing);
+  int check_source_service_connect_(); // todo
+  int update_data_backup_dest_config_(common::ObISQLClient &trans);
+private:
+  ObRestoreSourceServiceAttr service_attr_;
+  bool is_empty_;
+  DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceServiceConfigParser);
 };
 
 }

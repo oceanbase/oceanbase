@@ -96,6 +96,8 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_sstable_macro_info.h"
 #include "observer/virtual_table/ob_virtual_sql_plan_monitor.h"
 #include "observer/virtual_table/ob_virtual_ash.h"
+#include "observer/virtual_table/ob_all_virtual_arbitration_member_info.h"
+#include "observer/virtual_table/ob_all_virtual_arbitration_service_status.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor_statname.h"
 #include "observer/virtual_table/ob_virtual_sql_plan_statistics.h"
 #include "observer/virtual_table/ob_virtual_sql_monitor.h"
@@ -1598,6 +1600,30 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualPalfStat construct fail", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(palf_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_ARBITRATION_MEMBER_INFO_TID : {
+            ObAllVirtualArbMemberInfo *virtual_arb_info = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_UNLIKELY(NULL == omt)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "get tenant fail", K(ret));
+            } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualArbMemberInfo, virtual_arb_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualArbMemberInfo construct fail", K(ret));
+            } else if (OB_FAIL(virtual_arb_info->init(GCTX.schema_service_, omt))) {
+              SERVER_LOG(WARN, "fail to init ObAllVirtualArbMemberInfo", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(virtual_arb_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_ARBITRATION_SERVICE_STATUS_TID: {
+            ObAllVirtualArbServiceStatus *virtual_arb_status = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualArbServiceStatus, virtual_arb_status))) {
+              SERVER_LOG(ERROR, "ObAllVirtualArbServiceStatus construct fail", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(virtual_arb_status);
             }
             break;
           }

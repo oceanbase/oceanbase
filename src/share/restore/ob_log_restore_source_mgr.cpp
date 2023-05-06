@@ -77,17 +77,26 @@ int ObLogRestoreSourceMgr::delete_source()
 }
 
 int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
-    const ObAddr &addr)
+    const ObString &service_source)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(! addr.is_valid())) {
+  } else if (OB_UNLIKELY(service_source.empty() || !recovery_until_scn.is_valid()) ) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(addr));
+    LOG_WARN("invalid argument", K(service_source), K(recovery_until_scn));
   } else {
-    ret = OB_NOT_SUPPORTED;
+    ObLogRestoreSourceItem item(tenant_id_,
+                                OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
+                                ObLogRestoreSourceType::SERVICE,
+                                service_source,
+                                recovery_until_scn);
+    if (OB_FAIL(table_operator_.insert_source(item))) {
+      LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
+    } else {
+      LOG_INFO("add service source succ", K(recovery_until_scn), K(service_source));
+    }
   }
   return ret;
 }
@@ -139,6 +148,23 @@ int ObLogRestoreSourceMgr::get_source(ObLogRestoreSourceItem &item)
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
   } else if (OB_FAIL(table_operator_.get_source(item))) {
+    LOG_WARN("table_operator_ get_source failed", K(ret));
+  } else {
+    LOG_TRACE("get_source succ", K(item));
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceMgr::get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  // only support src_id 1
+  item.tenant_id_ = tenant_id_;
+  item.id_ = OB_DEFAULT_LOG_RESTORE_SOURCE_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
+  } else if (OB_FAIL(table_operator_.get_source_for_update(item, trans))) {
     LOG_WARN("table_operator_ get_source failed", K(ret));
   } else {
     LOG_TRACE("get_source succ", K(item));

@@ -304,7 +304,7 @@ int TransCtx::prepare_(
     ret = OB_ERR_UNEXPECTED;
   } else {
     const transaction::ObTransID &trans_id = host.get_trans_id();
-    const TenantLSID &host_tls_id = host.get_tls_id();
+    const logservice::TenantLSID &host_tls_id = host.get_tls_id();
     const uint64_t tenant_id = host_tls_id.get_tenant_id();
     int64_t host_commit_log_timestamp = host.get_commit_ts();
     const palf::LSN &host_commit_log_lsn = host.get_commit_log_lsn();
@@ -375,7 +375,7 @@ int TransCtx::prepare_(
             }
           } else if (is_serving) {
             // Add participant information for the service
-            TenantLSID tls_id(tenant_id, pinfo.get_ls_id());
+            logservice::TenantLSID tls_id(tenant_id, pinfo.get_ls_id());
             new (participants_ + participant_count_) TransPartInfo(tls_id);
             participant_count_++;
           }
@@ -569,7 +569,7 @@ int TransCtx::inc_ls_trans_count_on_serving_(
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  TenantLSID tls_id(tenant_id_, ls_id);
+  logservice::TenantLSID tls_id(tenant_id_, ls_id);
 
   if (OB_UNLIKELY(trans_id <= 0)
       || OB_UNLIKELY(!tls_id.is_valid())) {

@@ -132,6 +132,10 @@ int ObServerReloadConfig::operator()()
       real_ret = ret;
       LOG_WARN("reload config for tde encrypt engine fail", K(ret));
     }
+    if (OB_FAIL(OBSERVER.get_net_frame().reload_rpc_auth_method())) {
+      real_ret = ret;
+      LOG_WARN("reload config for rpc auth method fail", K(ret));
+    }
   }
   {
     GMEMCONF.reload_config(GCONF);

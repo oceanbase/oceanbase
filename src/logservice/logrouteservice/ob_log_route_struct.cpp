@@ -14,6 +14,7 @@
 
 #include "ob_log_route_struct.h"
 #include "lib/ob_define.h"    // OB_INVALID_CLUSTER_ID, OB_INVALID_TENANT_ID
+#include "logservice/common_util/ob_log_time_utils.h"
 
 namespace oceanbase
 {
@@ -94,7 +95,7 @@ int ObLSRouterValue::add_into_blacklist(
   survival_time = blacklist_survival_time_sec;
 
   // Cyclical cleaning blacklist history
-  if (REACH_TIME_INTERVAL(blacklist_history_clear_interval)) {
+  if (REACH_TIME_INTERVAL_THREAD_LOCAL(blacklist_history_clear_interval)) {
     if (OB_FAIL(blacklist_.clear_overdue_history(router_key, blacklist_history_overdue_time))) {
       LOG_WARN("blacklist_ clear_overdue_history failed", KR(ret), K(router_key));
     }

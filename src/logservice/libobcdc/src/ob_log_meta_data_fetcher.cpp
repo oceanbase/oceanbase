@@ -154,7 +154,7 @@ void ObLogMetaDataFetcher::destroy()
 
 int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
     const uint64_t tenant_id,
-    const ObLogFetcherStartParameters &start_parameters,
+    const logfetcher::ObLogFetcherStartParameters &start_parameters,
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
@@ -167,7 +167,7 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
     LOG_ERROR("log_fetcher_ is nullptr", KR(ret), K(log_fetcher_));
   } else {
     // Tenant sys log stream needs to be fetched to get the data dictionary
-    TenantLSID tls_id(tenant_id, share::SYS_LS);
+    logservice::TenantLSID tls_id(tenant_id, share::SYS_LS);
 
     if (OB_FAIL(log_fetcher_->add_ls(tls_id, start_parameters))) {
       LOG_ERROR("log_fetcher_ add_ls failed", KR(ret), K(tls_id), K(start_parameters));

@@ -126,15 +126,6 @@ int ObRpcProcessorBase::check_cluster_id()
       LOG_WARN("packet dst_cluster_id not match", K(ret), "self.dst_cluster_id", ObRpcNetHandler::CLUSTER_ID,
               "pkt.dst_cluster_id", rpc_pkt_->get_dst_cluster_id(), "pkt", *rpc_pkt_);
     }
-  } else if (ObRpcPacket::INVALID_CLUSTER_NAME_HASH != rpc_pkt_->get_cluster_name_hash()
-              && ObRpcPacket::INVALID_CLUSTER_NAME_HASH != ObRpcPacket::get_self_cluster_name_hash()
-              && ObRpcPacket::get_self_cluster_name_hash() != rpc_pkt_->get_cluster_name_hash()) {
-    // The verification is turned on locally and does not match the received pkt dst_cluster_id
-    ret = OB_PACKET_CLUSTER_ID_NOT_MATCH;
-    if (REACH_TIME_INTERVAL(500 * 1000)) {
-      RPC_OBRPC_LOG(WARN, "packet cluster name hash not match", K(ret), "self.cluster_name_hash", ObRpcPacket::get_self_cluster_name_hash(),
-              "pkt.cluster_name_hash", rpc_pkt_->get_cluster_name_hash(), "pkt", *rpc_pkt_);
-    }
   }
   return ret;
 }
@@ -333,7 +324,7 @@ int ObRpcProcessorBase::do_response(const Response &rsp)
         }
       }
     }
-  
+
     RPC_REQ_OP.response_result(req_, packet);
     req_ = NULL;
   }

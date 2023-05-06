@@ -271,6 +271,7 @@ int LogNetService::submit_config_change_pre_check_req(
   return ret;
 }
 
+
 int LogNetService::submit_register_parent_req(
     const common::ObAddr &server,
     const LogLearner &child_itself,

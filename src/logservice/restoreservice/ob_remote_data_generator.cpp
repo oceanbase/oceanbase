@@ -295,7 +295,9 @@ int LocationDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_
   } else if (is_fetch_to_end()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(fetch_log_from_location_(buf, buf_size))) {
-    LOG_WARN("fetch log from location failed", K(ret), KPC(this));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fetch log from location failed", K(ret), KPC(this));
+    }
   } else {
     lsn = base_lsn_;
   }
@@ -332,7 +334,11 @@ int LocationDataGenerator::fetch_log_from_location_(char *&buf, int64_t &buf_siz
     LOG_WARN("get precise file and offset failed", K(ret));
   } else if (OB_FAIL(read_file_(piece_path.get_ptr(), dest_->get_storage_info(), id_,
           file_id, file_offset, buf_, buf_size_, data_len_))) {
-    LOG_WARN("read file failed", K(ret));
+    if (OB_ITER_END == ret) {
+      LOG_TRACE("read end of file", K(ret));
+    } else {
+      LOG_WARN("read file failed", K(ret));
+    }
   } else if (file_offset > 0) {
     // 非第一次读文件, 不必再解析file header
     base_lsn_ = max_lsn_in_file;

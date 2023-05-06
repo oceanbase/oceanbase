@@ -114,8 +114,8 @@ void ObLogLSFetchMgr::destroy()
 }
 
 int ObLogLSFetchMgr::add_ls(
-    const TenantLSID &tls_id,
-    const ObLogFetcherStartParameters &start_parameters,
+    const logservice::TenantLSID &tls_id,
+    const logfetcher::ObLogFetcherStartParameters &start_parameters,
     const bool is_loading_data_dict_baseline_data,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str)
@@ -207,7 +207,7 @@ int ObLogLSFetchMgr::add_ls(
   return ret;
 }
 
-int ObLogLSFetchMgr::init_tls_info_(const TenantLSID &tls_id, char *&tls_id_str)
+int ObLogLSFetchMgr::init_tls_info_(const logservice::TenantLSID &tls_id, char *&tls_id_str)
 {
   int ret = OB_SUCCESS;
   tls_id_str = NULL;
@@ -236,7 +236,7 @@ int ObLogLSFetchMgr::init_tls_info_(const TenantLSID &tls_id, char *&tls_id_str)
   return ret;
 }
 
-bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const TenantLSID &tls_id,
+bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const logservice::TenantLSID &tls_id,
     LSFetchCtx *&ctx)
 {
   bool bool_ret = false;
@@ -258,7 +258,7 @@ bool ObLogLSFetchMgr::CtxRecycleCond::operator() (const TenantLSID &tls_id,
   return bool_ret;
 }
 
-int ObLogLSFetchMgr::recycle_ls(const TenantLSID &tls_id)
+int ObLogLSFetchMgr::recycle_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   CtxRecycleCond recycle_cond;
@@ -279,7 +279,7 @@ int ObLogLSFetchMgr::recycle_ls(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObLogLSFetchMgr::remove_ls(const TenantLSID &tls_id)
+int ObLogLSFetchMgr::remove_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
 
@@ -330,7 +330,7 @@ int ObLogLSFetchMgr::remove_ls(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObLogLSFetchMgr::get_ls_fetch_ctx(const TenantLSID &tls_id, LSFetchCtx *&ctx)
+int ObLogLSFetchMgr::get_ls_fetch_ctx(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -367,7 +367,7 @@ int ObLogLSFetchMgr::CtxLSProgressCond::init(const int64_t count)
   return ret;
 }
 
-bool ObLogLSFetchMgr::CtxLSProgressCond::operator() (const TenantLSID &tls_id,
+bool ObLogLSFetchMgr::CtxLSProgressCond::operator() (const logservice::TenantLSID &tls_id,
     LSFetchCtx *ctx)
 {
   int ret = OB_SUCCESS;

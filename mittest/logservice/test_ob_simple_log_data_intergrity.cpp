@@ -105,6 +105,7 @@ int make_log_group_entry_partial_error(LogGroupEntry &entry, char *&output_buf, 
 
 TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
 {
+  disable_hot_cache_ = true;
   SET_CASE_LOG_FILE(TEST_NAME, "accumlate_checksum");
   OB_LOGGER.set_log_level("TRACE");
   ObTimeGuard guard("accum_checksum", 0);
@@ -324,6 +325,7 @@ TEST_F(TestObSimpleLogDataIntergrity, accumlate_checksum)
 
 TEST_F(TestObSimpleLogDataIntergrity, log_corrupted)
 {
+  disable_hot_cache_ = true;
   SET_CASE_LOG_FILE(TEST_NAME, "log_corrupted");
   OB_LOGGER.set_log_level("TRACE");
   ObTimeGuard guard("log_corrupted", 0);

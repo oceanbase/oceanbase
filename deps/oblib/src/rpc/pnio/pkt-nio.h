@@ -30,6 +30,7 @@
 
 #include "io/msg.h"
 #include "io/sock.h"
+#include "io/rate_limit.h"
 #include "io/eloop.h"
 #include "io/iov.h"
 #include "io/io_func.h"

@@ -31,10 +31,10 @@
 #include "ob_log_dlist.h"                     // ObLogDList, ObLogDListNode
 #include "ob_log_fetch_stream_type.h"         // FetchStreamType
 #include "ob_cdc_part_trans_resolver.h"       // IObCDCPartTransResolver
-#include "ob_log_part_serve_info.h"           // PartServeInfo
+#include "logservice/logfetcher/ob_log_part_serve_info.h"           // logfetcher::PartServeInfo
 #include "ob_log_part_trans_dispatcher.h"     // PartTransDispatchInfo
-#include "ob_log_ls_define.h"                 // TenantLSID
-#include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
+#include "logservice/common_util/ob_log_ls_define.h"                 // logservice::TenantLSID
+#include "logservice/logfetcher/ob_log_fetcher_start_parameters.h"  // logfetcher::ObLogFetcherStartParameters
 
 namespace oceanbase
 {
@@ -89,8 +89,8 @@ public:
 public:
   void reset();
   int init(
-      const TenantLSID &tls_id,
-      const ObLogFetcherStartParameters &start_parameters,
+      const logservice::TenantLSID &tls_id,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const bool is_loading_data_dict_baseline_data,
       const int64_t progress_id,
       const ClientFetchingMode fetching_mode,
@@ -135,7 +135,7 @@ public:
       const palf::LogEntry &log_entry,
       const palf::LSN &lsn,
       IObCDCPartTransResolver::MissingLogInfo &missing,
-      TransStatInfo &tsi,
+      logfetcher::TransStatInfo &tsi,
       volatile bool &stop_flag);
 
   /// Read missing redo log entries(only support trans_log_entry)
@@ -151,7 +151,7 @@ public:
   int read_miss_tx_log(
       const palf::LogEntry &log_entry,
       const palf::LSN &lsn,
-      TransStatInfo &tsi,
+      logfetcher::TransStatInfo &tsi,
       IObCDCPartTransResolver::MissingLogInfo &missing);
 
   int update_progress(
@@ -215,7 +215,7 @@ public:
 
   IObCDCPartTransResolver *get_part_trans_resolver() { return part_trans_resolver_; }
 
-  const TenantLSID &get_tls_id() const { return tls_id_; }
+  const logservice::TenantLSID &get_tls_id() const { return tls_id_; }
 
   int64_t get_progress_id() const { return progress_id_; }
 
@@ -236,7 +236,7 @@ public:
   // 2. When no transaction is ready to be sent, the log progress is taken as the progress
   //
   // This value will be used as the basis for sending the heartbeat timestamp downstream
-  int get_dispatch_progress(int64_t &progress, PartTransDispatchInfo &dispatch_info);
+  int get_dispatch_progress(int64_t &progress, logfetcher::PartTransDispatchInfo &dispatch_info);
 
   struct LSProgress;
   void get_progress_struct(LSProgress &prog) const { progress_.atomic_copy(prog); }
@@ -519,8 +519,8 @@ private:
   bool                    discarded_; // LS is deleted or not
   bool                    is_loading_data_dict_baseline_data_;
 
-  TenantLSID              tls_id_;
-  PartServeInfo           serve_info_;
+  logservice::TenantLSID  tls_id_;
+  logfetcher::PartServeInfo serve_info_;
   int64_t                 progress_id_;             // Progress Unique Identifier
   IObLogLSFetchMgr        *ls_fetch_mgr_;           // LSFetchCtx manager
   IObCDCPartTransResolver *part_trans_resolver_;    // Partitioned transaction resolvers, one for each partition exclusively
@@ -535,7 +535,7 @@ private:
   LSProgress              progress_;
 
   // Contains data dictionary in log info(Tenant SYS LS)
-  ObLogFetcherStartParameters start_parameters_;
+  logfetcher::ObLogFetcherStartParameters start_parameters_;
 
   /// fetch log info
   FetchInfo               fetch_info_;
@@ -569,11 +569,11 @@ struct LSFetchInfoForPrint
 {
   double                      tps_;
   bool                        is_discarded_;
-  TenantLSID                  tls_id_;
+  logservice::TenantLSID      tls_id_;
   LSFetchCtx::LSProgress      progress_;
   LSFetchCtx::FetchModule     fetch_mod_;
   int64_t                     dispatch_progress_;
-  PartTransDispatchInfo       dispatch_info_;
+  logfetcher::PartTransDispatchInfo dispatch_info_;
 
   LSFetchInfoForPrint();
   int init(LSFetchCtx &ctx);

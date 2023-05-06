@@ -17,17 +17,14 @@ typedef struct pn_listen_t
 struct pn_t;
 typedef struct pn_grp_t
 {
-  int count;
+  PN_GRP_COMM;
   struct pn_t* pn_array[MAX_PN_PER_GRP];
 } pn_grp_t;
 
 typedef struct pn_t
 {
-  pthread_t pd;
-  int accept_qfd;
+  PN_COMM;
   eloop_t ep;
-  int gid;
-  int tid;
   serve_cb_t serve_cb;
   fifo_alloc_t server_ctx_alloc;
   cfifo_alloc_t server_resp_alloc;
@@ -65,11 +62,19 @@ static void* listen_thread_func(void* arg)
   return NULL;
 }
 
+static __thread pn_comm_t* current_pnio;
+pn_comm_t* get_current_pnio()
+{
+  return current_pnio;
+}
 static void* pn_thread_func(void* arg)
 {
   thread_counter_reg();
-  ob_set_thread_name("pnio");
   pn_t* pn = (typeof(pn))arg;
+  char pnio_name[16];
+  snprintf(pnio_name, sizeof(pnio_name), "pnio%d", pn->gid);
+  ob_set_thread_name(pnio_name);
+  current_pnio = (pn_comm_t*)pn;
   eloop_run(&pn->ep);
   return NULL;
 }
@@ -81,12 +86,13 @@ PN_API int pn_listen(int port, serve_cb_t cb)
   pn_listen_t* pnl = locate_listen(idx);
   addr_t addr;
   addr_init(&addr, "0.0.0.0", port);
-  if (listen_init(&pnl->l, addr, pnl_dispatch_accept) != 0) {
+
+  if (listen_create(addr) <= 0) {
     idx = -1;
   } else {
     pnl->serve_cb = cb;
-    ob_pthread_create(&pnl->pd, NULL, listen_thread_func, pnl);
   }
+
   return idx;
 }
 
@@ -95,12 +101,16 @@ static pn_grp_t* create_grp()
   pn_grp_t* grp = (typeof(grp))salloc(sizeof(*grp));
   if (grp) {
     memset(grp, 0, sizeof(*grp));
+    grp->rx_bw = RATE_UNLIMITED;
   }
   return grp;
 }
 
 static pn_grp_t* locate_grp(int gid)
 {
+  if (unlikely(gid < 0 || gid >= arrlen(pn_grp_array))) {
+    return NULL;
+  }
   return pn_grp_array[gid];
 }
 
@@ -136,7 +146,6 @@ static int pnl_dispatch_accept(int fd, const void* b, int sz)
   int err = 0;
   uint64_t dispatch_id = 0;
   if ((uint64_t)sz < sizeof(dispatch_id)) {
-    // abort();
     err = dispatch_fd_to(fd, 1, 0);
   } else {
     dispatch_id = *(uint64_t*)b;
@@ -198,11 +207,13 @@ static pn_t* pn_create(int listen_id, int gid, int tid)
   pn_t* pn = NULL;
   if (NULL == (pn = pn_alloc())) {
   } else if (0 != (err = eloop_init(&pn->ep))) {
+  } else if (0 != (err = eloop_rl_init(&pn->ep, &pn->ep.rl_impl))) {
   } else if (0 != (err = pktc_init(&pn->pktc, &pn->ep, calc_dispatch_id(gid, tid))))  {
   } else if (0 != (err = pn_init_pkts(listen_id, pn))) {
   } else {
     pn->gid = gid;
     pn->tid = tid;
+    pn->pn_grp = (pn_grp_comm_t*)locate_grp(gid);
     chunk_cache_init(&pn->server_ctx_chunk_alloc, CHUNK_SIZE, MOD_SERVER_CTX_CHUNK);
     chunk_cache_init(&pn->server_resp_chunk_alloc, CHUNK_SIZE, MOD_SERVER_RESP_CHUNK);
     chunk_cache_init(&pn->client_req_chunk_alloc, CHUNK_SIZE, MOD_CLIENT_REQ_CHUNK);
@@ -215,6 +226,7 @@ static pn_t* pn_create(int listen_id, int gid, int tid)
   }
   if (0 != err && NULL != pn) {
     pn_destroy(pn);
+    pn = NULL;
   }
   return pn;
 }
@@ -288,12 +300,20 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
 static void pn_pktc_flush_cb(pktc_req_t* r)
 {
   pn_client_req_t* pn_req = structof(r, pn_client_req_t, req);
+  pktc_cb_t* cb = r->resp_cb;
+  if (cb) {
+    cb->req = NULL;
+  }
   cfifo_free(pn_req);
 }
 
 static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
 {
   pn_pktc_cb_t* pn_cb = structof(cb, pn_pktc_cb_t, cb);
+  pktc_req_t* req = cb->req;
+  if (req) {
+    req->resp_cb = NULL;
+  }
   PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
@@ -329,10 +349,12 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   cb->expire_us = expire_us;
   cb->resp_cb = pn_pktc_resp_cb;
   cb->errcode = PNIO_OK;
+  cb->req = r;
   r->flush_cb = pn_pktc_flush_cb;
   r->resp_cb = cb;
   r->dest = dest;
   r->categ_id = categ_id;
+  dlink_init(&r->link);
   eh_copy_msg(&r->msg, cb->id, req, req_sz);
   return r;
 }
@@ -470,4 +492,51 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
   }
   pkts_t* pkts = &ctx->pn->pkts;
   return pkts_resp(pkts, r);
+}
+
+PN_API int pn_ratelimit(int grp_id, int64_t value) {
+  int err = 0;
+  pn_grp_t* pn_grp = locate_grp(grp_id);
+  if (NULL == pn_grp || value < 0) {
+    err = -EINVAL;
+  } else {
+    rk_info("set ratelimit as %ld bytes/s, grp_id=%d", value, grp_id);
+    STORE(&pn_grp->rx_bw, value);
+  }
+  return err;
+}
+
+PN_API int64_t pn_get_ratelimit(int grp_id) {
+  int64_t bytes = -1;
+  pn_grp_t* pn_grp = locate_grp(grp_id);
+  if (pn_grp) {
+    bytes = LOAD(&pn_grp->rx_bw);
+  }
+  return bytes;
+}
+
+PN_API uint64_t pn_get_rxbytes(int grp_id) {
+  uint64_t bytes = 0;
+  pn_grp_t* grp = locate_grp(grp_id);
+  if (NULL == grp) {
+    rk_warn("group not exists: %d", grp_id);
+  } else {
+    bytes = LOAD(&grp->rx_bytes);
+  }
+  return bytes;
+}
+
+int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
+{
+  int ret = 0;
+  if (UINT64_MAX == gid) {
+    rk_info("dispatch fd to oblistener, fd:%d", fd);
+    ret = DISPATCH_EXTERNAL(fd);
+  } else {
+    uint32_t group_id = gid >> 32;
+    uint32_t thread_idx = gid & ((1ULL<<32) - 1);
+    rk_info("dispatch fd to certain group, fd:%d, gid:0x%lx", fd, gid);
+    ret = dispatch_fd_to(fd, group_id, thread_idx);
+  }
+  return ret;
 }

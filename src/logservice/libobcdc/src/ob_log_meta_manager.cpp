@@ -155,6 +155,39 @@ void ObLogMetaManager::destroy()
   ddl_table_meta_ = NULL;
 }
 
+int ObLogMetaManager::get_usr_def_col_from_table_schema_(
+    const share::schema::ObTableSchema &schema,
+    ObIArray<uint64_t> &usr_def_col)
+{
+  int ret = OB_SUCCESS;
+  ObColumnIterByPrevNextID iter(schema);
+  const ObColumnSchemaV2 *column_schema = NULL;
+  usr_def_col.reset();
+
+  while (OB_SUCC(ret)) {
+    if (OB_FAIL(iter.next(column_schema))) {
+      if (ret != OB_ITER_END) {
+        LOG_ERROR("iterater table schema failed", K(usr_def_col), K(schema));
+      }
+    } else if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get column_schema failed when iterating the schema", K(column_schema), K(schema), K(usr_def_col));
+    } else if (OB_FAIL(usr_def_col.push_back(column_schema->get_column_id()))) {
+      LOG_ERROR("usr_def_col push back column id failed", K(usr_def_col), K(column_schema), K(schema));
+    } else {
+      _LOG_DEBUG("table_id: %lu, table_name: %s, column_id: %lu, column_name: %s, schema_version: %ld, tenant_id:%lu",
+          schema.get_table_id(), schema.get_table_name(),
+          column_schema->get_column_id(), column_schema->get_column_name(),
+          schema.get_schema_version(), schema.get_tenant_id());
+    }
+  }
+
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
@@ -188,6 +221,7 @@ int ObLogMetaManager::get_table_meta(
         const int64_t table_id = simple_table_schema->get_table_id();
         const share::schema::ObTableSchema *table_schema = NULL;
         ObLogSchemaGuard schema_mgr;
+        ObSEArray<uint64_t, 16> usr_def_col;
 
         IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
         if (OB_ISNULL(schema_getter)) {
@@ -213,8 +247,11 @@ int ObLogMetaManager::get_table_meta(
                 "table_id", simple_table_schema->get_table_id(),
                 "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
             ret = OB_TENANT_HAS_BEEN_DROPPED;
-          } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, schema_mgr, table_meta,
-              stop_flag))) {
+          } else if (OB_FAIL(get_usr_def_col_from_table_schema_(*table_schema, usr_def_col))) {
+            LOG_ERROR("get_usr_def_col_from_table_schema failed", K(tenant_id), K(global_schema_version),
+                K(table_schema), K(usr_def_col));
+          } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, usr_def_col,
+              schema_mgr, table_meta, stop_flag))) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
@@ -275,8 +312,8 @@ int ObLogMetaManager::get_table_meta(
               "table_id", simple_table_schema->get_table_id(),
               "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
           ret = OB_TENANT_HAS_BEEN_DROPPED;
-        } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, *tenant_info, table_meta,
-            stop_flag))) {
+        } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, table_schema->get_column_id_arr_order_by_table_define(),
+            *tenant_info, table_meta, stop_flag))) {
           // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
@@ -565,6 +602,7 @@ template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::add_and_get_table_meta_(
     TableMetaInfo *meta_info,
     const TABLE_SCHEMA *table_schema,
+    const ObIArray<uint64_t> &usr_def_col_ids,
     SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
@@ -589,7 +627,7 @@ int ObLogMetaManager::add_and_get_table_meta_(
       ret = OB_SUCCESS;
 
       // Create a new Table Meta and insert the Meta into the Meta Info chain(linked list)
-      if (OB_FAIL(build_table_meta_(table_schema, schema_mgr, table_meta, stop_flag))) {
+      if (OB_FAIL(build_table_meta_(table_schema, usr_def_col_ids, schema_mgr, table_meta, stop_flag))) {
         // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("build_table_meta_ fail", K(version), K(meta_info), KR(ret), KP(table_schema));
@@ -697,6 +735,7 @@ int ObLogMetaManager::dec_meta_ref_(MetaType *meta, int64_t &ref_cnt)
 template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::build_table_meta_(
     const TABLE_SCHEMA *table_schema,
+    const ObIArray<uint64_t> &usr_def_col_ids,
     SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
     volatile bool &stop_flag)
@@ -722,7 +761,7 @@ int ObLogMetaManager::build_table_meta_(
     } else if (OB_ISNULL(tmp_table_meta)) {
       LOG_ERROR("createTableMeta fail, return NULL");
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(build_column_metas_(tmp_table_meta, table_schema, *tb_schema_info,
+    } else if (OB_FAIL(build_column_metas_(tmp_table_meta, table_schema, usr_def_col_ids, *tb_schema_info,
           schema_mgr, stop_flag))) {
       // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
       if (OB_IN_FATAL_STATE != ret && OB_IN_STOP_STATE != ret) {
@@ -757,6 +796,114 @@ int ObLogMetaManager::build_table_meta_(
   return ret;
 }
 
+template<class TABLE_SCHEMA>
+int ObLogMetaManager::build_column_idx_mappings_(
+    const TABLE_SCHEMA *table_schema,
+    const ObIArray<uint64_t> &usr_def_col_ids,
+    const common::ObIArray<share::schema::ObColDesc> &column_ids,
+    ObIArray<int16_t> &store_idx_to_usr_idx,
+    int16_t &usr_column_cnt,
+    volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  const int64_t stored_column_cnt = column_ids.count();
+  const int64_t column_id_cnt = usr_def_col_ids.count();
+  int16_t usr_column_idx = 0;
+  // but here is a implicit requirement, which requires usr_def_col_ids is a superset of column_ids
+  ObLinearHashMap<share::schema::ObColumnIdKey, int16_t> col_id_to_usr_col_idx;
+  store_idx_to_usr_idx.reset();
+  if (OB_FAIL(store_idx_to_usr_idx.prepare_allocate(stored_column_cnt))) {
+    LOG_ERROR("prepare_allocate for store_idx_to_usr_idx failed", K(stored_column_cnt), K(column_ids));
+  } else if (OB_FAIL(col_id_to_usr_col_idx.init("ColIdToUsrColId"))) {
+    LOG_ERROR("col_id_to_usr_col_idx init failed");
+  }
+
+  for (int16_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < stored_column_cnt
+          && ! stop_flag; column_stored_idx++) {
+    const share::schema::ObColDesc &col_desc = column_ids.at(column_stored_idx);
+    const uint64_t column_id = col_desc.col_id_;
+    const auto *column_table_schema = table_schema->get_column_schema(column_id);
+    bool is_usr_column = false;
+    bool is_heap_table_pk_increment_column = false;
+
+    if (OB_UNLIKELY(OB_HIDDEN_PK_INCREMENT_COLUMN_ID < column_id && OB_APP_MIN_COLUMN_ID > column_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("column id can't handle currently", KR(ret), K(column_id), KPC(table_schema));
+    } else if (OB_ISNULL(column_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), K(column_id),
+          KPC(table_schema), KPC(column_table_schema));
+    } else if (OB_FAIL(col_id_to_usr_col_idx.insert(share::schema::ObColumnIdKey(column_id),
+        column_stored_idx))) {
+      LOG_ERROR("set key and value for the mapping from column_id to usr_column_idx failed",
+          K(column_id), K(column_stored_idx), K(stored_column_cnt), "map_size", col_id_to_usr_col_idx.count());
+    } else if (OB_FAIL(check_column_(*table_schema,
+        *column_table_schema,
+        is_usr_column,
+        is_heap_table_pk_increment_column))) {
+      LOG_ERROR("filter_column_ fail", KR(ret), K(is_usr_column),
+          K(is_heap_table_pk_increment_column),
+          "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id(),
+          "column", column_table_schema->get_column_name(),
+          "column_id", column_table_schema->get_column_id());
+    } else if (is_usr_column) {
+      store_idx_to_usr_idx.at(column_stored_idx) = usr_column_idx;
+      usr_column_idx++;
+    } else {
+      store_idx_to_usr_idx.at(column_stored_idx) = -1;
+      LOG_INFO("ignore column which is not usr column", K(is_usr_column), K(column_id),
+          "column_name", column_table_schema->get_column_name(),
+          "table_name", table_schema->get_table_name(),
+          "table_id", table_schema->get_table_id());
+    }
+  }
+
+  if (1 == TCONF.enable_output_by_table_def) {
+    int16_t usr_def_col_idx = 0;
+
+    for (int16_t column_idx = 0; OB_SUCC(ret) && column_idx < column_id_cnt && ! stop_flag; column_idx++) {
+      const uint64_t column_id = usr_def_col_ids.at(column_idx);
+      int16_t column_stored_idx = -1;
+      if (OB_FAIL(col_id_to_usr_col_idx.get(share::schema::ObColumnIdKey(column_id), column_stored_idx))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_ERROR("get from col_id_to_usr_idx failed", K(column_id), "map_size", col_id_to_usr_col_idx.count());
+        } else {
+          // virtual column is not stored, just ignore
+          ret = OB_SUCCESS;
+          LOG_INFO("ignore column which is not stored", K(column_id), "table_name", table_schema->get_table_name(),
+              "table_id", table_schema->get_table_id());
+        }
+      } else if (-1 != store_idx_to_usr_idx.at(column_stored_idx)) {
+        LOG_INFO("rewrite store_idx_to_usr_idx", K(column_stored_idx), K(usr_def_col_idx));
+        store_idx_to_usr_idx.at(column_stored_idx) = usr_def_col_idx;
+        usr_def_col_idx++;
+      } else {
+        // ignore non-user column
+        LOG_INFO("ignore column which is not usr column when output_by_table_def is enabled", K(column_id),
+            "table_name", table_schema->get_table_name(),
+            "table_id", table_schema->get_table_id());
+      }
+    }
+
+    if (usr_def_col_idx != usr_column_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("usr_def_col_idx is not equal to usr_column_idx, unexpected", K(usr_def_col_idx),
+          K(usr_column_idx), K(store_idx_to_usr_idx));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    usr_column_cnt = usr_column_idx;
+  }
+
+  if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
@@ -764,6 +911,7 @@ template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::build_column_metas_(
     ITableMeta *table_meta,
     const TABLE_SCHEMA *table_schema,
+    const ObIArray<uint64_t> &usr_def_col_ids,
     TableSchemaInfo &tb_schema_info,
     SCHEMA_GUARD &schema_mgr,
     volatile bool &stop_flag)
@@ -790,58 +938,48 @@ int ObLogMetaManager::build_column_metas_(
     uint64_t table_id = table_schema->get_table_id();
     const bool is_heap_table = table_schema->is_heap_table();
     const int64_t column_cnt = column_ids.count();
-    int16_t usr_column_idx = 0;
+    int16_t usr_column_cnt = 0;
 
-    // build Meata for each column
+    ObSEArray<int16_t, 16> column_stored_idx_to_usr_idx;
+    // the to_string method of ObSEArray requires the to_string method of IColMeta
+    // so we use void* to bypass the requirement
+    ObSEArray<void*, 16> col_metas;
+
+    // build Meta for each column
     // iter all column:
     // 1. all column should build column_schema and set into table_schema
     // 2. filter user_column, the user_column:
     // 2.1. should build column_meta(used for logmsg) and append to table_meta.
     // 2.2. inc usr_column_idx and recorded into column_schema, which will used to decide format
     //      idata into br or not.
+
+    if (OB_FAIL(build_column_idx_mappings_(table_schema, usr_def_col_ids, column_ids,
+        column_stored_idx_to_usr_idx, usr_column_cnt, stop_flag))) {
+      LOG_ERROR("build column idx mapping failed", K(table_schema), K(usr_def_col_ids), K(column_ids));
+    } else if (OB_FAIL(col_metas.prepare_allocate(usr_column_cnt))) {
+      LOG_ERROR("reserve slots for col_metas failed", K(usr_column_cnt));
+    } else {
+      LOG_DEBUG("finish build column idx map", K(usr_column_cnt), K(column_stored_idx_to_usr_idx));
+    }
+
     for (int16_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < column_cnt && ! stop_flag; column_stored_idx ++) {
-      share::schema::ObColDesc &col_desc = column_ids.at(column_stored_idx);
-      uint64_t column_id = col_desc.col_id_;
       IColMeta *col_meta = NULL;
-      int append_ret = 2;
-      bool is_usr_column = false;
-      bool is_heap_table_pk_increment_column = false;
+      const share::schema::ObColDesc &col_desc = column_ids.at(column_stored_idx);
+      const uint64_t column_id = col_desc.col_id_;
+      const int16_t usr_column_idx = column_stored_idx_to_usr_idx.at(column_stored_idx);
+      const bool is_usr_column = (-1 != usr_column_idx);
       const auto *column_table_schema = table_schema->get_column_schema(column_id);
 
-      if (OB_UNLIKELY(OB_HIDDEN_PK_INCREMENT_COLUMN_ID < column_id && OB_APP_MIN_COLUMN_ID > column_id)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("column id can't handle currently", KR(ret), K(column_id), KPC(table_schema));
-      } else if (OB_ISNULL(column_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("get_column_schema_by_id_internal fail", KR(ret), K(column_id), KPC(table_schema), KPC(column_table_schema));
-      } else if (OB_FAIL(check_column_(*table_schema, *column_table_schema, is_usr_column,
-              is_heap_table_pk_increment_column))) {
-        LOG_ERROR("filter_column_ fail", KR(ret), K(is_usr_column),
-            K(is_heap_table_pk_increment_column),
-            "table_name", table_schema->get_table_name(),
-            "table_id", table_schema->get_table_id(),
-            "column", column_table_schema->get_column_name(),
-            "column_id", column_table_schema->get_column_id());
-      } else if (! is_usr_column) {
+      if (! is_usr_column) {
         // do nothing, otherwise will try generate column_meta.
-      } else if (OB_NOT_NULL(col_meta = table_meta->getCol(column_table_schema->get_column_name()))) {
-        // LOG WARN and won't treate it as ERROR
-        LOG_WARN("col_meta is added into table_meta multiple times",
-            "table", table_schema->get_table_name(),
-            "column", column_table_schema->get_column_name());
       } else if (OB_ISNULL(col_meta = DRCMessageFactory::createColMeta())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("createColMeta fails", KR(ret), "col_name", column_table_schema->get_column_name());
       } else if (OB_FAIL(set_column_meta_(col_meta, *column_table_schema, *table_schema))) {
         LOG_ERROR("set_column_meta_ fail", KR(ret), KP(col_meta));
-      } else if (0 !=
-          (append_ret = table_meta->append(column_table_schema->get_column_name(), col_meta))) {
-        LOG_ERROR("append col_meta to table_meta fail", K(append_ret),
-            "table_name", table_schema->get_table_name(),
-            "column_name", column_table_schema->get_column_name());
-        ret = OB_ERR_UNEXPECTED;
       } else {
         // success
+        col_metas.at(usr_column_idx) = col_meta;
       }
 
       if (OB_SUCC(ret)) {
@@ -855,12 +993,29 @@ int ObLogMetaManager::build_column_metas_(
             tz_info_wrap))) {
           LOG_ERROR("set_column_schema_info_ fail", KR(ret), KPC(table_schema), K(tb_schema_info),
               K(column_stored_idx), K(usr_column_idx), KPC(column_table_schema));
-        } else if (is_usr_column) {
-          usr_column_idx ++;
         }
       }
 
     } // while
+
+    for (int64_t idx = 0, col_meta_cnt = col_metas.count(); OB_SUCC(ret) && idx < col_meta_cnt && ! stop_flag; idx++) {
+      IColMeta *col_meta = static_cast<IColMeta*>(col_metas.at(idx));
+      int append_ret = 2;
+      const char *column_name = col_meta->getName();
+      if (0 != (append_ret = table_meta->append(column_name, col_meta))) {
+        // DRCMessage doesn't support append IColMeta to ITableMeta with
+        // same column name but different capitalization temporarily.
+        // In Oracle mode, there may exist such columns with the same name but different capitalization.
+        DRCMessageFactory::destroy(col_meta);
+        LOG_ERROR("append col_meta to table_meta fail, there may exist such "
+            "columns with the same name but different capitalization", K(append_ret),
+            "table_name", table_schema->get_table_name(),
+            "column_name", column_name);
+      } else {
+        // succ
+        LOG_DEBUG("append IColMeta to ITableMeta succ", K(idx), K(col_meta_cnt), K(column_name));
+      }
+    }
 
     if (stop_flag) {
       ret = OB_IN_STOP_STATE;
@@ -872,13 +1027,13 @@ int ObLogMetaManager::build_column_metas_(
             table_schema->get_tenant_id(),
             table_id,
             table_schema->get_table_name(),
-            usr_column_idx,
+            usr_column_cnt,
             tb_schema_info))) {
         LOG_ERROR("set_table_schema_ fail", KR(ret), K(version),
             "tenant_id", table_schema->get_tenant_id(),
             K(table_id),
             "table_name", table_schema->get_table_name(),
-            "table_column_cnt", column_cnt, K(usr_column_idx), K(tb_schema_info));
+            "table_column_cnt", column_cnt, K(usr_column_cnt), K(tb_schema_info));
       } else {
         // succ
       }
@@ -1041,7 +1196,8 @@ int ObLogMetaManager::set_column_meta_(
           "isHiddenRowKey", col_meta->isHiddenRowKey(),
           "isGeneratedColumn", col_meta->isGenerated(),
           "isPartitionColumn", col_meta->isPartitioned(),
-          "isGenerateDepColumn", col_meta->isDependent());
+          "isGenerateDepColumn", col_meta->isDependent(),
+          "columnFlag", column_schema.get_column_flags());
 
       // Do not need
       //col_meta->setLength(data_length);
@@ -1528,7 +1684,7 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
     int64_t index_table_count = table_schema->get_index_tid_count();
     int64_t version = table_schema->get_schema_version();
     int64_t column_count = tb_schema_info.get_usr_column_count();
-
+    LOG_TRACE("set_unique_keys_ begin", KPC(table_schema), K(index_table_count), K(tb_schema_info));
     if (column_count < 0) {
       LOG_ERROR("column_num is invalid", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(), K(column_count));

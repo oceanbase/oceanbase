@@ -128,8 +128,8 @@ void LSFetchCtx::reset()
 }
 
 int LSFetchCtx::init(
-    const TenantLSID &tls_id,
-    const ObLogFetcherStartParameters &start_parameters,
+    const logservice::TenantLSID &tls_id,
+    const logfetcher::ObLogFetcherStartParameters &start_parameters,
     const bool is_loading_data_dict_baseline_data,
     const int64_t progress_id,
     const ClientFetchingMode fetching_mode,
@@ -390,7 +390,7 @@ int LSFetchCtx::read_log(
     const palf::LogEntry &log_entry,
     const palf::LSN &lsn,
     IObCDCPartTransResolver::MissingLogInfo &missing,
-    TransStatInfo &tsi,
+    logfetcher::TransStatInfo &tsi,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -482,7 +482,7 @@ int LSFetchCtx::read_log(
 int LSFetchCtx::read_miss_tx_log(
     const palf::LogEntry &log_entry,
     const palf::LSN &lsn,
-    TransStatInfo &tsi,
+    logfetcher::TransStatInfo &tsi,
     IObCDCPartTransResolver::MissingLogInfo &missing)
 {
   int ret = OB_SUCCESS;
@@ -1044,7 +1044,7 @@ int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
   return ret;
 }
 
-int LSFetchCtx::get_dispatch_progress(int64_t &dispatch_progress, PartTransDispatchInfo &dispatch_info)
+int LSFetchCtx::get_dispatch_progress(int64_t &dispatch_progress, logfetcher::PartTransDispatchInfo &dispatch_info)
 {
   int ret = OB_SUCCESS;
 

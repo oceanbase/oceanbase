@@ -808,6 +808,64 @@ int ObBackupDataStore::get_backup_set_array(
   return ret;
 }
 
+int ObBackupDataStore::get_max_backup_set_file_info(const common::ObString &passwd_array, ObBackupSetFileDesc &output_desc)
+{
+  int ret = OB_SUCCESS;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataStore not init", K(ret));
+  } else {
+    ObBackupIoAdapter util;
+    ObBackupSetFilter op;
+    share::ObBackupPath tenant_backup_placeholder_dir_path;
+    const ObBackupStorageInfo *storage_info = get_storage_info();
+    op.reset();
+    ObSArray<share::ObBackupSetDesc> backup_set_desc_array;
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_sets_dir_path(get_backup_dest(),
+        tenant_backup_placeholder_dir_path))) {
+      LOG_WARN("fail to get simple backup placeholder dir", K(ret));
+    } else if (OB_FAIL(util.list_files(tenant_backup_placeholder_dir_path.get_obstr(), storage_info, op))) {
+      LOG_WARN("fail to list files", K(ret), K(tenant_backup_placeholder_dir_path));
+    } else if (OB_FAIL(op.get_backup_set_array(backup_set_desc_array))) {
+      LOG_WARN("fail to get backup set name array", K(ret), K(op));
+    } else {
+      ObBackupSetDescComparator cmp;
+      share::ObExternBackupSetInfoDesc backup_set_info;
+      std::sort(backup_set_desc_array.begin(), backup_set_desc_array.end(), cmp);
+      for (int64_t i = backup_set_desc_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+        const share::ObBackupSetDesc &backup_set_desc = backup_set_desc_array.at(i);
+        backup_desc_.backup_set_id_ = backup_set_desc.backup_set_id_;
+        backup_desc_.backup_type_.type_ = backup_set_desc.backup_type_.type_;
+        backup_set_dest_.reset();
+        if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(
+            get_backup_dest(), backup_desc_, backup_set_dest_))) {
+          LOG_WARN("fail to construct backup set dest", K(ret));
+        } else if (OB_FAIL(read_backup_set_info(backup_set_info))) {
+          if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+            LOG_WARN("backup set info not exist", K(ret), K(backup_set_desc));
+            ret = OB_SUCCESS;
+            continue;
+          } else {
+            LOG_WARN("fail to read backup set info", K(ret), K(backup_set_desc));
+          }
+        } else {
+          const share::ObBackupSetFileDesc &backup_set_file = backup_set_info.backup_set_file_;
+          if (OB_FAIL(backup_set_file.check_passwd(passwd_array.ptr()))) {
+            LOG_WARN("fail to check passwd", K(ret));
+          } else if (share::ObBackupSetFileDesc::BackupSetStatus::SUCCESS != backup_set_file.status_
+              || share::ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE != backup_set_file.file_status_) {
+            LOG_WARN("invalid status backup set can not be used to restore", K(backup_set_file));
+          } else {
+            output_desc = backup_set_file;
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDataStore::do_get_backup_set_array_(const common::ObString &passwd_array, 
     const SCN &restore_scn, const ObBackupSetFilter &op,
     common::ObIArray<share::ObRestoreBackupSetBriefInfo> &tmp_backup_set_list, 

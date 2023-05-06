@@ -285,9 +285,6 @@ TEST_F(TestLogStreamBackup, test_backup_path)
   LOG_INFO("dump path", K(path), K(expect_path));
   ASSERT_EQ(0, path.get_obstr().compare(expect_path));
 
-  expect_path = "file:///obbackup/tenant_1_incarnation_1/data/backup_set_1_full/logstream_1/complement_log/0";
-  ret = ObBackupPathUtil::get_ls_complement_log_backup_path(
-      root_path, tenant_id_, backup_set_desc_, ls_id_, file_id_, path);
   ASSERT_EQ(OB_SUCCESS, ret);
   LOG_INFO("dump path", K(path), K(expect_path));
   ASSERT_EQ(0, path.get_obstr().compare(expect_path));

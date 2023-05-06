@@ -1026,6 +1026,7 @@ public:
   int check_tenant_is_restore(const uint64_t tenant_id, bool &is_restore);
   int get_tenant_status(const uint64_t tenant_id, ObTenantStatus &status);
   int check_if_tenant_has_been_dropped(const uint64_t tenant_id, bool &is_dropped);
+  int check_is_creating_standby_tenant(const uint64_t tenant_id, bool &is_creating_standby);
 
   int check_keystore_exist(const uint64_t tenant_id, bool &exist);
   int get_keystore_schema(const uint64_t tenant_id, const ObKeystoreSchema *&schema);

@@ -69,7 +69,8 @@ ObLogTenant::~ObLogTenant()
   reset();
 }
 
-int ObLogTenant::init(const uint64_t tenant_id,
+int ObLogTenant::init(
+    const uint64_t tenant_id,
     const char *tenant_name,
     const int64_t start_tstamp_ns,
     const int64_t start_seq,
@@ -514,7 +515,7 @@ int ObLogTenant::start_drop_tenant_if_needed_(bool &need_drop_tenant)
 int ObLogTenant::drop_sys_ls_()
 {
   int ret = OB_SUCCESS;
-  TenantLSID sys_ls(tenant_id_, share::SYS_LS);
+  logservice::TenantLSID sys_ls(tenant_id_, share::SYS_LS);
 
   if (OB_FAIL(ls_mgr_.offline_ls(sys_ls))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -553,7 +554,7 @@ const char *ObLogTenant::print_state(const int64_t state)
   return ret;
 }
 
-int ObLogTenant::inc_ls_count_on_serving(const TenantLSID &tls_id, bool &is_serving)
+int ObLogTenant::inc_ls_count_on_serving(const logservice::TenantLSID &tls_id, bool &is_serving)
 {
   int ret = OB_SUCCESS;
 
@@ -587,7 +588,7 @@ int ObLogTenant::inc_ls_count_on_serving(const TenantLSID &tls_id, bool &is_serv
   return ret;
 }
 
-int ObLogTenant::recycle_ls(const TenantLSID &tls_id, bool &tenant_can_be_dropped)
+int ObLogTenant::recycle_ls(const logservice::TenantLSID &tls_id, bool &tenant_can_be_dropped)
 {
   int ret = OB_SUCCESS;
 

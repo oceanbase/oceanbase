@@ -18,6 +18,7 @@
 #include "lib/thread/thread_pool.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "lib/thread/ob_simple_thread_pool.h"
+#include "lib/thread/ob_map_queue_thread_pool.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/ob_async_task_queue.h"
 #include "lib/queue/ob_dedup_queue.h"
@@ -91,6 +92,7 @@ enum class TGType
   QUEUE_THREAD,
   DEDUP_QUEUE,
   ASYNC_TASK_QUEUE,
+  MAP_QUEUE_THREAD
 };
 
 class TGCommonAttr
@@ -149,6 +151,11 @@ public:
     return common::OB_NOT_SUPPORTED;
   }
   virtual int push_task(void *task)
+  {
+    UNUSED(task);
+    return common::OB_NOT_SUPPORTED;
+  }
+  virtual int push_task(void *task, const uint64_t hash_val)
   {
     UNUSED(task);
     return common::OB_NOT_SUPPORTED;
@@ -264,7 +271,7 @@ public:
     }
     return ret;
   }
-  void logical_stop() 
+  void logical_stop()
   {
     if (nullptr != th_) {
       th_->runnable_->set_stop(true);
@@ -523,6 +530,104 @@ private:
   MySimpleThreadPool *qth_ = nullptr;
   int64_t thread_num_;
   int64_t task_num_limit_;
+};
+
+class MyMapQueueThreadPool : public common::ObMapQueueThreadPool
+{
+public:
+  void run1() override
+  {
+    handler_->set_thread_cnt(get_thread_count());
+    handler_->set_thread_idx(get_thread_idx());
+    common::ObMapQueueThreadPool::run1();
+  }
+  void handle(void *task, volatile bool &is_stoped) override
+  {
+    handler_->handle(task, is_stoped);
+  }
+  TGTaskHandler *handler_ = nullptr;
+};
+
+template<>
+class TG<TGType::MAP_QUEUE_THREAD> : public ITG
+{
+public:
+  TG(ThreadCountPair pair)
+    : thread_num_(pair.get_thread_cnt())
+  {}
+  ~TG() { destroy(); }
+  int thread_cnt() override { return (int)thread_num_; }
+  int set_thread_cnt(int64_t thread_cnt) override
+  {
+    int ret = common::OB_SUCCESS;
+    if (qth_ == nullptr) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      thread_num_ = thread_cnt;
+      qth_->set_thread_count(thread_num_);
+    }
+    return ret;
+  }
+  int set_handler(TGTaskHandler &handler)
+  {
+    int ret = common::OB_SUCCESS;
+    uint64_t tenant_id = NULL == tg_helper_ ? common::OB_SERVER_TENANT_ID : tg_helper_->id();
+    if (qth_ != nullptr) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      qth_ = new (buf_) MyMapQueueThreadPool();
+      qth_->handler_ = &handler;
+      qth_->set_run_wrapper(tg_helper_, tg_cgroup_);
+      ret = qth_->init(tenant_id, thread_num_, attr_.name_);
+    }
+    return ret;
+  }
+  int start() override
+  {
+    int ret = common::OB_SUCCESS;
+
+    if (OB_ISNULL(qth_)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(qth_->start())) {
+    }
+
+    return ret;
+  }
+  void stop() override
+  {
+    if (qth_ != nullptr) {
+      qth_->stop();
+    }
+  }
+  void wait() override
+  {
+    if (qth_ != nullptr) {
+      qth_->wait();
+    }
+  }
+  void destroy()
+  {
+    if (qth_ != nullptr) {
+      qth_->destroy();
+      qth_->~MyMapQueueThreadPool();
+      qth_ = nullptr;
+    }
+  }
+  int push_task(void *task, const uint64_t hash_val) override
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(qth_)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else {
+      ret = qth_->push(task, hash_val);
+    }
+    return ret;
+  }
+
+private:
+  char buf_[sizeof(MyMapQueueThreadPool)];
+  MyMapQueueThreadPool *qth_ = nullptr;
+  int64_t thread_num_;
 };
 
 template<>
@@ -915,6 +1020,7 @@ BIND_TG_CLS(TGType::DEDUP_QUEUE, TG<TGType::DEDUP_QUEUE>);
 BIND_TG_CLS(TGType::TIMER, TG<TGType::TIMER>);
 BIND_TG_CLS(TGType::TIMER_GROUP, TG<TGType::TIMER_GROUP>);
 BIND_TG_CLS(TGType::ASYNC_TASK_QUEUE, TG<TGType::ASYNC_TASK_QUEUE>);
+BIND_TG_CLS(TGType::MAP_QUEUE_THREAD, TG<TGType::MAP_QUEUE_THREAD>);
 
 
 namespace lib {
@@ -1154,7 +1260,7 @@ public:
       ret = common::OB_ERR_UNEXPECTED;                                                                  \
       OB_LOG(WARN, "logical stop only can be used with REENTRANT_THREAD_POOL");                         \
     }                                                                                                   \
-  }) 
+  })
 } // end of namespace lib
 } // end of namespace oceanbase
 

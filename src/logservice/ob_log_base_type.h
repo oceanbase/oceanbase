@@ -68,7 +68,7 @@ enum ObLogBaseType
 
   MEDIUM_COMPACTION_LOG_BASE_TYPE = 18,
 
-  // for arb garbage collect service,
+  // for arb garbage collect service, has not been used for now
   ARB_GARBAGE_COLLECT_SERVICE_LOG_BASE_TYPE = 19,
   // for data_dictionary_service
   DATA_DICT_LOG_BASE_TYPE = 20,
@@ -76,10 +76,17 @@ enum ObLogBaseType
   // for arbitration service
   ARBITRATION_SERVICE_LOG_BASE_TYPE = 21,
 
-  HEARTBEAT_SERVICE_LOG_BASE_TYPE = 22,
+  // for NET_STANDBY_TNT_SERVICE
+  NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE = 22,
+
+  // for endpoint ingress
+  NET_ENDPOINT_INGRESS_LOG_BASE_TYPE = 23,
+
+  HEARTBEAT_SERVICE_LOG_BASE_TYPE = 24,
 
   // for padding log entry
-  PADDING_LOG_BASE_TYPE = 23,
+  PADDING_LOG_BASE_TYPE = 25,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -138,6 +145,10 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"DATA_DICTIONARY_SERVICE", str_len);
   } else if (log_type == ARBITRATION_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"ARBITRATION_SERVICE", str_len);
+  } else if (log_type == NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str ,"NET_STANDBY_TNT_SERVICE", str_len);
+  } else if (log_type == NET_ENDPOINT_INGRESS_LOG_BASE_TYPE){
+    strncpy(str ,"NET_ENDPOINT_EGRESS", str_len);
   } else if (log_type == HEARTBEAT_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"HEARTBEAT_SERVICE", str_len);
   } else if (log_type == PADDING_LOG_BASE_TYPE) {

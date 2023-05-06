@@ -723,6 +723,12 @@ DEF_INT(rpc_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
          "maximum memory for rpc in a tenant, as a percentage of total tenant memory, "
          "and 0 means no limit to rpc memory",
         ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(standby_fetch_log_bandwidth_limit, OB_CLUSTER_PARAMETER, "0MB", "[0M,10000G]",
+        "the max bandwidth that can be occupied by the sum of the synchronizing log from primary cluster of all servers in the standby cluster",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_server_standby_fetch_log_bandwidth_limit, OB_CLUSTER_PARAMETER, "0MB", "[0M,1000G]",
+        "the max bandwidth that can be occupied by the synchronizing log from primary cluster of a server in the standby cluster",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// location cache config
 DEF_TIME(virtual_table_location_cache_expire_time, OB_CLUSTER_PARAMETER, "8s", "[1s,)",
@@ -1436,6 +1442,21 @@ DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(rpc_client_authentication_method, OB_CLUSTER_PARAMETER, "NONE",
+        common::ObRpcClientAuthMethodChecker,
+        "specifies rpc client authentication method. "
+        "NONE: without authentication. "
+        "SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. "
+        "SSL_IO: authentication by SSL handshake and encrypt the communication channel",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(rpc_server_authentication_method, OB_CLUSTER_PARAMETER, "ALL",
+        common::ObRpcServerAuthMethodChecker,
+        "specifies rpc server authentication method. "
+        "ALL: support all authentication methods. "
+        "NONE: without authentication. "
+        "SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel. "
+        "SSL_IO: authentication by SSL handshake and encrypt the communication channel",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
          "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

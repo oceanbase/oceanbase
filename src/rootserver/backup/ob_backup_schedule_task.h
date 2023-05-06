@@ -322,6 +322,10 @@ private:
 public:
   int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr, const share::ObBackupLSTaskAttr &ls_attr);
 
+private:
+  int calc_start_replay_scn_(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+      const share::ObBackupLSTaskAttr &ls_attr, share::SCN &scn);
+
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id), K_(backup_type), K_(backup_date),
       K_(ls_id), K_(start_scn), K_(end_scn), K_(backup_path), K_(backup_status));
 private:

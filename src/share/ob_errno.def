@@ -635,8 +635,8 @@ DEFINE_ERROR(OB_FREEZE_SERVICE_EPOCH_MISMATCH, -4743, -1, "HY000", "freeze servi
 DEFINE_ERROR_EXT_DEP(OB_FROZEN_INFO_ALREADY_EXIST, -4744, -1, "HY000", "already exist larger frozen_scn in __all_freeze_info", "%s");
 DEFINE_ERROR_EXT(OB_DELETE_SERVER_NOT_ALLOWED, -4745, -1, "HY000", "delete server not allowed", "%s");
 DEFINE_ERROR(OB_PACKET_STATUS_UNKNOWN, -4746, -1, "HY000", "Network error and packet status unknown. Abort auto retry.");
-DEFINE_ERROR(OB_ARBITRATION_SERVICE_NOT_EXIST, -4747, -1, "HY000", "arbitration service does not exist");
-DEFINE_ERROR(OB_ARBITRATION_SERVICE_ALREADY_EXIST, -4748, -1, "HY000", "arbitration service already exist");
+DEFINE_ERROR_EXT(OB_ARBITRATION_SERVICE_NOT_EXIST, -4747, -1, "HY000", "arbitration service does not exist", "arbitration service does not exist, %s");
+DEFINE_ERROR_EXT(OB_ARBITRATION_SERVICE_ALREADY_EXIST, -4748, -1, "HY000", "arbitration service already exist", "arbitration service already exist, %s");
 DEFINE_ERROR_EXT(OB_UNEXPECTED_TABLET_STATUS, -4749, -1, "HY000", "unexpected tablet status", "%s");
 DEFINE_ERROR_EXT(OB_INVALID_TABLE_STORE, -4750, -1, "HY000", "invalid table store", "%s");
 DEFINE_ERROR(OB_WAIT_DEGRATION_TIMEOUT, -4751, -1, "HY000", "wait degration finished timeout")
@@ -645,9 +645,9 @@ DEFINE_ERROR(OB_ERR_ROOTSERVICE_STOP, -4753, -1, "HY000", "rootservice stop proc
 DEFINE_ERROR(OB_ERR_ROOT_INSPECTION, -4754, -1, "HY000", "root inspection is not passed");
 DEFINE_ERROR(OB_ERR_ROOTSERVICE_THREAD_HUNG, -4755, -1, "HY000", "rootservice backgroud thread may be hung");
 DEFINE_ERROR(OB_MIGRATE_NOT_COMPATIBLE, -4756, -1, "HY000", "Migration src and dest version is not compatible.");
+DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 //DEFINE_ERROR(OB_CLUSTER_INFO_MAYBE_REMAINED, -4757, -1, "HY000", "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it.");
 DEFINE_ERROR(OB_ARBITRATION_INFO_QUERY_FAILED, -4758, -1, "HY000", "the arbitration service may be unavailable, please check and retry");
-
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000

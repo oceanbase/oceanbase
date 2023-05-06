@@ -8642,6 +8642,18 @@ int ObSchemaGetterGuard::check_if_tenant_has_been_dropped(const uint64_t tenant_
   return ret;
 }
 
+int ObSchemaGetterGuard::check_is_creating_standby_tenant(const uint64_t tenant_id, bool &is_creating_standby)
+{
+  int ret = OB_SUCCESS;
+  ObTenantStatus status;
+  if (OB_FAIL(get_tenant_status(tenant_id, status))) {
+    LOG_WARN("fail to get tenant status", KR(ret), K(tenant_id));
+  } else {
+    is_creating_standby = is_creating_standby_tenant_status(status);
+  }
+  return ret;
+}
+
 /*
  * check if schema guard's schema version is a format schema version.
  * 1. Before schema split, we can schema version from schema_mgr_.

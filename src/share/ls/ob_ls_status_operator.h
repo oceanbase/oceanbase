@@ -66,6 +66,33 @@ bool is_valid_status_in_ls(const ObLSStatus &status);
 bool ls_is_create_abort_status(const ObLSStatus &status);
 bool ls_need_create_abort_status(const ObLSStatus &status);
 bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status);
+const int64_t MAX_MEMBERLIST_FLAG_LENGTH = 10;
+class ObMemberListFlag
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum MemberListFlag
+  {
+    INVALID_FLAG = -1,
+    HAS_ARB_MEMBER = 0,
+    MAX_FLAG
+  };
+public:
+  ObMemberListFlag() : flag_(INVALID_FLAG) {}
+  explicit ObMemberListFlag(MemberListFlag flag) : flag_(flag) {}
+  virtual ~ObMemberListFlag() {}
+
+  void reset() { flag_ = INVALID_FLAG; }
+  const MemberListFlag &get_flag() const { return flag_; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  bool is_valid() const { return INVALID_FLAG < flag_ && MAX_FLAG > flag_; }
+  bool is_arb_member() const { return HAS_ARB_MEMBER == flag_; }
+
+private:
+  // 0: has arb member
+  MemberListFlag flag_;
+};
+
 struct ObLSStatusInfo
 {
   ObLSStatusInfo() : tenant_id_(OB_INVALID_TENANT_ID),
@@ -126,6 +153,9 @@ struct ObLSStatusInfo
   {
     return OB_LS_NORMAL == status_;
   }
+
+  bool is_user_ls() const { return ls_id_.is_user_ls(); }
+
   uint64_t tenant_id_;
   ObLSID ls_id_;
   uint64_t ls_group_id_;
@@ -284,7 +314,8 @@ public:
    * @param[in] client*/
   int update_init_member_list(const uint64_t tenant_id, const ObLSID &id,
                               const ObMemberList &member_list,
-                              ObISQLClient &client);
+                              ObISQLClient &client,
+                              const ObMember &arb_member);
   int get_all_ls_status_by_order(const uint64_t tenant_id,
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
@@ -316,7 +347,8 @@ public:
   int get_ls_init_member_list(const uint64_t tenant_id, const ObLSID &id,
                               ObMemberList &member_list,
                               ObLSStatusInfo &status_info,
-                              ObISQLClient &client);
+                              ObISQLClient &client,
+                              ObMember &arb_member);
   int get_ls_status_info(const uint64_t tenant_id, const ObLSID &id,
                          ObLSStatusInfo &status_info, ObISQLClient &client);
   int fill_cell(common::sqlclient::ObMySQLResult *result,
@@ -418,15 +450,17 @@ public:
 private:
   int get_visible_member_list_str_(const ObMemberList &member_list,
                                   common::ObIAllocator &allocator,
-                                  common::ObString &visible_member_list_str);
+                                  common::ObSqlString &visible_member_list_str,
+                                  const ObMember &arb_member);
   int get_member_list_hex_(const ObMemberList &member_list,
                           common::ObIAllocator &allocator,
-                          common::ObString &hex_str);
+                          common::ObString &hex_str,
+                          const ObMember &arb_member);
   int set_member_list_with_hex_str_(const common::ObString &str,
-                                       ObMemberList &member_list);
+                                       ObMemberList &member_list, ObMember &arb_member);
   int get_ls_status_(const uint64_t tenant_id, const ObLSID &id, const bool need_member_list,
                      ObMemberList &member_list,
-                     ObLSStatusInfo &status_info, ObISQLClient &client);
+                     ObLSStatusInfo &status_info, ObISQLClient &client, ObMember &arb_member);
   int construct_ls_primary_info_sql_(common::ObSqlString &sql);
 
   //////////for checking all ls log_stat_info/////////

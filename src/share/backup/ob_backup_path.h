@@ -247,33 +247,24 @@ struct ObBackupPathUtil
   // file:///obbackup/backup_set_1_full/infos/deleted_tablet_info
   static int get_deleted_tablet_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
 
-  // file:///obbackup/backup_set_1_full/log_stream_1/complement_log/
-  static int get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest,
-      const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
-  
-  static int get_ls_complement_log_dir_path(const share::ObBackupDest &backup_tenant_dest,
-      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
-
-  // file:///obbackup/backup_set_1_full/log_stream_1/complement_log/1
-  static int get_ls_complement_log_backup_path(const share::ObBackupDest &backup_set_dest,
-      const share::ObLSID &ls_id, const int64_t file_id, share::ObBackupPath &backup_path);
-
-  static int get_ls_complement_log_backup_path(const share::ObBackupDest &backup_tenant_dest,
-      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t file_id, 
+  // file:///obbackup/backup_set_1_full/complement_log/
+  static int get_complement_log_dir_path(const share::ObBackupDest &backup_set_dest,
       share::ObBackupPath &backup_path);
+
+  static int get_complement_log_dir_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
 
   // file:///obbackup/tenant_1001_incarnation_1/clog/1_1/log_stream_1/
   static int get_ls_log_archive_prefix(const share::ObBackupDest &backup_set_dest, uint64_t tenant_id,
       const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
       share::ObBackupPath &backup_path);
 
-  // file:///obbackup/tenant_1001_incarnation_1/clog/1_1/log_stream_1/1
-  static int get_ls_log_archive_path(const share::ObBackupDest &backup_set_dest, uint64_t tenant_id,
-      const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
-      const int64_t file_id, share::ObBackupPath &backup_path);
-
   static int construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
+  static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
+  static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
+      share::ObBackupDest &backup_set_dest);
 
 private:
   static int get_tenant_data_backup_set_placeholder_path_(

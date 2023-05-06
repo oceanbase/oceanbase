@@ -92,7 +92,7 @@ ssize_t uintr_read(int fd, char* buf, size_t size) {
     return bytes;
   }
 #endif
-  while((bytes = read(fd, buf, size)) < 0 && EINTR == errno)
+  while((bytes = ussl_read(fd, buf, size)) < 0 && EINTR == errno)
     ;
   return bytes;
 }
@@ -121,7 +121,7 @@ ssize_t uintr_writev(int fd, struct iovec* iov, int cnt) {
     return bytes;
   }
 #endif
-  while((bytes = writev(fd, iov, cnt)) < 0 && EINTR == errno)
+  while((bytes = ussl_writev(fd, iov, cnt)) < 0 && EINTR == errno)
     ;
   return bytes;
 }

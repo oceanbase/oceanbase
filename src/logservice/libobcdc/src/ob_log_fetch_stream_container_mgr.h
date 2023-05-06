@@ -15,7 +15,7 @@
 
 #include "lib/objectpool/ob_small_obj_pool.h"   // ObSmallObjPool
 #include "lib/hash/ob_linear_hash_map.h"        // ObLinearHashMap
-#include "ob_log_ls_define.h"                   // TenantLSID
+#include "logservice/common_util/ob_log_ls_define.h" // logservice::TenantLSID
 #include "ob_log_fetch_stream_container.h"      // FetchStreamContainer
 #include "ob_log_fetch_stream_pool.h"           // FetchStreamPool
 #include "ob_log_fetch_log_rpc.h"               // FetchLogARpcResultPool
@@ -29,13 +29,13 @@ class IObFsContainerMgr
 public:
   /// add a new fetch stream container
   virtual int add_fsc(const FetchStreamType stype,
-      const TenantLSID &tls_id) = 0;
+      const logservice::TenantLSID &tls_id) = 0;
 
   /// remove the fetch stream container
-  virtual int remove_fsc(const TenantLSID &tls_id) = 0;
+  virtual int remove_fsc(const logservice::TenantLSID &tls_id) = 0;
 
   /// get the fetch stream container
-  virtual int get_fsc(const TenantLSID &tls_id,
+  virtual int get_fsc(const logservice::TenantLSID &tls_id,
       FetchStreamContainer *&fsc) = 0;
 };
 
@@ -58,9 +58,9 @@ public:
 
 public:
   virtual int add_fsc(const FetchStreamType stype,
-      const TenantLSID &tls_id);
-  virtual int remove_fsc(const TenantLSID &tls_id);
-  virtual int get_fsc(const TenantLSID &tls_id,
+      const logservice::TenantLSID &tls_id);
+  virtual int remove_fsc(const logservice::TenantLSID &tls_id);
+  virtual int get_fsc(const logservice::TenantLSID &tls_id,
       FetchStreamContainer *&fsc);
   void print_stat();
 
@@ -69,7 +69,7 @@ private:
   // TODO
   struct SvrStreamStatFunc
   {
-    bool operator() (const TenantLSID &key, FetchStreamContainer* value)
+    bool operator() (const logservice::TenantLSID &key, FetchStreamContainer* value)
     {
       UNUSED(key);
       if (NULL != value) {
@@ -79,7 +79,7 @@ private:
     }
   };
 
-  typedef common::ObLinearHashMap<TenantLSID, FetchStreamContainer*> FscMap;
+  typedef common::ObLinearHashMap<logservice::TenantLSID, FetchStreamContainer*> FscMap;
   typedef common::ObSmallObjPool<FetchStreamContainer> FscPool;
   // TODO
   static const int64_t SVR_STREAM_POOL_BLOCK_SIZE = 1 << 22;

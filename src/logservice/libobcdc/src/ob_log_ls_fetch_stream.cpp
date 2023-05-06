@@ -289,7 +289,7 @@ void FetchStream::do_stat()
     LOG_DEBUG("fetch stream stat too frequently", K(delta_time), K(delta_second),
         K(last_stat_time_), K(this));
   } else {
-    FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
+    logfetcher::FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
 
     if (nullptr != ls_fetch_ctx_) {
       _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
@@ -529,7 +529,7 @@ int FetchStream::prepare_rpc_request_()
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), K(ls_fetch_ctx_));
   } else {
-    const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+    const logservice::TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
 
     if (OB_FAIL(fetch_log_arpc_.prepare_request(tls_id.get_ls_id(), rpc_timeout))) {
       LOG_ERROR("prepare request for rpc fail", KR(ret), K(rpc_timeout));
@@ -568,12 +568,12 @@ void FetchStream::print_handle_info_(
     const bool is_stream_valid,
     const char *stream_invalid_reason,
     const KickOutInfo &kickout_info,
-    const TransStatInfo &tsi,
+    const logfetcher::TransStatInfo &tsi,
     const bool need_stop_request)
 {
   bool print_rpc_handle_info = ATOMIC_LOAD(&g_print_rpc_handle_info);
   LSFetchCtx::LSProgress min_progress;
-  TenantLSID min_tls_id;
+  logservice::TenantLSID min_tls_id;
 
   if (print_rpc_handle_info) {
     LOG_INFO("handle rpc result by fetch stream",
@@ -618,7 +618,7 @@ int FetchStream::process_result_(
   int64_t read_log_time = 0;
   int64_t decode_log_entry_time = 0;
   int64_t flush_time = 0;
-  TransStatInfo tsi;
+  logfetcher::TransStatInfo tsi;
   bool need_stop_request = false;
   const char *stream_invalid_reason = NULL;
 
@@ -796,11 +796,11 @@ int FetchStream::read_group_entry_(palf::LogGroupEntry &group_entry,
     palf::LSN &group_start_lsn,
     volatile bool &stop_flag,
     KickOutInfo &kick_out_info,
-    TransStatInfo &tsi)
+    logfetcher::TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
   palf::MemPalfBufferIterator entry_iter;
-  TransStatInfo local_tsi;
+  logfetcher::TransStatInfo local_tsi;
 
   if (group_entry.get_header().is_padding_log()) {
     LOG_DEBUG("GroupLogEntry is_padding_log", K(group_entry), K(group_start_lsn));
@@ -893,11 +893,11 @@ void FetchStream::update_fetch_stat_info_(
     const int64_t fetch_and_read_time,
     const int64_t fetch_log_time,
     const int64_t flush_time,
-    const TransStatInfo &tsi)
+    const logfetcher::TransStatInfo &tsi)
 {
   ObByteLockGuard lock_guard(stat_lock_);
 
-  FetchStatInfo &fsi = cur_stat_info_;
+  logfetcher::FetchStatInfo &fsi = cur_stat_info_;
   fsi.fetch_log_rpc_cnt_++;
   fsi.fetch_log_cnt_ += fetch_log_cnt;
   fsi.fetch_log_size_ += fetch_log_size;
@@ -931,8 +931,8 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     }
   } else {
     KickOutInfo kick_out_info;
-    TransStatInfo tsi;
-    const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+    logfetcher::TransStatInfo tsi;
+    const logservice::TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
     int64_t fetched_group_entry_cnt = 0;
     int64_t fetched_group_entry_size = 0;
     int64_t start_handle_timestamp = get_timestamp();
@@ -957,7 +957,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           LOG_ERROR("get next group entry failed", KR(ret), KPC(ls_fetch_ctx_));
         } else if (OB_NEED_RETRY == ret) {
           int tmp_ret = OB_SUCCESS;
-          const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+          const logservice::TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
           if (OB_TMP_FAIL(set_(kick_out_info, tls_id, KickOutReason::FETCH_LOG_FAIL_IN_DIRECT_MODE))) {
             LOG_WARN("set kickout info failed", KR(tmp_ret), K(kick_out_info), K(tls_id));
           }
@@ -1054,11 +1054,11 @@ void FetchStream::update_fetch_stat_info_(
     const int64_t read_log_time,
     const int64_t decode_log_entry_time,
     const int64_t flush_time,
-    const TransStatInfo &tsi)
+    const logfetcher::TransStatInfo &tsi)
 {
   ObByteLockGuard lock_guard(stat_lock_);
 
-  FetchStatInfo &fsi = cur_stat_info_;
+  logfetcher::FetchStatInfo &fsi = cur_stat_info_;
   const ObRpcResultCode &rcode = result.rcode_;
   const ObCdcLSFetchLogResp &resp = result.resp_;
   const ObCdcFetchStatus &fetch_status = resp.get_fetch_status();
@@ -1117,7 +1117,7 @@ int FetchStream::handle_fetch_log_result_(
     bool &need_hibernate,
     int64_t &read_log_time,
     int64_t &decode_log_entry_time,
-    TransStatInfo &tsi,
+    logfetcher::TransStatInfo &tsi,
     int64_t &flush_time)
 {
   int ret = OB_SUCCESS;
@@ -1331,13 +1331,13 @@ const char *FetchStream::print_kick_out_reason_(const KickOutReason reason)
 }
 
 bool FetchStream::exist_(KickOutInfo &kick_out_info,
-    const TenantLSID &tls_id)
+    const logservice::TenantLSID &tls_id)
 {
   return tls_id == kick_out_info.tls_id_;
 }
 
 int FetchStream::set_(KickOutInfo &kick_out_info,
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const KickOutReason kick_out_reason)
 {
   int ret = OB_SUCCESS;
@@ -1360,7 +1360,7 @@ int FetchStream::read_log_(
     KickOutInfo &kick_out_info,
     int64_t &read_log_time,
     int64_t &decode_log_entry_time,
-    TransStatInfo &tsi)
+    logfetcher::TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
   const char *buf = resp.get_log_entry_buf();
@@ -1588,7 +1588,7 @@ int FetchStream::fetch_miss_log_(
 int FetchStream::handle_log_miss_(
     palf::LogEntry &log_entry,
     IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
-    TransStatInfo &tsi,
+    logfetcher::TransStatInfo &tsi,
     volatile bool &stop_flag,
     KickOutReason &fail_reason)
 {
@@ -1776,7 +1776,7 @@ int FetchStream::build_batch_misslog_lsn_arr_(
 int FetchStream::read_batch_misslog_(
     const obrpc::ObCdcLSFetchLogResp &resp,
     int64_t &fetched_missing_log_cnt,
-    TransStatInfo &tsi,
+    logfetcher::TransStatInfo &tsi,
     IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
     IObCDCPartTransResolver::MissingLogInfo &new_generated_miss_info)
 {
@@ -1920,7 +1920,7 @@ int FetchStream::check_feedback_(const obrpc::ObCdcLSFetchLogResp &resp,
       ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), K(ls_fetch_ctx_));
     } else {
-      const TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
+      const logservice::TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
 
       if (OB_FAIL(set_(kick_out_info, tls_id, reason))) {
         if (OB_ENTRY_EXIST == ret) {

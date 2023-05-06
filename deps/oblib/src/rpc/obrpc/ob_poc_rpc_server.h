@@ -25,6 +25,9 @@ namespace obrpc
 class ObPocServerHandleContext
 {
 public:
+  enum {
+    OBCG_ELECTION = 2
+  }; // same as src/share/resource_manager/ob_group_list.h
   ObPocServerHandleContext( ObRpcMemPool& pool, uint64_t resp_id):
       pool_(pool), resp_id_(resp_id)
   {}
@@ -45,20 +48,27 @@ class ObPocRpcServer
 {
 
 public:
+  enum {
+    DEFAULT_PNIO_GROUP = 1,
+    RATELIMIT_PNIO_GROUP = 2
+  };
   ObPocRpcServer() : has_start_(false){}
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
   void stop() {}
   bool has_start() {return has_start_;}
   int update_tcp_keepalive_params(int64_t user_timeout);
+  int update_server_standby_fetch_log_bandwidth_limit(int64_t value);
   bool client_use_pkt_nio();
+  int64_t get_ratelimit();
+  uint64_t get_ratelimit_rxbytes();
 private:
   bool has_start_;
 };
 
 extern ObPocRpcServer global_poc_server;
 extern ObListener* global_ob_listener;
-
+extern "C" int dispatch_to_ob_listener(int accept_fd);
 }; // end namespace obrpc
 }; // end namespace oceanbase
 

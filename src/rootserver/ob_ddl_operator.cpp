@@ -190,8 +190,13 @@ int ObDDLOperator::create_tenant(ObTenantSchema &tenant_schema,
       // A dropping status tenant is created when standby cluster load snapshot.
       tenant_status = TENANT_STATUS_DROPPING;
     } else if (OB_DDL_ADD_TENANT_START == op) {
-      tenant_status = tenant_schema.is_restore() ?
-                      TENANT_STATUS_RESTORE : TENANT_STATUS_CREATING;
+      if (tenant_schema.is_restore_tenant_status()) {
+        tenant_status = TENANT_STATUS_RESTORE;
+      } else if (tenant_schema.is_creating_standby_tenant_status()) {
+        tenant_status = TENANT_STATUS_CREATING_STANDBY;
+      } else {
+        tenant_status = TENANT_STATUS_CREATING;
+      }
     }
     tenant_schema.set_schema_version(new_schema_version);
     tenant_schema.set_status(tenant_status);
@@ -5704,7 +5709,10 @@ int ObDDLOperator::init_tenant_config(
 {
   int ret = OB_SUCCESS;
   int64_t tenant_idx = !is_user_tenant(tenant_id) ? 0 : 1;
-  if (OB_UNLIKELY(
+  if (is_user_tenant(tenant_id) && init_configs.count() == 1) {
+    ret = OB_SUCCESS;
+    LOG_WARN("no user config", KR(ret), K(tenant_idx), K(tenant_id), K(init_configs));
+  } else if (OB_UNLIKELY(
       init_configs.count() < tenant_idx + 1
       || tenant_id != init_configs.at(tenant_idx).get_tenant_id())) {
     ret = OB_INVALID_ARGUMENT;

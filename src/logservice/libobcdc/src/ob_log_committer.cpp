@@ -451,7 +451,7 @@ int ObLogCommitter::push_offline_ls_task_(PartTransTask &task)
 {
   int ret = OB_SUCCESS;
 
-  // TenantLSID should be valid
+  // logservice::TenantLSID should be valid
   if (OB_UNLIKELY(! task.get_tls_id().is_valid())) {
     ret = OB_INVALID_ERROR;
     LOG_ERROR("invalid offline ls task", KR(ret), K(task));
@@ -465,7 +465,7 @@ int ObLogCommitter::push_ls_table_task_(PartTransTask &task)
 {
   int ret = OB_SUCCESS;
 
-  // TenantLSID should be valid
+  // logservice::TenantLSID should be valid
   if (OB_UNLIKELY(! task.get_tls_id().is_valid())) {
     ret = OB_INVALID_ERROR;
     LOG_ERROR("invalid ls_table task", KR(ret), K(task));
@@ -639,7 +639,7 @@ int ObLogCommitter::handle_offline_checkpoint_task_(CheckpointTask &task)
     ret = OB_ERR_UNEXPECTED;
   } else {
     // See alloc_checkpoint_task_allocate_memory for details
-    const TenantLSID &tls_id = task.tenant_ls_id_;;
+    const logservice::TenantLSID &tls_id = task.tenant_ls_id_;
 
     // Go offline and reclaim the partition resources, requiring a successful recovery
     // Since the previous data has been exported, there are no transaction dependencies, so the recovery must be successful
@@ -1125,7 +1125,7 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
 int ObLogCommitter::update_tenant_trans_commit_version_(const PartTransTask &participants)
 {
   int ret = OB_SUCCESS;
-  const TenantLSID &tls_id = participants.get_tls_id();
+  const logservice::TenantLSID &tls_id = participants.get_tls_id();
   const int64_t trans_commit_version = participants.get_trans_commit_version();
   const transaction::ObTransID &tx_id = participants.get_trans_id();
 
@@ -1202,7 +1202,7 @@ int ObLogCommitter::after_trans_handled_(PartTransTask *participants)
   return ret;
 }
 
-int ObLogCommitter::do_trans_stat_(const TenantLSID &tls_id,
+int ObLogCommitter::do_trans_stat_(const logservice::TenantLSID &tls_id,
     const int64_t total_stmt_cnt)
 {
   int ret = OB_SUCCESS;

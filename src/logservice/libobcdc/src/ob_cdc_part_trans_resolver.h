@@ -23,8 +23,10 @@
 #include "ob_log_trans_log.h"                     // RedoLogList
 #include "ob_log_task_pool.h"                     // ObLogTransTaskPool
 #include "ob_log_part_trans_dispatcher.h"         // PartTransDispatcher
-#include "ob_log_fetch_stat_info.h"
+#include "logservice/logfetcher/ob_log_fetch_stat_info.h"
 #include "ob_log_utils.h"                         // ObLogLSNArray / _SEC_
+#include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info.h" // ObILogFetcherLSCtxAddInfo
+#include "logservice/logfetcher/ob_log_part_serve_info.h"       // logfetcher::PartServeInfo
 
 namespace oceanbase
 {
@@ -130,7 +132,7 @@ public:
 public:
   // init part_trans_resolver
   virtual int init(
-      const TenantLSID &ls_id,
+      const logservice::TenantLSID &ls_id,
       const int64_t start_commit_version) = 0;
 
 public:
@@ -153,9 +155,9 @@ public:
       const int64_t pos_after_log_header,
       const palf::LSN &lsn,
       const int64_t submit_ts,
-      const PartServeInfo &serve_info,
+      const logfetcher::PartServeInfo &serve_info,
       MissingLogInfo &missing_log_info,
-      TransStatInfo &tsi) = 0;
+      logfetcher::TransStatInfo &tsi) = 0;
 
   /// dispatch ready PartTransTask. READY means:
   /// 1. Trans(DML/DDL) that already handle commit log and all redo of trans have persisted if working_mode is storage
@@ -180,7 +182,7 @@ public:
   virtual double get_tps() = 0;
 
   /// get dispatch progress and dispatch info of current LS
-  virtual int get_dispatch_progress(int64_t &progress, PartTransDispatchInfo &dispatch_info) = 0;
+  virtual int get_dispatch_progress(int64_t &progress, logfetcher::PartTransDispatchInfo &dispatch_info) = 0;
 
   // generate LS heartbeat task and push into part_trans_dispatcher
   virtual int heartbeat(const int64_t hb_tstamp) = 0;
@@ -203,7 +205,7 @@ public:
 
 public:
   virtual int init(
-      const TenantLSID &tls_id,
+      const logservice::TenantLSID &tls_id,
       const int64_t start_commit_version);
 
   virtual int read(
@@ -212,9 +214,9 @@ public:
       const int64_t pos_after_log_header,
       const palf::LSN &lsn,
       const int64_t submit_ts,
-      const PartServeInfo &serve_info,
+      const logfetcher::PartServeInfo &serve_info,
       MissingLogInfo &missing_log_info,
-      TransStatInfo &tsi);
+      logfetcher::TransStatInfo &tsi);
 
   virtual int dispatch(volatile bool &stop_flag, int64_t &pending_task_count);
 
@@ -222,7 +224,7 @@ public:
 
   virtual double get_tps() { return part_trans_dispatcher_.get_tps(); }
 
-  virtual int get_dispatch_progress(int64_t &progress, PartTransDispatchInfo &dispatch_info)
+  virtual int get_dispatch_progress(int64_t &progress, logfetcher::PartTransDispatchInfo &dispatch_info)
   {
     return part_trans_dispatcher_.get_dispatch_progress(progress, dispatch_info);
   }
@@ -246,7 +248,7 @@ private:
       const transaction::ObTxLogHeader &tx_log_header,
       const palf::LSN &lsn,
       const int64_t submit_ts,
-      const PartServeInfo &serve_info,
+      const logfetcher::PartServeInfo &serve_info,
       MissingLogInfo &missing_info,
       bool &has_redo_in_cur_entry);
 
@@ -324,7 +326,7 @@ private:
       const transaction::ObTransID &tx_id,
       const palf::LSN &lsn,
       const int64_t submit_ts,
-      const PartServeInfo &serve_info,
+      const logfetcher::PartServeInfo &serve_info,
       MissingLogInfo &missing_info,
       transaction::ObTxLogBlock &tx_log_block,
       bool &is_served);
@@ -394,7 +396,7 @@ private:
 
 private:
   bool                      offlined_ CACHE_ALIGNED;     // Is the partition deleted
-  TenantLSID                tls_id_;
+  logservice::TenantLSID    tls_id_;
   PartTransDispatcher       part_trans_dispatcher_;
   IObLogClusterIDFilter     &cluster_id_filter_;
 private:

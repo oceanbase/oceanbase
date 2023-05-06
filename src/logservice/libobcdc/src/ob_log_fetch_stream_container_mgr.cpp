@@ -85,7 +85,7 @@ void ObFsContainerMgr::destroy()
 }
 
 int ObFsContainerMgr::add_fsc(const FetchStreamType stype,
-    const TenantLSID &tls_id)
+    const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   FetchStreamContainer *fsc = nullptr;
@@ -124,7 +124,7 @@ int ObFsContainerMgr::add_fsc(const FetchStreamType stype,
   return ret;
 }
 
-int ObFsContainerMgr::remove_fsc(const TenantLSID &tls_id)
+int ObFsContainerMgr::remove_fsc(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   FetchStreamContainer *fsc = nullptr;
@@ -143,7 +143,7 @@ int ObFsContainerMgr::remove_fsc(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObFsContainerMgr::get_fsc(const TenantLSID &tls_id,
+int ObFsContainerMgr::get_fsc(const logservice::TenantLSID &tls_id,
     FetchStreamContainer *&fsc)
 {
   int ret = OB_SUCCESS;

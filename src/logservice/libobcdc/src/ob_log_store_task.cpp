@@ -48,7 +48,7 @@ void ObLogStoreTask::reset()
   need_callback_ = true;
 }
 
-int ObLogStoreTask::init(const TenantLSID &tenant_ls_id,
+int ObLogStoreTask::init(const logservice::TenantLSID &tenant_ls_id,
     const palf::LSN &log_lsn,
     const char *data_buf,
     const int64_t data_len,

@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX OBLOG
 
+#include "ob_log_instance.h"                  // TCTX
 #include "ob_log_meta_data_queryer.h"
-#include "lib/mysqlclient/ob_isql_client.h"  // ObISQLClient
-#include "lib/mysqlclient/ob_mysql_result.h" // ObMySQLResult
-#include "lib/string/ob_sql_string.h"      // ObSqlString
+#include "lib/mysqlclient/ob_isql_client.h"   // ObISQLClient
+#include "lib/mysqlclient/ob_mysql_result.h"  // ObMySQLResult
+#include "lib/string/ob_sql_string.h"         // ObSqlString
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
 
 using namespace oceanbase::share;
@@ -73,12 +74,15 @@ int ObLogMetaDataSQLQueryer::get_data_dict_in_log_info(
     const uint64_t tenant_id,
     const int64_t start_timstamp_ns,
     int64_t &record_count,
-    DataDictionaryInLogInfo &data_dict_in_log_info)
+    logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info)
 {
   int ret = OB_SUCCESS;
-  const char *select_fields = "snapshot_scn, start_lsn, end_lsn";
+  const bool is_oracle_mode = TCTX.mysql_proxy_.is_oracle_mode();
+  const char *select_fields = "SNAPSHOT_SCN, START_LSN, END_LSN";
+  const char *limit_expr = is_oracle_mode ? "FETCH FIRST 1 ROWS ONLY" : "LIMIT 1";
   // __all_virtual_data_dictionary_in_log
   const char *data_dictionary_in_log_name = share::OB_ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG_TNAME;
+  uint64_t query_tenent_id = OB_INVALID_TENANT_ID;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -91,28 +95,48 @@ int ObLogMetaDataSQLQueryer::get_data_dict_in_log_info(
     ObSqlString sql;
     record_count = 0;
 
-    SMART_VAR(ObISQLClient::ReadResult, result) {
+    if (TCTX.is_tenant_sync_mode()) {
       if (OB_FAIL(sql.assign_fmt(
           "SELECT %s FROM %s"
-          " WHERE tenant_id = %lu AND snapshot_scn <= %lu"
-          " ORDER BY snapshot_scn DESC limit 1",
-          select_fields, data_dictionary_in_log_name,
+          " WHERE SNAPSHOT_SCN <= %lu"
+          " ORDER BY SNAPSHOT_SCN DESC %s",
+          select_fields, share::OB_DBA_OB_DATA_DICTIONARY_IN_LOG_TNAME,
+          start_timstamp_ns, limit_expr))) {
+        LOG_WARN("assign sql string failed", KR(ret), K(tenant_id), K(is_oracle_mode));
+      } else {
+        query_tenent_id = tenant_id;
+      }
+    } else {
+      // OB4.1 doesn't have CDB_OB_DATA_DICTIONARY_IN_LOG VIEW，should only query with virtual table
+      if (OB_FAIL(sql.assign_fmt(
+          "SELECT %s FROM %s"
+          " WHERE TENANT_ID = %lu AND SNAPSHOT_SCN <= %lu"
+          " ORDER BY SNAPSHOT_SCN DESC LIMIT 1",
+          select_fields, share::OB_ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG_TNAME,
           tenant_id, start_timstamp_ns))) {
         LOG_WARN("assign sql string failed", KR(ret), K(tenant_id));
-      // Use OB_SYS_TENANT_ID to query
-      } else if (OB_FAIL(do_query_(OB_SYS_TENANT_ID, sql, result))) {
-        LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret));
-      } else if (OB_FAIL(get_records_template_(
-              *result.get_result(),
-              data_dict_in_log_info,
-              "DataDictionaryInLogInfo",
-              record_count))) {
-        LOG_WARN("construct data_dict_in_log_info failed", KR(ret), K(data_dict_in_log_info));
+      } else {
+        // Use OB_SYS_TENANT_ID to query
+        query_tenent_id = OB_SYS_TENANT_ID;
       }
-    } // SMART_VAR
+    }
+
+    if (OB_SUCC(ret)) {
+      SMART_VAR(ObISQLClient::ReadResult, result) {
+        if (OB_FAIL(do_query_(OB_SYS_TENANT_ID, sql, result))) {
+          LOG_WARN("do_query_ failed", KR(ret), K(cluster_id_), K(tenant_id), "sql", sql.ptr());
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get mysql result failed", KR(ret));
+        } else if (OB_FAIL(get_records_template_(
+                *result.get_result(),
+                data_dict_in_log_info,
+                "DataDictionaryInLogInfo",
+                record_count))) {
+          LOG_WARN("construct data_dict_in_log_info failed", KR(ret), K(data_dict_in_log_info));
+        }
+      } // SMART_VAR
+    }
   }
 
   return ret;
@@ -183,16 +207,16 @@ int ObLogMetaDataSQLQueryer::get_records_template_(
 
 int ObLogMetaDataSQLQueryer::parse_record_from_row_(
     common::sqlclient::ObMySQLResult &res,
-    DataDictionaryInLogInfo &data_dict_in_log_info)
+    logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info)
 {
   int ret = OB_SUCCESS;
   int64_t snapshot_scn_int = 0;
   int64_t start_lsn_int = 0;
   int64_t end_lsn_int = 0;
 
-  (void)GET_COL_IGNORE_NULL(res.get_int, "snapshot_scn", snapshot_scn_int);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "start_lsn", start_lsn_int);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "end_lsn", end_lsn_int);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "SNAPSHOT_SCN", snapshot_scn_int);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "START_LSN", start_lsn_int);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "END_LSN", end_lsn_int);
 
   data_dict_in_log_info.reset(snapshot_scn_int, palf::LSN(start_lsn_int), palf::LSN(end_lsn_int));
 

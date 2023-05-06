@@ -1416,6 +1416,7 @@ enum ObTenantStatus
   TENANT_STATUS_CREATING = 1,
   TENANT_STATUS_DROPPING = 2,
   TENANT_STATUS_RESTORE = 3,
+  TENANT_STATUS_CREATING_STANDBY = 4,
   TENANT_STATUS_MAX
 };
 
@@ -1424,7 +1425,7 @@ const char *ob_tenant_status_str(const ObTenantStatus);
 int get_tenant_status(const common::ObString &str, ObTenantStatus &status);
 
 bool is_tenant_restore(ObTenantStatus &status);
-
+bool is_creating_standby_tenant_status(ObTenantStatus &status);
 class ObTenantSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -1543,8 +1544,11 @@ public:
   inline bool is_in_recyclebin() const { return in_recyclebin_; }
   inline void set_in_recyclebin(const bool in_recyclebin) { in_recyclebin_ = in_recyclebin; }
   inline bool is_creating() const { return TENANT_STATUS_CREATING == status_; }
-  inline bool is_restore() const { return TENANT_STATUS_RESTORE == status_; }
+  inline bool is_restore() const { return TENANT_STATUS_RESTORE == status_
+                                          || TENANT_STATUS_CREATING_STANDBY == status_; }
   inline bool is_normal() const { return TENANT_STATUS_NORMAL == status_; }
+  inline bool is_restore_tenant_status() const { return TENANT_STATUS_RESTORE == status_; }
+  inline bool is_creating_standby_tenant_status() const { return TENANT_STATUS_CREATING_STANDBY == status_; }
   inline void set_status(const ObTenantStatus status) { status_ = status; }
   inline ObTenantStatus get_status() const { return status_; }
   //other methods

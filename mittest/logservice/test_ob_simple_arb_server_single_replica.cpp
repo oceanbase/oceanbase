@@ -56,6 +56,8 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
   int64_t cluster_id = 1;
+  arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_id, "arbserver_test", epoch));
   sleep(2);
   CLOG_LOG(INFO, "one tenant");
   sleep(2);
@@ -141,6 +143,9 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   ObTenantRole tenant_role(ObTenantRole::PRIMARY_TENANT);
   int64_t cluster_id = 1;
+  arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, arb_server->palf_env_mgr_.add_cluster(
+            iserver->get_addr(), cluster_id, "arbserver_test", epoch));
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
         1000, get_member_list(), member, get_member_cnt()));
@@ -150,12 +155,12 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.create_arbitration_instance(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
         1000, tenant_role));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, arb_server->palf_env_mgr_.set_initial_member_list(
+  EXPECT_EQ(OB_NOT_SUPPORTED, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
         1000, get_member_list(), member, get_member_cnt()));
   ObMemberList member_list = get_member_list();
   member_list.add_server(arb_server->self_);
-  EXPECT_EQ(OB_INVALID_ARGUMENT, arb_server->palf_env_mgr_.set_initial_member_list(
+  EXPECT_EQ(OB_NOT_SUPPORTED, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
         1000, member_list, member, get_member_cnt()));
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.delete_arbitration_instance(
@@ -169,6 +174,99 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.delete_arbitration_instance(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1000));
   CLOG_LOG(INFO, "end test out_interface");
+}
+
+TEST_F(TestObSimpleMutilArbServer, create_mutil_cluster)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "create_mutil_cluster");
+  OB_LOGGER.set_log_level("TRACE");
+  ObISimpleLogServer *iserver = get_cluster()[0];
+  EXPECT_EQ(true, iserver->is_arb_server());
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
+  palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
+  std::vector<int64_t> cluster_ids = {2, 3, 4, 5, 6};
+  arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
+
+  // test add tenant without cluster, generate placeholder
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->create_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1)));
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[0], "", epoch));
+
+  // test add cluster and restart
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  // duplicate add_cluster
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  // wrong add_cluster
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test1", epoch));
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", arbserver::GCMsgEpoch(1, 0)));
+
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  // re-create cluster, cluster_name match, return OB_SUCCESS
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test", epoch));
+  // re-create cluster, cluster_name do not match, return OB_SUCCESS
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test1", epoch));
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test1", epoch));
+
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[2], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[3], "arbserver_test", epoch));
+
+  // empty cluster_name
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[4], "", epoch));
+  EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[4], "test", epoch));
+
+  // test remove_cluster
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  // duplicate remove_cluster
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+
+  // remove_cluster with wrong cluster_name, still success
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test1", epoch));
+
+  // improve epoch and remove cluster
+  arbserver::GCMsgEpoch improved_epoch = arbserver::GCMsgEpoch(2, 1);
+  arbserver::TenantLSIDSArray ls_ids;
+  ls_ids.set_max_tenant_id(UINT64_MAX);
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->handle_gc_message_(improved_epoch, iserver->get_addr(), cluster_ids[2], ls_ids));
+  EXPECT_EQ(OB_OP_NOT_ALLOW, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[2], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[2], "arbserver_test", improved_epoch));
+
+  // normal remove_cluster
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[3], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[4], "", epoch));
+
+  // test upgrade arbserver, cluster 2 has a tenant and cluster 3 do not
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[1], "arbserver_test", epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->create_palf_env_lite(palflite::PalfEnvKey(cluster_ids[0], 1)));
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[1]));
+
+  std::string cluster_dir1 = palf_env_mgr->base_dir_;
+  cluster_dir1 += "/cluster_2_clustername_arbserver_test";
+  cluster_dir1 = "rm -rf " + cluster_dir1;
+  std::string cluster_dir2 = palf_env_mgr->base_dir_;
+  cluster_dir2 += "/cluster_3_clustername_arbserver_test";
+  cluster_dir2 = "rm -rf " + cluster_dir2;
+  SERVER_LOG(INFO, "delete cluster placeholder manually", K(cluster_dir1.c_str()), K(cluster_dir2.c_str()));
+
+  system(cluster_dir1.c_str());
+  system(cluster_dir2.c_str());
+  EXPECT_FALSE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  EXPECT_FALSE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[1]));
+
+  // restart and regenerate cluster placeholder dir for cluster 2
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  EXPECT_FALSE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[1]));
+
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
+  EXPECT_FALSE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
 }
 
 } // end unittest

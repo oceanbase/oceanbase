@@ -936,7 +936,8 @@ bool ObCreateTenantArg::is_valid() const
   return !tenant_schema_.get_tenant_name_str().empty() && pool_list_.count() > 0
          && (!is_restore_ || (is_restore_ && palf_base_info_.is_valid()
                               && recovery_until_scn_.is_valid_and_not_min()
-                              && compatible_version_ > 0));
+                              && compatible_version_ > 0))
+         && (!is_creating_standby_ || (is_creating_standby_ && !log_restore_source_.empty()));
 }
 
 int ObCreateTenantArg::check_valid() const
@@ -970,6 +971,8 @@ int ObCreateTenantArg::assign(const ObCreateTenantArg &other)
     palf_base_info_ = other.palf_base_info_;
     recovery_until_scn_ = other.recovery_until_scn_;
     compatible_version_ = other.compatible_version_;
+    is_creating_standby_ = other.is_creating_standby_;
+    log_restore_source_ = other.log_restore_source_;
   }
   return ret;
 }
@@ -985,6 +988,8 @@ void ObCreateTenantArg::reset()
   is_restore_ = false;
   palf_base_info_.reset();
   compatible_version_ = 0;
+  is_creating_standby_ = false;
+  log_restore_source_.reset();
 }
 
 int ObCreateTenantArg::init(const share::schema::ObTenantSchema &tenant_schema,
@@ -1020,7 +1025,9 @@ DEF_TO_STRING(ObCreateTenantArg)
        K_(is_restore),
        K_(palf_base_info),
        K_(recovery_until_scn),
-       K_(compatible_version));
+       K_(compatible_version),
+       K_(is_creating_standby),
+       K_(log_restore_source));
   return pos;
 }
 
@@ -1033,7 +1040,9 @@ OB_SERIALIZE_MEMBER((ObCreateTenantArg, ObDDLArg),
                     is_restore_,
                     palf_base_info_,
                     compatible_version_,
-                    recovery_until_scn_);
+                    recovery_until_scn_,
+                    is_creating_standby_,
+                    log_restore_source_);
 
 bool ObCreateTenantEndArg::is_valid() const
 {

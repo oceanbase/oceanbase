@@ -38,9 +38,9 @@ class TransCtx;
 struct TransPartInfo
 {
   PartTransTask           *obj_;
-  TenantLSID  tls_id_;
+  logservice::TenantLSID  tls_id_;
 
-  explicit TransPartInfo(const TenantLSID &tls_id) : obj_(NULL), tls_id_(tls_id)
+  explicit TransPartInfo(const logservice::TenantLSID &tls_id) : obj_(NULL), tls_id_(tls_id)
   {}
 
   bool operator < (const TransPartInfo &other) const

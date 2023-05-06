@@ -114,6 +114,7 @@ ob_set_subtarget(ob_share common
   ob_inner_config_root_addr.cpp
   ob_io_device_helper.cpp
   ob_kv_parser.cpp
+  ob_log_restore_proxy.cpp
   ob_label_security_os.cpp
   ob_leader_election_waiter.cpp
   ob_lease_struct.cpp

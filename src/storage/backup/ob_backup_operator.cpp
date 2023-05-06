@@ -279,6 +279,45 @@ int ObLSBackupOperator::report_ls_task_finish(const uint64_t tenant_id, const in
   return ret;
 }
 
+int ObLSBackupOperator::get_all_backup_ls_id(const uint64_t tenant_id, const int64_t task_id,
+    common::ObIArray<share::ObLSID> &ls_array, common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_INVALID_ID == tenant_id || task_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(construct_query_backup_sql_(tenant_id, task_id, sql))) {
+    LOG_WARN("failed to construct query backup sql", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(get_distinct_ls_id_(tenant_id, sql, ls_array, sql_client))) {
+    LOG_WARN("failed to get distinct ls id", K(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::get_all_archive_ls_id(const uint64_t tenant_id, const int64_t dest_id,
+    const share::SCN &start_scn, const share::SCN &end_scn, common::ObIArray<share::ObLSID> &ls_array,
+    common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t start_piece_id = 0;
+  int64_t end_piece_id = 0;
+  if (OB_INVALID_ID == tenant_id || task_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(task_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(get_start_piece_id_(tenant_id, dest_id, start_scn, sql_client, start_piece_id))) {
+    LOG_WARN("failed to get start piece id", K(ret), K(tenant_id), K(dest_id), K(start_scn));
+  } else if (OB_FAIL(get_end_piece_id_(tenant_id, dest_id, end_scn, sql_client, end_piece_id))) {
+    LOG_WARN("failed to get end piece id", K(ret), K(tenant_id), K(dest_id), K(end_scn));
+  } else if (OB_FAIL(construct_query_archive_sql_(tenant_id, dest_id, start_piece_id, end_piece_id, sql))) {
+    LOG_WARN("failed to construct query archive sql", K(ret), K(tenant_id), K(dest_id), K(start_piece_id), K(end_piece_id));
+  } else if (OB_FAIL(get_distinct_ls_id_(tenant_id, sql, ls_array, sql_client))) {
+    LOG_WARN("failed to get distinct ls id", K(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
 int ObLSBackupOperator::report_tablet_skipped(
     const uint64_t tenant_id, const ObBackupSkippedTablet &skipped_tablet, common::ObISQLClient &sql_client)
 {
@@ -407,6 +446,147 @@ int ObLSBackupOperator::fill_backup_skipped_tablet_(const ObBackupSkippedTablet 
     LOG_WARN("failed to add column", K(task_info));
   } else if (OB_FAIL(dml.add_column("skipped_type", task_info.skipped_type_.str()))) {
     LOG_WARN("failed to add column", K(task_info));
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::get_distinct_ls_id_(const uint64_t tenant_id, const common::ObSqlString &sql,
+    common::ObIArray<share::ObLSID> &ls_array, common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql_client.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to exec sql", K(ret), K(sql), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result set from read is NULL", K(ret));
+    } else {/*do nothing*/}
+
+    while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+      int64_t ls_id = 0;
+      EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ls_id, int64_t);
+      if (OB_FAIL(ls_array.push_back(ObLSID(ls_id)))) {
+        LOG_WARN("failed to push back ls id", K(ret), K(ls_id));
+      }
+    }
+
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::get_piece_id_(const uint64_t tenant_id, const common::ObSqlString &sql,
+    int64_t &piece_id, common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> piece_array;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql_client.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to exec sql", K(ret), K(sql), K(tenant_id));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result set from read is NULL", K(ret));
+    } else {/*do nothing*/}
+
+    while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+      int64_t piece_id = 0;
+      EXTRACT_INT_FIELD_MYSQL(*result, "piece_id", piece_id, int64_t);
+      if (OB_FAIL(piece_array.push_back(piece_id))) {
+        LOG_WARN("failed to push back", K(piece_id), K(ret));
+      }
+    }
+    if (OB_LIKELY(OB_ITER_END == ret)) {
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_SUCC(ret)) {
+      if (piece_array.empty()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("piece array empty", K(ret));
+      } else if (piece_array.count() > 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("piece array count not correct", K(ret), K(piece_array));
+      } else {
+        piece_id = piece_array.at(0);
+
+      }
+    }
+  }
+  return ret;
+}
+
+// TODO(yangyi.yyy): currently, __all_ls_log_archive_progress is not cleaned,
+// fix later if __all_ls_log_archive_progress is cleaned
+int ObLSBackupOperator::get_start_piece_id_(const uint64_t tenant_id, const uint64_t dest_id,
+    const share::SCN &start_scn, common::ObISQLClient &sql_client, int64_t &start_piece_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const char *sql_str = "SELECT piece_id "
+                        "FROM %s "
+                        "WHERE tenant_id = %lu AND dest_id = %ld "
+                        "AND start_scn <= %ld ORDER BY piece_id DESC LIMIT 1";
+  if (OB_INVALID_ID == tenant_id || dest_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+      tenant_id, dest_id, start_scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id), K(dest_id));
+  } else if (OB_FAIL(get_piece_id_(tenant_id, sql, start_piece_id, sql_client))) {
+    LOG_WARN("failed to get piece id", K(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::get_end_piece_id_(const uint64_t tenant_id, const uint64_t dest_id,
+    const share::SCN &checkpoint_scn, common::ObISQLClient &sql_client, int64_t &end_piece_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const char *sql_str = "SELECT piece_id "
+                        "FROM %s "
+                        "WHERE tenant_id = %lu AND dest_id = %ld "
+                        "AND checkpoint_scn >= %ld ORDER BY piece_id ASC LIMIT 1";
+  if (OB_INVALID_ID == tenant_id || dest_id < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(dest_id), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+      tenant_id, dest_id, checkpoint_scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id), K(dest_id));
+  } else if (OB_FAIL(get_piece_id_(tenant_id, sql, end_piece_id, sql_client))) {
+    LOG_WARN("failed to get piece id", K(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::construct_query_backup_sql_(const uint64_t tenant_id, const int64_t task_id, common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  const char *sql_str = "SELECT DISTINCT ls_id "
+                        "FROM %s "
+                        "WHERE tenant_id = %lu and task_id = %ld";
+  if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_BACKUP_LS_TASK_TNAME, tenant_id, task_id))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id), K(task_id));
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::construct_query_archive_sql_(const uint64_t tenant_id, const int64_t dest_id,
+    const int64_t start_piece_id, const int64_t end_piece_id, common::ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  const char *sql_str = "SELECT DISTINCT ls_id "
+                        "FROM %s "
+                        "WHERE tenant_id = %lu AND dest_id = %ld "
+                        "AND piece_id >= %ld AND piece_id <= %ld";
+  if (OB_FAIL(sql.append_fmt(sql_str, OB_ALL_LS_LOG_ARCHIVE_PROGRESS_TNAME,
+        tenant_id, dest_id, start_piece_id, end_piece_id))) {
+    LOG_WARN("failed to append sql", K(ret), K(sql_str), K(tenant_id),
+        K(dest_id), K(start_piece_id), K(end_piece_id));
   }
   return ret;
 }

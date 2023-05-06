@@ -99,6 +99,7 @@ public:
   static void set_rcode(ObRpcProxy& proxy, const ObRpcResultCode& rcode);
   static int check_blacklist(const common::ObAddr& addr);
   static void set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id);
+  static int32_t get_proxy_group_id(ObRpcProxy& proxy);
   static uint8_t balance_assign_tidx()
   {
     static uint8_t s_rpc_tidx CACHE_ALIGNED;
@@ -111,6 +112,9 @@ public:
     int ret = common::OB_SUCCESS;
     const int64_t start_ts = common::ObTimeUtility::current_time();
     int64_t src_tenant_id = ob_get_tenant_id();
+    if (get_proxy_group_id(proxy) == ObPocServerHandleContext::OBCG_ELECTION) {
+      src_tenant_id = OB_SERVER_TENANT_ID;
+    }
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
@@ -123,12 +127,17 @@ public:
     ObRpcResultCode rcode;
     sockaddr_in sock_addr;
     uint8_t thread_id = balance_assign_tidx();
+    uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
+    if (OB_LS_FETCH_LOG2 == pcode) {
+      pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
+    }
     if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(check_blacklist(addr))) {
       RPC_LOG(WARN, "check_blacklist failed", K(ret));
     } else if (0 != (sys_err = pn_send(
-        (1ULL<<32) + thread_id,
+        (pnio_group_id<<32) + thread_id,
         obaddr2sockaddr(&sock_addr, addr),
         req,
         req_sz,
@@ -164,8 +173,16 @@ public:
     int ret = common::OB_SUCCESS;
     const int64_t start_ts = common::ObTimeUtility::current_time();
     ObRpcMemPool* pool = NULL;
+    uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
+    if (OB_LS_FETCH_LOG2 == pcode) {
+      pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
+    }
     uint8_t thread_id = balance_assign_tidx();
     int64_t src_tenant_id = ob_get_tenant_id();
+    if (get_proxy_group_id(proxy) == ObPocServerHandleContext::OBCG_ELECTION) {
+      src_tenant_id = OB_SERVER_TENANT_ID;
+    }
 #ifndef PERF_MODE
     const int init_alloc_sz = 0;
 #else
@@ -195,7 +212,7 @@ public:
       if (OB_SUCC(ret)) {
         sockaddr_in sock_addr;
         if (0 != (sys_err = pn_send(
-            (1ULL<<32) + thread_id,
+            (pnio_group_id<<32) + thread_id,
             obaddr2sockaddr(&sock_addr, addr),
             req,
             req_sz,

@@ -53,6 +53,8 @@ public:
   int assign_variable_nodes(const common::ObIArray<ObVariableSetStmt::VariableSetNode> &other);
   int set_default_tablegroup_name(const common::ObString &tablegroup_name);
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_tenant_arg_; }
+  void set_create_standby_tenant();
+  void set_log_restore_source(const common::ObString &log_restore_source);
 private:
   obrpc::ObCreateTenantArg create_tenant_arg_;
   common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;

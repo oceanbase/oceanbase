@@ -126,6 +126,7 @@ namespace rootserver
   class ObRestoreMajorFreezeService;
   class ObTenantRecoveryReportor;
   class ObTenantInfoLoader;
+  class ObCreateStandbyFromNetActor;
   class ObPrimaryLSService;
   class ObRestoreService;
   class ObRecoveryLSService;
@@ -201,8 +202,9 @@ using ObPartTransCtxObjPool = common::ObServerObjectPool<transaction::ObPartTran
       observer::QueueThread *,                       \
       storage::ObStorageHAHandlerService*,           \
       rootserver::ObTenantRecoveryReportor*,         \
+      rootserver::ObTenantInfoLoader*,         \
+      rootserver::ObCreateStandbyFromNetActor*,         \
       rootserver::ObStandbySchemaRefreshTrigger*,    \
-      rootserver::ObTenantInfoLoader*,               \
       rootserver::ObPrimaryLSService*,               \
       rootserver::ObRecoveryLSService*,              \
       rootserver::ObRestoreService*,                 \

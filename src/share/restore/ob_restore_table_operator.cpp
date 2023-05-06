@@ -23,6 +23,7 @@
 #include "ob_log_restore_source.h"
 #include "share/backup/ob_backup_struct.h"
 #include "logservice/palf/log_define.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -131,6 +132,41 @@ int ObTenantRestoreTableOperator::get_source(ObLogRestoreSourceItem &item)
               OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
         LOG_WARN("sql append failed", K(ret));
       } else if (OB_FAIL(proxy_->read(res, get_exec_tenant_id_(), sql.ptr()))) {
+        LOG_WARN("sql read failed", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is NULL", K(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          LOG_WARN("next failed", K(ret));
+        }
+      } else if (OB_FAIL(parse_log_restore_source_(*result, item))) {
+        LOG_WARN("parse log restore source failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantRestoreTableOperator::get_source_for_update(ObLogRestoreSourceItem &item, ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant restore table operator not init", K(ret));
+  } else {
+    SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(fill_select_source_(sql))) {
+        LOG_WARN("fill get source sql failed", K(ret));
+      } else if (OB_FAIL(sql.append_fmt(" where %s=%ld and %s=%ld for update",
+              OB_STR_TENANT_ID, item.tenant_id_,
+              OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
+        LOG_WARN("sql append failed", K(ret));
+      } else if (OB_FAIL(trans.read(res, get_exec_tenant_id_(), sql.ptr()))) {
         LOG_WARN("sql read failed", K(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;

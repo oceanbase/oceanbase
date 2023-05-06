@@ -55,14 +55,14 @@ public:
 
   // Add LS
   virtual int add_ls(
-      const TenantLSID &tls_id,
-      const ObLogFetcherStartParameters &start_parameters) = 0;
+      const logservice::TenantLSID &tls_id,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters) = 0;
 
   // Recycle LS
-  virtual int recycle_ls(const TenantLSID &tls_id) = 0;
+  virtual int recycle_ls(const logservice::TenantLSID &tls_id) = 0;
 
   // Remove LS
-  virtual int remove_ls(const TenantLSID &tls_id) = 0;
+  virtual int remove_ls(const logservice::TenantLSID &tls_id) = 0;
 
   virtual int wait_for_all_ls_to_be_removed(const int64_t timeout) = 0;
 
@@ -148,12 +148,12 @@ public:
   virtual void configure(const ObLogConfig &cfg);
 
   virtual int add_ls(
-      const TenantLSID &tls_id,
-      const ObLogFetcherStartParameters &start_parameters);
+      const logservice::TenantLSID &tls_id,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters);
 
-  virtual int recycle_ls(const TenantLSID &tls_id);
+  virtual int recycle_ls(const logservice::TenantLSID &tls_id);
 
-  virtual int remove_ls(const TenantLSID &tls_id);
+  virtual int remove_ls(const logservice::TenantLSID &tls_id);
 
   virtual int wait_for_all_ls_to_be_removed(const int64_t timeout);
 
@@ -187,9 +187,9 @@ private:
   struct LSProgressInfo
   {
     LSProgressInfo() : tls_id_(), progress_(0) {}
-    LSProgressInfo(const TenantLSID &tls_id, const int64_t progress) : tls_id_(tls_id), progress_(progress) {}
+    LSProgressInfo(const logservice::TenantLSID &tls_id, const int64_t progress) : tls_id_(tls_id), progress_(progress) {}
 
-    TenantLSID tls_id_;
+    logservice::TenantLSID tls_id_;
     int64_t progress_;
     TO_STRING_KV(K_(tls_id), K_(progress));
   };
@@ -199,15 +199,15 @@ private:
   struct FetchCtxMapHBFunc
   {
     FetchCtxMapHBFunc();
-    bool operator()(const TenantLSID &tls_id, LSFetchCtx *&ctx);
+    bool operator()(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx);
 
     int64_t                 data_progress_;
     int64_t                 ddl_progress_;
     palf::LSN               ddl_last_dispatch_log_lsn_;
     int64_t                 min_progress_;
     int64_t                 max_progress_;
-    TenantLSID              min_progress_ls_;
-    TenantLSID              max_progress_ls_;
+    logservice::TenantLSID  min_progress_ls_;
+    logservice::TenantLSID  max_progress_ls_;
     int64_t                 part_count_;
     LSProgressInfoArray     ls_progress_infos_;
 

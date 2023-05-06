@@ -244,7 +244,7 @@ int ObLogFetcherDeadPool::handle_task_list_(const int64_t thread_index, FetchTas
 
       // Recycle tasks that are not used by asynchronous requests
       if (! task->is_in_use()) {
-        const TenantLSID &tls_id = task->get_tls_id();
+        const logservice::TenantLSID &tls_id = task->get_tls_id();
 
         // Remove from list
         list.erase(*task);

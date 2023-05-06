@@ -1,5 +1,6 @@
 typedef struct pktc_req_t pktc_req_t;
 typedef struct pktc_cb_t pktc_cb_t;
+typedef struct pktc_t pktc_t;
 typedef void (*pktc_flush_cb_func_t)(pktc_req_t* req);
 typedef void (*pktc_resp_cb_func_t)(pktc_cb_t* cb, const char* resp, int64_t sz);
 
@@ -10,21 +11,21 @@ struct pktc_cb_t {
   dlink_t timer_dlink;
   int64_t expire_us;
   pktc_resp_cb_func_t resp_cb;
+  pktc_req_t* req;
   int errcode;
 };
 
 struct pktc_req_t {
-  struct pktc_sk_t* sk; // for debug
+  struct pktc_sk_t* sk;
   PNIO_DELAY_WARN(int64_t ctime_us);
   pktc_flush_cb_func_t flush_cb;
   pktc_cb_t* resp_cb;
   addr_t dest;
   int64_t categ_id;
-  link_t link;
+  dlink_t link;
   str_t msg;
 };
 
-typedef struct pktc_t pktc_t;
 extern int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id);
 extern int pktc_post(pktc_t* io, pktc_req_t* req);
 

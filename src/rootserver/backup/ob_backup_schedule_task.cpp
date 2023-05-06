@@ -18,6 +18,8 @@
 #include "share/backup/ob_backup_clean_operator.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ls/ob_ls_table_operator.h"
+#include "share/backup/ob_tenant_archive_mgr.h"
+#include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 namespace oceanbase 
 {
@@ -644,6 +646,7 @@ int ObBackupComplLogTask::build(const ObBackupJobAttr &job_attr, const ObBackupS
 {
   int ret = OB_SUCCESS;
   ObBackupScheduleTaskKey key;
+  share::SCN start_replay_scn;
   if (!job_attr.is_valid() || !ls_attr.is_valid()) {
     ret = OB_SUCCESS;
     LOG_WARN("invalid argument", K(ret), K(job_attr), K(ls_attr));
@@ -651,19 +654,55 @@ int ObBackupComplLogTask::build(const ObBackupJobAttr &job_attr, const ObBackupS
     LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(ls_attr));
   } else if (OB_FAIL(ObBackupScheduleTask::build(key, ls_attr.task_trace_id_, ls_attr.status_, ls_attr.dst_))) {
     LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", ls_attr.task_trace_id_, "status", ls_attr.status_, "dst", ls_attr.dst_);
+  } else if (OB_FAIL(calc_start_replay_scn_(job_attr, set_task_attr, ls_attr, start_replay_scn))) {
+    LOG_WARN("failed to calc start replay scn", K(ret), K(job_attr), K(set_task_attr), K(ls_attr));
   } else {
     incarnation_id_ = job_attr.incarnation_id_;
     backup_set_id_ = ls_attr.backup_set_id_;
     backup_type_.type_ = ls_attr.backup_type_.type_;
     backup_date_ = ls_attr.backup_date_;
     ls_id_ = ls_attr.ls_id_;
-    start_scn_ = set_task_attr.start_scn_;
+    start_scn_ = start_replay_scn;
     end_scn_ = set_task_attr.end_scn_;
     backup_status_.status_ = set_task_attr.status_.status_;
     if (OB_FAIL(backup_path_.assign(job_attr.backup_path_))) {
       LOG_WARN("failed to assign backup dest", K(ret), "backup dest", job_attr.backup_path_);
     } 
   }
+  return ret;
+}
+
+int ObBackupComplLogTask::calc_start_replay_scn_(const ObBackupJobAttr &job_attr,
+    const ObBackupSetTaskAttr &set_task_attr, const ObBackupLSTaskAttr &ls_attr, share::SCN &start_replay_scn)
+{
+  int ret = OB_SUCCESS;
+  ObBackupLSMetaInfosDesc ls_meta_infos;
+  ObTenantArchiveRoundAttr round_attr;
+  ObBackupDataStore store;
+  ObBackupDest backup_dest;
+  share::ObBackupSetDesc desc;
+  desc.backup_set_id_ = job_attr.backup_set_id_;
+  desc.backup_type_ = job_attr.backup_type_;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, job_attr.tenant_id_,
+      job_attr.backup_path_, backup_dest))) {
+    LOG_WARN("fail to get backup dest", K(ret), K(job_attr));
+  } else if (OB_FAIL(store.init(backup_dest, desc))) {
+    LOG_WARN("fail to init backup data store", K(ret));
+  } else if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr.tenant_id_, job_attr.incarnation_id_, round_attr))) {
+    LOG_WARN("failed to get tenant current round", K(ret), K(job_attr));
+  } else if (!round_attr.state_.is_doing()) {
+    ret = OB_LOG_ARCHIVE_NOT_RUNNING;
+    LOG_WARN("backup is not supported when log archive is not doing", K(ret), K(round_attr));
+  } else if (round_attr.start_scn_ > set_task_attr.start_scn_) {
+    ret = OB_LOG_ARCHIVE_INTERRUPTED;
+    LOG_WARN("backup is not supported when archive is interrupted", K(ret), K(round_attr), K(set_task_attr));
+  } else if (OB_FAIL(store.read_ls_meta_infos(ls_meta_infos))) {
+    LOG_WARN("fail to read ls meta infos", K(ret));
+  } else if (OB_FAIL(ObBackupUtils::calc_start_replay_scn(set_task_attr, ls_meta_infos, round_attr, start_replay_scn))) {
+    LOG_WARN("failed to calc start replay scn", K(ret), K(set_task_attr), K(ls_meta_infos), K(round_attr));
+  }
+  LOG_INFO("calc start replay scn", K(ret), K(job_attr), K(set_task_attr), K(ls_attr), K(start_replay_scn));
   return ret;
 }
 

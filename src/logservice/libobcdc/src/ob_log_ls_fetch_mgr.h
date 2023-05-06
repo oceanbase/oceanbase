@@ -23,7 +23,7 @@
 #include "lib/allocator/ob_safe_arena.h"        // ObSafeArena
 
 #include "ob_log_config.h"                      // ObLogConfig
-#include "ob_log_fetcher_start_parameters.h"    // ObLogFetcherStartParameters
+#include "logservice/logfetcher/ob_log_fetcher_start_parameters.h"    // ObLogFetcherStartParameters
 
 namespace oceanbase
 {
@@ -42,23 +42,23 @@ public:
 public:
   /// add a new LS
   virtual int add_ls(
-      const TenantLSID &tls_id,
-      const ObLogFetcherStartParameters &start_parameters,
+      const logservice::TenantLSID &tls_id,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const bool is_loading_data_dict_baseline_data,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str) = 0;
 
   /// recycle a LS
   /// mark LS deleted and begin recycle resource
-  virtual int recycle_ls(const TenantLSID &tls_id) = 0;
+  virtual int recycle_ls(const logservice::TenantLSID &tls_id) = 0;
 
   /// remove LS
   /// delete LS by physical
   /// only invaked by FetcherDeadPool
-  virtual int remove_ls(const TenantLSID &tls_id) = 0;
+  virtual int remove_ls(const logservice::TenantLSID &tls_id) = 0;
 
   /// get LS fetch context
-  virtual int get_ls_fetch_ctx(const TenantLSID &tls_id, LSFetchCtx *&ctx) = 0;
+  virtual int get_ls_fetch_ctx(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx) = 0;
 
   /// get the slowest k ls
   virtual void print_k_slowest_ls() = 0;
@@ -86,7 +86,7 @@ class ObLogLSFetchMgr : public IObLogLSFetchMgr
   static const uint64_t DEFAULT_TENANT_ID = common::OB_SERVER_TENANT_ID;
 
   typedef common::ObSmallObjPool<LSFetchCtx> LSFetchCtxPool;
-  typedef common::ObLinearHashMap<TenantLSID, LSFetchCtx *> LSFetchCtxMap;
+  typedef common::ObLinearHashMap<logservice::TenantLSID, LSFetchCtx *> LSFetchCtxMap;
 
 public:
   ObLogLSFetchMgr();
@@ -101,14 +101,14 @@ public:
 
 public:
   virtual int add_ls(
-      const TenantLSID &tls_id,
-      const ObLogFetcherStartParameters &start_parameters,
+      const logservice::TenantLSID &tls_id,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const bool is_loading_data_dict_baseline_data,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str);
-  virtual int recycle_ls(const TenantLSID &tls_id);
-  virtual int remove_ls(const TenantLSID &tls_id);
-  virtual int get_ls_fetch_ctx(const TenantLSID &tls_id, LSFetchCtx *&ctx);
+  virtual int recycle_ls(const logservice::TenantLSID &tls_id);
+  virtual int remove_ls(const logservice::TenantLSID &tls_id);
+  virtual int get_ls_fetch_ctx(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx);
   virtual void print_k_slowest_ls();
   virtual int set_start_global_trans_version(const int64_t start_global_trans_version);
   virtual void *get_fetcher_host() const { return fetcher_; }
@@ -124,17 +124,17 @@ public:
 
 private:
   // init tenent_ls_id_str
-  int init_tls_info_(const TenantLSID &tls_id, char *&tls_id_str);
+  int init_tls_info_(const logservice::TenantLSID &tls_id, char *&tls_id_str);
   struct CtxRecycleCond
   {
-    bool operator() (const TenantLSID &tls_id, LSFetchCtx *&ctx);
+    bool operator() (const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx);
   };
 
   struct CtxLSProgressCond
   {
     CtxLSProgressCond() : ctx_cnt_(0), ls_fetch_info_array_() {}
     int init(const int64_t count);
-    bool operator() (const TenantLSID &tls_id, LSFetchCtx *ctx);
+    bool operator() (const logservice::TenantLSID &tls_id, LSFetchCtx *ctx);
 
     int64_t ctx_cnt_;
     LSFetchInfoArray ls_fetch_info_array_;

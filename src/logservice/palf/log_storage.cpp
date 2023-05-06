@@ -14,6 +14,7 @@
 #include "log_storage.h"
 #include "lib/ob_errno.h"            // OB_INVALID_ARGUMENT
 #include "log_reader_utils.h"        // ReadBuf
+#include "palf_handle_impl.h"        // LogHotCache
 #include "share/scn.h"
 
 namespace oceanbase
@@ -35,6 +36,7 @@ LogStorage::LogStorage() :
     tail_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     update_manifest_cb_(),
+    hot_cache_(NULL),
     is_inited_(false)
 {}
 
@@ -47,7 +49,8 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t palf_id, const int64_t logical_block_size,
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
-                     ILogBlockPool *log_block_pool)
+                     ILogBlockPool *log_block_pool,
+                     LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -60,7 +63,8 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               align_size,
                               align_buf_size,
                               update_manifest_cb,
-                              log_block_pool))) {
+                              log_block_pool,
+                              hot_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
     PALF_LOG(INFO, "LogStorage init success", K(ret), K(base_dir), K(sub_dir),
@@ -262,6 +266,10 @@ int LogStorage::pread(const LSN &read_lsn, const int64_t in_read_size, ReadBuf &
              || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(read_lsn), K(in_read_size), K(read_buf));
+  } else if (OB_NOT_NULL(hot_cache_)
+      && OB_SUCCESS == (hot_cache_->read(read_lsn, in_read_size, read_buf.buf_, out_read_size))
+      && out_read_size > 0) {
+    // read data from hot_cache successfully
   } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size))) {
     PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), KPC(this));
   } else {
@@ -584,7 +592,8 @@ int LogStorage::do_init_(const char *base_dir,
                          const int64_t align_size,
                          const int64_t align_buf_size,
                          const UpdateManifestCallback &update_manifest_cb,
-                         ILogBlockPool *log_block_pool)
+                         ILogBlockPool *log_block_pool,
+                         LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -611,6 +620,7 @@ int LogStorage::do_init_(const char *base_dir,
     palf_id_ = palf_id;
     logical_block_size_ = logical_block_size;
     update_manifest_cb_ = update_manifest_cb;
+    hot_cache_ = hot_cache;
     is_inited_ = true;
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {

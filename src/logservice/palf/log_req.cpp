@@ -771,5 +771,7 @@ void LogGetStatResp::reset()
 
 OB_SERIALIZE_MEMBER(LogGetStatResp, max_scn_, end_lsn_);
 // ================= LogGetStatResp end ================
+
+
 } // end namespace palf
 } // end namespace oceanbase
