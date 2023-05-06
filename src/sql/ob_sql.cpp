@@ -2631,6 +2631,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
         ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
         switch (resolve_type) {
+          case T_ALTER_SYSTEM_SET:
+          case T_ALTER_SYSTEM_SET_PARAMETER:
           case T_CREATE_USER:
           case T_SET_PASSWORD:
           case T_GRANT:
