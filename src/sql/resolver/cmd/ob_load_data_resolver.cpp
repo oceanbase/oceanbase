@@ -540,9 +540,14 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         }
         break;
       }
+      case T_NO_GATHER_OPTIMIZER_STATISTICS: {
+        if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::NO_GATHER_OPTIMIZER_STATISTICS, 1))) {
+          LOG_WARN("fail to set gather optimizer statistics", K(ret));
+        }
+        break;
+      }
       default:
-        ret = OB_ERR_HINT_UNKNOWN;
-        LOG_WARN("Unknown hint", "hint_name", get_type_name(hint_node->type_));
+        LOG_WARN("Unused hint", "hint_name", get_type_name(hint_node->type_));
         break;
       }
     }

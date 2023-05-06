@@ -30,7 +30,12 @@ struct OSGShareInfo {
   col_conv_exprs_(),
   generated_column_exprs_(),
   column_ids_() {};
-  ~OSGShareInfo() = default;
+  ~OSGShareInfo()
+  {
+    col_conv_exprs_.reset();
+    generated_column_exprs_.reset();
+    column_ids_.reset();
+  }
 
   uint64_t table_id_;
   ObRawExpr *calc_part_id_expr_;

@@ -376,7 +376,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     need_late_materialization_(false),
     op_exprs_(),
     inherit_sharding_index_(-1),
-    allocated_osg_(false)
+    need_osg_merge_(false)
 
 {
 }
@@ -915,12 +915,12 @@ int ObLogicalOperator::compute_op_other_info()
         }
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && !allocated_osg_ && i < get_num_of_child(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_osg_merge_ && i < get_num_of_child(); i++) {
       if (OB_ISNULL(get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else {
-        allocated_osg_ |= get_child(i)->has_allocated_osg();
+        need_osg_merge_ |= get_child(i)->need_osg_merge();
       }
     }
   }

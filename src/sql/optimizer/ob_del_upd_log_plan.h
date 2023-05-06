@@ -114,7 +114,9 @@ public:
   int candi_allocate_one_pdml_insert(bool is_index_maintenance,
                                      bool is_last_dml_op,
                                      bool is_pdml_update_split,
-                                     IndexDMLInfo *index_dml_info);
+                                     IndexDMLInfo *index_dml_info,
+                                     OSGShareInfo *osg_info = NULL);
+
   int create_pdml_insert_plan(ObLogicalOperator *&top,
                               const ObExchangeInfo &exch_info,
                               ObTablePartitionInfo *table_location,
@@ -122,7 +124,8 @@ public:
                               bool is_last_dml_op,
                               bool need_partition_id,
                               bool is_pdml_update_split,
-                              IndexDMLInfo *index_dml_info);
+                              IndexDMLInfo *index_dml_info,
+                              OSGShareInfo *osg_info);
 
   int create_online_ddl_plan(ObLogicalOperator *&top,
                              const ObExchangeInfo &exch_info,
@@ -235,7 +238,8 @@ public:
 protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
-
+  int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
+                                                OSGShareInfo &info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
