@@ -2668,6 +2668,7 @@ inline bool is_valid_sys_func(const ObItemType type)
     T_FUN_SYS_CEIL,
     T_FUN_SYS_LEAST,
     T_FUN_SYS_GREATEST,
+    T_FUN_SYS_CAST,
   };
   for (int64_t i = 0; !ret && i < sizeof(WHITE_LIST) / sizeof(ObItemType); ++i) {
     ret = (type == WHITE_LIST[i]);
