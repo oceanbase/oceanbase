@@ -296,20 +296,20 @@ void ObFifoArena::speed_limit(const int64_t cur_mem_hold, const int64_t alloc_si
   int64_t trigger_percentage = get_writing_throttling_trigger_percentage_();
   int64_t trigger_mem_limit = 0;
   bool need_speed_limit = false;
-  int64_t seq = 0;
+  int64_t seq = max_seq_;
   int64_t throttling_interval = 0;
   if (trigger_percentage < 100) {
     if (OB_UNLIKELY(cur_mem_hold < 0 || alloc_size <= 0 || lastest_memstore_threshold_ <= 0 || trigger_percentage <= 0)) {
       COMMON_LOG(ERROR, "invalid arguments", K(cur_mem_hold), K(alloc_size), K(lastest_memstore_threshold_), K(trigger_percentage));
     } else if (cur_mem_hold > (trigger_mem_limit = lastest_memstore_threshold_ * trigger_percentage / 100)) {
       need_speed_limit = true;
+      seq = ATOMIC_AAF(&max_seq_, alloc_size);
       int64_t alloc_duration = get_writing_throttling_maximum_duration_();
       if (OB_FAIL(throttle_info_.check_and_calc_decay_factor(lastest_memstore_threshold_, trigger_percentage, alloc_duration))) {
         COMMON_LOG(WARN, "failed to check_and_calc_decay_factor", K(cur_mem_hold), K(alloc_size), K(throttle_info_));
       }
     }
     advance_clock();
-    seq = ATOMIC_AAF(&max_seq_, alloc_size);
     get_seq() = seq;
     tl_need_speed_limit() = need_speed_limit;
 
