@@ -2562,8 +2562,10 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
           col_expr->set_data_type(ObLobType);
         }
       }
-      col_expr->set_synonym_db_name(table_item.synonym_db_name_);
-      col_expr->set_synonym_name(table_item.synonym_name_);
+      if (table_item.alias_name_.empty()) {
+        col_expr->set_synonym_db_name(table_item.synonym_db_name_);
+        col_expr->set_synonym_name(table_item.synonym_name_);
+      }
       col_expr->set_column_attr(table_item.get_table_name(), col_schema->get_column_name_str());
       col_expr->set_from_alias_table(!table_item.alias_name_.empty());
       col_expr->set_database_name(table_item.database_name_);

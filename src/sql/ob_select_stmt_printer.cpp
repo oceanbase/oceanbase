@@ -433,7 +433,7 @@ int ObSelectStmtPrinter::print_select()
           if (NULL != select_item.expr_ && select_item.expr_->is_column_ref_expr()) {
             ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(select_item.expr_);
             const TableItem *table_item = stmt_->get_table_item_by_id(column_expr->get_table_id());
-            if (NULL != table_item) {
+            if (NULL != table_item && table_item->alias_name_.empty()) {
               column_expr->set_synonym_name(table_item->synonym_name_);
               column_expr->set_synonym_db_name(table_item->synonym_db_name_);
             }
