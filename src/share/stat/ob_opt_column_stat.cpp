@@ -296,17 +296,20 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
     avg_length_ = src.avg_length_;
     last_analyzed_ = src.last_analyzed_;
     cs_type_ = src.cs_type_;
+    llc_bitmap_size_ = src.llc_bitmap_size_;
     if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
       LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
     } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
       LOG_WARN("deep copy max_value_ failed.", K_(src.max_value), K(ret));
     } else if (OB_FAIL(histogram_.deep_copy(allocator_, src.histogram_))) {
       LOG_WARN("failed to deep copy histogram", K(ret));
-    } else {
-      void *ptr = allocator_.alloc(sizeof(char) * src.llc_bitmap_size_);
-      llc_bitmap_ = new (ptr) char[src.llc_bitmap_size_];
-      llc_bitmap_size_ = src.llc_bitmap_size_;
-      MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
+    } else if (src.llc_bitmap_size_ != 0 && src.llc_bitmap_ != NULL) {
+      if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(src.llc_bitmap_size_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for llc_bitmap_");
+      } else {
+        MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
+      }
     }
   }
   return ret;
