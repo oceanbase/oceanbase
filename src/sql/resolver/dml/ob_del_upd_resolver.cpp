@@ -2282,10 +2282,16 @@ int ObDelUpdResolver::expand_record_to_columns(const ParseNode &record_node,
         const pl::ObUserDefinedType *user_type = NULL;
         ParseNode *column_node = NULL;
         const ParseNode *member_node = &record_node;
-        bool multi_level_count = 0;
+        int64_t multi_level_count = 0;
         while (NULL != member_node && member_node->num_child_ > 1 && NULL != member_node->children_[1]) {
+          if (NULL != member_node->children_[0] &&
+              T_IDENT == member_node->children_[0]->type_ &&
+              T_OBJ_ACCESS_REF == member_node->children_[1]->type_) {
+            // do nothing
+          } else {
+            multi_level_count++;
+          }
           member_node = member_node->children_[1];
-          multi_level_count++;
         }
         if (multi_level_count > 0) {
           ret = OB_NOT_SUPPORTED;

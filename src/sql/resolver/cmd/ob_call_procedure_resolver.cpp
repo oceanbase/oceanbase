@@ -478,24 +478,6 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                       *(params_.allocator_),
                                                       *(params_.sql_proxy_),
                                                       pl_type));
-          if (OB_FAIL(ret)) {
-          } else if (params_.is_prepare_protocol_
-                    && params_.is_prepare_stage_
-                    && param_expr->get_expr_type() != T_QUESTIONMARK) {
-            // do nothing ...
-          } else if (!param_info->is_extern_type()) {
-          } else {
-            if (OB_SUCC(ret)) {
-              //not support complex param not in prepare, except default value
-              if (pl_type.is_user_type()) {
-                if (!params_.is_prepare_protocol_
-                    && !param_expr->has_flag(IS_PL_MOCK_DEFAULT_EXPR)) {
-                  ret = OB_ERR_CALL_WRONG_ARG;
-                  LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
-                }
-              }
-            }
-          }
         }
         if (OB_SUCC(ret)) {
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {

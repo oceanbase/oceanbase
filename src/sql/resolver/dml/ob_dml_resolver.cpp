@@ -2665,6 +2665,16 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
       && OB_FAIL(check_col_param_on_expr(expr))) {
     LOG_WARN("illegal param on func_expr", K(ret));
   }
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr) &&
+      T_QUESTIONMARK == expr->get_expr_type() &&
+      ObExtendType == expr->get_result_type().get_type() &&
+      ((NULL == params_.secondary_namespace_ && NULL == session_info_->get_pl_context()) ||
+      (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_FROM_SCOPE && current_scope_ != T_INTO_SCOPE) ||
+      (get_basic_stmt()->is_insert_stmt() && current_scope_ == T_INTO_SCOPE))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("dml with collection or record construction function is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
+  }
   return ret;
 }
 
@@ -2720,7 +2730,15 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         is_external = false;
       }
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
-      is_external = false;
+      if ((NULL == params_.secondary_namespace_ && NULL == session_info_->get_pl_context()) ||
+          (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE) ||
+          (get_basic_stmt()->is_insert_stmt() && current_scope_ == T_INTO_SCOPE)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("dml with collection or record construction function is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
+      } else {
+        is_external = false;
+      }
     }
   } else if (lib::is_oracle_mode() && q_name.col_name_.length() == 0) {
     //对于长度为0的identifier报错和oracle兼容
@@ -2742,8 +2760,27 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("dml with collection or record construction function is not supported", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
-          } else if ((ObExtendType == real_ref_expr->get_result_type().get_type()
-                   || ObMaxType == real_ref_expr->get_result_type().get_type())
+          } else if (ObExtendType == real_ref_expr->get_result_type().get_type() &&
+                     T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type() &&
+                     (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id()))) {
+            bool is_support = false;
+            const ObUserDefinedType *user_type = NULL;
+            uint64_t udt_id = real_ref_expr->get_result_type().get_udt_id();
+            OZ (params_.secondary_namespace_->get_pl_data_type_by_id(udt_id, user_type));
+            CK (OB_NOT_NULL(user_type));
+            if (OB_SUCC(ret) && user_type->is_udt_type()) {
+              is_support = true;
+            }
+            if (OB_SUCC(ret)) {
+              if (!is_support) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("dml with collection or record construction function is not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "dml with collection or record construction function is");
+              } else {
+                is_external = true;
+              }
+            }
+          } else if ((ObMaxType == real_ref_expr->get_result_type().get_type())
                    && (T_FUN_PL_SQLCODE_SQLERRM != real_ref_expr->get_expr_type())
                    && (!ob_is_xml_pl_type(real_ref_expr->get_data_type(), real_ref_expr->get_udt_id()))) {
             ret = OB_NOT_SUPPORTED;
