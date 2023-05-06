@@ -1037,6 +1037,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
       session->set_query_start_time(ObTimeUtility::current_time());
       session->set_inner_session();
       session->set_nested_count(-1);
+      //bug:
+      session->set_autocommit(session_value->inc_autocommit_);
     }
   }
   return ret;
