@@ -416,6 +416,7 @@ void ObTxLSLogWriter::destroy_cbs_(common::ObDList<ObTxLSLogCb> &cbs)
   ObTxLSLogCb *cb_ptr = nullptr;
   while (!cbs.is_empty()) {
     if (OB_NOT_NULL(cb_ptr = cbs.remove_first())) {
+      cb_ptr->~ObTxLSLogCb();
       ob_free(cb_ptr);
     }
   }
