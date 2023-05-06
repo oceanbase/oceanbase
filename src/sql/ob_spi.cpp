@@ -2616,6 +2616,8 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
         session->set_query_start_time(ObTimeUtility::current_time());
         bool is_retry = false;
         do {
+          ObArenaAllocator allocator;
+          ParamStore exec_params( (ObWrapperAllocator(allocator)) );
           ObWaitEventDesc max_wait_desc;
           ObWaitEventStat total_wait_desc;
           const bool enable_perf_event = lib::is_diagnose_info_enabled();
@@ -2643,8 +2645,6 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             OX (retry_ctrl.set_tenant_local_schema_version(tenant_version));
             OX (retry_ctrl.set_sys_local_schema_version(sys_version));
             OX (spi_result.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard());
-            ObArenaAllocator allocator;
-            ParamStore exec_params( (ObWrapperAllocator(allocator)) );
 
             bool is_inner_session = session->is_inner();
             ObSQLSessionInfo::SessionType old_session_type = session->get_session_type();
@@ -2661,7 +2661,19 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                 } else {
                   for (int64_t i = 0; OB_SUCC(ret) && i < exec_param_cnt; ++i) {
                     CK (OB_NOT_NULL(params[i]));
-                    OZ (exec_params.push_back(*params[i]), *params[i]);
+                    if (OB_SUCC(ret)) {
+                      ObObjParam new_param = *params[i];
+                      if (params[i]->is_pl_extend()) {
+                        if (params[i]->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+                          new_param.set_int_value(0);
+                          OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, *params[i], new_param, true));
+                        }
+                      } else {
+                        OZ (deep_copy_obj(allocator, *params[i], new_param));
+                      }
+                      OX (new_param.set_need_to_check_type(true));
+                      OZ (exec_params.push_back(new_param), new_param);
+                    }
                   }
                   LOG_INFO("execute dynamic sql using", K(ps_sql), K(exec_params));
                   OZ (GCTX.sql_engine_->handle_pl_execute(
@@ -2764,6 +2776,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             LOG_WARN("close result set failed", K(ret), K(close_ret));
           }
           ret = OB_SUCCESS == ret ? close_ret : ret;
+          spi_result.destruct_exec_params(*session);
           is_retry = true;
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
         session->get_retry_info_for_update().clear();
