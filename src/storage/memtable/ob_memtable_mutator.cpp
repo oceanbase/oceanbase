@@ -1007,11 +1007,12 @@ int ObMutatorWriter::append_table_lock_kv(
                                   redo.create_timestamp_,
                                   redo.create_schema_version_);
     int64_t tmp_pos = buf_.get_position();
+    int64_t row_capacity = row_capacity_;
     if (OB_ISNULL(buf_.get_data())) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "not init", K(ret));
     } else if (OB_FAIL(row_header.serialize(buf_.get_data(),
-                                            buf_.get_capacity(),
+                                            row_capacity,
                                             tmp_pos))) {
       if (ret == OB_ALLOCATE_MEMORY_FAILED) {
         //do nothing
@@ -1019,7 +1020,7 @@ int ObMutatorWriter::append_table_lock_kv(
         ret = OB_BUF_NOT_ENOUGH;
       }
     } else if (OB_FAIL(table_lock.serialize(buf_.get_data(),
-                                            buf_.get_capacity(),
+                                            row_capacity,
                                             tmp_pos))) {
       if (ret == OB_ALLOCATE_MEMORY_FAILED) {
         //do nothing
