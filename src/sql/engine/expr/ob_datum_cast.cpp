@@ -5492,8 +5492,14 @@ CAST_FUNC_NAME(bit, text)
         LOG_WARN("fail to store val", K(ret), K(in_val), K(length), K(buf), K(BUF_LEN), K(pos));
       } else {
         ObString str(pos, buf);
-        if (OB_FAIL(common_copy_string_to_text_result(expr, str, ctx, res_datum))) {
-          LOG_WARN("common_copy_string_to_text_result failed", K(ret));
+        ObString res_str;
+        bool has_set_res = false;
+        if (OB_FAIL(common_check_convert_string(expr, ctx, str, res_datum, has_set_res))) {
+          LOG_WARN("common_check_convert_string failed", K(ret));
+        } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
+          LOG_WARN("copy datum string with tmp allocator failed", K(ret));
+        } else if (OB_FAIL(common_string_text(expr, res_str, ctx, NULL, res_datum))) {
+          LOG_WARN("cast string to lob failed", K(ret));
         }
       }
     }
