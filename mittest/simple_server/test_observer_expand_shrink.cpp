@@ -102,6 +102,18 @@ TEST_F(ObserverExpandShink, basic_func)
                                                                 log_disk_percentage));
 }
 
+//class ObserverExpandShinkRestart: public ObSimpleClusterTestBase
+//{
+//public:
+//  ObserverExpandShinkRestart() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
+//};
+//
+//TEST_F(ObserverExpandShinkRestart, create_tenant_after_restart)
+//{
+//  EXPECT_NE(0, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+//  SERVER_LOG(INFO, "create_tenant_after_restart trace", KPC(GCTX.log_block_mgr_));
+//}
+
 TEST_F(ObserverExpandShink, direct_set_observer)
 {
   GCONF.log_disk_size = 1024 * 1024 * 1024ul * 3;
@@ -141,8 +153,63 @@ TEST_F(ObserverExpandShink, direct_set_observer)
   }
 }
 
+TEST_F(ObserverExpandShink, test_hidden_sys_tenant)
+{
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  bool remove_tenant_succ = false;
+  int64_t log_disk_size_in_use = GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_;
+  EXPECT_EQ(log_disk_size_in_use, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+
+  share::TenantUnits units;
+  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units));
+  EXPECT_EQ(false, units.empty());
+  bool has_sys_tenant = false;
+  int64_t origin_sys_log_disk_size = 0;
+  int64_t hidden_sys_log_disk_size = 0;
+  for (int i = 0; i < units.count(); i++) {
+    if (OB_SYS_TENANT_ID == units[i].tenant_id_) {
+      origin_sys_log_disk_size = units[i].config_.log_disk_size();
+      EXPECT_EQ(OB_SUCCESS, omt->convert_real_to_hidden_sys_tenant());
+    }
+  }
+
+  EXPECT_EQ(OB_SUCCESS, omt->get_tenant_units(units));
+  EXPECT_EQ(false, units.empty());
+  ObUnitInfoGetter::ObTenantConfig sys_unit_config;
+  for (int i = 0; i < units.count(); i++) {
+    if (OB_SYS_TENANT_ID == units[i].tenant_id_) {
+      hidden_sys_log_disk_size = units[i].config_.log_disk_size();
+      sys_unit_config = units[i];
+      sys_unit_config.config_.resource_.log_disk_size_ = origin_sys_log_disk_size + 512*1024*1024;
+    }
+  }
+  CLOG_LOG(INFO, "runlin trace convert_hidden_to_real_sys_tenant", K(log_disk_size_in_use), KPC(GCTX.log_block_mgr_), K(origin_sys_log_disk_size), K(hidden_sys_log_disk_size));
+
+  // 类型转换后，sys租户的unit规格可能会发生变化（隐藏sys租户的规格会被重新生成，具体逻辑参见gen_sys_tenant_unit_config）
+  EXPECT_EQ(log_disk_size_in_use-origin_sys_log_disk_size+hidden_sys_log_disk_size,
+      GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+  log_disk_size_in_use = GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_;
+  EXPECT_EQ(OB_SUCCESS, omt->convert_hidden_to_real_sys_tenant(sys_unit_config));
+  has_sys_tenant = true;
+  EXPECT_EQ(log_disk_size_in_use-hidden_sys_log_disk_size+sys_unit_config.config_.log_disk_size(),
+      GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+  log_disk_size_in_use = GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_;
+  CLOG_LOG(INFO, "runlin trace after convert_hidden_to_real_sys_tenant", K(log_disk_size_in_use), KPC(GCTX.log_block_mgr_),
+           K(origin_sys_log_disk_size));
+  int64_t new_sys_log_disk_size = 2 *1024*1024*1024l +512*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, omt->update_tenant_log_disk_size(OB_SYS_TENANT_ID, new_sys_log_disk_size));
+  EXPECT_EQ(true, has_sys_tenant);
+  EXPECT_EQ(log_disk_size_in_use-sys_unit_config.config_.log_disk_size()+new_sys_log_disk_size,
+            GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
+  CLOG_LOG(INFO, "runlin trace after convert_real_to_hidden_sys_tenant", K(log_disk_size_in_use), KPC(GCTX.log_block_mgr_),
+           K(origin_sys_log_disk_size));
+}
+
+
 TEST_F(ObserverExpandShink, paralle_set)
 {
+  omt::ObTenantNodeBalancer::get_instance().refresh_interval_ = 1000 * 1000 * 1000;
+  sleep(3);
   LOG_INFO("start to test parallel_set");
   share::ObTenantSwitchGuard tguard;
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(1));
@@ -178,23 +245,6 @@ TEST_F(ObserverExpandShink, paralle_set)
     EXPECT_EQ(OB_SUCCESS, log_service->get_palf_options(opts));
     EXPECT_EQ(opts.disk_options_.log_disk_usage_limit_size_, 1*1024*1024*1024+count1+count2);
   }
-}
-
-class ObserverExpandShinkRestart: public ObSimpleClusterTestBase
-{
-public:
-  ObserverExpandShinkRestart() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
-};
-
-TEST_F(ObserverExpandShinkRestart, observer_start)
-{
-  SERVER_LOG(INFO, "restart observer success");
-}
-
-TEST_F(ObserverExpandShinkRestart, create_tenant_after_restart)
-{
-  EXPECT_NE(0, GCTX.log_block_mgr_->min_log_disk_size_for_all_tenants_);
-  SERVER_LOG(INFO, "create_tenant_after_restart trace", KPC(GCTX.log_block_mgr_));
 }
 
 } // end unittest
