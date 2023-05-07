@@ -46,7 +46,7 @@ public:
   // choose to retry or throw an exception according to the isolation level.
   static int check_foreign_key_constraint_for_memtable(memtable::ObMvccValueIterator *value_iter,
                                                        storage::ObStoreRowLockState &lock_state);
-  static int check_foreign_key_constraint_for_sstable(const storage::ObTxTableGuard &tx_table_guard,
+  static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuard &tx_table_guard,
                                                       const transaction::ObTransID &read_trans_id,
                                                       const transaction::ObTransID &data_trans_id,
                                                       const int64_t sql_sequence,

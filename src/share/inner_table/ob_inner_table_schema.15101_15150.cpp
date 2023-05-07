@@ -1597,7 +1597,7 @@ int ObInnerTableSchema::all_virtual_lock_wait_stat_ora_schema(ObTableSchema &tab
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      512, //column_length
+      MAX_LOCK_ROWKEY_BUF_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -1760,11 +1760,11 @@ int ObInnerTableSchema::all_virtual_lock_wait_stat_ora_schema(ObTableSchema &tab
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObNumberType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      38, //column_length
-      38, //column_precision
-      0, //column_scale
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      MAX_LOCK_MODE_BUF_LENGTH, //column_length
+      2, //column_precision
+      -1, //column_scale
       false, //is_nullable
       false); //is_autoincrement
   }
@@ -1786,6 +1786,36 @@ int ObInnerTableSchema::all_virtual_lock_wait_stat_ora_schema(ObTableSchema &tab
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("TOTAL_UPDATE_CNT", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("TRANS_ID", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("HOLDER_TRANS_ID", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

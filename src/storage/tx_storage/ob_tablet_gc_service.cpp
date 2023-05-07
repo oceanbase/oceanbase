@@ -481,16 +481,8 @@ int ObTabletGCHandler::freeze_unpersist_tablet_ids(const common::ObTabletIDArray
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "tablet gc handle is not inited", KR(ret));
-  } else {
-    // freeze all tablets
-    for (int64_t i = 0; i < unpersist_tablet_ids.count() && OB_SUCC(ret); i++) {
-      if (!unpersist_tablet_ids.at(i).is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "invalid tablet_id", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids));
-      } else if (OB_FAIL(ls_->tablet_freeze(unpersist_tablet_ids.at(i), true/*is_sync*/))) {
-        STORAGE_LOG(WARN, "fail to freeze tablet", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids.at(i)));
-      }
-    }
+  } else if (OB_FAIL(ls_->batch_tablet_freeze(unpersist_tablet_ids, true/*is_sync*/))){
+    STORAGE_LOG(WARN, "fail to batch freeze tablet", KR(ret), KPC(this->ls_), K(unpersist_tablet_ids));
   }
   const int64_t end_ts = ObTimeUtility::fast_current_time();
   const int64_t cost = end_ts - start_ts;

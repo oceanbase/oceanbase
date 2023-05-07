@@ -828,7 +828,8 @@ int ObMvccRowCallback::merge_memtable_key(ObMemtableKeyArray &memtable_key_arr,
   int64_t i = 0;
   for (; i < count; i++) {
     // XXX maybe
-    if (memtable_key_arr.at(i).get_hash_val() == memtable_key.hash()) {
+    if (memtable_key_arr.at(i).get_tablet_id() == tablet_id &&
+        memtable_key_arr.at(i).get_hash_val() == memtable_key.hash()) {
       break;
     }
   }

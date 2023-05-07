@@ -41,12 +41,6 @@ void ObAllVirtualObjLock::reset()
 {
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
-  ls_id_ = share::ObLSID::INVALID_LS_ID;
-  ls_ = nullptr;
-  is_iter_tx_ = false;
-  ls_iter_guard_.reset();
-  obj_lock_iter_.reset();
-  lock_op_iter_.reset();
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -296,6 +290,26 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_varchar(lock_op_extra_info_);
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
+        case TIME_AFTER_CREATE: {
+          cur_row_.cells_[i].set_int(ObTimeUtility::current_time() - lock_op.create_timestamp_);
+          break;
+        }
+        case OBJ_TYPE: {
+          if (OB_FAIL(lock_obj_type_to_string(lock_op.lock_id_.obj_type_,
+                                              lock_obj_type_buf_,
+                                              sizeof(lock_obj_type_buf_)))) {
+            SERVER_LOG(WARN, "get lock obj type buf failed", K(ret), K(lock_op));
+          } else {
+            lock_obj_type_buf_[MAX_LOCK_OBJ_TYPE_BUF_LENGTH - 1] = '\0';
+            cur_row_.cells_[i].set_varchar(lock_obj_type_buf_);
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        }
+        case OBJ_ID: {
+          cur_row_.cells_[i].set_int(lock_op.lock_id_.obj_id_);
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

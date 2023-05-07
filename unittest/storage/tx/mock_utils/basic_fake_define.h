@@ -100,10 +100,9 @@ public:
     OZ (map_.insert(tx_data->tx_id_, tx_data));
     return ret;
   }
-  virtual int check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn) override
+  virtual int check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard) override
   {
     int ret = OB_SUCCESS;
-    ObTxDataGuard tx_data_guard;
     OZ (map_.get(tx_id, tx_data_guard));
     OZ (fn(*tx_data_guard.tx_data()));
     if (OB_ENTRY_NOT_EXIST == ret) { ret = OB_TRANS_CTX_NOT_EXIST; }

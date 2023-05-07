@@ -14,6 +14,7 @@
 #define OB_ALL_VIRTUAL_TX_LOCK_STAT_H
 
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "observer/omt/ob_multi_tenant_operator.h"
 #include "share/ob_scanner.h"
 #include "common/row/ob_row.h"
 #include "lib/container/ob_se_array.h"
@@ -42,15 +43,20 @@ class ObTxLockStat;
 
 namespace observer
 {
-class ObGVTxLockStat : public common::ObVirtualTableScannerIterator
+class ObGVTxLockStat : public common::ObVirtualTableScannerIterator,
+                       public omt::ObMultiTenantOperator
 {
 public:
-  explicit ObGVTxLockStat(transaction::ObTransService *txs) : txs_(txs) { reset(); }
-  ~ObGVTxLockStat() { destroy(); }
-  int inner_get_next_row(common::ObNewRow *&row);
-  void reset();
-  void destroy();
+  ObGVTxLockStat();
+  ~ObGVTxLockStat();
+public:
+  int inner_get_next_row(common::ObNewRow *&row) override;
+  void reset() override;
 private:
+  bool is_need_process(uint64_t tenant_id) override;
+  int process_curr_tenant(common::ObNewRow *&row) override;
+  void release_last_tenant() override;
+
   int prepare_start_to_read_();
   int get_next_tx_lock_stat_(transaction::ObTxLockStat &tx_lock_stat);
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
@@ -61,6 +67,7 @@ private:
   char memtable_key_buffer_[OB_MEMTABLE_KEY_BUFFER_SIZE];
   int output_row_(const transaction::ObTxLockStat& tx_lock_stat, ObNewRow *&row);
 private:
+  share::ObLSID ls_id_;
   transaction::ObTransService *txs_;
   transaction::ObLSIDIterator ls_id_iter_;
   transaction::ObTxLockStatIterator tx_lock_stat_iter_;

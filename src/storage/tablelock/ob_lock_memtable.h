@@ -207,6 +207,7 @@ private:
                    const share::SCN &scn);
   int post_obj_lock_conflict_(memtable::ObMvccAccessCtx &acc_ctx,
                               const ObLockID &lock_id,
+                              const ObTableLockMode &lock_mode,
                               const ObTransID &conflict_tx_id,
                               ObFunction<int(bool &need_wait)> &recheck_f);
 private:

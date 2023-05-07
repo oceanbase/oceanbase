@@ -5324,11 +5324,11 @@ int ObInnerTableSchema::all_virtual_trans_lock_stat_ora_schema(ObTableSchema &ta
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      512, //column_length
-      2, //column_precision
-      -1, //column_scale
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
       false, //is_nullable
       false); //is_autoincrement
   }
@@ -5419,7 +5419,7 @@ int ObInnerTableSchema::all_virtual_trans_lock_stat_ora_schema(ObTableSchema &ta
       512, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -5480,6 +5480,21 @@ int ObInnerTableSchema::all_virtual_trans_lock_stat_ora_schema(ObTableSchema &ta
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("TIME_AFTER_RECV", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
       false); //is_autoincrement
   }
 

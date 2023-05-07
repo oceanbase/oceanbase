@@ -70,13 +70,8 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         if (!tx_table_guard.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("tx table guard is invalid", KR(ret), K(ctx));
-        } else if (FALSE_IT(tx_table = tx_table_guard.get_tx_table())) {
-        } else if (FALSE_IT(read_epoch = tx_table_guard.epoch())) {
-        } else if (OB_FAIL(tx_table->check_row_locked(read_trans_id,
-                                                      row_header->get_trans_id(),
-                                                      sql_sequence,
-                                                      read_epoch,
-                                                      *lock_state_))) {
+        } else if (OB_FAIL(tx_table_guard.check_row_locked(
+                       read_trans_id, row_header->get_trans_id(), sql_sequence, *lock_state_))) {
         } else if (lock_state_->is_locked_) {
           lock_state_->lock_dml_flag_ = row_header->get_row_flag().get_dml_flag();
         }

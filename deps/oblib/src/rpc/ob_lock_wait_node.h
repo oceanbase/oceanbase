@@ -44,6 +44,7 @@ struct ObLockWaitNode: public common::SpHashNode
   bool is_timeout() { return common::ObTimeUtil::current_time() >= abs_timeout_; }
   void set_need_wait() { need_wait_ = true; }
   void set_standalone_task(const bool is_standalone_task) { is_standalone_task_ = is_standalone_task; }
+  void set_lock_mode(uint8_t lock_mode) { lock_mode_ = lock_mode; }
   bool is_standalone_task() const { return is_standalone_task_; }
   bool need_wait() { return need_wait_; }
   void on_retry_lock(uint64_t hash) { hold_key_ = hash; }
@@ -71,6 +72,7 @@ struct ObLockWaitNode: public common::SpHashNode
                K_(sessid),
                K_(block_sessid),
                K_(run_ts),
+               K_(lock_mode),
                K_(tx_id),
                K_(holder_tx_id),
                K_(need_wait),
@@ -93,6 +95,7 @@ struct ObLockWaitNode: public common::SpHashNode
   int64_t tx_id_;
   int64_t holder_tx_id_;
   char key_[400];
+  uint8_t lock_mode_;
   int64_t run_ts_;
   // There may be tasks that miss to wake up, called standalone tasks
   bool is_standalone_task_;

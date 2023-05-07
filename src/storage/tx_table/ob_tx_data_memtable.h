@@ -57,7 +57,11 @@ private:
   {
   public:
     // default constructer for ObSEArray
-    TxDataFakeRowKey() {}
+    TxDataFakeRowKey()
+    {
+      MEMSET(obj_array_, 0, sizeof(obj_array_));
+      rowkey_.reset();
+    }
 
     TxDataFakeRowKey(const int64_t tx_id)
     {
@@ -65,6 +69,7 @@ private:
         obj_array_[i].set_int(tx_id);
       }
       rowkey_.assign(obj_array_, OBJ_CNT);
+      rowkey_.set_min();
     }
     ~TxDataFakeRowKey() {}
 
@@ -90,14 +95,15 @@ private:
     ObObj obj_array_[OBJ_CNT];
   };
 
-  struct TxId2CntPair {
-    TxId2CntPair() : tx_id_(0), tx_data_count_(0) {}
-    TxId2CntPair(const transaction::ObTransID tx_id, const int64_t tx_data_count)
-        : tx_id_(tx_id), tx_data_count_(tx_data_count) {}
+  struct TxId2Range {
+    TxId2Range() : tx_id_(0), tx_data_count_(0), sort_list_node_(nullptr) {}
+    TxId2Range(const transaction::ObTransID tx_id, const int64_t tx_data_count, ObTxDataLinkNode *sort_list_node)
+        : tx_id_(tx_id), tx_data_count_(tx_data_count), sort_list_node_(sort_list_node) {}
     transaction::ObTransID tx_id_;
     int64_t tx_data_count_;
+    ObTxDataLinkNode *sort_list_node_;
 
-    TO_STRING_KV(K_(tx_id), K_(tx_data_count));
+    TO_STRING_KV(K_(tx_id), K_(tx_data_count), KP_(sort_list_node));
   };
 
   struct StateChangeTime {
@@ -198,7 +204,9 @@ public:  // ObTxDataMemtable
 
   int pre_process_for_merge();
 
-  int get_tx_data_cnt_by_tx_id(const transaction::ObTransID &tx_id, int64_t &tx_data_count);
+  int get_iter_start_and_count(const transaction::ObTransID &tx_id, ObTxDataLinkNode *&start_node, int64_t &iterate_row_cnt);
+
+  share::ObLSID get_ls_id() const;
 
   /**
    * @brief dump tx data memtable to file
@@ -227,7 +235,7 @@ public:  // ObTxDataMemtable
                        KP_(memtable_mgr),
                        K_(commit_versions_serialize_size),
                        K_(row_key_array),
-                       K_(tx_id_2_cnt));
+                       K_(tx_id_2_range));
 
 
 public: /* derived from ObITable */
@@ -267,15 +275,11 @@ public: /* derived from ObITable */
   virtual bool is_frozen_memtable() const { return ObTxDataMemtable::State::FROZEN == state_; }
 
 public: /* derived from ObIMemtable */
-  virtual int64_t get_occupied_size() const
-  {
-    int64_t res = 0;
-    res += (get_buckets_cnt() * sizeof(ObTxDataHashMap::ObTxDataHashHeader));
-    for (int i = 0; i < MAX_TX_DATA_TABLE_CONCURRENCY; i++) {
-      res += occupied_size_[i];
-    }
-    return res;
-  }
+  virtual int64_t get_occupied_size() const;
+  virtual int estimate_phy_size(const ObStoreRowkey *start_key,
+                                const ObStoreRowkey *end_key,
+                                int64_t &total_bytes,
+                                int64_t &total_rows) override;
 
   virtual int get_split_ranges(const ObStoreRowkey *start_key,
                                const ObStoreRowkey *end_key,
@@ -391,6 +395,7 @@ private:  // ObTxDataMemtable
 
   int insert_fake_tx_data_to_list_and_map_(ObTxData *fake_tx_data);
 
+
   int fill_in_cur_commit_versions_(ObCommitVersionsArray &cur_commit_versions);
 
   int periodical_get_next_commit_version_(ProcessCommitVersionData &process_data,
@@ -403,11 +408,12 @@ private:  // ObTxDataMemtable
                                           ObCommitVersionsArray &past_commit_versions,
                                           ObCommitVersionsArray &merged_commit_versions);
 
+
   int push_range_bounds_(const int64_t part_cnt);
 
   int prepare_array_space_(const int64_t part_cnt);
 
-  void reset_thread_local_list_();
+  int uniq_tx_id_();
 
   void init_arena_allocator_();
 
@@ -420,9 +426,6 @@ private:  // ObTxDataMemtable
                    ObTxData *&left_list,
                    ObTxData *&right_list);
 
-  ObTxDataLinkNode *quick_sort_(int64_t (*get_key)(const ObTxData &),
-                                    ObTxDataLinkNode *head);
-
   int merge_pre_process_node_(const int64_t step_len,
                               const share::SCN start_scn_limit,
                               const share::SCN recycle_scn,
@@ -434,7 +437,7 @@ private:  // ObTxDataMemtable
   int DEBUG_fake_calc_upper_trans_version(const share::SCN sstable_end_scn,
                                           share::SCN &upper_trans_version,
                                           ObCommitVersionsArray &merged_commit_versions);
-  void DEBUG_print_start_scn_list_();
+  void DEBUG_print_start_scn_list_(const char* fname);
   void DEBUG_print_merged_commit_versions_(ObCommitVersionsArray &merged_commit_versions);
   void TEST_reset_tx_data_map_();
 
@@ -493,8 +496,7 @@ private:  // ObTxDataMemtable
   // When parallel dump is enabled, the tx data sort list is splited to multiple ranges. This array map the start tx_id
   // of the range to a tx data count in the range. Then the ObTxDataMemtableScanIterator can detect how many tx data
   // need to be dumped.
-  ObSEArray<TxId2CntPair, 8> tx_id_2_cnt_;
-  int64_t DEBUG_iter_commit_ts_cnt_;
+  ObSEArray<TxId2Range, 8> tx_id_2_range_;
   share::SCN DEBUG_last_start_scn_;
 };
 

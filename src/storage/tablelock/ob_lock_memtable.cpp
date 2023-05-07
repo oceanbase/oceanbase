@@ -202,6 +202,7 @@ int ObLockMemtable::lock_(
       LOG_WARN("recheck function construct failed", K(tmp_ret));
     } else if (OB_SUCCESS != (tmp_ret = post_obj_lock_conflict_(ctx.mvcc_acc_ctx_,
                                                                 lock_op.lock_id_,
+                                                                lock_op.lock_mode_,
                                                                 *(conflict_tx_set.begin()),
                                                                 recheck_f))) {
       LOG_WARN("post obj lock conflict failed", K(tmp_ret));
@@ -318,6 +319,7 @@ int ObLockMemtable::replay_lock_(
 // wait lock at lock wait mgr.
 int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
                                             const ObLockID &lock_id,
+                                            const ObTableLockMode &lock_mode,
                                             const ObTransID &conflict_tx_id,
                                             ObFunction<int(bool &need_wait)> &recheck_f)
 {
@@ -352,6 +354,7 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
                                        -1, // total_trans_node_cnt
                                        tx_id,
                                        conflict_tx_id,
+                                       lock_mode,
                                        recheck_f);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("post_lock after tx conflict failed",

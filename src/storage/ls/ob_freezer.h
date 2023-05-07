@@ -181,6 +181,15 @@ public:
   void set_freeze_snapshot_version(const share::SCN &freeze_snapshot_version);
   share::SCN get_freeze_snapshot_version();
   int deep_copy_to(ObFreezerStat &other);
+  int begin_set_freeze_stat(const int64_t freeze_clock,
+                            const int64_t start_time,
+                            const int state,
+                            const share::SCN &freeze_snapshot_version,
+                            const ObTabletID &tablet_id,
+                            const bool is_force);
+  int end_set_freeze_stat(const int state,
+                          const int64_t end_time,
+                          const int ret_code);
 
 private:
   ObTabletID tablet_id_;
@@ -200,6 +209,7 @@ class ObFreezer
 {
 public:
   static const int64_t MAX_WAIT_READY_FOR_FLUSH_TIME = 10 * 1000 * 1000; // 10_s
+  typedef common::ObSEArray<ObTableHandleV2, OB_DEFAULT_TABLET_ID_COUNT> ObTableHandleArray;
 
 public:
   ObFreezer();
@@ -218,6 +228,7 @@ public:
   int force_tablet_freeze(const ObTabletID &tablet_id);
   int tablet_freeze_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
   int handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &tablet_id, ObTableHandleV2 &handle);
+  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result = nullptr);
 
   /* freeze_flag */
   bool is_freeze(uint32_t is_freeze=UINT32_MAX) const;
@@ -307,6 +318,11 @@ private:
   int check_ls_state(); // must be used under the protection of ls_lock
   int freeze_normal_tablet_(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
   int freeze_ls_inner_tablet_(const ObTabletID &tablet_id);
+  int batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze);
+  int submit_batch_tablet_freeze_task(const ObTableHandleArray &tables_array, ObFuture<int> *result);
+  int batch_tablet_freeze_task(ObTableHandleArray tables_array);
+  int finish_freeze_with_ls_lock(memtable::ObMemtable *memtable);
+  int try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable, bool &ready_for_flush, const int64_t start);
   void submit_checkpoint_task();
 private:
   // flag whether the logsteram is freezing

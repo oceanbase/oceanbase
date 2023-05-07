@@ -13,22 +13,38 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_DATA_FUNCTOR
 #define OCEANBASE_STORAGE_OB_TX_DATA_FUNCTOR
 
+#include "lib/function/ob_function.h"
 #include "storage/tx_table/ob_tx_table_define.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 
 namespace oceanbase
 {
 
+namespace memtable
+{
+struct ObMvccTransNode;
+struct ObMvccRow;
+};
+namespace observer
+{
+struct VirtualTxDataRow;
+}
+
 namespace storage
 {
-using ObReCheckOp = ObFunction<bool()>;
+
+class ObReCheckOp
+{
+public:
+  virtual bool operator()() = 0;
+  int64_t to_string(char* buf, const int64_t buf_len) const { return 0; }
+};
 
 // ReCheck whether tx node is valid.
 // It may be the case that the tx hasn't written any log and exists. And before
 // the tx exists, the check_with_tx_state catches the tnode and does not find
 // any ctx in tx_ctx_table and tx_data_table. So we need recheck the state to
 // prevent the incorrect error reporting
-class ObReCheckTxNodeForLockForReadOperation
+class ObReCheckTxNodeForLockForReadOperation : public ObReCheckOp
 {
 public:
   ObReCheckTxNodeForLockForReadOperation(memtable::ObMvccTransNode &tnode,
@@ -39,8 +55,8 @@ public:
     can_read_(can_read),
     is_determined_state_(is_determined_state),
     trans_version_(trans_version) {}
-  bool operator()();
-  TO_STRING_KV(K_(tnode));
+  virtual bool operator()() override;
+  DECLARE_TO_STRING;
 private:
   memtable::ObMvccTransNode &tnode_;
   bool &can_read_;
@@ -48,17 +64,23 @@ private:
   share::SCN &trans_version_;
 };
 
-class ObReCheckNothingOperation
+class ObReCheckNothingOperation : public ObReCheckOp
 {
 public:
   ObReCheckNothingOperation() {}
-  bool operator()();
+  virtual bool operator()() override;
   TO_STRING_KV("ReCheckOperation", "ReCheckNothing");
 };
 
-using ObCleanoutOp = ObFunction<int(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx)>;
+class ObCleanoutOp
+{
+public:
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) = 0;
 
-class ObCleanoutTxNodeOperation
+  int64_t to_string(char* buf, const int64_t buf_len) const { return 0; }
+};
+
+class ObCleanoutTxNodeOperation : public ObCleanoutOp
 {
 public:
   ObCleanoutTxNodeOperation(memtable::ObMvccRow &value,
@@ -67,19 +89,19 @@ public:
     : value_(value),
     tnode_(tnode),
     need_row_latch_(need_row_latch) {}
-  int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr);
-  TO_STRING_KV(K_(value), K_(tnode), K_(need_row_latch));
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
+  DECLARE_TO_STRING;
 private:
   memtable::ObMvccRow &value_;
   memtable::ObMvccTransNode &tnode_;
   bool need_row_latch_;
 };
 
-class ObCleanoutNothingOperation
+class ObCleanoutNothingOperation : public ObCleanoutOp
 {
 public:
   ObCleanoutNothingOperation() {}
-  int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr);
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   TO_STRING_KV("CleanoutOperation", "CleanoutNothing");
 };
 
@@ -161,8 +183,8 @@ public:
                      share::SCN &trans_version,
                      bool &is_determined_state,
                      const share::ObLSID ls_id,
-                     const ObCleanoutOp &cleanout_op = ObCleanoutNothingOperation(),
-                     const ObReCheckOp &recheck_op = ObReCheckNothingOperation())
+                     ObCleanoutOp &cleanout_op,
+                     ObReCheckOp &recheck_op)
     : lock_for_read_arg_(lock_for_read_arg),
       can_read_(can_read),
       is_determined_state_(is_determined_state),
@@ -186,24 +208,36 @@ public:
   share::SCN &trans_version_;
   share::ObLSID ls_id_;
   // Cleanout the tx node if necessary
-  ObCleanoutOp cleanout_op_;
+  ObCleanoutOp &cleanout_op_;
   // ReCheck whether tx node is valid.
   // It may be the case that the tx hasn't written any log and exists. And before
   // the tx exists, the check_with_tx_state catches the tnode and does not find
   // any ctx in tx_ctx_table and tx_data_table. So we need recheck the state to
   // prevent the incorrect error reporting
-  ObReCheckOp recheck_op_;
+  ObReCheckOp &recheck_op_;
 };
 
 class CleanoutTxStateFunctor : public ObITxDataCheckFunctor
 {
 public:
-  CleanoutTxStateFunctor(const ObCleanoutOp &op)
+  CleanoutTxStateFunctor(ObCleanoutOp &op)
     : operation_(op) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   TO_STRING_KV(K_(operation));
 public:
-  ObCleanoutOp operation_;
+  ObCleanoutOp &operation_;
+};
+
+class GenerateVirtualTxDataRowFunctor : public ObITxDataCheckFunctor
+{
+public:
+
+  GenerateVirtualTxDataRowFunctor(observer::VirtualTxDataRow &row_data) : row_data_(row_data) {}
+
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
+
+public:
+  observer::VirtualTxDataRow &row_data_;
 };
 
 }  // namespace storage

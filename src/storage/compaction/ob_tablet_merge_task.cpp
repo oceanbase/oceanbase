@@ -711,7 +711,7 @@ int ObTxTableMergeExecutePrepareTask::prepare_compaction_filter()
     } else if (OB_UNLIKELY(!guard.is_valid())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tx table guard is invalid", K(tmp_ret), K_(ctx_->param), K(guard));
-    } else if (OB_TMP_FAIL(guard.get_tx_table()->get_recycle_scn(recycle_scn))) {
+    } else if (OB_TMP_FAIL(guard.get_recycle_scn(recycle_scn))) {
       LOG_WARN("failed to get recycle ts", K(tmp_ret), K_(ctx_->param));
     } else if (OB_TMP_FAIL(compaction_filter->init(recycle_scn, ObTxTable::get_filter_col_idx()))) {
       LOG_WARN("failed to get init compaction filter", K(tmp_ret), K_(ctx_->param), K(recycle_scn));

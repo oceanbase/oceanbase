@@ -589,6 +589,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12366	__all_virtual_archive_dest_status	2	201001	1
 12369	__all_virtual_io_scheduler	2	201001	1
 12371	__all_virtual_external_table_file	2	201001	1
+12380	__all_virtual_tx_data	2	201001	1
 12381	__all_virtual_task_opt_stat_gather_history	2	201001	1
 12382	__all_virtual_table_opt_stat_gather_history	2	201001	1
 12383	__all_virtual_opt_stat_gather_monitor	2	201001	1
@@ -901,6 +902,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21383	V$OB_ARBITRATION_MEMBER_INFO	1	201001	1
 21387	GV$OB_ARBITRATION_SERVICE_STATUS	1	201001	1
 21388	V$OB_ARBITRATION_SERVICE_STATUS	1	201001	1
+21399	GV$OB_LOCKS	1	201001	1
+21400	V$OB_LOCKS	1	201001	1
 21401	CDB_OB_LOG_RESTORE_SOURCE	1	201001	1
 21402	DBA_OB_LOG_RESTORE_SOURCE	1	201001	1
 21404	V$OB_TIMESTAMP_SERVICE	1	201001	1

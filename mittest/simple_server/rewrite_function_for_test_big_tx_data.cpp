@@ -17,7 +17,6 @@
 int64_t TEST_TX_ID = 0;
 bool DUMP_BIG_TX_DATA = false;
 bool LOAD_BIG_TX_DATA = false;
-bool READ_TEST_TX_FROM_SSTABLE = false;
 int64_t BIGGEST_TX_DATA_SIZE = 0;
 
 namespace oceanbase
@@ -27,6 +26,47 @@ using namespace share;
 using namespace transaction;
 namespace storage
 {
+
+int ObTxDataMemtable::estimate_phy_size(const ObStoreRowkey *start_key,
+                                        const ObStoreRowkey *end_key,
+                                        int64_t &total_bytes,
+                                        int64_t &total_rows)
+{
+  int ret = OB_SUCCESS;
+  total_bytes = 134217728LL * 2LL;
+  total_rows = 1;
+  return ret;
+}
+
+int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "tx table is not init.", KR(ret), K(read_tx_data_arg));
+    return ret;
+  }
+  /**************************************************************************************************/
+  // 跳过读缓存
+  /**************************************************************************************************/
+
+  // step 3 : read tx data in tx_ctx table and tx_data table
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_tx_data_in_tables_(read_tx_data_arg, fn))) {
+    if (OB_TRANS_CTX_NOT_EXIST != ret) {
+      STORAGE_LOG(WARN, "check tx data in tables failed", KR(ret), K(ls_id_), K(read_tx_data_arg));
+    }
+  }
+
+  // step 4 : make sure tx table can be read
+  if (OB_SUCC(ret) || OB_TRANS_CTX_NOT_EXIST == ret) {
+    check_state_and_epoch_(read_tx_data_arg.tx_id_, read_tx_data_arg.read_epoch_, true /*need_log_error*/, ret);
+  }
+  return ret;
+}
+
+
 int ObTxData::add_undo_action(ObTxTable *tx_table,
                               transaction::ObUndoAction &new_undo_action,
                               ObUndoStatusNode *undo_node)
@@ -141,6 +181,7 @@ int ObTxDataMemtableScanIterator
 
 int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &tx_data)
 {
+  // fprintf(stdout, "deserialize tx data from sstable, tx_id = %ld, buffer size = %ld\n", tx_data.tx_id_.get_id(), tx_data_buffers_.count());
   int ret = OB_SUCCESS;
   int64_t total_buffer_size = 0;
   for (int64_t idx = 0; idx < tx_data_buffers_.count(); ++idx) {
@@ -169,6 +210,10 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
 /**************************************************************************************************/
     if (tx_data.tx_id_.get_id() == ATOMIC_LOAD(&TEST_TX_ID)) {
       if (tx_data_buffers_.count() > 1) {
+        fprintf(stdout,
+                "deserialize large tx data from sstable, tx_id = %ld tx_data_buffers_.count() = %ld\n",
+                tx_data.tx_id_.get_id(),
+                tx_data_buffers_.count());
         ATOMIC_STORE(&LOAD_BIG_TX_DATA, true);
         std::cout << "read big tx id from sstable, tx_id:" << ATOMIC_LOAD(&TEST_TX_ID) << ", undo cnt:" << tx_data.undo_status_list_.undo_node_cnt_ << ", buffer cnt:" << tx_data_buffers_.count() << std::endl;
       }
@@ -178,141 +223,6 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
   if (OB_NOT_NULL(merge_buffer)) {
     DEFAULT_TX_DATA_ALLOCATOR.free(merge_buffer);
   }
-  return ret;
-}
-
-int ObTxDataTable::check_with_tx_data(const ObTransID tx_id, ObITxDataCheckFunctor &fn)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "tx data table is not init.", KR(ret), KP(this), K(tx_id));
-  } else if (OB_SUCC(check_tx_data_in_memtable_(tx_id, fn))) {
-    // successfully do check function in memtable, check done
-    STORAGE_LOG(DEBUG, "tx data table check with tx memtable data succeed", K(tx_id), K(fn));
-  } else if (OB_TRANS_CTX_NOT_EXIST == ret && OB_SUCC(check_tx_data_in_sstable_(tx_id, fn))) {
-/**************************************************************************************************/
-    if (tx_id.get_id() == ATOMIC_LOAD(&TEST_TX_ID)) {
-      ATOMIC_STORE(&READ_TEST_TX_FROM_SSTABLE, true);
-    }
-/**************************************************************************************************/
-    // successfully do check function in sstable
-    STORAGE_LOG(DEBUG, "tx data table check with tx sstable data succeed", K(tx_id), K(fn));
-  } else {
-    STORAGE_LOG(WARN, "check something in tx data fail.", KR(ret), K(tx_id), KP(this),
-                K(tablet_id_));
-  }
-
-  return ret;
-}
-
-int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObTabletMergeCtx &merge_ctx)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(MINI_MERGE != merge_ctx.param_.merge_type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to init parallel mini merge", K(ret), K(merge_ctx));
-  } else {
-    const int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
-    memtable::ObIMemtable *memtable = nullptr;
-    if (OB_FAIL(merge_ctx.tables_handle_.get_first_memtable(memtable))) {
-      STORAGE_LOG(WARN, "failed to get first memtable", K(ret),
-                  "merge tables", merge_ctx.tables_handle_);
-    } else {
-      int64_t total_bytes = 0;
-      int64_t total_rows = 0;
-      int64_t mini_merge_thread = 0;
-      if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, total_bytes, total_rows))) {
-        STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
-      } else if (MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, mini_merge_thread)) {
-        STORAGE_LOG(WARN, "failed to get uplimit", K(ret), K(mini_merge_thread));
-      } else {
-        ObArray<ObStoreRange> store_ranges;
-        mini_merge_thread = MAX(mini_merge_thread, PARALLEL_MERGE_TARGET_TASK_CNT);
-/**************************************************************************************************/
-        concurrent_cnt_ = 2;
-        // concurrent_cnt_ = MIN((total_bytes + tablet_size - 1) / tablet_size, mini_merge_thread);
-/**************************************************************************************************/
-        if (concurrent_cnt_ <= 1) {
-          if (OB_FAIL(init_serial_merge())) {
-            STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
-          }
-        } else if (OB_FAIL(memtable->get_split_ranges(nullptr, nullptr, concurrent_cnt_, store_ranges))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            if (OB_FAIL(init_serial_merge())) {
-              STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
-            }
-          } else {
-            STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
-          }
-        } else if (OB_UNLIKELY(store_ranges.count() != concurrent_cnt_)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexpected range array and concurrent_cnt", K(ret), K_(concurrent_cnt),
-                      K(store_ranges));
-        } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < store_ranges.count(); i++) {
-            ObDatumRange datum_range;
-            if (OB_FAIL(datum_range.from_range(store_ranges.at(i), allocator_))) {
-              STORAGE_LOG(WARN, "Failed to transfer store range to datum range", K(ret), K(i), K(store_ranges.at(i)));
-            } else if (OB_FAIL(range_array_.push_back(datum_range))) {
-              STORAGE_LOG(WARN, "Failed to push back merge range to array", K(ret), K(datum_range));
-            }
-          }
-          parallel_type_ = PARALLEL_MINI;
-          STORAGE_LOG(INFO, "Succ to get parallel mini merge ranges", K_(concurrent_cnt), K_(range_array));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObParallelMergeCtx::init(compaction::ObTabletMergeCtx &merge_ctx)
-{
-  int ret = OB_SUCCESS;
-
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "ObParallelMergeCtx init twice", K(ret));
-  } else if (OB_UNLIKELY(nullptr == merge_ctx.get_schema() || merge_ctx.tables_handle_.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument to init parallel merge", K(ret), K(merge_ctx));
-  } else {
-    int64_t tablet_size = merge_ctx.get_schema()->get_tablet_size();
-/**************************************************************************************************/
-    bool enable_parallel_minor_merge = true;
-    // bool enable_parallel_minor_merge = false;
-    // {
-    //   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    //   if (tenant_config.is_valid()) {
-    //     enable_parallel_minor_merge = tenant_config->_enable_parallel_minor_merge;
-    //   }
-    // }
-/**************************************************************************************************/
-    if (enable_parallel_minor_merge && tablet_size > 0 && is_mini_merge(merge_ctx.param_.merge_type_)) {
-      if (OB_FAIL(init_parallel_mini_merge(merge_ctx))) {
-        STORAGE_LOG(WARN, "Failed to init parallel setting for mini merge", K(ret));
-      }
-    } else if (enable_parallel_minor_merge && tablet_size > 0 && is_minor_merge(merge_ctx.param_.merge_type_)) {
-      if (OB_FAIL(init_parallel_mini_minor_merge(merge_ctx))) {
-        STORAGE_LOG(WARN, "Failed to init parallel setting for mini minor merge", K(ret));
-      }
-    } else if (tablet_size > 0 && is_major_merge_type(merge_ctx.param_.merge_type_)) {
-      if (OB_FAIL(init_parallel_major_merge(merge_ctx))) {
-        STORAGE_LOG(WARN, "Failed to init parallel major merge", K(ret));
-      }
-    } else if (OB_FAIL(init_serial_merge())) {
-      STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
-      STORAGE_LOG(INFO, "Succ to init parallel merge ctx",
-          K(enable_parallel_minor_merge), K(tablet_size), K(merge_ctx.param_));
-    }
-  }
-
   return ret;
 }
 

@@ -43,6 +43,7 @@ private:
   int get_next_ls(ObLS *&ls);
   int get_next_obj_lock_or_iter_tx(ObLockID &lock_id);
   int get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op);
+
 private:
   enum
   {
@@ -60,6 +61,9 @@ private:
     CREATE_TIMESTAMP,
     CREATE_SCHEMA_VERSION,
     EXTRA_INFO,
+    TIME_AFTER_CREATE,
+    OBJ_TYPE,
+    OBJ_ID
   };
 private:
   common::ObAddr addr_;
@@ -75,6 +79,7 @@ private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   char lock_id_buf_[common::MAX_LOCK_ID_BUF_LENGTH];
   char lock_mode_buf_[common::MAX_LOCK_MODE_BUF_LENGTH];
+  char lock_obj_type_buf_[common::MAX_LOCK_OBJ_TYPE_BUF_LENGTH];
   char lock_op_type_buf_[common::MAX_LOCK_OP_TYPE_BUF_LENGTH];
   char lock_op_status_buf_[common::MAX_LOCK_OP_STATUS_BUF_LENGTH];
   char lock_op_extra_info_[common::MAX_LOCK_OP_EXTRA_INFO_LENGTH];

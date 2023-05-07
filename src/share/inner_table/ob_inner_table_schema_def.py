@@ -7511,19 +7511,21 @@ def_table_schema(
   rowkey_columns = [
   ],
 
+  in_tenant_space = True,
   normal_columns = [
   ('tenant_id', 'int'),
-  ('trans_id', 'varchar:512'),
+  ('trans_id', 'int'),
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
   ('svr_port', 'int'),
   ('ls_id', 'int'),
   ('table_id', 'int'),
   ('tablet_id', 'int'),
-  ('rowkey', 'varchar:512'),
+  ('rowkey', 'varchar:512', 'true'),
   ('session_id', 'int'),
   ('proxy_session_id', 'varchar:512'),
   ('ctx_create_time', 'timestamp', 'true'),
   ('expired_time', 'timestamp', 'true'),
+  ('time_after_recv', 'int'),
   ('row_lock_addr', 'uint', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
@@ -8376,7 +8378,7 @@ def_table_schema(
   table_id = '12013',
   table_type = 'VIRTUAL_TABLE',
   gm_columns = [],
-  in_tenant_space = False,
+  in_tenant_space = True,
   rowkey_columns = [
   ],
 
@@ -8385,7 +8387,7 @@ def_table_schema(
   ('svr_port', 'int'),
   ('tenant_id', 'int'),
   ('tablet_id', 'int'),
-  ('rowkey', 'varchar:512'),
+  ('rowkey', 'varchar:MAX_LOCK_ROWKEY_BUF_LENGTH'),
   ('addr', 'uint'),
   ('need_wait', 'bool'),
   ('recv_ts', 'int'),
@@ -8395,10 +8397,12 @@ def_table_schema(
   ('time_after_recv', 'int'),
   ('session_id', 'int'),
   ('block_session_id', 'int'),
-  ('type', 'int'),# 0 for ROW_LOCK
-  ('lock_mode', 'int'), # 0 for write lock
+  ('type', 'int'),
+  ('lock_mode', 'varchar:MAX_LOCK_MODE_BUF_LENGTH'),
   ('last_compact_cnt', 'int'),
-  ('total_update_cnt', 'int')
+  ('total_update_cnt', 'int'),
+  ('trans_id', 'int'),
+  ('holder_trans_id', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -10649,6 +10653,7 @@ def_table_schema(
   rowkey_columns = [
   ],
 
+  in_tenant_space = True,
   normal_columns = [
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
   ('svr_port', 'int'),
@@ -10664,6 +10669,9 @@ def_table_schema(
   ('create_timestamp', 'int'),
   ('create_schema_version', 'int'),
   ('extra_info', 'varchar:MAX_LOCK_OP_EXTRA_INFO_LENGTH'),
+  ('time_after_create', 'int'),
+  ('obj_type', 'varchar:MAX_LOCK_OBJ_TYPE_BUF_LENGTH'),
+  ('obj_id', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -11591,7 +11599,31 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12377: __all_virtual_dup_ls_follower_lease_info
 # 12378: __all_virtual_dup_ls_tablet_set
 # 12379: __all_virtual_dup_ls_tablets
-# 12380: __all_virtual_tx_data
+
+def_table_schema(
+  owner = 'gengli.wzy',
+  table_name     = '__all_virtual_tx_data',
+  table_id       = '12380',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ('tenant_id', 'int'),
+  ('ls_id', 'int'),
+  ('tx_id', 'int'),
+  ],
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('state', 'varchar:MAX_TX_DATA_STATE_LENGTH'),
+  ('start_scn', 'uint'),
+  ('end_scn', 'uint'),
+  ('commit_version', 'uint'),
+  ('undo_status', 'varchar:MAX_UNDO_LIST_CHAR_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12381',
@@ -12082,14 +12114,15 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304'
 # 15302: __all_virtual_wr_sysstat
 # 15303: __all_virtual_arbitration_member_info
 # 15304: __all_virtual_arbitration_service_status
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
+
 # 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
 
-# 15305: __all_virtual_obj_lock
 
 # [15306, 15375] for oracle inner_table index
 
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keywords['__all_virtual_log_restore_source']))
-# 15305: __all_virtual_obj_lock
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
@@ -26558,8 +26591,151 @@ def_table_schema(
 # 21396: CDB_WR_SYSSTAT
 # 21397: GV$OB_KV_CONNECTIONS
 # 21398: V$OB_KV_CONNECTIONS
-# 21399: GV$OB_LOCKS
-# 21400: V$OB_LOCKS
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  table_name      = 'GV$OB_LOCKS',
+  table_id        = '21399',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    TRANS_ID AS TRANS_ID,
+    CASE TYPE WHEN 1 THEN 'TR'
+              WHEN 2 THEN 'TX'
+              WHEN 3 THEN 'TM'
+              ELSE 'UNDEFINED' END
+    AS TYPE,
+    CASE TYPE WHEN 1 THEN TABLET_ID
+              WHEN 2 THEN HOLDER_TRANS_ID
+              WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM oceanbase.__ALL_VIRTUAL_OBJ_LOCK WHERE oceanbase.__ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+              ELSE -1 END
+    AS ID1,
+    CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+              WHEN 2 THEN NULL
+              WHEN 3 THEN NULL
+              ELSE 'ERROR' END
+    AS ID2,
+    'NONE' AS LMODE,
+    LOCK_MODE AS REQUEST,
+    TIME_AFTER_RECV AS CTIME,
+    1 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT
+
+    UNION ALL
+
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    TRANS_ID AS TRANS_ID,
+    'TX' AS TYPE,
+    HOLDER_TRANS_ID AS ID1,
+    NULL AS ID2,
+    'NONE' AS LMODE,
+    LOCK_MODE AS REQUEST,
+    TIME_AFTER_RECV AS CTIME,
+    1 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT
+    WHERE TYPE = 1
+
+    UNION ALL
+
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    TRANS_ID AS TRANS_ID,
+    'TR' AS TYPE,
+    TABLET_ID AS ID1,
+    CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY) AS ID2,
+    'NONE' AS LMODE,
+    LOCK_MODE AS REQUEST,
+    TIME_AFTER_RECV AS CTIME,
+    1 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_LOCK_WAIT_STAT
+    WHERE TYPE = 2
+
+    UNION ALL
+
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    TRANS_ID AS TRANS_ID,
+    'TR' AS TYPE,
+    TABLET_ID AS ID1,
+    CONCAT(CONCAT(TRANS_ID, '-'), ROWKEY) AS ID2,
+    'X' AS LMODE,
+    'NONE' AS REQUEST,
+    TIME_AFTER_RECV AS CTIME,
+    0 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_TRANS_LOCK_STAT
+    WHERE ROWKEY IS NOT NULL AND ROWKEY <> ''
+
+    UNION ALL
+
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    TRANS_ID AS TRANS_ID,
+    'TX' AS TYPE,
+    TRANS_ID AS ID1,
+    NULL AS ID2,
+    'X' AS LMODE,
+    'NONE' AS REQUEST,
+    MIN(TIME_AFTER_RECV) AS CTIME,
+    0 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_TRANS_LOCK_STAT
+    GROUP BY (TRANS_ID)
+
+    UNION ALL
+
+    SELECT
+    SVR_IP AS SVR_IP,
+    SVR_PORT AS SVR_PORT,
+    TENANT_ID AS TENANT_ID,
+    CREATE_TRANS_ID AS TRANS_ID,
+    'TM' AS TYPE,
+    OBJ_ID AS ID1,
+    NULL AS ID2,
+    LOCK_MODE AS LMODE,
+    'NONE' AS REQUEST,
+    TIME_AFTER_CREATE AS CTIME,
+    0 AS BLOCK
+    FROM
+    oceanbase.__ALL_VIRTUAL_OBJ_LOCK
+    WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+""".replace("\n", " ")
+)
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  table_name      = 'V$OB_LOCKS',
+  table_id        = '21400',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT *
+    FROM oceanbase.GV$OB_LOCKS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " ")
+)
+
 # 21401: CDB_OB_LOG_RESTORE_SOURCE
 # 21402: DBA_OB_LOG_RESTORE_SOURCE
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
@@ -50364,9 +50540,158 @@ def_table_schema(
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
+
 # 28178:  DBA_OB_LS_LOG_RESTORE_STAT
-# 28179:  GV$OB_LOCKS
-# 28180:  V$OB_LOCKS
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  table_name      = 'GV$OB_LOCKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28179',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  TRANS_ID AS TRANS_ID,
+  CASE TYPE WHEN 1 THEN 'TR'
+            WHEN 2 THEN 'TX'
+            WHEN 3 THEN 'TM'
+            ELSE 'UNDEFINED' END
+  AS TYPE,
+  CASE TYPE WHEN 1 THEN TABLET_ID
+            WHEN 2 THEN HOLDER_TRANS_ID
+            WHEN 3 THEN (SELECT DISTINCT OBJ_ID FROM SYS.ALL_VIRTUAL_OBJ_LOCK WHERE SYS.ALL_VIRTUAL_OBJ_LOCK.LOCK_ID = SYS.ALL_VIRTUAL_LOCK_WAIT_STAT.ROWKEY)
+            ELSE -1 END
+  AS ID1,
+  CASE TYPE WHEN 1 THEN CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY)
+            WHEN 2 THEN NULL
+            WHEN 3 THEN NULL
+            ELSE 'ERROR' END
+  AS ID2,
+  'NONE' AS LMODE,
+  LOCK_MODE AS REQUEST,
+  TIME_AFTER_RECV AS CTIME,
+  1 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
+
+UNION ALL
+
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  TRANS_ID AS TRANS_ID,
+  'TX' AS TYPE,
+  HOLDER_TRANS_ID AS ID1,
+  NULL AS ID2,
+  'NONE' AS LMODE,
+  LOCK_MODE AS REQUEST,
+  TIME_AFTER_RECV AS CTIME,
+  1 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
+WHERE TYPE = 1
+
+UNION ALL
+
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  TRANS_ID AS TRANS_ID,
+  'TR' AS TYPE,
+  TABLET_ID AS ID1,
+  CONCAT(CONCAT(HOLDER_TRANS_ID, '-'), ROWKEY) AS ID2,
+  'NONE' AS LMODE,
+  LOCK_MODE AS REQUEST,
+  TIME_AFTER_RECV AS CTIME,
+  1 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_LOCK_WAIT_STAT
+WHERE TYPE = 2
+
+UNION ALL
+
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  TRANS_ID AS TRANS_ID,
+  'TR' AS TYPE,
+  TABLET_ID AS ID1,
+  CONCAT(CONCAT(TRANS_ID, '-'), ROWKEY) AS ID2,
+  'X' AS LMODE,
+  'NONE' AS REQUEST,
+  TIME_AFTER_RECV AS CTIME,
+  0 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_TRANS_LOCK_STAT
+WHERE ROWKEY IS NOT NULL AND ROWKEY <> ''
+
+UNION ALL
+
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  TRANS_ID AS TRANS_ID,
+  'TX' AS TYPE,
+  TRANS_ID AS ID1,
+  NULL AS ID2,
+  'X' AS LMODE,
+  'NONE' AS REQUEST,
+  MIN(TIME_AFTER_RECV) AS CTIME,
+  0 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_TRANS_LOCK_STAT
+GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
+
+UNION ALL
+
+SELECT
+  SVR_IP AS SVR_IP,
+  SVR_PORT AS SVR_PORT,
+  TENANT_ID AS TENANT_ID,
+  CREATE_TRANS_ID AS TRANS_ID,
+  'TM' AS TYPE,
+  OBJ_ID AS ID1,
+  NULL AS ID2,
+  LOCK_MODE AS LMODE,
+  'NONE' AS REQUEST,
+  TIME_AFTER_CREATE AS CTIME,
+  0 AS BLOCK
+FROM
+  SYS.ALL_VIRTUAL_OBJ_LOCK
+WHERE (OBJ_TYPE = 'TABLE' OR OBJ_TYPE = 'TABLET') AND EXTRA_INFO LIKE '%tx_ctx%'
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'yangyifei.yyf',
+  table_name      = 'V$OB_LOCKS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28180',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT *
+    FROM SYS.GV$OB_LOCKS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
 def_table_schema(
   owner           = 'zhaoyongheng.zyh',
   table_name      = 'DBA_OB_ACCESS_POINT',
@@ -50410,8 +50735,6 @@ def_table_schema(
     FROM SYS.ALL_VIRTUAL_DATA_DICTIONARY_IN_LOG_REAL_AGENT
   """.replace("\n", " "),
 )
-# 28181:  DBA_OB_ACCESS_POINT
-# 28182:  DBA_OB_DATA_DICTIONARY_IN_LOG
 
 def_table_schema(
     owner = 'jiangxiu.wt',

@@ -636,25 +636,32 @@ public:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
   // ObFreezer interface:
-  // @param [in] result, only used for wait_freeze_finished()
-  // int logstream_freeze(ObFuture<int> *result = nullptr);
+  // @param [in] is_sync
+  // int logstream_freeze(const bool is_sync = false);
   // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
-  int logstream_freeze(bool is_sync = false);
+  int logstream_freeze(const bool is_sync = false);
   // tablet freeze
   // @param [in] tablet_id
-  // @param [in] result, only used for wait_freeze_finished()
-  // int tablet_freeze(const ObTabletID &tablet_id, ObFuture<int> *result = nullptr);
+  // @param [in] is_sync
+  // int tablet_freeze(const ObTabletID &tablet_id, const bool is_sync = false);
   // DELEGATE_WITH_RET(ls_freezer_, tablet_freeze, int);
-  int tablet_freeze(const ObTabletID &tablet_id, bool is_sync = false);
+  int tablet_freeze(const ObTabletID &tablet_id, const bool is_sync = false);
   // force freeze tablet
   // @param [in] tablet_id
   // int force_tablet_freeze(const ObTabletID &tablet_id);
   // DELEGATE_WITH_RET(ls_freezer_, force_tablet_freeze, int);
   int force_tablet_freeze(const ObTabletID &tablet_id);
+  // batch tablet freeze
+  // @param [in] tablet_ids
+  // @param [in] is_sync
+  // int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync = false);
+  // DELEGATE_WITH_RET(ls_freezer_, batch_tablet_freeze, int);
+  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync = false);
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
+  DELEGATE_WITH_RET(tx_table_, generate_virtual_tx_data_row, int);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
 
   // ObCheckpointExecutor interface:

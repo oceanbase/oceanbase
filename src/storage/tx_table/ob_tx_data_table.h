@@ -19,6 +19,7 @@
 #include "storage/tx_table/ob_tx_data_memtable_mgr.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "share/ob_occam_timer.h"
+
 namespace oceanbase
 {
 
@@ -126,6 +127,7 @@ public:  // ObTxDataTable
   ObTxDataTable()
     : is_inited_(false),
       is_started_(false),
+      ls_id_(),
       tablet_id_(0),
       slice_allocator_(),
       arena_allocator_(),
@@ -193,7 +195,7 @@ public:  // ObTxDataTable
    * @param[in] tx_id the tx id of the transaction to be checked
    * @param[in] fn the functor which is dealt with tx data
    */
-  virtual int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
+  virtual int check_with_tx_data(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
 
   /**
    * @brief See ObTxTable::get_recycle_scn
@@ -229,6 +231,7 @@ public:  // ObTxDataTable
   TO_STRING_KV(KP(this),
                K_(is_inited),
                K_(is_started),
+               K_(ls_id),
                K_(tablet_id),
                K_(calc_upper_info),
                K_(memtables_cache),
@@ -257,11 +260,13 @@ private:
 
   int register_clean_cache_task_();
 
-  int check_tx_data_in_memtable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
-  int check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
+  int check_tx_data_in_memtable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
+
+  int check_tx_data_with_cache_once_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
+
   int get_tx_data_from_cache_(const transaction::ObTransID tx_id, ObTxDataGuard &tx_data_guard, bool &find);
 
-  int check_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn);
+  int check_tx_data_in_sstable_(const transaction::ObTransID tx_id, ObITxDataCheckFunctor &fn, ObTxDataGuard &tx_data_guard);
 
   int get_tx_data_in_cache_(const transaction::ObTransID tx_id, ObTxData *&tx_data);
 
@@ -322,6 +327,7 @@ private:
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
+  share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   // Allocator to allocate ObTxData and ObUndoStatus
   SliceAllocator slice_allocator_;

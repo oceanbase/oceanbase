@@ -47,7 +47,7 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccValueI
   return ret;
 }
 
-int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(const ObTxTableGuard &tx_table_guard,
+int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuard &tx_table_guard,
                                                                    const ObTransID &read_trans_id,
                                                                    const ObTransID &data_trans_id,
                                                                    const int64_t sql_sequence,
@@ -68,10 +68,8 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(const ObTxTab
     if (!tx_table_guard.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "tx table guard is invalid", KR(ret));
-    } else if (FALSE_IT(tx_table = tx_table_guard.get_tx_table())) {
-    } else if (FALSE_IT(read_epoch = tx_table_guard.epoch())) {
-    } else if (OB_FAIL(tx_table->check_row_locked(
-                        read_trans_id, data_trans_id, sql_sequence, read_epoch, lock_state))){
+    } else if (OB_FAIL(tx_table_guard.check_row_locked(
+                        read_trans_id, data_trans_id, sql_sequence, lock_state))){
       TRANS_LOG(WARN, "check row locked fail", K(ret), K(read_trans_id), K(data_trans_id), K(sql_sequence), K(read_epoch), K(lock_state));
     }
     if (lock_state.is_locked_ && read_trans_id != lock_state.lock_trans_id_) {
@@ -136,9 +134,8 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
       if (lock_state.is_delayed_cleanout_) {
         auto lock_data_sequence = lock_state.lock_data_sequence_;
         auto &tx_table_guard = acc_ctx.get_tx_table_guard();
-        int64_t read_epoch = tx_table_guard.epoch();
-        if (OB_FAIL(tx_table_guard.get_tx_table()->check_row_locked(
-                tx_id, conflict_tx_id, lock_data_sequence, read_epoch, lock_state))) {
+        if (OB_FAIL(tx_table_guard.check_row_locked(
+                tx_id, conflict_tx_id, lock_data_sequence, lock_state))) {
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {

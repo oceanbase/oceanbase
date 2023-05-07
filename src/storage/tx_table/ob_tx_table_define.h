@@ -31,16 +31,8 @@ static_assert(MAX_TX_CTX_TABLE_VALUE_LENGTH > 0, "MAX_TX_CTX_TABLE_VALUE_LENGTH 
 
 
 struct TxDataDefaultAllocator : public ObIAllocator {
-  void *alloc(const int64_t size) override {
-    common::ObMemAttr attr;
-    attr.tenant_id_ = MTL_ID();
-    attr.label_ = "TxData";
-    if (size <= 0) {
-      abort();
-    }
-    return ob_malloc(size, attr);
-  }
-  void* alloc(const int64_t size, const ObMemAttr &attr) override { return ob_malloc(size, attr); }
+  void *alloc(const int64_t size) override;
+  void *alloc(const int64_t size, const ObMemAttr &attr) override { return ob_malloc(size, attr); }
   void free(void *ptr) override { ob_free(ptr); }
   static TxDataDefaultAllocator &get_default_allocator() {
     static TxDataDefaultAllocator default_allocator;

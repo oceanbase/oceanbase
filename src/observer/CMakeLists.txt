@@ -298,6 +298,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tx_scheduler_stat.cpp
   virtual_table/ob_all_virtual_tx_ctx_mgr_stat.cpp
   virtual_table/ob_all_virtual_tx_data_table.cpp
+  virtual_table/ob_all_virtual_tx_data.cpp
   virtual_table/ob_all_virtual_weak_read_stat.cpp
   virtual_table/ob_all_virtual_log_stat.cpp
   virtual_table/ob_all_virtual_arbitration_member_info.cpp

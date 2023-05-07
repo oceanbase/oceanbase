@@ -17,15 +17,58 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
+#include "storage/compaction/ob_compaction_diagnose.h"
+#include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx/ob_tx_data_functor.h"
 #include "storage/tablet/ob_tablet.h"
 
+enum EnumTestMode : uint32_t
+{
+  NORMAL_TEST = 0,
+  BIANQUE_TEST = 1,
+  MAX_TEST_MODE
+};
+
+enum EnumDataMode : uint32_t
+{
+  ALL_CLEANOUT = 0,
+  ALL_SAME_TXN_DELAY_CLEANOUT = 1,
+  ALL_DIFF_TXN_DELAY_CLEANOUT = 2,
+  MAX_DATA_MODE
+};
+
+enum EnumDataLocation : uint32_t
+{
+  DATA_IN_MEMORY = 0,
+  DATA_ON_DISK = 1,
+  MAX_DATA_LOCATION
+};
+
+enum EnumTxTableMode : uint32_t
+{
+  ALL_IN_MEMORY = 0,
+  ALL_IN_DISK = 1,
+  MAX_TX_TABLE_MODE
+};
+
 static const char *TEST_FILE_NAME = "fast_commit_report";
-const int64_t TOTAL_FC_ROW_COUNT = 1000000;
-const int64_t TOTAL_FC_SESSION = 10;
-const int64_t PAINTING_FC_ROW_COUNT = 10000;
+const int64_t DEFAULT_TOTAL_FC_ROW_COUNT = 100000;
+const int64_t DEFAULT_TOTAL_FC_SESSION = 10;
+const int64_t DEFAULT_PAINTING_FC_ROW_COUNT = 10000;
+EnumTestMode TEST_MODE = EnumTestMode::NORMAL_TEST;
+EnumDataMode DATA_MODE = EnumDataMode::ALL_CLEANOUT;
+EnumDataLocation DATA_LOCATION = EnumDataLocation::DATA_IN_MEMORY;
+EnumTxTableMode TX_TABLE_MODE = EnumTxTableMode::ALL_IN_MEMORY;
+int64_t TOTAL_FC_ROW_COUNT = DEFAULT_TOTAL_FC_ROW_COUNT;
+int64_t TOTAL_FC_SESSION = DEFAULT_TOTAL_FC_SESSION;
+int64_t TOTAL_READ_TIME = 0;
+int64_t READ_CNT = 0;
+int64_t SELECT_PARALLEL= 1;
+int64_t SLEEP_SECONDS = 0;
+
 
 namespace oceanbase
 {
@@ -45,6 +88,8 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       bool is_lock_node = false;
       if (NULL == version_iter_) {
         ret = OB_ITER_END;
+      } else if (EnumDataMode::ALL_CLEANOUT == DATA_MODE && OB_FAIL(try_cleanout_tx_node_(version_iter_))) {
+        TRANS_LOG(WARN, "fail to cleanout tnode", K(ret), K(*version_iter_));
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version
@@ -55,6 +100,50 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       }
 
       move_to_next_node_();
+    }
+  }
+
+  return ret;
+}
+
+
+int ObMemtable::flush(share::ObLSID ls_id)
+{
+  if (EnumDataLocation::DATA_IN_MEMORY == DATA_LOCATION) {
+    return OB_EAGAIN;
+  }
+  int ret = OB_SUCCESS;
+
+  int64_t cur_time = ObTimeUtility::current_time();
+  if (is_flushed_) {
+    ret = OB_NO_NEED_UPDATE;
+  } else {
+    if (mt_stat_.create_flush_dag_time_ == 0 &&
+        mt_stat_.ready_for_flush_time_ != 0 &&
+        cur_time - mt_stat_.ready_for_flush_time_ > 30 * 1000 * 1000) {
+      STORAGE_LOG(WARN, "memtable can not create dag successfully for long time",
+                K(ls_id), K(*this), K(mt_stat_.ready_for_flush_time_));
+      compaction::ADD_SUSPECT_INFO(MINI_MERGE,
+                       ls_id, get_tablet_id(),
+                       "memtable can not create dag successfully",
+                       "has been ready for flush time:",
+                       cur_time - mt_stat_.ready_for_flush_time_,
+                       "ready for flush time:",
+                       mt_stat_.ready_for_flush_time_);
+    }
+    compaction::ObTabletMergeDagParam param;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = key_.tablet_id_;
+    param.merge_type_ = MINI_MERGE;
+    param.merge_version_ = ObVersion::MIN_VERSION;
+
+    if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tablet_merge_dag(param))) {
+      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
+        TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
+      }
+    } else {
+      mt_stat_.create_flush_dag_time_ = cur_time;
+      TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
     }
   }
 
@@ -104,36 +193,10 @@ int LockForReadFunctor::operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx
 
 namespace unittest
 {
-
 using namespace oceanbase::transaction;
 using namespace oceanbase::storage;
 using namespace oceanbase::memtable;
 using namespace oceanbase::storage::checkpoint;
-
-enum FastCommitTestMode : int
-{
-  NORMAL_TEST = 0,
-  BIANQUE_TEST = 1
-};
-
-enum FastCommitReportDataMode : int
-{
-  ALL_CLEANOUT = 0,
-  ALL_SAME_TXN_DELAY_CLEANOUT = 1,
-  ALL_DIFF_TXN_DELAY_CLEANOUT = 2
-};
-
-enum FastCommitReportTxTableMode : int
-{
-  ALL_IN_MEMORY = 0,
-  ALL_IN_DISK = 1
-};
-
-FastCommitTestMode fast_commit_test_mode = FastCommitTestMode::NORMAL_TEST;
-FastCommitReportDataMode fast_commit_data_mode = FastCommitReportDataMode::ALL_CLEANOUT;
-FastCommitReportTxTableMode fast_commit_tx_table_mode = FastCommitReportTxTableMode::ALL_IN_MEMORY;
-int64_t total_fc_row_count = TOTAL_FC_ROW_COUNT;
-int64_t total_fc_session = TOTAL_FC_SESSION;
 
 #define EXE_SQL(sql_str)                                            \
   ASSERT_EQ(OB_SUCCESS, sql.assign(sql_str));                       \
@@ -170,6 +233,10 @@ public:
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_trx_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_trx_idle_timeout = 10000000000");
     WRITE_SQL_BY_CONN(connection, "set GLOBAL ob_query_timeout = 10000000000");
+    WRITE_SQL_BY_CONN(connection, "alter system set enable_early_lock_release = False;");
+    WRITE_SQL_BY_CONN(connection, "alter system set undo_retention = 1800;");
+    WRITE_SQL_BY_CONN(connection, "alter system set enable_perf_event = true;");
+    sleep(5);
   }
 
   void set_private_buffer_size(const char* size)
@@ -186,23 +253,6 @@ public:
     int64_t affected_rows = 0;
     ObSqlString sql;
     EXE_SQL_FMT("alter system set _fast_commit_callback_count = %ld;", count);
-  }
-
-  void set_memstore_limit()
-  {
-    common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
-    int64_t affected_rows = 0;
-    ObSqlString sql;
-    EXE_SQL("alter system set memstore_limit_percentage = 80;");
-  }
-
-  void set_freeze_trigger()
-  {
-    common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-    int64_t affected_rows = 0;
-    ObSqlString sql;
-    EXE_SQL("alter system set writing_throttling_trigger_percentage = 100;");
-    EXE_SQL("alter system set freeze_trigger_percentage = 80;");
   }
 
   void create_test_tenant(uint64_t &tenant_id)
@@ -235,6 +285,46 @@ public:
     }
 
     tablet = (uint64_t)tablet_id;
+  }
+
+  void minor_freeze_data_and_wait()
+  {
+    common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy();
+    sqlclient::ObISQLConnection *connection = nullptr;
+    ASSERT_EQ(OB_SUCCESS, sql_proxy.acquire(connection));
+
+    int ret = OB_SUCCESS;
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+
+    WRITE_SQL_BY_CONN(connection, "alter system minor freeze tenant all;");
+    fprintf(stdout, "start flush user data\n");
+    sleep(10);
+
+    int retry_times = 0;
+    bool freeze_success = false;
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      int64_t cnt = -1;
+      while (++retry_times <= 600) {
+        ASSERT_EQ(OB_SUCCESS,
+                  connection->execute_read(OB_SYS_TENANT_ID,
+                                           "select count(*) as cnt from oceanbase.__all_virtual_table_mgr where "
+                                           "table_type=0 and is_active like '%NO%';",
+                                           res));
+        common::sqlclient::ObMySQLResult *result = res.mysql_result();
+        ASSERT_EQ(OB_SUCCESS, result->next());
+        ASSERT_EQ(OB_SUCCESS, result->get_int("cnt", cnt));
+        if (0 == cnt) {
+          freeze_success = true;
+          break;
+        }
+      }
+      fprintf(stdout, "waitting for data minor merge. retry times = %d\n", retry_times);
+      sleep(1);
+    }
+
+    ASSERT_EQ(true, freeze_success);
   }
 
   void check_no_minor_freeze()
@@ -287,8 +377,10 @@ public:
     ASSERT_EQ(OB_SUCCESS, tablet->get_active_memtable(handle));
   }
 
-  void insert_data_single(const int row_count = oceanbase::unittest::total_fc_row_count)
+  void insert_data_single(const int row_count)
   {
+    fprintf(stdout, "start insert data, data count : %d \n", row_count);
+
     ObSqlString sql;
     int64_t affected_rows = 0;
 
@@ -304,45 +396,58 @@ public:
     TRANS_LOG(INFO, "insert data start");
     const int64_t begin_time = ObTimeUtility::current_time();
 
-    if (FastCommitReportDataMode::ALL_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+    if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
       WRITE_SQL_BY_CONN(connection, "begin;");
-    } else if (FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+    } else if (EnumDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == DATA_MODE) {
       WRITE_SQL_BY_CONN(connection, "begin;");
-    } else if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+    } else if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
       // pass
     }
+
     for (int i = 0; i < row_count; i++) {
-      if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+      if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
         WRITE_SQL_BY_CONN(connection, "begin;");
       }
       // const int64_t single_begin_time = ObTimeUtility::current_time();
       WRITE_SQL_FMT_BY_CONN(connection, "insert into test_fast_commit values(1);");
-      if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+      if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
         WRITE_SQL_BY_CONN(connection, "commit;");
       }
       // const int64_t single_end_time = ObTimeUtility::current_time();
       // TRANS_LOG(INFO, "single insert data single cost", K(single_end_time - single_begin_time));
-      if ((i + 1) % PAINTING_FC_ROW_COUNT == 0) {
+      if ((i + 1) % DEFAULT_PAINTING_FC_ROW_COUNT == 0) {
         TRANS_LOG(INFO, "insert data single pass one round",
-                  K(oceanbase::unittest::fast_commit_data_mode),
-                  K(oceanbase::unittest::fast_commit_tx_table_mode),
+                  K(DATA_MODE),
+                  K(TX_TABLE_MODE),
                   K(i + 1));
       }
     }
-    if (FastCommitReportDataMode::ALL_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+
+    if (EnumDataLocation::DATA_ON_DISK == DATA_LOCATION) {
+      fprintf(stdout, "data location is DATA_ON_DISK\n");
+      if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
+        WRITE_SQL_BY_CONN(connection, "commit;");
+        sleep(10);
+        minor_freeze_data_and_wait();
+      } else {
+        minor_freeze_data_and_wait();
+        WRITE_SQL_BY_CONN(connection, "commit;");
+      }
+    } else if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
       WRITE_SQL_BY_CONN(connection, "commit;");
-    } else if (FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+    } else if (EnumDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == DATA_MODE) {
       WRITE_SQL_BY_CONN(connection, "commit;");
-    } else if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+    } else if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
       // pass
     }
+
     const int64_t end_time = ObTimeUtility::current_time();
 
     TRANS_LOG(INFO, "insert data single cost", K(end_time - begin_time), K(begin_time), K(end_time));
   }
 
-  void insert_data_parallel(const int parrallel_num = oceanbase::unittest::total_fc_session,
-                            const int row_count = oceanbase::unittest::total_fc_row_count)
+  void insert_data_parallel(const int parrallel_num,
+                            const int row_count)
   {
     int single_row_count = row_count / parrallel_num;
     std::thread *threads[parrallel_num];
@@ -359,7 +464,55 @@ public:
     TRANS_LOG(INFO, "insert data parallel cost", K(end_time - begin_time), K(begin_time), K(end_time));
   }
 
-  void read_data(const int row_count = oceanbase::unittest::total_fc_row_count)
+  void insert_data_pdml(const int row_count)
+  {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    int64_t real_inserted_rows = 0;
+
+    common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+    sqlclient::ObISQLConnection *connection = nullptr;
+    ASSERT_EQ(OB_SUCCESS, sql_proxy.acquire(connection));
+    ASSERT_NE(nullptr, connection);
+
+    WRITE_SQL_BY_CONN(connection, "set SESSION ob_trx_timeout = 10000000000");
+    WRITE_SQL_BY_CONN(connection, "set SESSION ob_trx_idle_timeout = 10000000000");
+    WRITE_SQL_BY_CONN(connection, "set SESSION ob_query_timeout = 10000000000");
+
+    TRANS_LOG(INFO, "pdml insert data start");
+    const int64_t begin_time = ObTimeUtility::current_time();
+
+    WRITE_SQL_BY_CONN(connection, "begin;");
+    WRITE_SQL_FMT_BY_CONN(connection, "insert into test_fast_commit values(1);");
+    real_inserted_rows = 1;
+
+    while (real_inserted_rows < row_count) {
+      WRITE_SQL_FMT_BY_CONN(connection, "insert /*+ enable_parallel_dml PARALLEL(32) */ into test_fast_commit select/*+ PARALLEL(32) */ * from test_fast_commit;");
+      real_inserted_rows <<= 1;
+    }
+    fprintf(stdout, "real inserted rows : %ld \n", real_inserted_rows);
+
+    if (EnumDataLocation::DATA_ON_DISK == DATA_LOCATION) {
+      fprintf(stdout, "data location is DATA_ON_DISK\n");
+      if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
+        WRITE_SQL_BY_CONN(connection, "commit;");
+        sleep(10);
+        minor_freeze_data_and_wait();
+      } else {
+        minor_freeze_data_and_wait();
+        WRITE_SQL_BY_CONN(connection, "commit;");
+      }
+    } else {
+      WRITE_SQL_BY_CONN(connection, "commit;");
+    }
+
+    const int64_t end_time = ObTimeUtility::current_time();
+
+    TRANS_LOG(INFO, "insert data single cost", K(end_time - begin_time), K(begin_time), K(end_time));
+  }
+
+
+  void read_data(const int row_count)
   {
     ObSqlString sql;
     int64_t affected_rows = 0;
@@ -381,19 +534,25 @@ public:
     ObTxTable *tx_table = ls->get_tx_table();
 
     const int64_t begin_time = ObTimeUtility::current_time();
-    READ_SQL_BY_CONN(connection, "select count(*) as cnt from test_fast_commit");
+    sql.assign_fmt("SELECT/*+ enable_parallel_dml PARALLEL(%ld) */ * FROM test_fast_commit;", SELECT_PARALLEL);
+
+    TRANS_LOG(INFO, "do select sql", K(sql));
+    ASSERT_EQ(OB_SUCCESS, connection->execute_read(OB_SYS_TENANT_ID, sql.ptr(), read_res));
     const int64_t end_time = ObTimeUtility::current_time();
     TRANS_LOG(INFO, "read data cost", K(end_time - begin_time), K(begin_time), K(end_time));
-    std::cout << "read data cost(total_cost=" << (end_time - begin_time)
-              << ", begin_time=" << begin_time
-              << ", end_time=" << end_time << ")\n";
+
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      std::cout << "read data cost(total_cost=" << (end_time - begin_time)/1000 << "ms)\n";
+    }
+
+    READ_CNT++;
+    if (READ_CNT > 100) {
+      TOTAL_READ_TIME += (end_time - begin_time);
+    }
+
 
     sqlclient::ObMySQLResult *result = read_res.get_result();
     ASSERT_NE(nullptr, result);
-    ASSERT_EQ(OB_SUCCESS, result->next());
-    ASSERT_EQ(OB_SUCCESS, result->get_int("cnt", cnt));
-
-    ASSERT_EQ(cnt, row_count);
   }
 
   void check_memtable_cleanout(const bool memtable_is_all_cleanout,
@@ -509,65 +668,72 @@ TEST_F(ObFastCommitReport, fast_commit_report)
   TRANS_LOG(INFO, "create_table end");
 
   prepare_tenant_env();
-  set_freeze_trigger();
+  // set_freeze_trigger();
   set_private_buffer_size("2M");
 
-  if (FastCommitReportDataMode::ALL_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
-    set_fast_commit_count(oceanbase::unittest::total_fc_row_count + 100);
-  } else if (FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+  if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
+    set_fast_commit_count(TOTAL_FC_ROW_COUNT + 100);
+  } else if (EnumDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == DATA_MODE) {
     set_fast_commit_count(0);
-  } else if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
+  } else if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
     set_fast_commit_count(0);
   }
 
-  if (FastCommitReportDataMode::ALL_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
-    insert_data_parallel();
-  } else if (FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
-    insert_data_single();
-  } else if (FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
-    insert_data_parallel();
+  if (EnumDataMode::ALL_CLEANOUT == DATA_MODE) {
+    // insert_data_single(TOTAL_FC_ROW_COUNT);
+    insert_data_pdml(TOTAL_FC_ROW_COUNT);
+  } else if (EnumDataMode::ALL_SAME_TXN_DELAY_CLEANOUT == DATA_MODE) {
+    // insert_data_single(TOTAL_FC_ROW_COUNT);
+    insert_data_pdml(TOTAL_FC_ROW_COUNT);
+  } else if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
+    insert_data_parallel(TOTAL_FC_SESSION, TOTAL_FC_ROW_COUNT);
   }
 
-  check_no_minor_freeze();
-
-  if (FastCommitReportDataMode::ALL_CLEANOUT == oceanbase::unittest::fast_commit_data_mode) {
-    check_memtable_cleanout(true,  /*is_all_cleanout*/
-                            false, /*is_all_delay_cleanout*/
-                            oceanbase::unittest::total_fc_row_count);
-  } else {
-    check_memtable_cleanout(false,  /*is_all_cleanout*/
-                            true, /*is_all_delay_cleanout*/
-                            oceanbase::unittest::total_fc_row_count);
-  }
-
-  if (FastCommitReportTxTableMode::ALL_IN_DISK == oceanbase::unittest::fast_commit_tx_table_mode) {
+  if (EnumTxTableMode::ALL_IN_DISK == TX_TABLE_MODE) {
     minor_freeze_tx_data_memtable();
   }
 
   TRANS_LOG(INFO, "fast commit report with arguments",
-            K(oceanbase::unittest::fast_commit_data_mode),
-            K(oceanbase::unittest::fast_commit_tx_table_mode));
+            K(DATA_MODE),
+            K(TX_TABLE_MODE));
 
-  if (oceanbase::unittest::FastCommitTestMode::NORMAL_TEST == oceanbase::unittest::fast_commit_test_mode) {
-    // check with 3 times
-    read_data();
-    read_data();
-    read_data();
-  } else if (oceanbase::unittest::FastCommitTestMode::BIANQUE_TEST == oceanbase::unittest::fast_commit_test_mode) {
+  if (EnumTestMode::BIANQUE_TEST == TEST_MODE) {
     std::cout << "Master, you should start enterring a number as you like\n";
     int n;
     std::cin >> n;
     std::cout << "Your faithful servant, qianchen is start reading data within 60 seconds\n";
     std::cout << "So prepare for command: sudo perf record -e cycles -c 100000000 -p $(pidof -s test_fast_commit_report) -g -- sleep 30\n";
-    int64_t base_ts = OB_TSC_TIMESTAMP.current_time();
-
-    while (OB_TSC_TIMESTAMP.current_time() - base_ts <= 60 * 1000 * 1000) {
-      read_data();
-    }
-
-    std::cout << "Data reading has been finished, you can generate it with command: sudo perf script -i perf.data -F ip,sym -f > data.viz\n";
-    std::cout << "And finally you can graph it with command: `cat data.viz | ./perfdata2graph.py` or our web based perf tool.\n";
   }
+
+  while (READ_CNT < 400) {
+    read_data(TOTAL_FC_ROW_COUNT);
+  }
+
+  std::cout << "Data reading has been finished, you can generate it with command: sudo perf script -i perf.data -F "
+               "ip,sym -f > data.viz\n";
+  std::cout << "And finally you can graph it with command: `cat data.viz | ./perfdata2graph.py` or our web based perf "
+               "tool.\n";
+
+  fprintf(stdout, "average spend time : %ld ms, total read count : %ld\n", TOTAL_READ_TIME / (READ_CNT-100) / 1000, READ_CNT);
+
+  fprintf(stdout,
+          "argument : "
+          " test_mode = %d, "
+          " data_mode = %d, "
+          " data_location = %d, "
+          " tx_table_mode = %d, "
+          " row_cnt = %ld, "
+          " session_cnt = %ld"
+          " pdml_select_parallel = %ld\n",
+          TEST_MODE,
+          DATA_MODE,
+          DATA_LOCATION,
+          TX_TABLE_MODE,
+          TOTAL_FC_ROW_COUNT,
+          TOTAL_FC_SESSION,
+          SELECT_PARALLEL);
+
+  sleep(SLEEP_SECONDS);
 }
 
 
@@ -576,77 +742,74 @@ TEST_F(ObFastCommitReport, fast_commit_report)
 
 void tutorial()
 {
-  std::cout << "./mittest/simple_server/test_fast_commit_report -m $1 -d $2 -t $3 -r $4 -s $5\n"
-            << "-m(mode): 0 = NORMAL_MODE; 1 = BIANQUE_MODE\n"
+  std::cout << "./mittest/simple_server/test_fast_commit_report -m $1 -d $2 -l $3 -t $4 -r $5 -s $6\n"
+            << "-m(test mode): 0 = NORMAL_MODE; 1 = BIANQUE_MODE\n"
             << "-d(data model): 0 = ALL_CLEANOUT; 1 = ALL_SAME_TXN_DELAY_CLEANOUT; 2 = ALL_DIFF_TXN_DELAY_CLEANOUT\n"
-            << "-t(tx data model): 0 = ALL_IN_MEMORY; 1 = ALL_IN_DISK\n"
+            << "-l(data location): 0 = DATA_IN_MEMORY; 1 = DATA_ON_DISK\n"
+            << "-t(tx table model): 0 = ALL_IN_MEMORY; 1 = ALL_IN_DISK\n"
             << "-r(row count): n = n row that is read during benchmark\n"
             << "-s(session count): n = n session that is used during insert before benchmark\n";
 }
 
 int main(int argc, char **argv)
 {
+  using namespace oceanbase::unittest;
+
   int c = 0;
-  while(EOF != (c = getopt(argc,argv,"h:m:d:t:r:s:"))) {
+  while(EOF != (c = getopt(argc,argv,":h:m:d:l:t:r:s:p:S:"))) {
     switch(c) {
     case 'h':
       tutorial();
       return 0;
     case 'm':
-      fprintf(stdout, "m : %s\n", optarg);
-      oceanbase::unittest::fast_commit_test_mode = (oceanbase::unittest::FastCommitTestMode)atoi(optarg);
+      TEST_MODE = (EnumTestMode)atoi(optarg);
       break;
     case 'd':
-      oceanbase::unittest::fast_commit_data_mode = (oceanbase::unittest::FastCommitReportDataMode)atoi(optarg);
+      DATA_MODE = (EnumDataMode)atoi(optarg);
+      break;
+    case 'l':
+      DATA_LOCATION = (EnumDataLocation)atoi(optarg);
       break;
     case 't':
-      oceanbase::unittest::fast_commit_tx_table_mode = (oceanbase::unittest::FastCommitReportTxTableMode)atoi(optarg);
+      TX_TABLE_MODE = (EnumTxTableMode)atoi(optarg);
       break;
     case 'r':
-      oceanbase::unittest::total_fc_row_count = (int64_t)atoi(optarg);
+      TOTAL_FC_ROW_COUNT = (int64_t)atoi(optarg);
       break;
     case 's':
-      oceanbase::unittest::total_fc_session = (int64_t)atoi(optarg);
+      TOTAL_FC_SESSION = (int64_t)atoi(optarg);
+      break;
+    case 'p':
+      SELECT_PARALLEL = (int64_t)atoi(optarg);
+      break;
+    case 'S':
+      SLEEP_SECONDS = (int64_t)atoi(optarg);
       break;
     default:
-      break;
+      tutorial();
+      return 0;
     }
   }
 
-  if (oceanbase::unittest::fast_commit_test_mode != oceanbase::unittest::FastCommitTestMode::NORMAL_TEST
-      && oceanbase::unittest::fast_commit_test_mode != oceanbase::unittest::FastCommitTestMode::BIANQUE_TEST) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_test_mode));
-    ob_abort();
+  if (EnumDataLocation::DATA_ON_DISK == DATA_LOCATION) {
+    if (EnumDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT == DATA_MODE) {
+      fprintf(stdout, "Attention!! Not Support Diff Tx!!\n");
+      DATA_MODE = EnumDataMode::ALL_SAME_TXN_DELAY_CLEANOUT;
+    }
+    TOTAL_FC_SESSION = 1;
   }
 
-  if (oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_CLEANOUT
-      && oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_SAME_TXN_DELAY_CLEANOUT
-      && oceanbase::unittest::fast_commit_data_mode != oceanbase::unittest::FastCommitReportDataMode::ALL_DIFF_TXN_DELAY_CLEANOUT) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_data_mode));
-    ob_abort();
-  }
-
-  if (oceanbase::unittest::fast_commit_tx_table_mode != oceanbase::unittest::FastCommitReportTxTableMode::ALL_IN_MEMORY
-      && oceanbase::unittest::fast_commit_tx_table_mode != oceanbase::unittest::FastCommitReportTxTableMode::ALL_IN_DISK) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::fast_commit_tx_table_mode));
-    ob_abort();
-  }
-
-  if (oceanbase::unittest::total_fc_row_count < oceanbase::unittest::total_fc_session) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "wrong choice", K(oceanbase::unittest::total_fc_row_count), K(oceanbase::unittest::total_fc_session));
-    ob_abort();
+  if (TEST_MODE >= EnumTestMode::MAX_TEST_MODE || DATA_MODE >= EnumDataMode::MAX_DATA_MODE ||
+      TX_TABLE_MODE >= EnumTxTableMode::MAX_TX_TABLE_MODE || DATA_LOCATION >= EnumDataLocation::MAX_DATA_LOCATION ||
+      SELECT_PARALLEL <= 0 || SELECT_PARALLEL > 128) {
+    fprintf(stdout, "invalid argument for fast commit report test. ");
+    tutorial();
+    return 0;
   }
 
   oceanbase::unittest::init_log_and_gtest(argc, argv);
   OB_LOGGER.set_log_level("info");
   ::testing::InitGoogleTest(&argc, argv);
-
-  TRANS_LOG(INFO, "fast commit report with arguments",
-            K(oceanbase::unittest::fast_commit_test_mode),
-            K(oceanbase::unittest::fast_commit_data_mode),
-            K(oceanbase::unittest::fast_commit_tx_table_mode),
-            K(oceanbase::unittest::total_fc_row_count),
-            K(oceanbase::unittest::total_fc_session));
 
   return RUN_ALL_TESTS();
 }

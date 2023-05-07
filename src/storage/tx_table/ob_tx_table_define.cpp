@@ -11,12 +11,24 @@
  */
 
 #include "storage/tx_table/ob_tx_table_define.h"
+#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_table/ob_tx_data_table.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+
+void *TxDataDefaultAllocator::alloc(const int64_t size)
+{
+  common::ObMemAttr attr;
+  attr.tenant_id_ = MTL_ID();
+  attr.label_ = "TX_DATA_ITER";
+  if (size <= 0) {
+    abort();
+  }
+  return ob_malloc(size, attr);
+}
 
 int ObTxCtxTableCommonHeader::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {

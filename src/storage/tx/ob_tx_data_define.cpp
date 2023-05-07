@@ -170,10 +170,19 @@ int64_t ObUndoStatusList::get_serialize_size_() const
   return len;
 }
 
-bool ObUndoStatusList::is_contain(const int64_t seq_no) const
+bool ObUndoStatusList::is_contain(const int64_t seq_no, const int32_t tx_data_state) const
+{
+  if (OB_LIKELY(ObTxData::COMMIT == tx_data_state || ObTxData::ABORT == tx_data_state)) {
+    return is_contain_(seq_no);
+  } else {
+    SpinRLockGuard guard(lock_);
+    return is_contain_(seq_no);
+  }
+}
+
+bool ObUndoStatusList::is_contain_(const int64_t seq_no) const
 {
   bool bool_ret = false;
-  SpinRLockGuard guard(lock_);
   ObUndoStatusNode *node_ptr = head_;
   while (OB_NOT_NULL(node_ptr)) {
     for (int i = 0; i < node_ptr->size_; i++) {
@@ -193,14 +202,20 @@ DEF_TO_STRING(ObUndoStatusList)
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(KP_(head), K_(undo_node_cnt));
+
+  J_OBJ_START();
   ObUndoStatusNode *node_ptr = head_;
   while (nullptr != node_ptr) {
     for (int i = 0; i < node_ptr->size_; i++) {
       transaction::ObUndoAction undo_action = node_ptr->undo_actions_[i];
+      J_OBJ_START();
       J_KV(K(undo_action));
+      J_OBJ_END();
     }
     node_ptr = node_ptr->next_;
   }
+  J_OBJ_END();
+
   J_OBJ_END();
   return pos;
 }
@@ -313,6 +328,12 @@ int64_t ObTxData::get_serialize_size_() const
   return len;
 }
 
+int64_t ObTxData::size() const
+{
+  int64_t len = (TX_DATA_SLICE_SIZE * (1LL + undo_status_list_.undo_node_cnt_));
+  return len;
+}
+
 int ObTxData::deserialize(const char *buf,
                           const int64_t data_len,
                           int64_t &pos,
@@ -405,6 +426,11 @@ ObTxData &ObTxData::operator=(const ObTxCommitData &rhs)
   end_scn_ = rhs.end_scn_;
   undo_status_list_.reset();
   return *this;
+}
+
+const ObTxData &ObTxData::assign_without_undo(const ObTxData &rhs)
+{
+  return operator=(static_cast<ObTxCommitData>(rhs));
 }
 
 bool ObTxData::is_valid_in_tx_data_table() const
@@ -591,7 +617,6 @@ bool ObTxData::equals_(ObTxData &rhs)
   return bool_ret;
 }
 
-
 void ObTxData::print_to_stderr(const ObTxData &tx_data)
 {
   fprintf(stderr,
@@ -650,18 +675,6 @@ DEF_TO_STRING(ObUndoStatusNode)
   return pos;
 }
 
-void ObTxDataMemtableWriteGuard::reset()
-{
-  for (int i = 0; i < MAX_TX_DATA_MEMTABLE_CNT; i++) {
-    if (handles_[i].is_valid()) {
-      ObTxDataMemtable *tx_data_memtable = nullptr;
-      handles_[i].get_tx_data_memtable(tx_data_memtable);
-      tx_data_memtable->dec_write_ref();
-    }
-    handles_[i].reset();
-  }
-  size_ = 0;
-}
 
 }  // namespace storage
 

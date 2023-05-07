@@ -113,7 +113,7 @@ int ObTxDataMemtableScanIterator
     ret = OB_ITER_END;// all tx data datum row has been generated
   } else {
     if (generate_size_ >= 1) {
-      STORAGE_LOG(INFO, "meet big tx data", KR(ret), K(*this));
+      STORAGE_LOG(INFO, "[TX DATA MERGE]meet big tx data", KR(ret), K(*this));
     }
     datum_row_.reset();
     new (&datum_row_) ObDatumRow();// CAUTIONS: this is needed, or will core dump
@@ -175,8 +175,7 @@ int ObTxDataMemtableScanIterator::init(ObTxDataMemtable *tx_data_memtable)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "the state of this tx data memtable is not frozen",
                 K(tx_data_memtable->get_state()));
-  } else if (tx_data_memtable->get_tx_data_count() !=
-             tx_data_memtable->get_inserted_count() - tx_data_memtable->get_deleted_count()) {
+  } else if (tx_data_memtable->get_tx_data_count() != tx_data_memtable->get_inserted_count()) {
     ret = OB_ERR_UNEXPECTED;
     int64_t tx_data_count = tx_data_memtable->get_tx_data_count();
     int64_t inserted_count = tx_data_memtable->get_inserted_count();
@@ -190,15 +189,19 @@ int ObTxDataMemtableScanIterator::init(ObTxDataMemtable *tx_data_memtable)
         KPC(tx_data_memtable));
   } else if (OB_FAIL(init_iterate_range_(tx_data_memtable))) {
     STORAGE_LOG(WARN, "init iterate range failed.", KR(ret));
-  } else if (OB_FAIL(init_iterate_count_(tx_data_memtable))) {
-    STORAGE_LOG(WARN, "init iterate count failed.", KR(ret));
   } else {
     tx_data_memtable_ = tx_data_memtable;
     iterate_row_cnt_ = 0;
     pre_tx_data_ = nullptr;
-    DEBUG_drop_tx_data_cnt_ = 0;
+    drop_tx_data_cnt_ = 0;
 
     is_inited_ = true;
+  }
+
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "[TX DATA MERGE]init tx data dump iter finish", KR(ret), KPC(this), KPC(tx_data_memtable_));
+  } else {
+    STORAGE_LOG(INFO, "[TX DATA MERGE]init tx data dump iter finish", KR(ret), KPC(this), KPC(tx_data_memtable_));
   }
 
   return ret;
@@ -207,15 +210,47 @@ int ObTxDataMemtableScanIterator::init(ObTxDataMemtable *tx_data_memtable)
 int ObTxDataMemtableScanIterator::init_iterate_range_(ObTxDataMemtable *tx_data_memtable)
 {
   int ret = OB_SUCCESS;
+  // get start tx id
+  if (range_.get_start_key().is_min_rowkey()) {
+    ret = init_serial_range_(tx_data_memtable);
+  } else {
+    ret = init_parallel_range_(tx_data_memtable);
+  }
+  return ret;
+}
 
+int ObTxDataMemtableScanIterator::init_serial_range_(ObTxDataMemtable *tx_data_memtable)
+{
+  int ret = OB_SUCCESS;
+
+  // end_key must be max_rowkey when start_key is min_rowkey
+  if (!(range_.get_end_key().is_max_rowkey())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(ERROR, "invalid iterate range when flush tx data", KR(ret), K(range_));
+  } else if (OB_ISNULL(cur_node_ = tx_data_memtable->get_sorted_list_head())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected nullptr of sort list head", KR(ret), KPC(tx_data_memtable));
+  } else if (FALSE_IT(row_cnt_to_dump_ = tx_data_memtable->get_inserted_count() - tx_data_memtable->get_deleted_count())) {
+  } else if (row_cnt_to_dump_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected row count to dump", KR(ret), KPC(tx_data_memtable));
+  } else {
+    start_tx_id_ = 0;
+    end_tx_id_ = INT64_MAX;
+    is_parallel_merge_ = false;
+    STORAGE_LOG(DEBUG, "init serial range finish", KR(ret), K(start_tx_id_), K(end_tx_id_), K(row_cnt_to_dump_), KPC(cur_node_->next_));
+  }
+  return ret;
+}
+
+int ObTxDataMemtableScanIterator::init_parallel_range_(ObTxDataMemtable *tx_data_memtable)
+{
+  int ret = OB_SUCCESS;
   const ObObj *start_obj = nullptr;
   const ObObj *end_obj = nullptr;
 
-  // get start tx id
-  if (range_.get_start_key().is_min_rowkey()) {
-    start_tx_id_ = 0;
-  } else if (OB_ISNULL(start_obj
-                       = range_.get_start_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
+  // get start tx id of parallel merge
+  if (OB_ISNULL(start_obj = range_.get_start_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
     STORAGE_LOG(WARN, "get start obj from range failed.", KR(ret), K(range_));
   } else if (OB_FAIL(start_obj[0].get_int(start_tx_id_))) {
     STORAGE_LOG(WARN, "get start tx id from start obj failed", KR(ret), KPC(start_obj));
@@ -224,56 +259,27 @@ int ObTxDataMemtableScanIterator::init_iterate_range_(ObTxDataMemtable *tx_data_
     STORAGE_LOG(WARN, "get an invalid start tx id from start obj ", KR(ret), KPC(start_obj));
   }
 
-  // set iterate start node by start tx id
-  if (OB_FAIL(ret)) {
-  } else if (0 == start_tx_id_) {
-    // iterate from sort list head
-    if (OB_ISNULL(cur_node_ = tx_data_memtable->get_sorted_list_head())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected error.", KR(ret), KPC(tx_data_memtable));
-    }
-  } else {
-    // iterate from range start
-    ObTxDataGuard tx_data_guard;
-    tx_data_guard.reset();
-    ObTxData *tx_data = nullptr;
-    if (OB_FAIL(tx_data_memtable->get_tx_data(start_tx_id_, tx_data_guard))) {
-      STORAGE_LOG(WARN, "get tx data from tx data memtable failed.", KR(ret), K(start_tx_id_),
-                  KPC(tx_data_memtable));
-    } else if (OB_ISNULL(tx_data = tx_data_guard.tx_data())) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "tx data is unexpected nullptr in tx data guard", KR(ret),
-                  KPC(tx_data_memtable));
-    } else {
-      cur_node_ = &tx_data->sort_list_node_;
-    }
-  }
-
-  // set end tx id
+  // get end tx id of parallel merge
   if (OB_FAIL(ret)) {
   } else if (range_.get_end_key().is_max_rowkey()) {
     end_tx_id_ = INT64_MAX;
-  } else if (OB_ISNULL(end_obj
-                       = range_.get_end_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
+  } else if (OB_ISNULL(end_obj = range_.get_end_key().get_store_rowkey().get_rowkey().get_obj_ptr())) {
     STORAGE_LOG(WARN, "get end obj from range failed.", KR(ret), K(range_));
   } else if (OB_FAIL(end_obj[0].get_int(end_tx_id_))) {
     STORAGE_LOG(WARN, "get end tx id from end obj failed", KR(ret), KPC(end_obj));
   }
 
+  // get iterate start node and iterate count
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tx_data_memtable->get_iter_start_and_count(start_tx_id_, cur_node_, row_cnt_to_dump_))) {
+    STORAGE_LOG(WARN, "get iterate start node and iterate count failed", KR(ret), K(start_tx_id_), KPC(cur_node_->next_), K(iterate_row_cnt_));
+  } else {
+    STORAGE_LOG(DEBUG, "init parallel range finish", KR(ret), K(start_tx_id_), K(end_tx_id_), K(row_cnt_to_dump_), KPC(cur_node_->next_));
+  }
+
   return ret;
 }
 
-int ObTxDataMemtableScanIterator::init_iterate_count_(ObTxDataMemtable *tx_data_memtable)
-{
-  int ret = OB_SUCCESS;
-  if (range_.get_start_key().is_min_rowkey() && range_.get_end_key().is_max_rowkey()) {
-    row_cnt_to_dump_ = tx_data_memtable->get_tx_data_count();
-  } else if (OB_FAIL(tx_data_memtable->get_tx_data_cnt_by_tx_id(start_tx_id_, row_cnt_to_dump_))) {
-    STORAGE_LOG(WARN, "get tx data count by tx id failed.", KR(ret));
-  } else {
-  }
-  return ret;
-}
 
 void ObTxDataMemtableScanIterator::reset()
 {
@@ -285,7 +291,7 @@ void ObTxDataMemtableScanIterator::reset()
   cur_node_ = nullptr;
   tx_data_memtable_ = nullptr;
   is_inited_ = false;
-  DEBUG_drop_tx_data_cnt_ = 0;
+  drop_tx_data_cnt_ = 0;
 }
 
 void ObTxDataMemtableScanIterator::reuse() { reset(); }
@@ -301,7 +307,7 @@ int ObTxDataMemtableScanIterator::get_next_tx_data_(ObTxData *&tx_data)
     ret = OB_ITER_END;
   } else if (FALSE_IT(cur_node_ = &(cur_node_->next_->sort_list_node_))) {
   } else if (FALSE_IT(tx_data = ObTxData::get_tx_data_by_sort_list_node(cur_node_))) {
-  } else if (OB_FAIL(drop_and_get_tx_data_(tx_data))) { // handle savepoint rollback tx data
+  } else if (!is_parallel_merge_ && OB_FAIL(drop_and_get_tx_data_(tx_data))) {
     STORAGE_LOG(WARN, "drop and get tx data failed", KR(ret));
   } else if (OB_NOT_NULL(pre_tx_data_) && tx_data->tx_id_ <= pre_tx_data_->tx_id_) {
     ret = OB_ERR_UNEXPECTED;
@@ -330,7 +336,7 @@ int ObTxDataMemtableScanIterator::drop_and_get_tx_data_(ObTxData *&tx_data)
     if (OB_UNLIKELY(next_tx_data->tx_id_ == tx_data->tx_id_)) {
       cur_node_ = &(cur_node_->next_->sort_list_node_);
       row_cnt_to_dump_--;
-      DEBUG_drop_tx_data_cnt_++;
+      drop_tx_data_cnt_++;
       if (OB_UNLIKELY(next_tx_data->end_scn_ > tx_data->end_scn_)) {
         // pointer to next_tx_data cause its end_log_ts is larger
         STORAGE_LOG(DEBUG, "drop one rollback tx data", "droped : ", to_cstring(tx_data), "keeped", to_cstring(next_tx_data));
@@ -385,17 +391,14 @@ int ObTxDataMemtableScanIterator::inner_get_next_row(const blocksstable::ObDatum
   }
 
   if (OB_ITER_END == ret) {
-    if (iterate_row_cnt_ != row_cnt_to_dump_) {
-      STORAGE_LOG(ERROR, "invalid iterate row count",
-                         K(iterate_row_cnt_), K(row_cnt_to_dump_), KPC(tx_data_memtable_));
+    if (is_parallel_merge_ && drop_tx_data_cnt_ > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "parallel merge should not drop tx data", KPC(this), KPC(tx_data_memtable_));
+    } else if (iterate_row_cnt_ != row_cnt_to_dump_) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "invalid iterate row count", K(iterate_row_cnt_), K(row_cnt_to_dump_), KPC(tx_data_memtable_));
     } else {
-      STORAGE_LOG(INFO,
-          "iterate tx data memtable done.",
-          K(iterate_row_cnt_),
-          K(row_cnt_to_dump_),
-          K(start_tx_id_),
-          K(end_tx_id_),
-          KPC(tx_data_memtable_));
+      STORAGE_LOG(INFO, "[TX DATA MERGE]iterate tx data memtable done.", KPC(this), KPC(tx_data_memtable_));
     }
   }
   return ret;
@@ -464,6 +467,7 @@ int ObTxDataSingleRowGetter::get_next_row_(ObSSTableArray &sstables, ObTxData &t
     } else if (OB_FAIL(tx_data_buffers_.push_back(std::move(temp_buffer)))) {
       STORAGE_LOG(WARN, "push element to reserved array should not fail", KR(ret));
     } else {
+      STORAGE_LOG(INFO, "GENGLI total need buffer cnt", K(total_need_buffer_cnt));
       int64_t total_need_buffer_cnt2 = 0;
       for (int64_t idx = 1; idx < total_need_buffer_cnt && OB_SUCC(ret); ++idx) {
         key_datums_[1].set_int(idx);
