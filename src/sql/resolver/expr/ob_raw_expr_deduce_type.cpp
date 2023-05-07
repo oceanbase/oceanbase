@@ -449,11 +449,17 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     }
     if (OB_FAIL(ret) && my_session_->is_ps_prepare_stage()) {
       // the ps prepare stage does not do type deduction, and directly gives a default type.
-      result_type.set_type(ObVarcharType);
-      result_type.set_calc_type(ObVarcharType);
+      result_type.set_varchar();
+      result_type.set_default_collation_type();
+      result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+      result_type.set_calc_type_default_varchar();
+      result_type.set_calc_collation_level(CS_LEVEL_IMPLICIT);
       for (int64_t i = 0; i < types.count(); i++) {
-        types.at(i).set_type(ObVarcharType);
-        types.at(i).set_calc_type(ObVarcharType);
+        types.at(i).set_varchar();
+        types.at(i).set_default_collation_type();
+        types.at(i).set_collation_level(CS_LEVEL_IMPLICIT);
+        types.at(i).set_calc_type_default_varchar();
+        types.at(i).set_calc_collation_level(CS_LEVEL_IMPLICIT);
       }
       expr.set_result_type(result_type);
       expr.set_input_types(types);
