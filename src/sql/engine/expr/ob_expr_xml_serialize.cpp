@@ -92,7 +92,7 @@ int ObExprXmlSerialize::get_dest_type(const ObExprResType as_type, ObExprResType
     ObCollationType cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
     dst_type.set_type(obj_type);
     dst_type.set_collation_type(cs_type);
-    if (ob_is_varchar_type(dst_type.get_type(), dst_type.get_collation_type())) {
+    if (ob_is_varchar_type(dst_type.get_type(), dst_type.get_collation_type()) || ob_is_nvarchar2(obj_type)) {
       dst_type.set_full_length(parse_node.int32_values_[1], as_type.get_accuracy().get_length_semantics());
     } else if (ob_is_clob(dst_type.get_type(), dst_type.get_collation_type()) ||
                ob_is_blob(dst_type.get_type(), dst_type.get_collation_type())) {
