@@ -3236,7 +3236,7 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
           // Adding a column-level check constraint is only supported in mysql mode
           if (is_oracle_mode()) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_ERR_COL_CHECK_CST_REFER_ANOTHER_COL;
             LOG_WARN("Adding a column-level check constraint is not supported in oracle mode", K(ret), K(stmt_->get_stmt_type()));
           } else if (OB_FAIL(resolve_check_constraint_node(*attr_node, alter_csts, &column))) {
             SQL_RESV_LOG(WARN, "resolve constraint failed", K(ret));
@@ -5340,6 +5340,9 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
 
     if (OB_FAIL(ret)) {
+    } else if (column.is_xmltype() && ob_is_numeric_type(tmp_default_value.get_type())) {
+      ret = OB_ERR_INVALID_XML_DATATYPE;
+      LOG_WARN("incorrect cmp type with xml arguments",K(tmp_default_value.get_type()), K(ret));
     } else if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
       LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
     } else if (OB_ISNULL(tmp_res_obj)) {
