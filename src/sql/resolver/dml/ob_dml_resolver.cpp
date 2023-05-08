@@ -2730,8 +2730,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         is_external = false;
       }
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == real_ref_expr->get_expr_type()) {
-      if ((NULL == params_.secondary_namespace_ && NULL == session_info_->get_pl_context()) ||
-          (current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE) ||
+      if ((current_scope_ != T_FIELD_LIST_SCOPE && current_scope_ != T_INTO_SCOPE) ||
           (get_basic_stmt()->is_insert_stmt() && current_scope_ == T_INTO_SCOPE)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("dml with collection or record construction function is not supported", K(ret));
