@@ -296,6 +296,21 @@ int ObTransformConstPropagate::do_transform(ObDMLStmt *stmt,
 
     if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() &&
         (stmt->is_insert_stmt() || stmt->is_merge_stmt())) {
+      is_happened = false;
+      ObDelUpdStmt *insert = static_cast<ObDelUpdStmt *>(stmt);
+      if (OB_FAIL(collect_equal_pair_from_condition(stmt,
+                                                    insert->get_sharding_conditions(),
+                                                    const_ctx,
+                                                    is_happened))) {
+        LOG_WARN("failed to collect const info from sharding condition", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to do const propagation while collect from sharding", K(is_happened));
+      }
+    }
+
+    if (OB_SUCC(ret) && !const_ctx.active_const_infos_.empty() &&
+        (stmt->is_insert_stmt() || stmt->is_merge_stmt())) {
       ObDelUpdStmt *insert = static_cast<ObDelUpdStmt *>(stmt);
       if (OB_FAIL(replace_common_exprs(insert->get_sharding_conditions(),
                                        const_ctx,
