@@ -206,6 +206,29 @@ void ObAggregateProcessor::AggrCell::destroy()
   }
 }
 
+int ObAggregateProcessor::AggrCell::deep_copy_advance_collect_result(const ObDatum &datum, ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  uint32_t len = datum.len_ > 0 ? datum.len_: 1;
+  if (datum.is_null()) {
+    advance_collect_result_ = datum;
+  } else {
+    if (NULL == collect_buf_ || collect_buf_len_ < len) {
+      collect_buf_len_ = next_pow2(len);
+      if (OB_ISNULL(collect_buf_ = static_cast<char *>(alloc.alloc(collect_buf_len_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(collect_buf_len_), K(datum), K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(advance_collect_result_.deep_copy(datum, collect_buf_, collect_buf_len_, pos))) {
+      LOG_WARN("failed to deep copy datum", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::AggrCell::collect_result(
   const ObObjTypeClass tc, ObEvalCtx &eval_ctx, const ObAggrInfo &aggr_info)
 {
@@ -771,7 +794,8 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       support_fast_single_row_agg_(false),
       op_eval_infos_(nullptr),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
-      op_monitor_info_(op_monitor_info)
+      op_monitor_info_(op_monitor_info),
+      need_advance_collect_(false)
 {
 }
 
@@ -933,6 +957,7 @@ void ObAggregateProcessor::reuse()
   group_rows_.reuse();
   cur_batch_group_idx_ = 0;
   cur_batch_group_buf_ = nullptr;
+  need_advance_collect_ = false;
   aggr_alloc_.reset_remain_one_page();
   removal_info_.reset();
 }
@@ -1376,6 +1401,41 @@ int ObAggregateProcessor::process_batch(
   return ret;
 }
 
+int ObAggregateProcessor::advance_collect_result(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t aggr_cnt = aggr_infos_.count();
+  GroupRow *group_row = NULL;
+  ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+  guard.set_batch_size(1);
+  for (int64_t aggr_idx = 0; OB_SUCC(ret) && aggr_idx < aggr_cnt; ++aggr_idx) {
+    const ObAggrInfo &aggr_info = aggr_infos_.at(aggr_idx);
+    group_row = group_rows_.at(group_id);
+    AggrCell &aggr_cell = group_row->aggr_cells_[aggr_idx];
+    if (aggr_cell.get_need_advance_collect()) {
+      if (aggr_info.has_distinct_) {
+        if (OB_FAIL(process_distinct_batch(0, aggr_cell, aggr_info, eval_ctx_.max_batch_size_))) {
+          LOG_WARN("aggregate distinct cell failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        guard.set_batch_idx(0);
+        if (OB_FAIL(collect_aggr_result(aggr_cell, NULL, aggr_info))) {
+          LOG_WARN("collect_aggr_result failed", K(ret), K(group_id), K(aggr_idx));
+        } else if (OB_FAIL(aggr_cell.deep_copy_advance_collect_result(
+            aggr_info.expr_->locate_expr_datum(eval_ctx_), aggr_alloc_))) {
+          LOG_WARN("failed to deep copy datum", K(ret));
+        } else {
+          LOG_TRACE("finish collect", K(group_id), K(aggr_cell), K(aggr_cell.get_advance_collect_result()));
+        }
+      }
+      aggr_cell.set_is_advance_evaluated();
+      aggr_cell.reuse_extra();
+    }
+  } // end for
+  return ret;
+}
+
 int ObAggregateProcessor::collect_result_batch(const ObIArray<ObExpr *> &group_exprs,
                                                const int64_t output_batch_size,
                                                ObBatchRows &output_brs,
@@ -1397,27 +1457,33 @@ int ObAggregateProcessor::collect_result_batch(const ObIArray<ObExpr *> &group_e
       int64_t output_batch_idx = output_brs.size_ + loop_idx;
       group_row = group_rows_.at(group_cur_idx);
       AggrCell &aggr_cell = group_row->aggr_cells_[aggr_idx];
-      if (aggr_info.has_distinct_) {
-        if (OB_FAIL(process_distinct_batch(0, aggr_cell, aggr_info, loop_cnt))) {
-          LOG_WARN("aggregate distinct cell failed", K(ret));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (aggr_info.is_implicit_first_aggr()) {
-        // aggr_info.expr_ skip check null, check in cg
-        // judge aggr_cell.get_is_evaluated() whether implicit expr is evaluated
-        aggr_info.expr_->locate_expr_datumvector(eval_ctx_)
-                       .at(output_batch_idx)
-                       ->set_datum(aggr_cell.get_iter_result());
-        LOG_DEBUG("first aggr result ", K(aggr_cell.get_iter_result()),
+      guard.set_batch_idx(output_batch_idx);
+      if (aggr_cell.get_need_advance_collect() && aggr_cell.get_is_advance_evaluated()) {
+        aggr_info.expr_->locate_datum_for_write(eval_ctx_).set_datum(aggr_cell.get_advance_collect_result());
+        LOG_TRACE("fill aggr result ", K(aggr_cell.get_advance_collect_result()),
           K(aggr_cell.get_is_evaluated()));
       } else {
-        guard.set_batch_idx(output_batch_idx);
-        if (OB_FAIL(collect_aggr_result(aggr_cell, NULL, aggr_info))) {
-          LOG_WARN("collect_aggr_result failed", K(ret));
+        if (aggr_info.has_distinct_) {
+          if (OB_FAIL(process_distinct_batch(0, aggr_cell, aggr_info, loop_cnt))) {
+            LOG_WARN("aggregate distinct cell failed", K(ret));
+          }
         }
-        LOG_DEBUG("finish collect", K(cur_group_id), K(aggr_cell), K(group_cur_idx),
-          K(output_batch_idx));
+        if (OB_FAIL(ret)) {
+        } else if (aggr_info.is_implicit_first_aggr()) {
+          // aggr_info.expr_ skip check null, check in cg
+          // judge aggr_cell.get_is_evaluated() whether implicit expr is evaluated
+          aggr_info.expr_->locate_expr_datumvector(eval_ctx_)
+                        .at(output_batch_idx)
+                        ->set_datum(aggr_cell.get_iter_result());
+          LOG_DEBUG("first aggr result ", K(aggr_cell.get_iter_result()),
+            K(aggr_cell.get_is_evaluated()));
+        } else {
+          if (OB_FAIL(collect_aggr_result(aggr_cell, NULL, aggr_info))) {
+            LOG_WARN("collect_aggr_result failed", K(ret));
+          }
+          LOG_DEBUG("finish collect", K(cur_group_id), K(aggr_cell), K(group_cur_idx),
+            K(output_batch_idx));
+        }
       }
     } // end for
     aggr_info.expr_->get_eval_info(eval_ctx_).projected_ = true;
@@ -1787,6 +1853,8 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_ORA_XMLAGG:
         {
           void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
@@ -1851,6 +1919,8 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         }
         case T_FUN_TOP_FRE_HIST: {
           void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(TopKFreHistExtraResult)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
@@ -1891,6 +1961,8 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
       }
 
       if (OB_SUCC(ret) && aggr_info.has_distinct_) {
+        set_need_advance_collect();
+        aggr_cell.set_need_advance_collect();
         if (NULL == aggr_cell.get_extra()) {
           void *tmp_buf = NULL;
           if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(ExtraResult)))) {

@@ -206,6 +206,7 @@ private:
             uint64_t *hash_vals,
             ObBitVector *skip,
             int64_t count);
+  int advance_collect_result(int64_t group_id);
 private:
   bool is_end_;
   // added to support groupby with rollup

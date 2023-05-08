@@ -443,9 +443,13 @@ public:
     : tiny_num_int_(0),
       extra_(NULL),
       iter_result_(),
-      flags_(0)
+      flags_(0),
+      collect_buf_(NULL),
+      collect_buf_len_(0),
+      advance_collect_result_()
     {
       iter_result_.set_null();
+      advance_collect_result_.set_null();
     }
     ~AggrCell();
 
@@ -472,12 +476,25 @@ public:
                                           ? (iter_result_.ptr_ - 2 * sizeof(int64_t)) : nullptr; }
     inline void set_buf(char *buf) { iter_result_.ptr_ = buf + 2 * sizeof(int64_t); }
     int64_t to_string(char *buf, const int64_t buf_len) const;
+    int deep_copy_advance_collect_result(const ObDatum &datum, ObIAllocator &alloc);
+    ObDatum &get_advance_collect_result() { return advance_collect_result_; }
+    void set_need_advance_collect() { need_advance_collect_ = true; }
+    bool get_need_advance_collect() const { return need_advance_collect_; }
+    void set_is_advance_evaluated()  { is_advance_evaluated_ = true; }
+    bool get_is_advance_evaluated() const { return is_advance_evaluated_; }
     inline void reuse(const bool release_mem = true)
     {
       UNUSED(release_mem);
       tiny_num_int_ = 0;
       flags_ = 0;
       iter_result_.set_null();
+      if (NULL != extra_) {
+        extra_->reuse();
+      }
+      advance_collect_result_.set_null();
+    }
+    inline void reuse_extra()
+    {
       if (NULL != extra_) {
         extra_->reuse();
       }
@@ -498,9 +515,13 @@ public:
       struct {
         int32_t is_tiny_num_used_ : 1;
         int32_t is_evaluated_ : 1;
+        int32_t need_advance_collect_ : 1;
+        int32_t is_advance_evaluated_ : 1;
       };
     };
-
+    char *collect_buf_;
+    int64_t collect_buf_len_;
+    ObDatum advance_collect_result_;
   };
 
 
@@ -632,6 +653,7 @@ public:
                            const int64_t output_batch_size,
                            ObBatchRows &output_brs,
                            int64_t &cur_group_id);
+  int advance_collect_result(int64_t cur_group_id);
   int process_distinct_batch(const int64_t group_id,
                             AggrCell &aggr_cell,
                             const ObAggrInfo &aggr_info,
@@ -742,6 +764,8 @@ public:
   int fast_single_row_agg(ObEvalCtx &eval_ctx, ObIArray<ObAggrInfo> &aggr_infos);
   int fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const int64_t batch_size, const ObBitVector *skip);
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
+  void set_need_advance_collect() { need_advance_collect_ = true; }
+  bool get_need_advance_collect() const { return need_advance_collect_; }
   static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
 private:
   template <typename T>
@@ -1028,6 +1052,7 @@ private:
   ObIArray<ObEvalInfo *> *op_eval_infos_;
   ObSqlWorkAreaProfile profile_;
   ObMonitorNode &op_monitor_info_;
+  bool need_advance_collect_;
 };
 
 struct ObAggregateCalcFunc
