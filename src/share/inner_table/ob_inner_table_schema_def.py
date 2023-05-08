@@ -37694,7 +37694,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
 SELECT
-  CAST(o.owner AS VARCHAR2(128)) AS OWNER,
+  CAST(SYS_CONTEXT('USERENV','CURRENT_USER') AS VARCHAR2(128)) AS OWNER,
   CAST(o.object_name AS VARCHAR2(128)) AS NAME,
   CAST(o.object_type AS VARCHAR2(19)) AS TYPE,
   CAST(e.obj_seq AS NUMBER) AS SEQUENCE,
@@ -37704,7 +37704,7 @@ SELECT
   CAST(DECODE(e.property, 0, 'ERROR', 1, 'WARNING', 'UNDEFINED') AS VARCHAR2(9)) AS ATTRIBUTE,
   CAST(e.error_number AS NUMBER) AS MESSAGE_NUMBER
 FROM
-  SYS.ALL_OBJECTS o,
+  SYS.USER_OBJECTS o,
  (select obj_id, obj_seq, line, position, text, property, error_number, CAST( UPPER(decode(obj_type,
                                    3, 'PACKAGE',
                                    4, 'TYPE',
@@ -37715,8 +37715,7 @@ FROM
                                    9, 'FUNCTION',
                                    12, 'PROCEDURE',
                                    'MAXTYPE')) AS VARCHAR2(23)) object_type from SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT
-                          WHERE TENANT_ID = EFFECTIVE_TENANT_ID())  e,
-  SYS.ALL_USERS u
+                          WHERE TENANT_ID = EFFECTIVE_TENANT_ID())  e
 WHERE
   o.object_id = e.obj_id
   AND o.object_type like e.object_type
@@ -37737,8 +37736,6 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
-  AND u.username=o.owner
-  AND u.userid IN (USERENV('SCHEMAID'))
   """.replace("\n", " ")
 )
 def_table_schema(
