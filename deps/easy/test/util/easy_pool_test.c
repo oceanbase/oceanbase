@@ -44,6 +44,13 @@ static void *test_realloc_2 (void *ptr, size_t size)
 
     return NULL;
 }
+static void test_cleanup(const void *data)
+{
+    int                     *p;
+
+    p = (int *) data;
+    *p += 1;
+}
 
 TEST(easy_pool, create)
 {
@@ -281,3 +288,28 @@ TEST(easy_pool, strdup)
     easy_pool_destroy(pool);
 }
 
+TEST(easy_pool, cleanup)
+{
+    easy_pool_t             *pool;
+    easy_pool_cleanup_t     *cl;
+    int                     i, cnt, size;
+
+    i = 0;
+    cnt = 0;
+    size = 111;
+    cl = NULL;
+    pool = easy_pool_create(0);
+
+    for (i = 0; i < size; ++ i)
+    {
+        cl = easy_pool_cleanup_new(pool, &cnt, test_cleanup);
+        EXPECT_TRUE(cl != NULL);
+
+        easy_pool_cleanup_reg(pool, cl);
+    }
+
+    cl = NULL;
+    easy_pool_destroy(pool);
+
+    EXPECT_TRUE(cnt == size);
+}
