@@ -146,10 +146,10 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     mt_ctx_.set_trans_ctx(this);
     mt_ctx_.set_for_replay(is_follower_());
 
-    if (!GCONF.enable_sql_audit) {
+    if (!GCONF.enable_record_trace_log) {
       tlog_ = NULL;
     } else {
-      tlog_ = &trace_log_;
+      tlog_ = ObTransTraceLogFactory::alloc();
     }
 
     is_inited_ = true;
@@ -234,6 +234,7 @@ void ObPartTransCtx::destroy()
 
     if (NULL != tlog_) {
       print_trace_log_if_necessary_();
+      ObTransTraceLogFactory::release(tlog_);
       tlog_ = NULL;
     }
 
