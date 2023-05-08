@@ -23,9 +23,7 @@ ObCompressorPool::ObCompressorPool()
      snappy_compressor(),
      zlib_compressor(),
      zstd_compressor_1_3_8(),
-#if defined(__x86_64__)
-      qpl_compressor(),
-#endif
+     zlib_lite_compressor(),
      lz4_stream_compressor(),
      zstd_stream_compressor(),
      zstd_stream_compressor_1_3_8()
@@ -80,11 +78,9 @@ int ObCompressorPool::get_compressor(const ObCompressorType &compressor_type,
     case ZSTD_1_3_8_COMPRESSOR:
       compressor = &zstd_compressor_1_3_8;
       break;
-#if defined(__x86_64__)
-    case QPL_COMPRESSOR:
-      compressor = &qpl_compressor;
+    case ZLIB_LITE_COMPRESSOR:
+      compressor = &zlib_lite_compressor;
       break;
-#endif
     default:
       compressor = NULL;
       ret = OB_NOT_SUPPORTED;
@@ -120,13 +116,9 @@ int ObCompressorPool::get_compressor_type(const char *compressor_name,
     compressor_type = STREAM_ZSTD_COMPRESSOR;
   } else if (!strcmp(compressor_name, "stream_zstd_1.3.8")) {
     compressor_type = STREAM_ZSTD_1_3_8_COMPRESSOR;
-  } 
-#if defined(__x86_64__)  
-  else if (!strcmp(compressor_name, "qpl")) {
-    compressor_type = QPL_COMPRESSOR;
+  } else if (!strcmp(compressor_name, "zlib_lite_1.0")) {
+    compressor_type = ZLIB_LITE_COMPRESSOR;
   }
-#endif 
-  
   else {
     ret = OB_NOT_SUPPORTED;
     LIB_LOG(WARN, "no support compressor type, ", K(ret), KCSTRING(compressor_name));
@@ -200,9 +192,8 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
   int64_t zlib_overflow_size = 0;
   int64_t zstd_overflow_size = 0;
   int64_t zstd_138_overflow_size = 0;
-#if defined(__x86_64__)
-  int64_t qpl_overflow_size = 0;
-#endif
+  int64_t zlib_lite_overflow_size = 0;
+
   if (OB_FAIL(lz4_compressor.get_max_overflow_size(src_data_size, lz4_overflow_size))) {
       LIB_LOG(WARN, "failed to get_max_overflow_size of lz4", K(ret), K(src_data_size));
   } else if (OB_FAIL(lz4_compressor_1_9_1.get_max_overflow_size(src_data_size, lz4_191_overflow_size))) {
@@ -215,21 +206,16 @@ int ObCompressorPool::get_max_overflow_size(const int64_t src_data_size, int64_t
       LIB_LOG(WARN, "failed to get_max_overflow_size of zstd", K(ret), K(src_data_size));
   } else if (OB_FAIL(zstd_compressor_1_3_8.get_max_overflow_size(src_data_size, zstd_138_overflow_size))) {
     LIB_LOG(WARN, "failed to get_max_overflow_size of zstd_138", K(ret), K(src_data_size));
+  } else if (OB_FAIL(zlib_lite_compressor.get_max_overflow_size(src_data_size, zlib_lite_overflow_size))) {
+    LIB_LOG(WARN, "failed to get_max_overflow_size of zlib_lite", K(ret), K(src_data_size));
   }
-#if defined(__x86_64__)
-  else if (OB_FAIL(qpl_compressor.get_max_overflow_size(src_data_size, qpl_overflow_size))) {
-    LIB_LOG(WARN, "failed to get_max_overflow_size of qpl", K(ret), K(src_data_size));
-  } 
-#endif 
   else {
     max_overflow_size = std::max(lz4_overflow_size, lz4_191_overflow_size);
     max_overflow_size = std::max(max_overflow_size, snappy_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zlib_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zstd_overflow_size);
     max_overflow_size = std::max(max_overflow_size, zstd_138_overflow_size);
-#if defined(__x86_64__)
-    max_overflow_size = std::max(max_overflow_size, qpl_overflow_size);
-#endif
+    max_overflow_size = std::max(max_overflow_size, zlib_lite_overflow_size);
   }
   return ret;
 }

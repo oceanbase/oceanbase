@@ -1,9 +1,3 @@
-if(${ARCHITECTURE} STREQUAL "x86_64")
-  set(QPL_COMPILE_FILE_C "qpl/ob_qpl_compressor.cpp")
-  set(QPL_COMPILE_FILE_H "qpl/ob_qpl_compressor.h")
-  set(QPL_LIB "qpl")
-endif()
-
 oblib_add_library(compress
   ob_compressor.cpp
   ob_compressor.h
@@ -26,16 +20,14 @@ oblib_add_library(compress
   zstd_1_3_8/ob_zstd_compressor_1_3_8.h
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.cpp
   zstd_1_3_8/ob_zstd_stream_compressor_1_3_8.h
-  ${QPL_COMPILE_FILE_C}
-  ${QPL_COMPILE_FILE_H})
+  zlib_lite/ob_zlib_lite_compressor.cpp
+  zlib_lite/ob_zlib_lite_compressor.h)
 
 add_subdirectory(zstd)
 add_subdirectory(zstd_1_3_8)
 add_subdirectory(lz4)
 add_subdirectory(snappy)
 add_subdirectory(zlib)
-if(${ARCHITECTURE} STREQUAL "x86_64")
-  add_subdirectory(qpl)
-endif()
+add_subdirectory(zlib_lite)
 
-target_link_libraries(compress PUBLIC lz4 snappy zlib zstd zstd_1_3_8 ${QPL_LIB})
+target_link_libraries(compress PUBLIC lz4 snappy zlib zstd zstd_1_3_8 zlib_lite)
