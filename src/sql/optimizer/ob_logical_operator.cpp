@@ -3841,8 +3841,8 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
     if (OB_SUCC(ret)) {
       if (LOG_SET == get_type() && !got_in_exch) {
         ObLogSet *set_op = static_cast<ObLogSet *>(this);
-        bool is_union_all = ObSelectStmt::UNION == set_op->get_set_op() && !set_op->is_set_distinct();
-        if (is_union_all && max_dfo_child_idx > 0) {
+        bool is_union = ObSelectStmt::UNION == set_op->get_set_op();
+        if (is_union && max_dfo_child_idx > 0) {
           got_in_exch = true;
         }
       }
