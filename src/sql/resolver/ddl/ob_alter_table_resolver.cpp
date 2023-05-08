@@ -1364,9 +1364,25 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               ObCreateIndexArg &index_arg = create_index_stmt.get_create_index_arg();
               if (is_index_part_specified) {
                 ObTableSchema &index_schema = index_arg.index_schema_;
-                if (OB_FAIL(share::ObIndexBuilderUtil::set_index_table_columns(
-                            index_arg, *table_schema_, index_schema, false))) {
-                  LOG_WARN("fail to set index table columns", K(ret));
+                SMART_VAR(ObCreateIndexArg, my_create_index_arg) {
+                  SMART_VAR(ObTableSchema, new_table_schema) {
+                    ObArray<ObColumnSchemaV2 *> gen_columns;
+                    if (OB_FAIL(new_table_schema.assign(*table_schema_))) {
+                      LOG_WARN("fail to assign schema", K(ret));
+                    } else if (OB_FAIL(my_create_index_arg.assign(index_arg))) {
+                      LOG_WARN("fail to assign index arg", K(ret));
+                    } else if (OB_FAIL(share::ObIndexBuilderUtil::adjust_expr_index_args(
+                            my_create_index_arg, new_table_schema, *allocator_, gen_columns))) {
+                      LOG_WARN("fail to adjust expr index args", K(ret));
+                    } else if (OB_FAIL(share::ObIndexBuilderUtil::set_index_table_columns(
+                              my_create_index_arg, new_table_schema, my_create_index_arg.index_schema_, false))) {
+                      LOG_WARN("fail to set index table columns", K(ret));
+                    } else if (OB_FAIL(index_schema.assign(my_create_index_arg.index_schema_))){
+                      LOG_WARN("fail to assign schema", K(ret));
+                    }
+                  }
+                }
+                if (OB_FAIL(ret)) {
                 } else if (OB_FAIL(resolve_index_partition_node(index_partition_option->children_[0], &create_index_stmt))) {
                   LOG_WARN("fail to resolve partition option", K(ret));
                 } else {
