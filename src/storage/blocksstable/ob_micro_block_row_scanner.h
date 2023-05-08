@@ -264,7 +264,7 @@ public:
       : ObIMicroBlockRowScanner(allocator),
       trans_version_col_idx_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
       sql_sequence_col_idx_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
-      row_allocator_("MergeRowQueue"),
+      row_allocator_("MergeRowQueue", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       row_queue_(),
       is_last_multi_version_row_(false),
       is_row_queue_ready_(false),
