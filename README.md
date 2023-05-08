@@ -7,7 +7,7 @@
     <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
         <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
     </a>
-    <a href="https://github.com/oceanbase/oceanbase/releases">
+    <a href="https://github.com/oceanbase/oceanbase/releases/latest">
         <img alt="license" src="https://img.shields.io/badge/dynamic/json?color=blue&label=release&query=tag_name&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase%2Freleases%2Flatest" />
     </a>
     <a href="https://github.com/oceanbase/oceanbase">
