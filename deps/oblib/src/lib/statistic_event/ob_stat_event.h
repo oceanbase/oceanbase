@@ -446,6 +446,8 @@ STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, "
 
 #ifdef STAT_EVENT_SET_DEF
 // NETWORK
+STAT_EVENT_SET_DEF(STANDBY_FETCH_LOG_BYTES, "standby fetch log bytes", ObStatClassIds::NETWORK, "standby fetch log bytes" , 110000, false, true)
+STAT_EVENT_SET_DEF(STANDBY_FETCH_LOG_BANDWIDTH_LIMIT, "standby fetch log bandwidth limit", ObStatClassIds::NETWORK, "standby fetch log bandwidth limit" , 110001, false, true)
 
 // QUEUE
 

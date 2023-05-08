@@ -189,6 +189,10 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
         (OB_SYS_TENANT_ID == tenant_id) ? lib::AChunkMgr::instance().get_freelist_hold() : 0;
     stat_events.get(ObStatEventIds::IS_MINI_MODE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
         (OB_SYS_TENANT_ID == tenant_id) ? (lib::is_mini_mode() ? 1 : 0) : -1;
+    stat_events.get(ObStatEventIds::STANDBY_FETCH_LOG_BYTES - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? global_poc_server.get_ratelimit_rxbytes() : -1;
+    stat_events.get(ObStatEventIds::STANDBY_FETCH_LOG_BANDWIDTH_LIMIT - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_ =
+        (OB_SYS_TENANT_ID == tenant_id) ? global_poc_server.get_ratelimit() : -1;
 
     int ret_bk = ret;
     if (NULL != GCTX.omt_) {

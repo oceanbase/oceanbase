@@ -24,38 +24,12 @@
 #include "ob_log_part_trans_task.h"               // PartTransTask
 #include "ob_log_part_trans_task_queue.h"         // SafePartTransTaskQueue
 #include "ob_log_fetcher_dispatcher_interface.h"  // IObLogFetcherDispatcher
+#include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info.h" // ObILogFetcherLSCtxAddInfo
 
 namespace oceanbase
 {
 namespace libobcdc
 {
-
-struct PartTransDispatchInfo
-{
-  palf::LSN   last_dispatch_log_lsn_;
-  int64_t     current_checkpoint_;
-  int64_t     pending_task_count_;        // The total number of tasks waiting, both in the queue and in the Map
-  int64_t     task_count_in_queue_;       // Number of queued tasks
-
-  const char  *next_task_type_;
-  palf::LSN   next_trans_log_lsn_;
-  bool        next_trans_committed_;
-  bool        next_trans_ready_to_commit_;
-  int64_t     next_trans_global_version_;
-
-  PartTransDispatchInfo();
-
-  TO_STRING_KV(
-      K_(last_dispatch_log_lsn),
-      K_(current_checkpoint),
-      K_(pending_task_count),
-      K_(task_count_in_queue),
-      K_(next_task_type),
-      K_(next_trans_log_lsn),
-      K_(next_trans_committed),
-      K_(next_trans_ready_to_commit),
-      K_(next_trans_global_version));
-};
 
 class PartTransDispatcher;
 struct TransCommitInfo
@@ -92,7 +66,7 @@ public:
   static int64_t  g_part_trans_task_count;
 
 public:
-  int init(const TenantLSID &tls_id, const int64_t start_tstamp);
+  int init(const logservice::TenantLSID &tls_id, const int64_t start_tstamp);
 
   bool is_data_dict_dispatcher() const { return dispatcher_.is_data_dict_dispatcher(); }
 
@@ -129,12 +103,12 @@ public:
   int get_task(const PartTransID &trans_id, PartTransTask *&task);
 
   // Get the progress of the assignment and ensure atomicity
-  int get_dispatch_progress(int64_t &progress, PartTransDispatchInfo &dispatch_info);
+  int get_dispatch_progress(int64_t &progress, logfetcher::PartTransDispatchInfo &dispatch_info);
 
   // Get TPS information
   double get_tps();
 
-  const TenantLSID &get_tls_id() const { return tls_id_; }
+  const logservice::TenantLSID &get_tls_id() const { return tls_id_; }
   const char *get_tls_id_str() const { return tls_id_str_; }
 
   int64_t get_checkpoint() const { return ATOMIC_LOAD(&checkpoint_); }
@@ -160,7 +134,7 @@ protected:
   int check_task_ready_(PartTransTask &task, bool &task_is_ready);
 
 protected:
-  TenantLSID              tls_id_;
+  logservice::TenantLSID  tls_id_;
   const char              *tls_id_str_;
 
   // Constructors initialise variables

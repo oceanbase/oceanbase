@@ -146,6 +146,9 @@ private:
   // import timezone_info from local file and convert to ObTZInfoMap
   int import_timezone_info_(common::ObTZInfoMap &tz_info_map);
   int load_tzinfo_from_file_(char *buf, const int64_t buf_len);
+  // currently refresh tz_info while using online_refresh_mode(data_dict won't refresh tz_info even
+  // if in intergate_mode)
+  bool is_online_tz_info_available() const { return is_online_refresh_mode(TCTX.refresh_mode_); };
 
 private:
   bool                  inited_;

@@ -174,7 +174,7 @@ public:
 public:
   // Get a task.
   // Return NULL when it runs out of memory.
-  TaskType* get(const char *info, const TenantLSID &tls_id)
+  TaskType* get(const char *info, const logservice::TenantLSID &tls_id)
   {
     int ret = common::OB_SUCCESS;
     TaskType *ret_task = NULL;

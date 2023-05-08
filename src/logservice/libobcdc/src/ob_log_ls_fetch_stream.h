@@ -24,7 +24,7 @@
 #include "ob_log_timer.h"                   // ObLogTimerTask
 #include "ob_log_dlist.h"                   // ObLogDList
 #include "ob_log_fetch_stream_type.h"       // FetchStreamType
-#include "ob_log_fetch_stat_info.h"         // FetchStatInfo
+#include "logservice/logfetcher/ob_log_fetch_stat_info.h"         // logfetcher::FetchStatInfo
 
 namespace oceanbase
 {
@@ -178,7 +178,7 @@ private:
       const bool is_stream_valid,
       const char *stream_invalid_reason,
       const KickOutInfo &kickout_info,
-      const TransStatInfo &tsi,
+      const logfetcher::TransStatInfo &tsi,
       const bool need_stop_request);
   bool has_new_fetch_task_() const;
   int process_result_(FetchLogARpcResult &result,
@@ -195,14 +195,14 @@ private:
       const int64_t read_log_time,
       const int64_t decode_log_entry_time,
       const int64_t flush_time,
-      const TransStatInfo &tsi);
+      const logfetcher::TransStatInfo &tsi);
   void update_fetch_stat_info_(
       const int64_t fetch_log_cnt,
       const int64_t fetch_log_size,
       const int64_t fetch_and_read_time,
       const int64_t fetch_log_time,
       const int64_t flush_time,
-      const TransStatInfo &tsi);
+      const logfetcher::TransStatInfo &tsi);
   int handle_fetch_log_result_(FetchLogARpcResult &result,
       volatile bool &stop_flag,
       bool &is_stream_valid,
@@ -211,7 +211,7 @@ private:
       bool &need_hibernate,
       int64_t &read_log_time,
       int64_t &decode_log_entry_time,
-      TransStatInfo &tsi,
+      logfetcher::TransStatInfo &tsi,
       int64_t &flush_time);
   int update_rpc_request_params_();
   int handle_fetch_log_error_(
@@ -219,23 +219,23 @@ private:
       const obrpc::ObCdcLSFetchLogResp &resp,
       KickOutInfo &kickout_info);
   bool exist_(KickOutInfo &kick_out_info,
-      const TenantLSID &tls_id);
+      const logservice::TenantLSID &tls_id);
   int set_(KickOutInfo &kick_out_info,
-      const TenantLSID &tls_id,
+      const logservice::TenantLSID &tls_id,
       KickOutReason kick_out_reason);
   int read_group_entry_(
       palf::LogGroupEntry &group_entry,
       palf::LSN &group_start_lsn,
       volatile bool &stop_flag,
       KickOutInfo &kick_out_info,
-      TransStatInfo &tsi);
+      logfetcher::TransStatInfo &tsi);
   int read_log_(
       const obrpc::ObCdcLSFetchLogResp &resp,
       volatile bool &stop_flag,
       KickOutInfo &kick_out_info,
       int64_t &read_log_time,
       int64_t &decode_log_entry_time,
-      TransStatInfo &tsi);
+      logfetcher::TransStatInfo &tsi);
   int fetch_miss_log_direct_(
       const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
       const int64_t timeout,
@@ -252,7 +252,7 @@ private:
   //
   // @param [in] log_entry         LogEntry
   // @param [in] org_missing_info  MissingLogInfo
-  // @param [in] tsi               TransStatInfo
+  // @param [in] tsi               logfetcher::TransStatInfo
   // @param [out] fail_reason      KickOutReason
   //
   // @retval OB_SUCCESS                   success
@@ -261,7 +261,7 @@ private:
   int handle_log_miss_(
       palf::LogEntry &log_entry,
       IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
-      TransStatInfo &tsi,
+      logfetcher::TransStatInfo &tsi,
       volatile bool &stop_flag,
       KickOutReason &fail_reason);
   // split all miss_logs by batch
@@ -273,7 +273,7 @@ private:
   int read_batch_misslog_(
       const obrpc::ObCdcLSFetchLogResp &resp,
       int64_t &fetched_missing_log_cnt,
-      TransStatInfo &tsi,
+      logfetcher::TransStatInfo &tsi,
       IObCDCPartTransResolver::MissingLogInfo &org_missing_info,
       IObCDCPartTransResolver::MissingLogInfo &new_generated_miss_info);
   int alloc_fetch_log_srpc_(FetchLogSRpc *&fetch_log_srpc);
@@ -298,20 +298,20 @@ private:
 private:
   struct KickOutInfo
   {
-    TenantLSID tls_id_;
+    logservice::TenantLSID tls_id_;
     KickOutReason kick_out_reason_;
 
     KickOutInfo() : tls_id_(), kick_out_reason_(NONE) {}
-    explicit KickOutInfo(const TenantLSID &tls_id) :
+    explicit KickOutInfo(const logservice::TenantLSID &tls_id) :
         tls_id_(tls_id),
         kick_out_reason_(NONE)
     {}
-    KickOutInfo(const TenantLSID &tls_id, KickOutReason kick_out_reason) :
+    KickOutInfo(const logservice::TenantLSID &tls_id, KickOutReason kick_out_reason) :
         tls_id_(tls_id),
         kick_out_reason_(kick_out_reason)
     {}
 
-    void reset(const TenantLSID &tls_id, const KickOutReason kick_out_reason)
+    void reset(const logservice::TenantLSID &tls_id, const KickOutReason kick_out_reason)
     {
       tls_id_ = tls_id;
       kick_out_reason_ = kick_out_reason;
@@ -362,8 +362,8 @@ private:
 
   // Statistical Information
   int64_t                       last_stat_time_;
-  FetchStatInfo                 cur_stat_info_;
-  FetchStatInfo                 last_stat_info_;
+  logfetcher::FetchStatInfo     cur_stat_info_;
+  logfetcher::FetchStatInfo     last_stat_info_;
   common::ObByteLock            stat_lock_;      // Mutex lock that statistical information update and access to
 
 private:

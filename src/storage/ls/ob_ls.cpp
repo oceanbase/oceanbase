@@ -39,7 +39,10 @@
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "rootserver/ob_primary_ls_service.h"
 #include "rootserver/ob_recovery_ls_service.h"
+#include "rootserver/ob_create_standby_from_net_actor.h"
 #include "rootserver/restore/ob_restore_scheduler.h"
+#include "observer/net/ob_ingress_bw_alloc_service.h"
+#include "observer/ob_srv_network_frame.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "sql/das/ob_das_id_service.h"
 #include "storage/tablet/ob_tablet.h"
@@ -210,6 +213,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         //only user table need recovery
         REGISTER_TO_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRecoveryLSService *));
         LOG_INFO("recovery ls manager registre to restoreservice success");
+        REGISTER_TO_RESTORESERVICE(logservice::NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObCreateStandbyFromNetActor *));
       }
 
       if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
@@ -217,6 +221,11 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
       }
 
+      if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
+        REGISTER_TO_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
+        LOG_INFO("net endpoint ingress regist to logservice success");
+      }
 
       if (OB_SUCC(ret) && is_sys_tenant(tenant_id) && ls_id.is_sys_ls()) {
         //sys tenant
@@ -648,6 +657,9 @@ void ObLS::destroy()
     UNREGISTER_FROM_LOGSERVICE(logservice::DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
     rootserver::ObRecoveryLSService* ls_service = MTL(rootserver::ObRecoveryLSService*);
     UNREGISTER_FROM_RESTORESERVICE(logservice::RECOVERY_LS_SERVICE_LOG_BASE_TYPE, ls_service);
+
+    rootserver::ObCreateStandbyFromNetActor* net_standby_tnt_service = MTL(rootserver::ObCreateStandbyFromNetActor*);
+    UNREGISTER_FROM_RESTORESERVICE(logservice::NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, net_standby_tnt_service);
   }
   if (OB_SUCC(ret) && !is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
@@ -656,6 +668,10 @@ void ObLS::destroy()
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObHeartbeatService * heartbeat_service = MTL(rootserver::ObHeartbeatService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
+  }
+  if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObIngressBWAllocService *ingress_service = GCTX.net_frame_->get_ingress_service();
+    UNREGISTER_FROM_LOGSERVICE(logservice::NET_ENDPOINT_INGRESS_LOG_BASE_TYPE, ingress_service);
   }
   tx_table_.destroy();
   lock_table_.destroy();
@@ -1328,7 +1344,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::logstream_freeze(bool is_sync)
+int ObLS::logstream_freeze(const bool is_sync)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1360,7 +1376,7 @@ int ObLS::logstream_freeze(bool is_sync)
   return ret;
 }
 
-int ObLS::tablet_freeze(const ObTabletID &tablet_id, bool is_sync)
+int ObLS::tablet_freeze(const ObTabletID &tablet_id, const bool is_sync)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1412,6 +1428,38 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id)
   } else {
     // do nothing
   }
+  return ret;
+}
+
+int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync)
+{
+  int ret = OB_SUCCESS;
+  ObFuture<int> result;
+
+  {
+    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+    int64_t write_lock = 0;
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("ls is not inited", K(ret));
+    } else if (OB_UNLIKELY(is_stopped_)) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
+      ret = OB_NOT_RUNNING;
+      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
+    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(tablet_ids, &result))) {
+      LOG_WARN("batch tablet freeze failed", K(ret));
+    } else {
+      // do nothing
+    }
+  }
+
+  if (OB_SUCC(ret) && is_sync) {
+    ret = ls_freezer_.wait_freeze_finished(result);
+  }
+
   return ret;
 }
 

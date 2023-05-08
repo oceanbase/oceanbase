@@ -1506,7 +1506,7 @@ void ObLogTenantMgr::print_stat_info()
   }
 }
 
-int ObLogTenantMgr::recycle_ls(const TenantLSID &tls_id)
+int ObLogTenantMgr::recycle_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   ObLogTenantGuard guard;

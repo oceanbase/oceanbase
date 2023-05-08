@@ -17,8 +17,8 @@
 #include "lib/container/ob_array.h"             // ObArray
 
 #include "ob_easy_hazard_map.h"                 // ObEasyHazardMap
-#include "ob_log_part_serve_info.h"             // PartServeInfo
-#include "ob_log_ls_define.h"                   // TenantLSID
+#include "logservice/logfetcher/ob_log_part_serve_info.h" // logfetcher::PartServeInfo
+#include "logservice/common_util/ob_log_ls_define.h" // logservice::TenantLSID
 
 #define LS_STAT(level, ls_info, fmt, arg...) \
     do { \
@@ -74,8 +74,8 @@ struct ObLogLSInfo
     int64_t iv_;                // Full 64-bit values
   } ctx_;
 
-  TenantLSID  tls_id_;
-  PartServeInfo           serve_info_;
+  logservice::TenantLSID  tls_id_;
+  logfetcher::PartServeInfo serve_info_;
 
   ObLogLSInfo() { reset(); }
   ~ObLogLSInfo() { reset(); }
@@ -87,7 +87,7 @@ struct ObLogLSInfo
   /// Initialize
   /// Set from INVALID state to PART_STATE_NORMAL state if serviced
   /// If not in service, set from INVALID state to PART_STATE_NOT_SERVED state
-  int init(const TenantLSID &tls_id,
+  int init(const logservice::TenantLSID &tls_id,
       const bool start_serve_from_create,   // Whether to start the service from the creation of a partition
       const int64_t start_tstamp,
       const bool is_served);
@@ -135,22 +135,22 @@ struct LSInfoPrinter
       offline_ls_count_(0),
       not_served_ls_count_(0)
   {}
-  bool operator()(const TenantLSID &tls_id, ObLogLSInfo *ls_info);
+  bool operator()(const logservice::TenantLSID &tls_id, ObLogLSInfo *ls_info);
 };
 
 struct LSInfoScannerByTenant
 {
   uint64_t tenant_id_;
-  common::ObArray<TenantLSID> ls_array_;
+  common::ObArray<logservice::TenantLSID> ls_array_;
 
   explicit LSInfoScannerByTenant(const uint64_t tenant_id) :
       tenant_id_(tenant_id),
       ls_array_()
   {}
-  bool operator()(const TenantLSID &tls_id, ObLogLSInfo *ls_info);
+  bool operator()(const logservice::TenantLSID &tls_id, ObLogLSInfo *ls_info);
 };
 
-typedef ObEasyHazardMap<TenantLSID, ObLogLSInfo> LSInfoMap;
+typedef ObEasyHazardMap<logservice::TenantLSID, ObLogLSInfo> LSInfoMap;
 
 } // namespace libobcdc
 } // namespace oceanbase

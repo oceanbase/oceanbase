@@ -257,6 +257,9 @@ public:
   int check_if_tenant_has_been_dropped(
       const uint64_t tenant_id,
       bool &is_dropped);
+  int check_is_creating_standby_tenant(
+    const uint64_t tenant_id,
+    bool &is_creating_standby);
   int check_outline_exist_with_name(const uint64_t tenant_id,
       const uint64_t database_id,
       const common::ObString &outline_name,

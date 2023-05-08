@@ -52,6 +52,9 @@ class TGTaskHandler
 {
 public:
   virtual void handle(void *task) = 0;
+
+  virtual void handle(void *task, volatile bool &is_stoped)
+  {}
   // when thread set stop left task will be process by handle_drop (default impl is handle)
   // users should define it's behaviour to manage task memory or some what
   virtual void handle_drop(void *task) {

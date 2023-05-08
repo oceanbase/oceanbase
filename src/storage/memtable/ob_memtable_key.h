@@ -113,10 +113,10 @@ public:
   {
     int64_t pos = 0;
     if (OB_NOT_NULL(rowkey_)) {
-      common::databuff_printf(buf, buf_len, pos, "rowkey_object=[%s] ",
+      common::databuff_printf(buf, buf_len, pos, "%s",
                               common::to_cstring(*rowkey_));
     } else {
-      common::databuff_printf(buf, buf_len, pos, "rowkey_object=NULL");
+      common::databuff_printf(buf, buf_len, pos, "NULL");
     }
     return pos;
   }

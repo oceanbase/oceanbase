@@ -1500,10 +1500,10 @@ public:
     inherit_sharding_index_ = inherit_sharding_index;
   }
 
-  inline bool has_allocated_osg() const { return allocated_osg_; }
-  inline void set_allocated_osg(bool allocated_osg)
+  inline bool need_osg_merge() const { return need_osg_merge_; }
+  inline void set_need_osg_merge(bool v)
   {
-    allocated_osg_ = allocated_osg;
+    need_osg_merge_ = v;
   }
 
   bool is_dml_operator() const
@@ -1868,7 +1868,7 @@ protected:
   // Used to indicate which child node the current sharding inherits from
   int64_t inherit_sharding_index_;
   // wether has allocated a osg_gather.
-  bool allocated_osg_;
+  bool need_osg_merge_;
 };
 
 template <typename Allocator>

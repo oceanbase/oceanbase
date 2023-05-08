@@ -108,6 +108,7 @@ int ObLogFetcher::init(
     // Before the Fetcher module is initialized, the following configuration items need to be loaded
     configure(cfg);
     const common::ObRegion prefer_region(cfg.region.str());
+    const bool is_tenant_mode = TCTX.is_tenant_sync_mode();
 
     if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
         proxy,
@@ -122,7 +123,8 @@ int ObLogFetcher::init(
         cfg.blacklist_survival_time_upper_limit_min,
         cfg.blacklist_survival_time_penalty_period_min,
         cfg.blacklist_history_overdue_time_min,
-        cfg.blacklist_history_clear_interval_min))) {
+        cfg.blacklist_history_clear_interval_min,
+        is_tenant_mode))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
@@ -352,20 +354,20 @@ bool ObLogFetcher::is_paused()
 void ObLogFetcher::mark_stop_flag()
 {
   if (OB_UNLIKELY(is_inited_)) {
-    LOG_INFO("mark fetcher stop begin");
+    LOG_INFO("mark fetcher stop begin", K_(is_loading_data_dict_baseline_data));
     stop_flag_ = true;
 
     stream_worker_.mark_stop_flag();
     dead_pool_.mark_stop_flag();
     idle_pool_.mark_stop_flag();
     start_lsn_locator_.mark_stop_flag();
-    LOG_INFO("mark fetcher stop succ");
+    LOG_INFO("mark fetcher stop succ",K_(is_loading_data_dict_baseline_data));
   }
 }
 
 int ObLogFetcher::add_ls(
-    const TenantLSID &tls_id,
-    const ObLogFetcherStartParameters &start_parameters)
+    const logservice::TenantLSID &tls_id,
+    const logfetcher::ObLogFetcherStartParameters &start_parameters)
 {
   int ret = OB_SUCCESS;
   LSFetchCtx *ls_fetch_ctx = NULL;
@@ -415,7 +417,7 @@ int ObLogFetcher::add_ls(
   return ret;
 }
 
-int ObLogFetcher::recycle_ls(const TenantLSID &tls_id)
+int ObLogFetcher::recycle_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
 
@@ -436,11 +438,11 @@ int ObLogFetcher::recycle_ls(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObLogFetcher::remove_ls(const TenantLSID &tls_id)
+int ObLogFetcher::remove_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   // Copy the tls_id to avoid recycle
-  const TenantLSID removed_tls_id = tls_id;
+  const logservice::TenantLSID removed_tls_id = tls_id;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -609,10 +611,10 @@ int ObLogFetcher::check_progress(
     LOG_ERROR("fetcher is not inited", KR(ret), K_(is_inited));
   } else {
     is_exceeded = false;
-    TenantLSID tls_id(tenant_id, share::SYS_LS);
+    logservice::TenantLSID tls_id(tenant_id, share::SYS_LS);
     LSFetchCtx *ls_fetch_ctx = nullptr;
     int64_t progress = OB_INVALID_TIMESTAMP;
-    PartTransDispatchInfo dispatch_info;
+    logfetcher::PartTransDispatchInfo dispatch_info;
 
     if (OB_FAIL(ls_fetch_mgr_.get_ls_fetch_ctx(tls_id, ls_fetch_ctx))) {
       LOG_ERROR("ls_fetch_mgr_ get_ls_fetch_ctx failed", KR(ret), K(tls_id));
@@ -675,7 +677,7 @@ void ObLogFetcher::heartbeat_dispatch_routine()
   int ret = OB_SUCCESS;
   LOG_INFO("fetcher heartbeat dispatch thread start");
   // Global heartbeat invalid tls_id
-  TenantLSID hb_tls_id;
+  logservice::TenantLSID hb_tls_id;
 
   if (is_loading_data_dict_baseline_data_) {
     // Don't have to deal with heartbeat when is loading data dictionary baseline data
@@ -778,12 +780,12 @@ ObLogFetcher::FetchCtxMapHBFunc::FetchCtxMapHBFunc() :
 {
 }
 
-bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const TenantLSID &tls_id, LSFetchCtx *&ctx)
+bool ObLogFetcher::FetchCtxMapHBFunc::operator()(const logservice::TenantLSID &tls_id, LSFetchCtx *&ctx)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = true;
   int64_t progress = OB_INVALID_TIMESTAMP;
-  PartTransDispatchInfo dispatch_info;
+  logfetcher::PartTransDispatchInfo dispatch_info;
   palf::LSN last_dispatch_log_lsn;
 
   if (NULL == ctx) {
@@ -852,7 +854,7 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   static int64_t last_data_progress = OB_INVALID_TIMESTAMP;
   static int64_t last_ddl_handle_progress = OB_INVALID_TIMESTAMP;
   static palf::LSN last_ddl_handle_lsn;
-  static TenantLSID last_min_data_progress_ls;
+  static logservice::TenantLSID last_min_data_progress_ls;
   static LSProgressInfoArray last_ls_progress_infos;
 
   FetchCtxMapHBFunc hb_func;
@@ -885,8 +887,8 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
   } else {
     int64_t data_progress = hb_func.data_progress_;
     // TODO
-    TenantLSID min_progress_tls_id = hb_func.min_progress_ls_;
-    TenantLSID max_progress_tls_id = hb_func.max_progress_ls_;
+    logservice::TenantLSID min_progress_tls_id = hb_func.min_progress_ls_;
+    logservice::TenantLSID max_progress_tls_id = hb_func.max_progress_ls_;
 
     // The final heartbeat timestamp is equal to the minimum value of the DDL processing progress and data progress
     if (OB_INVALID_TIMESTAMP != data_progress) {
@@ -906,7 +908,7 @@ int ObLogFetcher::next_heartbeat_timestamp_(int64_t &heartbeat_tstamp, const int
         // FIXME: Here the tls_id of the DDL is constructed directly, which may be wrong for the partition count field of the sys tenant, but here it is just
         // printing logs does not affect
         // TODO modifies
-        min_progress_tls_id = TenantLSID(ddl_min_progress_tenant_id, share::SYS_LS);
+        min_progress_tls_id = logservice::TenantLSID(ddl_min_progress_tenant_id, share::SYS_LS);
       }
 
       _LOG_INFO("[STAT] [FETCHER] [HEARTBEAT] DELAY=[%.3lf, %.3lf](sec) LS_COUNT=%ld "

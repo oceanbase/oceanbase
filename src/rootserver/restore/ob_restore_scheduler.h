@@ -78,6 +78,7 @@ public:
     return FAILED == tenant_restore_status;
   }
 
+  static int reset_schema_status(const uint64_t tenant_id, common::ObMySQLProxy *sql_proxy);
 
 public:
   static int assign_pool_list(const char *str,
@@ -132,7 +133,6 @@ private:
                                       share::ObHisRestoreJobPersistInfo &history_info,
                                       bool &restore_tenant_exist);
   int check_tenant_can_restore_(const uint64_t tenant_id);
-  int reset_schema_status_(const uint64_t tenant_id);
   int may_update_restore_concurrency_(const uint64_t new_tenant_id,
       const share::ObPhysicalRestoreJob &job_info);
   int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);

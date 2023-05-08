@@ -493,5 +493,7 @@ int LogRequestHandler::handle_sync_request<LogGetStatReq, LogGetStatResp>(
   }
   return ret;
 }
+
+
 } // end namespace palf
 } // end namespace oceanbase

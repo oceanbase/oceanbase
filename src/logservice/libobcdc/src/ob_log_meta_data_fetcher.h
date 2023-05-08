@@ -17,7 +17,7 @@
 #include "ob_log_task_pool.h"        // ObLogTransTaskPool
 #include "ob_log_entry_task_pool.h"  // ObLogEntryTaskPool
 #include "ob_log_meta_data_fetcher_dispatcher.h"  // ObLogMetaDataFetcherDispatcher
-#include "ob_log_fetcher_start_parameters.h"
+#include "logservice/logfetcher/ob_log_fetcher_start_parameters.h"
 
 namespace oceanbase
 {
@@ -51,7 +51,7 @@ public:
 public:
   int add_ls_and_fetch_until_the_progress_is_reached(
       const uint64_t tenant_id,
-      const ObLogFetcherStartParameters &start_parameters,
+      const logfetcher::ObLogFetcherStartParameters &start_parameters,
       const int64_t timeout);
 
 private:

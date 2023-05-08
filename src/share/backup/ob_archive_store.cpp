@@ -1326,7 +1326,7 @@ int ObArchiveStore::get_piece_paths_in_range(const SCN &start_scn, const SCN &en
     if (OB_FAIL(ret)) {
     } else if (-1 == last_piece_idx) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("no enough log for restore", K(ret), K(last_piece_idx), K(end_scn));
+      LOG_WARN("no enough log for restore", K(ret), K(last_piece_idx), K(end_scn), K(piece_keys));
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
     } else {
       const ObTenantArchivePieceAttr &last_piece = piece_whole_info.his_frozen_pieces_.at(last_piece_idx);

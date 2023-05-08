@@ -26,6 +26,10 @@ using namespace oceanbase::omt;
 ObAllVirtualUnit::ObAllVirtualUnit()
     : ObVirtualTableScannerIterator(),
       addr_(),
+      zone_type_(ZONE_TYPE_INVALID),
+      region_(DEFAULT_REGION_NAME),
+      is_zone_type_set_(false),
+      is_region_set_(false),
       tenant_idx_(0),
       tenant_meta_arr_()
 {
@@ -60,6 +64,9 @@ int ObAllVirtualUnit::init(common::ObAddr &addr)
 int ObAllVirtualUnit::inner_open()
 {
   int ret = OB_SUCCESS;
+  is_zone_type_set_ = false;
+  is_region_set_ = false;
+  ObLocalityManager *locality_manager_ = GCTX.locality_manager_;
 
   ObTenant *tenant = nullptr;
   if (OB_ISNULL(GCTX.omt_)) {
@@ -86,6 +93,39 @@ int ObAllVirtualUnit::inner_open()
     }
   } else if (OB_FAIL(tenant_meta_arr_.push_back(tenant->get_tenant_meta()))) {
     SERVER_LOG(WARN, "fail to push back tenant meta", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(locality_manager_)) {
+      ret = OB_ERR_UNEXPECTED;
+      SERVER_LOG(WARN, "fail to get locality manager from GCTX", KR(ret));
+    } else {
+      // Loacality cache will be loaded shortly after ObServer starts.
+      // Before that, two columns ZONE_TYPE and REGION of the local unit rows will be set to NULL.
+      if (OB_FAIL(locality_manager_->get_server_zone_type(addr_, zone_type_))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          SERVER_LOG(WARN, "fail to get zone type from locality manager", KR(ret));
+        } else {
+          // OB_ENTRY_NOT_EXIST means locality cache not loaded, no warning would be popped.
+          ret = OB_SUCCESS;
+        }
+      } else {
+        is_zone_type_set_ = true;
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(locality_manager_->get_server_region(addr_, region_))) {
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            SERVER_LOG(WARN, "fail to get region from locality manager", KR(ret));
+          } else {
+            // OB_ENTRY_NOT_EXIST means locality cache not loaded, no warning would be popped.
+            ret = OB_SUCCESS;
+          }
+        } else {
+          is_region_set_ = true;
+        }
+      }
+    }
   }
 
   tenant_idx_ = 0;
@@ -137,6 +177,24 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         case ZONE:
           cur_row_.cells_[i].set_varchar(GCONF.zone.str());
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        case ZONE_TYPE:
+          if (OB_UNLIKELY(!is_zone_type_set_)) {
+            // locality not refreshed yet, set to null
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_varchar(zone_type_to_str(zone_type_));
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        case REGION:
+          if (OB_UNLIKELY(!is_region_set_)) {
+            // locality not refreshed yet, set to null
+            cur_row_.cells_[i].set_null();
+          } else {
+            cur_row_.cells_[i].set_varchar(region_.str());
+            cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         case MIN_CPU: {
           if (is_meta_tnt) {

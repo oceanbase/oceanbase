@@ -259,6 +259,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObCreateTenantStmt, ObCreateTenantExecutor);
         break;
       }
+      case stmt::T_CREATE_STANDBY_TENANT: {
+        DEFINE_EXECUTE_CMD(ObCreateTenantStmt, ObCreateStandbyTenantExecutor);
+        break;
+      }
       case stmt::T_DROP_TENANT: {
         DEFINE_EXECUTE_CMD(ObDropTenantStmt, ObDropTenantExecutor);
         break;

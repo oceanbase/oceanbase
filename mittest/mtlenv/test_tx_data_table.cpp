@@ -30,6 +30,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
+#include "storage/blocksstable/ob_datum_row.h"
 #undef private
 #undef protected
 
@@ -393,11 +394,15 @@ void TestTxDataTable::do_basic_test()
   ObTxDataMemtable *freezing_memtable = nullptr;
   ObTxDataMemtable *active_memtable = nullptr;
   check_freeze_(memtable_mgr, freezing_memtable, active_memtable);
-  inserted_cnt = freezing_memtable->get_tx_data_count();
 
   const int64_t range_cnt = 4;
   ObSEArray<common::ObStoreRange, range_cnt> range_array;
+
+  int64_t inserted_cnt_before_pre_process = freezing_memtable->get_tx_data_count();
   ASSERT_EQ(OB_SUCCESS, freezing_memtable->pre_process_for_merge());
+  int64_t inserted_cnt_after_pre_process = freezing_memtable->get_tx_data_count();
+  ASSERT_EQ(inserted_cnt_before_pre_process + 1, inserted_cnt_after_pre_process);
+
   ASSERT_EQ(OB_SUCCESS, freezing_memtable->get_split_ranges(nullptr, nullptr, range_cnt, range_array));
   int64_t pre_range_end_key = 0;
   for (int i = 0; i < range_cnt; i++) {
@@ -418,7 +423,7 @@ void TestTxDataTable::do_basic_test()
     transaction::ObTransID pre_tx_id = INT64_MIN;
     ObTxData *cur_tx_data = freezing_memtable->sort_list_head_.next_;
     ASSERT_NE(nullptr, cur_tx_data);
-    int64_t cnt = 0;
+    int64_t iter_cnt = 0;
     while (nullptr != cur_tx_data) {
       auto tx_id = cur_tx_data->tx_id_;
       if (INT64_MAX == tx_id) {
@@ -428,12 +433,13 @@ void TestTxDataTable::do_basic_test()
 
       pre_tx_id = tx_id;
       cur_tx_data = cur_tx_data->sort_list_node_.next_;
-      cnt++;
+      iter_cnt++;
     }
 
     // there is a fake tx data inserted into link hash map after pre-process for upper_trans_version
     // calculation
-    ASSERT_EQ(inserted_cnt + 1, cnt);
+    int64_t deleted_cnt = freezing_memtable->get_deleted_count();
+    ASSERT_EQ(iter_cnt, inserted_cnt_after_pre_process - deleted_cnt);
   }
 
   // free memtable

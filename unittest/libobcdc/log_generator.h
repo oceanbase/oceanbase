@@ -177,7 +177,7 @@ private:
   // lsn of last log_entry, may be invalid if haven't generate any log_entry.
   palf::LSN last_lsn_();
 private:
-  TenantLSID tls_id_;
+  logservice::TenantLSID tls_id_;
   ObTxLogBlockBuilder block_builder_;
   ObLogLSNArray lsn_arr_;
   LSN last_record_lsn_;

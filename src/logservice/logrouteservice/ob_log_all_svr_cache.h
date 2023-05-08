@@ -192,7 +192,6 @@ private:
 
 private:
   ObLogSysTableQueryer  *systable_queryer_;
-
   int64_t               all_server_cache_update_interval_;
   int64_t               all_zone_cache_update_interval_;
   common::ObRegion      assign_region_;

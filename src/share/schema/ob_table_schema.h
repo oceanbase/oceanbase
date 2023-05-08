@@ -78,6 +78,12 @@ struct ObColumnIdKey
   inline operator uint64_t() const { return column_id_; }
 
   inline uint64_t hash() const { return ((column_id_ * 29 + 7) & 0xFFFF); }
+
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return common::OB_SUCCESS;
+  }
 };
 
 template<class K, class V>

@@ -112,15 +112,16 @@ public:
 
   inline void set_udt_set_id(const uint64_t id) { udt_set_id_ = id; }
   inline uint64_t get_udt_set_id() const { return udt_set_id_; }
-  inline bool is_udt_column() const { return udt_set_id_ > 0; }
+  inline bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
 
   inline void set_sub_data_type(const uint64_t sub_data_type) { sub_type_ = sub_data_type; }
   inline uint64_t get_sub_data_type() const { return sub_type_; }
 
-  inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
+  inline bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
   inline bool is_xmltype() const {
-    return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
-           || meta_type_.is_xml_sql_type();
+    return is_udt_column()
+        && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
+           || meta_type_.is_xml_sql_type());
   }
 
 public:

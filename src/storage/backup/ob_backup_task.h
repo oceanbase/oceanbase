@@ -32,6 +32,7 @@
 #include "storage/ls/ob_ls_tablet_service.h"
 #include "share/backup/ob_backup_data_store.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "share/backup/ob_archive_store.h"
 
 namespace oceanbase {
 namespace share
@@ -395,7 +396,7 @@ public:
   ObLSBackupComplementLogDag();
   virtual ~ObLSBackupComplementLogDag();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
-      const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
+      const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
       const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
@@ -410,6 +411,7 @@ private:
   ObBackupJobDesc job_desc_;
   share::ObBackupDest backup_dest_;
   uint64_t tenant_id_;
+  int64_t dest_id_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObLSID ls_id_;
   int64_t turn_id_;
@@ -657,14 +659,16 @@ class ObLSBackupComplementLogTask : public share::ObITask {
   struct BackupPieceFile {
     BackupPieceFile();
     void reset();
-    int set(const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id, const int64_t ls_id,
-        const int64_t file_id);
-    TO_STRING_KV(K_(tenant_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id));
-    uint64_t tenant_id_;
+    int set(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const share::ObLSID &ls_id,
+        const int64_t file_id, const share::SCN &start_scn, const ObBackupPathString &path);
+    TO_STRING_KV(K_(dest_id), K_(round_id), K_(piece_id), K_(ls_id), K_(file_id), K_(path));
+    int64_t dest_id_;
     int64_t round_id_;
     int64_t piece_id_;
-    int64_t ls_id_;
+    share::ObLSID ls_id_;
     int64_t file_id_;
+    share::SCN start_scn_;
+    ObBackupPathString path_;
   };
 
   class BackupPieceOp : public ObBaseDirEntryOperator {
@@ -673,9 +677,6 @@ class ObLSBackupComplementLogTask : public share::ObITask {
     virtual int func(const dirent *entry) override;
     int get_file_id_list(common::ObIArray<int64_t> &files) const;
     TO_STRING_KV(K_(file_id_list));
-
-  private:
-    int parse_log_file_id_(const common::ObString &file_name, int64_t &piece_id);
 
   private:
     ObArray<int64_t> file_id_list_;
@@ -688,43 +689,66 @@ class ObLSBackupComplementLogTask : public share::ObITask {
 public:
   ObLSBackupComplementLogTask();
   virtual ~ObLSBackupComplementLogTask();
-  int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
+  int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const int64_t dest_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const share::SCN &start_scn,
       const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx);
   virtual int process() override;
 
 private:
+  int get_newly_created_ls_in_piece_(const int64_t dest_id, const uint64_t tenant_id,
+      const share::SCN &start_scn, const share::SCN &end_scn, common::ObIArray<share::ObLSID> &ls_array);
+  int inner_process_(const int64_t archive_dest_id, const share::ObLSID &ls_id);
   int get_complement_log_dir_path_(share::ObBackupPath &backup_path);
-  int calc_backup_file_range_(common::ObIArray<BackupPieceFile> &file_list);
-  int check_pieces_continue_(const common::ObIArray<share::ObTenantArchivePieceAttr> &rounds);
-  int get_piece_id_by_ts_(const uint64_t tenant_id, const share::SCN &scn, int64_t &piece_id);
-  int get_all_pieces_(const uint64_t tenant_id, const int64_t start_piece_id, const int64_t end_piece_id,
+  int write_format_file_();
+  int generate_format_desc_(share::ObBackupFormatDesc &format_desc);
+  int calc_backup_file_range_(const int64_t dest_id, const share::ObLSID &ls_id, common::ObIArray<BackupPieceFile> &file_list);
+  int get_active_round_dest_id_(const uint64_t tenant_id, int64_t &dest_id);
+  int get_piece_id_by_scn_(const uint64_t tenant_id, const int64_t dest_id, const share::SCN &scn, int64_t &piece_id);
+  int get_all_pieces_(const uint64_t tenant_id, const int64_t dest_id, const int64_t start_piece_id, const int64_t end_piece_id,
       common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
-  int get_all_piece_file_list_(const uint64_t tenant_id,
+  int wait_pieces_frozen_(const common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int wait_piece_frozen_(const share::ObTenantArchivePieceAttr &piece);
+  int check_piece_frozen_(const share::ObTenantArchivePieceAttr &piece, bool &is_frozen);
+  int get_all_piece_file_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list, const share::SCN &start_scn, const share::SCN &end_scn,
       common::ObIArray<BackupPieceFile> &piece_file_list);
-  int inner_get_piece_file_list_(
-      const int64_t round_id, const int64_t piece_id, common::ObIArray<BackupPieceFile> &piece_file_list);
-  int locate_archive_file_id_by_ts_(const uint64_t tenant_id, const int64_t round_id, const int64_t piece_id,
-      const share::SCN &scn, const bool is_upper_bound, int64_t &file_id);
+  int inner_get_piece_file_list_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, common::ObIArray<BackupPieceFile> &piece_file_list);
+  int locate_archive_file_id_by_scn_(const ObTenantArchivePieceAttr &piece_attr, const share::ObLSID &ls_id, const SCN &scn, int64_t &file_id);
+  int get_file_in_between_(const int64_t start_file_id, const int64_t end_file_id, common::ObIArray<BackupPieceFile> &list);
   int filter_file_id_smaller_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
   int filter_file_id_larger_than_(const int64_t file_id, common::ObIArray<BackupPieceFile> &list);
-  int get_src_backup_piece_dir_(const int64_t round_id, const int64_t piece_id, share::ObBackupPath &backup_path);
+  int get_src_backup_piece_dir_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, share::ObBackupPath &backup_path);
   int get_src_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
   int get_dst_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
   int backup_complement_log_(const common::ObIArray<BackupPieceFile> &path);
   int inner_backup_complement_log_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
   int transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
-  int inner_transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
+  int inner_transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path, int64_t &transfer_len);
   int get_transfer_length_(const int64_t delta_len, int64_t &transfer_len);
   int get_file_length_(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, int64_t &length);
-  int post_rpc_result_(const int64_t result);
+  int get_copy_src_and_dest_(const BackupPieceFile &piece_file, share::ObBackupDest &src, share::ObBackupDest &dest);
+  int transform_and_copy_meta_file_(const BackupPieceFile &piece_file);
+  // ls_file_info
+  int copy_ls_file_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // piece_file_info
+  int copy_piece_file_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // single_piece_info
+  int copy_single_piece_info_(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // tenant_archive_piece_infos
+  int copy_tenant_archive_piece_infos(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // checkpoint_info
+  int copy_checkpoint_info(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // round_start
+  int copy_round_start_file(const BackupPieceFile &piece_file, const share::ObArchiveStore &src_store, const share::ObArchiveStore &dest_store);
+  // piece_start
+  int copy_piece_start_file(const BackupPieceFile &piece_file, const share::ObBackupDest &src, const share::ObBackupDest &dest);
 
 private:
   bool is_inited_;
   ObBackupJobDesc job_desc_;
   share::ObBackupDest backup_dest_;
   uint64_t tenant_id_;
+  int64_t dest_id_;
   share::ObBackupSetDesc backup_set_desc_;
   share::ObLSID ls_id_;
   share::SCN compl_start_scn_;

@@ -208,6 +208,7 @@ ob_set_subtarget(oblib_lib thread
   thread/ob_dynamic_thread_pool.cpp
   thread/ob_reentrant_thread.cpp
   thread/ob_simple_thread_pool.cpp
+  thread/ob_map_queue_thread_pool.cpp
   thread/ob_work_queue.cpp
   thread/thread_mgr.cpp
   thread/thread_mgr_interface.cpp

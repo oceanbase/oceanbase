@@ -41,7 +41,9 @@ class ObAllVirtualUnit : public common::ObVirtualTableScannerIterator
     LOG_DISK_IN_USE,
     DATA_DISK_IN_USE,
     STATUS,
-    CREATE_TIME
+    CREATE_TIME,
+    ZONE_TYPE,
+    REGION
   };
 
 public:
@@ -55,6 +57,10 @@ public:
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
   common::ObAddr addr_;
+  common::ObZoneType zone_type_;
+  common::ObRegion region_;
+  bool is_zone_type_set_;
+  bool is_region_set_;
   int64_t tenant_idx_;
   common::ObArray<omt::ObTenantMeta> tenant_meta_arr_;
 

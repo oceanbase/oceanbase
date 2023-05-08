@@ -230,8 +230,8 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
                     }
                   }
                 } else {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("invalid out param expr", K(*expr), K(ret));
+                  ret = OB_ERR_CALL_WRONG_ARG;
+                  LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt", K(ret));
                 }
               } else {
                 ctx.get_physical_plan_ctx()->get_param_store_for_update().at(i) = params.at(i);

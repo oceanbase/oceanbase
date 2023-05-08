@@ -380,7 +380,12 @@ int ObLogArchivePieceContext::get_round_range_()
   int64_t max_round_id = 0;
   share::ObArchiveStore archive_store;
   if (OB_FAIL(load_archive_meta_())) {
-    CLOG_LOG(WARN, "load archive meta failed", K(ret));
+    if (OB_BACKUP_FILE_NOT_EXIST == ret) {
+      ret = OB_INVALID_BACKUP_DEST;
+      CLOG_LOG(WARN, "archive meta file not exist, invalid archive dest", K(id_), K(archive_dest_));
+    } else {
+      CLOG_LOG(WARN, "load archive meta failed", K(id_), K(archive_dest_));
+    }
   } else if (OB_FAIL(archive_store.init(archive_dest_))) {
     CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
   } else if (OB_FAIL(archive_store.get_round_range(dest_id_, min_round_id, max_round_id))) {

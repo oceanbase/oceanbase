@@ -153,19 +153,23 @@ public:
   void logstream_freeze();
   void tablet_freeze();
   void tablet_freeze_for_replace_tablet_meta();
+  void batch_tablet_freeze();
   void insert_and_freeze();
   void empty_memtable_flush();
   void all_virtual_minor_freeze_info();
   void check_frozen_memtable();
+  void create_tables();
+private:
+  static const int64_t OB_DEFAULT_TABLE_COUNT = 3;
 private:
   int insert_thread_num_ = 10;
   int insert_num_ = 200000;
   int freeze_num_ = 1000;
   int freeze_duration_ = 50 * 1000 * 1000;
-  int64_t table_id_ = 0;
-  ObTabletID tablet_id_;
-  share::ObLSID ls_id_;
-  ObLSHandle ls_handle_;
+  ObSEArray<int64_t, OB_DEFAULT_TABLE_COUNT> table_ids_;
+  ObSEArray<ObTabletID, OB_DEFAULT_TABLE_COUNT> tablet_ids_;
+  ObSEArray<share::ObLSID, OB_DEFAULT_TABLE_COUNT> ls_ids_;
+  ObSEArray<ObLSHandle, OB_DEFAULT_TABLE_COUNT> ls_handles_;
 };
 
 void ObMinorFreezeTest::get_tablet_id_and_ls_id()
@@ -178,9 +182,9 @@ void ObMinorFreezeTest::get_tablet_id_and_ls_id()
   int64_t tmp_ls_id = 0;
 
   OB_LOG(INFO, "get table_id");
-  {
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
     ObSqlString sql;
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select table_id from oceanbase.__all_virtual_table where table_name = 't1'"));
+    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select table_id from oceanbase.__all_virtual_table where table_name = 't%d'", i));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
       sqlclient::ObMySQLResult *result = res.get_result();
@@ -188,12 +192,14 @@ void ObMinorFreezeTest::get_tablet_id_and_ls_id()
       ASSERT_EQ(OB_SUCCESS, result->next());
       ASSERT_EQ(OB_SUCCESS, result->get_int("table_id", tmp_table_id));
     }
+    table_ids_.push_back(tmp_table_id);
+    OB_LOG(INFO, "tmp_table_id", K(tmp_table_id));
   }
 
   OB_LOG(INFO, "get tablet_id");
-  {
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
     ObSqlString sql;
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select tablet_id from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld", tmp_table_id));
+    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select tablet_id from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld", table_ids_.at(i)));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
       sqlclient::ObMySQLResult *result = res.get_result();
@@ -201,12 +207,14 @@ void ObMinorFreezeTest::get_tablet_id_and_ls_id()
       ASSERT_EQ(OB_SUCCESS, result->next());
       ASSERT_EQ(OB_SUCCESS, result->get_int("tablet_id", tmp_tablet_id));
     }
+    tablet_ids_.push_back(ObTabletID(tmp_tablet_id));
+    OB_LOG(INFO, "tmp_tablet_id", K(tmp_tablet_id));
   }
 
   OB_LOG(INFO, "get ls_id");
-  {
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
     ObSqlString sql;
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select ls_id from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld", tmp_table_id));
+    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select ls_id from oceanbase.__all_virtual_tablet_to_ls where table_id = %ld", table_ids_.at(i)));
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
       sqlclient::ObMySQLResult *result = res.get_result();
@@ -214,18 +222,17 @@ void ObMinorFreezeTest::get_tablet_id_and_ls_id()
       ASSERT_EQ(OB_SUCCESS, result->next());
       ASSERT_EQ(OB_SUCCESS, result->get_int("ls_id", tmp_ls_id));
     }
+    ls_ids_.push_back(share::ObLSID(tmp_ls_id));
+    OB_LOG(INFO, "tmp_ls_id", K(tmp_ls_id));
   }
 
-  table_id_ = tmp_table_id;
-  tablet_id_ = tmp_tablet_id;
-  ls_id_ = tmp_ls_id;
-  OB_LOG(INFO, "tmp_table_id", K(tmp_table_id));
-  OB_LOG(INFO, "tmp_tablet_id", K(tmp_tablet_id));
-  OB_LOG(INFO, "tmp_ls_id", K(tmp_ls_id));
-  OB_LOG(INFO, "tablet_id", K(table_id_));
-  OB_LOG(INFO, "ls_id", K(ls_id_));
-  ASSERT_EQ(true, tablet_id_.is_valid());
-  ASSERT_EQ(true, ls_id_.is_valid());
+  OB_LOG(INFO, "tablet_ids", K(tablet_ids_));
+  OB_LOG(INFO, "ls_ids", K(ls_ids_));
+
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
+    ASSERT_EQ(true, tablet_ids_.at(i).is_valid());
+    ASSERT_EQ(true, ls_ids_.at(i).is_valid());
+  }
 }
 
 void ObMinorFreezeTest::all_virtual_minor_freeze_info()
@@ -236,13 +243,15 @@ void ObMinorFreezeTest::all_virtual_minor_freeze_info()
 
   OB_LOG(INFO, "test __all_virtual_minor_freeze_info");
   while (ObTimeUtility::current_time() - start_time <= freeze_duration_) {
-    ObSqlString sql;
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select * from oceanbase.__all_virtual_minor_freeze_info where ls_id = %ld", ls_id_.id()));
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
-      sqlclient::ObMySQLResult *result = res.get_result();
-      ASSERT_NE(nullptr, result);
-      ASSERT_EQ(OB_SUCCESS, result->next());
+    for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
+      ObSqlString sql;
+      ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("select * from oceanbase.__all_virtual_minor_freeze_info where ls_id = %ld", ls_ids_.at(i).id()));
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ASSERT_EQ(OB_SUCCESS, sql_proxy.read(res, sql.ptr()));
+        sqlclient::ObMySQLResult *result = res.get_result();
+        ASSERT_NE(nullptr, result);
+        ASSERT_EQ(OB_SUCCESS, result->next());
+      }
     }
   }
 
@@ -290,14 +299,18 @@ void ObMinorFreezeTest::check_frozen_memtable()
 void ObMinorFreezeTest::get_ls()
 {
   OB_LOG(INFO, "get_ls");
-  share::ObTenantSwitchGuard tenant_guard;
-  OB_LOG(INFO, "tenant_id", K(RunCtx.tenant_id_));
-  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
-  ObLSService *ls_srv = MTL(ObLSService *);
-  ASSERT_NE(nullptr, ls_srv);
-  OB_LOG(INFO, "ls_id", K(ls_id_));
-  ASSERT_EQ(OB_SUCCESS, ls_srv->get_ls(ls_id_, ls_handle_, ObLSGetMod::STORAGE_MOD));
-  ASSERT_EQ(true, ls_handle_.is_valid());
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
+    share::ObTenantSwitchGuard tenant_guard;
+    ObLSHandle ls_handle;
+    OB_LOG(INFO, "tenant_id", K(RunCtx.tenant_id_));
+    ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
+    ObLSService *ls_srv = MTL(ObLSService *);
+    ASSERT_NE(nullptr, ls_srv);
+    OB_LOG(INFO, "ls_id", K(ls_ids_.at(i)));
+    ASSERT_EQ(OB_SUCCESS, ls_srv->get_ls(ls_ids_.at(i), ls_handle, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(true, ls_handle.is_valid());
+    ls_handles_.push_back(ls_handle);
+  }
 }
 
 void ObMinorFreezeTest::insert_data(int start)
@@ -309,11 +322,13 @@ void ObMinorFreezeTest::insert_data(int start)
   OB_LOG(INFO, "insert data start");
   int i = 0;
   while (ObTimeUtility::current_time() - start_time <= freeze_duration_) {
-    ObSqlString sql;
-    ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("insert into t1 values(%d, %d)", i + start, i + start));
-    int64_t affected_rows = 0;
-    ret = sql_proxy.write(sql.ptr(), affected_rows);
-    ASSERT_EQ(OB_SUCCESS, ret);
+    for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
+      ObSqlString sql;
+      ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("insert into t%d values(%d, %d)", j, i + start, i + start));
+      int64_t affected_rows = 0;
+      ret = sql_proxy.write(sql.ptr(), affected_rows);
+      ASSERT_EQ(OB_SUCCESS, ret);
+    }
     ++i;
   }
 }
@@ -343,7 +358,10 @@ void ObMinorFreezeTest::logstream_freeze()
 
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    ASSERT_EQ(OB_SUCCESS, ls_handle_.get_ls()->logstream_freeze((i % 2 == 0) ? true : false));
+    for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
+
+      ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->logstream_freeze((i % 2 == 0) ? true : false));
+    }
     i = i + 1;
   }
 }
@@ -358,7 +376,9 @@ void ObMinorFreezeTest::tablet_freeze()
 
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    ASSERT_EQ(OB_SUCCESS, ls_handle_.get_ls()->tablet_freeze(tablet_id_, (i % 2 == 0) ? true : false));
+    for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
+      ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->tablet_freeze(tablet_ids_.at(j), (i % 2 == 0) ? true : false));
+    }
     i = i + 1;
   }
 }
@@ -371,15 +391,32 @@ void ObMinorFreezeTest::tablet_freeze_for_replace_tablet_meta()
   ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
   const int64_t start = ObTimeUtility::current_time();
   while (ObTimeUtility::current_time() - start <= freeze_duration_) {
-    ObTableHandleV2 handle;
-    int ret = ls_handle_.get_ls()->get_freezer()->tablet_freeze_for_replace_tablet_meta(tablet_id_, handle);
-    if (OB_EAGAIN == ret || OB_ENTRY_EXIST == ret) {
-      ret = OB_SUCCESS;
+    for (int j = 0; j < OB_DEFAULT_TABLE_COUNT; ++j) {
+      ObTableHandleV2 handle;
+      int ret = ls_handles_.at(j).get_ls()->get_freezer()->tablet_freeze_for_replace_tablet_meta(tablet_ids_.at(j), handle);
+      if (OB_EAGAIN == ret || OB_ENTRY_EXIST == ret) {
+        ret = OB_SUCCESS;
+      }
+      ASSERT_EQ(OB_SUCCESS, ret);
+      if (OB_SUCC(ret)) {
+        ASSERT_EQ(OB_SUCCESS, ls_handles_.at(j).get_ls()->get_freezer()->handle_frozen_memtable_for_replace_tablet_meta(tablet_ids_.at(j), handle));
+      }
     }
-    ASSERT_EQ(OB_SUCCESS, ret);
-    if (OB_SUCC(ret)) {
-      ASSERT_EQ(OB_SUCCESS, ls_handle_.get_ls()->get_freezer()->handle_frozen_memtable_for_replace_tablet_meta(tablet_id_, handle));
-    }
+  }
+}
+
+void ObMinorFreezeTest::batch_tablet_freeze()
+{
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+  share::ObTenantSwitchGuard tenant_guard;
+  OB_LOG(INFO, "tenant_id", K(RunCtx.tenant_id_));
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(RunCtx.tenant_id_));
+  int64_t i = 0;
+
+  const int64_t start = ObTimeUtility::current_time();
+  while (ObTimeUtility::current_time() - start <= freeze_duration_) {
+    ASSERT_EQ(OB_SUCCESS, ls_handles_.at(0).get_ls()->batch_tablet_freeze(tablet_ids_, (i % 2 == 0) ? true : false));
+    i = i + 1;
   }
 }
 
@@ -389,6 +426,7 @@ void ObMinorFreezeTest::insert_and_freeze()
   std::thread tablet_freeze_thread([this]() { tablet_freeze(); });
   std::thread tablet_freeze_for_replace_tablet_meta_thread([this]() { tablet_freeze_for_replace_tablet_meta(); });
   std::thread check_frozen_memtable_thread([this]() { check_frozen_memtable(); });
+  std::thread batch_tablet_freeze_thread([this]() { batch_tablet_freeze(); });
   std::vector<std::thread> insert_threads;
   for (int i = 0; i < insert_thread_num_; ++i) {
     int start = i * insert_num_;
@@ -399,6 +437,7 @@ void ObMinorFreezeTest::insert_and_freeze()
   tablet_freeze_thread.join();
   tablet_freeze_for_replace_tablet_meta_thread.join();
   check_frozen_memtable_thread.join();
+  batch_tablet_freeze_thread.join();
   for (int i = 0; i < insert_thread_num_; ++i) {
     insert_threads[i].join();
   }
@@ -452,6 +491,20 @@ void ObMinorFreezeTest::empty_memtable_flush()
   }
 }
 
+void ObMinorFreezeTest::create_tables()
+{
+  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
+
+  for (int i = 0; i < OB_DEFAULT_TABLE_COUNT; ++i) {
+    OB_LOG(INFO, "create_table: ", K(i));
+    ObSqlString sql;
+    sql.assign_fmt("create table if not exists t%d (c1 int, c2 int, primary key(c1))", i);
+    int64_t affected_rows = 0;
+    ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+    OB_LOG(INFO, "create_table succ", K(i));
+  }
+}
+
 TEST_F(ObMinorFreezeTest, observer_start)
 {
   SERVER_LOG(INFO, "observer_start succ");
@@ -470,16 +523,9 @@ TEST_F(ObMinorFreezeTest, add_tenant)
 
 TEST_F(ObMinorFreezeTest, create_table)
 {
-  common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-
-  {
-    OB_LOG(INFO, "create_table start");
-    ObSqlString sql;
-    sql.assign_fmt("create table if not exists t1 (c1 int, c2 int, primary key(c1))");
-    int64_t affected_rows = 0;
-    ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
-    OB_LOG(INFO, "create_table succ");
-  }
+  OB_LOG(INFO, "create_table start");
+  create_tables();
+  OB_LOG(INFO, "create_table all succ");
 }
 
 TEST_F(ObMinorFreezeTest, insert_and_freeze)

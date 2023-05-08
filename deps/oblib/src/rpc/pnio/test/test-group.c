@@ -31,12 +31,17 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t req_id)
   return 0;
 }
 
+typedef  struct client_cond {
+  void* req_ptr;
+  int cond;
+} client_cond;
+
 int client_cb(void* arg, int error, const char* b, int64_t sz)
 {
   cb_cnt++;
-  int* cond = (typeof(cond))arg;
-  if (cond) {
-    (*cond)++;
+  int* cond = &((typeof(client_cond*))arg)->cond;
+  if (arg) {
+    AAF(cond, 1);
     rk_futex_wake(cond, 1);
   }
   return 0;
@@ -45,7 +50,7 @@ int client_cb(void* arg, int error, const char* b, int64_t sz)
 void* stress_thread(void* arg)
 {
   int64_t tid = (int64_t)arg;
-  int cond = 0;
+  client_cond cond = {NULL, 0};
   thread_counter_reg();
   prctl(PR_SET_NAME, "stress");
   srand((unsigned)time(NULL));
@@ -60,16 +65,31 @@ void* stress_thread(void* arg)
   }
 #endif
     char *msg = (char*)malloc(msg_length);
-    int* pcond = (i & 0xff)? NULL: &cond;
-    pn_send(((int64_t)grp<<32) + tid, &dest_addr, msg, msg_length, 0, rk_get_corse_us() + 10000000, client_cb, pcond);
+    client_cond* pcond = (i & 0xff)? NULL: &cond;
+    if (PNIO_OK != pn_send(
+        ((int64_t)grp<<32) + tid,
+        &dest_addr,
+        msg,
+        msg_length,
+        0,
+        rk_get_corse_us() + 1000000,
+        client_cb,
+        pcond)) {
+      i = i - 1;
+    }
     free(msg);
-    usleep(0.005*1000*1000);
+    // usleep(0.005*1000*1000);
     if (pcond) {
       int cur_cond = 0;
-      while((cur_cond = LOAD(pcond)) < ((i>>8) - 64)) {
-        rk_futex_wait(pcond, cur_cond, NULL);
+      while((cur_cond = LOAD(&pcond->cond)) < ((i>>8))) {
+        rk_futex_wait(&pcond->cond, cur_cond, NULL);
+      }
+      if (i == 0xffff) {
+        i = 0;
+        AAF(&pcond->cond, -0xff);
       }
     }
+    // usleep(1000*1000/80000);
   }
 }
 
@@ -89,18 +109,23 @@ int main(int argc, char** argv)
   }
   signal(SIGPIPE, SIG_IGN);
   const char* mode = argv[1];
+  int port = cfgi("io_port", "8042");
   int lfd = -1;
   if (streq(mode, "server") || streq(mode, "all")) {
-    lfd = pn_listen(8042, serve_cb);
+    lfd = pn_listen(port, serve_cb);
   }
   int cnt = pn_provision(lfd, grp, cfgi("io_thread", "1"));
+  int rl = cfgi("rl", "0");
+  if (rl > 0) {
+    pn_ratelimit(grp, rl * 1024 * 1024);
+  }
   if (cnt != cfgi("io_thread", "1")) {
-    printf("pn_provision failed, cnt = %d", cnt);
+    printf("pn_provision failed, cnt = %d\n", cnt);
     if (cnt <= 0) {
       exit(-1);
     }
   }
-  rk_make_unix_sockaddr(&dest_addr, inet_addr(cfg("dest", "127.0.0.1")), 8042);
+  rk_make_unix_sockaddr(&dest_addr, inet_addr(cfg("dest", "127.0.0.1")), port);
   if (streq(mode, "client") || streq(mode, "all")) {
     int stress_count = cfgi("stress_thread", "1");
     pthread_t thd[1024];
@@ -125,9 +150,18 @@ void report()
     mod_report(&f);
     int64_t cur_cb_cnt = thread_counter_sum(&cb_cnt);
     int64_t cur_handle_cnt = thread_counter_sum(&handle_cnt);
+    uint64_t rx_bytes = pn_get_rxbytes(grp);
+    int64_t cur_time_us = rk_get_us();
+    static __thread uint64_t last_rx_bytes = 0;
+    static __thread uint64_t last_time = 0;
+    uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
+    double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
     printf("handle: %ld cb: %ld alloc: %s\n", cur_handle_cnt - last_handle_cnt, cur_cb_cnt - last_cb_cnt, format_gets(&f));
+    printf("time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
     last_handle_cnt = cur_handle_cnt;
     last_cb_cnt = cur_cb_cnt;
+    last_rx_bytes = rx_bytes;
+    last_time = cur_time_us;
     usleep(1000 * 1000);
   }
 }

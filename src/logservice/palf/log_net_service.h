@@ -178,6 +178,7 @@ public:
       const int64_t timeout_us,
       LogGetMCStResp &resp);
 
+
   int submit_register_parent_req(
       const common::ObAddr &server,
       const LogLearner &child_itself,

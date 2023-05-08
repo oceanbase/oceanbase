@@ -289,7 +289,7 @@ END_P SET_VAR DELIMITER
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
-        LEVEL LN LOG LS LINE_DELIMITER
+        LEVEL LN LOG LS LOG_RESTORE_SOURCE LINE_DELIMITER
 
         MAJOR MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
@@ -363,7 +363,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
 %type <node> opt_database_name database_option database_option_list opt_database_option_list database_factor databases_expr opt_databases
-%type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt
+%type <node> create_tenant_stmt opt_tenant_option_list alter_tenant_stmt drop_tenant_stmt create_standby_tenant_stmt log_restore_source_option
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
 %type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func
@@ -600,6 +600,7 @@ stmt:
   | help_stmt               { $$ = $1; check_question_mark($$, result); }
   | create_view_stmt        { $$ = $1; check_question_mark($$, result); }
   | create_tenant_stmt      { $$ = $1; check_question_mark($$, result); }
+  | create_standby_tenant_stmt { $$ = $1; check_question_mark($$, result); }
   | alter_tenant_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_tenant_stmt        { $$ = $1; check_question_mark($$, result); }
   | create_restore_point_stmt { $$ = $1; check_question_mark($$, result); }
@@ -3660,6 +3661,30 @@ opt_tenant_option_list opt_set_sys_var
                            $4,                   /* tenant name */
                            tenant_options,      /* tenant opt */
                            $6);      /* system variable set opt */
+};
+
+create_standby_tenant_stmt:
+CREATE STANDBY TENANT opt_if_not_exists relation_name
+log_restore_source_option opt_tenant_option_list
+{
+  ParseNode *tenant_options = NULL;
+  merge_nodes(tenant_options, result, T_TENANT_OPTION_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_STANDBY_TENANT, 4,
+                           $4,                   /* if not exists */
+                           $5,                   /* tenant name */
+                           $6,                   /* log_restore_source */
+                           tenant_options);      /* tenant opt */
+};
+
+log_restore_source_option:
+LOG_RESTORE_SOURCE opt_equal_mark conf_const
+{
+  UNUSED($2);
+  merge_nodes($$, result, T_LOG_RESTORE_SOURCE, $3);
+}
+| /*empty*/
+{
+  $$ = NULL;
 };
 
 opt_tenant_option_list:
@@ -15913,6 +15938,21 @@ opt_server_or_zone opt_tenant_name
                            $7     /* tenant */
                            );
   $$->value_ = $5[0];                /* scope */
+}
+|
+LOG_RESTORE_SOURCE COMP_EQ STRING_VALUE opt_comment opt_config_scope
+opt_server_or_zone opt_tenant_name
+{
+  ParseNode *log_restore_source= NULL;
+  make_name_node(log_restore_source, result->malloc_pool_, "log_restore_source");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_ACTION, 5,
+                           log_restore_source,    /* param_name */
+                           $3,    /* param_value */
+                           $4,    /* comment */
+                           $6,    /* zone or server */
+                           $7     /* tenant */
+                           );
+  $$->value_ = $5[0];                /* scope */
 };
 
 opt_comment:
@@ -17277,6 +17317,7 @@ ACCOUNT
 |       LOGFILE
 |       LOGONLY_REPLICA_NUM
 |       LOGS
+|       LOG_RESTORE_SOURCE
 |       MAJOR
 |       MANUAL
 |       MASTER

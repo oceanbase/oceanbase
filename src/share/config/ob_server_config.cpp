@@ -238,7 +238,6 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
       // memory_limit should not be less than 4G for non arbitration mode
       is_valid_config = false;
       LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
-      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
     } else if (memory_limit_g <= 8) {
       system_memory = 2LL << 30;
     } else if (memory_limit_g <= 16) {

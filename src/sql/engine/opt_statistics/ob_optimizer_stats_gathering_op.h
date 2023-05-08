@@ -93,7 +93,7 @@ public:
   ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual int inner_open() override;
   virtual int inner_close() override;
-  // do not need to overwitten rescan(), since this operator may have part-gi above.
+  virtual int inner_rescan() override;
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void destroy() override;
@@ -107,7 +107,6 @@ public:
   int get_col_stat_map(ColStatIndMap &col_stat_map);
 private:
   static const int64_t DEFAULT_HASH_MAP_BUCKETS_COUNT = 100;
-  void reuse_stats();
 
   // set piece_msg's basic info, copy tab/column stats from stat_map to piece_msg's array.
   int build_piece_msg(ObOptStatsGatherPieceMsg &piece,

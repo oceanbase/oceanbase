@@ -136,7 +136,8 @@ private:
  int set_member_list_(const common::ObMemberList &member_list,
                       const common::ObMember &arbitration_service,
                       const int64_t paxos_replica_num);
- int persist_ls_member_list_(const common::ObMemberList &member_list);
+ int persist_ls_member_list_(const common::ObMemberList &member_list,
+                             const ObMember &arb_member);
 
  // interface for oceanbase 4.0
  int alloc_sys_ls_addr(const uint64_t tenant_id,

@@ -38,6 +38,8 @@ public:
     static uint32_t get_local_addr_ipv4(const char *dev_name);
     static std::string addr_to_string(uint64_t ipport);
     static uint64_t ip_to_addr(uint32_t ip, int port);
+    // get ipv4 by hostname, no need free the returned value
+    static char *get_addr_by_hostname(const char *hostname);
     static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len);
 };
 

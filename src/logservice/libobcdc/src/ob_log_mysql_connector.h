@@ -65,11 +65,15 @@ public:
 public:
   int query(MySQLQueryBase &query);
   int exec(MySQLQueryBase &query);
+  bool is_oracle_mode() const;
 private:
   int init_conn_(const MySQLConnConfig &cfg,
       const bool enable_ssl_client_authentication);
   void destroy_conn_();
   int set_timeout_variable_(const int64_t query_timeout, const int64_t trx_timeout);
+public:
+  const static char *DEFAULT_DB_NAME_MYSQL_MODE;
+  const static char *DEFAULT_DB_NAME_ORACLE_MODE;
 private:
   bool              inited_;
   MYSQL             *mysql_;

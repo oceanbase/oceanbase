@@ -75,6 +75,7 @@
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "storage/tx_table/ob_tx_data_cache.h"
 #include "storage/ob_file_system_router.h"
 #include "common/log/ob_log_constants.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
@@ -340,6 +341,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init create clock generator failed", KR(ret));
     } else if (OB_FAIL(init_storage())) {
       LOG_ERROR("init storage failed", KR(ret));
+    } else if (OB_FAIL(init_tx_data_cache())) {
+      LOG_ERROR("init tx data cache failed", KR(ret));
     } else if (OB_FAIL(locality_manager_.init(self_addr_,
                                               &sql_proxy_))) {
       LOG_ERROR("init locality manager failed", KR(ret));
@@ -558,6 +561,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy store cache");
     OB_STORE_CACHE.destroy();
     FLOG_INFO("store cache destroyed");
+
+    FLOG_INFO("begin to destroy tx data kv cache");
+    OB_TX_DATA_KV_CACHE.destroy();
+    FLOG_INFO("tx data kv cache destroyed");
 
     FLOG_INFO("begin to destroy ObDagWarningHistoryManager");
     ObDagWarningHistoryManager::get_instance().destroy();
@@ -2327,7 +2334,15 @@ int ObServer::init_storage()
       LOG_WARN("fail to init ObDDLCtrlSpeedHandle", KR(ret));
     }
   }
+  return ret;
+}
 
+int ObServer::init_tx_data_cache()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_TX_DATA_KV_CACHE.init("tx_data_kv_cache", 2 /* cache priority */))) {
+    LOG_WARN("init OB_TX_DATA_KV_CACHE failed", KR(ret));
+  }
   return ret;
 }
 

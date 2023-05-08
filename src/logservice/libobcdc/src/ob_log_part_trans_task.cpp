@@ -1117,7 +1117,7 @@ int DmlStmtTask::parse_col(
   return ret;
 }
 
-const TenantLSID &DmlStmtTask::get_tls_id() const
+const logservice::TenantLSID &DmlStmtTask::get_tls_id() const
 {
   return get_host().get_tls_id();
 }
@@ -1794,7 +1794,7 @@ bool ObLogEntryTask::is_valid() const
 }
 
 int ObLogEntryTask::init(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const char *participant,
     const transaction::ObTransID &trans_id,
     DmlRedoLogNode *redo_node)
@@ -2239,7 +2239,7 @@ const char *PartTransTask::print_task_type(const TaskType type)
   return task_type_str;
 }
 
-void PartTransTask::set_task_info(const TenantLSID &tls_id, const char *info)
+void PartTransTask::set_task_info(const logservice::TenantLSID &tls_id, const char *info)
 {
   tls_id_ = tls_id;
   tls_str_ = info;
@@ -3243,7 +3243,7 @@ int PartTransTask::parse_tablet_change_mds_(
   return ret;
 }
 
-int PartTransTask::init_ls_heartbeat_info(const TenantLSID &tls_id, const int64_t timestamp)
+int PartTransTask::init_ls_heartbeat_info(const logservice::TenantLSID &tls_id, const int64_t timestamp)
 {
   int ret = OB_SUCCESS;
 
@@ -3285,7 +3285,7 @@ int PartTransTask::init_global_heartbeat_info(const int64_t timestamp)
   return ret;
 }
 
-int PartTransTask::init_offline_ls_task(const TenantLSID &tls_id)
+int PartTransTask::init_offline_ls_task(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
 

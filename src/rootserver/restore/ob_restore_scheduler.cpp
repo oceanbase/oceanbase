@@ -570,7 +570,7 @@ int ObRestoreService::post_check(const ObPhysicalRestoreJob &job_info)
     }
   }
 
-  if (FAILEDx(reset_schema_status_(tenant_id_))) {
+  if (FAILEDx(reset_schema_status(tenant_id_, sql_proxy_))) {
     LOG_WARN("failed to reset schema status", KR(ret));
   }
 
@@ -925,7 +925,7 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
     LOG_WARN("fail to get tenant schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
     LOG_WARN("fail to get tenant schema", KR(ret), K(job_info));
-  } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore()) {
+  } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore_tenant_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant not exist or tenant is not in physical restore status", KR(ret),
         K(tenant_schema));
@@ -1182,7 +1182,7 @@ int ObRestoreService::restore_wait_ls_finish(const share::ObPhysicalRestoreJob &
     LOG_WARN("fail to get tenant schema guard", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("fail to get tenant schema", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore()) {
+  } else if (OB_ISNULL(tenant_schema) || !tenant_schema->is_restore_tenant_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant not exist or tenant is not in physical restore status", KR(ret),
                KPC(tenant_schema));
@@ -1295,8 +1295,8 @@ int ObRestoreService::restore_wait_tenant_finish(const share::ObPhysicalRestoreJ
     } else if (OB_ISNULL(tenant_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tenant schema is null", K(ret), K(tenant_id));
-    } else if (tenant_schema->is_restore() || tenant_schema->is_normal()) {
-      if (tenant_schema->is_restore()) {
+    } else if (tenant_schema->is_restore_tenant_status() || tenant_schema->is_normal()) {
+      if (tenant_schema->is_restore_tenant_status()) {
         const int64_t DEFAULT_TIMEOUT = 10 * 1000 * 1000L;
         // try finish restore status
         obrpc::ObCreateTenantEndArg arg;
@@ -1333,22 +1333,17 @@ int ObRestoreService::restore_wait_tenant_finish(const share::ObPhysicalRestoreJ
   return ret;
 }
 
-int ObRestoreService::reset_schema_status_(const uint64_t tenant_id)
+int ObRestoreService::reset_schema_status(const uint64_t tenant_id, common::ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", KR(ret));
-  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_stop())) {
-    LOG_WARN("restore scheduler stopped", KR(ret));
-  } else if (OB_ISNULL(sql_proxy_)) {
+  } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy_));
+    LOG_WARN("sql proxy is null", KR(ret), KP(sql_proxy));
   } else {
-    ObSchemaStatusProxy proxy(*sql_proxy_);
+    ObSchemaStatusProxy proxy(*sql_proxy);
     ObRefreshSchemaStatus schema_status(tenant_id, OB_INVALID_TIMESTAMP, OB_INVALID_VERSION);
     if (OB_FAIL(proxy.init())) {
       LOG_WARN("failed to init schema proxy", KR(ret));

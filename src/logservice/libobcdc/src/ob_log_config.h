@@ -257,6 +257,9 @@ public:
   // Number of globally cached RPC results
   T_DEF_INT_INFT(rpc_result_cached_count, OB_CLUSTER_PARAMETER, 16, 1, "cached rpc result object count");
 
+  // Whether output column by table defination
+  T_DEF_BOOL(enable_output_by_table_def, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
   // Number of active ls count in memory
   // This value can be used as a reference for the number of data structure objects cached at the ls level
   T_DEF_INT_INFT(active_ls_count, OB_CLUSTER_PARAMETER, 10000, 1, "active ls count in memory");
@@ -528,6 +531,18 @@ public:
   // 1. Local file mode: ssl_external_kms_info=file
   // 2. BKMI mode: ssl_external_kms_info=hex(...)
   DEF_STR(ssl_external_kms_info, OB_CLUSTER_PARAMETER, "|", "ssl external kms info");
+
+ //RPC client authentication method
+ //1. NONE: without authentication
+ //2. SSL_NO_ENCRYPT: authentication by SSL handshake but not encrypt the communication channel.
+ //3. SSL_IO: authentication by SSL handshake and encrypt the communication channel
+ DEF_STR(rpc_client_authentication_method, OB_CLUSTER_PARAMETER, "NONE", "RPC client authentication method");
+
+  // ******* tenant level sync config ****** //
+  DEF_STR(tenant_endpoint, OB_CLUSTER_PARAMETER, "|", "tenant endpoint, format like host1:sql_port1|host2:sql_port2");
+  DEF_STR(tenant_user, OB_CLUSTER_PARAMETER, "|", "tenant login user, should has read access to specified tenant");
+  DEF_STR(tenant_password, OB_CLUSTER_PARAMETER, "|", "login password for tenant_user");
+  // tenatn level sync config end //
 
 #undef OB_CLUSTER_PARAMETER
 

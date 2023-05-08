@@ -160,7 +160,7 @@ void RowHolderMapper::reset_hash_holder(const ObTabletID &tablet_id,
                                         const ObTransID &tx_id) {
   if (OB_LIKELY(ObDeadLockDetectorMgr::is_deadlock_enabled())) {
     int ret = OB_SUCCESS;
-    uint64_t hash = hash_rowkey(tablet_id, key);
+    uint64_t hash = LockHashHelper::hash_rowkey(tablet_id, key);
     auto remove_if_op = [tx_id](const ObIntWarp &k, const ObTransID &v) {
       return tx_id == v;
     };
@@ -170,6 +170,20 @@ void RowHolderMapper::reset_hash_holder(const ObTabletID &tablet_id,
       }
     }
   }
+}
+
+int RowHolderMapper::get_rowkey_holder(const ObTabletID &tablet_id,
+                                       const memtable::ObMemtableKey &key,
+                                       transaction::ObTransID &holder)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ObDeadLockDetectorMgr::is_deadlock_enabled())) {
+    ret = OB_NOT_RUNNING;
+  } else {
+    uint64_t hash = LockHashHelper::hash_rowkey(tablet_id, key);
+    ret = map_.get(ObIntWarp(hash), holder);
+  }
+  return ret;
 }
 
 void ObLockWaitMgr::run1()
@@ -273,7 +287,7 @@ int ObLockWaitMgr::register_to_deadlock_detector_(const ObTransID &self_tx_id,
     CollectCallBack on_collect_callback((LocalDeadLockCollectCallBack(self_tx_id,
                                                                       get_thread_node()->key_,
                                                                       self_sess_id)));
-    if (is_rowkey_hash(get_thread_node()->hash())) {// waiting for row
+    if (LockHashHelper::is_rowkey_hash(get_thread_node()->hash())) {// waiting for row
       DeadLockBlockCallBack deadlock_block_call_back(row_holder_mapper_, get_thread_node()->hash());
       if (OB_FAIL(ObTransDeadlockDetectorAdapter::register_local_execution_to_deadlock_detector_waiting_for_row(on_collect_callback,
                                                                                                                deadlock_block_call_back,
@@ -363,7 +377,7 @@ void ObLockWaitMgr::wakeup(uint64_t hash)
     }
     // continue loop to wake up all requests waitting on the transaction.
     // or continue loop to wake up all requests waitting on the tablelock.
-  } while (!is_rowkey_hash(hash) && node != NULL);
+  } while (!LockHashHelper::is_rowkey_hash(hash) && node != NULL);
   TRANS_LOG(TRACE, "LockWaitMgr.wakeup.done", K(hash));
 }
 
@@ -608,6 +622,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const int64_t total_trans_node_cnt,
                              const transaction::ObTransID &tx_id,
                              const transaction::ObTransID &holder_tx_id,
+                             const ObTableLockMode &lock_mode,
                              ObFunction<int(bool&)> &check_need_wait)
 {
   int ret = OB_SUCCESS;
@@ -618,7 +633,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     TRANS_LOG(WARN, "lock wait mgr not inited", K(ret));
   } else if (NULL == (node = get_thread_node())) {
   } else if (OB_TRY_LOCK_ROW_CONFLICT == tmp_ret) {
-    auto hash = hash_lock_id(lock_id);
+    auto hash = LockHashHelper::hash_lock_id(lock_id);
     const bool need_delay = is_remote_sql;
     char lock_id_buf[common::MAX_LOCK_ID_BUF_LENGTH];
     lock_id.to_string(lock_id_buf, sizeof(lock_id_buf));
@@ -646,6 +661,7 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                 tx_id,
                 holder_tx_id);
       node->set_need_wait();
+      node->set_lock_mode(lock_mode);
     }
   }
   return ret;
@@ -681,8 +697,8 @@ int ObLockWaitMgr::transform_row_lock_to_tx_lock(const ObTabletID &tablet_id,
 {
   int ret = OB_SUCCESS;
 
-  uint64_t hash_tx_id = hash_trans(tx_id);
-  uint64_t hash_row_key = hash_rowkey(tablet_id, row_key);
+  uint64_t hash_tx_id = LockHashHelper::hash_trans(tx_id);
+  uint64_t hash_row_key = LockHashHelper::hash_rowkey(tablet_id, row_key);
 
   int64_t lock_seq = get_seq(hash_tx_id);
   Node *node = NULL;
@@ -710,19 +726,19 @@ int ObLockWaitMgr::transform_row_lock_to_tx_lock(const ObTabletID &tablet_id,
 void ObLockWaitMgr::wakeup(const ObTabletID &tablet_id, const Key& key)
 {
   TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byRowKey", K(tablet_id), K(key), K(lbt()));
-  wakeup(hash_rowkey(tablet_id, key));
+  wakeup(LockHashHelper::hash_rowkey(tablet_id, key));
 }
 
 void ObLockWaitMgr::wakeup(const ObTransID &tx_id)
 {
   TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byTransID", K(tx_id), K(lbt()));
-  wakeup(hash_trans(tx_id));
+  wakeup(LockHashHelper::hash_trans(tx_id));
 }
 
 void ObLockWaitMgr::wakeup(const ObLockID &lock_id)
 {
   TRANS_LOG(TRACE, "LockWaitMgr.wakeup.byLockID", K(lock_id), K(lbt()));
-  wakeup(hash_lock_id(lock_id));
+  wakeup(LockHashHelper::hash_lock_id(lock_id));
 }
 
 int ObLockWaitMgr::fullfill_row_key(uint64_t hash, char *row_key, int64_t length)

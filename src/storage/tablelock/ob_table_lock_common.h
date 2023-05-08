@@ -223,6 +223,41 @@ enum class ObLockOBJType : char
 };
 
 static inline
+int lock_obj_type_to_string(const ObLockOBJType obj_type,
+                            char *str,
+                            const int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  switch (obj_type) {
+  case ObLockOBJType::OBJ_TYPE_TABLE: {
+    strncpy(str, "TABLE", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_TABLET: {
+    strncpy(str, "TABLET", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_COMMON_OBJ: {
+    strncpy(str, "COMMON_OBJ", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_LS: {
+    strncpy(str, "LS", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_TENANT: {
+    strncpy(str, "TENANT", str_len);
+    break;
+  }
+  default: {
+    strncpy(str, "UNKNOWN", str_len);
+    break;
+  }
+  }
+  return ret;
+}
+
+static inline
 bool is_lock_obj_type_valid(const ObLockOBJType &type)
 {
   return (type > ObLockOBJType::OBJ_TYPE_INVALID &&

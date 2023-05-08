@@ -1039,7 +1039,8 @@ int ObDelUpdLogPlan::allocate_pdml_delete_as_top(ObLogicalOperator *&top,
 int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
                                                     bool is_last_dml_op,
                                                     bool is_pdml_update_split,
-                                                    IndexDMLInfo *index_dml_info)
+                                                    IndexDMLInfo *index_dml_info,
+                                                    OSGShareInfo *osg_info /*=NULL*/)
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
@@ -1113,7 +1114,8 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
                                               is_last_dml_op,
                                               need_partition_id,
                                               is_pdml_update_split,
-                                              index_dml_info))) {
+                                              index_dml_info,
+                                              osg_info))) {
             LOG_WARN("failed to create delete plan", K(ret));
           } else { /*do nothing*/ }
         }
@@ -1135,7 +1137,8 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
                                              bool is_last_dml_op,
                                              bool need_partition_id,
                                              bool is_pdml_update_split,
-                                             IndexDMLInfo *index_dml_info)
+                                             IndexDMLInfo *index_dml_info,
+                                             OSGShareInfo *osg_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(top) || OB_ISNULL(table_partition_info)) {
@@ -1143,6 +1146,9 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
     LOG_WARN("get unexpected null", K(top), K(table_partition_info), K(ret));
   } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
+  } else if (osg_info != NULL &&
+             OB_FAIL(allocate_optimizer_stats_gathering_as_top(top, *osg_info))) {
+    LOG_WARN("failed to allocate optimizer stats gathering");
   } else if (OB_FAIL(allocate_pdml_insert_as_top(top,
                                                  is_index_maintenance,
                                                  is_last_dml_op,
@@ -1152,6 +1158,43 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
                                                  index_dml_info))) {
     LOG_WARN("failed to allocate pdml insert as top", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
+                                                               OSGShareInfo &info)
+{
+  int ret = OB_SUCCESS;
+  ObLogOptimizerStatsGathering *osg = NULL;
+  if (OB_ISNULL(old_top)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Get unexpected null", K(ret), K(old_top));
+  } else if (OB_ISNULL(osg = static_cast<ObLogOptimizerStatsGathering *>(get_log_op_factory().
+                                        allocate(*this, LOG_OPTIMIZER_STATS_GATHERING)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate sequence operator", K(ret));
+  } else {
+    OSG_TYPE type = old_top->need_osg_merge() ? OSG_TYPE::MERGE_OSG :
+                    old_top->is_distributed() ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
+    osg->set_child(ObLogicalOperator::first_child, old_top);
+    osg->set_osg_type(type);
+    osg->set_table_id(info.table_id_);
+    osg->set_part_level(info.part_level_);
+    osg->set_generated_column_exprs(info.generated_column_exprs_);
+    osg->set_col_conv_exprs(info.col_conv_exprs_);
+    osg->set_column_ids(info.column_ids_);
+    if (type == OSG_TYPE::GATHER_OSG) {
+      osg->set_need_osg_merge(true);
+    }
+    if (type != OSG_TYPE::MERGE_OSG && info.part_level_ != share::schema::PARTITION_LEVEL_ZERO) {
+      osg->set_calc_part_id_expr(info.calc_part_id_expr_);
+    }
+    if (OB_FAIL(osg->compute_property())) {
+      LOG_WARN("failed to compute property", K(ret));
+    } else {
+      old_top = osg;
+    }
+  }
   return ret;
 }
 

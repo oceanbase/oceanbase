@@ -56,6 +56,7 @@
 #include "sql/resolver/ddl/ob_drop_routine_resolver.h"
 #include "sql/resolver/ddl/ob_trigger_resolver.h"
 #include "sql/resolver/ddl/ob_optimize_resolver.h"
+#include "sql/resolver/ddl/ob_create_standby_tenant_resolver.h"
 #include "ddl/ob_create_routine_resolver.h"
 #include "ddl/ob_drop_routine_resolver.h"
 #include "ddl/ob_alter_routine_resolver.h"
@@ -265,6 +266,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CREATE_TENANT: {
         REGISTER_STMT_RESOLVER(CreateTenant);
+        break;
+      }
+      case T_CREATE_STANDBY_TENANT: {
+        REGISTER_STMT_RESOLVER(CreateStandbyTenant);
         break;
       }
       case T_DROP_TENANT: {

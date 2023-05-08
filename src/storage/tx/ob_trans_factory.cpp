@@ -180,6 +180,7 @@ ObLSTxCtxMgr *ObLSTxCtxMgrFactory::alloc(const uint64_t tenant_id)
     partition_trans_ctx_mgr = new(ptr) ObLSTxCtxMgr;
     (void)ATOMIC_FAA(&alloc_count_, 1);
   }
+  TRANS_LOG(INFO, "alloc ls tx ctx mgr", KP(partition_trans_ctx_mgr));
   return partition_trans_ctx_mgr;
 }
 
@@ -191,6 +192,7 @@ void ObLSTxCtxMgrFactory::release(ObLSTxCtxMgr *partition_trans_ctx_mgr)
   } else {
     partition_trans_ctx_mgr->~ObLSTxCtxMgr();
     ob_free(partition_trans_ctx_mgr);
+    TRANS_LOG(INFO, "release ls tx ctx mgr", KP(partition_trans_ctx_mgr));
     partition_trans_ctx_mgr = NULL;
     (void)ATOMIC_FAA(&release_count_, 1);
   }

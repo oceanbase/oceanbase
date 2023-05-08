@@ -16,7 +16,7 @@
 
 #include "ob_cdc_part_trans_resolver.h"
 #include "ob_log_cluster_id_filter.h"     // ClusterIdFilter
-#include "ob_log_part_serve_info.h"       // PartServeInfo
+#include "logservice/logfetcher/ob_log_part_serve_info.h"       // PartServeInfo
 
 namespace oceanbase
 {
@@ -147,7 +147,7 @@ ObCDCPartTransResolver::~ObCDCPartTransResolver()
 
 
 int ObCDCPartTransResolver::init(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_commit_version)
 {
   tls_id_ = tls_id;
@@ -162,9 +162,9 @@ int ObCDCPartTransResolver::read(
     const int64_t pos_after_log_header,
     const palf::LSN &lsn,
     const int64_t submit_ts,
-    const PartServeInfo &serve_info,
+    const logfetcher::PartServeInfo &serve_info,
     MissingLogInfo &missing_info,
-    TransStatInfo &tsi)
+    logfetcher::TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
   int pos = pos_after_log_header;
@@ -276,7 +276,7 @@ int ObCDCPartTransResolver::read_trans_log_(
     const transaction::ObTxLogHeader &tx_log_header,
     const palf::LSN &lsn,
     const int64_t submit_ts,
-    const PartServeInfo &serve_info,
+    const logfetcher::PartServeInfo &serve_info,
     MissingLogInfo &missing_info,
     bool &has_redo_in_cur_entry)
 {
@@ -706,7 +706,7 @@ int ObCDCPartTransResolver::handle_commit_(
     const transaction::ObTransID &tx_id,
     const palf::LSN &lsn,
     const int64_t submit_ts,
-    const PartServeInfo &serve_info,
+    const logfetcher::PartServeInfo &serve_info,
     MissingLogInfo &missing_info,
     transaction::ObTxLogBlock &tx_log_block,
     bool &is_served)

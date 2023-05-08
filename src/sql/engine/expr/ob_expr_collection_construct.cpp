@@ -69,8 +69,15 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
   int ret = OB_SUCCESS;
   UNUSED(type_ctx);
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
-    types[i].set_calc_accuracy(elem_type_.get_accuracy());
-    types[i].set_calc_meta(elem_type_.get_meta_type());
+    if ((ObExtendType == elem_type_.get_obj_type()
+          && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType)
+        ||(ObExtendType == types[i].get_type() && elem_type_.get_obj_type() != ObExtendType)) {
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+    } else {
+      types[i].set_calc_accuracy(elem_type_.get_accuracy());
+      types[i].set_calc_meta(elem_type_.get_meta_type());
+    }
   }
   OX (type.set_type(ObExtendType));
   OX (type.set_udt_id(udt_id_));

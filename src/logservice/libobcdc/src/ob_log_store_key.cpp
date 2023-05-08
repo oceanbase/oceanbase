@@ -37,7 +37,7 @@ void ObLogStoreKey::reset()
   log_lsn_.reset();
 }
 
-int ObLogStoreKey::init(const TenantLSID &tenant_ls_id,
+int ObLogStoreKey::init(const logservice::TenantLSID &tenant_ls_id,
     const palf::LSN &log_lsn)
 {
   int ret = OB_SUCCESS;

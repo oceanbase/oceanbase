@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <string>
 #include "lib/utility/ob_macro_utils.h"       // DISALLOW_COPY_AND_ASSIGN
-#include "ob_log_utils.h"                     // TenantLSID
+#include "ob_log_utils.h"                     // logservice::TenantLSID
 
 namespace oceanbase
 {
@@ -28,7 +28,7 @@ public:
   ObLogStoreKey();
   ~ObLogStoreKey();
   void reset();
-  int init(const TenantLSID &tenant_ls_id, const palf::LSN &log_lsn);
+  int init(const logservice::TenantLSID &tenant_ls_id, const palf::LSN &log_lsn);
   bool is_valid() const;
   uint64_t get_tenant_id() const { return tenant_ls_id_.get_tenant_id(); }
 
@@ -37,7 +37,7 @@ public:
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
-  TenantLSID    tenant_ls_id_;
+  logservice::TenantLSID  tenant_ls_id_;
   // StorageKey: tenant_ls_id_+log_lsn_
   // Log LSN, for redo data
   // 1. non-LOB record corresponding to LogEntry log_lsn

@@ -1783,16 +1783,12 @@ int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &lsid,
 {
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
-  ObTxTable *tx_table = NULL;
   int64_t _state = 0;
-  int64_t read_epoch = ObTxTable::INVALID_READ_EPOCH;
   if (OB_FAIL(get_tx_table_guard_(NULL, lsid, tx_table_guard))) {
     TRANS_LOG(WARN, "get tx table guard failed", KR(ret), K(lsid), KPC(this));
   } else if (!tx_table_guard.is_valid()) {
     TRANS_LOG(WARN, "tx table is null", KR(ret), K(lsid), KPC(this));
-  } else if (FALSE_IT(tx_table = tx_table_guard.get_tx_table())) {
-  } else if (FALSE_IT(read_epoch = tx_table_guard.epoch())) {
-  } else if (OB_FAIL(tx_table->try_get_tx_state(tx_id, read_epoch, _state, commit_version))) {
+  } else if (OB_FAIL(tx_table_guard.try_get_tx_state(tx_id, _state, commit_version))) {
     TRANS_LOG(WARN, "get tx state failed", KR(ret), K(lsid), K(tx_id), KPC(this));
   } else {
     state = (int)_state;

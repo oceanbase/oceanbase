@@ -735,7 +735,7 @@ void StartLSNLocateReq::reset()
 }
 
 void StartLSNLocateReq::reset(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_tstamp_ns)
 {
   reset();

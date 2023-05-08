@@ -108,6 +108,8 @@ inline int access_mode_to_string(const AccessMode access_mode, char *str_buf_, c
   return ret;
 }
 
+int get_access_mode(const common::ObString &str, AccessMode &mode);
+
 inline bool is_valid_access_mode(const AccessMode &access_mode)
 {
   return AccessMode::APPEND == access_mode

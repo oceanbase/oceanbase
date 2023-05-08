@@ -176,7 +176,7 @@ public:
   int drop_tenant(bool &tenant_can_be_dropped, const char *call_from);
 
   // Increase the number of LS when a tenant is in service
-  int inc_ls_count_on_serving(const TenantLSID &tls_id, bool &is_serving);
+  int inc_ls_count_on_serving(const logservice::TenantLSID &tls_id, bool &is_serving);
 
   /// Recycle LS
   /// This task is called when processing a LS offline task, if this task is received,
@@ -188,7 +188,7 @@ public:
   ///
   /// @retval OB_SUCCESS         Success
   /// @retval other_error_code   Fail
-  int recycle_ls(const TenantLSID &tls_id, bool &tenant_can_be_dropped);
+  int recycle_ls(const logservice::TenantLSID &tls_id, bool &tenant_can_be_dropped);
 
   /// mark start of drop tenant
   ///

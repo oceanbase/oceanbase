@@ -95,7 +95,7 @@ int ObLogLSMgr::add_sys_ls(
     LOG_ERROR("ObLogLSMgr has not been initialized", KR(ret));
   } else {
     bool add_succ = false;
-    TenantLSID tls_id(tenant_id_, share::SYS_LS);
+    logservice::TenantLSID tls_id(tenant_id_, share::SYS_LS);
 
     if (OB_FAIL(add_served_ls_(
         tls_id,
@@ -140,7 +140,7 @@ int ObLogLSMgr::add_all_ls(
 
     ARRAY_FOREACH_N(ls_id_array, idx, count) {
       const share::ObLSID &ls_id = ls_id_array.at(idx);
-      TenantLSID tls_id(tenant_id_, ls_id);
+      logservice::TenantLSID tls_id(tenant_id_, ls_id);
 
       if (OB_FAIL(add_served_ls_(
           tls_id,
@@ -185,7 +185,7 @@ int ObLogLSMgr::drop_all_ls()
         tenant_id_, scanner.ls_array_.count(), map_->get_valid_count());
 
     for (int64_t index = 0; OB_SUCCESS == ret && index < scanner.ls_array_.count(); index++) {
-      const TenantLSID &tls_id = scanner.ls_array_.at(index);
+      const logservice::TenantLSID &tls_id = scanner.ls_array_.at(index);
       ret = offline_ls_(tls_id);
 
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -206,7 +206,7 @@ int ObLogLSMgr::drop_all_ls()
 }
 
 int ObLogLSMgr::add_ls(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_serve_tstamp,
     const bool is_create_ls)
 {
@@ -235,7 +235,7 @@ int ObLogLSMgr::add_ls(
 }
 
 int ObLogLSMgr::add_served_ls_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_serve_tstamp,
     const bool is_create_ls,
     bool &add_succ)
@@ -269,7 +269,7 @@ int ObLogLSMgr::add_served_ls_(
 }
 
 bool ObLogLSMgr::is_ls_served_(
-    const TenantLSID &tls_id) const
+    const logservice::TenantLSID &tls_id) const
 {
   bool bool_ret = false;
 
@@ -291,7 +291,7 @@ bool ObLogLSMgr::is_ls_served_(
 }
 
 int ObLogLSMgr::add_ls_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_serve_tstamp,
     const bool is_create_ls,
     const bool is_served)
@@ -368,7 +368,7 @@ int ObLogLSMgr::add_ls_(
   return ret;
 }
 
-int ObLogLSMgr::add_served_ls_pre_check_(const TenantLSID &tls_id)
+int ObLogLSMgr::add_served_ls_pre_check_(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   bool is_tenant_serving = false;
@@ -388,7 +388,7 @@ int ObLogLSMgr::add_served_ls_pre_check_(const TenantLSID &tls_id)
 }
 
 int ObLogLSMgr::call_add_ls_callbacks_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const int64_t start_serve_tstamp,
     const palf::LSN &start_lsn)
 {
@@ -398,7 +398,7 @@ int ObLogLSMgr::call_add_ls_callbacks_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogLSMgr has not been initialized", KR(ret));
   } else {
-    ObLogFetcherStartParameters start_parameters;
+    logfetcher::ObLogFetcherStartParameters start_parameters;
     start_parameters.reset(start_serve_tstamp, start_lsn);
 
     for (int64_t index = 0; OB_SUCCESS == ret && index < ls_add_cb_array_->count(); index++) {
@@ -421,7 +421,7 @@ int ObLogLSMgr::call_add_ls_callbacks_(
   return ret;
 }
 
-int ObLogLSMgr::call_recycle_ls_callbacks_(const TenantLSID &tls_id)
+int ObLogLSMgr::call_recycle_ls_callbacks_(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
 
@@ -453,7 +453,7 @@ int ObLogLSMgr::call_recycle_ls_callbacks_(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObLogLSMgr::offline_ls(const TenantLSID &tls_id)
+int ObLogLSMgr::offline_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   bool ensure_recycled_when_offlined = false;
@@ -472,7 +472,7 @@ int ObLogLSMgr::offline_ls(const TenantLSID &tls_id)
   return ret;
 }
 
-int ObLogLSMgr::offline_and_recycle_ls(const TenantLSID &tls_id)
+int ObLogLSMgr::offline_and_recycle_ls(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   bool ensure_recycled_when_offlined = true;
@@ -513,7 +513,7 @@ void ObLogLSMgr::print_ls_info(int64_t &serving_ls_count,
 }
 
 int ObLogLSMgr::offline_ls_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const bool ensure_recycled_when_offlined)
 {
   int ret = OB_SUCCESS;
@@ -562,7 +562,7 @@ int ObLogLSMgr::offline_ls_(
 }
 
 int ObLogLSMgr::recycle_ls_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     ObLogLSInfo *info)
 {
   int ret = OB_SUCCESS;
@@ -590,7 +590,7 @@ int ObLogLSMgr::recycle_ls_(
 }
 
 int ObLogLSMgr::inc_ls_trans_count_on_serving(bool &is_serving,
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const palf::LSN &commit_log_lsn,
     const bool print_ls_not_serve_info,
     const int64_t timeout)
@@ -652,7 +652,7 @@ int ObLogLSMgr::inc_ls_trans_count_on_serving(bool &is_serving,
 }
 
 int ObLogLSMgr::inc_trans_count_on_serving_(bool &is_serving,
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const bool print_ls_not_serve_info)
 {
   int ret = OB_SUCCESS;
@@ -694,7 +694,7 @@ int ObLogLSMgr::inc_trans_count_on_serving_(bool &is_serving,
   return ret;
 }
 
-int ObLogLSMgr::dec_ls_trans_count(const TenantLSID &tls_id)
+int ObLogLSMgr::dec_ls_trans_count(const logservice::TenantLSID &tls_id)
 {
   int ret = OB_SUCCESS;
   bool need_remove = false;

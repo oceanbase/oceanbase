@@ -27,7 +27,7 @@ public:
   ObLogStoreTask();
   ~ObLogStoreTask();
   void reset();
-  int init(const TenantLSID &tenant_ls_id,
+  int init(const logservice::TenantLSID &tenant_ls_id,
       const palf::LSN &log_lsn,
       const char *data_buf,
       const int64_t data_len,

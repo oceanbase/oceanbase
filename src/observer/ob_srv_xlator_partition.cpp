@@ -59,6 +59,7 @@
 #include "observer/table_load/ob_table_load_get_status_processor.h"
 #include "observer/table_load/ob_table_load_processor.h"
 #include "observer/table_load/ob_table_load_trans_processor.h"
+#include "observer/net/ob_net_endpoint_ingress_rpc_processor.h"
 
 using namespace oceanbase;
 using namespace oceanbase::observer;
@@ -282,6 +283,10 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObUpdateTenantInfoCacheP, gctx_);
 
   RPC_PROCESSOR(ObSyncRewriteRulesP, gctx_);
+
+  RPC_PROCESSOR(ObNetEndpointRegisterP, gctx_);
+  RPC_PROCESSOR(ObNetEndpointPredictIngressP, gctx_);
+  RPC_PROCESSOR(ObNetEndpointSetIngressP, gctx_);
 
   // session info verification
   RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);

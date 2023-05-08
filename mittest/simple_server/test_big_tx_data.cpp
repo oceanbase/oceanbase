@@ -52,7 +52,8 @@ class DoNothingOP : public ObITxDataCheckFunctor
 {
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) {
     UNUSED(tx_cc_ctx);
-    cout << "read tx data:" << tx_data.tx_id_.get_id() << ", undo cnt:" << tx_data.undo_status_list_.undo_node_cnt_ << ", READ_TEST_TX_FROM_SSTABLE:" << ATOMIC_LOAD(&READ_TEST_TX_FROM_SSTABLE) << endl;
+    cout << "read tx data:" << tx_data.tx_id_.get_id() << ", undo cnt:" << tx_data.undo_status_list_.undo_node_cnt_ << endl;
+    STORAGE_LOG_RET(INFO, 0, "read tx data", K(tx_data.tx_id_), K(lbt()));
     return OB_SUCCESS;
   }
 };
@@ -95,6 +96,7 @@ TEST_F(TestBigTxData, big_tx_data)
       result = res.mysql_result();
       DO(result->next());
       result->get_int("trans_id", tx_id);
+      ASSERT_EQ(OB_ITER_END, result->next());
       ATOMIC_STORE(&TEST_TX_ID, tx_id);
       std::cout << "tx_id:" << tx_id << std::endl;
     }
@@ -118,11 +120,12 @@ TEST_F(TestBigTxData, big_tx_data)
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle handle;
     DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD));
-    STORAGETEST_LOG(INFO, "start read tx data from sstable", K(TEST_TX_ID));
-    DO(handle.get_ls()->tx_table_.check_with_tx_data(ObTransID(ATOMIC_LOAD(&TEST_TX_ID)), op, 0));
-    // 7，检查被测事务的tx data已经经过了deserialize以及从sstable读取过
+    fprintf(stdout, "start read tx data from sstable, test_tx_id = %ld\n", TEST_TX_ID);
+    ObTxDataMiniCache fake_cache;
+    ObReadTxDataArg read_arg(ObTransID(ATOMIC_LOAD(&TEST_TX_ID)), 0, fake_cache);
+    DO(handle.get_ls()->tx_table_.check_with_tx_data(read_arg, op));
+    // 7，检查被测事务的tx data已经经过了deserialize
     ASSERT_EQ(ATOMIC_LOAD(&LOAD_BIG_TX_DATA), true);
-    ASSERT_EQ(ATOMIC_LOAD(&READ_TEST_TX_FROM_SSTABLE), true);
   }
 }
 

@@ -101,46 +101,46 @@ void ObRemoteLogParent::get_error_info(share::ObTaskId &trace_id, int &ret_code,
 // =========================== ObRemoteSerivceParent ==============================//
 ObRemoteSerivceParent::ObRemoteSerivceParent(const share::ObLSID &ls_id) :
   ObRemoteLogParent(ObLogRestoreSourceType::SERVICE, ls_id),
-  server_()
+  attr_()
 {}
 
 ObRemoteSerivceParent::~ObRemoteSerivceParent()
 {
-  server_.reset();
 }
 
-int ObRemoteSerivceParent::set(const ObAddr &addr, const SCN &end_scn)
+int ObRemoteSerivceParent::set(const RestoreServiceAttr &attr, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! addr.is_valid() || !end_scn.is_valid())) {
+  if (OB_UNLIKELY(! attr.is_valid() || !end_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(addr));
-  } else if (addr == server_ && end_scn == upper_limit_scn_) {
+    CLOG_LOG(WARN, "invalid argument", K(end_scn), K(attr));
+  } else if (attr == attr_ && end_scn == upper_limit_scn_) {
+  } else if (!(attr == attr_) && OB_FAIL(attr_.assign(attr))) {
+    CLOG_LOG(WARN, "attr assign failed", K(attr));
   } else {
-    server_ = addr;
     upper_limit_scn_ = end_scn;
     to_end_ = end_fetch_scn_ >= upper_limit_scn_;
+    CLOG_LOG(INFO, "set service parent succ", KPC(this));
   }
   return ret;
 }
 
-void ObRemoteSerivceParent::get(ObAddr &addr, SCN &end_scn)
+void ObRemoteSerivceParent::get(RestoreServiceAttr *&attr, SCN &end_scn)
 {
-  addr = server_;
+  attr = &attr_;
   end_scn = upper_limit_scn_;
 }
 
 int ObRemoteSerivceParent::deep_copy_to(ObRemoteLogParent &other)
 {
   ObRemoteSerivceParent &dst = static_cast<ObRemoteSerivceParent &>(other);
-  dst.server_ = server_;
   base_copy_to_(other);
-  return OB_SUCCESS;
+  return dst.attr_.assign(attr_);
 }
 
 bool ObRemoteSerivceParent::is_valid() const
 {
-  return is_valid_() && server_.is_valid();
+  return is_valid_() && attr_.is_valid();
 }
 
 // =========================== ObRemoteLocationParent ==============================//

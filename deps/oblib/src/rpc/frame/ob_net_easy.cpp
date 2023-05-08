@@ -825,11 +825,6 @@ int ObNetEasy::start()
         LOG_ERROR("oblistener start failed!", K(rpc_port_), K(ret));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObNetKeepAlive::get_instance().start())) {
-      LOG_ERROR("ObNetKeepAlive start failed!", K(rpc_port_), K(ret));
-    } else {
-      LOG_INFO("ObNetKeepAlive start!", K(rpc_port_));
-    }
   }
 
   // start rpc io thread
@@ -1043,7 +1038,6 @@ int ObNetEasy::stop()
         LOG_WARN("stop rpc unix eio error", K(ret));
       }
     }
-    ObNetKeepAlive::get_instance().stop();
   }
 
   started_ = false;
@@ -1074,7 +1068,6 @@ void ObNetEasy::destroy()
       easy_eio_destroy(rpc_unix_eio_);
     }
     rpc_listener_.destroy();
-    ObNetKeepAlive::get_instance().destroy();
     mysql_unix_eio_ = NULL;
     rpc_unix_eio_ = NULL;
     is_inited_ = false;
@@ -1103,7 +1096,6 @@ void ObNetEasy::wait()
   }
 
   rpc_listener_.wait();
-  ObNetKeepAlive::get_instance().wait();
 }
 
 void ObNetEasy::on_ioth_start()

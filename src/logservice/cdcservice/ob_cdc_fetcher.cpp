@@ -82,7 +82,7 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
 
   // Generate this RPC ID using the current timestamp directly.
   ObLogRpcIDType rpc_id = cur_tstamp;
-
+  ObCdcFetchLogTimeStats fetch_log_time_stat;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_UNLIKELY(! req.is_valid())) {
@@ -129,7 +129,7 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
 
     if (OB_SUCC(ret)) {
       ls_ctx->update_touch_ts();
-      if (OB_FAIL(do_fetch_log_(req, frt, resp, *ls_ctx))) {
+      if (OB_FAIL(do_fetch_log_(req, frt, resp, *ls_ctx, fetch_log_time_stat))) {
       LOG_WARN("do fetch log error", KR(ret), K(req));
       } else {}
     }
@@ -159,9 +159,11 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
     EVENT_ADD(CLOG_EXTLOG_FETCH_LOG_COUNT, fetch_log_count);
   }
 
+  fetch_log_time_stat.inc_fetch_total_time(ObTimeUtility::current_time() - cur_tstamp);
+
   resp.set_err(ret);
 
-  LOG_INFO("fetch_log done", K(req), K(resp));
+  LOG_INFO("fetch_log done", K(req), K(resp), K(fetch_log_time_stat));
   return ret;
 }
 
@@ -269,7 +271,8 @@ int ObCdcFetcher::init_group_iterator_(const ObLSID &ls_id,
 int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
     FetchRunTime &frt,
     ObCdcLSFetchLogResp &resp,
-    ClientLSCtx &ctx)
+    ClientLSCtx &ctx,
+    ObCdcFetchLogTimeStats &fetch_time_stat)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = req.get_ls_id();
@@ -290,7 +293,7 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
 
   // execute specific logging logic
   if (OB_FAIL(ls_fetch_log_(ls_id, end_tstamp, fetch_flag, resp, frt, reach_upper_limit,
-          reach_max_lsn, scan_round_count, fetched_log_count, ctx))) {
+          reach_max_lsn, scan_round_count, fetched_log_count, ctx, fetch_time_stat))) {
     LOG_WARN("ls_fetch_log_ error", KR(ret), K(ls_id), K(frt));
   } else { }
 
@@ -455,9 +458,11 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     bool &reach_max_lsn,
     int64_t &scan_round_count,
     int64_t &fetched_log_count,
-    ClientLSCtx &ctx)
+    ClientLSCtx &ctx,
+    ObCdcFetchLogTimeStats &fetch_time_stat)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_ls_fetch_log_time = ObTimeUtility::current_time();
   PalfGroupBufferIterator palf_iter;
   PalfHandleGuard palf_guard;
   // use cached remote_iter
@@ -496,6 +501,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     LogGroupEntry log_group_entry;
     LSN lsn;
     FetchMode fetch_mode = get_fetch_mode_when_fetching_log_(ctx, fetch_archive_only);
+    int64_t finish_fetch_ts = OB_INVALID_TIMESTAMP;
     // update fetching rounds
     scan_round_count++;
     int64_t start_fetch_ts = ObTimeUtility::current_time();
@@ -531,6 +537,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ
+      fetch_time_stat.inc_fetch_palf_time(ObTimeUtility::current_time() - start_fetch_ts);
     } // fetch palf log
     else if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
       if (OB_FAIL(fetch_log_in_archive_(ls_id, remote_iter, resp.get_next_req_lsn(),
@@ -574,14 +581,15 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
         need_init_iter = false;
         fetch_log_succ = true;
       } // fetch log succ
+      fetch_time_stat.inc_fetch_archive_time(ObTimeUtility::current_time() - start_fetch_ts);
     } // fetch archive log
     else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fetch mode is invalid", KR(ret), K(fetch_mode));
     } // unexpected branch
-
+    finish_fetch_ts = ObTimeUtility::current_time();
     // inc log fetch time in any condition
-    resp.inc_log_fetch_time(ObTimeUtility::current_time() - start_fetch_ts);
+    resp.inc_log_fetch_time(finish_fetch_ts - start_fetch_ts);
 
     // retry on OB_ITER_END (when fetching logs in archive), OB_ALLOCATE_MEMORY_FAILED and
     // OB_ERR_OUT_OF_LOWER_BOUND (when fetching logs in palf), thus some return codes are blocked and the
@@ -592,7 +600,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
       resp.set_progress(ctx.get_progress());
       if (frt.is_stopped()) {
         // Stop fetching log
-      } else if (OB_FAIL(prefill_resp_with_group_entry_(ls_id, lsn, log_group_entry, resp))) {
+      } else if (OB_FAIL(prefill_resp_with_group_entry_(ls_id, lsn, log_group_entry, resp, fetch_time_stat))) {
         if (OB_BUF_NOT_ENOUGH == ret) {
           handle_when_buffer_full_(frt); // stop
           ret = OB_SUCCESS;
@@ -606,6 +614,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
         LOG_TRACE("LS fetch a log", K(ls_id), K(fetched_log_count), K(frt));
       }
     }
+    fetch_time_stat.inc_fetch_log_post_process_time(ObTimeUtility::current_time() - finish_fetch_ts);
   } // while
 
   // update source back when remote_iter is valid, needn't reset remote iter,
@@ -631,6 +640,8 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
   } else {
     // other error code
   }
+
+  fetch_time_stat.inc_fetch_log_time(ObTimeUtility::current_time() - start_ls_fetch_log_time);
 
   LOG_TRACE("LS fetch log done", KR(ret), K(fetched_log_count), K(frt), K(resp));
 
@@ -680,9 +691,11 @@ void ObCdcFetcher::check_next_group_entry_(const LSN &next_lsn,
 int ObCdcFetcher::prefill_resp_with_group_entry_(const ObLSID &ls_id,
     const LSN &lsn,
     LogGroupEntry &log_group_entry,
-    obrpc::ObCdcLSFetchLogResp &resp)
+    obrpc::ObCdcLSFetchLogResp &resp,
+    ObCdcFetchLogTimeStats &fetch_time_stat)
 {
   int ret = OB_SUCCESS;
+  const int64_t start_fill_ts = ObTimeUtility::current_time();
   int64_t entry_size = log_group_entry.get_serialize_size();
 
   if (! resp.has_enough_buffer(entry_size)) {
@@ -705,6 +718,8 @@ int ObCdcFetcher::prefill_resp_with_group_entry_(const ObLSID &ls_id,
       resp.set_next_req_lsn(next_req_lsn);
     }
   }
+
+  fetch_time_stat.inc_prefill_resp_time(ObTimeUtility::current_time() - start_fill_ts);
 
   return ret;
 }

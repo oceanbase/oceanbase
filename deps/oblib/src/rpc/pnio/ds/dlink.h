@@ -1,6 +1,6 @@
 typedef struct dlink_t {
-  struct dlink_t* prev;
   struct dlink_t* next;
+  struct dlink_t* prev;
 } dlink_t;
 
 inline bool dlink_is_empty(dlink_t* n) { return n->next == n; }
@@ -24,6 +24,10 @@ inline void __dlink_delete(dlink_t* prev, dlink_t* next) {
 
 inline void dlink_insert(dlink_t* head, dlink_t* n) {
   __dlink_insert(head, head->next, n);
+}
+
+inline void dlink_insert_before(dlink_t* head, dlink_t* n) {
+  __dlink_insert(head->prev, head, n);
 }
 
 inline void dlink_delete(dlink_t* n) {

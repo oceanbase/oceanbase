@@ -18,6 +18,7 @@
 #include "lib/lock/ob_futex.h"
 extern "C" {
 #include "rpc/pnio/interface/group.h"
+#include "ussl-hook.h"
 };
 #include "rpc/obrpc/ob_rpc_endec.h"
 #define cfgi(k, v) atoi(getenv(k)?:v)
@@ -57,20 +58,24 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     const int64_t pool_size = sizeof(ObPocServerHandleContext) + sizeof(ObRequest) + sizeof(ObRpcPacket) + alloc_payload_sz;
-    ObRpcMemPool* pool = ObRpcMemPool::create(tmp_pkt.get_tenant_id(), pcode_label, pool_size);
+    int64_t tenant_id = tmp_pkt.get_tenant_id();
+    if (OB_UNLIKELY(tmp_pkt.get_group_id() == OBCG_ELECTION)) {
+      tenant_id = OB_SERVER_TENANT_ID;
+    }
+    ObRpcMemPool* pool = ObRpcMemPool::create(tenant_id, pcode_label, pool_size);
     void *temp = NULL;
     if (OB_ISNULL(pool)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      RPC_LOG(WARN, "create memory pool failed", K(ret));
+      RPC_LOG(WARN, "create memory pool failed", K(tenant_id), K(pcode_label));
     } else if (OB_ISNULL(temp = pool->alloc(sizeof(ObPocServerHandleContext) + sizeof(ObRequest)))){
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      RPC_LOG(WARN, "pool allocate memory failed", K(ret));
+      RPC_LOG(WARN, "pool allocate memory failed", K(tenant_id), K(pcode_label));
     } else {
       ctx = new(temp)ObPocServerHandleContext(*pool, resp_id);
       req = new(ctx + 1)ObRequest(ObRequest::OB_RPC, ObRequest::TRANSPORT_PROTO_POC);
       ObRpcPacket* pkt = (ObRpcPacket*)pool->alloc(sizeof(ObRpcPacket) + alloc_payload_sz);
       if (NULL == pkt) {
-        RPC_LOG(WARN, "pool allocate rpc packet memory failed", K(ret));
+        RPC_LOG(WARN, "pool allocate rpc packet memory failed", K(tenant_id), K(pcode_label));
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
       } else {
         MEMCPY(reinterpret_cast<void *>(pkt), reinterpret_cast<void *>(&tmp_pkt), sizeof(ObRpcPacket));
@@ -108,7 +113,7 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   char* buf = NULL;
   int64_t sz = 0;
   if (NULL == pkt) {
-    RPC_LOG(WARN, "resp pkt is null", K(pkt));
+    RPC_LOG(DEBUG, "resp pkt is null", K(pkt));
   } else if (OB_FAIL(rpc_encode_ob_packet(pool_, pkt, buf, sz))) {
     RPC_LOG(WARN, "rpc_encode_ob_packet fail", K(pkt));
     buf = NULL;
@@ -150,18 +155,21 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   int ret = OB_SUCCESS;
   // init pkt-nio framework
   int lfd = -1;
-  int grp = 1;
   if ((lfd = pn_listen(port, serve_cb)) == -1) {
     ret = OB_SERVER_LISTEN_ERROR;
     RPC_LOG(ERROR, "pn_listen failed", K(ret));
   } else {
     global_deliver = deliver;
-    int count = pn_provision(lfd, grp, net_thread_count);
-    if (count != net_thread_count) {
+    int count = 0;
+    if ((count = pn_provision(lfd, DEFAULT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
       ret = OB_ERR_SYS;
       RPC_LOG(WARN, "pn_provision error", K(count), K(net_thread_count));
+    } else if((count = pn_provision(lfd, RATELIMIT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
+      ret = OB_ERR_SYS;
+      RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(net_thread_count));
+    } else {
+      has_start_ = true;
     }
-    has_start_ = true;
   }
   return ret;
 }
@@ -169,11 +177,28 @@ int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {
   int ret = OB_SUCCESS;
   if (pn_set_keepalive_timeout(user_timeout) != user_timeout) {
     ret = OB_INVALID_ARGUMENT;
-    RPC_LOG(WARN, "invalid user_timeout", K(ret), K(user_timeout));
+    RPC_LOG(WARN, "invalid user_timeout", K(user_timeout));
   }
   return ret;
 }
 
+int ObPocRpcServer::update_server_standby_fetch_log_bandwidth_limit(int64_t value) {
+  int ret = OB_SUCCESS;
+  int tmp_err = -1;
+  tmp_err = pn_ratelimit(RATELIMIT_PNIO_GROUP, value);
+  if (tmp_err != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    RPC_LOG(WARN, "invalid bandwidth limit value", K(value));
+  }
+  return ret;
+}
+
+int64_t ObPocRpcServer:: get_ratelimit() {
+  return pn_get_ratelimit(RATELIMIT_PNIO_GROUP);
+}
+uint64_t ObPocRpcServer::get_ratelimit_rxbytes() {
+  return pn_get_rxbytes(RATELIMIT_PNIO_GROUP);
+}
 bool ObPocRpcServer::client_use_pkt_nio() {
   return has_start() && enable_pkt_nio();
 }

@@ -1474,7 +1474,8 @@ static const char *tenant_display_status_strs[] = {
   "NORMAL",
   "CREATING",
   "DROPPING",
-  "RESTORE"
+  "RESTORE",
+  "CREATING_STANDBY",
 };
 
 const char *ob_tenant_status_str(const ObTenantStatus status)
@@ -1514,7 +1515,12 @@ int get_tenant_status(const ObString &str, ObTenantStatus &status)
 
 bool is_tenant_restore(ObTenantStatus &status)
 {
-  return TENANT_STATUS_RESTORE == status;
+  return TENANT_STATUS_RESTORE == status || TENANT_STATUS_CREATING_STANDBY == status;
+}
+
+bool is_creating_standby_tenant_status(ObTenantStatus &status)
+{
+  return TENANT_STATUS_CREATING_STANDBY == status;
 }
 
 ObTenantSchema::ObTenantSchema()

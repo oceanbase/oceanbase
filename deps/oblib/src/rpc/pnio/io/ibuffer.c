@@ -86,15 +86,29 @@ void ib_destroy(ibuffer_t* ib) {
   }
 }
 
-int sk_read_with_ib(void** ret, sock_t* s, ibuffer_t* ib, int64_t sz) {
+int sk_read_with_ib(void** ret, sock_t* s, ibuffer_t* ib, int64_t sz, int64_t* available_bytes) {
   int err = 0;
   int64_t rbytes = 0;
+  pn_grp_comm_t* pn_grp = get_current_pnio()->pn_grp;
   ef(*ret = ib_read(ib, sz));
-  ef(err = ib_prepare_buffer(ib, sz));
-  ef(err = sk_read(s, ib->e, ib->limit - ib->e, &rbytes));
-  ib->e += rbytes;
-  *ret = ib_read(ib, sz);
-  ef(err);
+  if (NULL == available_bytes) {
+    ef(err = ib_prepare_buffer(ib, sz));
+    ef(err = sk_read(s, ib->e, ib->limit - ib->e, &rbytes));
+    *ret = ib_read(ib, sz);
+    ib->e += rbytes;
+    ef(err);
+  } else if (*available_bytes <= 0) {
+    err = EAGAIN;
+  } else {
+    ef(err = ib_prepare_buffer(ib, sz));
+    int64_t limit_size = rk_min(*available_bytes, ib->limit - ib->e);
+    ef(err = sk_read(s, ib->e, limit_size, &rbytes));
+    *ret = ib_read(ib, sz);
+    ib->e += rbytes;
+    *available_bytes -= rbytes;
+    ef(err);
+  }
+  AAF(&pn_grp->rx_bytes, rbytes);
   el();
   return err;
 }

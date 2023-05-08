@@ -14,7 +14,7 @@
 #define OCEANBASE_OB_SERVER_BLACKLIST_H_
 
 #include "lib/net/ob_addr.h"                  // ObAddr
-#include "ob_log_utility.h"                   // get_timestamp
+#include "logservice/common_util/ob_log_time_utils.h"  // get_timestamp
 #include "ob_log_route_key.h"                 // ObLSRouterKey
 
 namespace oceanbase

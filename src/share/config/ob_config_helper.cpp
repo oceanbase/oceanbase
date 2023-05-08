@@ -703,6 +703,66 @@ bool ObAutoIncrementModeChecker::check(const ObConfigItem &t) const
   return is_valid;
 }
 
+bool ObRpcClientAuthMethodChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("NONE") ||
+         0 == v_str.case_compare("SSL_NO_ENCRYPT") ||
+         0 == v_str.case_compare("SSL_IO");
+}
+
+bool ObRpcServerAuthMethodChecker::is_valid_server_auth_method(const ObString &str) const
+{
+  return 0 == str.case_compare("NONE") ||
+         0 == str.case_compare("SSL_NO_ENCRYPT") ||
+         0 == str.case_compare("SSL_IO") ||
+         0 == str.case_compare("ALL");
+}
+
+bool ObRpcServerAuthMethodChecker::check(const ObConfigItem &t) const
+{
+  bool bret = true;
+  int MAX_METHOD_LENGTH = 256;
+  char tmp_str[MAX_METHOD_LENGTH];
+  size_t str_len = STRLEN(t.str());
+  if (str_len >= MAX_METHOD_LENGTH) {
+    bret = false;
+  } else {
+    MEMCPY(tmp_str, t.str(), str_len);
+    tmp_str[str_len] = 0;
+    ObString str(str_len, reinterpret_cast<const char *>(tmp_str));
+    if (NULL == str.find(',')) {
+      bret = is_valid_server_auth_method(str);
+    } else {
+      //split by comma
+      char *token = NULL;
+      char *save = NULL;
+      char *str_token = tmp_str;
+      int hint = 0;
+      do {
+        token = strtok_r(str_token, ",", &save);
+        str_token = NULL;
+        if (token) {
+          hint = 1;
+          ObString tmp(STRLEN(token), reinterpret_cast<const char *>(token));
+          ObString tmp_to_check = tmp.trim();
+          if (is_valid_server_auth_method(tmp_to_check)) {
+          } else {
+            bret = false;
+            break;
+          }
+        } else {
+          if (!hint) {
+            bret = false;
+          }
+          break;
+        }
+      } while(true);
+    }
+  }
+  return bret;
+}
+
 int64_t ObConfigRuntimeFilterChecker::get_runtime_filter_type(const char *str, int64_t len)
 {
   int64_t rf_type = -1;
@@ -764,7 +824,5 @@ bool ObConfigRuntimeFilterChecker::check(const ObConfigItem &t) const
   int64_t rf_type = get_runtime_filter_type(t.str(), len);
   return rf_type >= 0;
 }
-
-
 } // end of namepace common
 } // end of namespace oceanbase

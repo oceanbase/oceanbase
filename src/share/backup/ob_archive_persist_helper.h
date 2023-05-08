@@ -167,6 +167,10 @@ public:
   // that it has not started archived yet and piece_id bigger or equal than input 'since_piece_id'.
   int get_dest_round_summary(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t round_id, const int64_t since_piece_id, ObDestRoundSummary &summary) const;
+  int get_piece_by_scn(common::ObISQLClient &proxy, const int64_t dest_id,
+      const share::SCN &scn, ObTenantArchivePieceAttr &piece) const;
+  int get_pieces_by_range(common::ObISQLClient &proxy, const int64_t dest_id,
+      const int64_t start_piece_id, const int64_t end_piece_id, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
 
 private:
   int parse_round_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;

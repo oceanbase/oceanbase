@@ -110,6 +110,7 @@ protected:
   ObIAllocator &allocator_;
   bool can_ignore_multi_version_;
   storage::ObBlockRowStore *block_row_store_;
+  storage::ObTxTableGuard tx_table_guard_;
 };
 
 // major sstable micro block scanner for query and merge

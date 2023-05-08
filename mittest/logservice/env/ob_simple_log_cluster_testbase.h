@@ -73,6 +73,7 @@ public:
   const ObMemberList &get_node_list() const {return node_list_;}
   int64_t get_node_cnt() const { return node_cnt_; }
   int64_t get_member_cnt() const { return member_cnt_; }
+  bool disable_hot_cache() const { return disable_hot_cache_; }
 
 private:
   static int generate_sorted_server_list_(const int64_t node_cnt);
@@ -96,6 +97,7 @@ public:
   static ObSignalWorker *sig_worker_;
   static observer::ObSignalHandle *signal_handle_;
   static bool need_add_arb_server_;
+  static bool disable_hot_cache_;
 };
 
 } // end unittest

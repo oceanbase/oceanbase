@@ -42,6 +42,8 @@ public:
 
   int get_source(ObLogRestoreSourceItem &item);
 
+  int get_source_for_update(ObLogRestoreSourceItem &item, ObMySQLTransaction &trans);
+
 private:
   int fill_log_restore_source_(const ObLogRestoreSourceItem &item, ObDMLSqlSplicer &dml);
   int fill_select_source_(common::ObSqlString &sql);

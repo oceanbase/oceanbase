@@ -22,7 +22,7 @@
 #include "lib/profile/ob_trace_id.h"      // ObCurTraceId
 #include "logservice/cdcservice/ob_cdc_req.h"
 #include "ob_log_fetching_mode.h"
-#include "ob_log_ls_define.h"
+#include "logservice/common_util/ob_log_ls_define.h"
 
 #include "ob_map_queue_thread.h"          // ObMapQueueThread
 #include "ob_log_config.h"                // ObLogConfig
@@ -309,7 +309,7 @@ struct StartLSNLocateReq
   State                   state_;
 
   // request parameters
-  TenantLSID              tls_id_;
+  logservice::TenantLSID  tls_id_;
   int64_t                 start_tstamp_ns_;
 
   // server list
@@ -343,7 +343,7 @@ struct StartLSNLocateReq
 
   void reset();
   void reset(
-      const TenantLSID &tls_id,
+      const logservice::TenantLSID &tls_id,
       const int64_t start_tstamp_ns);
   void set_state(const State state) { ATOMIC_STORE(&state_, state); }
   State get_state() const { return (ATOMIC_LOAD(&state_)); }

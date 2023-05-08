@@ -23,7 +23,7 @@
 #include "share/ob_define.h"
 #include "storage/ob_storage_log_type.h"
 #include "storage/tx/ob_trans_log.h"
-#include "ob_log_fetch_stat_info.h"
+#include "logservice/logfetcher/ob_log_fetch_stat_info.h"
 #include "logservice/libobcdc/src/ob_log_utils.h"
 #include "logservice/libobcdc/src/ob_log_ls_fetch_ctx.h"
 #include "logservice/libobcdc/src/ob_log_ls_fetch_mgr.h"
@@ -42,13 +42,14 @@ using namespace common;
 using namespace libobcdc;
 using namespace transaction;
 using namespace storage;
+using namespace logfetcher;
 
 #define PREPARE_ENV(tenant_id, ls_id, tx_id, cluster_id) \
     bool stop_flag = false; \
-    TenantLSID tls_id(tenant_id, share::ObLSID(ls_id)); \
+    logservice::TenantLSID tls_id(tenant_id, share::ObLSID(ls_id)); \
     EXPECT_TRUE(tls_id.is_valid()); \
     IObCDCPartTransResolver::MissingLogInfo missing_info; \
-    TransStatInfo tsi; \
+    logfetcher::TransStatInfo tsi; \
     int64_t start_ts_ns = 1; \
     palf::LSN start_lsn(0); \
     EXPECT_TRUE(start_lsn.is_valid());

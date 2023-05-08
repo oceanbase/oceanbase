@@ -443,7 +443,7 @@ public:
       tmp_ret = OB_INVALID_ARGUMENT;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", KP(ls_tx_ctx_mgr));
     } else {
-      const share::ObLSID &ls_id = ls_tx_ctx_mgr->get_ls_id();
+      const share::ObLSID ls_id = ls_tx_ctx_mgr->get_ls_id();
 
       if (!ls_id.is_valid()) {
         tmp_ret = OB_INVALID_ARGUMENT;
@@ -457,8 +457,8 @@ public:
         ls_tx_ctx_mgr = NULL;
         bool_ret = true;
       }
+      TRANS_LOG_RET(INFO, tmp_ret, "remove ls", K(ls_id), KP(ls_tx_ctx_mgr));
     }
-    UNUSED(tmp_ret);
     return bool_ret;
   }
 };
@@ -950,6 +950,16 @@ public:
       } else if (OB_FAIL(tx_ctx->get_memtable_key_arr(memtable_key_info_arr))) {
         TRANS_LOG(WARN, "get memtable key arr fail", KR(ret), K(memtable_key_info_arr));
       } else {
+        // If the row has been dumped into sstable, we can not get the
+        // memtable key info since the callback of it has been dropped.
+        // So we need to judge whether the transaction has been dumped
+        // into sstable here. Futhermore, we need to fitler out ratain
+        // transactions by !tx_ctx->is_exiting().
+        if (memtable_key_info_arr.empty() && !tx_ctx->is_exiting()
+            && tx_ctx->get_memtable_ctx()->maybe_has_undecided_callback()) {
+          ObMemtableKeyInfo key_info;
+          memtable_key_info_arr.push_back(key_info);
+        }
         int64_t count = memtable_key_info_arr.count();
         for (int i = 0; OB_SUCC(ret) && i < count; i++) {
           ObTxLockStat tx_lock_stat;

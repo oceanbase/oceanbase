@@ -276,7 +276,7 @@ int ObRemoteFetchWorker::handle_single_task_()
 
     // only fatal error report fail, retry with others
     if (is_fatal_error_(ret)) {
-      report_error_(id, ret, cur_lsn);
+      report_error_(id, ret, cur_lsn, ObLogRestoreErrorContext::ErrorType::FETCH_LOG);
     }
   }
   return ret;
@@ -413,6 +413,10 @@ int ObRemoteFetchWorker::submit_log_(const ObLSID &id,
   } while (OB_LOG_OUTOF_DISK_SPACE == ret && ! has_set_stop());
   // submit log until successfully if which can succeed with retry
   // except NOT MASTER or OTHER FATAL ERROR
+
+  if (OB_ERR_UNEXPECTED == ret) {
+    report_error_(id, ret, lsn, ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG);
+  }
   return ret;
 }
 
@@ -565,14 +569,18 @@ bool ObRemoteFetchWorker::is_retry_ret_code_(const int ret_code) const
 bool ObRemoteFetchWorker::is_fatal_error_(const int ret_code) const
 {
   return OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret_code
-    || OB_ARCHIVE_LOG_RECYCLED == ret_code;
+    || OB_ARCHIVE_LOG_RECYCLED == ret_code
+    || OB_INVALID_BACKUP_DEST == ret_code;
 }
 
-void ObRemoteFetchWorker::report_error_(const ObLSID &id, const int ret_code, const palf::LSN &lsn)
+void ObRemoteFetchWorker::report_error_(const ObLSID &id,
+                                        const int ret_code,
+                                        const palf::LSN &lsn,
+                                        const ObLogRestoreErrorContext::ErrorType &error_type)
 {
   int ret = OB_SUCCESS;
   GET_RESTORE_HANDLER_CTX(id) {
-    restore_handler->mark_error(*ObCurTraceId::get_trace_id(), ret_code, lsn);
+    restore_handler->mark_error(*ObCurTraceId::get_trace_id(), ret_code, lsn, error_type);
   }
 }
 

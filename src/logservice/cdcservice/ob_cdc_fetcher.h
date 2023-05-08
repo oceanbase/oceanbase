@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_CDC_FETCHER_
 #define OCEANBASE_LOGSERVICE_OB_CDC_FETCHER_
 
+#include "logservice/cdcservice/ob_cdc_service_monitor.h"
 #include "share/ob_ls_id.h"                     // ObLSID
 #include "logservice/palf/lsn.h"                // LSN
 #include "logservice/palf/log_group_entry.h"    // LogGroupEntry
@@ -75,7 +76,8 @@ private:
   int do_fetch_log_(const obrpc::ObCdcLSFetchLogReq &req,
       FetchRunTime &fetch_runtime,
       obrpc::ObCdcLSFetchLogResp &resp,
-      ClientLSCtx &ctx);
+      ClientLSCtx &ctx,
+      ObCdcFetchLogTimeStats &fetch_time_stat);
   int set_fetch_mode_before_fetch_log_(const ObLSID &ls_id,
       const bool test_switch_fetch_mode,
       bool &ls_exist_in_palf,
@@ -90,7 +92,8 @@ private:
       bool &reach_max_lsn,
       int64_t &scan_round_count,
       int64_t &fetched_log_count,
-      ClientLSCtx &ctx);
+      ClientLSCtx &ctx,
+      ObCdcFetchLogTimeStats &fetch_time_stat);
   int get_replayable_point_scn_(SCN &replayable_point_scn);
   FetchMode get_fetch_mode_when_fetching_log_(const ClientLSCtx &ctx,
       const bool fetch_archive_only);
@@ -154,7 +157,8 @@ private:
   int prefill_resp_with_group_entry_(const ObLSID &ls_id,
       const LSN &lsn,
       LogGroupEntry &log_group_entry,
-      obrpc::ObCdcLSFetchLogResp &resp);
+      obrpc::ObCdcLSFetchLogResp &resp,
+      ObCdcFetchLogTimeStats &fetch_time_stat);
   void handle_when_buffer_full_(FetchRunTime &frt);
   // lsn of ls_id wantted does not exist on this server, feed this information back to CDC Connector,
   // CDC Connector needs to change search server.

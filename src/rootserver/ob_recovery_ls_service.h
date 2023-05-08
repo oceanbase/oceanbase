@@ -19,6 +19,9 @@
 #include "ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
+#include "src/share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
+#include "src/share/backup/ob_backup_struct.h" //ObRestoreSourceServiceAttr
+#include "share/restore/ob_log_restore_source_mgr.h" //ObLogRestoreSourceMgr
 
 namespace oceanbase
 {
@@ -65,7 +68,7 @@ class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
   ObRecoveryLSService() : inited_(false),
-  tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL) {}
+  tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL), primary_is_avaliable_(true) {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
@@ -101,11 +104,16 @@ private:
  int get_min_data_version_(uint64_t &compatible);
  int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+ void try_update_primary_ip_list();
+ bool check_need_update_ip_list(share::ObLogRestoreSourceItem &item);
+ int get_restore_source_value(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
+ int do_update_restore_source(ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
+ int update_source_inner_table(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
 private:
   bool inited_;
   uint64_t tenant_id_;
   common::ObMySQLProxy *proxy_;
-
+  bool primary_is_avaliable_;
 };
 }
 }

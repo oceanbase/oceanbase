@@ -1115,56 +1115,26 @@ int ObBackupPathUtil::get_deleted_tablet_info_path(const share::ObBackupDest &ba
   return ret;
 }
 
-// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/
-int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_set_dest, 
-    const share::ObLSID &ls_id, ObBackupPath &backup_path)
+// file:///obbackup/backup_set_1_full/complement_log/
+int ObBackupPathUtil::get_complement_log_dir_path(const share::ObBackupDest &backup_set_dest, ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, backup_path))) {
-    LOG_WARN(
-        "failed to get log stream backup dir path", K(ret), K(backup_set_dest), K(ls_id));
+  if (OB_FAIL(get_backup_set_dir_path(backup_set_dest, backup_path))) {
+    LOG_WARN("failed to get log stream backup dir path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(backup_path.join_complement_log())) {
     LOG_WARN("faile to join complement log", K(ret));
   }
   return ret;
 }
 
-int ObBackupPathUtil::get_ls_complement_log_dir_path(const share::ObBackupDest &backup_tenant_dest,
-    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path)
+int ObBackupPathUtil::get_complement_log_dir_path(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   share::ObBackupDest backup_set_dest;
   if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
     LOG_WARN("fail to construct backup set dest", K(ret));
-  } else if (OB_FAIL(get_ls_complement_log_dir_path(backup_set_dest, ls_id, backup_path))) {
-    LOG_WARN("fail to get ls backup data dir path", K(ret));
-  }
-  return ret;
-}
-
-// file:///obbackup/backup_set_1_full/log_stream_1/complement_log/1
-int ObBackupPathUtil::get_ls_complement_log_backup_path(const share::ObBackupDest &backup_set_dest,
-    const share::ObLSID &ls_id, const int64_t file_id, ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_ls_complement_log_dir_path(backup_set_dest, ls_id, path))) {
-    LOG_WARN(
-        "failed to get ls complement log dir path", K(ret), K(backup_set_dest), K(ls_id));
-  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
-    LOG_WARN("failed to join file id", K(ret), K(file_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::get_ls_complement_log_backup_path(const share::ObBackupDest &backup_tenant_dest,
-    const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const int64_t file_id, 
-    share::ObBackupPath &backup_path)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupDest backup_set_dest;
-  if (OB_FAIL(construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
-    LOG_WARN("fail to construct backup set dest", K(ret));
-  } else if (OB_FAIL(get_ls_complement_log_backup_path(backup_set_dest, ls_id, file_id, backup_path))) {
+  } else if (OB_FAIL(get_complement_log_dir_path(backup_set_dest, backup_path))) {
     LOG_WARN("fail to get ls backup data dir path", K(ret));
   }
   return ret;
@@ -1191,21 +1161,7 @@ int ObBackupPathUtil::get_ls_log_archive_prefix(const share::ObBackupDest &backu
   return ret;
 }
 
-// file:///obbackup/tenant_1001_incarnation_1/clog/1_1/log_stream_1/1
-int ObBackupPathUtil::get_ls_log_archive_path(const share::ObBackupDest &backup_set_dest, const uint64_t tenant_id,
-    const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
-    const int64_t file_id, ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(get_ls_log_archive_prefix(backup_set_dest, tenant_id, incarnation, round, piece_id, ls_id, path))) {
-    LOG_WARN("failed to get ls log archive prefix", K(ret));
-  } else if (OB_FAIL(path.join(file_id, ObBackupFileSuffix::ARCHIVE))) {
-    LOG_WARN("failed to join file id", K(ret), K(file_id));
-  }
-  return ret;
-}
-
-int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
+int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
 {
   int ret = OB_SUCCESS;
@@ -1218,7 +1174,68 @@ int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backu
     LOG_WARN("fail to init path", K(ret), K(backup_set_dest));
   } else if (OB_FAIL(path.join_backup_set(backup_desc))) {
     LOG_WARN("fail to join backup set", K(ret));
-  } 
+  }
+
+  const ObBackupStorageInfo *storage_info = nullptr;
+  char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(storage_info = backup_tenant_dest.get_storage_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage info must not be nullptr", K(ret));
+  } else if (OB_FAIL(storage_info->get_storage_info_str(
+        storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, true/*need_encrypt*/))) {
+    LOG_WARN("fail to get storage info", K(ret));
+  } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
+    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
+    const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  backup_set_dest.reset();
+  if (!backup_tenant_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnet", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.init(backup_tenant_dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_backup_set(backup_desc))) {
+    LOG_WARN("fail to join backup set", K(ret));
+  } else if (OB_FAIL(path.join_complement_log())) {
+    LOG_WARN("fail to join complement log", K(ret));
+  }
+
+  const ObBackupStorageInfo *storage_info = nullptr;
+  char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(storage_info = backup_tenant_dest.get_storage_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("storage info must not be nullptr", K(ret));
+  } else if (OB_FAIL(storage_info->get_storage_info_str(
+        storage_info_buf, OB_MAX_BACKUP_STORAGE_INFO_LENGTH, true/*need_encrypt*/))) {
+    LOG_WARN("fail to get storage info", K(ret));
+  } else if (OB_FAIL(backup_set_dest.set(path.get_ptr(), storage_info_buf))) {
+    LOG_WARN("fail to set backup set dest", K(ret), K(path), K(storage_info_buf));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest, share::ObBackupDest &backup_set_dest)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  backup_set_dest.reset();
+  if (!backup_tenant_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnet", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.init(backup_tenant_dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_complement_log())) {
+    LOG_WARN("fail to join complement log", K(ret));
+  }
 
   const ObBackupStorageInfo *storage_info = nullptr;
   char storage_info_buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };

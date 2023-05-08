@@ -1919,6 +1919,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
 
 TEST_F(TestObSimpleLogClusterSingleReplica, read_block_in_flashback)
 {
+  disable_hot_cache_ = true;
   SET_CASE_LOG_FILE(TEST_NAME, "read_block_in_flashback");
   OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);

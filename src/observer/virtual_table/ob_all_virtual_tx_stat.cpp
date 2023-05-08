@@ -199,7 +199,7 @@ int ObGVTxStat::inner_get_next_row(ObNewRow *&row)
             cur_row_.cells_[i].set_varchar(participants_buffer_);
             cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else {
-            cur_row_.cells_[i].set_varchar(ObString("NULL"));
+            cur_row_.cells_[i].reset();
             cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;

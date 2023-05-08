@@ -2715,6 +2715,24 @@ TEST_F(TestXmlParser, test_endtags_content)
   ASSERT_EQ(OB_ERR_PARSER_SYNTAX, ret);
 }
 
+TEST_F(TestXmlParser, test_revert_escape)
+{
+  int ret = 0;
+  common::ObString text_1(
+  "&lt;heading&gt;Reminder&lt;/heading&gt;"
+  "&lt;a/&gt;&amp;:&apos;&apos;&apos; &quot; &apos;"
+  );
+  common::ObString text_2("<heading>Reminder</heading><a/>&:''' \" '");
+  common::ObString text_3("abdasdjkkjlasdopqweoionk");
+  common::ObString res;
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ret = ObXmlParserUtils::revert_escape_character(allocator, text_1, res);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(std::string(res.ptr(), res.length()), std::string(text_2.ptr(), text_2.length()));
+  ret = ObXmlParserUtils::revert_escape_character(allocator, text_3, res);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(std::string(res.ptr(), res.length()), std::string(text_3.ptr(), text_3.length()));
+}
 
 // class TestMemoryXmlParser : public ::testing::Test {
 // public:

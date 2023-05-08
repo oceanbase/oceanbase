@@ -144,3 +144,8 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
 
 }
 }
+
+#undef STAT
+#undef ISTAT
+#undef WSTAT
+#undef TSTAT

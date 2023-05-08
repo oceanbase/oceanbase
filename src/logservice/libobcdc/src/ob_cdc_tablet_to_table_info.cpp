@@ -73,7 +73,7 @@ void ObCDCTabletChangeInfo::reset(const TabletChangeCmd cmd)
 }
 
 int ObCDCTabletChangeInfo::parse_from_multi_data_source_buf(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const transaction::ObTxBufferNode &multi_data_source_node)
 {
   int ret = OB_SUCCESS;
@@ -124,7 +124,7 @@ int ObCDCTabletChangeInfo::parse_from_multi_data_source_buf(
 }
 
 int ObCDCTabletChangeInfo::parse_create_tablet_op_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const obrpc::ObBatchCreateTabletArg &create_tablet_arg)
 {
   int ret = OB_SUCCESS;
@@ -173,7 +173,7 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
 }
 
 int ObCDCTabletChangeInfo::parse_remove_tablet_op_(
-    const TenantLSID &tls_id,
+    const logservice::TenantLSID &tls_id,
     const obrpc::ObBatchRemoveTabletArg &remove_tablet_arg)
 {
   int ret = OB_SUCCESS;

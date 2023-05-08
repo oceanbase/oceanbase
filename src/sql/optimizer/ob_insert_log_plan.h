@@ -52,7 +52,7 @@ public:
   bool is_direct_insert() const { return is_direct_insert_; }
 protected:
   int allocate_insert_values_as_top(ObLogicalOperator *&top);
-  int candi_allocate_insert();
+  int candi_allocate_insert(OSGShareInfo *osg_info);
   int build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_expr);
   int create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
                           ObTablePartitionInfo *insert_table_part,
@@ -60,20 +60,15 @@ protected:
                           ObConstRawExpr *lock_row_flag_expr,
                           const bool force_no_multi_part,
                           const bool force_multi_part,
-                          ObIArray<CandidatePlan> &insert_plans);
+                          ObIArray<CandidatePlan> &insert_plans,
+                          OSGShareInfo *osg_info);
   int allocate_insert_as_top(ObLogicalOperator *&top,
                              ObRawExpr *lock_row_flag_expr,
                              ObTablePartitionInfo *table_partition_info,
                              ObShardingInfo *insert_sharding,
                              bool is_multi_part);
-  int candi_allocate_pdml_insert();
-  int candi_allocate_optimizer_stats_gathering(const OSGShareInfo &osg_info);
-  int candi_allocate_root_optimizer_stats_gathering(const OSGShareInfo &osg_info);
-
-  int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
-                                                OSG_TYPE type,
-                                                const OSGShareInfo &osg_info);
-  int generate_osg_share_info(OSGShareInfo &info);
+  int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
+  int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
   virtual int check_insert_need_multi_partition_dml(ObLogicalOperator &top,
                                                     ObTablePartitionInfo *insert_table_partition,
@@ -125,6 +120,7 @@ protected:
                                       ObRawExpr *&column_conv_expr);
 
 private:
+  int generate_osg_share_info(OSGShareInfo *&info);
   int check_need_online_stats_gather(bool &need_osg);
   int set_is_direct_insert();
   DISALLOW_COPY_AND_ASSIGN(ObInsertLogPlan);

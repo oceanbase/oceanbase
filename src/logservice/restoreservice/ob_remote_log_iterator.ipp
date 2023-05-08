@@ -169,7 +169,7 @@ int ObRemoteLogIterator<LogEntryType>::build_data_generator_(const share::SCN &p
   const share::ObLogRestoreSourceType &type = source->get_source_type();
   if (is_service_log_source_type(type)) {
     ObRemoteSerivceParent *service_source = static_cast<ObRemoteSerivceParent *>(source);
-    ret = build_service_data_generator_(service_source);
+    ret = OB_NOT_SUPPORTED;
   } else if (is_raw_path_log_source_type(type)) {
     ObRemoteRawPathParent *dest_source = static_cast<ObRemoteRawPathParent *>(source);
     ret = build_dest_data_generator_(pre_scn, dest_source);
@@ -178,21 +178,6 @@ int ObRemoteLogIterator<LogEntryType>::build_data_generator_(const share::SCN &p
     ret = build_location_data_generator_(pre_scn, location_source, refresh_storage_info_func);
   } else {
     ret = OB_NOT_SUPPORTED;
-  }
-  return ret;
-}
-
-template<class LogEntryType>
-int ObRemoteLogIterator<LogEntryType>::build_service_data_generator_(ObRemoteSerivceParent *source)
-{
-  int ret = OB_SUCCESS;
-  share::SCN end_scn;
-  ObAddr server;
-  source->get(server, end_scn);
-  gen_ = MTL_NEW(ServiceDataGenerator, "ResDataGen", tenant_id_, id_, start_lsn_, end_lsn_, end_scn, server);
-  if (OB_ISNULL(gen_)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    CLOG_LOG(WARN, "alloc service data generator failed", K(ret), KPC(this));
   }
   return ret;
 }

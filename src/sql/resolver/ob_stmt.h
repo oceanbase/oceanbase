@@ -264,6 +264,7 @@ public:
             || stmt_type == stmt::T_ALTER_RESOURCE_UNIT
             || stmt_type == stmt::T_DROP_RESOURCE_UNIT
             || stmt_type == stmt::T_CREATE_TENANT
+            || stmt_type == stmt::T_CREATE_STANDBY_TENANT
             || stmt_type == stmt::T_DROP_TENANT
             || stmt_type == stmt::T_MODIFY_TENANT
             || stmt_type == stmt::T_LOCK_TENANT
@@ -393,6 +394,7 @@ public:
             || stmt_type == stmt::T_ALTER_RESOURCE_UNIT
             || stmt_type == stmt::T_DROP_RESOURCE_UNIT
             || stmt_type == stmt::T_CREATE_TENANT
+            || stmt_type == stmt::T_CREATE_STANDBY_TENANT
             || stmt_type == stmt::T_DROP_TENANT
             || stmt_type == stmt::T_MODIFY_TENANT
             || stmt_type == stmt::T_LOCK_TENANT
@@ -452,6 +454,7 @@ public:
             || stmt_type == stmt::T_ALTER_RESOURCE_UNIT
             || stmt_type == stmt::T_DROP_RESOURCE_UNIT
             || stmt_type == stmt::T_CREATE_TENANT
+            || stmt_type == stmt::T_CREATE_STANDBY_TENANT
             || stmt_type == stmt::T_DROP_TENANT
             || stmt_type == stmt::T_MODIFY_TENANT
             || stmt_type == stmt::T_LOCK_TENANT

@@ -108,7 +108,7 @@ public:
   // @brief add log fetch source of phyiscal backups
   int add_source(logservice::DirArray &array, const share::SCN &end_scn);
   int add_source(share::ObBackupDest &dest, const share::SCN &end_scn);
-  int add_source(const ObAddr &addr, const share::SCN &end_scn);
+  int add_source(const share::ObRestoreSourceServiceAttr &service_attr, const share::SCN &end_scn);
   // clean source if log_restore_source is empty
   int clean_source();
   // @brief As restore handler maybe destroyed, log source should be copied out
@@ -151,7 +151,10 @@ public:
   // return true only if in restore state and all replicas have restore and replay finish
   int check_restore_done(const share::SCN &recovery_end_scn, bool &done);
   // @brief set error if error occurs in log restore
-  void mark_error(share::ObTaskId &trace_id, const int ret_code, const palf::LSN &lsn);
+  void mark_error(share::ObTaskId &trace_id,
+                  const int ret_code,
+                  const palf::LSN &lsn,
+                  const ObLogRestoreErrorContext::ErrorType &error_type);
   // @brief get restore error for report
   int get_restore_error(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   // @brief Before the standby tenant switchover to primary, check if all primary logs are restored in the standby
@@ -182,6 +185,10 @@ private:
   int check_replay_done_(const share::SCN &scn, bool &done);
   int check_replica_replay_done_(const share::SCN &scn, common::ObMemberList &member_list, bool &done);
   int check_member_list_change_(common::ObMemberList &member_list, bool &member_list_change);
+  int check_restore_to_newest_from_service_(const share::ObRestoreSourceServiceAttr &attr,
+      const share::SCN &end_scn, share::SCN &archive_scn);
+  int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
+      const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
 
 private:

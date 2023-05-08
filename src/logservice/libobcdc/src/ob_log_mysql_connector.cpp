@@ -36,7 +36,6 @@ bool MySQLConnConfig::is_valid() const
   if (! svr_.is_valid()
       || NULL == mysql_user_
       || NULL == mysql_password_
-      || NULL == mysql_db_
       || mysql_connect_timeout_sec_ <= 0
       || mysql_query_timeout_sec_ <= 0) {
     ret = false;
@@ -71,6 +70,9 @@ int MySQLConnConfig::reset(const ObAddr &svr,
 }
 
 ////////////////////////////////////// ObLogMySQLConnector /////////////////////////////////
+const char *ObLogMySQLConnector::DEFAULT_DB_NAME_MYSQL_MODE = "OCEANBASE";
+const char *ObLogMySQLConnector::DEFAULT_DB_NAME_ORACLE_MODE = "SYS";
+
 ObLogMySQLConnector::ObLogMySQLConnector() :
     inited_(false),
     mysql_(NULL),
@@ -101,7 +103,7 @@ int ObLogMySQLConnector::init(const MySQLConnConfig& cfg,
   } else {
     svr_ = cfg.svr_;
     inited_ = true;
-    LOG_INFO("init mysql connector succ", K(this), K(cfg));
+    LOG_INFO("init mysql connector succ", K(this), K(cfg), "is_oracle_mode", is_oracle_mode());
   }
 
   if (OB_SUCCESS != ret) {
@@ -144,7 +146,7 @@ int ObLogMySQLConnector::query(MySQLQueryBase& query)
     const char *err_msg = mysql_error(mysql_);
 
     LOG_WARN("mysql_real_query fail", K(err), K(mysql_error_code), "mysql_error", err_msg,
-        K(svr_), K(sql_len), K(sql), K(svr_));
+        K(svr_), K(sql_len), K(sql), K(svr_), "is_oracle_mode", is_oracle_mode());
 
     // 1. execution of sql failed, and mysql error: 1054 - Unknown column 'id' in 'field list'
     // This means that libobcdc is connected to a low version of the observer, no replica_type information is available, error code OB_ERR_COLUMN_NOT_FOUND is returned
@@ -183,7 +185,7 @@ int ObLogMySQLConnector::exec(MySQLQueryBase& query)
     int mysql_error_code = mysql_errno(mysql_);
     const char *err_msg = mysql_error(mysql_);
     LOG_WARN("mysql_real_query fail", K(err), K(mysql_error_code), K(err_msg), K(svr_),
-        K(sql_len), K(sql));
+        K(sql_len), K(sql), "is_oracle_mode", is_oracle_mode());
 
     // Setting error codes in case of errors
     query.set_mysql_error(mysql_error_code, err_msg);
@@ -197,6 +199,12 @@ int ObLogMySQLConnector::exec(MySQLQueryBase& query)
     ret = OB_NEED_RETRY;
   }
   return ret;
+}
+
+bool ObLogMySQLConnector::is_oracle_mode() const
+{
+  bool b_ret = false;
+  return b_ret;
 }
 
 #define SET_TIMEOUT_SQL "SET SESSION ob_query_timeout = %ld, SESSION ob_trx_timeout = %ld"
@@ -218,7 +226,7 @@ int ObLogMySQLConnector::set_timeout_variable_(const int64_t query_timeout, cons
           K(trx_timeout));
     } else if (0 != (mysql_err = mysql_real_query(mysql_, sql, sql_len))) {
       LOG_WARN("mysql_real_query fail", K(mysql_err), K(mysql_error(mysql_)), K(sql_len), K(sql),
-          K(svr_));
+          K(svr_), "is_oracle_mode", is_oracle_mode());
       ret = OB_NEED_RETRY;
     } else {
       // success
@@ -236,6 +244,7 @@ int ObLogMySQLConnector::init_conn_(const MySQLConnConfig &cfg,
   unsigned int write_timeout = connect_timeout;
   int64_t query_timeout_us = cfg.mysql_query_timeout_sec_ * _SEC_;
   int64_t trx_timeout_us = query_timeout_us;
+  const char *db_name = ""; // connect to ob without db_name at first to get tenant_mode
 
   if (NULL == (mysql_ = mysql_init(NULL))) {
     LOG_ERROR("mysql_init fail", KR(ret));
@@ -259,7 +268,7 @@ int ObLogMySQLConnector::init_conn_(const MySQLConnConfig &cfg,
           cfg.get_mysql_addr(),
           cfg.mysql_user_,
           cfg.mysql_password_,
-          cfg.mysql_db_,
+          db_name,
           cfg.get_mysql_port(),
           NULL, CLIENT_MULTI_STATEMENTS)) {
       LOG_WARN("mysql connect failed", "mysql_error", mysql_error(mysql_),
@@ -270,6 +279,17 @@ int ObLogMySQLConnector::init_conn_(const MySQLConnConfig &cfg,
     else if (OB_FAIL(set_timeout_variable_(query_timeout_us, trx_timeout_us))) {
       LOG_WARN("set_timeout_variable_ fail", KR(ret), K(query_timeout_us), K(trx_timeout_us), K(cfg));
     } else {
+      db_name = is_oracle_mode() ? DEFAULT_DB_NAME_ORACLE_MODE: DEFAULT_DB_NAME_MYSQL_MODE;
+
+      // first connect to db with empty db_name to get tenant_mode, then set default db according to tenant_mode
+      if (OB_ISNULL(db_name)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("expect valid default_db_name, OCEANBASE for mysql tenant and SYS for oracle tenant",
+            KR(ret), "is_oracle_mode", is_oracle_mode(), K(cfg));
+      } else if (0 != mysql_select_db(mysql_, db_name)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("failed to change default db", KR(ret), "is_oracle_mode", is_oracle_mode(), K(db_name), K(cfg));
+      }
       // Connection successful
     }
   }

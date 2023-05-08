@@ -27,7 +27,7 @@ const int easy_head_size = 16;
 int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 {
   if (PNIO_OK != io_err) {
-    if (PNIO_TIMEOUT == io_err || PNIO_DISCONNECT == io_err) {
+    if (PNIO_TIMEOUT == io_err) {
       send_ret_ = OB_TIMEOUT;
     } else {
       send_ret_ = OB_RPC_SEND_ERROR;
@@ -162,6 +162,10 @@ static easy_addr_t to_ez_addr(const ObAddr &addr)
 int64_t ObPocClientStub::get_proxy_timeout(ObRpcProxy& proxy) {
   return proxy.timeout();
 }
+int32_t ObPocClientStub::get_proxy_group_id(ObRpcProxy& proxy) {
+  return proxy.get_group_id();
+}
+
 void ObPocClientStub::set_rcode(ObRpcProxy& proxy, const ObRpcResultCode& rcode) {
   proxy.set_result_code(rcode);
 }

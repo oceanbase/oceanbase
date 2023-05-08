@@ -16,15 +16,13 @@
 #define OCEANBASE_LIBOBCDC_OB_LOG_PART_TRANS_TASK_QUEUE_H__
 
 #include "lib/lock/ob_small_spin_lock.h"    // ObByteLock
-
+#include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info.h" // PartTransDispatchInfo
 #include "ob_log_part_trans_task.h"         // PartTransTask
 
 namespace oceanbase
 {
 namespace libobcdc
 {
-
-struct PartTransDispatchInfo;
 
 // task queue
 // not thread-safe
@@ -239,7 +237,7 @@ public:
   void reset_dispatched_task_info();
 
   void update_dispatch_progress_by_task_queue(int64_t &dispatch_progress,
-      PartTransDispatchInfo &dispatch_info);
+      logfetcher::PartTransDispatchInfo &dispatch_info);
 private:
   void record_dispatching_task_info_(PartTransTask *task);
 private:

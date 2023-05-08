@@ -203,7 +203,7 @@ void ObLSTxCtxMgr::destroy()
   if (IS_INIT) {
     ls_log_writer_.destroy();
     is_inited_ = false;
-    TRANS_LOG(INFO, "ObLSTxCtxMgr destroyed", K_(ls_id));
+    TRANS_LOG(INFO, "ObLSTxCtxMgr destroyed", KP(this), K_(ls_id));
   }
 }
 
@@ -2178,9 +2178,9 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
           TRANS_LOG(WARN, "remove ls error", KR(ret), K(ls_id));
         } else {
           ATOMIC_INC(&ls_release_cnt_);
-          TRANS_LOG(INFO, "remove ls success", "total_alloc", ls_alloc_cnt_,
-                                               "total_release", ls_release_cnt_,
-                                               K(ls_id));
+          TRANS_LOG(INFO, "remove ls success", KP(ls_tx_ctx_mgr), K(ls_id),
+                                               "total_alloc", ls_alloc_cnt_,
+                                               "total_release", ls_release_cnt_);
         }
         revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
       }
@@ -2194,7 +2194,7 @@ int ObTxCtxMgr::remove_ls(const ObLSID &ls_id, const bool graceful)
       // do nothing
     }
   }
-  UNUSED(MAX_RETRY_NUM);
+  TRANS_LOG(INFO, "remove ls", KR(ret), K(ls_id), K(graceful));
 
   return ret;
 }

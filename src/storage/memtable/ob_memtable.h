@@ -318,7 +318,7 @@ public:
   void clear_memtable_mgr() { ATOMIC_STORE(&memtable_mgr_, nullptr); }
   storage::ObTabletMemtableMgr *get_memtable_mgr() { return ATOMIC_LOAD(&memtable_mgr_); }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
-  uint32_t get_freeze_clock() { return ATOMIC_LOAD(&freeze_clock_); }
+  uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
   ObMtStat& get_mt_stat() { return mt_stat_; }
   int64_t get_size() const;
@@ -448,6 +448,8 @@ public:
   int resolve_right_boundary_for_migration();
   void unset_logging_blocked_for_active_memtable();
   void resolve_left_boundary_for_active_memtable();
+  inline void set_allow_freeze(const bool allow_freeze) { ATOMIC_STORE(&allow_freeze_, allow_freeze); }
+  inline bool allow_freeze() const { return ATOMIC_LOAD(&allow_freeze_); }
 
   /* multi source data operations */
   virtual int get_multi_source_data_unit(
@@ -482,7 +484,7 @@ public:
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(is_force_freeze), K_(contain_hotspot_row),
-                       K_(read_barrier), K_(is_flushed), K_(freeze_state),
+                       K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
                        K_(mt_stat_.frozen_time), K_(mt_stat_.ready_for_flush_time),
                        K_(mt_stat_.create_flush_dag_time), K_(mt_stat_.release_time),
                        K_(mt_stat_.last_print_time));
@@ -551,7 +553,7 @@ private:
   storage::ObLSHandle ls_handle_;
   storage::ObFreezer *freezer_;
   storage::ObTabletMemtableMgr *memtable_mgr_;
-  uint32_t freeze_clock_;
+  mutable uint32_t freeze_clock_;
   ObMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
   ObQueryEngine query_engine_;
@@ -578,6 +580,7 @@ private:
   bool is_flushed_;
   bool read_barrier_ CACHE_ALIGNED;
   bool write_barrier_;
+  bool allow_freeze_;
   int64_t write_ref_cnt_ CACHE_ALIGNED;
   lib::Worker::CompatMode mode_;
   int64_t minor_merged_time_;

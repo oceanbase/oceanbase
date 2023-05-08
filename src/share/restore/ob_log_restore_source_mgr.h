@@ -39,7 +39,7 @@ public:
   int init(const uint64_t tenant_id, ObISQLClient *proxy);
 public:
   // add source with net service
-  int add_service_source(const SCN &recovery_until_scn, const ObAddr &addr);
+  int add_service_source(const SCN &recovery_until_scn, const ObString &service_source);
   // add source with archive dest
   // 1. nfs example
   // file:///data/1/
@@ -58,6 +58,8 @@ public:
 
   // get log restore source
   int get_source(ObLogRestoreSourceItem &item);
+
+  int get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans);
 
   static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest& dest);
 private:

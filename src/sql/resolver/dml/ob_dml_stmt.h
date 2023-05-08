@@ -1127,6 +1127,8 @@ public:
   int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,
                                       bool need_replace);
 
+  int check_has_cursor_expression(bool &has_cursor_expr) const;
+
   int do_formalize_query_ref_exprs_pre();
 
   int do_formalize_query_ref_exprs_post();

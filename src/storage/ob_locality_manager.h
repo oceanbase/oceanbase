@@ -53,6 +53,7 @@ public:
   int get_local_zone_type(common::ObZoneType &zone_type);
   virtual int get_server_locality_array(common::ObIArray<share::ObServerLocality> &server_locality_array,
                                         bool &has_readonly_zone) const;
+  virtual int get_server_zone_type(const common::ObAddr &server, common::ObZoneType &zone_type) const;
   virtual int get_server_region(const common::ObAddr &server, common::ObRegion &region) const;
   virtual int get_server_idc(const common::ObAddr &server, common::ObIDC &idc) const;
   int get_server_cluster_id(const common::ObAddr &server, int64_t &cluster_id) const;

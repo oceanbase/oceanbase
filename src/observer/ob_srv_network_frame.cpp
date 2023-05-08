@@ -24,6 +24,10 @@
 #include "observer/ob_rpc_intrusion_detect.h"
 #include "storage/ob_locality_manager.h"
 #include "lib/ssl/ob_ssl_config.h"
+extern "C" {
+#include "ussl-hook.h"
+#include "auth-methods.h"
+}
 #include <sys/types.h>
 #include <sys/stat.h>
 #include "storage/ob_locality_manager.h"
@@ -41,12 +45,16 @@ ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
       deliver_(request_qhandler_, xlator_.get_session_handler(), gctx),
       rpc_handler_(deliver_),
       mysql_handler_(deliver_, gctx),
+      ingress_service_(),
       net_(),
       rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL),
       mysql_transport_(NULL),
       batch_rpc_transport_(NULL),
-      last_ssl_info_hash_(UINT64_MAX)
+      last_ssl_info_hash_(UINT64_MAX),
+      standby_fetchlog_bw_limit_(0),
+      standby_fetchlog_bytes_(0),
+      standby_fetchlog_time_(0)
 {
   // empty;
 }
@@ -145,6 +153,8 @@ int ObSrvNetworkFrame::init()
     LOG_ERROR("init rpc easy network fail", K(ret));
   } else if (OB_FAIL(reload_ssl_config())) {
     LOG_ERROR("load_ssl_config fail", K(ret));
+  } else if (OB_FAIL(reload_rpc_auth_method())) {
+    LOG_ERROR("load rpc auth method fail", K(ret));
   } else if (false == enable_new_sql_nio() && OB_FAIL(net_.add_mysql_listen(static_cast<uint32_t>(GCONF.mysql_port),
                                            mysql_handler_,
                                            mysql_transport_))) {
@@ -161,7 +171,9 @@ int ObSrvNetworkFrame::init()
     LOG_ERROR("net keepalive register fail", K(ret));
   } else if (hp_io_cnt > 0 && OB_FAIL(net_.high_prio_rpc_net_register(rpc_handler_, high_prio_rpc_transport_))) {
     LOG_ERROR("high prio rpc net register fail", K(ret));
-  } 
+  } else if (ingress_service_.init(GCONF.cluster_id)) {
+    LOG_ERROR("endpoint ingress service init fail", K(ret));
+  }
   else {
     if (OB_FAIL(obrpc::global_poc_server.start(rpc_port, io_cnt, &deliver_))) {
       LOG_ERROR("poc rpc server start fail", K(ret));
@@ -179,6 +191,8 @@ int ObSrvNetworkFrame::init()
 void ObSrvNetworkFrame::destroy()
 {
   net_.destroy();
+  ObNetKeepAlive::get_instance().destroy();
+  ingress_service_.destroy();
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->destroy();
   }
@@ -187,6 +201,13 @@ void ObSrvNetworkFrame::destroy()
 int ObSrvNetworkFrame::start()
 {
   int ret = net_.start();
+
+  if (OB_SUCC(ret) && OB_FAIL(ObNetKeepAlive::get_instance().start())) {
+    LOG_ERROR("ObNetKeepAlive start failed!", K(ret));
+  } else {
+    LOG_INFO("ObNetKeepAlive start success!");
+  }
+
   if (OB_SUCC(ret)) {
     if (enable_new_sql_nio()) {
       obmysql::global_sql_nio_server =
@@ -211,6 +232,11 @@ int ObSrvNetworkFrame::start()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ingress_service_.start())) {
+      LOG_ERROR("endpoint register task start fail", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -224,6 +250,7 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepintvl     = static_cast<int>(GCONF.tcp_keepintvl);
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
+  int64_t server_standby_bw = static_cast<int64_t>(GCONF._server_standby_fetch_log_bandwidth_limit);
 
   if (GCONF._enable_easy_keepalive) {
     enable_easy_keepalive = 1;
@@ -253,8 +280,9 @@ int ObSrvNetworkFrame::reload_config()
                                                                         tcp_keepidle, tcp_keepintvl,
                                                                         tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
+  } else if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(server_standby_bw))) {
+    LOG_WARN("Failed to set server-level standby fetchlog bandwidth limit");
   }
-
   return ret;
 }
 
@@ -337,6 +365,28 @@ uint64_t ObSrvNetworkFrame::get_ssl_file_hash(const char *intl_file[3], const ch
   return hash_value;
 }
 
+static int create_ssl_ctx(int ctx_id, int is_from_file, int is_sm, const char *ca_cert,
+                          const char *sign_cert, const char *sign_private_key,
+                          const char *enc_cert, const char *enc_private_key)
+{
+  int ret = OB_SUCCESS;
+  ssl_config_item_t config_item;
+  config_item.is_from_file = is_from_file;
+  config_item.is_sm = is_sm;
+  config_item.ca_cert = ca_cert;
+  config_item.sign_cert = sign_cert;
+  config_item.sign_private_key = sign_private_key;
+  config_item.enc_cert = enc_cert;
+  config_item.enc_private_key = enc_private_key;
+  if (ussl_setsockopt(ctx_id, SOL_OB_CTX, SO_OB_CTX_SET_SSL_CONFIG, &config_item, socklen_t(sizeof(config_item))) < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("create ssl ctx failed", K(ctx_id));
+  } else {
+    LOG_INFO("create ssl ctx success", K(ctx_id));
+  }
+  return ret;
+}
+
 int ObSrvNetworkFrame::reload_ssl_config()
 {
   int ret = common::OB_SUCCESS;
@@ -412,6 +462,13 @@ int ObSrvNetworkFrame::reload_ssl_config()
                 LOG_INFO("create ssl ctx success!", K(use_bkmi), K(use_sm));
               }
             }
+            if (OB_SUCC(ret)) {
+              const int OB_EASY_RPC_SSL_CTX_ID = 0;
+              if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm,
+                                          ca_cert, public_cert, private_key, NULL, NULL))) {
+                LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID));
+              }
+            }
           }
         }
       }
@@ -456,6 +513,8 @@ int ObSrvNetworkFrame::unix_rpc_shutdown()
 void ObSrvNetworkFrame::wait()
 {
   net_.wait();
+  ObNetKeepAlive::get_instance().wait();
+  ingress_service_.wait();
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->wait();
   }
@@ -469,7 +528,10 @@ int ObSrvNetworkFrame::stop()
   // easy.stop will release memory that deliver thread maybe in use.
   if (OB_FAIL(net_.stop())) {
     LOG_WARN("stop easy net fail", K(ret));
-  } 
+  } else {
+    ObNetKeepAlive::get_instance().stop();
+  }
+  ingress_service_.stop();
   return ret;
 }
 
@@ -509,4 +571,89 @@ void ObSrvNetworkFrame::sql_nio_stop()
   if (NULL != obmysql::global_sql_nio_server) {
     obmysql::global_sql_nio_server->stop();
   }
+}
+
+int ObSrvNetworkFrame::reload_rpc_auth_method()
+{
+  int ret = OB_SUCCESS;
+  int client_auth_method = USSL_AUTH_NONE;
+  int server_auth_methods = 0;
+  ObString client_auth_method_str(GCONF.rpc_client_authentication_method.str());
+  ObString server_auth_method_str(GCONF.rpc_server_authentication_method.str());
+  if (0 == client_auth_method_str.case_compare("NONE")) {
+    client_auth_method = USSL_AUTH_NONE;
+  } else if (0 == client_auth_method_str.case_compare("SSL_NO_ENCRYPT")) {
+    client_auth_method = USSL_AUTH_SSL_HANDSHAKE;
+  } else if (0 == client_auth_method_str.case_compare("SSL_IO")) {
+    client_auth_method = USSL_AUTH_SSL_IO;
+  }
+  set_client_auth_methods(client_auth_method);
+
+  if (NULL != strcasestr(server_auth_method_str.ptr(), "ALL")) {
+    server_auth_methods = USSL_AUTH_NONE | USSL_AUTH_SSL_HANDSHAKE | USSL_AUTH_SSL_IO;
+  } else {
+    if (NULL != strcasestr(server_auth_method_str.ptr(), "SSL_NO_ENCRYPT")) {
+      server_auth_methods |= USSL_AUTH_SSL_HANDSHAKE;
+    }
+    if (NULL != strcasestr(server_auth_method_str.ptr(), "SSL_IO")) {
+      server_auth_methods |= USSL_AUTH_SSL_IO;
+    }
+    if (NULL != strcasestr(server_auth_method_str.ptr(), "NONE")) {
+      server_auth_methods |= USSL_AUTH_NONE;
+    }
+  }
+  set_server_auth_methods(server_auth_methods);
+  return ret;
+}
+
+oceanbase::rootserver::ObIngressBWAllocService *ObSrvNetworkFrame::get_ingress_service()
+{
+  return &ingress_service_;
+}
+int ObSrvNetworkFrame::net_endpoint_register(const ObNetEndpointKey &endpoint_key, int64_t expire_time)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  if (!is_sys_tenant(tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("endpoint register is only valid in sys tenant", K(ret), K(endpoint_key));
+  } else if (ingress_service_.is_leader() && OB_FAIL(ingress_service_.register_endpoint(endpoint_key, expire_time))) {
+    LOG_WARN("net endpoint register failed", K(ret), K(endpoint_key));
+  }
+  return ret;
+}
+
+int ObSrvNetworkFrame::net_endpoint_predict_ingress(const ObNetEndpointKey &endpoint_key, int64_t &predicted_bw)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_time = ObTimeUtility::current_time();
+  uint64_t current_fetchlog_bytes = pn_get_rxbytes(obrpc::ObPocRpcServer::RATELIMIT_PNIO_GROUP);
+  uint64_t peroid_bytes = current_fetchlog_bytes - standby_fetchlog_bytes_;
+  int64_t real_bw = peroid_bytes * 1000000L / (current_time - standby_fetchlog_time_);
+
+  if (real_bw <= standby_fetchlog_bw_limit_) {
+    predicted_bw = (uint64_t)(real_bw + max(real_bw / 10, 1024 * 1024L));
+  } else {
+    predicted_bw = (uint64_t)(real_bw + real_bw / 2);
+  }
+  standby_fetchlog_time_ = current_time;
+  standby_fetchlog_bytes_ = current_fetchlog_bytes;
+  return ret;
+}
+
+int ObSrvNetworkFrame::net_endpoint_set_ingress(const ObNetEndpointKey &endpoint_key, int64_t assigned_bw)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(assigned_bw == -1)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("assigned bandwidtth is invalid", K(ret), K(endpoint_key), K(assigned_bw));
+  } else {
+    standby_fetchlog_bw_limit_ = assigned_bw;
+    standby_fetchlog_time_ = ObTimeUtility::current_time();
+    standby_fetchlog_bytes_ = pn_get_rxbytes(obrpc::ObPocRpcServer::RATELIMIT_PNIO_GROUP);
+    if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(assigned_bw))) {
+      LOG_WARN("net endpoint set ingress failed", K(ret), K(endpoint_key), K(assigned_bw));
+    }
+  }
+  return ret;
 }

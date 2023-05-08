@@ -45,6 +45,22 @@ using namespace palf;
 namespace unittest
 {
 
+void init_gtest_output(std::string &gtest_log_name)
+{
+  // 判断是否处于Farm中
+  char *mit_network_start_port_env = getenv("mit_network_start_port");
+  char *mit_network_port_num_env = getenv("mit_network_port_num");
+  if (mit_network_start_port_env != nullptr && mit_network_port_num_env != nullptr) {
+    std::string gtest_file_name = gtest_log_name;
+    int fd = open(gtest_file_name.c_str(), O_RDWR|O_CREAT, 0666);
+    if (fd == 0) {
+      ob_abort();
+    }
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+  }
+}
+
 PalfHandleImplGuard::PalfHandleImplGuard() : palf_id_(),
                                              palf_handle_impl_(NULL),
                                              palf_env_impl_(NULL)
@@ -315,7 +331,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
           break;
         } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
           CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
-        } else if (OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1))) {
+        } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1))) {
           CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
         } else {
           handle->set_location_cache_cb(loc_cb);
@@ -469,6 +485,9 @@ int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleImplGuard 
       sleep(1);
     }
   } while (OB_ENTRY_NOT_EXIST == ret);
+  if (OB_SUCC(ret) && disable_hot_cache()) {
+    leader.get_palf_handle_impl()->log_engine_.log_storage_.hot_cache_ = NULL;
+  }
   PALF_LOG(INFO, "get_leader finished", K(ret), K(id), K(leader_idx));
   return ret;
 }
@@ -1174,7 +1193,10 @@ void ObSimpleLogClusterTestEnv::switch_append_to_raw_write(PalfHandleImplGuard &
   leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  do {
+    usleep(50);
+    leader.palf_handle_impl_->get_access_mode(mode_version, access_mode);
+  } while(access_mode != AccessMode::RAW_WRITE);
 }
 
 void ObSimpleLogClusterTestEnv::switch_append_to_flashback(PalfHandleImplGuard &leader, int64_t &mode_version)
@@ -1186,10 +1208,16 @@ void ObSimpleLogClusterTestEnv::switch_append_to_flashback(PalfHandleImplGuard &
   leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::RAW_WRITE, SCN::min_scn()));
+  do {
+    usleep(50);
+    leader.palf_handle_impl_->get_access_mode(mode_version, access_mode);
+  } while(access_mode != AccessMode::RAW_WRITE);
   leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::FLASHBACK, SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  do {
+    usleep(50);
+    leader.palf_handle_impl_->get_access_mode(mode_version, access_mode);
+  } while(access_mode != AccessMode::FLASHBACK);
 }
 
 void ObSimpleLogClusterTestEnv::switch_flashback_to_append(PalfHandleImplGuard &leader, int64_t &mode_version)
@@ -1201,7 +1229,10 @@ void ObSimpleLogClusterTestEnv::switch_flashback_to_append(PalfHandleImplGuard &
   leader.palf_handle_impl_->get_role(unused_role, proposal_id, state);
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(proposal_id, mode_version, AccessMode::APPEND, SCN::min_scn()));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, access_mode));
+  do {
+    usleep(50);
+    leader.palf_handle_impl_->get_access_mode(mode_version, access_mode);
+  } while(access_mode != AccessMode::APPEND);
 }
 
 void ObSimpleLogClusterTestEnv::set_disk_options_for_throttling(PalfEnvImpl &palf_env_impl)

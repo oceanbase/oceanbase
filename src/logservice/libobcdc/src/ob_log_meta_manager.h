@@ -25,6 +25,7 @@
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
 #include "lib/allocator/ob_allocator.h"                   // ObIAllocator
 #include "deps/oblib/src/common/rowkey/ob_rowkey_info.h"  // ObRowkeyInfo, ObIndexInfo
+#include "share/schema/ob_table_param.h"                  // ObColDesc
 
 namespace oceanbase
 {
@@ -308,6 +309,7 @@ private:
   int add_and_get_table_meta_(
       TableMetaInfo *meta_info,
       const TABLE_SCHEMA *table_schema,
+      const ObIArray<uint64_t> &usr_def_col_ids,
       SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
@@ -321,6 +323,7 @@ private:
   template<class SCHEMA_GUARD, class TABLE_SCHEMA>
   int build_table_meta_(
       const TABLE_SCHEMA *schema,
+      const ObIArray<uint64_t> &usr_def_col_ids,
       SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
       volatile bool &stop_flag);
@@ -328,10 +331,22 @@ private:
       const DBSchemaInfo &db_schema_info,
       const TenantSchemaInfo &tenant_schema_info,
       IDBMeta *&db_meta);
+  int get_usr_def_col_from_table_schema_(
+      const share::schema::ObTableSchema &schema,
+      ObIArray<uint64_t> &usr_def_col);
+  template<class TABLE_SCHEMA>
+  int build_column_idx_mappings_(
+      const TABLE_SCHEMA *table_schema,
+      const ObIArray<uint64_t> &usr_def_col_ids,
+      const common::ObIArray<share::schema::ObColDesc> &column_ids,
+      ObIArray<int16_t> &store_idx_to_usr_idx,
+      int16_t &usr_column_cnt,
+      volatile bool &stop_flag);
   template<class SCHEMA_GUARD, class TABLE_SCHEMA>
   int build_column_metas_(
       ITableMeta *table_meta,
       const TABLE_SCHEMA *table_schema,
+      const ObIArray<uint64_t> &usr_def_col_ids,
       TableSchemaInfo &tb_schema_info,
       SCHEMA_GUARD &schema_mgr,
       volatile bool &stop_flag);

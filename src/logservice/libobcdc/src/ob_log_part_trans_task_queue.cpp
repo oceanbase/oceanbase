@@ -77,7 +77,7 @@ void SafePartTransTaskQueue::print_task_queue()
 //
 void SafeTaskWithRecordQueue::update_dispatch_progress_by_task_queue(
     int64_t &dispatch_progress,
-    PartTransDispatchInfo &dispatch_info)
+    logfetcher::PartTransDispatchInfo &dispatch_info)
 {
   common::ObByteLockGuard guard(lock_);
   if (dispatching_task_info_.is_dispatching_) {

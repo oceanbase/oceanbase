@@ -22,12 +22,12 @@ void on_accept(int fd, sf_t* sf, eloop_t* ep)
     ns->fty = sf;
     if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
       add_succ = true;
-      rk_info("accept new connection, ns=%p, fd=%d", ns, ns->fd);
+      rk_info("accept new connection, ns=%p, fd=%s", ns, T2S(sock_fd, ns->fd));
     }
   }
   if (!add_succ) {
     if (fd >= 0) {
-      close(fd);
+      ussl_close(fd);
     }
     if (NULL != ns) {
       sf->destroy(sf, ns);
@@ -50,6 +50,7 @@ int listenfd_handle_event(listenfd_t* s) {
     } else {
       err = EIO;
     }
+    rk_warn("do_accept failed, err=%d, errno=%d, fd=%d", err, errno, fd);
   }
   return err;
 }

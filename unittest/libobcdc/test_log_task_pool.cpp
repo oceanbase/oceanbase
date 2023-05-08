@@ -48,7 +48,7 @@ public:
     UNUSED(page);
   }
 
-  void set_task_info(const TenantLSID &tls_id,
+  void set_task_info(const logservice::TenantLSID &tls_id,
       const char *tls_id_str)
   {
     UNUSED(tls_id);
@@ -90,7 +90,7 @@ TEST(ObLogTransTaskPool, Function1)
 
   MockTransTask **tasks = new MockTransTask*[task_cnt];
   const char *tls_info = "tenant_ls_id";
-  TenantLSID tls_id;
+  logservice::TenantLSID tls_id;
 
   for (int64_t idx = 0; idx < task_cnt; ++idx) {
     tasks[idx] = pool.get(tls_info, tls_id);
@@ -123,7 +123,7 @@ TEST(ObLogTransTaskPool, Function2)
 
   MockTransTask **tasks = new MockTransTask*[task_cnt];
   const char *tls_info = "partition";
-  TenantLSID tls_id;
+  logservice::TenantLSID tls_id;
 
   for (int64_t idx = 0; idx < task_cnt; ++idx) {
     tasks[idx] = pool.get(tls_info, tls_id);

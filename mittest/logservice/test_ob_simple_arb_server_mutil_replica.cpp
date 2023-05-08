@@ -140,6 +140,20 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
   // 验证GC
   {
     palflite::PalfEnvLiteMgr *mgr = &arb_server->palf_env_mgr_;
+    auto create_clusters = [&mgr, log_server](const std::vector<int64_t> &cluster_ids) -> int {
+      int ret = OB_SUCCESS;
+      for (int64_t i = 0; OB_SUCC(ret) && i < cluster_ids.size(); i++) {
+        auto cluster_id = cluster_ids[i];
+        std::string name_base = "name_base";
+        name_base += std::to_string(cluster_id);
+        arbserver::GCMsgEpoch epoch(1, 1);
+        EXPECT_EQ(OB_SUCCESS, mgr->add_cluster(log_server->get_addr(),         \
+                                               cluster_id,                     \
+                                               ObString(name_base.c_str()),    \
+                                               epoch));
+      }
+      return OB_SUCCESS;
+    };
     auto create_tenant_and_ls = [&mgr]
                                   (const std::vector<int64_t> &cluster_ids,
                                    const std::vector<uint64_t> &tenant_ids,
@@ -155,7 +169,7 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
             malloc->create_and_add_tenant_allocator(tenant_id);
           }
           PalfEnvKey palf_env_key(cluster_id, tenant_id);
-          PalfEnvLite *palf_env_lite;
+          PalfEnvLite *palf_env_lite = NULL;
 
           if (OB_FAIL(mgr->create_palf_env_lite(palf_env_key))) {
             CLOG_LOG(WARN, "create_palf_env_lite failed", K(ret), K(palf_env_key));
@@ -255,8 +269,14 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
     std::vector<uint64_t> tenant_ids = {1000, 1001, 1002, 1003, 1004, 1007};
     std::vector<int64_t> ls_ids = {1000, 1001, 1002, 1003, 1004, 1007, 1008};
 
+    EXPECT_EQ(OB_SUCCESS, create_clusters(cluster_ids));
     EXPECT_EQ(OB_SUCCESS, create_tenant_and_ls(cluster_ids, tenant_ids, ls_ids));
-    EXPECT_EQ(true, check_tenant_and_ls(cluster_ids, tenant_ids, ls_ids));
+    EXPECT_TRUE(check_tenant_and_ls(cluster_ids, tenant_ids, ls_ids));
+
+    std::vector<int64_t> not_existing_cluster_ids = {1004};
+
+    ClusterMetaInfo tmp_info;
+    EXPECT_EQ(OB_HASH_NOT_EXIST, mgr->get_cluster_meta_info_(1004, tmp_info));
 
     std::vector<int64_t> gc_cluster_ids = {1000, 1002};
     std::vector<uint64_t> gc_tenant_ids = {1000, 1001, 1002, 1004};
@@ -318,6 +338,20 @@ TEST_F(TestObSimpleMutilArbServer, test_gc)
     // 已经gc的cluster中，其他日志流存在
     CLOG_LOG(INFO, "five check");
     EXPECT_EQ(true, check_tenant_and_ls(gc_cluster_ids, gc_tenant_ids, gc_ls_ids));
+
+    // delete all tenants of following clusters
+    arbserver::GCMsgEpoch delete_epoch(101, 1000);
+    std::vector<int64_t> full_gc_cluster_ids = {1000, 1001, 1002};
+    std::vector<int64_t> no_full_gc_cluster_ids = {1003};
+    for (int i = 0; i < full_gc_cluster_ids.size(); i++) {
+      EXPECT_TRUE(mgr->is_cluster_placeholder_exists(full_gc_cluster_ids[i]));
+      EXPECT_EQ(OB_SUCCESS, mgr->remove_cluster(log_server->get_addr(), full_gc_cluster_ids[i], "test", delete_epoch));
+      EXPECT_FALSE(mgr->is_cluster_placeholder_exists(full_gc_cluster_ids[i]));
+    }
+    for (int i = 0; i < no_full_gc_cluster_ids.size(); i++) {
+      EXPECT_TRUE(mgr->is_cluster_placeholder_exists(no_full_gc_cluster_ids[i]));
+    }
+
   }
   sleep(3);
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());

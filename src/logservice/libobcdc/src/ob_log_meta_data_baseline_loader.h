@@ -13,7 +13,7 @@
 
 #include "logservice/data_dictionary/ob_data_dict_iterator.h"  // ObDataDictIterator
 #include "ob_log_config.h"
-#include "ob_log_data_dictionary_in_log_table.h"
+#include "logservice/logfetcher/ob_log_data_dictionary_in_log_table.h"
 #include "ob_log_meta_data_struct.h"
 
 namespace oceanbase

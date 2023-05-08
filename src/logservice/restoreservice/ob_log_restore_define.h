@@ -13,7 +13,12 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_DEFINE_H_
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_DEFINE_H_
 
+#include "lib/container/ob_array.h"           // Array
+#include "lib/net/ob_addr.h"                  // ObAddr
+#include "lib/ob_define.h"
+#include "lib/string/ob_fixed_length_string.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"              // LSN
 #include "share/ob_define.h"
 namespace oceanbase
@@ -27,6 +32,13 @@ const int64_t MAX_LS_FETCH_LOG_TASK_CONCURRENCY = 4;
 
 struct ObLogRestoreErrorContext
 {
+  enum class ErrorType
+  {
+    FETCH_LOG,
+    SUBMIT_LOG,
+  };
+
+  ErrorType error_type_;
   int ret_code_;
   share::ObTaskId trace_id_;
   ObLogRestoreErrorContext() { reset(); }
@@ -45,6 +57,28 @@ struct ObRestoreLogContext
   ~ObRestoreLogContext() { reset(); }
   void reset();
   TO_STRING_KV(K_(seek_done), K_(lsn));
+};
+
+struct ObLogRestoreSourceTenant final
+{
+  ObLogRestoreSourceTenant() { reset(); }
+  ~ObLogRestoreSourceTenant() { reset(); }
+  void reset();
+  int set(const ObLogRestoreSourceTenant &other);
+  bool is_valid() const;
+  int64_t source_cluster_id_;
+  uint64_t source_tenant_id_;
+  common::ObFixedLengthString<OB_MAX_USER_NAME_LENGTH> user_name_;
+  common::ObFixedLengthString<OB_MAX_PASSWORD_LENGTH> user_passwd_;
+  bool is_oracle_;
+  common::ObArray<common::ObAddr> ip_list_;
+
+  TO_STRING_KV(K_(source_cluster_id),
+      K_(source_tenant_id),
+      K_(user_name),
+      K_(user_passwd),  // TODO remove it
+      K_(is_oracle),
+      K_(ip_list));
 };
 } // namespace logservice
 } // namespace oceanbase

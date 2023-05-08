@@ -1212,7 +1212,7 @@ int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimize
         spec.set_target_osg_id(target_id);
       }
     }
-    // only osg gather need calc_part_id_expr
+
     if (OB_SUCC(ret) && spec.is_part_table() && !op.is_merge_osg()) {
       if (OB_ISNULL(op.get_calc_part_id_expr())) {
         ret = OB_INVALID_ARGUMENT;

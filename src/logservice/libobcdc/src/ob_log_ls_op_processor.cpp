@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_log_ls_op_processor.h"
-#include "ob_log_ls_define.h"
+#include "logservice/common_util/ob_log_ls_define.h"
 #include "ob_log_instance.h"        // TCTX
 
 namespace oceanbase
@@ -72,7 +72,7 @@ int ObLogLSOpProcessor::create_new_ls_(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ls_attr is invalid", KR(ret), K(ls_attr));
   } else {
-    TenantLSID tls_id(tenant->get_tenant_id(), ls_attr.get_ls_id());
+    logservice::TenantLSID tls_id(tenant->get_tenant_id(), ls_attr.get_ls_id());
     const bool is_create_ls = true;
 
     if (OB_FAIL(tenant->get_ls_mgr().add_ls(tls_id, start_tstamp_ns, is_create_ls))) {

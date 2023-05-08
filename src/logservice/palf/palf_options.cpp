@@ -11,7 +11,10 @@
  */
 
 #include "palf_options.h"
+#include "lib/ob_errno.h"
+#include "lib/utility/ob_macro_utils.h"
 #include "log_define.h"
+#include <cstdint>
 
 namespace oceanbase
 {
@@ -89,6 +92,34 @@ PalfTransportCompressOptions &PalfTransportCompressOptions::operator=(const Palf
   return *this;
 }
 
+static const char *access_mode_strs[] = {
+  "INVALID_ACCESS_MODE",
+  "APPEND",
+  "RAW_WRITE",
+  "FLASHBACK",
+  "PREPARE_FLASHBACK"
+};
+
+int get_access_mode(const common::ObString &str, AccessMode &mode)
+{
+  int ret = OB_SUCCESS;
+  if (str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    mode = AccessMode::INVALID_ACCESS_MODE;
+    for (int64_t i = 0; i < ARRAYSIZEOF(access_mode_strs); i++) {
+      if (0 == str.case_compare(access_mode_strs[i])) {
+        mode = static_cast<AccessMode>(i);
+        break;
+      }
+    }
+  }
+  if (AccessMode::INVALID_ACCESS_MODE == mode) {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  return ret;
+}
+
 void PalfThrottleOptions::reset()
 {
   total_disk_space_ = -1;
@@ -104,6 +135,7 @@ bool PalfThrottleOptions::is_valid() const
   && trigger_percentage_ >= MIN_WRITING_THTOTTLING_TRIGGER_PERCENTAGE && trigger_percentage_ <= 100
   && unrecyclable_disk_space_ >= 0);
 }
+
 bool PalfThrottleOptions::operator==(const PalfThrottleOptions &other) const
 {
   return total_disk_space_  == other.total_disk_space_

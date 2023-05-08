@@ -49,6 +49,7 @@ ObMySQLConnection::ObMySQLConnection() :
 
 ObMySQLConnection::~ObMySQLConnection()
 {
+  close();
 }
 
 ObCommonServerConnectionPool *ObMySQLConnection::get_common_server_pool()

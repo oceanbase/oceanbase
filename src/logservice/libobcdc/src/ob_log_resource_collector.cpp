@@ -818,7 +818,7 @@ void ObLogResourceCollector::get_task_count(int64_t &part_trans_task_count, int6
 int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
 {
   int ret = OB_SUCCESS;
-  const TenantLSID &tenant_ls_id = task.get_tls_id();
+  const logservice::TenantLSID &tenant_ls_id = task.get_tls_id();
   SortedRedoLogList &sorted_redo_list =  task.get_sorted_redo_list();
   DmlRedoLogNode *dml_redo_node = static_cast<DmlRedoLogNode *>(sorted_redo_list.head_);
 

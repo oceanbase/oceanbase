@@ -44,6 +44,7 @@ PalfHandleImpl::PalfHandleImpl()
     log_engine_(),
     election_msg_sender_(log_engine_.log_net_service_),
     election_(),
+    hot_cache_(),
     fetch_log_engine_(NULL),
     allocator_(NULL),
     palf_id_(INVALID_PALF_ID),
@@ -140,8 +141,8 @@ int PalfHandleImpl::init(const int64_t palf_id,
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
-  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, log_rpc, \
-          log_io_worker, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &hot_cache_, \
+          log_rpc, log_io_worker, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
@@ -193,7 +194,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
-  } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, log_rpc,
+  } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &hot_cache_, log_rpc,
         log_io_worker, entry_header, palf_epoch, is_integrity, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
@@ -230,6 +231,7 @@ void PalfHandleImpl::destroy()
     fetch_log_engine_ = NULL;
     allocator_ = NULL;
     election_.stop();
+    hot_cache_.destroy();
     log_engine_.destroy();
     reconfirm_.destroy();
     state_mgr_.destroy();
@@ -2452,6 +2454,8 @@ int PalfHandleImpl::do_init_mem_(
     return role_change_cb_wrpper.on_need_change_leader(id, dest_addr);
   }))) {
     PALF_LOG(WARN, "election_ init failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(hot_cache_.init(palf_id, this))) {
+    PALF_LOG(WARN, "hot_cache_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(state_mgr_.init(palf_id, self, log_meta.get_log_prepare_meta(), log_meta.get_log_replica_property_meta(),
           &election_, &sw_, &reconfirm_, &log_engine_, &config_mgr_, &mode_mgr_, &role_change_cb_wrpper_, &plugins_))) {
     PALF_LOG(WARN, "state_mgr_ init failed", K(ret), K(palf_id));
@@ -4393,6 +4397,28 @@ void PalfStat::reset()
   max_scn_.reset();
   is_in_sync_ = false;
   is_need_rebuild_ = false;
+}
+
+int PalfHandleImpl::read_data_from_buffer(const LSN &read_begin_lsn,
+                                          const int64_t in_read_size,
+                                          char *buf,
+                                          int64_t &out_read_size) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!read_begin_lsn.is_valid() || in_read_size <= 0 || OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid arguments", K(ret), K_(palf_id), K(read_begin_lsn), K(in_read_size),
+        KP(buf));
+  } else if (OB_FAIL(sw_.read_data_from_buffer(read_begin_lsn, in_read_size, buf, out_read_size))) {
+    PALF_LOG(WARN, "read_data_from_buffer failed", K(ret), K_(palf_id), K(read_begin_lsn),
+        K(in_read_size));
+  } else {
+    PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
+        K(in_read_size), K(out_read_size));
+  }
+  return ret;
 }
 
 OB_SERIALIZE_MEMBER(PalfStat, self_, palf_id_, role_, log_proposal_id_, config_version_,

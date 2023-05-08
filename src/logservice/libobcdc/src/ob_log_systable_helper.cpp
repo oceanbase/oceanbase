@@ -17,13 +17,15 @@
 
 #include "ob_log_systable_helper.h"
 
-#include "common/ob_role.h"                                    // LEADER
+#include "common/ob_role.h"                                     // LEADER
 
-#include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
-#include "share/schema/ob_schema_struct.h"                     // TenantStatus
-#include "ob_log_config.h"                                     // ObLogConfig, TCONF
+#include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_***_TNAME
+#include "share/schema/ob_schema_struct.h"                      // TenantStatus
+#include "ob_log_instance.h"                                    // TCTX
+#include "ob_log_config.h"                                      // ObLogConfig, TCONF
 #include "ob_log_utils.h"
-#include "ob_log_svr_blacklist.h"                              // ObLogSvrBlacklist
+#include "ob_log_svr_blacklist.h"                               // ObLogSvrBlacklist
+#include "ob_cdc_tenant_endpoint_provider.h"                    // ObCDCEndpointProvider
 
 #define GET_DATA(type, index, val, val_str) \
     do { \
@@ -53,7 +55,7 @@ int QueryClusterIdStrategy::build_sql_statement(char *sql_buf,
 {
   int ret = OB_SUCCESS;
   pos = 0;
-  const char *query_sql = "show parameters like 'cluster_id'";
+  const char *query_sql = "SELECT DISTINCT VALUE FROM GV$OB_PARAMETERS WHERE NAME = 'cluster_id'";
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
@@ -75,7 +77,12 @@ int QueryObserverVersionStrategy::build_sql_statement(char *sql_buf,
 {
   int ret = OB_SUCCESS;
   pos = 0;
-  const char *query_sql = "select distinct(value) from __all_virtual_sys_parameter_stat where name='min_observer_version';";
+  const char *query_sql = nullptr;
+  if (TCTX.is_tenant_sync_mode()) {
+    query_sql = "SELECT DISTINCT VALUE FROM GV$OB_PARAMETERS WHERE NAME = 'min_observer_version'";
+  } else {
+    query_sql = "SELECT DISTINCT VALUE FROM __ALL_VIRTUAL_SYS_PARAMETER_STAT WHERE NAME = 'MIN_OBSERVER_VERSION'";
+  }
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
@@ -100,7 +107,7 @@ int QueryTimeZoneInfoVersionStrategy::build_sql_statement(char *sql_buf,
   const char *query_sql = NULL;
   const bool need_query_tenant_timezone_version = true;
 
-  query_sql = "select value from __all_virtual_sys_stat where name='current_timezone_version' and tenant_id=";
+  query_sql = "SELECT VALUE FROM __ALL_VIRTUAL_SYS_STAT WHERE NAME = 'CURRENT_TIMEZONE_VERSION' AND TENANT_ID = ";
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     LOG_ERROR("invalid argument", K(sql_buf), K(mul_statement_buf_len));
     ret = OB_INVALID_ARGUMENT;
@@ -127,7 +134,7 @@ int QueryTenantLSInfoStrategy::build_sql_statement(char *sql_buf,
   int ret = OB_SUCCESS;
   pos = 0;
   const char *query_sql = NULL;
-  query_sql = "select ls_id from __all_virtual_ls where ls_id !=1 and tenant_id=";
+  query_sql = "SELECT LS_ID FROM CDB_OB_LS WHERE LS_ID != 1 AND TENANT_ID = ";
 
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -157,6 +164,15 @@ int QueryAllServerInfoStrategy::build_sql_statement(
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
+  } else if (TCTX.is_tenant_sync_mode()) {
+    if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
+        "SELECT DISTINCT UNIT.SVR_IP, UNIT.SVR_PORT, LOCATION.SQL_PORT "
+        "FROM %s UNIT JOIN %s LOCATION "
+        "ON UNIT.SVR_IP = LOCATION.SVR_IP AND UNIT.SVR_PORT = LOCATION.SVR_PORT "
+        "WHERE UNIT.STATUS = 'NORMAL'",
+        OB_GV_OB_UNITS_TNAME, OB_DBA_OB_LS_LOCATIONS_TNAME))) {
+      LOG_ERROR("build_sql_statement failed for query all_server in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
+    }
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
       "SELECT SVR_IP, SVR_PORT, SQL_PORT FROM %s WHERE STATUS = 'ACTIVE'", OB_DBA_OB_SERVERS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), KCSTRING(sql_buf));
@@ -177,8 +193,13 @@ int QueryAllTenantStrategy::build_sql_statement(
   if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
+  } else if (TCTX.is_tenant_sync_mode()) {
+    if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
+        "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s", OB_DBA_OB_ACCESS_POINT_TNAME))) {
+      LOG_ERROR("build_sql_statement failed for query all_tenant_info in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
+    }
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
-      "SELECT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
+      "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));
   }
 
@@ -210,6 +231,29 @@ int QueryTenantServerListStrategy::build_sql_statement(
       "AND TENANT_ID = %lu",
       OB_DBA_OB_UNITS_TNAME, OB_DBA_OB_SERVERS_TNAME, tenant_id_))) {
     LOG_ERROR("build_sql_statement failed for query all_server_info", KR(ret), K(pos), K_(tenant_id), KCSTRING(sql_buf));
+  }
+
+  return ret;
+}
+
+int QueryTenantEndpointStrategy::build_sql_statement(
+    char *sql_buf,
+    const int64_t mul_statement_buf_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  pos = 0;
+
+  if (OB_ISNULL(sql_buf) || OB_UNLIKELY(mul_statement_buf_len <=0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(sql_buf), K(mul_statement_buf_len));
+  } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
+      "SELECT DISTINCT UNIT.SVR_IP, UNIT.SVR_PORT, LOCATION.SQL_PORT "
+      "FROM %s UNIT JOIN %s LOCATION "
+      "ON UNIT.SVR_IP = LOCATION.SVR_IP AND UNIT.SVR_PORT = LOCATION.SVR_PORT "
+      "WHERE UNIT.STATUS = 'NORMAL'",
+      OB_GV_OB_UNITS_TNAME, OB_DBA_OB_LS_LOCATIONS_TNAME))) {
+    LOG_ERROR("build_sql_statement failed for query tenant_endpoint", KR(ret), K(pos), KCSTRING(sql_buf));
   }
 
   return ret;
@@ -439,13 +483,13 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(ClusterInfo &rec
 {
   int ret = OB_SUCCESS;
   int64_t index = -1;
-  const char *column_name = "value";
+  const char *column_name = "VALUE";
   // Get  value of column `value`
   // FIXME: it is assumed that show parameters like 'cluster_id' will only return one row, and value must be the value of cluster_id
   if (OB_FAIL(get_column_index(column_name, index))) {
     LOG_ERROR("get_column_index fail", KR(ret), K(column_name), K(index));
   } else {
-    GET_DATA(int, index, record.cluster_id_, "value");
+    GET_DATA(int, index, record.cluster_id_, "VALUE");
   }
   return ret;
 }
@@ -472,7 +516,7 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(ObServerVersionI
   int64_t index = -1;
 
   index++;
-  GET_DATA(varchar, index, server_version_str, "value");
+  GET_DATA(varchar, index, server_version_str, "VALUE");
 
   if (OB_FAIL(ObClusterVersion::get_version(server_version_str, server_version))) {
     LOG_ERROR("ObClusterVersion get_version fail", KR(ret), K(server_version_str), K(server_version));
@@ -499,7 +543,7 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(ObServerTZInfoVe
   int64_t index = -1;
 
   index++;
-  GET_DATA(int, index, record.timezone_info_version_, "value");
+  GET_DATA(int, index, record.timezone_info_version_, "VALUE");
 
   return ret;
 }
@@ -525,7 +569,7 @@ int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(TenantLSIDs &rec
   int64_t ls_id_int = 0;
 
   index++;
-  GET_DATA(int, index, ls_id_int, "ls_id");
+  GET_DATA(int, index, ls_id_int, "LS_ID");
   share::ObLSID ls_id(ls_id_int);
 
   if (OB_SUCCESS == ret && OB_FAIL(records.push_back(ls_id))) {
@@ -669,6 +713,7 @@ int IObLogSysTableHelper::BatchSQLQuery::get_records(share::schema::TenantStatus
   int ret = get_records_tpl_(records, "QueryTenantStatus", record_count);
   if (OB_UNLIKELY(0 == record_count)) {
     records = share::schema::TenantStatus::TENANT_NOT_CREATE;
+  int refresh_svr_list_by_inner(ObIArray<ObAddr> &svr_list);
   }
   return ret;
 }
@@ -1227,6 +1272,57 @@ int ObLogSysTableHelper::query_tenant_status(
   }
 
   LOG_DEBUG("query_tenant_status", KR(ret), K(tenant_id), K(tenant_status));
+
+  return ret;
+}
+
+int ObLogSysTableHelper::refresh_tenant_endpoint()
+{
+  int ret = OB_SUCCESS;
+  BatchSQLQuery query;
+  ObArray<ObAddr> tenant_endpoint_list;
+  QueryTenantEndpointStrategy query_tenant_endpoint_strategy;
+  ObCDCEndpointProvider *endpoint_provider = static_cast<ObCDCEndpointProvider*>(svr_provider_);
+
+  if (OB_UNLIKELY(! inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("systable_helper not init", KR(ret));
+  } else if (! TCTX.is_tenant_sync_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_ERROR("refresh_tenant_endpoint not support in non_tenant_sync_mode, please check sync_mode");
+  } else if (OB_ISNULL(endpoint_provider)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("endpoint_provider not valid", KR(ret));
+  } else if (OB_FAIL(query.init(&query_tenant_endpoint_strategy))) {
+    LOG_ERROR("init tenant_endpoint query failed", KR(ret));
+  } else if (OB_FAIL(do_query_(query))) {
+    if (OB_NEED_RETRY == ret) {
+      LOG_WARN("do query_tenant_endpoint fail, need retry", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    } else {
+      LOG_ERROR("do query_tenant_endpoint fail", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    }
+  } else if (OB_FAIL(query.get_records(
+      endpoint_provider->get_svr_black_list(),
+      tenant_endpoint_list))) {
+    if (OB_NEED_RETRY == ret) {
+      LOG_WARN("get_records fail while query_tenant_status, need retry", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    } else {
+      LOG_ERROR("get_records fail while query_tenant_status", KR(ret),
+          "mysql_error_code", query.get_mysql_err_code(),
+          "mysql_error_msg", query.get_mysql_err_msg());
+    }
+  } else if (OB_FAIL(endpoint_provider->refresh_server_list(tenant_endpoint_list))) {
+    LOG_ERROR("refresh_server_list failed", KR(ret), K(tenant_endpoint_list));
+  }
+
+  // TODO change to DEBUG level
+  LOG_INFO("query_tenant_endpoint_list", KR(ret), K(tenant_endpoint_list));
 
   return ret;
 }

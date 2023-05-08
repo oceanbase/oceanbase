@@ -102,6 +102,7 @@
 #include "logservice/palf/palf_base_info.h"//PalfBaseInfo
 #include "logservice/data_dictionary/ob_data_dict_storager.h" // ObDataDictStorage
 #include "share/scn.h"
+#include "share/backup/ob_backup_config.h" // ObBackupConfigParserMgr
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
@@ -20392,11 +20393,11 @@ int ObDDLService::generate_tenant_schema(
         //standby cluster and restore tenant no need init user tenant system variables
         if (tenant_role.is_restore()) {
           user_tenant_schema.set_status(TENANT_STATUS_RESTORE);
+        } else if (arg.is_creating_standby_) {
+          user_tenant_schema.set_status(TENANT_STATUS_CREATING_STANDBY);
         }
       } else if (OB_FAIL(init_system_variables(arg, user_tenant_schema, user_sys_variable))) {
         LOG_WARN("fail to init tenant sys params", KR(ret), K(user_tenant_schema), K(arg));
-      } else if (OB_FAIL(check_tenant_primary_zone_(schema_guard, user_tenant_schema))) {
-        LOG_WARN("fail to check tenant primary zone", KR(ret), K(user_tenant_schema));
       }
     }
     // meta tenant
@@ -20428,7 +20429,20 @@ int ObDDLService::generate_tenant_schema(
         LOG_WARN("fail to gen tenant init config", KR(ret), K(meta_tenant_id));
       } else if (OB_FAIL(init_configs.push_back(config))) {
         LOG_WARN("fail to push back config", KR(ret), K(meta_tenant_id), K(config));
+      // } else if (!is_sys_tenant(user_tenant_id) && !arg.is_creating_standby_) {
+      //
+      // FIXME(msy164651) : Data Version scheme is not suitable for Create
+      // Standby Tenant. The DDL will fail because GET_MIN_DATA_VERSION will
+      // return OB_ENTRY_NOT_EXIST;
+      //
+      // msy164651 wil fix it.
       } else if (!is_sys_tenant(user_tenant_id)) {
+        /**
+        * When the primary tenant has done upgrade and create a standby tenant for it,
+        * the standby tenant must also perform the upgrade process. Don't set compatible_version for
+        * standby tenant so that it can be upgraded from 0 to ensure that the compatible_version matches
+        * the internal table. and it also prevent loss of the upgrade action.
+        */
         uint64_t compatible_version = arg.is_restore_ ? arg.compatible_version_ : DATA_CURRENT_VERSION;
         if (OB_FAIL(gen_tenant_init_config(user_tenant_id, compatible_version, config))) {
           LOG_WARN("fail to gen tenant init config", KR(ret), K(user_tenant_id), K(compatible_version));
@@ -20532,6 +20546,8 @@ int ObDDLService::create_tenant(
       recovery_until_scn = arg.recovery_until_scn_;
       user_palf_base_info = arg.palf_base_info_;
       create_ls_with_palf = true;
+    } else if (arg.is_creating_standby_) {
+      tenant_role = share::STANDBY_TENANT_ROLE;
     } else {
       tenant_role = share::PRIMARY_TENANT_ROLE;
     }
@@ -20566,13 +20582,16 @@ int ObDDLService::create_tenant(
       if (OB_FAIL(get_pools(arg.pool_list_, pools))) {
         LOG_WARN("get_pools failed", KR(ret), K(arg));
       } else if (OB_FAIL(create_normal_tenant(meta_tenant_id, pools, meta_tenant_schema, tenant_role,
-        recovery_until_scn, meta_sys_variable, false/*create_ls_with_palf*/, meta_palf_base_info, init_configs))) {
+        recovery_until_scn, meta_sys_variable, false/*create_ls_with_palf*/, meta_palf_base_info, init_configs,
+        arg.is_creating_standby_, arg.log_restore_source_))) {
         LOG_WARN("fail to create meta tenant", KR(ret), K(meta_tenant_id), K(pools), K(meta_sys_variable),
             K(tenant_role), K(recovery_until_scn), K(meta_palf_base_info), K(init_configs));
       } else {
+        ObString empty_str;
         DEBUG_SYNC(BEFORE_CREATE_USER_TENANT);
         if (OB_FAIL(create_normal_tenant(user_tenant_id, pools, user_tenant_schema, tenant_role,
-              recovery_until_scn, user_sys_variable, create_ls_with_palf, user_palf_base_info, init_configs))) {
+              recovery_until_scn, user_sys_variable, create_ls_with_palf, user_palf_base_info, init_configs,
+              false /* is_creating_standby */, empty_str))) {
           LOG_WARN("fail to create user tenant", KR(ret), K(user_tenant_id), K(pools), K(user_sys_variable),
               K(tenant_role), K(recovery_until_scn), K(user_palf_base_info));
         }
@@ -20852,7 +20871,9 @@ int ObDDLService::create_normal_tenant(
     ObSysVariableSchema &sys_variable,
     const bool create_ls_with_palf,
     const palf::PalfBaseInfo &palf_base_info,
-    const common::ObIArray<common::ObConfigPairs> &init_configs)
+    const common::ObIArray<common::ObConfigPairs> &init_configs,
+    bool is_creating_standby,
+    const common::ObString &log_restore_source)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
   LOG_INFO("[CREATE_TENANT] STEP 2. start create tenant", K(tenant_id), K(tenant_schema));
@@ -20879,9 +20900,11 @@ int ObDDLService::create_normal_tenant(
   } else if (OB_FAIL(create_tenant_sys_tablets(tenant_id, tables))) {
     LOG_WARN("fail to create tenant partitions", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_tenant_schema(tenant_id, tenant_schema,
-             tenant_role, recovery_until_scn, tables, sys_variable, init_configs))) {
+             tenant_role, recovery_until_scn, tables, sys_variable, init_configs,
+             is_creating_standby, log_restore_source))) {
     LOG_WARN("fail to init tenant schema", KR(ret), K(tenant_role), K(recovery_until_scn),
-             K(tenant_id), K(tenant_schema), K(sys_variable), K(init_configs));
+             K(tenant_id), K(tenant_schema), K(sys_variable), K(init_configs),
+             K(is_creating_standby), K(log_restore_source));
   }
   LOG_INFO("[CREATE_TENANT] STEP 2. finish create tenant", KR(ret), K(tenant_id),
            "cost", ObTimeUtility::fast_current_time() - start_time);
@@ -21220,16 +21243,19 @@ int ObDDLService::init_tenant_schema(
     const SCN &recovery_until_scn,
     common::ObIArray<ObTableSchema> &tables,
     ObSysVariableSchema &sys_variable,
-    const common::ObIArray<common::ObConfigPairs> &init_configs)
+    const common::ObIArray<common::ObConfigPairs> &init_configs,
+    bool is_creating_standby,
+    const common::ObString &log_restore_source)
 {
   const int64_t start_time = ObTimeUtility::fast_current_time();
   LOG_INFO("[CREATE_TENANT] STEP 2.4. start init tenant schemas", K(tenant_id));
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min())) {
+  } else if (OB_UNLIKELY(!recovery_until_scn.is_valid_and_not_min()
+             || (is_creating_standby && log_restore_source.empty()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid recovery_until_scn", KR(ret), K(recovery_until_scn));
+    LOG_WARN("invalid argument", KR(ret), K(recovery_until_scn), K(is_creating_standby), K(log_restore_source));
   } else if (OB_ISNULL(sql_proxy_)
              || OB_ISNULL(schema_service_)
              || OB_ISNULL(schema_service_->get_schema_service())
@@ -21321,6 +21347,8 @@ int ObDDLService::init_tenant_schema(
           0, /*server_zone_op_service_epoch*/
           0 /*heartbeat_service_epoch*/))) {
         LOG_WARN("fail to init service epoch", KR(ret));
+      } else if (is_creating_standby && OB_FAIL(set_log_restore_source(gen_user_tenant_id(tenant_id), log_restore_source, trans))) {
+        LOG_WARN("fail to set_log_restore_source", KR(ret), K(tenant_id), K(log_restore_source));
       }
 
       if (trans.is_started()) {
@@ -21380,6 +21408,33 @@ int ObDDLService::init_tenant_schema(
 
   LOG_INFO("[CREATE_TENANT] STEP 2.4. finish init tenant schemas", KR(ret), K(tenant_id),
            "cost", ObTimeUtility::fast_current_time() - start_time);
+  return ret;
+}
+
+int ObDDLService::set_log_restore_source(
+    const uint64_t tenant_id,
+    const common::ObString &log_restore_source,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupConfigParserMgr config_parser_mgr;
+  common::ObSqlString name;
+  common::ObSqlString value;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || log_restore_source.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(log_restore_source));
+  } else if (OB_FAIL(name.assign("log_restore_source"))) {
+    LOG_WARN("assign sql failed", KR(ret));
+  } else if (OB_FAIL(value.assign(log_restore_source))) {
+    LOG_WARN("fail to assign value", KR(ret), K(log_restore_source));
+  } else if (OB_FAIL(config_parser_mgr.init(name, value, gen_user_tenant_id(tenant_id)))) {
+    LOG_WARN("fail to init backup config parser mgr", KR(ret), K(name), K(value), K(tenant_id));
+    // TODO use the interface without rpc_proxy_
+  } else if (OB_FAIL(config_parser_mgr.update_inner_config_table(*rpc_proxy_, trans))) {
+    LOG_WARN("fail to update inner config table", KR(ret), K(name), K(value));
+  }
   return ret;
 }
 

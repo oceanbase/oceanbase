@@ -9,11 +9,14 @@ typedef struct sf_t {
 } sf_t;
 
 typedef int (*handle_event_t)(struct sock_t*);
+
 #define SOCK_COMMON                             \
   struct sf_t* fty;                             \
   handle_event_t handle_event;                  \
   dlink_t ready_link;                           \
+  dlink_t rl_ready_link;                        \
   int fd;                                       \
+  int ep_fd;                                    \
   uint32_t mask;                                \
   uint8_t conn_ok:1
 

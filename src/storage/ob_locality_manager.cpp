@@ -24,7 +24,8 @@ using namespace share;
 namespace storage
 {
 ObLocalityManager::ObLocalityManager()
-  : rwlock_(ObLatchIds::SERVER_LOCALITY_MGR_LOCK), ssl_invited_nodes_buf_(NULL)
+  : rwlock_(ObLatchIds::SERVER_LOCALITY_MGR_LOCK),
+    ssl_invited_nodes_buf_(NULL)
 {
   reset();
   ssl_invited_nodes_buf_ = new (std::nothrow) char[common::OB_MAX_CONFIG_VALUE_LEN];
@@ -236,6 +237,7 @@ int ObLocalityManager::load_region()
   return ret;
 }
 
+
 int ObLocalityManager::get_local_region(ObRegion &region) const
 {
   int ret = OB_SUCCESS;
@@ -307,6 +309,22 @@ int ObLocalityManager::get_server_locality_array(
                      server_locality_array,
                      has_readonly_zone))) {
     STORAGE_LOG(WARN, "fail to get server locality array", K(ret));
+  }
+  return ret;
+}
+
+int ObLocalityManager::get_server_zone_type(const common::ObAddr &server,
+                                         common::ObZoneType &zone_type) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObLocalityManager not init", KR(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", KR(ret), K(server));
+  } else if (OB_FAIL(server_locality_cache_.get_server_zone_type(server, zone_type))) {
+    STORAGE_LOG(WARN, "fail to get server zone type", KR(ret), K(server));
   }
   return ret;
 }
@@ -689,7 +707,6 @@ int ObLocalityManager::ObRefreshLocalityTask::process()
   }
   return ret;
 }
-
 
 }// storage
 }// oceanbase

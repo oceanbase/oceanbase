@@ -475,6 +475,13 @@ public:
   // for deadlock detect.
   void set_table_lock_killed() { lock_mem_ctx_.set_killed(); }
   bool is_table_lock_killed() const { return lock_mem_ctx_.is_killed(); }
+  // The SQL can be rollbacked, and the callback of it will be removed, too.
+  // In this case, the remove count of callbacks is larger than 0, but the callbacks
+  // may be all decided. So we can't exactly know whether they're decided.
+  bool maybe_has_undecided_callback() const {
+      return trans_mgr_.get_callback_remove_for_fast_commit_count() > 0 ||
+             trans_mgr_.get_callback_remove_for_remove_memtable_count() > 0;
+  }
 private:
   int do_trans_end(
       const bool commit,

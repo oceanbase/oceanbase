@@ -183,9 +183,12 @@ public:
   // 3.  set start global trans version
   int set_start_global_trans_version(const int64_t start_global_trans_version);
 
-  // online schema is available or not.
-  OB_INLINE bool is_online_schema_not_avaliable() const
-  { return is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_); }
+  // online sql not available only when using data_dict and fetch_log directly from backup.
+  OB_INLINE bool is_online_sql_not_available() const
+  {
+    return is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_);
+  }
+  OB_INLINE bool is_tenant_sync_mode() const { return is_tenant_sync_mode_; }
 
 public:
   friend class ObLogGlobalContext;
@@ -194,6 +197,7 @@ private:
   void do_stop_(const char *stop_reason);
   int init_logger_();
   int dump_config_();
+  int check_sync_mode_();
   int init_sys_var_for_generate_column_schema_();
   int init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb);
   int get_pid_();
@@ -217,6 +221,11 @@ private:
   void clean_log_();
   int init_global_tenant_manager_();
   int init_global_kvcache_();
+  // 1. check tenant_user info
+  // 2. check sync_mode and refresh_mode
+  // 2. init sql_provider
+  // 3. init sql_proxy
+  int init_sql_provider_();
   // Get the total amount of memory occupied by libobcdc
   int64_t get_memory_hold_();
   // Get system free memory
@@ -318,6 +327,7 @@ public:
   WorkingMode               working_mode_;
   RefreshMode               refresh_mode_;
   ClientFetchingMode        fetching_mode_;
+  bool                      is_tenant_sync_mode_;
   ObCDCGlobalInfo           global_info_;
 
   // compoments

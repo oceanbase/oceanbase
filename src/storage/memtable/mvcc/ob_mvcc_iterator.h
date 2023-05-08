@@ -146,6 +146,7 @@ private:
   int lock_for_read_inner_(const ObQueryFlag &flag, ObMvccTransNode *&iter);
   int try_cleanout_tx_node_(ObMvccTransNode *tnode);
   void move_to_next_node_();
+  void lock_for_read_end(const int64_t lock_start_time, int64_t ret) const;
 private:
   static const int64_t WAIT_COMMIT_US = 20 * 1000;
 private:

@@ -378,10 +378,6 @@ int ObBackupDataScheduler::fill_template_job_(const obrpc::ObBackupDatabaseArg &
   if (!in_arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(in_arg));
-  } else if (in_arg.is_compl_log_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("backup with plus archive is not supported", K(ret), K(in_arg));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "plus archive is not supported");
   } else if (!in_arg.backup_dest_.is_empty()) {
     ObBackupDest dest;
     if (OB_FAIL(dest.set(in_arg.backup_dest_.ptr()))) {

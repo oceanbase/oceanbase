@@ -83,7 +83,8 @@ public:
       const int64_t blacklist_survival_time_upper_limit_min = 4,
       const int64_t blacklist_survival_time_penalty_period_min = 1,
       const int64_t blacklist_history_overdue_time_min = 30,
-      const int64_t blacklist_history_clear_interval_min = 20);
+      const int64_t blacklist_history_clear_interval_min = 20,
+      const bool is_tenant_mode = false);
   int start();
   void stop();
   void wait();
@@ -348,6 +349,7 @@ private:
 
 private:
   bool is_inited_;
+  bool is_tenant_mode_;
   volatile bool is_stopped_ CACHE_ALIGNED;
   int64_t cluster_id_;
   LSRouteKeySet ls_route_key_set_;

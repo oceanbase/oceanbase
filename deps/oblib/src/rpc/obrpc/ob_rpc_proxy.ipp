@@ -61,15 +61,19 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     const char* resp = NULL;
     ObRpcPacket resp_pkt;
     sockaddr_in sock_addr;
-    static unsigned int thread_id = 0;
-    thread_id ++;
+    uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
+    uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
+    if (OB_LS_FETCH_LOG2 == pcode_) {
+      pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
+    }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(!dst_.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
       RPC_LOG(WARN, "invalid addr", K(ret));
     } else if (OB_FAIL(pn_send(
-        (1ULL<<32) + thread_id,
+        (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
         pnio_req,
         pnio_req_sz,
@@ -192,15 +196,19 @@ int SSHandle<pcodeStruct>::abort()
     const char* resp = NULL;
     ObRpcPacket resp_pkt;
     sockaddr_in sock_addr;
-    static unsigned int thread_id = 0;
-    thread_id ++;
+    uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
+    uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
+    if (OB_LS_FETCH_LOG2 == pcode_) {
+      pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
+    }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(!dst_.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
       RPC_LOG(WARN, "invalid addr", K(ret));
     } else if (OB_FAIL(pn_send(
-        (1ULL<<32) + thread_id,
+        (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
         pnio_req,
         pnio_req_sz,
@@ -360,7 +368,6 @@ template <typename Input, typename Out>
 int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
                          Out &result, Handle *handle, const ObRpcOpts &opts)
 {
-  POC_RPC_INTERCEPT(send, dst_, pcode, args, result, handle, opts);
   using namespace oceanbase::common;
   using namespace rpc::frame;
   int ret = OB_SUCCESS;
@@ -378,6 +385,7 @@ int ObRpcProxy::rpc_call(ObRpcPacketCode pcode, const Input &args,
   } else {
     //do nothing
   }
+  POC_RPC_INTERCEPT(send, dst_, pcode, args, result, handle, opts);
 
   int64_t pos = 0;
   const int64_t payload = calc_payload_size(common::serialization::encoded_length(args));
@@ -498,7 +506,6 @@ template <class pcodeStruct>
 int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
                          AsyncCB<pcodeStruct> *cb, const ObRpcOpts &opts)
 {
-  POC_RPC_INTERCEPT(post, dst_, pcodeStruct::PCODE, args, cb, opts);
   using namespace oceanbase::common;
   using namespace rpc::frame;
   int ret = OB_SUCCESS;
@@ -515,6 +522,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
     ret = OB_INACTIVE_RPC_PROXY;
     RPC_OBRPC_LOG(WARN, "rpc is inactive", K(ret));
   }
+  POC_RPC_INTERCEPT(post, dst_, pcodeStruct::PCODE, args, cb, opts);
 
   ObReqTransport::Request req;
   int64_t pos = 0;

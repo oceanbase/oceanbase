@@ -20,7 +20,7 @@
 #include "ob_log_config.h"
 #include "ob_log_task_pool.h"
 #include "ob_log_entry_task_pool.h"
-#include "ob_log_data_dictionary_in_log_table.h"
+#include "logservice/logfetcher/ob_log_data_dictionary_in_log_table.h"
 #include "ob_log_meta_data_queryer.h"
 #include "ob_log_meta_data_baseline_loader.h"
 #include "ob_log_meta_data_replayer.h" // ObLogMetaDataReplayer
@@ -99,11 +99,11 @@ private:
   int get_data_dict_in_log_info_(
       const uint64_t tenant_id,
       const int64_t start_timestamp_ns,
-      DataDictionaryInLogInfo &data_dict_in_log_info);
+      logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
 
   int get_data_dict_in_log_info_in_archive_(
       const int64_t start_timestamp_ns,
-      DataDictionaryInLogInfo &data_dict_in_log_info);
+      logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info);
 
   int read_meta_info_in_archive_log_(
       const int64_t start_timestamp_ns,

@@ -156,6 +156,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(QueryTenantServerListStrategy);
 };
 
+///////////////////////// QueryTenantEndpointStrategy /////////////////////////
+// query tenant endpiont(or access point) in tenant_sync_mode
+class QueryTenantEndpointStrategy : public ISQLStrategy {
+public:
+  QueryTenantEndpointStrategy() {}
+  ~QueryTenantEndpointStrategy() {}
+public:
+  int build_sql_statement(char *sql_buf, const int64_t mul_statement_buf_len, int64_t &pos);
+private:
+  DISALLOW_COPY_AND_ASSIGN(QueryTenantEndpointStrategy);
+};
+
 ///////////////////////// QueryTenantStatusStrategy /////////////////////////
 // query tenant_status
 class QueryTenantStatusStrategy : public ISQLStrategy {
@@ -231,6 +243,8 @@ public:
   virtual int query_tenant_status(
       const uint64_t tenant_id,
       share::schema::TenantStatus &tenant_status) = 0;
+
+  virtual int refresh_tenant_endpoint() = 0;
 
   /// Reset the current thread connection to allow the next query to use a different Server
   virtual int reset_connection() = 0;
@@ -472,6 +486,7 @@ public:
   virtual int query_tenant_status(
       const uint64_t tenant_id,
       share::schema::TenantStatus &tenant_status);
+  virtual int refresh_tenant_endpoint();
 
   /// Restart the connection used by the current thread
   virtual int reset_connection();

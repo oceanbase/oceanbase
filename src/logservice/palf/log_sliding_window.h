@@ -255,6 +255,10 @@ public:
                                       const LSN &log_lsn,
                                       const LSN &log_end_lsn,
                                       const int64_t &log_proposal_id);
+  virtual int read_data_from_buffer(const LSN &read_begin_lsn,
+                                    const int64_t in_read_size,
+                                    char *buf,
+                                    int64_t &out_read_size) const;
   int64_t get_last_slide_log_id() const;
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
@@ -440,6 +444,7 @@ private:
   LogPlugins *plugins_;
   palf::PalfFSCbWrapper *palf_fs_cb_;
   LSNAllocator lsn_allocator_;
+  mutable RWLock group_buffer_lock_;
   LogGroupBuffer group_buffer_;
   // Record the last submit log info.
   // It is used to submit logs sequentially, for restarting, set it as last_replay_log_id.

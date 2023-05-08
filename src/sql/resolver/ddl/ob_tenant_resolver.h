@@ -48,8 +48,11 @@ public:
   int resolve_tenant_options(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info, common::ObIAllocator &allocator);
   const common::ObBitSet<> &get_alter_option_bitset() const { return alter_option_bitset_; };
   bool is_modify_read_only() const { return modify_read_only_; }
+  int resolve_tenant_name(T *stmt, ParseNode *node) const;
+
 private:
   int resolve_tenant_option(T *stmt, ParseNode *node, ObSQLSessionInfo *session_info, common::ObIAllocator &allocator);
+  int check_support_option(const T *stmt, const ParseNode *node);
   int resolve_zone_list(T *stmt, ParseNode *node) const;
   int resolve_resource_pool_list(T *stmt, ParseNode *node) const;
 private:
@@ -100,6 +103,8 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
   if (OB_ISNULL(stmt)) {
     ret = common::OB_ERR_UNEXPECTED;
     SQL_LOG(ERROR, "null ptr", K(ret));
+  } else if (OB_FAIL(check_support_option(stmt, option_node))) {
+    LOG_WARN("failed to check support option", KR(ret), KPC(stmt), KP(option_node));
   } else if (option_node) {
     switch (option_node->type_) {
       case T_REPLICA_NUM: {
@@ -389,6 +394,75 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
 }
 
 template<class T>
+int ObTenantResolver<T>::check_support_option(const T *stmt, const ParseNode *node)
+{
+  int ret = common::OB_SUCCESS;
+
+  if (OB_ISNULL(stmt)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SQL_LOG(WARN, "null pointer", KR(ret), KP(stmt));
+  } else if (OB_NOT_NULL(node)) {
+    if (stmt->get_stmt_type() == stmt::T_CREATE_STANDBY_TENANT) {
+      switch (node->type_) {
+        case T_REPLICA_NUM: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_num");
+        }
+        case T_CHARSET: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "charset");
+        }
+        case T_COLLATION: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "collation");
+        }
+        case T_ENABLE_ARBITRATION_SERVICE: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "enable_arbitration_service");
+        }
+        case T_ZONE_LIST: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "zone_list");
+        }
+        case T_READ_ONLY: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "read_only");
+        }
+        case T_LOGONLY_REPLICA_NUM: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "logonly_replica_num");
+        }
+        case T_DEFAULT_TABLEGROUP: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "default_tablegroup");
+        }
+        case T_PROGRESSIVE_MERGE_NUM: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "progressive_merge_num");
+        }
+        case T_ENABLE_EXTENDED_ROWID: {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "enable_extended_rowid");
+        }
+        {
+          // not support option
+          ret = common::OB_INVALID_ARGUMENT;
+          SQL_LOG(WARN, "invalid argument", KR(ret), K(node->type_));
+          break;
+        }
+
+        case T_LOCALITY:
+        case T_PRIMARY_ZONE:
+        case T_TENANT_RESOURCE_POOL_LIST:
+        case T_COMMENT: {
+          // support option
+          break;
+        }
+
+        default: {
+          /* won't be here */
+          ret = common::OB_ERR_UNEXPECTED;
+          SQL_LOG(ERROR, "code should not reach here", KR(ret));
+          break;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+template<class T>
 int ObTenantResolver<T>::resolve_zone_list(T *stmt, ParseNode *node) const
 {
   int ret = common::OB_SUCCESS;
@@ -442,6 +516,35 @@ int ObTenantResolver<T>::resolve_resource_pool_list(T *stmt, ParseNode *node) co
       }
     }
   }
+  return ret;
+}
+
+
+template<class T>
+int ObTenantResolver<T>::resolve_tenant_name(T *stmt, ParseNode *node) const
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_LOG(ERROR, "null ptr", KR(ret), KP(node), KP(stmt));
+  } else if (OB_UNLIKELY(T_IDENT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(ERROR, "invalid parse_tree", KR(ret));
+  } else {
+    ObString tenant_name;
+    tenant_name.assign_ptr((char *)(node->str_value_),
+                            static_cast<int32_t>(node->str_len_));
+    if (tenant_name.length() >= OB_MAX_TENANT_NAME_LENGTH) {
+      ret = OB_ERR_TOO_LONG_IDENT;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, tenant_name.length(), tenant_name.ptr());
+    } else if (ObString::make_string("seed") == tenant_name) {
+      ret = OB_ERR_INVALID_TENANT_NAME;
+      LOG_ERROR("invalid tenant name", K(tenant_name), KR(ret));
+    } else {
+      stmt->set_tenant_name(tenant_name);
+    }
+  }
+
   return ret;
 }
 

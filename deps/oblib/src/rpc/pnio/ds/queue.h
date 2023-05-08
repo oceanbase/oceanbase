@@ -23,9 +23,30 @@ inline link_t* queue_pop(queue_t* q) {
   link_t* n = queue_top(q);
   if (n) {
     q->head.next = n->next;
-    if (q->tail == n) {
-      q->tail = &q->head;
-    }
   }
   return n;
+}
+
+typedef struct dqueue_t {
+  dlink_t head;
+} dqueue_t;
+
+extern void dqueue_init(dqueue_t* q);
+inline void dqueue_push(dqueue_t* q, dlink_t* n) {
+  dlink_insert_before(&q->head, n);
+}
+
+inline dlink_t* dqueue_top(dqueue_t* q) {
+  return q->head.next;
+}
+
+inline bool dqueue_empty(dqueue_t* q) { return dqueue_top(q) == &q->head; }
+
+inline void dqueue_set(dqueue_t* q, dlink_t* n) {
+  q->head.next = n;
+  n->prev = &q->head;
+}
+
+inline void dqueue_delete(dqueue_t* q, dlink_t* n) {
+  dlink_delete(n);
 }

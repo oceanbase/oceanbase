@@ -204,6 +204,7 @@ TEST_F(TestObSimpleLogClusterBasicFunc, restart_and_clear_tmp_files)
       guard.click("submit_log");
       EXPECT_EQ(OB_ITER_END, read_log(leader1));
       guard.click("read_log");
+      PALF_LOG(INFO, "finish read_log", KPC(log_storage), K(lsn_origin_log_tail), KPC(leader1.palf_handle_impl_));
     }
     // 验证tenant下有临时文件的场景，该临时文件需要归还给log_pool
     {

@@ -617,7 +617,7 @@ bool is_xml_type(const int ctype)
 double get_delay_sec(const int64_t tstamp_ns)
 {
   int64_t delta = (ObTimeUtility::current_time() - tstamp_ns / NS_CONVERSION);
-  double delay_sec =  static_cast<double>(delta) / 1000000.0;;
+  double delay_sec =  static_cast<double>(delta) / 1000000.0;
   return delay_sec;
 }
 
@@ -1274,7 +1274,7 @@ ObLogTimeMonitor::ObLogTimeMonitor(const char *log_msg_prefix, bool enable)
     log_msg_prefix_ = log_msg_prefix;
     start_time_usec_ = get_timestamp();
   } else {
-    log_msg_prefix_ = NULL;;
+    log_msg_prefix_ = NULL;
     start_time_usec_ = 0;
   }
   last_mark_time_usec_ = start_time_usec_;
@@ -1327,15 +1327,17 @@ char *lbt_oblog()
     char *res_idx = res[idx];
     int tmp_ret = OB_SUCCESS;
 
-    if (NULL != res_idx) {
+    if (OB_NOT_NULL(res_idx)) {
       if (OB_TMP_FAIL(databuff_printf(buf, LBT_BUFFER_LENGTH, pos, "%s", res_idx))) {
-        LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
-            K(LBT_BUFFER_LENGTH));
+        if (OB_SIZE_OVERFLOW != ret) {
+          LOG_WARN("atabuff_printf fail when lbt, ignore", KR(tmp_ret), K(idx), K(size), K(buf), K(pos),
+              K(LBT_BUFFER_LENGTH));
+        }
       }
     }
   }
 
-  if (NULL != res) {
+  if (OB_NOT_NULL(res)) {
     free(res);
   }
 

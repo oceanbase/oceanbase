@@ -21,6 +21,10 @@
 #include "ob_log_config.h"                // ObLogConfig
 #include "observer/ob_srv_network_frame.h"
 
+extern "C" {
+#include "ussl-hook.h"
+#include "auth-methods.h"
+}
 
 /// The rpc proxy executes the RPC function with two error codes:
 /// 1. proxy function return value ret
@@ -136,6 +140,27 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
   return ret;
 }
 
+static int reload_rpc_client_auth_method()
+{
+  int ret = OB_SUCCESS;
+  int client_auth_method = USSL_AUTH_NONE;
+  ObString client_auth_method_str(TCONF.rpc_client_authentication_method.str());
+  if (0 == client_auth_method_str.case_compare("NONE")) {
+    client_auth_method = USSL_AUTH_NONE;
+  } else if (0 == client_auth_method_str.case_compare("SSL_NO_ENCRYPT")) {
+    client_auth_method = USSL_AUTH_SSL_HANDSHAKE;
+  } else if (0 == client_auth_method_str.case_compare("SSL_IO")) {
+    client_auth_method = USSL_AUTH_SSL_IO;
+  } else {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("invalid rpc_client_authentication_method", K(client_auth_method_str), KR(ret));
+  }
+  if (OB_SUCC(ret)) {
+    set_client_auth_methods(client_auth_method);
+  }
+  return ret;
+}
+
 int ObLogRpc::init(const int64_t io_thread_num)
 {
   int ret = OB_SUCCESS;
@@ -153,6 +178,8 @@ int ObLogRpc::init(const int64_t io_thread_num)
     LOG_ERROR("init client identity failed", KR(ret));
   } else if (OB_FAIL(net_client_.init(opt))) {
     LOG_ERROR("init net client fail", KR(ret), K(io_thread_num));
+  } else if (OB_FAIL(reload_rpc_client_auth_method())) {
+    LOG_ERROR("reload_rpc_client_auth_method failed", K(ret));
   } else if (OB_FAIL(reload_ssl_config())) {
     LOG_ERROR("reload_ssl_config succ", KR(ret));
   } else {
@@ -170,6 +197,28 @@ void ObLogRpc::destroy()
   last_ssl_info_hash_ = UINT64_MAX;
   ssl_key_expired_time_ = 0;
   client_id_.reset();
+}
+
+static int create_ssl_ctx(int ctx_id, int is_from_file, int is_sm, const char *ca_cert,
+                          const char *sign_cert, const char *sign_private_key,
+                          const char *enc_cert, const char *enc_private_key)
+{
+  int ret = OB_SUCCESS;
+  ssl_config_item_t config_item;
+  config_item.is_from_file = is_from_file;
+  config_item.is_sm = is_sm;
+  config_item.ca_cert = ca_cert;
+  config_item.sign_cert = sign_cert;
+  config_item.sign_private_key = sign_private_key;
+  config_item.enc_cert = enc_cert;
+  config_item.enc_private_key = enc_private_key;
+  if (ussl_setsockopt(ctx_id, SOL_OB_CTX, SO_OB_CTX_SET_SSL_CONFIG, &config_item, socklen_t(sizeof(config_item))) < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("create ssl ctx failed", K(ctx_id), KR(ret));
+  } else {
+    LOG_INFO("create ssl ctx success", K(ctx_id));
+  }
+  return ret;
 }
 
 int ObLogRpc::reload_ssl_config()
@@ -242,6 +291,11 @@ int ObLogRpc::reload_ssl_config()
             last_ssl_info_hash_ = new_hash_value;
             ssl_key_expired_time_ = ssl_key_expired_time;
             LOG_INFO("finish reload_ssl_config", K(use_bkmi), K(use_sm), K(new_hash_value), K(ssl_key_expired_time_));
+            const int OB_EASY_RPC_SSL_CTX_ID = 0;
+            if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm,
+                                      ca_cert, public_cert, private_key, NULL, NULL))) {
+              LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID), KR(ret));
+            }
           }
         }
       }

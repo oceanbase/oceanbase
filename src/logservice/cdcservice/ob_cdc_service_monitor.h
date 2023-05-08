@@ -16,6 +16,7 @@
 #include "lib/atomic/ob_atomic.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/time/ob_time_utility.h"
+#include "lib/utility/ob_print_utils.h"
 #include "lib/oblog/ob_log.h"
 
 namespace oceanbase
@@ -102,6 +103,71 @@ private:
   static int64_t need_fetch_pkey_count_;
   static int64_t scan_round_count_;
   static int64_t round_rate_;
+};
+
+class ObCdcFetchLogTimeStats {
+public:
+  ObCdcFetchLogTimeStats() {
+    reset();
+  }
+
+  void reset() {
+    fetch_total_time_ = 0;
+    fetch_log_time_ = 0;
+    fetch_palf_time_ = 0;
+    fetch_archive_time_ = 0;
+    fetch_log_post_process_time_ = 0;
+    prefill_resp_time_ = 0;
+  }
+
+  void inc_fetch_total_time(int64_t time_cost) {
+    fetch_total_time_ += time_cost;
+  }
+
+  void inc_fetch_log_time(int64_t time_cost) {
+    fetch_log_time_ += time_cost;
+  }
+
+  void inc_fetch_palf_time(int64_t time_cost) {
+    fetch_palf_time_ += time_cost;
+  }
+
+  void inc_fetch_archive_time(int64_t time_cost) {
+    fetch_archive_time_ += time_cost;
+  }
+
+  void inc_fetch_log_post_process_time(int64_t time_cost) {
+    fetch_log_post_process_time_ += time_cost;
+  }
+
+  void inc_prefill_resp_time(int64_t time_cost) {
+    prefill_resp_time_ += time_cost;
+  }
+  //  total_time (fetch_log)
+  //   ├-- fetch_log_time (ls_fetch_log)
+  //   |    ├-- fetch_palf_time (fetch_log_in_palf)
+  //   |    ├-- fetch_archive_time (fetch_log_in_archive)
+  //   |    ├-- fetch_log_post_process_time
+  //   |    |    ├-- prefill_resp_time (prefill_resp_with_log_group_entry)
+  //   |    |    └-- other_post_process_time (virtual)
+  //   |    └-- other_fetch_log_time (virtual)
+  //   └-- other_time (virtual)
+  TO_STRING_KV(
+    K_(fetch_total_time),
+    K_(fetch_log_time),
+    K_(fetch_palf_time),
+    K_(fetch_archive_time),
+    K_(fetch_log_post_process_time),
+    K_(prefill_resp_time)
+  );
+
+private:
+  int64_t fetch_total_time_;
+  int64_t fetch_log_time_;
+  int64_t fetch_palf_time_;
+  int64_t fetch_archive_time_;
+  int64_t fetch_log_post_process_time_;
+  int64_t prefill_resp_time_;
 };
 
 } // namespace cdc

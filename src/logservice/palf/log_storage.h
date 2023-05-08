@@ -36,6 +36,7 @@ class SCN;
 namespace palf
 {
 class ReadBuf;
+class LogHotCache;
 class LogStorage : public ILogStorage
 {
 public:
@@ -50,7 +51,8 @@ public:
            const int64_t align_size,
            const int64_t align_buf_size,
            const UpdateManifestCallback &update_manifest_cb,
-           ILogBlockPool *log_block_pool);
+           ILogBlockPool *log_block_pool,
+           LogHotCache *hot_cache);
 
   template <class EntryHeaderType>
   int load(const char *log_dir,
@@ -62,6 +64,7 @@ public:
            const int64_t align_buf_size,
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
+           LogHotCache *hot_cache,
            EntryHeaderType &entry_header,
            LSN &lsn);
 
@@ -126,7 +129,8 @@ private:
                const int64_t align_size,
                const int64_t align_buf_size,
                const UpdateManifestCallback &update_manifest_cb,
-               ILogBlockPool *log_block_pool);
+               ILogBlockPool *log_block_pool,
+               LogHotCache *hot_cache);
   // @ret val:
   //   OB_SUCCESS
   //   OB_ERR_OUT_OF_LOWER_BOUND
@@ -187,6 +191,7 @@ private:
   mutable ObSpinLock delete_block_lock_;
   UpdateManifestCallback update_manifest_cb_;
   char block_header_serialize_buf_[MAX_INFO_BLOCK_SIZE];
+  LogHotCache *hot_cache_;
   bool is_inited_;
 };
 
@@ -206,6 +211,7 @@ int LogStorage::load(const char *base_dir,
                      const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool,
+                     LogHotCache *hot_cache,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
 {
@@ -224,7 +230,8 @@ int LogStorage::load(const char *base_dir,
                               align_size,
                               align_buf_size,
                               update_manifest_cb,
-                              log_block_pool))) {
+                              log_block_pool,
+                              hot_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block
   } else if (OB_FAIL(block_mgr_.get_block_id_range(min_block_id, max_block_id))

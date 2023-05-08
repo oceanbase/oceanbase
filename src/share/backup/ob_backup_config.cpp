@@ -25,6 +25,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
+#include "share/ob_log_restore_proxy.h"  // ObLogRestoreProxyUtil
 
 using namespace oceanbase;
 using namespace share;
@@ -125,7 +126,7 @@ int BackupConfigItemPair::set_value(const int64_t &value)
   return ret;
 }
 
-int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uint64_t tenant_id)
+int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uint64_t tenant_id, const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
   if (is_setted_) {
@@ -140,9 +141,67 @@ int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uin
     config_parser_ = nullptr;
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(generate_parser_(type, tenant_id))) {
+    if ((ObBackupConfigType::Type::LOG_RESTORE_SOURCE == type.get_type()) && OB_FAIL(set_restore_source_type_(value))) {
+      LOG_WARN("fail to get restore source type");
+    } else if (OB_FAIL(generate_parser_(type, tenant_id))) {
       LOG_WARN("fail to generate_parser", K(ret));
     }
+  }
+  return ret;
+}
+
+/*
+As LOG_RESTORE_SOURCE supports two kind of type now, this function is to figure out
+whether the LOG_RESTORE_SOURCE is SERVICE or LOCATION.
+If the value is "SERVICE=127.0.0.1:1000;127.0.0.1:1001;127.0.0.1:1002 USER=ziqi_user@ziqi_tenant PASSWORD=123",
+the restore_source_type_ will be parsed into SERVICE type.
+If the value is "LOCATION=file:///data/1/zhaoyongheng.zyh/archivelog";
+the restore_source_type_ will be parsed into LOCATION type.
+*/
+int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlString &value)
+{
+  int ret = OB_SUCCESS;
+  char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+  char *token = nullptr;
+  char *tmp_token = nullptr;
+  char *saveptr = nullptr;
+  char *tmp_saveptr = nullptr;
+  bool is_location = false;
+  bool is_service = false;
+
+  if (value.empty()) {
+    restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
+  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
+    LOG_WARN("fail to set config value", K(value));
+  } else {
+    saveptr = tmp_str;
+    for (char *str = saveptr; OB_SUCC(ret); str = nullptr) {
+      token = ::STRTOK_R(str, " ", &saveptr);
+      if (nullptr == token) {
+        break;
+      } else if (OB_ISNULL(tmp_token = ::STRTOK_R(token, "=", &tmp_saveptr))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to split config str", K(ret), KP(tmp_token), K(tmp_saveptr));
+      } else if (OB_FALSE_IT(str_tolower(tmp_token, strlen(tmp_token)))) {
+      } else if (0 == STRCASECMP(tmp_token, OB_STR_LOCATION)) {
+        is_location = true;
+      } else if (0 == STRCASECMP(tmp_token, OB_STR_SERVICE)) {
+        is_service = true;
+      }
+      LOG_INFO("log restore source parse token", K(tmp_token), K(str), K(token));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fail to parse value", K(value));
+    } else if ((is_location && is_service) || (!is_location && !is_service)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to parse restore source type", K(ret), K(value));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parse log restore source type");
+    } else if (is_location) {
+      restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
+    } else if (is_service) {
+      restore_source_type_ = share::ObLogRestoreSourceType::SERVICE;
+    }
+    LOG_DEBUG("log restore source type", K(is_location), K(is_service));
   }
   return ret;
 }
@@ -175,6 +234,29 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
       }
       break;
     }
+    case ObBackupConfigType::Type::LOG_RESTORE_SOURCE: {
+      if (share::ObLogRestoreSourceType::SERVICE == restore_source_type_) {
+        int64_t size = sizeof(ObLogRestoreSourceServiceConfigParser);
+        void *tmp_ptr = nullptr;
+        if (OB_ISNULL(tmp_ptr = (allocator_.alloc(size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("parser generator alloc memory failed", K(ret));
+        } else {
+          config_parser_ = new(tmp_ptr) ObLogRestoreSourceServiceConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+        }
+        break;
+      } else if (share::ObLogRestoreSourceType::LOCATION == restore_source_type_) {
+        int64_t size = sizeof(ObLogRestoreSourceLocationConfigParser);
+        void *tmp_ptr = nullptr;
+        if (OB_ISNULL(tmp_ptr = (allocator_.alloc(size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("parser generator alloc memory failed", K(ret));
+        } else {
+          config_parser_ = new(tmp_ptr) ObLogRestoreSourceLocationConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id, 0);
+        }
+        break;
+      }
+    }
     GENERATE_LOG_ARCHIVE_PARSER(Dest, 0, LOG_ARCHIVE_DEST, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(Dest, 1, LOG_ARCHIVE_DEST_1, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(Dest, 2, LOG_ARCHIVE_DEST_2, tenant_id);
@@ -193,7 +275,6 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 6, LOG_ARCHIVE_DEST_STATE_6, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 7, LOG_ARCHIVE_DEST_STATE_7, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 8, LOG_ARCHIVE_DEST_STATE_8, tenant_id);
-    GENERATE_LOG_ARCHIVE_PARSER(RestoreSource, 0, LOG_RESTORE_SOURCE, tenant_id);
     default: {
       ret = OB_ERR_SYS;
       LOG_ERROR("invalid config type", K(ret), K(type));
@@ -255,7 +336,7 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     LOG_WARN("invalid backup config argumnet", K(ret), K(name), K(value));
   } else if (OB_FAIL(type.set_backup_config_type(name.ptr()))) {
     LOG_WARN("fail to set backup config type", K(ret), K(name));
-  } else if (OB_FAIL(parser_generator_.set(type, tenant_id))) {
+  } else if (OB_FAIL(parser_generator_.set(type, tenant_id, value))) {
     LOG_WARN("fail to set backup parser generator", K(ret), K(type));
   } else if (OB_ISNULL(config_parser = parser_generator_.get_parser())) {
     ret = OB_ERR_UNEXPECTED;
@@ -286,6 +367,24 @@ int ObBackupConfigParserMgr::update_inner_config_table(obrpc::ObSrvRpcProxy &rpc
     LOG_WARN("fail to check before update inner config", K(ret));
   } else if (OB_FAIL(parser->update_inner_config_table(trans))) {
     LOG_WARN("fail to update inner config table", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupConfigParserMgr::only_check_before_update(ObCompatibilityMode &compat_mode)
+{
+  int ret = OB_SUCCESS;
+  ObIBackupConfigItemParser *parser = nullptr;
+  compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup parser mgr not init", KR(ret));
+  } else if (OB_ISNULL(parser = parser_generator_.get_parser())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parser must not be nullptr", KR(ret));
+  } else if (OB_FAIL(parser->check_before_update_inner_config(true /* for_verify */, compat_mode))) {
+    LOG_WARN("fail to check_before_update_inner_config", KR(ret));
   }
   return ret;
 }
@@ -739,7 +838,7 @@ int ObLogArchiveDestStateConfigParser::check_before_update_inner_config(obrpc::O
   return ret;
 }
 
-int ObLogArchiveRestoreSourceConfigParser::update_inner_config_table(common::ObISQLClient &trans)
+int ObLogRestoreSourceLocationConfigParser::update_inner_config_table(common::ObISQLClient &trans)
 {
   int ret = OB_SUCCESS;
   ObBackupDestMgr dest_mgr;
@@ -771,7 +870,7 @@ int ObLogArchiveRestoreSourceConfigParser::update_inner_config_table(common::ObI
           || config_items_.at(0).value_.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid archive source", KR(ret), KPC(this));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set log_restore_source");
       } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
                                                                 true /* for update */, tenant_info))) {
         LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
@@ -785,7 +884,7 @@ int ObLogArchiveRestoreSourceConfigParser::update_inner_config_table(common::ObI
   return ret;
 }
 
-int ObLogArchiveRestoreSourceConfigParser::check_before_update_inner_config(
+int ObLogRestoreSourceLocationConfigParser::check_before_update_inner_config(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     common::ObISQLClient &trans)
 {
@@ -803,7 +902,7 @@ int ObLogArchiveRestoreSourceConfigParser::check_before_update_inner_config(
   return ret;
 }
 
-int ObLogArchiveRestoreSourceConfigParser::do_parse_sub_config_(const common::ObString &config_str)
+int ObLogRestoreSourceLocationConfigParser::do_parse_sub_config_(const common::ObString &config_str)
 {
   int ret = OB_SUCCESS;
   const char *target= nullptr;
@@ -829,6 +928,252 @@ int ObLogArchiveRestoreSourceConfigParser::do_parse_sub_config_(const common::Ob
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("log restore source does not has this config", KR(ret), K(token));
     }
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::parse_from(const common::ObSqlString &value)
+{
+  int ret = OB_SUCCESS;
+  char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+  char *token = nullptr;
+  char *saveptr = nullptr;
+  is_empty_ = false;
+
+  if (value.empty()) {
+    is_empty_ = true;
+  } else if (value.length() > OB_MAX_BACKUP_DEST_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("config value is too long");
+  } else if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", static_cast<int>(value.length()), value.ptr()))) {
+    LOG_WARN("fail to set config value", K(value));
+  } else {
+    token = tmp_str;
+    for (char *str = token; OB_SUCC(ret); str = nullptr) {
+      token = ::STRTOK_R(str, " ", &saveptr);
+      if (nullptr == token) {
+        break;
+      } else if (OB_FAIL(do_parse_sub_config_(token))) {
+        LOG_WARN("fail to do parse log restore source server sub config");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::update_inner_config_table(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObLogRestoreSourceMgr restore_source_mgr;
+  ObAllTenantInfo tenant_info;
+
+  if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", KPC(this));
+  } else if (OB_FAIL(restore_source_mgr.init(tenant_id_, &trans))) {
+    LOG_WARN("failed to init restore_source_mgr", KPC(this));
+  } else if (is_empty_) {
+    if (OB_FAIL(restore_source_mgr.delete_source())) {
+      LOG_WARN("failed to delete restore source", KPC(this));
+    }
+  } else if (!service_attr_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid restore source", KPC(this));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
+  } else if (OB_FAIL(service_attr_.gen_config_items(config_items_))) {
+    LOG_WARN("fail to gen restore source service config items", KPC(this));
+  } else {
+    /*
+    eg: 开源版本 "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=xxxxxxx(密码),TENANT_ID=1002,CLUSTER_ID=10001,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=false"
+      非开源版本 "ip_list=127.0.0.1:1001;127.0.0.1:1002,USER=restore_user@primary_tenant,PASSWORD=xxxxxxx(加密后密码),TENANT_ID=1002,CLUSTER_ID=10001,COMPATIBILITY_MODE=MYSQL,IS_ENCRYPTED=true"
+    */
+    char value_string[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+
+    if (config_items_.empty() || OB_MAX_RESTORE_SOURCE_SERVICE_CONFIG_LEN != config_items_.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid restore source", KPC(this));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log_restore_source");
+    } else if (OB_FAIL(service_attr_.gen_service_attr_str(value_string, OB_MAX_BACKUP_DEST_LENGTH))) {
+      LOG_WARN("failed gen service attr str", K_(tenant_id));
+    } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, &trans,
+                                                            true /* for update */, tenant_info))) {
+      LOG_WARN("failed to load tenant info", K_(tenant_id));
+    } else if (OB_FAIL(restore_source_mgr.add_service_source(tenant_info.get_recovery_until_scn(),
+                                                            value_string))) {
+      LOG_WARN("failed to add log restore source", K(tenant_info), K(value_string), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObCompatibilityMode compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
+  if (is_empty_) {
+  } else if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", KR(ret), KPC(this));
+  } else if (OB_FAIL(check_before_update_inner_config(false /* for_verify */, compat_mode))) {
+    LOG_WARN("fail to check before update inner config");
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(
+    const bool for_verify,
+    ObCompatibilityMode &compat_mode)
+{
+  int ret = OB_SUCCESS;
+  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
+  ObSqlString user_and_tenant;
+  compat_mode = ObCompatibilityMode::OCEANBASE_MODE;
+
+  SMART_VAR(ObLogRestoreProxyUtil, proxy) {
+    if (is_empty_) {
+    } else if (!type_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid parser", KPC(this));
+    } else if (0 == STRLEN(service_attr_.encrypt_passwd_)
+        || 0 == STRLEN(service_attr_.user_.user_name_)
+        || 0 == STRLEN(service_attr_.user_.tenant_name_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("fail to parse log restore source config, please check the config parameters");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parse log restore source config, please check the config parameters");
+    } else if (OB_FAIL(service_attr_.get_password(passwd, sizeof(passwd)))) {
+      LOG_WARN("get servcie attr password failed");
+    } else if (OB_FAIL(service_attr_.get_user_str_(user_and_tenant))) {
+      LOG_WARN("get user str failed", K(service_attr_.user_.user_name_), K(service_attr_.user_.tenant_name_));
+    } else if (OB_FAIL(proxy.try_init(tenant_id_/*standby*/, service_attr_.addr_, user_and_tenant.ptr(), passwd))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("proxy connect to primary db failed", K(service_attr_.addr_), K(user_and_tenant));
+    } else if (OB_FAIL(proxy.get_tenant_id(service_attr_.user_.tenant_name_, service_attr_.user_.tenant_id_))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get primary tenant id failed", K(tenant_id_), K(service_attr_.user_));
+    } else if (OB_FAIL(proxy.get_cluster_id(service_attr_.user_.tenant_id_, service_attr_.user_.cluster_id_))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get primary cluster id failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));
+    } else if (OB_FAIL(proxy.get_compatibility_mode(service_attr_.user_.tenant_id_, service_attr_.user_.mode_))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get primary compatibility mode failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));
+    } else if (for_verify && OB_FAIL(proxy.check_begin_lsn(service_attr_.user_.tenant_id_))) {
+      LOG_WARN("check_begin_lsn failed", K(tenant_id_), K(service_attr_.user_.tenant_id_));
+    } else {
+      compat_mode = service_attr_.user_.mode_;
+      LOG_INFO("check_before_update_inner_config success", K(tenant_id_), K(service_attr_), K(compat_mode));
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::get_compatibility_mode(common::ObCompatibilityMode &compatibility_mode)
+{
+  int ret = OB_SUCCESS;
+  compatibility_mode = OCEANBASE_MODE;
+  if (is_empty_) {
+  } else if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", KPC(this));
+  } else if (!service_attr_.user_.is_valid()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KPC(this));
+  } else {
+    compatibility_mode = service_attr_.user_.mode_;
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::do_parse_sub_config_(const common::ObString &config_str)
+{
+  int ret = OB_SUCCESS;
+  if (config_str.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty log restore source sub config is not allowed", K(config_str));
+  } else {
+    char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+    char *token = nullptr;
+    char *saveptr = nullptr;
+    if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", config_str.length(), config_str.ptr()))) {
+      LOG_WARN("fail to set config value", K(config_str));
+    } else if (OB_ISNULL(token = ::STRTOK_R(tmp_str, "=", &saveptr))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to split config str", KP(token));
+    } else if (OB_FALSE_IT(str_tolower(token, strlen(token)))) {
+    } else if (0 == STRCASECMP(token, OB_STR_SERVICE)) {
+      if (OB_FAIL(do_parse_restore_service_host_(token, saveptr))) {
+        LOG_WARN("fail to do parse restore service host", K(token), K(saveptr));
+      }
+    } else if (0 == STRCASECMP(token, OB_STR_USER)) {
+      if (OB_FAIL(do_parse_restore_service_user_(token, saveptr))) {
+        LOG_WARN("fail to do parse restore service user", K(token), K(saveptr));
+      }
+    } else if (0 == STRCASECMP(token, OB_STR_PASSWORD)) {
+      if (OB_FAIL(do_parse_restore_service_passwd_(token, saveptr))) {
+        LOG_WARN("fail to do parse restore service passwd", K(token), K(saveptr));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("log restore source does not has this config", K(token));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::do_parse_restore_service_host_(const common::ObString &name, const
+common::ObString &value)
+{
+  int ret = OB_SUCCESS;
+  if (name.empty() || value.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid log restore source service host config", K(name), K(value));
+  } else if (OB_FAIL(service_attr_.parse_ip_port_from_str(value.ptr(), ";" /*delimiter*/))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parse restore source service host failed", K(name), K(value));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set ip list config, please check the length and format of ip list");
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::do_parse_restore_service_user_(const common::ObString &name, const
+common::ObString &value)
+{
+  int ret = OB_SUCCESS;
+  if (name.empty() || value.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid log restore source service user config", K(name), K(value));
+  } else {
+    char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+    char *user_token = nullptr;
+    char *tenant_token = nullptr;
+    if (OB_FAIL(databuff_printf(tmp_str, sizeof(tmp_str), "%.*s", value.length(), value.ptr()))) {
+      LOG_WARN("fail to set user config value", K(value));
+    } else if (OB_FAIL(service_attr_.set_service_user_config(tmp_str))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("parse restore source service user failed", K(name), K(value));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set user config, please check the length and format of username, tenant name");
+  }
+  return ret;
+}
+
+int ObLogRestoreSourceServiceConfigParser::do_parse_restore_service_passwd_(const common::ObString &name, const
+common::ObString &value)
+{
+  int ret = OB_SUCCESS;
+  if (name.empty() || value.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid log restore source service password config", K(name), K(value));
+  } else if (OB_FAIL(service_attr_.set_service_passwd_to_encrypt(value.ptr()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parse restore source service password failed", K(name), K(value));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "set password config, please check the length and format of password");
   }
   return ret;
 }

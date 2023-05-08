@@ -1,6 +1,7 @@
 typedef struct eloop_t {
   int fd;
   dlink_t ready_link;
+  rl_impl_t rl_impl;
 } eloop_t;
 
 extern int eloop_init(eloop_t* ep);

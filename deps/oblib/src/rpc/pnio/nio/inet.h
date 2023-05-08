@@ -1,5 +1,5 @@
 #include <netinet/tcp.h>
-extern int async_connect(addr_t dest);
+extern int async_connect(addr_t dest, uint64_t dispatch_id);
 extern int listen_create(addr_t src);
 extern int tcp_accept(int fd);
 extern int check_connect_result(int fd);

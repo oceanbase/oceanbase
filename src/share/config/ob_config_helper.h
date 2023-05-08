@@ -637,6 +637,28 @@ struct ObConfigBoolParser
   static bool get(const char *str, bool &valid);
 };
 
+class ObRpcClientAuthMethodChecker
+  : public ObConfigChecker
+{
+public:
+  ObRpcClientAuthMethodChecker() {}
+  virtual ~ObRpcClientAuthMethodChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRpcClientAuthMethodChecker);
+};
+
+class ObRpcServerAuthMethodChecker
+  : public ObConfigChecker
+{
+public:
+  ObRpcServerAuthMethodChecker() {}
+  virtual ~ObRpcServerAuthMethodChecker() {}
+  bool check(const ObConfigItem &t) const;
+  bool is_valid_server_auth_method(const ObString &str) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRpcServerAuthMethodChecker);
+};
 
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;

@@ -86,7 +86,7 @@ TEST_F(TestLogGroupBuffer, test_get_buffer_pos)
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
   lsn.val_ = 50;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
   lsn.val_ = 110;
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
   EXPECT_EQ(10, start_pos);
@@ -312,6 +312,88 @@ TEST_F(TestLogGroupBuffer, test_to_follower)
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.to_follower());
 }
 
+TEST_F(TestLogGroupBuffer, test_read_data)
+{
+  LSN lsn(100);
+  char data[1024];
+  int64_t len = 100;
+  LSN reuse_lsn(0);
+  LSN start_lsn(0);
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(lsn, data, len));
+  LSN read_begin_lsn(0);
+  int64_t in_read_size = 100;
+  int64_t out_read_size = 0;
+  char *out_buf = (char*)malloc(1024);
+  // read nothing because reuse_lsn <= read_begin_lsn
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(0, out_read_size);
+  reuse_lsn.val_ = 200;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(reuse_lsn));
+  // read data success
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(in_read_size, out_read_size);
+  // fill data at lsn(40M) with len 50.
+  lsn.val_ = reuse_lsn.val_ + log_group_buffer_.get_available_buffer_size() - 200;
+  len = 50;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(lsn, data, len));
+  // read data at lsn(50)
+  read_begin_lsn.val_ = 50;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(in_read_size, out_read_size);
+  // read data at lsn(49), this pos has been re-written
+  read_begin_lsn.val_ = 49;
+  out_read_size = 0;
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(0, out_read_size);
+  // truncate at lsn(40M + 1000)
+  LSN truncate_lsn(1000 + log_group_buffer_.get_available_buffer_size());
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.truncate(truncate_lsn));
+  // read data at lsn(49), this pos has been re-written
+  out_read_size = 0;
+  read_begin_lsn.val_ = 49;
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  // truncate at lsn(0)
+//  truncate_lsn.val_ = 0;
+//  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.truncate(truncate_lsn));
+  // read data at lsn(500)
+  out_read_size = 0;
+  read_begin_lsn.val_ = 500;
+  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(0, out_read_size);
+  // fill data at lsn 500 - 600
+  lsn = truncate_lsn + 500;
+  len = 100;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(lsn, data, len));
+  reuse_lsn = truncate_lsn + 600;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(reuse_lsn));
+  // read data at lsn(500), read nothing because of last_truncate_max_lsn_
+  out_read_size = 0;
+  read_begin_lsn = truncate_lsn + 500;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(100, out_read_size);
+  // truncate at lsn(40M + 40M)
+  truncate_lsn.val_ = 2 * log_group_buffer_.get_available_buffer_size();
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.truncate(truncate_lsn));
+  reuse_lsn = truncate_lsn + 100;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(reuse_lsn));
+  // fill data at lsn 40M - 600
+  lsn.val_ = truncate_lsn.val_ + log_group_buffer_.get_available_buffer_size() - 50;
+  len = 100;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(lsn, data, len));
+  // update reuse_lsn
+  reuse_lsn = lsn + len;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(reuse_lsn));
+  // read above wrapped data, expect success
+  out_read_size = 0;
+  read_begin_lsn = lsn;
+  in_read_size = 100;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
+  EXPECT_EQ(in_read_size, out_read_size);
+
+  free(out_buf);
+}
+
 } // END of unittest
 } // end of oceanbase
 
@@ -319,7 +401,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf ./test_log_group_buffer.log*");
   OB_LOGGER.set_file_name("test_log_group_buffer.log", true);
-  OB_LOGGER.set_log_level("INFO");
+  OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin unittest::test_log_group_buffer");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
