@@ -539,7 +539,7 @@ int ObLogRestoreNetDriver::set_restore_log_upper_limit_()
     // do nothing
   } else if (OB_FAIL(ObLogRestoreDriverBase::get_upper_resotore_scn(upper_limit_scn))) {
     LOG_WARN("get upper limit scn failed");
-  } else if (OB_FAIL(fetcher_->set_restore_log_upper_limit(upper_limit_scn))) {
+  } else if (OB_FAIL(fetcher_->update_fetching_log_upper_limit(upper_limit_scn))) {
     LOG_WARN("set restore log upper limit failed", K(upper_limit_scn));
   }
   return ret;

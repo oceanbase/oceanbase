@@ -451,6 +451,7 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
 {
   int ret = OB_SUCCESS;
   int64_t min_progress = OB_INVALID_TIMESTAMP;
+  int64_t global_upper_limit = OB_INVALID_TIMESTAMP;
 
   if (OB_ISNULL(progress_controller_)) {
     LOG_ERROR("invalid progress controller", K(progress_controller_));
@@ -469,6 +470,11 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
     } else {
       // Other partition are limited by progress limit
       upper_limit_us = min_progress + ATOMIC_LOAD(&g_dml_progress_limit) * NS_CONVERSION;
+    }
+
+    global_upper_limit = progress_controller_->get_global_upper_limit();
+    if (OB_INVALID_TIMESTAMP != global_upper_limit) {
+      upper_limit_us = std::min(upper_limit_us, global_upper_limit);
     }
   }
 

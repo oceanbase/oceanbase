@@ -498,17 +498,24 @@ int ObLogFetcher::get_ls_proposal_id(const share::ObLSID &ls_id, int64_t &propos
       LOG_WARN("get_tls_proposal_id failed", K(tls_id));
     }
   }
+
   return ret;
 }
 
-// TODO support
 int ObLogFetcher::update_fetching_log_upper_limit(const share::SCN &upper_limit_scn)
 {
   int ret = OB_SUCCESS;
+  int64_t upper_limit_ts_ns = -1;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_ERROR("LogFetcher is not inited", KR(ret));
+  } else if (OB_UNLIKELY(!upper_limit_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(upper_limit_scn));
+  } else if (FALSE_IT(upper_limit_ts_ns = upper_limit_scn.convert_to_ts() * 1000L)) {
+  } else if (OB_FAIL(progress_controller_.set_global_upper_limit(upper_limit_ts_ns))) {
+    LOG_WARN("set_global_upper_limit failed", K(upper_limit_scn), K(upper_limit_ts_ns));
   }
 
   return ret;
