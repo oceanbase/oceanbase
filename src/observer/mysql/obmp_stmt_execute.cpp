@@ -1390,8 +1390,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator& allocator, const uint32_t t
     } else {
       char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
       int64_t pos = 0;
-      MEMSET(tmp, 0, length);
-      if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.string(), pos))) {
+      if (OB_ISNULL(tmp)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret));
+      } else if (FALSE_IT(MEMSET(tmp, 0, length))) {
+      } else if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.string(), pos))) {
         LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id));
       } else {
         const char* src = tmp;
