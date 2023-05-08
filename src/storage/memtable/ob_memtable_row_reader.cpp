@@ -529,6 +529,7 @@ OB_INLINE int ObMemtableRowReader::parse_no_meta(
 {
   int ret = OB_SUCCESS;
   const ObCellWriter::CellMeta* meta = read<ObCellWriter::CellMeta>();
+  obj_.meta_.reset();
   switch (meta->type_) {
     case ObNullType:
       READ_NULL();

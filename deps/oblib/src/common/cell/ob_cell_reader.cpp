@@ -409,6 +409,7 @@ int ObCellReader::parse(uint64_t* column_id)
   } else if (OB_FAIL(read<ObCellWriter::CellMeta>(meta))) {
     COMMON_LOG(WARN, "cell reader fail to read meta, ", K(ret));
   } else {
+    obj_.meta_.reset();
     switch (meta->type_) {
       case ObNullType:
         READ_NULL(obj_);
@@ -605,6 +606,7 @@ int ObCellReader::read_cell(common::ObObj& obj)
   } else if (OB_FAIL(read<ObCellWriter::CellMeta>(meta))) {
     COMMON_LOG(WARN, "cell reader fail to read meta, ", K(ret));
   } else {
+    obj.meta_.reset();
     switch (meta->type_) {
       case ObNullType:
         READ_NULL(obj);
