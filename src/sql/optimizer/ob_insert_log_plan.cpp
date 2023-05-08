@@ -170,8 +170,9 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
     LOG_WARN("failed to allocate memory");
   } else {
     stmt = static_cast<const ObInsertStmt *>(get_stmt());
-    uint64_t table_id = stmt->get_insert_table_info().table_id_;
-    uint64_t ref_table_id = stmt->get_insert_table_info().ref_table_id_;
+    const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
+    uint64_t table_id = table_info.table_id_;
+    uint64_t ref_table_id = table_info.ref_table_id_;
     if (OB_FAIL(schema_guard->get_table_schema(table_id, ref_table_id, stmt, tab_schema))) {
       LOG_WARN("fail to get table schema", K(ref_table_id), K(tab_schema), K(ret));
     } else if (OB_ISNULL(tab_schema)) {
@@ -179,12 +180,11 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
       LOG_WARN("get unexpected null pointer", K(ret));
     } else {
       const ObColumnSchemaV2 *col_schema = NULL;
-      const ObInsertTableInfo& table_info = stmt->get_insert_table_info();
       ObSEArray<uint64_t, 4> generated_column_ids;
       info->table_id_ = ref_table_id;
       if (tab_schema->is_partitioned_table()) {
         info->part_level_ = tab_schema->get_part_level();
-        if (OB_FAIL(gen_calc_part_id_expr(table_id,
+        if (OB_FAIL(gen_calc_part_id_expr(table_info.loc_table_id_,
                                           ref_table_id,
                                           CALC_PARTITION_TABLET_ID,
                                           info->calc_part_id_expr_))) {
