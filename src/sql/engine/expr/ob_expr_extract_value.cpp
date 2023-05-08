@@ -44,6 +44,10 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
   if (OB_UNLIKELY(param_num != 2 && param_num != 3)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid argument number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_EXTRACTVALUE));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_EXTRACTVALUE)), N_EXTRACTVALUE);
   } else {
     ObObjType in_type = types[0].get_type();
     if (types[0].is_ext() && types[0].get_udt_id() == T_OBJ_XML) {
@@ -70,6 +74,7 @@ int ObExprExtractValue::calc_result_typeN(ObExprResType &type,
     if (OB_SUCC(ret)) {
       type.set_type(ObVarcharType);
       type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
       // length == OB_MAX_ORACLE_VARCHAR_LENGTH is not supported by generated key, use OB_MAX_VARCHAR_LENGTH_KEY instead
       type.set_length(OB_MAX_VARCHAR_LENGTH_KEY);
       type.set_length_semantics(LS_BYTE);

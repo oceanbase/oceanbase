@@ -42,6 +42,10 @@ int ObExprSysMakeXML::calc_result_typeN(ObExprResType& type,
   if (OB_UNLIKELY(param_num < 1 || param_num == 3 || param_num > 4)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid argument number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_SYS_MAKEXML));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_SYS_MAKEXML)), N_SYS_MAKEXML);
   } else if (param_num == 1) {
     // 1st param is blob
     // oracle will rewrite the query to sys_makexml(0, ...), but there is no need to compat it.

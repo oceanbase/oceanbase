@@ -43,6 +43,10 @@ int ObExprXmlSerialize::calc_result_typeN(ObExprResType& type,
   if (OB_UNLIKELY(param_num != 10)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_XMLSERIALIZE));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_XMLSERIALIZE)), N_XMLSERIALIZE);
   } else {
     if (!ob_is_integer_type(types[0].get_type())) {
       ret = OB_ERR_UNEXPECTED;
@@ -72,6 +76,7 @@ int ObExprXmlSerialize::calc_result_typeN(ObExprResType& type,
       } else {
         type.set_collation_type(dst_type.get_collation_type());
       }
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
       type.set_full_length(dst_type.get_length(), dst_type.get_length_semantics());
     }
   }
