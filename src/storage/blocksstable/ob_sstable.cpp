@@ -138,7 +138,7 @@ int ObSSTable::scan(
           row_scanner);
     } else {
       ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
-          ObSSTableRowScanner,
+          ObSSTableRowScanner<>,
           row_scanner);
     }
 

@@ -21,7 +21,7 @@ namespace oceanbase {
 using namespace blocksstable;
 namespace storage {
 
-class ObSSTableMultiVersionRowGetter : public ObSSTableRowScanner
+class ObSSTableMultiVersionRowGetter : public ObSSTableRowScanner<>
 {
 public:
   ObSSTableMultiVersionRowGetter()

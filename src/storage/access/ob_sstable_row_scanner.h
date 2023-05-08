@@ -19,6 +19,7 @@
 namespace oceanbase {
 using namespace blocksstable;
 namespace storage {
+template<typename PrefetchType = ObIndexTreeMultiPassPrefetcher<>>
 class ObSSTableRowScanner : public ObStoreRowIterator
 {
 public:
@@ -60,7 +61,7 @@ protected:
   ObSSTable *sstable_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
-  ObIndexTreeMultiPassPrefetcher prefetcher_;
+  PrefetchType prefetcher_;
   ObMacroBlockReader macro_block_reader_;
   ObIMicroBlockRowScanner *micro_scanner_;
 private:

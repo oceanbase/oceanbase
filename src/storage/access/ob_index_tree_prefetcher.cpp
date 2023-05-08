@@ -654,7 +654,8 @@ int ObIndexTreeMultiPrefetcher::drill_down(
 
 ////////////////////////////////// MultiPassPrefetcher /////////////////////////////////////////////
 
-void ObIndexTreeMultiPassPrefetcher::reset()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::reset()
 {
   for (int64_t i = 0; i < DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT; i++) {
     micro_data_handles_[i].reset();
@@ -686,7 +687,8 @@ void ObIndexTreeMultiPassPrefetcher::reset()
   tree_handles_.reset();
 }
 
-void ObIndexTreeMultiPassPrefetcher::reuse()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+void ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::reuse()
 {
   ObIndexTreePrefetcher::reuse();
   clean_blockscan_check_info();
@@ -706,7 +708,8 @@ void ObIndexTreeMultiPassPrefetcher::reuse()
   }
 }
 
-int ObIndexTreeMultiPassPrefetcher::init(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::init(
     const int iter_type,
     ObSSTable &sstable,
     const ObTableIterParam &iter_param,
@@ -748,7 +751,8 @@ int ObIndexTreeMultiPassPrefetcher::init(
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::switch_context(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::switch_context(
     const int iter_type,
     const ObTableReadInfo &index_read_info,
     ObSSTable &sstable,
@@ -789,7 +793,8 @@ int ObIndexTreeMultiPassPrefetcher::switch_context(
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::init_basic_info(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::init_basic_info(
     const int iter_type,
     ObSSTable &sstable,
     ObTableAccessContext &access_ctx,
@@ -865,14 +870,16 @@ int ObIndexTreeMultiPassPrefetcher::init_basic_info(
  * so that index block could be load when read the rows of data_block.
  * If the last row read is non-data-block, stop the prefetching. Others, micro data blocks prefetched.
  */
-int ObIndexTreeMultiPassPrefetcher::prefetch()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch()
 {
   int ret = OB_SUCCESS;
+  const int32_t prefetch_limit = MAX(2, max_micro_handle_cnt_ / 2);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObIndexTreeMultiPassPrefetcher not init", K(ret));
   } else if (is_prefetch_end_) {
-  } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ >= max_micro_handle_cnt_ / 2) {
+  } else if (micro_data_prefetch_idx_ - cur_micro_data_fetch_idx_ >= prefetch_limit) {
     // continue current prefetch
   } else if (OB_FAIL(prefetch_index_tree())) {
     if (OB_LIKELY(OB_ITER_END == ret)) {
@@ -893,7 +900,8 @@ int ObIndexTreeMultiPassPrefetcher::prefetch()
 }
 
 // prefetch index block tree from up to down, cur_level_ is the level of index tree last read
-int ObIndexTreeMultiPassPrefetcher::prefetch_index_tree()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch_index_tree()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(index_tree_height_ <= cur_level_)) {
@@ -920,7 +928,9 @@ int ObIndexTreeMultiPassPrefetcher::prefetch_index_tree()
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::try_add_query_range(ObIndexTreeLevelHandle &tree_handle)
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::try_add_query_range(
+    ObIndexTreeLevelHandle &tree_handle)
 {
   int ret = OB_SUCCESS;
   if (cur_range_prefetch_idx_ - cur_range_fetch_idx_ == max_range_prefetching_cnt_ ||
@@ -979,7 +989,8 @@ int ObIndexTreeMultiPassPrefetcher::try_add_query_range(ObIndexTreeLevelHandle &
 }
 
 static int32_t OB_SSTABLE_MICRO_AVG_COUNT = 100;
-int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prefetch_micro_data()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(index_tree_height_ <= cur_level_ ||
@@ -1065,7 +1076,8 @@ int ObIndexTreeMultiPassPrefetcher::prefetch_micro_data()
 }
 
 // drill down to get next valid index micro block
-int ObIndexTreeMultiPassPrefetcher::drill_down()
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::drill_down()
 {
   int ret = OB_SUCCESS;
   if (index_tree_height_ <= cur_level_) {
@@ -1109,7 +1121,8 @@ int ObIndexTreeMultiPassPrefetcher::drill_down()
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::prepare_read_handle(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::prepare_read_handle(
     ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle &tree_handle,
     ObSSTableReadHandle &read_handle)
 {
@@ -1225,7 +1238,8 @@ OB_INLINE static int binary_check_micro_infos(
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::check_data_infos_border(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::check_data_infos_border(
     const int64_t start_pos,
     const int64_t end_pos,
     const ObDatumRowkey &border_rowkey,
@@ -1309,7 +1323,10 @@ int ObIndexTreeMultiPassPrefetcher::check_data_infos_border(
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::refresh_blockscan_checker(const int64_t start_micro_idx, const ObDatumRowkey &border_rowkey)
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::refresh_blockscan_checker(
+    const int64_t start_micro_idx,
+    const ObDatumRowkey &border_rowkey)
 {
   int ret = OB_SUCCESS;
   // 1. check blockscan in the rest micro data prefetched
@@ -1347,7 +1364,8 @@ int ObIndexTreeMultiPassPrefetcher::refresh_blockscan_checker(const int64_t star
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::check_blockscan(bool &can_blockscan)
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::check_blockscan(bool &can_blockscan)
 {
   static int64 MICRO_DATA_CHECK_DEPTH = DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT / 2;
   int ret = OB_SUCCESS;
@@ -1374,7 +1392,8 @@ int ObIndexTreeMultiPassPrefetcher::check_blockscan(bool &can_blockscan)
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::check_row_lock(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::check_row_lock(
     const blocksstable::ObMicroIndexInfo &index_info,
     bool &is_row_lock_checked)
 {
@@ -1398,7 +1417,8 @@ int ObIndexTreeMultiPassPrefetcher::check_row_lock(
 
 //////////////////////////////////////// ObIndexTreeLevelHandle //////////////////////////////////////////////
 
-int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::prefetch(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::ObIndexTreeLevelHandle::prefetch(
     const ObTableReadInfo &read_info,
     const ObDatumRowkey &border_rowkey,
     const int64_t level,
@@ -1468,7 +1488,8 @@ int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::prefetch(
   return ret;
 }
 
-int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::forward(
+template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
+int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::ObIndexTreeLevelHandle::forward(
     const ObTableReadInfo &read_info,
     const ObDatumRowkey &border_rowkey,
     const bool has_lob_out)
@@ -1521,6 +1542,10 @@ int ObIndexTreeMultiPassPrefetcher::ObIndexTreeLevelHandle::forward(
   }
   return ret;
 }
+
+// Explicit instantiations.
+template class ObIndexTreeMultiPassPrefetcher<32, 3>;
+template class ObIndexTreeMultiPassPrefetcher<2, 1>;
 
 }
 }
