@@ -384,18 +384,18 @@ int ObDiskUsageReportTask::count_server_clog()
   ObDiskUsageReportKey report_key;
   logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
 
-  int64_t clog_free_size_byte = 0;
+  int64_t clog_in_use_size_byte = 0;
   int64_t clog_total_size_byte = 0;
 
   if (OB_ISNULL(log_block_mgr)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(ERROR, "log_block_mgr is null", KR(ret), K(GCTX.log_block_mgr_));
-  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
+  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_in_use_size_byte, clog_total_size_byte))) {
     STORAGE_LOG(ERROR, "Failed to get clog stat ", KR(ret));
   } else {
     report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;
     report_key.tenant_id_ = OB_SERVER_TENANT_ID;
-    int64_t clog_space = clog_total_size_byte - clog_free_size_byte;
+    int64_t clog_space = clog_in_use_size_byte;
     if (OB_FAIL(result_map_.set_refactored(report_key, clog_space, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(clog_space));
     }

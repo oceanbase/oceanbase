@@ -1831,9 +1831,9 @@ int ObServer::init_io()
           LOG_ERROR("cal_all_part_disk_size failed", KR(ret));
         } else {
           if (log_block_mgr_.is_reserved()) {
-            int64_t clog_pool_free_size = 0;
+            int64_t clog_pool_in_use = 0;
             int64_t clog_pool_total_size = 0;
-            if (OB_FAIL(log_block_mgr_.get_disk_usage(clog_pool_free_size, clog_pool_total_size))) {
+            if (OB_FAIL(log_block_mgr_.get_disk_usage(clog_pool_in_use, clog_pool_total_size))) {
                LOG_ERROR("get clog disk size failed", KR(ret));
             } else {
               log_disk_size = clog_pool_total_size;
@@ -2266,19 +2266,19 @@ int ObServer::init_storage()
 
   if (OB_SUCC(ret)) {
     int64_t total_log_disk_size = 0;
-    int64_t free_log_disk_size = 0;
+    int64_t log_disk_in_use = 0;
     // Check if the clog directory is empty
     if (OB_FAIL(log_block_mgr_.get_disk_usage(
-            free_log_disk_size, total_log_disk_size))) {
+            log_disk_in_use, total_log_disk_size))) {
       LOG_ERROR("ObServerLogBlockMgr get_disk_usage failed", K(ret));
-    } else if (0 == total_log_disk_size-free_log_disk_size
+    } else if (0 == log_disk_in_use
         && OB_FAIL(logservice::ObServerLogBlockMgr::check_clog_directory_is_empty(
             OB_FILE_SYSTEM_ROUTER.get_clog_dir(), clogdir_is_empty))) {
       LOG_ERROR("is_dir_empty fail", K(ret));
     } else if (clogdir_is_empty) {
       LOG_INFO("clog dir is empty");
     } else {
-      clogdir_is_empty = total_log_disk_size == free_log_disk_size;
+      clogdir_is_empty = log_disk_in_use == 0;
     }
   }
 

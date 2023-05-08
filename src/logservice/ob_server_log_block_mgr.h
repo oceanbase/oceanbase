@@ -153,9 +153,9 @@ public:
   int try_resize();
 
   // @brief get current disk usage.
-  // @param[out] current available diskspace.
+  // @param[out] current in used diskspace.
   // @param[out] current total diskspace.
-  int get_disk_usage(int64_t &free_size_byte, int64_t &total_size_byte);
+  int get_disk_usage(int64_t &in_use_size_byte, int64_t &total_size_byte);
 
   // @brief allocate a new block, and move it to the specified directory with the specified
   // name.
@@ -238,8 +238,11 @@ private:
   const LogPoolMeta &get_log_pool_meta_guarded_by_lock_() const;
   int64_t get_total_size_guarded_by_lock_();
   int64_t get_free_size_guarded_by_lock_();
-  int get_and_inc_max_block_id_guarded_by_lock_(palf::block_id_t &out_block_id);
-  int get_and_inc_min_block_id_guarded_by_lock_(palf::block_id_t &out_block_id);
+  int64_t get_in_use_size_guarded_by_lock_();
+  int get_and_inc_max_block_id_guarded_by_lock_(palf::block_id_t &out_block_id,
+                                                const bool remove_block=false);
+  int get_and_inc_min_block_id_guarded_by_lock_(palf::block_id_t &out_block_id,
+                                                const bool create_block=false);
   int move_block_not_guarded_by_lock_(const palf::FileDesc &dest_dir_fd,
                                       const char *dest_block_path,
                                       const palf::FileDesc &src_dir_fd,
@@ -323,6 +326,9 @@ private:
   // 'min_log_disk_size_for_all_tenants_' is 0.
   int64_t min_log_disk_size_for_all_tenants_;
   GetTenantsLogDiskSize get_tenants_log_disk_size_func_;
+  // NB: in progress of expanding, the free size byte calcuated by BLOCK_SIZE * (max_block_id_ - min_block_id_) may be greater than
+  //     curr_total_size_, if we calcuated log disk in use by curr_total_size_ - 'free size byte', the resule may be negative.
+  int64_t block_cnt_in_use_;
   bool is_inited_;
 
 private:

@@ -279,7 +279,12 @@ TEST_F(TestServerLogBlockMgr, basic_func)
 
   const int64_t ls_id = 1;
   EXPECT_EQ(OB_SUCCESS, create_new_blocks_at(ls_id, tenant_ls_fd_map_[ls_id], 0, 10));
+  int64_t in_use_size_byte, total_size_byte;
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.get_disk_usage(in_use_size_byte, total_size_byte));
+  EXPECT_EQ(10*ObServerLogBlockMgr::BLOCK_SIZE, in_use_size_byte);
   EXPECT_EQ(OB_SUCCESS, delete_blocks_at(ls_id, tenant_ls_fd_map_[ls_id], 0, 10));
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.get_disk_usage(in_use_size_byte, total_size_byte));
+  EXPECT_EQ(0, in_use_size_byte);
 }
 
 TEST_F(TestServerLogBlockMgr, restart_for_empty_log_disk)
@@ -287,9 +292,12 @@ TEST_F(TestServerLogBlockMgr, restart_for_empty_log_disk)
   log_block_mgr_.destroy();
   const int64_t reserved_size = 2 * ObServerLogBlockMgr::GB;
   const int64_t aligned_reserved_size = log_block_mgr_.lower_align_(reserved_size);
+  int64_t in_use_size_byte, total_size_byte;
   EXPECT_EQ(OB_SUCCESS, log_block_mgr_.init(log_pool_base_path_));
   EXPECT_EQ(aligned_reserved_size, log_block_mgr_.log_pool_meta_.curr_total_size_);
   EXPECT_EQ(aligned_reserved_size, log_block_mgr_.log_pool_meta_.next_total_size_);
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.get_disk_usage(in_use_size_byte, total_size_byte));
+  EXPECT_EQ(0, in_use_size_byte);
   EXPECT_EQ(0, log_block_mgr_.log_pool_meta_.status_);
 }
 
