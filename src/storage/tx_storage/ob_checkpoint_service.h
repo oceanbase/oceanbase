@@ -52,9 +52,6 @@ public:
   int add_ls_freeze_task(
       ObDataCheckpoint *data_checkpoint,
       share::SCN rec_scn);
-
-  int do_minor_freeze();
-
 private:
   bool is_inited_;
 

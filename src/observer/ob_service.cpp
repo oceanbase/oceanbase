@@ -1070,11 +1070,11 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
     LOG_INFO("no need to freeze virtual tenant", K(ret), K(tenant_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      checkpoint::ObCheckPointService* checkpoint_serv = nullptr;
-      if (OB_ISNULL(checkpoint_serv = MTL(checkpoint::ObCheckPointService*))) {
+      storage::ObTenantFreezer* freezer = nullptr;
+      if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ObCheckPointService shouldn't be null", K(ret), K(tenant_id));
-      } else if (OB_FAIL(checkpoint_serv->do_minor_freeze())) {
+        LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
+      } else if (OB_FAIL(freezer->tenant_freeze())) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {

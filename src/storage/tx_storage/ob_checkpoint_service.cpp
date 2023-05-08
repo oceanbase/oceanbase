@@ -362,35 +362,6 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
   }
 }
 
-int ObCheckPointService::do_minor_freeze()
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObLSIterator *iter = NULL;
-  common::ObSharedGuard<ObLSIterator> guard;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  if (OB_ISNULL(ls_svr)) {
-    STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
-    STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
-  } else if (OB_ISNULL(iter = guard.get_ptr())) {
-    STORAGE_LOG(WARN, "iter is NULL", K(ret));
-  } else {
-    ObLS *ls = nullptr;
-    int ls_cnt = 0;
-    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_SUCCESS != (tmp_ret = (ls->advance_checkpoint_by_flush(SCN::max_scn())))) {
-        STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", K(tmp_ret), K(ls->get_ls_id()));
-      }
-    }
-    if (ret == OB_ITER_END) {
-      ret = OB_SUCCESS;
-    }
-  }
-
-  return ret;
-}
-
 } // checkpoint
 } // storage
 } // oceanbase

@@ -636,27 +636,28 @@ public:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
   // ObFreezer interface:
-  // @param [in] is_sync
-  // int logstream_freeze(const bool is_sync = false);
-  // DELEGATE_WITH_RET(ls_freezer_, logstream_freeze, int);
-  int logstream_freeze(const bool is_sync = false);
+  // freeze the data of ls:
+  // @param [in] is_sync, only used for wait_freeze_finished()
+  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  int logstream_freeze(const bool is_sync = false,
+                       const int64_t abs_timeout_ts = INT64_MAX);
   // tablet freeze
-  // @param [in] tablet_id
-  // @param [in] is_sync
-  // int tablet_freeze(const ObTabletID &tablet_id, const bool is_sync = false);
-  // DELEGATE_WITH_RET(ls_freezer_, tablet_freeze, int);
-  int tablet_freeze(const ObTabletID &tablet_id, const bool is_sync = false);
+  // @param [in] is_sync, only used for wait_freeze_finished()
+  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  int tablet_freeze(const ObTabletID &tablet_id,
+                    const bool is_sync = false,
+                    const int64_t abs_timeout_ts = INT64_MAX);
   // force freeze tablet
-  // @param [in] tablet_id
-  // int force_tablet_freeze(const ObTabletID &tablet_id);
-  // DELEGATE_WITH_RET(ls_freezer_, force_tablet_freeze, int);
-  int force_tablet_freeze(const ObTabletID &tablet_id);
+  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  int force_tablet_freeze(const ObTabletID &tablet_id,
+                          const int64_t abs_timeout_ts = INT64_MAX);
   // batch tablet freeze
   // @param [in] tablet_ids
   // @param [in] is_sync
-  // int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync = false);
-  // DELEGATE_WITH_RET(ls_freezer_, batch_tablet_freeze, int);
-  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync = false);
+  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  int batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
+                          const bool is_sync = false,
+                          const int64_t abs_timeout_ts = INT64_MAX);
 
   // ObTxTable interface
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
@@ -666,7 +667,10 @@ public:
 
   // ObCheckpointExecutor interface:
   DELEGATE_WITH_RET(checkpoint_executor_, get_checkpoint_info, int);
-  int advance_checkpoint_by_flush(share::SCN recycle_scn);
+  // advance the checkpoint of this ls
+  // @param [in] abs_timeout_ts, wait until timeout if lock conflict
+  int advance_checkpoint_by_flush(share::SCN recycle_scn,
+                                  const int64_t abs_timeout_ts = INT64_MAX);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);
