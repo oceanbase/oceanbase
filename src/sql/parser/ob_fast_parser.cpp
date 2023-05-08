@@ -2351,6 +2351,7 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
               tmp_buf_ += byte_len;
               tmp_buf_len_ -= (2 * byte_len);
               is_quote_end = true;
+              break;
             } else if (tmp_buf_len_ >= 2 &&
                 ((tmp_buf_[0] == tmp_buf_[tmp_buf_len_ - 1] && tmp_buf_[0] != '(' &&
                 tmp_buf_[0] != '[' && tmp_buf_[0] != '{' && tmp_buf_[0] != '<' &&
