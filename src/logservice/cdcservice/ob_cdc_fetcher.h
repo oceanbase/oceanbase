@@ -94,7 +94,7 @@ private:
       int64_t &fetched_log_count,
       ClientLSCtx &ctx,
       ObCdcFetchLogTimeStats &fetch_time_stat);
-  int get_replayable_point_scn_(SCN &replayable_point_scn);
+  int get_replayable_point_scn_(const ObLSID &ls_id, SCN &replayable_point_scn);
   FetchMode get_fetch_mode_when_fetching_log_(const ClientLSCtx &ctx,
       const bool fetch_archive_only);
   // template method is not defined here for tidiness, should be defined and instantiated in the same file
@@ -105,7 +105,8 @@ private:
   // return OB_ALLOCATE_MEMORY_FAILED when allocate memory failed during fetching log
   // return OB_ITER_END when no more log could be iterated
   template <class LogEntryType>
-  int fetch_log_in_palf_(palf::PalfIterator<palf::DiskIteratorStorage, LogEntryType> &iter,
+  int fetch_log_in_palf_(const ObLSID &ls_id,
+      palf::PalfIterator<palf::DiskIteratorStorage, LogEntryType> &iter,
       palf::PalfHandleGuard &palf_guard,
       const LSN &start_lsn,
       const bool need_init_iter,
