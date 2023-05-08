@@ -36,6 +36,14 @@ public:
     ObP2PDatahubMsgBase &dh_msg_;
     bool need_free_;
   };
+  struct P2PRegenerateCall
+  {
+    P2PRegenerateCall(ObP2PDatahubMsgBase &db_msg) : ret_(OB_SUCCESS), dh_msg_(db_msg) {};
+    ~P2PRegenerateCall() = default;
+    int operator() (common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry);
+    int ret_;
+    ObP2PDatahubMsgBase &dh_msg_;
+  };
   struct P2PMsgGetCall
   {
     P2PMsgGetCall(ObP2PDatahubMsgBase *&db_msg) : dh_msg_(db_msg), ret_(OB_SUCCESS) {};

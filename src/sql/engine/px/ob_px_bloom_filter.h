@@ -49,7 +49,7 @@ struct BloomFilterIndex
   int64_t begin_idx_; // join filter begin position in full bloom filter
   int64_t end_idx_;   // join filter end position in full bloom filter
   ObArray<int64_t> channel_ids_;
-  TO_STRING_KV(K_(begin_idx), K_(end_idx));
+  TO_STRING_KV(K_(begin_idx), K_(end_idx), K_(channel_id), K_(channel_ids));
 };
 
 class ObPxBloomFilter
@@ -81,15 +81,17 @@ public:
   void dec_merge_filter_count() { ATOMIC_DEC(&px_bf_merge_filter_count_); }
   bool is_merge_filter_finish() const { return 0 == px_bf_merge_filter_count_; }
   int64_t get_bits_array_length() const { return bits_array_length_; }
+  int64_t get_bits_count() const { return bits_count_; }
   void set_begin_idx(int64_t idx) { begin_idx_ = idx; }
   void set_end_idx(int64_t idx) { end_idx_ = idx; }
-  int64_t get_begin_idx() { return begin_idx_; }
-  int64_t get_end_idx() { return end_idx_; }
+  int64_t get_begin_idx() const { return begin_idx_; }
+  int64_t get_end_idx() const { return end_idx_; }
   void prefetch_bits_block(uint64_t hash);
   typedef int (ObPxBloomFilter::*GetFunc)(uint64_t hash, bool &is_match);
   int generate_receive_count_array(int64_t piece_size);
   void reset();
   int assign(const ObPxBloomFilter &filter);
+  int regenerate();
   TO_STRING_KV(K_(data_length), K_(bits_count), K_(fpp), K_(hash_func_count), K_(is_inited),
       K_(bits_array_length), K_(true_count));
 private:
@@ -112,7 +114,7 @@ private:
   int64_t begin_idx_;            // join filter begin position
   int64_t end_idx_;              // join filter end position
   GetFunc might_contain_;       // function pointer for might contain
-private:
+public:
   common::ObArenaAllocator allocator_;
 public:
   //无需序列化

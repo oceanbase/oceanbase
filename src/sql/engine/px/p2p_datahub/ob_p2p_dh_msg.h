@@ -85,6 +85,7 @@ public:
   virtual int process_receive_count(ObP2PDatahubMsgBase &);
   virtual int process_msg_internal(bool &need_free);
   virtual int reuse() { return OB_SUCCESS; }
+  virtual int regenerate() { return OB_SUCCESS; }
   void check_finish_receive();
   bool check_ready() const { return is_ready_; }
   ObP2PDatahubMsgType get_msg_type() const { return msg_type_; }
