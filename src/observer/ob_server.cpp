@@ -102,7 +102,6 @@
 #include "logservice/palf/election/interface/election.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
 #include "observer/ob_server_utils.h"
-#include "observer/table_load/ob_table_load_partition_calc.h"
 #include "share/detect/ob_detect_manager.h"
 
 using namespace oceanbase::lib;
@@ -267,8 +266,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init retry ctrl failed", KR(ret));
     } else if (OB_FAIL(ObTableApiProcessorBase::init_session())) {
       LOG_ERROR("init static session failed", KR(ret));
-    } else if (OB_FAIL(ObTableLoadPartitionCalc::init_session())) {
-      LOG_ERROR("failed to init static session", KR(ret));
     } else if (OB_FAIL(init_loaddata_global_stat())) {
       LOG_ERROR("init global load data stat map failed", KR(ret));
     } else if (OB_FAIL(init_pre_setting())) {
