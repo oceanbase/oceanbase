@@ -1,26 +1,32 @@
-name: feature request
+name: 🚀 Feature Request
 description: feature request for OceanBase
-title: "[feat.]: "
-labels: [feature]
-assignees:
-  - caifeizhi
+title: "[feat.]: <title>"
+labels: ["type: feature"]
+assignees: []
 body:
   - type: checkboxes
     attributes:
       label: Please check the issue list for the same feature first
       options:
-        - label: Please checked issue list and confirm this feature is encountered for the first time.
+        - label: I have searched the existing issues.
           required: true
         - label: Please try full text in English and attach precise description.
           required: true
   - type: textarea
     attributes:
-      label: A full description of the feature and provide some example if the same feature exists in other products, such as mysql  
-      render: markdown
+      label: Use Case
+      description: A clear and concise description of what is the intended usage scenario is.
     validations:
       required: true
   - type: textarea
     attributes:
-      label: other information
+      label: Describe alternatives you have considered
+      description: A clear and concise description of any alternative solutions or features you've considered
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Other information
+      description: Any other information about the feature.
     validations:
       required: false
