@@ -11,23 +11,47 @@
  */
 
 #include "ob_mock_tx_log_adapter.h"
-#include "storage/tx/ob_tx_ls_log_writer.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
+#include "storage/tx/ob_tx_ls_log_writer.h"
 #include <gtest/gtest.h>
 
-namespace oceanbase {
+namespace oceanbase
+{
 
 using namespace transaction;
 using namespace storage;
 using namespace share;
 
+namespace transaction
+{
+int ObTxLSLogCb::alloc_log_buf_()
+{
+  int ret = OB_SUCCESS;
 
-namespace unittest {
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "TxLSLogBuf");
+  SET_USE_500(attr);
+  if (0 == ObTxLSLogLimit::LOG_BUF_SIZE || nullptr != log_buf_) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", KR(ret), K(ObTxLSLogLimit::LOG_BUF_SIZE),
+              KP(log_buf_));
+  } else if (nullptr == (log_buf_ = (char *)ob_malloc(ObTxLSLogLimit::LOG_BUF_SIZE, attr))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "[TxLsLogWriter] allocate memory failed", KR(ret),
+              K(ObTxLSLogLimit::LOG_BUF_SIZE));
+  }
+
+  return ret;
+}
+} // namespace transaction
+
+namespace unittest
+{
 MockTxLogAdapter tx_log_adapter;
 MockTxLogParam param;
 ObTxLSLogWriter ls_log_writer;
 
-class TestLSLogWriter : public ::testing::Test {
+class TestLSLogWriter : public ::testing::Test
+{
 public:
   virtual void SetUp()
   {
@@ -51,7 +75,7 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   int64_t tmp_tenant_id = 1004;
   ObLSTxCtxMgr tmp_mgr;
   common::ObConcurrentFIFOAllocator tmp_allocator;
-  
+
   ObTxLogBlock replay_block;
   int64_t replay_hint = 0;
   share::SCN log_ts;
@@ -59,16 +83,17 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   ObTxLogHeader log_header;
   ObTxStartWorkingLogTempRef tmp_ref;
   ObTxStartWorkingLog sw_log(tmp_ref);
-  int64_t test_leader_epoch  = 1308;
+  int64_t test_leader_epoch = 1308;
 
   ObTxLogBlockHeader block_header;
-  
-  ASSERT_EQ(OB_SUCCESS, ls_log_writer.init(TEST_LS_ID, &tx_log_adapter, (ObLSTxCtxMgr *)&tmp_mgr));
-  ASSERT_EQ(OB_SUCCESS, ls_log_writer.submit_start_working_log(test_leader_epoch,log_ts));
-  
+
+  ASSERT_EQ(OB_SUCCESS, ls_log_writer.init(tmp_tenant_id, TEST_LS_ID, &tx_log_adapter,
+                                           (ObLSTxCtxMgr *)&tmp_mgr));
+  ASSERT_EQ(OB_SUCCESS, ls_log_writer.submit_start_working_log(test_leader_epoch, log_ts));
+
   ASSERT_EQ(true, tx_log_adapter.get_log(log_ts.get_val_for_gts(), log_string));
-  ASSERT_EQ(OB_SUCCESS,
-            replay_block.init_with_header(log_string.c_str(), log_string.size(), replay_hint, block_header));
+  ASSERT_EQ(OB_SUCCESS, replay_block.init_with_header(log_string.c_str(), log_string.size(),
+                                                      replay_hint, block_header));
   ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(log_header));
   EXPECT_EQ(ObTxLogType::TX_START_WORKING_LOG, log_header.get_tx_log_type());
   ASSERT_EQ(OB_SUCCESS, replay_block.deserialize_log_body(sw_log));

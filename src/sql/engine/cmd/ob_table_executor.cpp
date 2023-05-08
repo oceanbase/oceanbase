@@ -53,6 +53,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/ob_debug_sync.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2081,6 +2082,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
         } else {
           int64_t start_time = ObTimeUtility::current_time();
           while (OB_SUCC(ret)) {
+            DEBUG_SYNC(BEFORE_PARELLEL_TRUNCATE);
             if (OB_FAIL(common_rpc_proxy->truncate_table_v2(truncate_table_arg, res))) {
               LOG_WARN("rpc proxy truncate table failed", K(ret));
               if ((OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TIMEOUT == ret || OB_NOT_MASTER == ret

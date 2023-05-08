@@ -509,8 +509,10 @@ int ObTableScanIterator::get_next_row(ObNewRow *&row)
   } else if (OB_ISNULL(main_iter_)) {
     ret = OB_ITER_END;
   } else {
+    ObDatum *trans_info_datums = nullptr;
     if (scan_param_->op_ != nullptr) {
       scan_param_->op_->clear_datum_eval_flag();
+      scan_param_->op_->reset_trans_info_datum();
     }
     if (OB_FAIL(main_iter_->get_next_row(store_row))) {
       if (OB_ITER_END != ret) {
@@ -540,9 +542,12 @@ int ObTableScanIterator::get_next_rows(int64_t &count, int64_t capacity)
   } else if (OB_ISNULL(main_iter_)) {
     ret = OB_ITER_END;
   } else {
+    ObDatum *trans_info_datums = nullptr;
     if (scan_param_->op_ != nullptr) {
       scan_param_->op_->clear_datum_eval_flag();
+      scan_param_->op_->reset_trans_info_datum();
     }
+
     if (OB_FAIL(main_iter_->get_next_rows(count, capacity))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "Fail to get next row, ", K(ret), K(*scan_param_), K_(main_table_param),

@@ -403,7 +403,6 @@ class ObNoRetry : public ObIRetryPolicy
 {};
 
 /// consistency levels
-/// @see
 enum class ObTableConsistencyLevel
 {
   STRONG = 0,

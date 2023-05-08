@@ -523,6 +523,7 @@ public:
   int64_t res_map_rule_param_idx_;
   uint64_t res_map_rule_version_;
   bool is_text_ps_mode_;
+  bool is_strict_defensive_check_;
   uint64_t first_plan_hash_;
   common::ObString first_outline_data_;
   bool is_bulk_;

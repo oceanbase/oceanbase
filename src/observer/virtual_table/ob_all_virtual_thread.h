@@ -30,8 +30,8 @@ class ObAllVirtualThread : public common::ObVirtualTableScannerIterator
     TNAME,
     STATUS,
     WAIT_EVENT,
-    LATCH_WAIT_ADDR,
-    LATCH_HOLD_ADDR,
+    LATCH_WAIT,
+    LATCH_HOLD,
     TRACE_ID,
     LOOP_TS
   };

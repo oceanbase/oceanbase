@@ -356,6 +356,14 @@ int ObIndexBuilderUtil::set_index_table_columns(
                     "column name", sort_item.column_name_,
                     "column length", sort_item.prefix_len_, K(ret));
           }
+        } else if (data_column->is_xmltype()) {
+          ret = OB_ERR_XML_INDEX;
+          LOG_USER_ERROR(OB_ERR_XML_INDEX, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("Index column should not be udt type", "tenant_id", data_schema.get_tenant_id(),
+                   "database_id", data_schema.get_database_id(),
+                   "table_name", data_schema.get_table_name(),
+                   "column name", sort_item.column_name_,
+                   "column length", sort_item.prefix_len_, K(ret));
         } else if (ob_is_extend(data_column->get_data_type())
                      || ob_is_user_defined_sql_type(data_column->get_data_type())) {
           ret = OB_ERR_WRONG_KEY_COLUMN;

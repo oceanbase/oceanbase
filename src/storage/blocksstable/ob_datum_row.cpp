@@ -196,7 +196,8 @@ ObDatumRow::ObDatumRow()
     storage_datums_(nullptr),
     datum_buffer_(),
     old_row_(),
-    obj_buf_()
+    obj_buf_(),
+    trans_info_(nullptr)
 {}
 
 ObDatumRow::~ObDatumRow()
@@ -204,7 +205,7 @@ ObDatumRow::~ObDatumRow()
   reset();
 }
 
-int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity)
+int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *trans_info_ptr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_valid())) {
@@ -219,8 +220,10 @@ int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity)
   } else {
     storage_datums_ = datum_buffer_.get_datums();
     count_ = capacity;
+    // trans_info_ptr maybe is nullptr,
+    // ObDatumRow does not care about the free of trans_info_ptr's memory
+    trans_info_ = trans_info_ptr;
   }
-
 
   return ret;
 }
@@ -310,6 +313,7 @@ void ObDatumRow::reset()
   row_flag_.reset();
   count_ = 0;
   local_allocator_.reset();
+  trans_info_ = nullptr;
 }
 
 void ObDatumRow::reuse()
@@ -326,6 +330,9 @@ void ObDatumRow::reuse()
   snapshot_version_ = 0;
   fast_filter_skipped_ = false;
   have_uncommited_row_ = false;
+  if (OB_NOT_NULL(trans_info_)) {
+    trans_info_[0] = '\0';
+  }
 }
 
 int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)

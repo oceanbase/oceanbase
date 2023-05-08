@@ -55,7 +55,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_location_,
                     external_file_access_info_,
                     external_files_,
-                    external_file_format_str_);
+                    external_file_format_str_,
+                    trans_info_expr_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -148,6 +149,8 @@ int ObDASScanRtDef::init_pd_op(ObExecContext &exec_ctx,
                                                          scan_ctdef.pd_expr_spec_))) {
     } else if (OB_FAIL(pd_expr_op_.init_pushdown_storage_filter())) {
       LOG_WARN("init pushdown storage filter failed", K(ret));
+    } else if (OB_NOT_NULL(scan_ctdef.trans_info_expr_)) {
+      //do nothing
     }
   }
   return ret;
@@ -173,6 +176,7 @@ ObDASScanOp::~ObDASScanOp()
     #endif
   }
   scan_param_.destroy();
+  trans_info_array_.destroy();
 }
 
 int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
@@ -438,6 +442,11 @@ void ObDASScanOp::reset_access_datums_ptr()
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
+    FOREACH_CNT(e, get_result_outputs()) {
+      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
   }
   if (get_lookup_rtdef() != nullptr && get_lookup_rtdef()->p_pd_expr_op_->is_vectorized()) {
     FOREACH_CNT(e, get_lookup_ctdef()->pd_expr_spec_.access_exprs_) {
@@ -584,6 +593,12 @@ int ObDASScanOp::fill_extra_result()
     LOG_WARN("save task result failed", KR(ret), K(task_id_));
   }
   return ret;
+}
+
+int ObDASScanOp::init_task_info(uint32_t row_extend_size)
+{
+  UNUSED(row_extend_size);
+  return OB_SUCCESS;
 }
 
 int ObDASScanOp::rescan()
@@ -889,6 +904,9 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
   void *buf = nullptr;
   common::ObArenaAllocator& lookup_alloc = lookup_memctx_->get_arena_allocator();
   ObNewRange lookup_range;
+  if (index_ctdef_->trans_info_expr_ != nullptr) {
+    rowkey_cnt = rowkey_cnt - 1;
+  }
   if (OB_ISNULL(buf = lookup_alloc.alloc(sizeof(ObObj) * rowkey_cnt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate buffer failed", K(ret), K(rowkey_cnt));
@@ -900,6 +918,9 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
     ObExpr *expr = index_ctdef_->result_output_.at(i);
     if (T_PSEUDO_GROUP_ID == expr->type_) {
       // do nothing
+    } else if (T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->type_) {
+      // do nothing
+      ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
     } else {
       ObDatum &col_datum = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
       if (OB_FAIL(col_datum.to_obj(tmp_obj, expr->obj_meta_, expr->obj_datum_map_))) {
@@ -909,6 +930,23 @@ int ObLocalIndexLookupOp::process_data_table_rowkey()
       }
     }
   }
+
+  if (OB_SUCC(ret) && nullptr != index_ctdef_->trans_info_expr_) {
+    void *buf = nullptr;
+    ObDatum *datum_ptr = nullptr;
+    if (OB_FAIL(build_trans_datum(index_ctdef_->trans_info_expr_,
+                                  lookup_rtdef_->eval_ctx_,
+                                  lookup_memctx_->get_arena_allocator(),
+                                  datum_ptr))) {
+
+    } else if (OB_ISNULL(datum_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(trans_info_array_.push_back(datum_ptr))) {
+      LOG_WARN("fail to push back trans info array", K(ret), KPC(datum_ptr));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     ObRowkey table_rowkey(obj_ptr, rowkey_cnt);
     uint64_t ref_table_id = lookup_ctdef_->ref_table_id_;
@@ -1056,14 +1094,30 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       K(ret), K_(lookup_rowkey_cnt), K_(lookup_row_cnt),
                       "index_group_cnt", get_index_group_cnt(),
                       "lookup_group_cnt", get_lookup_group_cnt(),
-                      "scan_range", scan_param_.key_ranges_,
                       "index_table_id", index_ctdef_->ref_table_id_ ,
                       "data_table_tablet_id", tablet_id_ ,
                       KPC_(tx_desc));
-      LOG_ERROR("Fatal Error!!! Catch a defensive error!",
-                K(ret), KPC_(lookup_ctdef), KPC_(lookup_rtdef));
+      if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
+        for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+          LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
+              KPC(trans_info_array_.at(i)), K(scan_param_.key_ranges_.at(i)));
+        }
+      } else {
+        for (int64_t i = 0; i < scan_param_.key_ranges_.count(); i++) {
+          LOG_ERROR("dump TableLookup DAS Task key_ranges",
+              K(i), K(scan_param_.key_ranges_.at(i)));
+        }
+      }
     }
   }
+
+  int simulate_error = EVENT_CALL(EventTable::EN_DAS_SIMULATE_DUMP_WRITE_BUFFER);
+  if (0 != simulate_error) {
+    for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+      LOG_INFO("dump TableLookup DAS Task trans info", K(i), KPC(trans_info_array_.at(i)));
+    }
+  }
+
   return ret;
 }
 
@@ -1198,6 +1252,7 @@ int ObLocalIndexLookupOp::reset_lookup_state()
   int ret = OB_SUCCESS;
   state_ = INDEX_SCAN;
   index_end_ = false;
+  trans_info_array_.reuse();
   lookup_rtdef_->stmt_allocator_.set_alloc(index_rtdef_->stmt_allocator_.get_alloc());
   // Keep lookup_rtdef_->stmt_allocator_.alloc_ consistent with index_rtdef_->stmt_allocator_.alloc_
   // to avoid memory expansion
@@ -1225,6 +1280,7 @@ int ObLocalIndexLookupOp::revert_iter()
   lookup_iter_ = NULL;
   scan_param_.destroy_schema_guard();
   scan_param_.~ObTableScanParam();
+  trans_info_array_.destroy();
   if (lookup_memctx_ != nullptr) {
     lookup_memctx_->reset_remain_one_page();
     DESTROY_CONTEXT(lookup_memctx_);

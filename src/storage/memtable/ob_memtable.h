@@ -630,12 +630,19 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         TRANS_LOG(INFO, "unsync_cnt_for_multi_data inc for rollback", K(key_.tablet_id_), K(type), KPC(multi_source_data_unit));
       }
     } else {
+      const share::SCN start_scn = get_start_scn();
       if (scn > get_start_scn() && scn < share::ObScnRange::MAX_SCN) {
         if (OB_FAIL(ret)) {
         }
         // skip updating max_end_scn of frozen memtable for commit/abort when replay clog.
         else if ((!for_replay || !is_callback)
                  && OB_FAIL(set_max_end_scn(scn))) {
+          TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
+        }
+        // commit log is replayed to empty memtable whitch is frozen after clog switch to follower gracefully, commit status mds will be lost.
+        // so push max_end_scn to start_scn + 1
+        else if (start_scn == get_end_scn()
+                 && OB_FAIL(set_end_scn(share::SCN::scn_inc(start_scn)))) {
           TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
         } else if (OB_FAIL(set_rec_scn(scn))) {
           TRANS_LOG(WARN, "failed to set rec_scn", K(ret), K(scn), KPC(this));

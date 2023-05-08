@@ -208,7 +208,8 @@ OB_SERIALIZE_MEMBER(ObDMLBaseCtDef,
                     view_check_exprs_,
                     is_primary_index_,
                     is_heap_table_,
-                    has_instead_of_trigger_);
+                    has_instead_of_trigger_,
+                    trans_info_expr_);
 
 OB_SERIALIZE_MEMBER(ObMultiInsCtDef,
                     calc_part_id_expr_,

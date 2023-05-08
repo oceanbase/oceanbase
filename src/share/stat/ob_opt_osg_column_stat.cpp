@@ -259,8 +259,8 @@ int ObOptOSGColumnStat::inner_merge_min(const ObDatum &datum, const ObObjMeta &m
         LOG_WARN("failed to deep copy datum");
       }
     }
+    LOG_TRACE("succeed to merge min datum", K(cmp_ret), K(*min_val_.datum_), K(datum), K(meta));
   }
-  LOG_TRACE("succeed to merge min datum", K(*min_val_.datum_), K(datum), K(meta));
   return ret;
 }
 
@@ -295,8 +295,8 @@ int ObOptOSGColumnStat::inner_merge_max(const ObDatum &datum, const ObObjMeta &m
         LOG_WARN("failed to deep copy datum");
       }
     }
+    LOG_TRACE("succeed to merge max datum", K(cmp_ret), K(*max_val_.datum_), K(datum), K(meta));
   }
-  LOG_TRACE("succeed to merge max datum", K(*max_val_.datum_), K(datum), K(meta));
   return ret;
 }
 

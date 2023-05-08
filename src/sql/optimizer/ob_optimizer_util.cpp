@@ -8636,3 +8636,36 @@ int ObOptimizerUtil::truncate_string_for_opt_stats(const ObObj *old_obj,
   LOG_TRACE("Succeed to truncate string obj for opt stats", KPC(old_obj), KPC(new_obj), K(is_truncated));
   return ret;
 }
+
+int ObOptimizerUtil::generate_pseudo_trans_info_expr(ObOptimizerContext &opt_ctx,
+                                                     const common::ObString &table_name,
+                                                     ObOpPseudoColumnRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObExprResType res_type;
+  char *pseudo_name = nullptr;
+  res_type.set_type(ObVarcharType);
+  res_type.set_collation_type(CS_TYPE_BINARY);
+  res_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObVarcharType]);
+  const char *name = ".TRANS_DEBUG_INFO";
+  int64_t buf_len = table_name.length()+ STRLEN(name) + 1;
+  int64_t pos = 0;
+  if (OB_ISNULL(pseudo_name =
+      static_cast<char*>(opt_ctx.get_allocator().alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate name buffer failed", K(ret), K(buf_len));
+  } else if (OB_FAIL(databuff_printf(pseudo_name, buf_len, pos, "%.*s", table_name.length(), table_name.ptr()))) {
+    LOG_WARN("databuff print column name failed", K(ret));
+  } else if (OB_FAIL(databuff_printf(pseudo_name, buf_len, pos, "%.*s", static_cast<int32_t>(STRLEN(name)), name))) {
+    LOG_WARN("databuff print column name failed", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_op_pseudo_column_expr(opt_ctx.get_expr_factory(),
+                                                                 T_PSEUDO_ROW_TRANS_INFO_COLUMN,
+                                                                 pseudo_name,
+                                                                 res_type,
+                                                                 expr))) {
+    LOG_WARN("build operator pseudo column failed", K(ret));
+  } else if (OB_FAIL(expr->formalize(opt_ctx.get_session_info()))) {
+    LOG_WARN("expr formalize failed", K(ret));
+  }
+  return ret;
+}

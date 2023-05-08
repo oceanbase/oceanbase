@@ -254,11 +254,18 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_parallel_rule(PXParallelRule rule) { px_parallel_rule_ = rule; }
   const PXParallelRule& get_parallel_rule() const { return px_parallel_rule_; }
   inline bool is_batched_multi_stmt() {
+    bool bret = false;
     if (NULL != exec_ctx_ && NULL != exec_ctx_->get_sql_ctx()) {
-      return exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
-    } else {
-      return false;
+      bret = exec_ctx_->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt();
     }
+    return bret;
+  }
+  inline bool is_strict_defensive_check() {
+    bool bret = false;
+    if (NULL != exec_ctx_ && NULL != exec_ctx_->get_sql_ctx()) {
+      bret = exec_ctx_->get_sql_ctx()->is_strict_defensive_check_;
+    }
+    return bret;
   }
   void disable_batch_rpc() { enable_batch_opt_ = 0; }
   bool enable_batch_rpc()

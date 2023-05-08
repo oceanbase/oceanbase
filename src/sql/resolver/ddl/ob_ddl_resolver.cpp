@@ -5273,8 +5273,10 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       LOG_WARN("resolve generated column expr failed", K(ret));
     } else {
       if (true == lib::is_oracle_mode()) {
-        OZ (check_dup_gen_col(default_value.get_string(), gen_col_expr_arr));
-        OZ (gen_col_expr_arr.push_back(default_value.get_string()));
+        if (!table_schema.is_external_table()) {
+          OZ (check_dup_gen_col(default_value.get_string(), gen_col_expr_arr));
+          OZ (gen_col_expr_arr.push_back(default_value.get_string()));
+        }
         if (OB_NOT_NULL(expr) && expr->is_udf_expr()) {
           OX (column.add_column_flag(GENERATED_COLUMN_UDF_EXPR));
         }
@@ -9812,7 +9814,7 @@ int ObDDLResolver::resolve_hash_partition_elements(ObPartitionedStmt *stmt,
           LOG_WARN("failed to add partition", K(ret));
         } else if (stmt->use_def_sub_part() &&
                    OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_INVALID_SUB_PARTITION_TYPE;
           LOG_WARN("individual subpartition with sub part template", K(ret));
         } else if (!stmt->use_def_sub_part()) {
           // resolve non template

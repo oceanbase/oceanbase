@@ -955,6 +955,24 @@ int ObDDLScheduler::update_task_info(const ObDDLTaskID &task_id,
   return ret;
 }
 
+int ObDDLScheduler::reschedule_ddl_task(const ObDDLTaskID &task_id, ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator(lib::ObLabel("reschedule"));
+  if (OB_UNLIKELY(!task_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(task_id));
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_,
+                                                                  root_service_->get_sql_proxy(),
+                                                                  allocator,
+                                                                  task_record))) {
+    LOG_WARN("get single ddl task failed", K(ret), K(task_id.task_id_));
+  } else if (OB_FAIL(schedule_ddl_task(task_record))) {
+    LOG_WARN("failed to schedule ddl task", K(ret), K(task_record));
+  }
+  return ret;
+}
+
 int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
 {
   int ret = OB_SUCCESS;
@@ -993,13 +1011,11 @@ int ObDDLScheduler::abort_redef_table(const ObDDLTaskID &task_id)
         LOG_WARN("failed to modify task", K(ret));
         if (OB_ENTRY_NOT_EXIST == ret) {
           int tmp_ret = OB_SUCCESS;
-          ObSqlString sql_string;
-          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
-            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id.task_id_));
-          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
-            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
+            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
           } else {
-            ret = OB_SUCCESS;
+            ret = OB_EAGAIN;
+            LOG_INFO("schedule ddl task again success, please abort again", K(ret));
           }
         }
       } else {
@@ -1065,12 +1081,11 @@ int ObDDLScheduler::copy_table_dependents(const ObDDLTaskID &task_id,
         LOG_WARN("failed to modify task", K(ret));
         if (OB_ENTRY_NOT_EXIST == ret) {
           int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
-            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id.task_id_));
-          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
-            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
+            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
           } else {
-            ret = OB_SUCCESS;
+            ret = OB_EAGAIN;
+            LOG_INFO("schedule ddl task again success, please copy table deps again", K(ret));
           }
         }
       } else {
@@ -1137,13 +1152,11 @@ int ObDDLScheduler::finish_redef_table(const ObDDLTaskID &task_id)
         LOG_WARN("failed to modify task", K(ret));
         if (OB_ENTRY_NOT_EXIST == ret) {
           int tmp_ret = OB_SUCCESS;
-          ObSqlString sql_string;
-          if (OB_TMP_FAIL(ObDDLTaskRecordOperator::get_ddl_task_record(task_id.task_id_, root_service_->get_sql_proxy(), allocator, task_record))) {
-            LOG_WARN("get single ddl task failed", K(tmp_ret), K(task_id.task_id_));
-          } else if (OB_TMP_FAIL(schedule_ddl_task(task_record))) {
-            LOG_WARN("failed to schedule ddl task", K(tmp_ret), K(task_record));
+          if (OB_TMP_FAIL(reschedule_ddl_task(task_id, task_record))) {
+            LOG_WARN("reschedule ddl task failed", K(tmp_ret), K(task_id));
           } else {
-            ret = OB_SUCCESS;
+            ret = OB_EAGAIN;
+            LOG_INFO("schedule ddl task again success, please finish redef table again", K(ret));
           }
         }
       } else {
@@ -1633,7 +1646,7 @@ int ObDDLScheduler::recover_task()
       ObMySQLTransaction trans;
       if (OB_FAIL(schema_service.get_tenant_schema_version(cur_record.tenant_id_, tenant_schema_version))) {
         LOG_WARN("failed to get tenant schema version", K(ret), K(cur_record));
-      } else if (!is_tenant_primary(primary_tenant_ids, cur_record.tenant_id_)) {
+      } else if (!is_tenant_primary(primary_tenant_ids, cur_record.tenant_id_) && OB_SYS_TENANT_ID != cur_record.tenant_id_) {
         LOG_INFO("tenant not primary, skip schedule ddl task", K(cur_record));
       } else if (tenant_schema_version < cur_record.schema_version_) {
         // schema has not publish, by pass now

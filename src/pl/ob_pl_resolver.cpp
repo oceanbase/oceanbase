@@ -2352,7 +2352,9 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
           OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
           OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
           OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
-          OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+          if (!ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)) {
+            OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+          }
         } else {
           ret = OB_ERR_WRONG_ROWTYPE;
           LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE,

@@ -250,6 +250,18 @@ int ObMvccValueIterator::try_cleanout_tx_node_(ObMvccTransNode *tnode)
   return ret;
 }
 
+void ObMvccValueIterator::get_trans_stat_row(concurrency_control::ObTransStatRow &row)
+{
+  if (OB_ISNULL(version_iter_)) {
+    row.reset();
+  } else {
+    row.set(version_iter_->get_tx_version(),
+            version_iter_->get_scn(),
+            version_iter_->get_tx_id(),
+            version_iter_->get_seq_no());
+  }
+}
+
 int ObMvccValueIterator::get_next_node(const void *&tnode)
 {
   int ret = OB_SUCCESS;

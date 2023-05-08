@@ -2291,12 +2291,6 @@ OB_INLINE int64_t &get_tid_cache()
   return (&tid)->v_;
 }
 
-OB_INLINE bool &get_ignore_mem_limit()
-{
-  RLOCAL_INLINE(bool, ignore_mem_limit);
-  return ignore_mem_limit;
-}
-
 OB_INLINE int64_t &get_seq()
 {
   RLOCAL_INLINE(int64_t, seq);

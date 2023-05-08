@@ -1155,11 +1155,12 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           OB_SUCCESS == cb->get_result().rc_) {
         sqc.set_need_report(true);
         ObPeerTaskState peer_state(sqc.get_sqc_addr());
-        if (OB_FAIL(peer_states.push_back(peer_state))) {
-          LOG_WARN("[DM] fail to push back", K(ret), K(sqc.get_sqc_addr()),
+        int push_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (push_ret = peer_states.push_back(peer_state))) {
+          LOG_WARN("[DM] fail to push back", K(push_ret), K(sqc.get_sqc_addr()),
               K(dfo.get_px_detectable_ids().sqc_detectable_id_));
-        } else if (OB_FAIL(dtl_channels.push_back(sqc.get_qc_channel()))) {
-          LOG_WARN("[DM] fail to push back dtl channels", K(ret), K(sqc.get_sqc_addr()),
+        } else if (OB_SUCCESS != (push_ret = dtl_channels.push_back(sqc.get_qc_channel()))) {
+          LOG_WARN("[DM] fail to push back dtl channels", K(push_ret), K(sqc.get_sqc_addr()),
               K(dfo.get_px_detectable_ids().sqc_detectable_id_));
         }
       } else if (!cb->is_processed()) {
@@ -1190,11 +1191,12 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
       ObPxSqcMeta &sqc = *sqcs.at(idx);
       sqc.set_need_report(true);
       ObPeerTaskState peer_state(sqc.get_sqc_addr());
-      if (OB_FAIL(peer_states.push_back(peer_state))) {
-        LOG_WARN("[DM] fail to push back", K(ret), K(sqc.get_sqc_addr()),
+      int push_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (push_ret = peer_states.push_back(peer_state))) {
+        LOG_WARN("[DM] fail to push back", K(push_ret), K(sqc.get_sqc_addr()),
             K(dfo.get_px_detectable_ids().sqc_detectable_id_));
-      } else if (OB_FAIL(dtl_channels.push_back(sqc.get_qc_channel()))) {
-        LOG_WARN("[DM] fail to push back dtl channels", K(ret), K(sqc.get_sqc_addr()),
+      } else if (OB_SUCCESS != (push_ret = dtl_channels.push_back(sqc.get_qc_channel()))) {
+        LOG_WARN("[DM] fail to push back dtl channels", K(push_ret), K(sqc.get_sqc_addr()),
             K(dfo.get_px_detectable_ids().sqc_detectable_id_));
       }
 

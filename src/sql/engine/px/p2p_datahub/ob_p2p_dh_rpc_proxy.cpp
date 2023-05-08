@@ -49,6 +49,14 @@ OB_DEF_SERIALIZE_SIZE(ObPxP2PDatahubArg)
   return len;
 }
 
+void ObPxP2PDatahubArg::destroy_arg()
+{
+  if (OB_NOT_NULL(msg_)) {
+    msg_->destroy();
+    msg_ = nullptr;
+  }
+}
+
 OB_SERIALIZE_MEMBER(ObPxP2PDatahubMsgResponse, rc_);
 
 OB_SERIALIZE_MEMBER(ObPxP2PClearMsgArg, p2p_dh_ids_, px_seq_id_);

@@ -530,9 +530,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     task_op->set_tablet_id(tablet_loc->tablet_id_);
     task_op->set_ls_id(tablet_loc->ls_id_);
     task_op->set_tablet_loc(tablet_loc);
-    if (OB_FAIL(task_op->init_task_info())) {
-      LOG_WARN("init task info failed", K(ret));
-    } else if (OB_FAIL(add_aggregated_task(task_op))) {
+    if (OB_FAIL(add_aggregated_task(task_op))) {
       LOG_WARN("failed to add aggregated task", KR(ret));
     }
   }

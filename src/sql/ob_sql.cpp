@@ -1537,7 +1537,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
     ectx.set_is_ps_prepare_stage(true);
 
 #ifndef NDEBUG
-    LOG_INFO("Begin to handle prepare stmtement", "sess_id", session.get_sessid(),
+    LOG_INFO("Begin to handle prepare statement", "sess_id", session.get_sessid(),
              "proxy_sess_id", session.get_proxy_sessid(), K(stmt));
 #endif
 
@@ -1856,7 +1856,7 @@ int ObSql::init_execute_params_for_ab(ObIAllocator &allocator,
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(ObPlanCacheValue::get_one_group_params(0, params_store, *first_group_params))) {
-    LOG_WARN("fail to get the first group paramsters", K(ret));
+    LOG_WARN("fail to get the first group parameters", K(ret));
   } else {
     for (int64_t i = 0; i < first_group_params->count(); i++) {
       ObObjParam &obj_param = first_group_params->at(i);
@@ -2007,7 +2007,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
       const ObString &sql = !ps_info->get_no_param_sql().empty() ? ps_info->get_no_param_sql() : ps_info->get_ps_sql();
       context.cur_sql_ = sql;
 #ifndef NDEBUG
-      LOG_INFO("Begin to handle execute stmtement", "sess_id", session.get_sessid(),
+      LOG_INFO("Begin to handle execute statement", "sess_id", session.get_sessid(),
                "proxy_sess_id", session.get_proxy_sessid(), K(sql));
 #endif
 
@@ -2631,6 +2631,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
         ObItemType resolve_type = parse_result.result_tree_->children_[0]->type_;
         switch (resolve_type) {
+          case T_ALTER_SYSTEM_SET:
+          case T_ALTER_SYSTEM_SET_PARAMETER:
           case T_CREATE_USER:
           case T_SET_PASSWORD:
           case T_GRANT:

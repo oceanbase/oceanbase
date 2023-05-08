@@ -213,7 +213,7 @@ public:
     return res;
   }
 
-  int print(ObJsonBuffer& j_buf, bool is_quoted, bool is_pretty, uint64_t depth = 0, uint64_t size = 0)
+  int print(ObJsonBuffer& j_buf, uint32_t format_flag, uint64_t depth = 0, uint64_t size = 0)
   {
     return 0;
   }

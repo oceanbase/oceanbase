@@ -4008,6 +4008,14 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non string type");
         }
+      } else if (dst_column.is_xmltype()) {
+        // if xmltype, must be oracle mode
+        ret = OB_INVALID_ALTERATIONG_DATATYPE;
+        LOG_USER_ERROR(OB_INVALID_ALTERATIONG_DATATYPE);
+      } else if (src_column.is_xmltype()) {
+        // if xmltype, must be oracle mode
+        ret = OB_INVALID_MODIFICATION_OF_COLUMNS;
+        LOG_USER_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS);
       } else if (!is_oracle_mode) {
         is_offline = true;
       } else {

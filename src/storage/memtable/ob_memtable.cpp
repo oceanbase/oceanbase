@@ -44,6 +44,8 @@
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
+#include "storage/concurrency_control/ob_trans_stat_row.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -846,12 +848,24 @@ int ObMemtable::get(
       }
     } else {
       if (OB_UNLIKELY(!row.is_valid())) {
-        if (OB_FAIL(row.init(*context.stmt_allocator_, out_cols.count()))) {
-          STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
+        char *trans_info_ptr = nullptr;
+        if (param.need_trans_info()) {
+          int64_t length = concurrency_control::ObTransStatRow::MAX_TRANS_STRING_SIZE;
+          if (OB_ISNULL(trans_info_ptr = static_cast<char *>(context.stmt_allocator_->alloc(length)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_FAIL(row.init(*context.stmt_allocator_, out_cols.count(), trans_info_ptr))) {
+          STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(param.need_trans_info()));
         }
       }
       if (OB_SUCC(ret)) {
         const ObStoreRowkey *store_rowkey = nullptr;
+        concurrency_control::ObTransStatRow trans_stat_row;
+        (void)value_iter.get_trans_stat_row(trans_stat_row);
         if (NULL != returned_mtk.get_rowkey()) {
           returned_mtk.get_rowkey(store_rowkey);
         } else {
@@ -872,6 +886,9 @@ int ObMemtable::get(
               }
             }
           }
+
+          // generate trans stat datum for 4377 check
+          concurrency_control::build_trans_stat_datum(&param, row, trans_stat_row);
         }
       }
     }

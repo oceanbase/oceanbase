@@ -90,7 +90,7 @@ public:
 
 private:
   bool need_alloc_buf_() { return nullptr == log_buf_; }
-  int alloc_log_buf_();
+  OB_NOINLINE int alloc_log_buf_();
 
 private:
   ObTxLogType type_; // Unkown == unused, not init
@@ -150,7 +150,8 @@ public:
 public:
   ObTxLSLogWriter();
   ~ObTxLSLogWriter();
-  int init(const share::ObLSID &ls_id,
+  int init(const int64_t tenant_id,
+           const share::ObLSID &ls_id,
            ObITxLogAdapter *adapter,
            ObLSTxCtxMgr *ctx_mgr);
   int stop();
@@ -162,6 +163,7 @@ public:
 public:
   int submit_start_working_log(const int64_t &leader_epoch, share::SCN &log_ts);
 
+  int64_t get_tenant_id() const { return tenant_id_; }
 public:
   int on_success(ObTxLSLogCb *cb);
   int on_failure(ObTxLSLogCb *cb);
@@ -199,6 +201,7 @@ private:
   common::ObDList<ObTxLSLogCb> start_working_cbs_;
 
   share::ObLSID ls_id_;
+  int64_t tenant_id_;
   ObLSTxCtxMgr *ctx_mgr_;
   ObITxLogAdapter *tx_log_adapter_;
 };

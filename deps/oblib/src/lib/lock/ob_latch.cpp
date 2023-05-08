@@ -73,7 +73,7 @@ int ObLatchMutex::try_lock(
     if (!ATOMIC_BCAS(&lock_.val(), 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
     } else {
-      IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&lock_.val());
+      IGNORE_RETURN ObLatch::reg_lock((uint32_t*)&lock_.val());
     }
     if (need_record_stat()) {
       TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
@@ -610,7 +610,7 @@ int ObLatch::try_rdlock(const uint32_t latch_id)
           ++i;
           if (ATOMIC_BCAS(&lock_, lock, lock + 1)) {
             ret = OB_SUCCESS;
-            IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
+            IGNORE_RETURN reg_lock((uint32_t*)&lock_);
             break;
           }
         }
@@ -640,7 +640,7 @@ int ObLatch::try_wrlock(const uint32_t latch_id, const uint32_t *puid)
     if (!ATOMIC_BCAS(&lock_, 0, (WRITE_MASK | uid))) {
       ret = OB_EAGAIN;
     } else {
-      IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
+      IGNORE_RETURN reg_lock((uint32_t*)&lock_);
     }
     if (need_record_stat()) {
       TRY_LOCK_RECORD_STAT(latch_id, 1, ret);
@@ -711,7 +711,6 @@ int ObLatch::wr2rdlock(const uint32_t *puid)
       lock = lock_;
       PAUSE();
     }
-    IGNORE_RETURN unreg_lock((uint32_t*)&lock_);
     bool only_rd_wait = true;
     if (OB_FAIL(ObLatchWaitQueue::get_instance().wake_up(*this, only_rd_wait))) {
       COMMON_LOG(ERROR, "Fail to wake up latch wait queue, ", K(this), K(ret));

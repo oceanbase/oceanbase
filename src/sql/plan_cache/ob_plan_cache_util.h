@@ -974,6 +974,7 @@ public:
     bloom_filter_enabled_(true),
     enable_newsort_(true),
     px_join_skew_handling_(true),
+    is_strict_defensive_check_(true),
     px_join_skew_minfreq_(30),
     min_cluster_version_(0),
     is_enable_px_fast_reclaim_(false),
@@ -1014,6 +1015,7 @@ public:
   bool bloom_filter_enabled_;
   bool enable_newsort_;
   bool px_join_skew_handling_;
+  bool is_strict_defensive_check_;
   int8_t px_join_skew_minfreq_;
   uint64_t min_cluster_version_;
   bool is_enable_px_fast_reclaim_;

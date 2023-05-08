@@ -569,7 +569,7 @@ int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
               OB_ISNULL(cell = new(buf) ObMinMaxAggCell(is_min, col_idx, col_param, expr, allocator_))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("Failed to alloc memroy for agg cell", K(ret), K(i));
-          } else if (OB_FAIL(static_cast<ObMinMaxAggCell*>(cell)->init(param.op_, col_expr, batch_size))) {
+          } else if (OB_FAIL(static_cast<ObMinMaxAggCell*>(cell)->init(param.get_op(), col_expr, batch_size))) {
             LOG_WARN("Failed to init ObMinMaxAggCell", K(ret), KPC(cell));
           } else if (OB_FAIL(agg_cells_.push_back(cell))) {
             LOG_WARN("Failed to push back agg cell", K(ret), K(i));

@@ -386,7 +386,7 @@ public:
   int try_add_row(const common::ObIArray<ObExpr*> &exprs,
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
-                  DmlRow* &stored_row,
+                  DmlRow *&stored_row,
                   bool &row_added,
                   bool strip_lob_locator);
   int try_add_row(const DmlShadowRow &sr, const int64_t memory_limit, bool &row_added, DmlRow **stored_row = nullptr);
@@ -394,6 +394,7 @@ public:
   int begin(NewRowIterator &it, const common::ObIArray<common::ObObjMeta> &col_types);
 
   int dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const;
+  uint32_t get_row_extend_size() { return row_extend_size_; }
 
   TO_STRING_KV(K_(mem_attr),
                "buffer_memory", buffer_list_.mem_used_,
@@ -421,6 +422,11 @@ private:
   int deserialize_buffer_list(const char *buf, const int64_t data_len, int64_t &pos);
   int get_stored_row_size(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, int64_t &size);
   int init_dml_shadow_row(int64_t column_cnt, bool strip_lob_locator);
+public:
+  const static uint32_t DAS_ROW_DEFAULT_EXTEND_SIZE = 16;
+  const static uint32_t DAS_ROW_TRANS_STRING_SIZE = 128;
+  const static uint32_t DAS_WITH_TRANS_INFO_EXTEND_SIZE =
+      DAS_ROW_DEFAULT_EXTEND_SIZE + sizeof(int32_t) + DAS_ROW_TRANS_STRING_SIZE;
 private:
   static const int64_t DAS_WRITE_ROW_LIST_LEN = 128;
 private:

@@ -110,13 +110,13 @@ int ObDASLockOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   return ret;
 }
 
-int ObDASLockOp::init_task_info()
+int ObDASLockOp::init_task_info(uint32_t row_extend_size)
 {
   int ret = OB_SUCCESS;
   if (!lock_buffer_.is_inited()
       && OB_FAIL(lock_buffer_.init(CURRENT_CONTEXT->get_allocator(),
-                                   DAS_ROW_EXTEND_SIZE,
-                                   tenant_id_,
+                                   row_extend_size,
+                                   MTL_ID(),
                                    "DASLockBuffer"))) {
     LOG_WARN("init lock buffer failed", K(ret));
   }
@@ -134,12 +134,18 @@ int ObDASLockOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
   return ret;
 }
 
-int ObDASLockOp::write_row(const ExprFixedArray &row, ObEvalCtx &eval_ctx, ObChunkDatumStore::StoredRow* &stored_row, bool &buffer_full)
+int ObDASLockOp::write_row(const ExprFixedArray &row,
+                           ObEvalCtx &eval_ctx,
+                           ObChunkDatumStore::StoredRow *&stored_row,
+                           bool &buffer_full)
 {
   int ret = OB_SUCCESS;
   bool added = false;
   buffer_full = false;
-  if (OB_FAIL(lock_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
+  if (!lock_buffer_.is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("buffer not inited", K(ret));
+  } else if (OB_FAIL(lock_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
     LOG_WARN("try add row to lock buffer failed", K(ret), K(row), K(lock_buffer_));
   } else if (!added) {
     buffer_full = true;

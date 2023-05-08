@@ -346,6 +346,7 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              // T_TABLET_AUTOINC_NEXTVAL is the hidden_pk for heap_table
              // this column is an pseudo column
              || T_TABLET_AUTOINC_NEXTVAL == expr->get_expr_type()
+             || T_PSEUDO_ROW_TRANS_INFO_COLUMN == expr->get_expr_type()
              || expr->is_set_op_expr()
              || (expr->is_sys_func_expr() && 0 == expr->get_param_count()) // sys func with no param
              || expr->is_query_ref_expr()
@@ -4969,7 +4970,7 @@ int ObStaticEngineCG::generate_spec(
     }
   }
   if (OB_SUCC(ret)) {
-    spec.enable_das_batch_rescans_ = op.enable_das_batch_rescans();
+    spec.enable_das_group_rescan_ = op.enable_das_group_rescan();
   }
   return ret;
 }
@@ -5099,7 +5100,7 @@ int ObStaticEngineCG::generate_spec(ObLogDelete &op,
     } else {
       spec.row_desc_.set_part_id_index(partition_expr_idx);
     }
-    LOG_TRACE("pdml static cg information", K(ret), K(partition_expr_idx), K(index_dml_info));
+    LOG_TRACE("pdml static cg information", K(ret), K(index_dml_info), K(partition_expr_idx));
   }
   return ret;
 }
@@ -5188,7 +5189,7 @@ int ObStaticEngineCG::generate_spec(ObLogUpdate &op,
     } else {
       spec.row_desc_.set_part_id_index(partition_expr_idx);
     }
-    LOG_TRACE("pdml static cg information", K(ret), K(partition_expr_idx), K(index_dml_info));
+    LOG_TRACE("pdml static cg information", K(ret), K(index_dml_info), K(partition_expr_idx));
     // table columns exprs in dml need to set IS_COLUMNLIZED flag
     OZ(mark_expr_self_produced(index_dml_info.column_exprs_));
   }

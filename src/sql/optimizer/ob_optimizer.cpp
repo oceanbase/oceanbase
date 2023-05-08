@@ -407,7 +407,7 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
     //create index with PL UDF allow to use PDML plan during build index table
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
-  } else if (ctx_.has_trigger() && !ctx_.is_allow_parallel_trigger()) {
+  } else if (!ctx_.is_online_ddl() && ctx_.has_trigger() && !ctx_.is_allow_parallel_trigger()) {
     // if sql linked trigger, and trigger do not access package var, sequence, sql stmt etc..,
     // allow it use PDML plan
     is_use_pdml = false;

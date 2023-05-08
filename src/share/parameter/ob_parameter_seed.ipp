@@ -171,7 +171,7 @@ DEF_STR_WITH_CHECKER(default_compress, OB_CLUSTER_PARAMETER, "archive",
                      "default compress strategy for create new table within oracle mode",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "500ms", "[50ms,)",
+DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

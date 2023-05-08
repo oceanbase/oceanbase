@@ -165,6 +165,10 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to push back expr", K(ret));
   } else if (NULL != calc_part_id_expr_ && OB_FAIL(all_exprs.push_back(calc_part_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (OB_FAIL(allocate_lookup_trans_info_expr())) {
+    LOG_WARN("failed to add lookup trans expr", K(ret));
+  } else if (NULL != trans_info_expr_ && OB_FAIL(all_exprs.push_back(trans_info_expr_))) {
+    LOG_WARN("failed to push back expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
@@ -246,6 +250,10 @@ int ObLogTableScan::check_output_dependance(common::ObIArray<ObRawExpr *> &child
   } else if (use_batch() && nullptr != group_id_expr_
              && OB_FAIL(add_var_to_array_no_dup(exprs, group_id_expr_))) {
     LOG_WARN("failed to push back group id expr", K(ret));
+  } else if (index_back_ &&
+      nullptr != trans_info_expr_ &&
+      OB_FAIL(add_var_to_array_no_dup(exprs, trans_info_expr_))) {
+    LOG_WARN("fail to add lookup trans info expr", K(ret));
   } else if (OB_FAIL(dep_checker.check(exprs))) {
     LOG_WARN("failed to check op_exprs", K(ret));
   } else {
@@ -701,6 +709,38 @@ int ObLogTableScan::get_mbr_column_exprs(const uint64_t table_id,
   return ret;
 }
 
+int ObLogTableScan::allocate_lookup_trans_info_expr()
+{
+  int ret = OB_SUCCESS;
+  // Is strict defensive check mode
+  // Is index_back (contain local lookup and global lookup)
+  // There is no trans_info_expr on the current table_scan operator
+  // Satisfy the three conditions, add trans_info_expr for lookup
+  // The result of Index_scan will contain the transaction information corresponding to each row
+  // The result of the lookup in the data table will also include the trans_info
+  // of the current row in the data table, But the trans_info will not be output to the upper operator
+  ObOptimizerContext *opt_ctx = nullptr;
+  ObOpPseudoColumnRawExpr *tmp_trans_info_expr = nullptr;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_ISNULL(opt_ctx = &(get_plan()->get_optimizer_context()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (index_back_ &&
+      opt_ctx->is_strict_defensive_check() &&
+      nullptr == trans_info_expr_) {
+    if (OB_FAIL(OB_FAIL(ObOptimizerUtil::generate_pseudo_trans_info_expr(*opt_ctx,
+                                                                         index_name_,
+                                                                         tmp_trans_info_expr)))) {
+      LOG_WARN("fail to generate pseudo trans info expr", K(ret), K(index_name_));
+    } else {
+      trans_info_expr_ = tmp_trans_info_expr;
+    }
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
 {
   int ret = OB_SUCCESS;
@@ -719,36 +759,12 @@ int ObLogTableScan::generate_necessary_rowkey_and_partkey_exprs()
     LOG_WARN("failed to check whether stmt has lob column", K(ret));
   } else if (OB_FAIL(get_mbr_column_exprs(table_id_, spatial_exprs_))) {
     LOG_WARN("failed to check whether stmt has mbr column", K(ret));
-  } else if (has_lob_column || (is_index_global_ && index_back_) || get_index_back()) {
-    if (is_heap_table && is_index_global_ && index_back_) {
-      if (OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
-        LOG_WARN("failed to get part column exprs", K(ret));
-      }
-    } else if (has_lob_column) {
-      ObSEArray<ObRawExpr*, 8> tmp_part_exprs;
-      if (OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, tmp_part_exprs))) {
-        LOG_WARN("failed to get part column exprs", K(ret));
-      } else if ((is_index_global_ && index_back_) || get_index_back()) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_part_exprs.count(); ++i) {
-          ObRawExpr *expr = tmp_part_exprs.at(i);
-          if (OB_ISNULL(expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (expr->is_column_ref_expr() &&
-                     static_cast<ObColumnRefRawExpr *>(expr)->is_virtual_generated_column()) {
-            // do nothing
-          } else if (OB_FAIL(part_exprs_.push_back(expr))) {
-            LOG_WARN("failed to push back part expr", K(ret));
-          }
-        }
-      } else if (OB_FAIL(append(part_exprs_, tmp_part_exprs))) {
-        LOG_WARN("failed to appen part exprs", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
-      LOG_WARN("failed to generate rowkey exprs", K(ret));
-    } else { /*do nothing*/ }
+  } else if (is_heap_table && is_index_global_ && index_back_ &&
+             OB_FAIL(get_part_column_exprs(table_id_, ref_table_id_, part_exprs_))) {
+    LOG_WARN("failed to get part column exprs", K(ret));
+  } else if ((has_lob_column || index_back_) &&
+             OB_FAIL(get_plan()->get_rowkey_exprs(table_id_, ref_table_id_, rowkey_exprs_))) {
+    LOG_WARN("failed to generate rowkey exprs", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }

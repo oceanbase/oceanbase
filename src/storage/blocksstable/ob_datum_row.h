@@ -347,7 +347,7 @@ struct ObDatumRow
 public:
   ObDatumRow();
   ~ObDatumRow();
-  int init(common::ObIAllocator &allocator, const int64_t capacity);
+  int init(common::ObIAllocator &allocator, const int64_t capacity, char *trans_info_ptr = nullptr);
   int init(const int64_t capacity);
   void reset();
   void reuse();
@@ -408,6 +408,9 @@ public:
   //TODO @hanhui only for compile
   common::ObNewRow old_row_;
   storage::ObObjBufArray obj_buf_;
+  // add by @zimiao ObDatumRow does not care about the free of trans_info_ptr's memory
+  // The caller must guarantee the life cycle and release of this memory
+  char *trans_info_;
 };
 
 struct ObConstDatumRow

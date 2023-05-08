@@ -1106,8 +1106,7 @@ struct ObObjPrintParams
       uint32_t beginning_space_:1;
       uint32_t for_dblink_:1;
       uint32_t binary_string_print_hex_:1;
-      uint32_t need_print_converter_:1;
-      uint32_t reserved_:24;
+      uint32_t reserved_:25;
     };
   };
 };

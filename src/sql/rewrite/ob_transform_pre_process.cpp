@@ -6394,6 +6394,7 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
     ObColumnRefRawExpr *hidd_col = NULL;
     ObRawExpr *value_expr = NULL;
     ObAssignment &assign = assignments.at(j);
+    bool trigger_exist = false;
     if (OB_ISNULL(assign.column_expr_) || OB_ISNULL(assign.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("assgin expr is null", K(ret));
@@ -6409,10 +6410,19 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
       if (OB_ISNULL(hidd_col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("hidden column is null", K(ret));
-      } else if (assign.expr_->get_expr_type() != T_FUN_COLUMN_CONV) {
+       } else if (assign.expr_->get_expr_type() == T_FUN_SYS_WRAPPER_INNER) {
+        trigger_exist = true;
+        value_expr = assign.expr_->get_param_expr(0);
+      } else {
+        value_expr = assign.expr_;
+      }
+
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (value_expr->get_expr_type() != T_FUN_COLUMN_CONV) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpectd expr type", K(ret), K(assign.expr_->get_expr_type()));
-      } else if (OB_ISNULL(value_expr = assign.expr_->get_param_expr(4))) {
+      } else if (OB_ISNULL(value_expr = value_expr->get_param_expr(4))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("raw expr param is null");
       } else if (value_expr->get_expr_type() == T_FUN_SYS_CAST) {
@@ -6454,7 +6464,13 @@ int ObTransformPreProcess::replace_udt_assignment_exprs(ObDMLStmt *stmt,
       } else {
         trans_happened = true;
         assign.column_expr_ = hidd_col;
-        assign.expr_ = new_value_expr;
+        if (trigger_exist) {
+          if (OB_FAIL(static_cast<ObSysFunRawExpr*>(assign.expr_)->replace_param_expr(0, new_value_expr))) {
+            LOG_WARN("failed to replace wrapper expr param", K(ret));
+          }
+        } else {
+          assign.expr_ = new_value_expr;
+        }
       }
     }
   }

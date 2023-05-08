@@ -85,7 +85,7 @@ int ObHashPartCols::equal_distinct(
     ObDatum *l_cells = store_row_->cells();
     ObDatum *r_cell = nullptr;
     // must evaled in calc_hash_values
-    for (int64_t i = 0; i < OB_SUCC(ret) && sort_collations->count() && 0 == cmp_result; ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < sort_collations->count() && 0 == cmp_result; ++i) {
       int64_t idx = sort_collations->at(i).field_idx_;
       r_cell = &exprs->at(idx)->locate_expr_datum(*eval_ctx);
       if (OB_FAIL(cmp_funcs->at(i).cmp_func_(l_cells[idx], *r_cell, cmp_result))) {

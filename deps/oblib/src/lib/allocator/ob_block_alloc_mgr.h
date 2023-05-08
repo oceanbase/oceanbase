@@ -32,9 +32,8 @@ public:
   int64_t hold() const { return ATOMIC_LOAD(&hold_); }
   void* alloc_block(int64_t size, ObMemAttr &attr) {
     void *ret = NULL;
-    bool ignore_mem_limit = get_ignore_mem_limit();
     int64_t used_after_alloc = ATOMIC_AAF(&hold_, size);
-    if (!ignore_mem_limit && used_after_alloc > limit_) {
+    if (used_after_alloc > limit_) {
       ATOMIC_AAF(&hold_, -size);
       if (REACH_TIME_INTERVAL(1000 * 1000)) {
         _OB_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "block alloc over limit, limit=%ld alloc_size=%ld", limit_, size);

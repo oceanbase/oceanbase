@@ -1968,6 +1968,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                         && T_FUN_ORA_JSON_ARRAYAGG != expr.get_expr_type()
                         && T_FUN_ORA_XMLAGG != expr.get_expr_type()))
                 && !(T_FUN_COUNT == expr.get_expr_type() && ob_is_json(param_expr->get_data_type()))
+                && !(T_FUN_COUNT == expr.get_expr_type() && (ob_is_user_defined_sql_type(param_expr->get_data_type()) ||
+                                                             ob_is_user_defined_pl_type(param_expr->get_data_type())))
                 && T_FUN_MEDIAN != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()

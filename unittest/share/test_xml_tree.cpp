@@ -409,7 +409,7 @@ TEST_F(TestXmlNodeBase, test_simple_print_document)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-  doc->print_document(buf_str, type, false);
+  doc->print_document(buf_str, type, ObXmlFormatType::NO_FORMAT);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 }
 
@@ -455,7 +455,7 @@ TEST_F(TestXmlNodeBase, test_simple_print_document_with_pretty)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-  doc->print_document(buf_str, type, true, 2);
+  doc->print_document(buf_str, type, ObXmlFormatType::WITH_FORMAT, 2);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 }
 
@@ -509,13 +509,13 @@ TEST_F(TestXmlNodeBase, test_print_content_with_pretty)
   param_list.version = "4.0.0";
   param_list.encode = "utf-8";
   param_list.indent = 4;
-  content->print_content(buf_str, false, false, true, param_list);
+  content->print_content(buf_str, false, false, ObXmlFormatType::WITH_FORMAT, param_list);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
   buf_str.reuse();
-  content->print_content(buf_str, true, false, true, param_list);
+  content->print_content(buf_str, true, false, ObXmlFormatType::WITH_FORMAT, param_list);
   ASSERT_EQ(std::string(serialize_text_with_encoding.ptr(), serialize_text_with_encoding.length()), std::string(buf_str.ptr(), buf_str.length()));
   buf_str.reuse();
-  content->print_content(buf_str, false, true, true, param_list);
+  content->print_content(buf_str, false, true, ObXmlFormatType::WITH_FORMAT, param_list);
   ASSERT_EQ(std::string(serialize_text_with_version.ptr(), serialize_text_with_version.length()), std::string(buf_str.ptr(), buf_str.length()));
 }
 
@@ -549,7 +549,7 @@ TEST_F(TestXmlNodeBase, test_print_content)
   param_list.version = "";
   param_list.encode = "";
   param_list.indent = 2;
-  content->print_content(buf_str, false, false, false, param_list);
+  content->print_content(buf_str, false, false, ObXmlFormatType::NO_FORMAT, param_list);
   ASSERT_EQ(std::string(ser_text.ptr(), ser_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 }
 
@@ -587,7 +587,7 @@ TEST_F(TestXmlNodeBase, test_print_xml_node)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-  doc->at(0)->print(buf_str, false, false);
+  doc->at(0)->print(buf_str, ObXmlFormatType::NO_FORMAT);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 
 }
@@ -625,7 +625,7 @@ TEST_F(TestXmlNodeBase, test_print_xml_node_with_pretty)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-  doc->at(0)->print(buf_str, false, true, 0, 3);
+  doc->at(0)->print(buf_str, ObXmlFormatType::WITH_FORMAT, 0, 3);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 
 }
@@ -644,7 +644,7 @@ TEST_F(TestXmlNodeBase, test_simple_print_document_mysqltest)
   ret = ObXmlParserUtils::parse_document_text(ctx, xml_text, doc);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObStringBuffer buf_str(&allocator);
-  doc->print_document(buf_str, type, false);
+  doc->print_document(buf_str, type, ObXmlFormatType::NO_FORMAT);
   ASSERT_EQ(std::string(serialize_text.ptr(), serialize_text.length()), std::string(buf_str.ptr(), buf_str.length()));
 
 }
@@ -717,7 +717,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_well_from)
   content.append_unparse_text(str2);
   ASSERT_EQ(5, content.size());
   ObStringBuffer str_res(&allocator);
-  content.print_document(str_res, type, false);
+  content.print_document(str_res, type, ObXmlFormatType::NO_FORMAT);
   cout<< "str_res :" <<endl;
   ObString str_res_ = str_res.string();
   cout<< str_res_ <<endl;

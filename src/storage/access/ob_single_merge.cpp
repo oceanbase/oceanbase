@@ -317,6 +317,7 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
         } else {
           row.row_flag_ = full_row_.row_flag_;
           row.group_idx_ = rowkey_->get_group_idx();
+          row.trans_info_ = full_row_.trans_info_;
           STORAGE_LOG(TRACE, "succ to do single get", K(full_row_), K(row), K(have_uncommited_row), K(cols_index), K(access_param_->iter_param_.table_id_));
         }
         if (OB_FAIL(ret)) {

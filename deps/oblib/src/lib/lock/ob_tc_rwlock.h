@@ -150,7 +150,7 @@ public:
     }
     if (OB_SUCC(ret)) {
       // record in try_rdlock will be overwrited by latch_.rdlock, so record again.
-      IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&(latch_.lock_));
+      IGNORE_RETURN ObLatch::reg_lock((uint32_t*)&(latch_.lock_));
     }
     return ret;
   }
@@ -161,7 +161,7 @@ public:
       get_tcref().inc_ref(&read_ref_);
       if (OB_LIKELY(0 == ATOMIC_LOAD(&write_id_))) {
         locked = true;
-        IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&(latch_.lock_));
+        IGNORE_RETURN ObLatch::reg_lock((uint32_t*)&(latch_.lock_));
       } else {
         get_tcref().dec_ref(&read_ref_);
         lcond_.signal();
@@ -260,7 +260,7 @@ public:
       get_tcref().inc_ref(&read_ref_, slot_id);
       if (OB_LIKELY(0 == ATOMIC_LOAD(&write_id_))) {
         locked = true;
-        IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&(latch_.lock_));
+        IGNORE_RETURN ObLatch::reg_lock((uint32_t*)&(latch_.lock_));
       } else {
         get_tcref().dec_ref(&read_ref_, slot_id);
         lcond_.signal();
@@ -278,7 +278,7 @@ public:
     }
     if (OB_SUCC(ret)) {
       // record in try_rdlock will be overwrited by latch_.rdlock, so record again.
-      IGNORE_RETURN ObLatch::unreg_lock((uint32_t*)&(latch_.lock_));
+      IGNORE_RETURN ObLatch::reg_lock((uint32_t*)&(latch_.lock_));
     }
     return ret;
   }

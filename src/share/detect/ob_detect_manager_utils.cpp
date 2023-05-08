@@ -17,6 +17,7 @@
 #include "sql/dtl/ob_dtl_interm_result_manager.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "sql/engine/px/ob_px_scheduler.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
@@ -37,11 +38,13 @@ void ObDetectManagerUtils::prepare_register_dm_info(common::ObRegisterDmInfo &re
 
 int ObDetectManagerUtils::qc_register_detectable_id_into_dm(ObDetectableId &detectable_id,
                                                             bool &register_detectable_id,
-                                                            uint64_t tenant_id)
+                                                            uint64_t tenant_id,
+                                                            ObPxCoordInfo& coord_info)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObDetectManagerUtils::generate_detectable_id(detectable_id, tenant_id))) {
     LIB_LOG(WARN, "[DM] failed to generate_detectable_id", K(tenant_id));
+  } else if (FALSE_IT(coord_info.qc_detectable_id_ = detectable_id)) {
   } else {
     ObDetectManager* dm = MTL(ObDetectManager*);
     if (OB_ISNULL(dm)) {

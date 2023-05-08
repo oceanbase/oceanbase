@@ -707,7 +707,7 @@ int ob_sql_type_str(char *buff,
     if (OB_FAIL(ob_geometry_sub_type_str(buff, buff_length, pos, static_cast<common::ObGeoType>(sub_type)))) {
       LOG_WARN("fail to get geometry sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
-  } else if (lib::is_oracle_mode() && ob_is_user_defined_sql_type(type)) {
+  } else if (lib::is_oracle_mode() && (ob_is_user_defined_sql_type(type) || sub_type == T_OBJ_XML)) {
      if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, sub_type, true))) {
        LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
      }

@@ -862,7 +862,7 @@ int ObDMLService::insert_row(const ObInsCtDef &ins_ctdef,
                              ObInsRtDef &ins_rtdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
-                             ObChunkDatumStore::StoredRow* &stored_row)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_dml_tablet_validity(dml_rtctx,
@@ -887,10 +887,16 @@ int ObDMLService::insert_row(const ObDASInsCtDef &ins_ctdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
                              const ExprFixedArray &new_row,
-                             ObChunkDatumStore::StoredRow* &stored_row)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  ret = write_row_to_das_op<DAS_OP_TABLE_INSERT>(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx, new_row, stored_row);
+  ret = write_row_to_das_op<DAS_OP_TABLE_INSERT>(ins_ctdef,
+                                                 ins_rtdef,
+                                                 tablet_loc,
+                                                 dml_rtctx,
+                                                 new_row,
+                                                 nullptr,
+                                                 stored_row);
   return ret;
 }
 
@@ -898,7 +904,7 @@ int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
                              ObDelRtDef &del_rtdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
-                             ObChunkDatumStore::StoredRow* &stored_row)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_dml_tablet_validity(dml_rtctx,
@@ -912,6 +918,7 @@ int ObDMLService::delete_row(const ObDelCtDef &del_ctdef,
                                                               tablet_loc,
                                                               dml_rtctx,
                                                               del_ctdef.old_row_,
+                                                              del_ctdef.trans_info_expr_,
                                                               stored_row))) {
     LOG_WARN("delete old row from das failed", K(ret));
   }
@@ -935,6 +942,7 @@ int ObDMLService::lock_row(const ObLockCtDef &lock_ctdef,
                                                 tablet_loc,
                                                 dml_rtctx,
                                                 lock_ctdef.old_row_,
+                                                nullptr,
                                                 stored_row))) {
     LOG_WARN("lock row to das failed", K(ret));
   }
@@ -953,6 +961,7 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                                                 tablet_loc,
                                                 das_rtctx,
                                                 old_row,
+                                                nullptr,
                                                 stored_row);
 }
 
@@ -961,9 +970,9 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              const ObDASTabletLoc *old_tablet_loc,
                              const ObDASTabletLoc *new_tablet_loc,
                              ObDMLRtCtx &dml_rtctx,
-                             ObChunkDatumStore::StoredRow* &old_row,
-                             ObChunkDatumStore::StoredRow* &new_row,
-                             ObChunkDatumStore::StoredRow* &full_row)
+                             ObChunkDatumStore::StoredRow *&old_row,
+                             ObChunkDatumStore::StoredRow *&new_row,
+                             ObChunkDatumStore::StoredRow *&full_row)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(dml_rtctx.get_exec_ctx());
@@ -996,6 +1005,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                          old_tablet_loc,
                                                          dml_rtctx,
                                                          upd_ctdef.old_row_,
+                                                         nullptr,
                                                          old_row))) {
         LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else {
@@ -1025,6 +1035,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                            old_tablet_loc,
                                                            dml_rtctx,
                                                            upd_ctdef.old_row_,
+                                                           upd_ctdef.trans_info_expr_,
                                                            old_row))) {
         LOG_WARN("delete row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (upd_ctdef.is_heap_table_ &&
@@ -1037,6 +1048,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                                   new_tablet_loc,
                                                                   dml_rtctx,
                                                                   upd_ctdef.new_row_,
+                                                                  nullptr,
                                                                   new_row))) {
         LOG_WARN("insert row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else {
@@ -1050,6 +1062,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                               old_tablet_loc,
                                                               dml_rtctx,
                                                               upd_ctdef.full_row_,
+                                                              upd_ctdef.trans_info_expr_,
                                                               full_row))) {
     LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
   } else {
@@ -1072,6 +1085,7 @@ int ObDMLService::update_row(const ObDASUpdCtDef &ctdef,
                                                   tablet_loc,
                                                   dml_rtctx,
                                                   full_row,
+                                                  nullptr,
                                                   stored_row);
 }
 
@@ -1080,13 +1094,14 @@ int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
                              const ObDASTabletLoc *tablet_loc,
                              ObDMLRtCtx &das_rtctx,
                              const ExprFixedArray &old_row,
-                             ObChunkDatumStore::StoredRow* &stored_row)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   return write_row_to_das_op<DAS_OP_TABLE_DELETE>(das_del_ctdef,
                                                   das_del_rtdef,
                                                   tablet_loc,
                                                   das_rtctx,
                                                   old_row,
+                                                  nullptr,
                                                   stored_row);
 }
 
@@ -1438,6 +1453,31 @@ int ObDMLService::init_ob_rowkey( ObIAllocator &allocator, const int64_t rowkey_
   return ret;
 }
 
+int ObDMLService::add_trans_info_datum(ObExpr *trans_info_expr,
+                                       ObEvalCtx &eval_ctx,
+                                       ObChunkDatumStore::StoredRow *stored_row)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *datum = nullptr;
+
+  if (OB_ISNULL(trans_info_expr) || OB_ISNULL(stored_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret), K(trans_info_expr), K(stored_row));
+  } else if (OB_FAIL(trans_info_expr->eval(eval_ctx, datum))) {
+    LOG_WARN("failed to evaluate expr datum", K(ret));
+  } else if (OB_ISNULL(datum)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else {
+    char *buf = static_cast<char *>(stored_row->get_extra_payload());
+    *static_cast<int32_t *>(stored_row->get_extra_payload()) = datum->len_;
+    int64_t pos = sizeof(int32_t);
+    MEMCPY(buf + pos, datum->ptr_, datum->len_);
+  }
+
+  return ret;
+}
+
 int ObDMLService::init_das_ins_rtdef_for_update(ObDMLRtCtx &dml_rtctx,
                                                 const ObUpdCtDef &upd_ctdef,
                                                 ObUpdRtDef &upd_rtdef)
@@ -1523,15 +1563,20 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                       const ObDASTabletLoc *tablet_loc,
                                       ObDMLRtCtx &dml_rtctx,
                                       const ExprFixedArray &row,
-                                      ObChunkDatumStore::StoredRow* &stored_row)
+                                      ObExpr *trans_info_expr,
+                                      ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
   bool need_retry = false;
+  bool is_strict_defensive_check = trans_info_expr == nullptr ? false : true;
   typedef typename das_reg::ObDASOpTypeTraits<N>::DASCtDef CtDefType;
   typedef typename das_reg::ObDASOpTypeTraits<N>::DASRtDef RtDefType;
   typedef typename das_reg::ObDASOpTypeTraits<N>::DASOp OpType;
   OB_ASSERT(typeid(ctdef) == typeid(CtDefType));
   OB_ASSERT(typeid(rtdef) == typeid(RtDefType));
+  int64_t extend_size = is_strict_defensive_check ?
+      ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE :
+        ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE;
   do {
     bool buffer_full = false;
     need_retry = false;
@@ -1540,6 +1585,8 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_UNLIKELY(!dml_rtctx.das_ref_.has_das_op(tablet_loc, dml_op))) {
       if (OB_FAIL(dml_rtctx.das_ref_.prepare_das_task(tablet_loc, dml_op))) {
         LOG_WARN("prepare das task failed", K(ret), K(N));
+      } else if (OB_FAIL(dml_op->init_task_info(extend_size))) {
+        LOG_WARN("fail to init das write buff", K(ret), K(extend_size));
       } else {
         dml_op->set_das_ctdef(static_cast<const CtDefType*>(&ctdef));
         dml_op->set_das_rtdef(static_cast<RtDefType*>(&rtdef));
@@ -1559,11 +1606,15 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     if (OB_SUCC(ret)) {
       if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
         LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+      } else if (!buffer_full &&
+          OB_NOT_NULL(trans_info_expr) &&
+          OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
+        LOG_WARN("fail to add trans info datum", K(ret));
       } else if (OB_NOT_NULL(stored_row)) {
         dml_rtctx.add_cached_row_size(stored_row->row_size_);
-        LOG_DEBUG("write row to das op", K(ret), K(buffer_full), "op_type", N,
-                  "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
-                  "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
+        LOG_DEBUG("write row to das op", K(ret), K(buffer_full),
+            "op_type", N, "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
+            "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
       }
     }
     //3. if buffer is full, frozen node, create a new das op to add row
@@ -2007,7 +2058,7 @@ bool ObDMLService::is_nested_dup_table(const uint64_t table_id,  DASDelCtxList& 
   return ret;
 }
 
-int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxList& del_ctx_list, SeRowkeyDistCtx* &rowkey_dist_ctx)
+int ObDMLService::get_nested_dup_table_ctx(const uint64_t table_id,  DASDelCtxList& del_ctx_list, SeRowkeyDistCtx *&rowkey_dist_ctx)
 {
   int ret = OB_SUCCESS;
   bool find = false;

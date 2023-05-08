@@ -205,7 +205,12 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
     final_result = false;
     bool first_val = (0 == result.count_ || result.row_flag_.is_not_exist());
     int64_t column_cnt = 0;
-
+    // add by zimiao, When result.trans_info_ is nullptr,
+    // it means that the current row does not have any transaction information,
+    // so set the first transaction information obtained by the current row
+    if (OB_ISNULL(result.trans_info_)) {
+      result.trans_info_ = former.trans_info_;
+    }
     if (first_val) {
       nop_pos.reset();
       result.row_flag_ = former.row_flag_;

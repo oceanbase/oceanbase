@@ -395,6 +395,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
   // here to add value of configs that can influence execution plan.
   enable_px_ordered_coord_ = GCONF._enable_px_ordered_coord;
   enable_newsort_ = GCONF._enable_newsort;
+  is_strict_defensive_check_ = GCONF.enable_strict_defensive_check();
   is_enable_px_fast_reclaim_ = GCONF._enable_px_fast_reclaim;
 
   // For Tenant configs
@@ -440,6 +441,9 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", px_join_skew_handling_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(px_join_skew_handling_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                              "%d,", is_strict_defensive_check_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(is_strict_defensive_check_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                               "%d,", px_join_skew_minfreq_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(px_join_skew_minfreq_));

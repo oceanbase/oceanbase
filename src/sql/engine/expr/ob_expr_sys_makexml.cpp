@@ -24,7 +24,7 @@ namespace sql
 {
 // Internal expression used for generate xmltype data from blob or udt with schema
 ObExprSysMakeXML::ObExprSysMakeXML(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKEXML, N_SYS_MAKEXML, MORE_THAN_ONE, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_MAKEXML, N_SYS_MAKEXML, MORE_THAN_ONE, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

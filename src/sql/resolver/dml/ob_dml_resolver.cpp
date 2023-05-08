@@ -1058,7 +1058,6 @@ int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bo
       } else if (depth == 2 && OB_FAIL(check_column_udt_type(node))) {
         // cases like: a.b.fun(), a must be table alias, b must be col name, and b must be udt type
         LOG_WARN("not an object or REF", K(ret));
-        ret = OB_ERR_NOT_OBJ_REF; // error code compatible
       } else {
         exist_fun = true;
         is_fun_sys = true;
@@ -1297,9 +1296,14 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
 {
   int ret = OB_SUCCESS;
   ObQualifiedName udt_col_func_q_name;
-  // Only support table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
-  // must have table alias name;
-  if (q_name.access_idents_.count() == 3
+  // Only support:
+  // 1. table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
+  // 2. table_alias.col_name.member_func.udf, for example: select a.c2.transfrom(xxx).getclobval() from t1 a;
+  // Notice:
+  // 1. must have table alias name;
+  // 2. table_alias.col_name.static_func.udf is not supported, for example:
+  //    select a.c2.createxml(xxx).getclobval() from t1 a; creatxml is an static function, not support
+  if (q_name.access_idents_.count() >= 3
         && q_name.access_idents_.at(0).type_ == UNKNOWN
         && q_name.access_idents_.at(1).type_ == UNKNOWN
         && q_name.access_idents_.at(2).type_ == PL_UDF) {
@@ -1327,12 +1331,17 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
       udt_col_func_q_name.ref_expr_= q_name.ref_expr_;
       if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
         LOG_WARN("push back col ref ident failed", K(ret));
-      } else if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(q_name.access_idents_.at(2)))) {
-        LOG_WARN("push back udt member function failed", K(ret), K(q_name.access_idents_.at(2)));
       } else {
-        udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
-        udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
-        q_name = udt_col_func_q_name;
+        for (int64_t i = 2; OB_SUCC(ret) && i < q_name.access_idents_.count(); i++) {
+          if (OB_FAIL(udt_col_func_q_name.access_idents_.push_back(q_name.access_idents_.at(i)))) {
+            LOG_WARN("push back udt member function failed", K(ret), K(i), K(q_name.access_idents_.at(i)));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
+          udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
+          q_name = udt_col_func_q_name;
+        }
       }
     }
   }
@@ -1433,7 +1442,7 @@ int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
     if (OB_FAIL(get_target_column_list(columns_list, tab_str, false, tab_has_alias, table_item, false))) {
       LOG_WARN("parse table fail");
     } else if (OB_ISNULL(table_item) || !tab_has_alias) {
-      ret = OB_INVALID_ARGUMENT;
+      ret = OB_ERR_BAD_FIELD_ERROR;
       LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
     } else {
       ColumnItem the_col_item;
@@ -1466,25 +1475,26 @@ int ObDMLResolver::get_target_column_list(ObSEArray<ColumnItem, 4> &target_list,
                                           bool &tab_has_alias, TableItem *&tab_item, bool is_col)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   int64_t num = 0;
+  ObDMLStmt *stmt = static_cast<ObDMLStmt *>(stmt_);
   ObArray<ColumnItem> column_items;
 
-  if (OB_ISNULL(select_stmt)) {
+  if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null");
   } else {
-    num = select_stmt->get_table_size();
+    num = stmt->get_table_size();
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
-    const TableItem *tmp_table_item = select_stmt->get_table_item(i);
+    const TableItem *tmp_table_item = stmt->get_table_item(i);
     if (OB_ISNULL(tmp_table_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null");
     } else if (OB_NOT_NULL(tab_name.ptr()) && !is_col && !all_tab && tmp_table_item->table_name_ != tab_name && tmp_table_item->alias_name_ != tab_name) {
       // other table should chose
     } else {
-      if (tmp_table_item->alias_name_ == tab_name || (num > 1 && tmp_table_item->table_name_ == tab_name)) {
+      if (tmp_table_item->alias_name_ == tab_name ||
+          (num > 1 && tmp_table_item->table_name_ == tab_name && stmt->get_stmt_type() == stmt::T_SELECT)) {
         tab_has_alias = true;
       }
 
@@ -2552,8 +2562,10 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
           col_expr->set_data_type(ObLobType);
         }
       }
-      col_expr->set_synonym_db_name(table_item.synonym_db_name_);
-      col_expr->set_synonym_name(table_item.synonym_name_);
+      if (table_item.alias_name_.empty()) {
+        col_expr->set_synonym_db_name(table_item.synonym_db_name_);
+        col_expr->set_synonym_name(table_item.synonym_name_);
+      }
       col_expr->set_column_attr(table_item.get_table_name(), col_schema->get_column_name_str());
       col_expr->set_from_alias_table(!table_item.alias_name_.empty());
       col_expr->set_database_name(table_item.database_name_);

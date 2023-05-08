@@ -42,6 +42,7 @@ public:
     new_part_id_expr_(NULL),
     old_rowid_expr_(NULL),
     new_rowid_expr_(NULL),
+    trans_info_expr_(NULL),
     related_index_ids_()
   {
   }
@@ -69,6 +70,7 @@ public:
     new_part_id_expr_ = NULL,
     old_rowid_expr_ = NULL,
     new_rowid_expr_ = NULL,
+    trans_info_expr_ = NULL,
     related_index_ids_.reset();
   }
   int64_t to_explain_string(char *buf, int64_t buf_len, ExplainType type) const;
@@ -157,6 +159,9 @@ public:
   ObRawExpr *new_part_id_expr_;
   ObRawExpr *old_rowid_expr_;
   ObRawExpr *new_rowid_expr_;
+  // When the defensive check level is set to 2,
+  // the transaction information of the current row is recorded for 4377 diagnosis
+  ObRawExpr *trans_info_expr_;
   // for generated column, the diff between column_exprs_ and column_old_values_exprs_
   // is virtual generated column is replaced.
   common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
@@ -178,7 +183,9 @@ public:
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
                K_(is_update_part_key),
-               K_(assignments));
+               K_(assignments),
+               K_(distinct_algo),
+               K_(related_index_ids));
 };
 
 class ObDelUpdLogPlan;
@@ -225,6 +232,17 @@ public:
   {
     return view_check_exprs_;
   }
+
+  inline const common::ObIArray<ObRawExpr*> &get_produced_trans_exprs() const
+  {
+    return produced_trans_exprs_;
+  }
+  inline common::ObIArray<ObRawExpr*> &get_produced_trans_exprs()
+  {
+    return produced_trans_exprs_;
+  }
+
+
   virtual bool is_single_value() const { return false; }
   virtual uint64_t get_hash(uint64_t seed) const { return seed; }
   virtual uint64_t hash(uint64_t seed) const override;
@@ -295,6 +313,10 @@ public:
   int get_rowid_version(int64_t &rowid_version);
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override = 0;
   int inner_get_op_exprs(ObIArray<ObRawExpr*> &all_exprs, bool need_column_expr);
+  int find_trans_info_producer();
+  int find_trans_info_producer(ObLogicalOperator &op,
+                               const uint64_t tid,
+                               ObLogicalOperator *&producer);
   int get_table_columns_exprs(const ObIArray<IndexDMLInfo *> &index_dml_infos,
                               ObIArray<ObRawExpr*> &all_exprs,
                               bool need_column_expr);
@@ -397,6 +419,11 @@ protected:
   // 但是对于非分区表，pdml中的dml是需要分配partition id expr
   bool need_alloc_part_id_expr_; // pdml计划中，用于判断当前dml 算子是否需要分配partition id expr
   bool has_instead_of_trigger_;
+  // Only when trans_info_expr can be pushed down to the corresponding table_scan operator,
+  // the expression will be added to produced_trans_exprs_
+  // When trans_info_expr does not find a producer operator,
+  // the upper layer dml operator cannot consume the expression
+  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> produced_trans_exprs_;
 };
 }
 }

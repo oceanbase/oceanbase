@@ -139,7 +139,7 @@ public:
   {
     return common::OB_NOT_IMPLEMENT;
   }
-  virtual int init_task_info() = 0;
+  virtual int init_task_info(uint32_t row_extend_size) = 0;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) = 0;
   virtual const ObDASBaseCtDef *get_ctdef() const { return nullptr; }
   virtual ObDASBaseRtDef *get_rtdef() { return nullptr; }
@@ -200,6 +200,7 @@ public:
 
   ObIDASTaskResult *get_op_result() const { return op_result_; }
   void set_op_result(ObIDASTaskResult *op_result) { op_result_ = op_result; }
+
 protected:
   int start_das_task();
   int end_das_task();
@@ -241,9 +242,6 @@ protected:
   ObDasAggregatedTasks *agg_tasks_;  // task's agg task, do not serialize
   DasTaskLinkedList *cur_agg_list_;  // task's agg_list, do not serialize
   ObIDASTaskResult *op_result_;
-
-public:
-  const static uint32_t DAS_ROW_EXTEND_SIZE = 16;
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;

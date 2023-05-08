@@ -87,7 +87,7 @@ public:
                                        ObIArray<ObRawExpr*> &rowkey_exprs);
 
   int replace_assignment_expr_from_dml_info(const IndexDMLInfo &index_dml_info,
-                                            ObRawExpr* &expr);
+                                            ObRawExpr *&expr);
 
   int candi_allocate_one_pdml_delete(bool is_index_maintenance,
                                      bool is_last_dml_op,

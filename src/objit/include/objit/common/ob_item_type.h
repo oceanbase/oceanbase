@@ -833,6 +833,7 @@ typedef enum ObItemType
   T_PSEUDO_STMT_ID = 3009,
   T_PSEUDO_RANDOM = 3010,
   T_INNER_WF_AGGR_STAUTS = 3011,
+  T_PSEUDO_ROW_TRANS_INFO_COLUMN = 3012, // trans_info, only for defensive check
   T_PSEUDO_GROUP_PARAM = 3040,
   T_PSEUDO_EXTERNAL_FILE_COL = 3041,
 

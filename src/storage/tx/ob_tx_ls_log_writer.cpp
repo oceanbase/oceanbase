@@ -148,7 +148,7 @@ int ObTxLSLogCb::alloc_log_buf_()
 {
   int ret = OB_SUCCESS;
 
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "TxLSLogBuf");
+  ObMemAttr attr(base_wr_->get_tenant_id(), "TxLSLogBuf");
   SET_USE_500(attr);
   if (0 == ObTxLSLogLimit::LOG_BUF_SIZE || nullptr != log_buf_) {
     ret = OB_INVALID_ARGUMENT;
@@ -167,7 +167,8 @@ ObTxLSLogWriter::ObTxLSLogWriter() : cbs_lock_(common::ObLatchIds::TX_LS_LOG_WRI
 
 ObTxLSLogWriter::~ObTxLSLogWriter() { reset(); }
 
-int ObTxLSLogWriter::init(const ObLSID &ls_id,
+int ObTxLSLogWriter::init(const int64_t tenant_id,
+                          const ObLSID &ls_id,
                           ObITxLogAdapter * adapter,
                           ObLSTxCtxMgr *ctx_mgr)
 {
@@ -180,6 +181,7 @@ int ObTxLSLogWriter::init(const ObLSID &ls_id,
     TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", K(ls_id), KP(adapter), KP(ctx_mgr));
   } else {
     ls_id_ = ls_id;
+    tenant_id_ = tenant_id;
     ctx_mgr_ = ctx_mgr;
     tx_log_adapter_ = adapter;
     ObTxLSLogLimit::decide_log_buf_size();
