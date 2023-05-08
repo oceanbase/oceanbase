@@ -3373,20 +3373,11 @@ int ObLogicalOperator::adjust_plan_root_output_exprs()
              FALSE_IT(into_item = static_cast<const ObSelectStmt*>(stmt)->get_select_into())) {
     /*do nothing*/
   } else if (NULL == get_parent()) {
-    if (NULL != into_item && T_INTO_OUTFILE == into_item->into_type_ &&
-        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
-      if (OB_FAIL(build_and_put_into_outfile_expr(into_item, output_exprs_))) {
-        LOG_WARN("failed to add into outfile expr to ctx", K(ret));
-      } else {
-        LOG_TRACE("succeed to add into outfile expr to ctx", K(ret));
-      }
-    } else {
-      bool need_pack = false;
-      if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
-        LOG_WARN("failed to check stmt can be pack", K(ret));
-      } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
-        LOG_WARN("failed to add pack expr to context", K(ret));
-      }
+    bool need_pack = false;
+    if (OB_FAIL(check_stmt_can_be_packed(stmt, need_pack))) {
+      LOG_WARN("failed to check stmt can be pack", K(ret));
+    } else if (need_pack && OB_FAIL(build_and_put_pack_expr(output_exprs_))) {
+      LOG_WARN("failed to add pack expr to context", K(ret));
     }
     LOG_TRACE("succeed to adjust plan root output exprs", K(output_exprs_));
   }
@@ -4121,7 +4112,7 @@ int ObLogicalOperator::allocate_gi_recursively(AllocGIContext &ctx)
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
     }
-  } else if (is_fully_paratition_wise() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+  } else if (is_fully_partition_wise()) {
     ctx.alloc_gi_ = true;
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
@@ -4195,7 +4186,7 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
     // so that won't work in the plan found in this bug.
     // Now we support GI rescan in partition_wise_state so we just push up the GI here in such case
     //
-    if (ctx.is_in_partition_wise_state() && is_fully_paratition_wise()) {
+    if (ctx.is_in_partition_wise_state() && is_fully_partition_wise()) {
       ctx.alloc_gi_ = true;
       if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
         LOG_WARN("allocate gi above table scan failed", K(ret));

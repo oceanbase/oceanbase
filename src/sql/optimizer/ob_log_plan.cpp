@@ -11552,19 +11552,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       }
     }
 
-    if (OB_SUCC(ret) && op->get_type() == LOG_SELECT_INTO && !op->is_plan_root() &&
-        GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
-      if (!op->get_stmt()->is_select_stmt()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected stmt type", K(ret));
-      } else {
-        const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(op->get_stmt());
-        if (OB_FAIL(sel_stmt->get_select_exprs(op->get_output_exprs()))) {
-          LOG_WARN("failed to get select exprs", K(ret));
-        }
-      }
-    }
-
     if (OB_SUCC(ret)) {
       if (op->is_plan_root() && OB_FAIL(op->set_plan_root_output_exprs())) {
         LOG_WARN("failed to add plan root exprs", K(ret));
@@ -13289,6 +13276,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
   } else if (op->get_type() == log_op_def::LOG_SET) {
     ObLogSet *log_set = static_cast<ObLogSet *>(op);
     bool is_ext_pw = (log_set->get_distributed_algo() == DistAlgo::DIST_SET_PARTITION_WISE);
+    is_fully_partition_wise |= (op->is_fully_partition_wise() || is_ext_pw);
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
       ObLogicalOperator* child_op;
       ObLogPlan* child_plan;
@@ -13301,7 +13289,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         ObTabletID::INVALID_TABLET_ID,
                                                                         hint_info,
                                                                         is_current_dfo,
-                                                                        op->is_fully_paratition_wise() || is_ext_pw,
+                                                                        is_fully_partition_wise,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
                                                                         join_filter_infos))) {
@@ -13427,6 +13415,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     ObLogJoin* join_op = static_cast<ObLogJoin*>(op);
     ObLogicalOperator* left_op;
     ObLogicalOperator* right_op;
+    is_fully_partition_wise |= join_op->is_fully_partition_wise();
     if (OB_UNLIKELY(2 != op->get_num_of_child()) ||
         OB_ISNULL(left_op = op->get_child(ObLogicalOperator::first_child)) ||
         OB_ISNULL(right_op = op->get_child(ObLogicalOperator::second_child))) {
@@ -13436,7 +13425,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     hint_info,
                                                                     right_tables,
                                                                     is_current_dfo,
-                                                                    join_op->is_fully_paratition_wise(),
+                                                                    is_fully_partition_wise,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13445,7 +13434,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     hint_info,
                                                                     right_tables,
                                                                     is_current_dfo,
-                                                                    join_op->is_fully_paratition_wise(),
+                                                                    is_fully_partition_wise,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13460,6 +13449,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
              static_cast<ObLogExchange*>(op)->is_local()) {
     /* do nothing */
   } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
+    is_fully_partition_wise |= op->is_fully_partition_wise();
     if (OB_FAIL(SMART_CALL(find_possible_join_filter_tables(op->get_child(ObLogicalOperator::first_child),
                                                             hint_info,
                                                             right_tables,
@@ -13471,6 +13461,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
   } else {
+    is_fully_partition_wise |= op->is_fully_partition_wise();
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
       if (OB_FAIL(SMART_CALL(find_possible_join_filter_tables(op->get_child(i),
                                                               hint_info,

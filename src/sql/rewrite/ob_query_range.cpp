@@ -3667,20 +3667,10 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
         LOG_WARN("extract not_btw failed", K(ret));
       }
     } else if (T_OP_IN  == node->get_expr_type()) {
-      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
-        if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
-          LOG_WARN("extract single in_op failed", K(ret));
-        } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
-          contain_in_ = true;
-        }
-      } else {
-        if (is_single_in) {
-          if (OB_FAIL(pre_extract_single_in_op(b_expr, out_key_part, dtc_params))) {
-            LOG_WARN("extract single in_op failed", K(ret));
-          }
-        } else if (OB_FAIL(pre_extract_complex_in_op(b_expr, out_key_part, dtc_params))) {
-          LOG_WARN("extract in_op failed", K(ret));
-        }
+      if (OB_FAIL(pre_extract_in_op(b_expr, out_key_part, dtc_params))) {
+        LOG_WARN("extract single in_op failed", K(ret));
+      } else if (!out_key_part->is_always_true() && !out_key_part->is_always_false()) {
+        contain_in_ = true;
       }
     } else if (T_OP_NOT_IN  == node->get_expr_type()) {
       if (OB_FAIL(pre_extract_not_in_op(b_expr, out_key_part, dtc_params))) {

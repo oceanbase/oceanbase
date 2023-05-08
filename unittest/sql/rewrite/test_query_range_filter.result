@@ -651,20 +651,20 @@ count of rang columns = 2
 [{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
 
 **rowkey num = 3**  
-**filter count = 1**
+**filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
-all_single_value_ranges = 1
-star_border_flag[0] = 1
-end_border_flag[0] = 1
-star_border_flag[1] = 1
-end_border_flag[1] = 1
-star_border_flag[2] = 1
-end_border_flag[2] = 1
-star_border_flag[3] = 1
-end_border_flag[3] = 1
+all_single_value_ranges = 0
+star_border_flag[0] = 0
+end_border_flag[0] = 0
+star_border_flag[1] = 0
+end_border_flag[1] = 0
+star_border_flag[2] = 0
+end_border_flag[2] = 0
+star_border_flag[3] = 0
+end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,[{"BIGINT":1},{"BIGINT":1},{"BIGINT":1};{"BIGINT":1},{"BIGINT":1},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3},{"BIGINT":1};{"BIGINT":3},{"BIGINT":3},{"BIGINT":1}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4},{"BIGINT":1};{"BIGINT":4},{"BIGINT":4},{"BIGINT":1}]"}]
+[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},{"BIGINT":1},MIN;{"BIGINT":1},{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":2},{"BIGINT":2},MIN;{"BIGINT":2},{"BIGINT":2},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
 
 [16] (a, b, c) in ((?{1},?{1},?{1}),(?{2},?{2},?{2})) or (a,b) in ((?{3},?{3}),(?{4},?{4})) or a = ?{1}
 
@@ -689,32 +689,32 @@ count of rang columns = 1
 is not min_to_max_range
 ranges.count() = 4
 all_single_value_ranges = 0
-star_border_flag[0] = 0
-end_border_flag[0] = 0
+star_border_flag[0] = 1
+end_border_flag[0] = 1
 star_border_flag[1] = 1
 end_border_flag[1] = 1
 star_border_flag[2] = 1
 end_border_flag[2] = 1
-star_border_flag[3] = 1
-end_border_flag[3] = 1
+star_border_flag[3] = 0
+end_border_flag[3] = 0
 count of rang columns = 2
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}]
+[{"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":3},{"BIGINT":3};{"BIGINT":3},{"BIGINT":3}]"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":4},{"BIGINT":4};{"BIGINT":4},{"BIGINT":4}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN;{"BIGINT":1},MAX)"}]
 
 **rowkey num = 3**  
 **filter count = 0**
 is not min_to_max_range
 ranges.count() = 4
 all_single_value_ranges = 0
-star_border_flag[0] = 0
-end_border_flag[0] = 0
-star_border_flag[1] = 1
-end_border_flag[1] = 1
+star_border_flag[0] = 1
+end_border_flag[0] = 1
+star_border_flag[1] = 0
+end_border_flag[1] = 0
 star_border_flag[2] = 0
 end_border_flag[2] = 0
 star_border_flag[3] = 0
 end_border_flag[3] = 0
 count of rang columns = 3
-[{"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}, {"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}]
+[{"range":"table_id:3003,group_idx:0,[{"BIGINT":2},{"BIGINT":2},{"BIGINT":2};{"BIGINT":2},{"BIGINT":2},{"BIGINT":2}]"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":3},{"BIGINT":3},MIN;{"BIGINT":3},{"BIGINT":3},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":4},{"BIGINT":4},MIN;{"BIGINT":4},{"BIGINT":4},MAX)"}, {"range":"table_id:3003,group_idx:0,({"BIGINT":1},MIN,MIN;{"BIGINT":1},MAX,MAX)"}]
 
 [17] a = 1 and c = 1 or (a = 2 and b = 2)
 
