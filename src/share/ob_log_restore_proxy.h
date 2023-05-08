@@ -140,6 +140,7 @@ public:
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
 private:
   bool is_user_changed_(const char *user_name, const char *user_password, const char *db_name);
+  void destroy_tg_();
 private:
   bool inited_;
   uint64_t tenant_id_;
