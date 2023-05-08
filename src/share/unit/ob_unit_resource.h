@@ -70,13 +70,6 @@ public:
   static const int64_t META_TENANT_SAFE_MIN_MEMORY = 1 * GB;
   static const int64_t UNIT_SAFE_MIN_MEMORY = 2 * META_TENANT_SAFE_MIN_MEMORY;
 
-  // SYS tenant MEMORY configurations
-  //
-  // SYS tenant default memory upper limit
-  static const int64_t SYS_TENANT_DEFAULT_MEMORY_MAX = 16L * GB;
-  // SYS tenant default memory percentage of server available memory
-  static const int64_t SYS_TENANT_DEFAULT_MEMORY_PERCENTAGE = 25;
-
   ////////////////////////// LOG DISK ////////////////////////////
   // Unit LOG DISK SIZE is limited by LS replica. Every LS replica need 512M.
   //
