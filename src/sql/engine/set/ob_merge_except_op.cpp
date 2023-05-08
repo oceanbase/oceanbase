@@ -160,7 +160,6 @@ int ObMergeExceptOp::inner_get_next_batch(const int64_t max_row_cnt)
                                                            first_got_left_row_))) {
       //when we succ locate a row in left batch, store row is out of date,
       //we will compare inside a batch
-      last_row_.store_row_ = nullptr;
       brs_.skip_->unset(curr_left_idx);
       last_left_idx = curr_left_idx;
       if (right_iter_end_) {

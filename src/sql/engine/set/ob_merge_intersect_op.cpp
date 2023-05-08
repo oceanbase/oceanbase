@@ -158,7 +158,6 @@ int ObMergeIntersectOp::inner_get_next_batch(const int64_t max_row_cnt)
                                                            first_got_left_row_))) {
       //when we succ locate a row in left batch, store row is out of date,
       //we will compare inside a batch
-      last_row_.store_row_ = nullptr;
       while (OB_SUCC(ret) && !right_iter_end_) {
         if (!first_got_right_row_) {
           if (OB_FAIL(cmp_(right_->get_spec().output_, left_->get_spec().output_,

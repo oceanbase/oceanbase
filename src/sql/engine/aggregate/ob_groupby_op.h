@@ -69,7 +69,8 @@ public:
       aggr_processor_(eval_ctx_,
                       (static_cast<ObGroupBySpec &>(const_cast<ObOpSpec &>(spec))).aggr_infos_,
                       ObModIds::OB_SQL_AGGR_FUNC_ROW,
-                      op_monitor_info_)
+                      op_monitor_info_,
+                      exec_ctx.get_my_session()->get_effective_tenant_id())
   {
   }
   inline ObAggregateProcessor &get_aggr_processor() { return aggr_processor_; }
