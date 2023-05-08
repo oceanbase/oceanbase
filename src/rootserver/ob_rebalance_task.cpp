@@ -2681,6 +2681,12 @@ int ObMigrateReplicaTask::build(const obrpc::MigrateMode migrate_mode,
     const ObRebalanceTaskPriority priority, const char* comment, bool admin_force)
 {
   int ret = OB_SUCCESS;
+  // When a tenant is regarded as a small tenant, all partitions could migrate in the same batch.
+  // If the count of partitions exceed 30000, this migration could fail forever. Because memory
+  // allocator could only provide 4G at one time, making it impossible to alloc memory to execute
+  // these tasks. So we have to limit the max batch migrate task count to solve this problem.
+  // 10000 is safe enough to ensure memory allocation not exceeding 4G.
+  const int64_t max_batch_migrate_task_count = 10000;
   if (OB_UNLIKELY(task_infos.count() <= 0 || !dst.is_valid() || !is_valid_priority(priority))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_infos), K(dst), K(priority));
@@ -2689,7 +2695,13 @@ int ObMigrateReplicaTask::build(const obrpc::MigrateMode migrate_mode,
   } else {
     task_infos_.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < task_infos.count(); ++i) {
-      if (OB_FAIL(task_infos_.push_back(task_infos.at(i)))) {
+      if (max_batch_migrate_task_count <= get_sub_task_count()) {
+        LOG_INFO("sub task count exceed batch limit, only part of these tasks can execute at this time",
+            K(max_batch_migrate_task_count),
+            "task_infos_count",
+            task_infos.count());
+        break;
+      } else if (OB_FAIL(task_infos_.push_back(task_infos.at(i)))) {
         LOG_WARN("fail to push task", K(ret));
       }
     }
