@@ -2731,8 +2731,8 @@ Qb name trace:
 -------------------------------------
   stmt_id:0, stmt_type:T_EXPLAIN
   stmt_id:1, SEL$1 > SEL$4D615D57 > SEL$26211548
-  stmt_id:2, SEL$2
-  stmt_id:3, SEL$3 > SEL$69480C90
+  stmt_id:2, SEL$2 > SEL$69480C90
+  stmt_id:3, SEL$3 > SEL$DD143F72
   stmt_id:4, SEL$4
   stmt_id:5, SEL$5
   stmt_id:6, SEL$6
@@ -2743,10 +2743,10 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       FULL(@"SEL$26211548" "test"."t1"@"SEL$1")
-      FULL(@"SEL$2" "test"."t2"@"SEL$2")
-      USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      FULL(@"SEL$69480C90" "test"."t2"@"SEL$3")
-      USE_DAS(@"SEL$69480C90" "test"."t2"@"SEL$3")
+      FULL(@"SEL$69480C90" "test"."t2"@"SEL$2")
+      USE_DAS(@"SEL$69480C90" "test"."t2"@"SEL$2")
+      FULL(@"SEL$DD143F72" "test"."t2"@"SEL$3")
+      USE_DAS(@"SEL$DD143F72" "test"."t2"@"SEL$3")
       FULL(@"SEL$4" "test"."t2"@"SEL$4")
       USE_DAS(@"SEL$4" "test"."t2"@"SEL$4")
       FULL(@"SEL$5" "test"."t2"@"SEL$5")
@@ -2758,6 +2758,7 @@ Outline Data:
       FULL(@"SEL$8" "test"."t2"@"SEL$8")
       USE_DAS(@"SEL$8" "test"."t2"@"SEL$8")
       SIMPLIFY_SUBQUERY(@"SEL$1")
+      PRED_DEDUCE(@"SEL$2")
       PRED_DEDUCE(@"SEL$3")
       SIMPLIFY_SUBQUERY(@"SEL$4D615D57")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
