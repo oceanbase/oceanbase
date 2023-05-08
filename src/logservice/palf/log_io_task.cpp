@@ -97,7 +97,7 @@ int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl)
 	if (OB_FAIL(after_consume_(palf_env_impl))) {
 		PALF_LOG(WARN, "after_consume_ failed", K(ret), KPC(palf_env_impl));
 	}
-	constexpr int64_t MAX_DELAY_TIME = 10 * 1000;
+	constexpr int64_t MAX_DELAY_TIME = 100 * 1000;
 	if (delay_ts >= MAX_DELAY_TIME) {
 		PALF_LOG(INFO, "[io delay]", K(after_consume_ts), K(delay_ts));
 	}
