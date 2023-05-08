@@ -58,9 +58,9 @@ private:
   typedef ObSEArray<palf::block_id_t, DEFAULT_BLOCK_CNT> BlockIdArray;
 
 private:
-  static const int64_t NORMAL_STATUS = 0;
-  static const int64_t EXPANDING_STATUS = 1;
-  static const int64_t SHRINKING_STATUS = 2;
+  static const int64_t NORMAL_STATUS;
+  static const int64_t EXPANDING_STATUS;
+  static const int64_t SHRINKING_STATUS;
   struct LogPoolMeta
   {
     LogPoolMeta(const int64_t curr_total_size, const int64_t next_total_size,

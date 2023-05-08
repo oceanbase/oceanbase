@@ -515,6 +515,38 @@ TEST_F(TestServerLogBlockMgr, create_tenant_resize)
   EXPECT_EQ(3*GB, log_block_mgr_.min_log_disk_size_for_all_tenants_);
 }
 
+TEST_F(TestServerLogBlockMgr, resize_log_loop_and_restart)
+{
+  ObServerLogBlockMgr::LogPoolMeta meta;
+  meta.curr_total_size_ = log_block_mgr_.log_pool_meta_.curr_total_size_;
+  int64_t next_total_size = meta.next_total_size_ = meta.curr_total_size_ + 1*1024*1024*1024;
+  meta.status_ = ObServerLogBlockMgr::EXPANDING_STATUS;
+  log_block_mgr_.update_log_pool_meta_guarded_by_lock_(meta);
+  char tmp_dir_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  snprintf(tmp_dir_path, OB_MAX_FILE_NAME_LENGTH, "%s/expanding.tmp", log_block_mgr_.log_pool_path_);
+  int tmp_dir_fd = -1;
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.make_resizing_tmp_dir_(tmp_dir_path, tmp_dir_fd));
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.remove_resizing_tmp_dir_(tmp_dir_path, tmp_dir_fd));
+  char file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  auto touch_file_in_log_pool = [](const char *file_path) {
+    char cmd_touch[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    char cmd_fallocate[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    snprintf(cmd_touch, OB_MAX_FILE_NAME_LENGTH, "touch %s", file_path);
+    snprintf(cmd_fallocate, OB_MAX_FILE_NAME_LENGTH, "fallocate -l %lu %s", PALF_PHY_BLOCK_SIZE, file_path);
+    system(cmd_touch);
+    system(cmd_fallocate);
+  };
+  for (int i = 0; i < 10; i++) {
+    int64_t file_id = i + 10000;
+    snprintf(file_path, OB_MAX_FILE_NAME_LENGTH, "%s/%ld", log_block_mgr_.log_pool_path_, file_id);
+    touch_file_in_log_pool(file_path);
+  }
+  log_block_mgr_.destroy();
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.init(log_pool_base_path_));
+  EXPECT_EQ(ObServerLogBlockMgr::NORMAL_STATUS, log_block_mgr_.log_pool_meta_.status_);
+  EXPECT_EQ(next_total_size, log_block_mgr_.log_pool_meta_.curr_total_size_);
+}
+
 class DummyBlockPool : public palf::ILogBlockPool {
 public:
   virtual int create_block_at(const palf::FileDesc &dir_fd,
