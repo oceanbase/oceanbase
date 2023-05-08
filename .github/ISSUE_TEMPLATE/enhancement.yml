@@ -1,0 +1,10 @@
+name: 🚀 Enhancement
+description: I want to make an enhancement.
+labels: ["type: enhancement"]
+body:
+  - type: textarea
+    attributes:
+      label: Enhancement
+      description: A clear and concise description.
+    validations:
+      required: true
