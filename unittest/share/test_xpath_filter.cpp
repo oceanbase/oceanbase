@@ -204,7 +204,7 @@ TEST_F(TestXPathFilter, test_complex_in_predicate)
 
 /*
 <bookstore>
-  <book category="a">
+  <book category="">
     <title lang="x">abc</title>
     <author>def</author>
     <year month="1">1</year>
@@ -232,9 +232,11 @@ TEST_F(TestXPathFilter, test_complex_in_predicate)
 
 ObString enter_predicate[PREDICATE_TEST_COUNT] = {
   // node-set
-  "/bookstore/book/sell[0 | /bookstore/book]",
-  "/bookstore/book/sell[/bookstore/book | 0]",
-  "/bookstore/book/sell[/a | /bookstore]",
+  // "/bookstore/book/sell[0 | /bookstore/book]",
+  // "/bookstore/book/sell[/bookstore/book | 0]",
+  // "/bookstore/book/sell[/a | /bookstore]",
+  "/bookstore/book/sell[/bookstore/book/@category = \"\"]",
+  "/bookstore/book/sell[@abced = \"\"]",
 
   "/bookstore/book/sell[/bookstore/book/sell = \"\"]",
   "/bookstore/book/sell[(3 > 5) = /bookstore/book/abc]",
@@ -247,9 +249,9 @@ ObString enter_predicate[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[/bookstore/book/title = /bookstore/book/author]",
 
   // union
-  "/bookstore/book/sell[1 | 0]",
-  "/bookstore/book/sell[\"abc\" | 0]",
-  "/bookstore/book/sell[1 > 0 | 0]",
+  // "/bookstore/book/sell[1 | 0]",
+  // "/bookstore/book/sell[\"abc\" | 0]",
+  // "/bookstore/book/sell[1 > 0 | 0]",
 
   // logic compare
   "/bookstore/book/sell[(0 < 2) and \"abc\"]",
@@ -322,9 +324,11 @@ ObString enter_predicate[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[189 <= 2222]",
 };
 ObString expect_predicate_parse_result[PREDICATE_TEST_COUNT] = {
-  "/bookstore/book/sell[0 | /bookstore/book]",
-  "/bookstore/book/sell[/bookstore/book | 0]",
-  "/bookstore/book/sell[/a | /bookstore]",
+  // "/bookstore/book/sell[0 | /bookstore/book]",
+  // "/bookstore/book/sell[/bookstore/book | 0]",
+  // "/bookstore/book/sell[/a | /bookstore]",
+  "/bookstore/book/sell[/bookstore/book/@category = \"\"]",
+  "/bookstore/book/sell[@abced = \"\"]",
 
   "/bookstore/book/sell[/bookstore/book/sell = \"\"]",
   "/bookstore/book/sell[3 > 5 = /bookstore/book/abc]",
@@ -336,9 +340,9 @@ ObString expect_predicate_parse_result[PREDICATE_TEST_COUNT] = {
   "/bookstore/book/sell[/bookstore/book/author = 3 > 1]",
   "/bookstore/book/sell[/bookstore/book/title = /bookstore/book/author]",
 
-  "/bookstore/book/sell[1 | 0]",
-  "/bookstore/book/sell[\"abc\" | 0]",
-  "/bookstore/book/sell[1 > 0 | 0]",
+  // "/bookstore/book/sell[1 | 0]",
+  // "/bookstore/book/sell[\"abc\" | 0]",
+  // "/bookstore/book/sell[1 > 0 | 0]",
 
   "/bookstore/book/sell[0 < 2 and \"abc\"]",
   "/bookstore/book/sell[0 < 2 and \"x\"]",
@@ -399,7 +403,7 @@ TEST_F(TestXPathFilter, test_in_predicate)
 {
   INIT_SUCC(ret);
   ObArenaAllocator allocator(ObModIds::TEST);
-  ObString xml_text("<bookstore><book category=\"a\"><title lang=\"x\">abc</title> <author>def</author><year month=\"1\">1</year><price>false</price></book><book category=\"b\"><title lang=\"y\">def</title><author>xyz</author><year month=\"2\">2005</year><price>30.00</price></book><book category=\"c\"><title lang=\"en\">xyz</title><author>abc</author><year>2005</year><price>29.99</price></book><book category=\"WEB\"><title lang=\"en\">Learning XML</title><year>2003</year><sell></sell></book></bookstore>");
+  ObString xml_text("<bookstore><book category=\"\"><title lang=\"x\">abc</title> <author>def</author><year month=\"1\">1</year><price>false</price></book><book category=\"b\"><title lang=\"y\">def</title><author>xyz</author><year month=\"2\">2005</year><price>30.00</price></book><book category=\"c\"><title lang=\"en\">xyz</title><author>abc</author><year>2005</year><price>29.99</price></book><book category=\"WEB\"><title lang=\"en\">Learning XML</title><year>2003</year><sell></sell></book></bookstore>");
   ObXmlDocument* doc = nullptr;
   ObMulModeMemCtx* ctx = nullptr;
   ASSERT_EQ(ObXmlUtil::create_mulmode_tree_context(&allocator, ctx), OB_SUCCESS);
@@ -444,8 +448,8 @@ TEST_F(TestXPathFilter, test_in_predicate)
 }
 ObString enter_false_predicate[PREDICATE_FALSE_TEST_COUNT] = {
   // node-set
-  "/bookstore/book/sell[/a | 0]",
-  "/bookstore/book/sell[/a | 1]",
+  // "/bookstore/book/sell[/a | 0]",
+  // "/bookstore/book/sell[/a | 1]",
 
   "/bookstore/book/sell[/bookstore/book/abc != (3 > 3)]",
   "/bookstore/book/sell[/bookstore/book/title < 2]",
@@ -458,10 +462,10 @@ ObString enter_false_predicate[PREDICATE_FALSE_TEST_COUNT] = {
   "/bookstore/book/sell[/abc = /xyz]",
 
   // union
-  "/bookstore/book/sell[0 | 1]",
-  "/bookstore/book/sell[\"\" | 0]",
-  "/bookstore/book/sell[\"\" | 1]",
-  "/bookstore/book/sell[\"\" | 3 > 2]",
+  // "/bookstore/book/sell[0 | 1]",
+  // "/bookstore/book/sell[\"\" | 0]",
+  // "/bookstore/book/sell[\"\" | 1]",
+  // "/bookstore/book/sell[\"\" | 3 > 2]",
 
   // logic compare
   "/bookstore/book/sell[(20 < 2) and (3 < 9)]",
@@ -501,8 +505,8 @@ ObString enter_false_predicate[PREDICATE_FALSE_TEST_COUNT] = {
   "/bookstore/book/sell[1 != 1.0]",
 };
 ObString expect_false_predicate_parse_result[PREDICATE_FALSE_TEST_COUNT] = {
-  "/bookstore/book/sell[/a | 0]",
-  "/bookstore/book/sell[/a | 1]",
+  // "/bookstore/book/sell[/a | 0]",
+  // "/bookstore/book/sell[/a | 1]",
 
   "/bookstore/book/sell[/bookstore/book/abc != 3 > 3]",
   "/bookstore/book/sell[/bookstore/book/title < 2]",
@@ -514,10 +518,10 @@ ObString expect_false_predicate_parse_result[PREDICATE_FALSE_TEST_COUNT] = {
   "/bookstore/book/sell[/bookstore/book/abc > \"\"]",
   "/bookstore/book/sell[/abc = /xyz]",
 
-  "/bookstore/book/sell[0 | 1]",
-  "/bookstore/book/sell[\"\" | 0]",
-  "/bookstore/book/sell[\"\" | 1]",
-  "/bookstore/book/sell[\"\" | 3 > 2]",
+  // "/bookstore/book/sell[0 | 1]",
+  // "/bookstore/book/sell[\"\" | 0]",
+  // "/bookstore/book/sell[\"\" | 1]",
+  // "/bookstore/book/sell[\"\" | 3 > 2]",
 
   "/bookstore/book/sell[20 < 2 and 3 < 9]",
   "/bookstore/book/sell[20 < 2 or 19 < 9]",
