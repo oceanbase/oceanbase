@@ -55,7 +55,7 @@ function _obd_sh_complete_func
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  all_cmds["$*"]="prepare deploy redeploy reinstall start stop restart destroy upgrade mysqltest pid ssh less gdb sql mysql oracle edit list sys display create_tenant drop_tenant sysbench tpch tpcc tpcds"
+  all_cmds["$*"]="prepare deploy redeploy reinstall start stop restart destroy upgrade mysqltest pid ssh less gdb sql mysql oracle edit list sys display create_tenant drop_tenant sysbench tpch tpcc tpcds display-trace"
   case $prev in
   list)
     return 0
