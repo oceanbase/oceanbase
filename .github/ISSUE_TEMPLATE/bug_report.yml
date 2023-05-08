@@ -1,15 +1,15 @@
-name: Bug report
+name: 🐞 Bug Report
 description: bug report for OceanBase
-title: "[Bug]: "
-labels: [bug]
-assignees:
-  - caifeizhi
+title: "[Bug]: <title>"
+labels: ["type: bug"]
+assignees: []
+
 body:
   - type: checkboxes
     attributes:
       label: Please check the issue list for the same bug 
       options:
-        - label: Please checked issue list and confirm this bug is encountered for the first time.
+        - label: I have searched the existing issues.
           required: true
         - label: Please try full text in English and attach precise description.
           required: true
@@ -19,10 +19,10 @@ body:
       description: |
         Environment Details sometimes important 
       value: |
-        - OB Version&commit_id or other module version&commit_id (e.g. observer V3.1.2 8b23a93):
-        - Hardware parameter:OS type & Compliler & CPU etc. 
-        - Others
-      render: markdown
+        #### OB Version(`LD_LIBRARY_PATH=../lib:$LD_LIBRARY_PATH ./observer -V`):
+        
+        #### Hardware parameter(`uname -a`): 
+        
     validations:
       required: false
   - type: textarea
@@ -33,18 +33,18 @@ body:
   - type: textarea
     attributes:
       label: Actual Behavior
-      description: What is the result? picture is allowed
+      description: What is the result? Pictures are allowed
     validations:
       required: true
   - type: textarea
     attributes:
       label: Expected Behavior
-      description: what you expected.
+      description: What you expected.
     validations:
       required: false
   - type: textarea
     attributes:
-      label: other information
+      label: Other information
       description: Error Log or Core stack or Others
     validations:
       required: false
