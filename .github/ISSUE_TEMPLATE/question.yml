@@ -1,25 +1,35 @@
-name: question
-description: concise description of the problem.
+name: 🙋 Question
+description: Ask a question about OceanBase
 title: "[Question]: "
-labels: [question]
-assignees:
-  - caifeizhi
+labels: ["type: question"]
 body:
-  - type: checkboxes
-    attributes:
-      label: Please check the issue list for the same question
-      options:
-        - label: Please try full text in English and attach precise description.
-          required: true
   - type: markdown
     attributes:
       value: |
         Make sure you have:
         * Searched [GitHub issue](https://github.com/oceanbase/oceanbase/issues)
-        * Searched [documentation](https://open.oceanbase.com)
+
+        If the question is concise and probably has a short answer, asking it in [community Slack](https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw)
   - type: textarea
     attributes:
       label: Describe your question
       description: better to provide some pictures.
     validations:
       required: true
+
+  - type: textarea
+    attributes:
+      label: Environment
+      description: |
+          Environment details sometimes important 
+      value: |
+        #### OB Version(`LD_LIBRARY_PATH=../lib:$LD_LIBRARY_PATH ./observer -V`)
+
+        #### Hardware parameter(`uname -a`)
+
+  - type: textarea
+    attributes:
+      label: Other information
+      description: Anything others about the question
+    validations:
+      required: false
