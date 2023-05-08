@@ -167,8 +167,7 @@ void ObLogFetcherIdlePool::handle(void *data, volatile bool &stop_flag)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls_fetch_ctx is nullptt", KR(ret), K(thread_index), K(get_thread_cnt()));
   } else {
-    // TODO remvoe
-    LOG_INFO("fetcher idle pool thread start", K(thread_index));
+    LOG_INFO("fetcher idle pool thread start", K(thread_index), "tls_id", ls_fetch_ctx->get_tls_id());
 
     if (OB_FAIL(do_request_(thread_index, *ls_fetch_ctx))) {
       if (OB_IN_STOP_STATE != ret) {
@@ -199,8 +198,10 @@ int ObLogFetcherIdlePool::do_request_(const int64_t thread_index, LSFetchCtx &ls
     ret = OB_INVALID_ERROR;
   } else {
     bool need_dispatch = false;
+    int64_t retry_count = 0;
+    const int64_t MAX_RETRY_COUNT = 5;
 
-    while (OB_SUCC(ret) && ! need_dispatch) {
+    while (OB_SUCC(ret) && ! need_dispatch && (retry_count < MAX_RETRY_COUNT)) {
       if (OB_FAIL(handle_task_(&ls_fetch_ctx, need_dispatch))) {
         LOG_ERROR("handle task fail", KR(ret), K(ls_fetch_ctx));
       } else if (need_dispatch) {
@@ -216,6 +217,13 @@ int ObLogFetcherIdlePool::do_request_(const int64_t thread_index, LSFetchCtx &ls
       } else {
         // sleep
         ob_usleep(IDLE_WAIT_TIME);
+        ++retry_count;
+
+        if (MAX_RETRY_COUNT == retry_count) {
+          if (OB_FAIL(push(&ls_fetch_ctx))) {
+            LOG_ERROR("ObLogFetcherIdlePool push failed", KR(ret));
+          }
+        }
       }
     } // while
   }
@@ -239,7 +247,7 @@ int ObLogFetcherIdlePool::handle_task_(LSFetchCtx *task, bool &need_dispatch)
   } else if (OB_UNLIKELY(task->is_discarded())) {
     // If a task is deleted, assign it directly and recycle it during the assignment process
     need_dispatch = true;
-    LOG_DEBUG("[STAT] [IDLE_POOL] [RECYCLE_FETCH_TASK]", K(task), KPC(task));
+    LOG_INFO("[STAT] [IDLE_POOL] [RECYCLE_FETCH_TASK]", K(task), KPC(task));
   } else if (OB_ISNULL(cfg_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid ObLogFetcherConfig", KR(ret), K(cfg_));

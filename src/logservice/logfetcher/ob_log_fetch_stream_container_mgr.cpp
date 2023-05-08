@@ -37,7 +37,9 @@ ObFsContainerMgr::~ObFsContainerMgr()
   destroy();
 }
 
-int ObFsContainerMgr::init(const int64_t svr_stream_cached_count,
+int ObFsContainerMgr::init(
+    const uint64_t tenant_id,
+    const int64_t svr_stream_cached_count,
     const int64_t fetch_stream_cached_count,
     const int64_t rpc_result_cached_count,
     IObLogRpc &rpc,
@@ -59,8 +61,8 @@ int ObFsContainerMgr::init(const int64_t svr_stream_cached_count,
     LOG_ERROR("init FetchStreamContainer pool fail", KR(ret));
   } else if (OB_FAIL(fs_pool_.init(fetch_stream_cached_count))) {
     LOG_ERROR("init fetch stream pool fail", KR(ret), K(fetch_stream_cached_count));
-  } else if (OB_FAIL(rpc_result_pool_.init(rpc_result_cached_count))) {
-    LOG_ERROR("init rpc result pool fail", KR(ret), K(rpc_result_cached_count));
+  } else if (OB_FAIL(rpc_result_pool_.init(tenant_id, rpc_result_cached_count))) {
+    LOG_ERROR("init rpc result pool fail", KR(ret), K(tenant_id), K(rpc_result_cached_count));
   } else {
     rpc_ = &rpc;
     stream_worker_ = &stream_worker;
@@ -84,6 +86,7 @@ void ObFsContainerMgr::destroy()
     (void)fsc_map_.destroy();
     fsc_pool_.destroy();
     fs_pool_.destroy();
+    rpc_result_pool_.destroy();
   }
 }
 

@@ -160,7 +160,7 @@ void ObLogFetcherDeadPool::handle(void *data, volatile bool &stop_flag)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls_fetch_ctx is nullptt", KR(ret), K(thread_index), K(get_thread_cnt()));
   } else {
-    LOG_INFO("fetcher dead pool thread start", K(thread_index));
+    LOG_INFO("fetcher dead pool thread start", K(thread_index), "tls_id", ls_fetch_ctx->get_tls_id());
 
     if (OB_FAIL(handle_task_list_(thread_index, *ls_fetch_ctx, stop_flag))) {
       if (OB_IN_STOP_STATE != ret) {

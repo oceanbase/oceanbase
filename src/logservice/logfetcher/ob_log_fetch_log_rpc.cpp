@@ -1349,20 +1349,22 @@ int FetchLogARpcResult::set(const obrpc::ObRpcResultCode &rcode,
 
 ////////////////////////////// FetchLogARpcResult Object Pool //////////////////////////////
 
-int FetchLogARpcResultPool::init(const int64_t cached_obj_count)
+int FetchLogARpcResultPool::init(const uint64_t tenant_id, const int64_t cached_obj_count)
 {
   int ret = OB_SUCCESS;
+
   if (OB_UNLIKELY(inited_)) {
-    LOG_ERROR("init twice");
     ret = OB_INIT_TWICE;
+    LOG_ERROR("init twice");
   } else if (OB_FAIL(pool_.init(cached_obj_count,
       ObModIds::OB_LOG_FETCH_LOG_ARPC_RESULT,
-      OB_SERVER_TENANT_ID,
+      tenant_id,
       DEFAULT_RESULT_POOL_BLOCK_SIZE))) {
-    LOG_ERROR("init result obj pool fail", KR(ret), K(cached_obj_count));
+    LOG_ERROR("init result obj pool fail", KR(ret), K(tenant_id), K(cached_obj_count));
   } else {
     inited_ = true;
   }
+
   return ret;
 }
 
@@ -1374,14 +1376,15 @@ void FetchLogARpcResultPool::destroy()
 
 void FetchLogARpcResultPool::print_stat()
 {
-  int64_t alloc_count = pool_.get_alloc_count();
-  int64_t free_count = pool_.get_free_count();
-  int64_t fixed_count = pool_.get_fixed_count();
-  int64_t used_count = alloc_count - free_count;
-  int64_t dynamic_count = (alloc_count > fixed_count) ? alloc_count - fixed_count : 0;
+  const int64_t alloc_count = pool_.get_alloc_count();
+  const int64_t free_count = pool_.get_free_count();
+  const int64_t fixed_count = pool_.get_fixed_count();
+  const int64_t used_count = alloc_count - free_count;
+  const int64_t dynamic_count = (alloc_count > fixed_count) ? alloc_count - fixed_count : 0;
+  const int64_t cached_total_count = pool_.get_cached_total_count();
 
-  _LOG_INFO("[STAT] [RPC_RESULT_POOL] USED=%ld FREE=%ld FIXED=%ld DYNAMIC=%ld",
-      used_count, free_count, fixed_count, dynamic_count);
+  _LOG_INFO("[STAT] [RPC_RESULT_POOL] USED=%ld ALLOC=%ld FREE=%ld FIXED=%ld DYNAMIC=%ld CACHED_TOTAL_COUNT=%ld",
+      used_count, alloc_count, free_count, fixed_count, dynamic_count, cached_total_count);
 }
 
 int FetchLogARpcResultPool::alloc(FetchLogARpcResult *&result)

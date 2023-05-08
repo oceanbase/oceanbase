@@ -157,6 +157,7 @@ int ObLogFetcher::init(
             *err_handler))) {
       LOG_ERROR("init stream worker fail", KR(ret));
     } else if (OB_FAIL(fs_container_mgr_.init(
+            tenant_id,
             cfg.svr_stream_cached_count,
             cfg.fetch_stream_cached_count,
             cfg.rpc_result_cached_count,

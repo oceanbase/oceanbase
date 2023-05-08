@@ -49,7 +49,9 @@ class ObFsContainerMgr : public IObFsContainerMgr
 public:
   ObFsContainerMgr();
   virtual ~ObFsContainerMgr();
-  int init(const int64_t svr_stream_cached_count,
+  int init(
+      const uint64_t tenant_id,
+      const int64_t svr_stream_cached_count,
       const int64_t fetch_stream_cached_count,
       const int64_t rpc_result_cached_count,
       IObLogRpc &rpc,

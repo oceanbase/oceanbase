@@ -56,6 +56,8 @@ public:
   int64_t get_free_count() const { return free_count_; }
   int64_t get_alloc_count() const { return alloc_count_; }
   int64_t get_fixed_count() const { return fixed_count_; }
+  int64_t get_cached_total_count() const { return free_list_.get_total(); }
+  int64_t get_cached_free_count() const { return free_list_.get_free(); }
 
 public:
   int init(const int64_t fixed_count = DEFAULT_FIXED_COUNT,
