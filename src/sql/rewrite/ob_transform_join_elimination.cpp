@@ -1114,10 +1114,8 @@ int ObTransformJoinElimination::do_eliminate_left_outer_join(ObDMLStmt *stmt,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(construct_eliminated_tables(stmt,
-                                                   right_table_items,
-                                                   trans_tables))) {
-      LOG_WARN("failed to construct eliminated tables", K(ret));
+    } else if (OB_FAIL(construct_eliminated_table(stmt, right_table, trans_tables))) {
+      LOG_WARN("failed to construct eliminated table", K(ret));
     } else if (OB_FAIL(stmt->remove_table_info(right_table_items))) {
       LOG_WARN("failed to remove table info", K(ret));
     } else if (OB_FAIL(stmt->replace_relation_exprs(from_exprs, to_exprs))) {
