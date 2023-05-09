@@ -1309,7 +1309,7 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.tenant_id_         = tenant_id_;
           drop_index_arg.exec_tenant_id_    = tenant_id_;
           drop_index_arg.index_table_id_    = index_table_id_;
-          drop_index_arg.session_id_        = 0;
+          drop_index_arg.session_id_        = create_index_arg_.session_id_;
           drop_index_arg.index_name_        = index_name;
           drop_index_arg.table_name_        = data_table_schema->get_table_name();
           drop_index_arg.database_name_     = database_schema->get_database_name_str();
