@@ -810,6 +810,9 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
             if (OB_SUCCESS != close_ret) {
               LOG_WARN("failed to close result", K(close_ret), K(ret));
             }
+          } else if (retry_cnt > 0) {
+            int64_t total_time_cost_us = (ObTimeUtility::current_time() - start_time);
+            LOG_INFO("[OK] inner sql execute success after retry!", K(retry_cnt), K(total_time_cost_us));
           }
           get_session().set_session_in_retry(need_retry, ret_code);
           //监控项统计开始
