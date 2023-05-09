@@ -303,6 +303,9 @@ int ObExternalTableAccessService::revert_scan_iter(ObNewRowIterator *iter)
 ObCSVTableRowIterator::~ObCSVTableRowIterator()
 {
   release_buf();
+  if (nullptr != bit_vector_cache_) {
+    allocator_.free(bit_vector_cache_);
+  }
 }
 
 void ObCSVTableRowIterator::release_buf()
