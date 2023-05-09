@@ -88,6 +88,7 @@ private:
   int inner_remove_dummy_nvl(ObDMLStmt *stmt,
                              ObRawExpr *&expr,
                              ObNotNullContext &not_null_ctx,
+                             ObIArray<ObRawExpr *> &ignore_exprs,
                              bool &trans_happened);
   int do_remove_dummy_nvl(ObDMLStmt *stmt,
                           ObRawExpr *&expr,
@@ -97,6 +98,7 @@ private:
   int convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_happened);
   int inner_convert_nvl_predicate(ObDMLStmt *stmt,
                                   ObRawExpr *&expr,
+                                  ObIArray<ObRawExpr *> &ignore_exprs,
                                   bool &trans_happened);
   int do_convert_nvl_predicate(ObDMLStmt *stmt,
                                ObRawExpr *&parent_expr,

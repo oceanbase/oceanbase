@@ -4331,6 +4331,33 @@ int ObTransformUtils::add_cast_for_replace(ObRawExprFactory &expr_factory,
   return ret;
 }
 
+int ObTransformUtils::add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
+                                                   const ObRawExpr *from_expr,
+                                                   ObRawExpr *&to_expr,
+                                                   ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(from_expr) || OB_ISNULL(to_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KP(from_expr), KP(to_expr), K(ret));
+  } else {
+    const ObExprResType &src_type = from_expr->get_result_type();
+    const ObExprResType &dst_type = to_expr->get_result_type();
+    bool need_cast = (src_type.get_type() != dst_type.get_type()) ||
+                     (src_type.get_length() != dst_type.get_length()) ||
+                     (src_type.get_precision() != dst_type.get_precision()) ||
+                     (src_type.get_scale() != dst_type.get_scale());
+    if (ob_is_string_or_lob_type(src_type.get_type())) {
+      need_cast |= (src_type.get_collation_type() != dst_type.get_collation_type()) ||
+                   (src_type.get_collation_level() != dst_type.get_collation_level());
+    }
+    if (need_cast && OB_FAIL(add_cast_for_replace(expr_factory, from_expr, to_expr, session_info))) {
+      LOG_WARN("failed to add cast for _replace", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::UniqueCheckInfo::assign(const UniqueCheckInfo &other)
 {
   int ret = OB_SUCCESS;

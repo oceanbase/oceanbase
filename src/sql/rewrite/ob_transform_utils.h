@@ -887,6 +887,11 @@ public:
                                   ObRawExpr *&to_expr,
                                   ObSQLSessionInfo *session_info);
 
+  static int add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
+                                          const ObRawExpr *from_expr,
+                                          ObRawExpr *&to_expr,
+                                          ObSQLSessionInfo *session_info);
+
   static int extract_table_exprs(const ObDMLStmt &stmt,
                                  const ObIArray<ObRawExpr *> &source_exprs,
                                  const TableItem &target,
