@@ -167,6 +167,11 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     }
+    // check if it is an oracle temporary table
+    else if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
+    }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;
