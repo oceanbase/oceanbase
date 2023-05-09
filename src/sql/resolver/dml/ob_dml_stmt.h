@@ -203,7 +203,8 @@ struct TableItem
                K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
                K_(ddl_schema_version), K_(ddl_table_id),
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
-               KPC_(function_table_expr), K_(table_type));
+               KPC_(function_table_expr),
+               K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type));
 
   enum TableType
   {
@@ -243,7 +244,6 @@ struct TableItem
     USING_TIMESTAMP,
     USING_SCN
   };
-
   //this table resolved from schema, is base table or alias from base table
   bool is_basic_table() const { return BASE_TABLE == type_ || ALIAS_TABLE == type_; }
   bool is_generated_table() const { return GENERATED_TABLE == type_; }

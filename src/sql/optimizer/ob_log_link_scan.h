@@ -21,6 +21,9 @@ public:
   ObLogLinkScan(ObLogPlan &plan);
   virtual ~ObLogLinkScan() {}
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
+private:
+  virtual bool print_flashback_query() const override { return true; };
+
 };
 
 } // namespace sql

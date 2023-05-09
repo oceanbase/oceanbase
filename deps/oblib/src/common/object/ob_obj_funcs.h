@@ -817,14 +817,22 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
     int ret = common::OB_SUCCESS;                                       \
     static const char *CAST_PREFIX_ORACLE = "TO_DATE('";                \
     static const char *CAST_SUFFIX_ORACLE = "', 'YYYY-MM-DD HH24:MI:SS')"; \
+    static const char *CAST_PREFIX_MYSQL_TIMESTAMP = "TIMESTAMP";        \
+    static const char *CAST_PREFIX_MYSQL_DATETIME = "DATETIME";        \
     static const char *NORMAL_SUFFIX = "'";                             \
     const ObTimeZoneInfo *tz_info = params.tz_info_;                    \
     const char *NORMAL_PREFIX = params.beginning_space_ ? "' " : "'";        \
     ObString str(static_cast<int32_t>(length - pos - 1), 0, buffer + pos + 1);  \
     if (OB_SUCC(ret)) {                                                 \
-      const char *fmt_prefix = params.need_cast_expr_ && lib::is_oracle_mode() ? \
-                                 CAST_PREFIX_ORACLE : NORMAL_PREFIX;    \
-      ret = databuff_printf(buffer, length, pos, "%s", fmt_prefix);        \
+      if (lib::is_oracle_mode() && params.need_cast_expr_) {                                            \
+        ret = databuff_printf(buffer, length, pos, "%s", CAST_PREFIX_ORACLE);                           \
+      } else if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ObDateTimeType == obj.get_type()) {  \
+        ret = databuff_printf(buffer, length, pos, "CAST('"); \
+      } else if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ObTimestampType == obj.get_type()) {                         \
+        ret = databuff_printf(buffer, length, pos, "%s %s", CAST_PREFIX_MYSQL_TIMESTAMP, NORMAL_PREFIX);\
+      } else {                                                                                          \
+        ret = databuff_printf(buffer, length, pos, "%s", NORMAL_PREFIX);                                \
+      }                                                                                                 \
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \
       if (ObTimestampType != obj.get_type()) {                          \
@@ -835,10 +843,14 @@ DEF_NUMBER_FUNCS(ObNumberFloatType, number_float);
                                             obj.get_scale(), buffer, length, pos); \
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \
-      const char *fmt_suffix = params.need_cast_expr_ && lib::is_oracle_mode() ? \
-                                 CAST_SUFFIX_ORACLE : NORMAL_SUFFIX;    \
-      ret = databuff_printf(buffer, length, pos, "%s", fmt_suffix);     \
-    }                                                                   \
+      if (params.print_const_expr_type_ && !lib::is_oracle_mode() &&  ObDateTimeType == obj.get_type()) {                        \
+        ret = databuff_printf(buffer, length, pos, "' AS %s)", CAST_PREFIX_MYSQL_DATETIME);     \
+      } else {                                                                                  \
+        const char *fmt_suffix = params.need_cast_expr_ && lib::is_oracle_mode() ?              \
+                                  CAST_SUFFIX_ORACLE : NORMAL_SUFFIX;                           \
+        ret = databuff_printf(buffer, length, pos, "%s", fmt_suffix);     \
+      }                                                                   \
+    }                                                                     \
     return ret;                                                         \
   }                                                                     \
                                                                         \
@@ -913,7 +925,12 @@ DEF_DATETIME_FUNCS(ObTimestampType, timestamp, int64_t);
                                     const ObObjPrintParams &params) \
   {                                                                     \
     UNUSED(params);                                                    \
-    int ret = databuff_printf(buffer, length, pos, "'");                \
+    int ret = OB_SUCCESS;                                               \
+    if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ObDateType == obj.get_type()) {       \
+      ret = databuff_printf(buffer, length, pos, "DATE '");            \
+    } else {                                                           \
+      ret = databuff_printf(buffer, length, pos, "'");                 \
+    }                                                                  \
     if (OB_SUCC(ret)) {                                            \
       ret = ObTimeConverter::TYPE##_to_str(obj.get_##TYPE(), buffer, length, pos);  \
     }                                                                   \
@@ -978,8 +995,13 @@ DEF_DATE_YEAR_FUNCS(ObDateType, date, int32_t);
                                     const ObObjPrintParams &params)      \
   {                                                                     \
     UNUSED(params);                                                    \
-    int ret = databuff_printf(buffer, length, pos, "'");                \
-    if (OB_SUCC(ret)) {                                            \
+    int ret = OB_SUCCESS;                                              \
+    if (params.print_const_expr_type_ && !lib::is_oracle_mode() && ObTimeType == obj.get_type()) {      \
+      ret = databuff_printf(buffer, length, pos, "TIME '");            \
+    } else {                                                           \
+      ret = databuff_printf(buffer, length, pos, "'");                 \
+    }                                                                  \
+    if (OB_SUCC(ret)) {                                                \
       ret = ObTimeConverter::TYPE##_to_str(obj.get_##TYPE(), obj.get_scale(), buffer, length, pos);\
     }                                                                   \
     if (OB_SUCC(ret)) {                                            \

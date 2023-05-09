@@ -50,7 +50,8 @@ ObLinkScanOp::ObLinkScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpIn
     tm_session_(NULL),
     tm_rm_connection_(NULL),
     reverse_link_(NULL),
-    conn_type_(sql::DblinkGetConnType::DBLINK_POOL)
+    conn_type_(sql::DblinkGetConnType::DBLINK_POOL),
+    snapshot_created_(NULL)
 {
 }
 
@@ -76,6 +77,7 @@ int ObLinkScanOp::init_tz_info(const ObTimeZoneInfo *tz_info)
   return ret;
 }
 
+
 int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
 {
   int ret = OB_SUCCESS;
@@ -86,12 +88,12 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   transaction::ObTransID tx_id;
   bool have_lob = false;
   res_.set_enable_use_result(true);
+  bool new_snapshot = false;
   if (OB_ISNULL(link_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), KP(link_stmt));
   } else if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
-      ObDblinkUtils::process_dblink_errno(DblinkDriverProto(tm_rm_connection_->get_dblink_driver_proto()), ret);
       LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(DblinkDriverProto(tm_rm_connection_->get_dblink_driver_proto())));
     } else {
       LOG_DEBUG("succ to read table data by tm_rm_connection", K(link_stmt), K(DblinkDriverProto(tm_rm_connection_->get_dblink_driver_proto())));
@@ -105,9 +107,10 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   } else if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(my_session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), KP(dblink_proxy_), KP(my_session));
-  } else if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn_, res_, link_stmt))) { 
-    ObDblinkUtils::process_dblink_errno(link_type_, dblink_conn_, ret);
-    LOG_WARN("read failed", K(ret), K(link_stmt));
+  } else {
+    if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn_, res_, link_stmt))) {
+      LOG_WARN("read failed", K(ret), K(link_type_), K(dblink_conn_), K(link_stmt));
+    }
   }
   if (OB_FAIL(ret)) {
     // do nothing

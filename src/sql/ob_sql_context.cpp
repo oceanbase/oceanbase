@@ -19,6 +19,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "sql/dblink/ob_dblink_utils.h"
+#include "src/storage/tx/ob_trans_define_v4.h"
 
 using namespace ::oceanbase::common;
 namespace oceanbase
@@ -323,6 +324,7 @@ void ObSqlSchemaGuard::reset()
   schema_guard_ = NULL;
   allocator_.reset();
   next_link_table_id_ = 1;
+  dblink_scn_.reuse();
 }
 
 TableItem *ObSqlSchemaGuard::get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id)
@@ -411,13 +413,41 @@ int ObSqlSchemaGuard::get_table_schema(uint64_t dblink_id,
   if (OB_SUCC(ret) && OB_ISNULL(table_schema)) {
     ObTableSchema *tmp_schema = NULL;
     OV (OB_NOT_NULL(schema_guard_), OB_NOT_INIT);
+    uint64_t current_scn = OB_INVALID_ID;
+    uint64_t *scn = NULL;
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(session_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else {
+         bool use_scn = (session_info->is_in_transaction() &&
+          transaction::ObTxIsolationLevel::RC == session_info->get_tx_desc()->get_isolation_level())
+          || !session_info->is_in_transaction();
+        if (use_scn && OB_FAIL(get_link_current_scn(dblink_id, tenant_id, session_info, current_scn))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            scn = &current_scn;
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("get link current scn failed", K(ret));
+          }
+        }
+      }
+    }
     OZ (schema_guard_->get_link_table_schema(tenant_id,
                                              dblink_id,
                                              database_name, table_name,
                                              allocator_, tmp_schema,
                                              session_info,
                                              dblink_name,
-                                             is_reverse_link));
+                                             is_reverse_link,
+                                             scn));
+    if (OB_SUCC(ret) && (NULL != scn)) {
+      if (OB_FAIL(dblink_scn_.set_refactored(dblink_id, *scn))) {
+        LOG_WARN("set refactored failed", K(ret));
+      } else {
+        LOG_TRACE("set dblink current scn", K(dblink_id), K(*scn));
+      }
+    }
     OV (OB_NOT_NULL(tmp_schema));
     OX (tmp_schema->set_table_id(next_link_table_id_++));
     OX (tmp_schema->set_link_table_id(tmp_schema->get_table_id()));
@@ -583,6 +613,28 @@ int ObSqlSchemaGuard::get_link_column_schema(uint64_t table_id, uint64_t column_
   OZ (get_link_table_schema(table_id, table_schema), table_id);
   if (OB_NOT_NULL(table_schema)) {
     OX (column_schema = table_schema->get_column_schema(column_id));
+  }
+  return ret;
+}
+
+int ObSqlSchemaGuard::get_link_current_scn(uint64_t dblink_id, uint64_t tenant_id,
+                                           ObSQLSessionInfo *session_info,
+                                           uint64_t &current_scn)
+{
+  int ret = OB_SUCCESS;
+  current_scn = OB_INVALID_ID;
+  if (!dblink_scn_.created()) {
+    if (OB_FAIL(dblink_scn_.create(4, "DblinkScnMap", "DblinkScnMap", tenant_id))) {
+      LOG_WARN("create hash map failed", K(ret));
+    } else {
+      ret = OB_HASH_NOT_EXIST;
+    }
+  } else {
+    if (OB_FAIL(dblink_scn_.get_refactored(dblink_id, current_scn))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("get dblink scn failed", K(ret));
+      }
+    }
   }
   return ret;
 }

@@ -915,7 +915,16 @@ int ObDMLStmtPrinter::print_base_table(const TableItem *table_item)
       }
       // flashback query
       if (OB_SUCC(ret)) {
-        if (OB_NOT_NULL(table_item->flashback_query_expr_)) {
+        bool explain_non_extend = false;
+        if (OB_NOT_NULL(stmt_->get_query_ctx()) &&
+            OB_NOT_NULL(stmt_->get_query_ctx()->root_stmt_) &&
+            stmt_->get_query_ctx()->root_stmt_->is_explain_stmt()) {
+          explain_non_extend = !static_cast<const ObExplainStmt *>
+                                (stmt_->get_query_ctx()->root_stmt_)->is_explain_extended();
+        }
+        if (OB_NOT_NULL(table_item->flashback_query_expr_) &&
+            // do not print flashback of link table when explain [basic]
+            !(table_item->is_link_table() && explain_non_extend)) {
           if (table_item->flashback_query_type_ == TableItem::USING_TIMESTAMP) {
             DATA_PRINTF(" as of timestamp "); 
             if (OB_FAIL(expr_printer_.do_print(table_item->flashback_query_expr_, T_NONE_SCOPE))) {
@@ -1200,23 +1209,67 @@ int ObDMLStmtPrinter::print_limit()
   } else if (stmt_->has_fetch() || is_oracle_mode()) {
     /*有fetch,说明是oracle mode下的fetch填充的limit,这里不应该打印 */
   } else {
-    if (NULL != stmt_->get_offset_expr() || NULL != stmt_->get_limit_expr()) {
+    ObRawExpr *offset_expr = stmt_->get_offset_expr();
+    ObRawExpr *limit_expr = stmt_->get_limit_expr();
+    if (NULL != offset_expr || NULL != limit_expr) {
       DATA_PRINTF(" limit ");
     }
     // offset
     if (OB_SUCC(ret)) {
-      if (NULL != stmt_->get_offset_expr()) {
-        if (OB_FAIL(expr_printer_.do_print(stmt_->get_offset_expr(), T_NONE_SCOPE))) {
-          LOG_WARN("fail to print order offset expr", K(ret));
+      if (NULL != offset_expr) {
+        if (NULL != print_params_.exec_ctx_) {
+          ObArenaAllocator allocator("PrintDMLStmt");
+          ObObj result;
+          bool got_result = false;
+          if (!offset_expr->is_static_const_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("offset expr should be a const int", K(ret), KPC(offset_expr));
+          } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(print_params_.exec_ctx_,
+                                                                       offset_expr,
+                                                                       result,
+                                                                       got_result,
+                                                                       allocator))) {
+            LOG_WARN("failed to calc offset expr", K(ret));
+          } else if (!got_result || !result.is_int()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get the result of offset expr", K(ret), KPC(offset_expr));
+          } else {
+            DATA_PRINTF("%ld", result.get_int());
+          }
+        } else {
+          if (OB_FAIL(expr_printer_.do_print(offset_expr, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print offset expr", K(ret));
+          }
         }
         DATA_PRINTF(",");
       }
     }
     // limit
     if (OB_SUCC(ret)) {
-      if (NULL != stmt_->get_limit_expr()) {
-        if (OB_FAIL(expr_printer_.do_print(stmt_->get_limit_expr(), T_NONE_SCOPE))) {
-          LOG_WARN("fail to print order limit expr", K(ret));
+      if (NULL != limit_expr) {
+        if (NULL != print_params_.exec_ctx_) {
+          ObArenaAllocator allocator("PrintDMLStmt");
+          ObObj result;
+          bool got_result = false;
+          if (!limit_expr->is_static_const_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("limit expr should be a const int", K(ret), KPC(limit_expr));
+          } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(print_params_.exec_ctx_,
+                                                                       limit_expr,
+                                                                       result,
+                                                                       got_result,
+                                                                       allocator))) {
+            LOG_WARN("failed to calc limit expr", K(ret));
+          } else if (!got_result || !result.is_int()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get the result of limit expr", K(ret), KPC(limit_expr));
+          } else {
+            DATA_PRINTF("%ld", result.get_int());
+          }
+        } else {
+          if (OB_FAIL(expr_printer_.do_print(limit_expr, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print limit expr", K(ret));
+          }
         }
       }
     }

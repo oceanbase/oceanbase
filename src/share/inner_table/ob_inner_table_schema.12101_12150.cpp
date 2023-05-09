@@ -5825,7 +5825,7 @@ int ObInnerTableSchema::all_virtual_dblink_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_IP_ADDR_LENGTH, //column_length
+      OB_MAX_DOMIN_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -6158,6 +6158,21 @@ int ObInnerTableSchema::all_virtual_dblink_schema(ObTableSchema &table_schema)
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       OB_MAX_ENCRYPTED_PASSWORD_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("database_name", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_DATABASE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -6338,7 +6353,7 @@ int ObInnerTableSchema::all_virtual_dblink_history_schema(ObTableSchema &table_s
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      MAX_IP_ADDR_LENGTH, //column_length
+      OB_MAX_DOMIN_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -6671,6 +6686,21 @@ int ObInnerTableSchema::all_virtual_dblink_history_schema(ObTableSchema &table_s
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
       OB_MAX_ENCRYPTED_PASSWORD_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("database_name", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_DATABASE_NAME_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable

@@ -46,15 +46,18 @@ public:
   FlashBackItem()
     : need_scn_(false),
       flashback_query_expr_(nullptr),
-      flashback_query_type_(TableItem::NOT_USING)
+      flashback_query_type_(TableItem::NOT_USING),
+      fq_read_tx_uncommitted_(false)
   { }
   int set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef &scan_rtdef) const;
   TO_STRING_KV(K_(need_scn),
                KPC_(flashback_query_expr),
-               K_(flashback_query_type));
+               K_(flashback_query_type),
+               K_(fq_read_tx_uncommitted));
   bool need_scn_;
   ObExpr *flashback_query_expr_; //flashback query expr
   TableItem::FlashBackQueryType flashback_query_type_; //flashback query type
+  bool fq_read_tx_uncommitted_; // whether read uncommitted changes in transaction
 };
 
 struct ObSpatialIndexCache

@@ -52,6 +52,7 @@ protected:
                                 ObSqlPlanItem &plan_item) override;
 private:
   int print_link_stmt(char *buf, int64_t buf_len);
+  virtual bool print_flashback_query() const { return false; };
 protected:
   common::ObIAllocator &allocator_;
   char *stmt_fmt_buf_;

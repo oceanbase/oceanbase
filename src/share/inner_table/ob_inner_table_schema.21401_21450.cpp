@@ -625,6 +625,56 @@ int ObInnerTableSchema::cdb_ob_external_table_files_schema(ObTableSchema &table_
   return ret;
 }
 
+int ObInnerTableSchema::dba_db_links_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_DB_LINKS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_DB_LINKS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT            convert(B.USER_NAME, char(128)) AS OWNER,            convert(A.DBLINK_NAME, char(128)) AS DB_LINK,            convert(A.USER_NAME, char(128)) AS USERNAME,            convert('', char(128)) AS CREDENTIAL_NAME,            convert('', char(128)) AS CREDENTIAL_OWNER,            convert(CONCAT_WS(':', A.HOST_IP,convert(A.HOST_PORT, char)), char(2000)) AS HOST,            convert(A.GMT_CREATE, datetime) AS CREATED,            convert('', char(3)) AS HIDDEN,            convert('', char(3)) AS SHARD_INTERNAL,            convert('YES', char(3)) AS VALID,            convert('', char(3)) AS INTRA_CDB,            convert(A.TENANT_NAME, char(128)) AS TENANT_NAME,            convert(A.DATABASE_NAME, char(128)) AS DATABASE_NAME,            convert(A.REVERSE_TENANT_NAME, char(128)) AS REVERSE_TENANT_NAME,            convert(A.CLUSTER_NAME, char(128)) AS CLUSTER_NAME,            convert(A.REVERSE_CLUSTER_NAME, char(128)) AS REVERSE_CLUSTER_NAME,            convert(A.REVERSE_HOST_IP, char(2000)) AS REVERSE_HOST,            A.REVERSE_HOST_PORT AS REVERSE_PORT     FROM OCEANBASE.__ALL_DBLINK A,          OCEANBASE.__ALL_USER B     WHERE A.OWNER_ID = B.USER_ID )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 
 } // end namespace share
 } // end namespace oceanbase

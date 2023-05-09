@@ -24,6 +24,7 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "share/client_feedback/ob_feedback_partition_struct.h"
+#include "sql/dblink/ob_dblink_utils.h"
 
 namespace oceanbase
 {
@@ -374,6 +375,11 @@ public:
                              const share::schema::ObColumnSchemaV2 *&column_schema) const;
   int get_link_column_schema(uint64_t table_id, uint64_t column_id,
                              const share::schema::ObColumnSchemaV2 *&column_schema) const;
+  int fetch_link_current_scn(uint64_t dblink_id, uint64_t tenant_id, ObSQLSessionInfo *session_info,
+                             uint64_t &current_scn);
+  // get current scn from dblink. return OB_INVALID_ID if remote server not support current_scn
+  int get_link_current_scn(uint64_t dblink_id, uint64_t tenant_id, ObSQLSessionInfo *session_info,
+                           uint64_t &current_scn);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
@@ -382,6 +388,8 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_;
   uint64_t next_link_table_id_;
+  // key is dblink_id, value is current scn.
+  common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
 };
 
 struct ObBaselineKey
@@ -564,7 +572,8 @@ public:
       has_nested_sql_(false),
       tz_info_(NULL),
       res_map_rule_id_(common::OB_INVALID_ID),
-      res_map_rule_param_idx_(common::OB_INVALID_INDEX)
+      res_map_rule_param_idx_(common::OB_INVALID_INDEX),
+      root_stmt_(NULL)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -603,6 +612,7 @@ public:
     tz_info_ = NULL;
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
+    root_stmt_ = NULL;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -630,6 +640,7 @@ public:
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
+
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
   typedef common::ObSEArray<ObHiddenColumnItem, CALCULABLE_EXPR_NUM, common::ModulePageAllocator, true> CalculableItems;
@@ -676,6 +687,7 @@ public:
   const common::ObTimeZoneInfo *tz_info_;
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
+  ObDMLStmt *root_stmt_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

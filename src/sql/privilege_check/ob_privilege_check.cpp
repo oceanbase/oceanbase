@@ -1227,6 +1227,50 @@ int get_create_synonym_priv(
   return ret;
 }
 
+int get_create_dblink_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_CREATE_DBLINK != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_CREATE_DATABASE_LINK;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
+int get_drop_dblink_priv(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(session_priv);
+  ObNeedPriv need_priv;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (stmt::T_DROP_DBLINK != basic_stmt->get_stmt_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected stmt type", K(basic_stmt->get_stmt_type()), K(ret));
+  } else {
+    need_priv.priv_set_ = OB_PRIV_DROP_DATABASE_LINK;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    ADD_NEED_PRIV(need_priv);
+  }
+  return ret;
+}
+
 int get_drop_synonym_priv(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,

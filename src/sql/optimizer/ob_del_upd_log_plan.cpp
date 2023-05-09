@@ -181,7 +181,10 @@ int ObDelUpdLogPlan::generate_dblink_raw_plan()
   int ret = OB_SUCCESS;
   const ObDelUpdStmt *stmt = get_stmt();
   ObLogicalOperator *top = NULL;
-  if (OB_ISNULL(stmt)) {
+  if (!lib::is_oracle_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("mysql dblink not support dml", K(ret));
+  } else if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(allocate_link_dml_as_top(top))) {

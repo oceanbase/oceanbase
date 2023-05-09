@@ -58,6 +58,24 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     create_dblink_stmt->set_user_id(session_info_->get_user_id());
     LOG_TRACE("debug dblink create", K(session_info_->get_database_id()));
   }
+  if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
+    uint64_t compat_version = 0;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
+    } else if (NULL != node->children_[IF_NOT_EXIST]) {
+      if (T_IF_NOT_EXISTS != node->children_[IF_NOT_EXIST]->type_) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(WARN, "invalid argument.",
+                      K(ret), K(node->children_[1]->type_));
+      } else {
+        create_dblink_stmt->set_if_not_exist(true);
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     ObString dblink_name;
     ParseNode *name_node = node->children_[DBLINK_NAME];
@@ -93,6 +111,18 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
       // do nothing
     } else if (OB_FAIL(create_dblink_stmt->set_tenant_name(tenant_name))) {
       LOG_WARN("set tenant name failed", K(ret));
+    }
+  }
+  if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
+    ObString database_name;
+    ParseNode *name_node = node->children_[DATABASE_NAME];
+    if (OB_ISNULL(name_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid parse tree", K(ret));
+    } else if (FALSE_IT(database_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_)))) {
+      // do nothing
+    } else if (OB_FAIL(create_dblink_stmt->set_database_name(database_name))) {
+      LOG_WARN("set database name failed", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
@@ -158,7 +188,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
   }
   if (OB_FAIL(ret)) {
     //do nothing
-  } else if (OB_FAIL(resolve_opt_reverse_link(node, create_dblink_stmt, drv_type))) {
+  } else if (lib::is_oracle_mode() && OB_FAIL(resolve_opt_reverse_link(node, create_dblink_stmt, drv_type))) {
     LOG_WARN("failed to resolve optional reverse link", K(ret));
   } else if (ObSchemaChecker::is_ora_priv_check()) {
     OZ (schema_checker_->check_ora_ddl_priv(

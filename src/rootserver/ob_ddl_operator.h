@@ -584,6 +584,7 @@ public:
                                 const uint64_t user_id,
                                 const ObPrivSet priv_set,
                                 const bool grant,
+                                const bool is_from_inner_sql,
                                 const common::ObString *ddl_stmt_str,
                                 common::ObMySQLTransaction &trans);
   virtual int lock_user(const uint64_t tenant_id,

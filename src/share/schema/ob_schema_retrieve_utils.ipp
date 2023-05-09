@@ -44,6 +44,15 @@ namespace schema
     }  \
   }
 
+#define EXTRACT_PRIV_FROM_MYSQL_RESULT_IGNORE_NULL_AND_IGNORE_COLUMN_ERROR(result, column_name, obj, priv_type) \
+  if (OB_SUCC(ret)) { \
+    int64_t priv_col_value = 0;  \
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, #column_name, priv_col_value, int64_t, true, true, 0) \
+    if (OB_SUCC(ret)) {   \
+      1 == priv_col_value ? (obj).set_priv(OB_##priv_type) : (void) 0;      \
+    }  \
+  }
+
 #define EXTRACT_PRIV_FIELD_FROM_MYSQL_RESULT(result, column_name, priv_set, priv_type) \
   if (OB_SUCC(ret)) { \
     int64_t int_value = 0;  \
@@ -1636,6 +1645,8 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
         result, max_user_connections, user_info, uint64_t, true,
         ObSchemaService::g_ignore_column_retrieve_error_, 0);
+    EXTRACT_PRIV_FROM_MYSQL_RESULT_IGNORE_NULL_AND_IGNORE_COLUMN_ERROR(result, priv_drop_database_link, user_info, PRIV_DROP_DATABASE_LINK);
+    EXTRACT_PRIV_FROM_MYSQL_RESULT_IGNORE_NULL_AND_IGNORE_COLUMN_ERROR(result, priv_create_database_link, user_info, PRIV_CREATE_DATABASE_LINK);
   }
   return ret;
 }
@@ -1982,6 +1993,7 @@ int ObSchemaRetrieveUtils::fill_dblink_schema(
   dblink_schema.reset();
   is_deleted  = false;
   int ret = common::OB_SUCCESS;
+  bool is_oracle_mode = false;
   ObString default_val("");
   dblink_schema.set_tenant_id(tenant_id);
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, dblink_id, dblink_schema, tenant_id);
@@ -2018,11 +2030,18 @@ int ObSchemaRetrieveUtils::fill_dblink_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_tenant_name, dblink_schema, true, skip_column_error, default_val);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_user_name, dblink_schema, true, skip_column_error, default_val);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, reverse_password, dblink_schema, true, skip_column_error, default_val);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, database_name, dblink_schema, true, skip_column_error, default_val);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(dblink_schema.do_decrypt_password())) {
       LOG_WARN("failed to decrypt password", K(ret));
     } else if (OB_FAIL(dblink_schema.do_decrypt_reverse_password())) {
       LOG_WARN("failed to decrypt reverse_password", K(ret));
+    } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(tenant_id), K(ret));
+    } else if (!is_oracle_mode && dblink_schema.get_database_name().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mysql dblink database_name is empty", K(ret));
     }
   }
   return ret;

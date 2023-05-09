@@ -419,6 +419,8 @@ int ObTransformDBlink::pack_link_table(ObDMLStmt *stmt, bool &trans_happened)
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(add_flashback_query_for_dblink(stmt))) {
+    LOG_WARN("add flashback query for dblink failed", K(ret));
   } else if (OB_FAIL(collect_link_table(stmt,
                                         helpers,
                                         dblink_id,
@@ -1450,6 +1452,78 @@ int ObTransformDBlink::check_link_oracle(int64_t dblink_id, bool &link_oracle)
       LOG_WARN("unexpect null dblink schema", K(ret));
     } else if (common::sqlclient::DBLINK_DRV_OCI == dblink_schema->get_driver_proto()) {
       link_oracle = true;
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard *schema_guard = NULL;
+  const ObDbLinkSchema *dblink_schema = NULL;
+  ObConstRawExpr *c_expr = NULL;
+  uint64_t current_scn = OB_INVALID_ID;
+  bool need_add = false;
+  uint64_t tenant_id = OB_INVALID_ID;
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(ctx_->sql_schema_guard_) ||
+      OB_ISNULL(ctx_->session_info_) ||
+      OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret), K(ctx_), K(stmt));
+  } else {
+    tenant_id = ctx_->session_info_->get_effective_tenant_id();
+    for (int64_t i = 0; i < stmt->get_table_items().count() && OB_SUCC(ret); i++) {
+      TableItem *table_item = stmt->get_table_item(i);
+      uint64_t dblink_id = OB_INVALID_ID;
+      bool need_add = false;
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null param", K(ret));
+      } else if (!table_item->is_link_table()
+                 || TableItem::NOT_USING != table_item->flashback_query_type_) {
+      // do nothing if not dblink table or already have flashback query
+      } else if (FALSE_IT(dblink_id = table_item->dblink_id_)) {
+      } else if (table_item->is_reverse_link_) {
+        need_add = true;
+      } else if (OB_FAIL(ctx_->sql_schema_guard_->get_dblink_schema(tenant_id, dblink_id, dblink_schema))) {
+        LOG_WARN("failed to get dblink schema", K(ret), K(tenant_id), K(dblink_id));
+      } else if (OB_ISNULL(dblink_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dblink schema is null", K(ret), K(tenant_id), K(dblink_id), KPC(table_item));
+      } else if (static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()) != common::sqlclient::DBLINK_DRV_OB) {
+        // do nothing if not connect to ob
+      } else {
+        need_add = true;
+      }
+      if (OB_FAIL(ret) || !need_add) {
+      } else if (OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(ctx_->expr_factory_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ctx or expr factory is null", K(ret), K(stmt->get_query_ctx()),
+                K(ctx_->expr_factory_));
+      } else if (OB_FAIL(stmt->get_query_ctx()->sql_schema_guard_.get_link_current_scn(dblink_id,
+                tenant_id, ctx_->session_info_, current_scn))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get dblink current scn failed", K(ret), K(dblink_id));
+        }
+      } else if (OB_INVALID_ID == current_scn) {
+        // remote server not support current_scn function, do nothing
+      } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_INT, c_expr))) {
+        LOG_WARN("fail to create raw expr", K(ret));
+      } else if (OB_ISNULL(c_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("const expr is null");
+      } else {
+        ObObj val;
+        val.set_uint64(current_scn);
+        c_expr->set_value(val);
+        c_expr->set_param(val);
+        table_item->flashback_query_expr_ = c_expr;
+        table_item->flashback_query_type_ = TableItem::USING_SCN;
+      }
     }
   }
   return ret;

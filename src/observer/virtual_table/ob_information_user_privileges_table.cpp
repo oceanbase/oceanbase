@@ -56,6 +56,10 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "REPLICATION SLAVE";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REPL_CLIENT_SHIFT] = 
                                                    "REPLICATION CLIENT";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_DATABASE_LINK_SHIFT] =
+                                                   "DROP DATABASE LINK";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_DATABASE_LINK_SHIFT] =
+                                                   "CREATE DATABASE LINK";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

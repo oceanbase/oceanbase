@@ -123,7 +123,17 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
   ObString reverse_host_ip;
   char ip_buf[MAX_IP_ADDR_LENGTH] = {0};
   char reverse_ip_buf[MAX_IP_ADDR_LENGTH] = {0};
-  if (!dblink_info.get_host_addr().ip_to_string(ip_buf, sizeof(ip_buf))) {
+  uint64_t compat_version = 0;
+  bool is_oracle_mode = false;
+  uint64_t tenant_id = dblink_info.get_tenant_id();
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (compat_version < DATA_VERSION_4_2_0_0 && !is_oracle_mode) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
+  } else if (!dblink_info.get_host_addr().ip_to_string(ip_buf, sizeof(ip_buf))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to ip to string", K(ret), K(dblink_info.get_host_addr()));
   } else if (FALSE_IT(host_ip.assign_ptr(ip_buf, static_cast<int32_t>(STRLEN(ip_buf))))) {
@@ -197,6 +207,16 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
                 || OB_FAIL(dml.add_column("reverse_user_name", dblink_info.get_reverse_user_name()))
                 || OB_FAIL(dml.add_column("reverse_password", dblink_info.get_reverse_password()))) {
         LOG_WARN("failed to add encrypted_password column", K(ret), K(encrypted_password));
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (compat_version < DATA_VERSION_4_2_0_0) {
+        if (!dblink_info.get_database_name().empty()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret), K(dblink_info.get_database_name()));
+        }
+      } else if (OB_FAIL(dml.add_column("database_name", dblink_info.get_database_name()))) {
+        LOG_WARN("failed to add normal database_name", K(dblink_info.get_database_name()), K(ret));
       }
     }
 

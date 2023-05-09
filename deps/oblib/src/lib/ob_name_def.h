@@ -622,6 +622,7 @@
 #define N_COMPRESS_METHOD "compress_method"
 #define N_JOIN_INFO "join_info"
 #define N_ID_SET "id_set"
+#define N_CURRENT_SCN "current_scn"
 #define N_EQUAL_SET "equal_set"
 #define N_LEFT_ID "left_id"
 #define N_RIGHT_ID "right_id"

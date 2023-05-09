@@ -964,9 +964,97 @@ int ObUpgradeFor4200Processor::post_upgrade()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_grant_create_database_link_priv())) {
+    LOG_WARN("grant create database link failed", K(ret));
+  } else if (OB_FAIL(post_upgrade_for_grant_drop_database_link_priv())) {
+    LOG_WARN("grant drop database link failed", K(ret));
   } else if (OB_FAIL(post_upgrade_for_heartbeat_and_server_zone_op_service())) {
     LOG_WARN("post upgrade for heartbeat and server zone op service failed", KR(ret));
   }
+  return ret;
+}
+
+int ObUpgradeFor4200Processor::post_upgrade_for_grant_create_database_link_priv()
+{
+  int ret = OB_SUCCESS;
+  ObString sql("grant create database link on *.* to root");
+  int64_t start = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  ObSchemaGetterGuard schema_guard;
+  common::ObSEArray<const ObUserInfo *, 4, ModulePageAllocator, true> user_infos;
+  ObString root_name("root");
+  bool has_priv = true;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id_, root_name, user_infos))) {
+    LOG_WARN("get root user failed", K(ret));
+  } else {
+    for (int64_t i = 0; has_priv && OB_SUCC(ret) && i < user_infos.count(); ++i) {
+      const ObUserInfo *user_info = user_infos.at(i);
+      if (OB_ISNULL(user_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else {
+        has_priv = has_priv && (OB_PRIV_CREATE_DATABASE_LINK & user_info->get_priv_set());
+      }
+    }
+    if (OB_FAIL(ret) || has_priv) {
+      // do nothing
+    } else if (OB_ISNULL(sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else {
+      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
+    }
+  }
+  LOG_INFO("set create database link priv", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
+  return ret;
+}
+
+int ObUpgradeFor4200Processor::post_upgrade_for_grant_drop_database_link_priv()
+{
+  int ret = OB_SUCCESS;
+  ObString sql("grant drop database link on *.* to root");
+  int64_t start = ObTimeUtility::current_time();
+  int64_t affected_rows = 0;
+  ObSchemaGetterGuard schema_guard;
+  common::ObSEArray<const ObUserInfo *, 4, ModulePageAllocator, true> user_infos;
+  ObString root_name("root");
+  bool has_priv = true;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id_, root_name, user_infos))) {
+    LOG_WARN("get root user failed", K(ret));
+  } else {
+    for (int64_t i = 0; has_priv && OB_SUCC(ret) && i < user_infos.count(); ++i) {
+      const ObUserInfo *user_info = user_infos.at(i);
+      if (OB_ISNULL(user_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else {
+        has_priv = has_priv && (OB_PRIV_DROP_DATABASE_LINK & user_info->get_priv_set());
+      }
+    }
+    if (OB_FAIL(ret) || has_priv) {
+      // do nothing
+    } else if (OB_ISNULL(sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else {
+      LOG_TRACE("execute sql", KR(ret), K(tenant_id_), K(sql), K(affected_rows));
+    }
+  }
+  LOG_INFO("set drop database link priv", K(ret), K(tenant_id_), K(affected_rows), "cost", ObTimeUtility::current_time() - start);
   return ret;
 }
 

@@ -4804,7 +4804,7 @@ bool ObDropDbLinkArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !dblink_name_.empty();
 }
 
-OB_SERIALIZE_MEMBER((ObDropDbLinkArg, ObDDLArg), tenant_id_, dblink_name_);
+OB_SERIALIZE_MEMBER((ObDropDbLinkArg, ObDDLArg), tenant_id_, dblink_name_, if_exist_);
 
 OB_SERIALIZE_MEMBER((ObUseDatabaseArg, ObDDLArg));
 OB_SERIALIZE_MEMBER(ObGetPartitionCountResult, partition_count_);

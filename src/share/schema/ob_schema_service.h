@@ -1121,7 +1121,8 @@ public:
                                     ObTableSchema *&table_schema,
                                     sql::ObSQLSessionInfo *session_info,
                                     const common::ObString &dblink_name,
-                                    bool is_reverse_link) = 0;
+                                    bool is_reverse_link,
+                                    uint64_t *current_scn) = 0;
   // when refresh schema, if new ddl operations are as following:
   // (ALTER USER TABLE, v1), (ALTER SYS TABLE, v2),
   // if we replay new ddl operation one by one, when we execute sql to read sys table

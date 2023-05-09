@@ -37,6 +37,10 @@ class ObjTest;
 class ObSqlString;
 }
 }
+namespace sql
+{
+class ObExecContext;
+}
 namespace common
 {
 
@@ -1081,17 +1085,20 @@ struct ObObjPrintParams
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
     tz_info_(tz_info),
     cs_type_(cs_type),
-    print_flags_(0)
+    print_flags_(0),
+    exec_ctx_(NULL)
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
-    print_flags_(0)
+    print_flags_(0),
+    exec_ctx_(NULL)
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
-    print_flags_(0)
+    print_flags_(0),
+    exec_ctx_(NULL)
   {}
   TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags));
   const ObTimeZoneInfo *tz_info_;
@@ -1106,9 +1113,21 @@ struct ObObjPrintParams
       uint32_t beginning_space_:1;
       uint32_t for_dblink_:1;
       uint32_t binary_string_print_hex_:1;
-      uint32_t reserved_:25;
+      uint32_t need_print_converter_:1;
+      uint32_t print_const_expr_type_:1;
+      uint32_t reserved_:23;
     };
   };
+
+  /**
+   * MySQL only
+   * The limit expr may no longer be a constant number after transformer.
+   * So, set exec_ctx_ if the stmt is rewritten.
+   * If exec_ctx_ is not null, Printer will calculate the value of limit expr and output.
+   *  e.g. "limit (1 + 1)" will be output as "limit 2"
+   *
+  */
+  sql::ObExecContext *exec_ctx_;
 };
 
 // sizeof(ObObjValue)=8

@@ -101,6 +101,10 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "REPLICATION SLAVE"; break;
     case OB_PRIV_REPL_CLIENT:
       name = "REPLICATION CLIENT"; break;
+    case OB_PRIV_DROP_DATABASE_LINK:
+      name = "DROP DATABASE LINK"; break;
+    case OB_PRIV_CREATE_DATABASE_LINK:
+      name = "CREATE DATABASE LINK"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

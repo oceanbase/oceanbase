@@ -6502,6 +6502,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_location_type(index_scan->get_location_type());
     table_scan->set_flashback_query_expr(index_scan->get_flashback_query_expr());
     table_scan->set_flashback_query_type(index_scan->get_flashback_query_type());
+    table_scan->set_fq_read_tx_uncommitted(index_scan->get_fq_read_tx_uncommitted());
     table_scan->set_part_ids(index_scan->get_part_ids());
     table_scan->get_table_name() = table_item->alias_name_.length() > 0 ?
                                    table_item->alias_name_ : table_item->table_name_;

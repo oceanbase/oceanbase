@@ -43,6 +43,8 @@ public:
 private:
   virtual void reset_dblink() override;
   void reset_result();
+  int init_conn_snapshot(bool &new_snapshot);
+  int free_snapshot();
   bool need_tx(const ObSQLSessionInfo *my_session) const;
 private:
   common::ObMySQLProxy::MySQLResult res_;
@@ -55,6 +57,8 @@ private:
   common::sqlclient::ObISQLConnection *tm_rm_connection_;
   ObReverseLink *reverse_link_;
   sql::DblinkGetConnType conn_type_;
+  // snapshot created by this operator, need free it when close.
+  void *snapshot_created_;
 };
 
 } // end namespace sql

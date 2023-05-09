@@ -8418,7 +8418,8 @@ int ObSchemaGetterGuard::get_link_table_schema(
     ObTableSchema *&table_schema,
     sql::ObSQLSessionInfo *session_info,
     const ObString &dblink_name,
-    bool is_reverse_link)
+    bool is_reverse_link,
+    uint64_t *current_scn)
 {
   int ret = OB_SUCCESS;
   const ObDbLinkSchema *dblink_schema = NULL;
@@ -8434,7 +8435,8 @@ int ObSchemaGetterGuard::get_link_table_schema(
                                                               database_name, table_name,
                                                               allocator, table_schema,
                                                               session_info, dblink_name,
-                                                              is_reverse_link))) {
+                                                              is_reverse_link,
+                                                              current_scn))) {
     LOG_WARN("get link table schema failed", KR(ret));
   }
   LOG_DEBUG("get link table schema", K(is_reverse_link), KP(dblink_schema), K(ret));

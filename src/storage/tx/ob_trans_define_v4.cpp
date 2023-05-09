@@ -1085,6 +1085,12 @@ void ObTxReadSnapshot::init_ls_read(const share::ObLSID &ls_id, const ObTxSnapsh
   valid_ = true;
 }
 
+void ObTxReadSnapshot::specify_snapshot_scn(const share::SCN snapshot)
+{
+  core_.version_ = snapshot;
+  source_ = SRC::SPECIAL;
+}
+
 void ObTxReadSnapshot::wait_consistency()
 {
   if (SRC::GLOBAL == source_) {

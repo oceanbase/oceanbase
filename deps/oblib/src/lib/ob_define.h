@@ -258,6 +258,7 @@ const int64_t OB_MAX_WHEN_CONDITION_LENGTH = 4000;  // Compatible with Oracle
 const int64_t OB_MAX_UPDATE_COLUMNS_LENGTH = 4000;  // Compatible with Oracle
 const int64_t OB_MAX_TRIGGER_BODY_LENGTH = 64 * 1024;  // In Oracle, it is the LONG type, but there is a problem with the large object type used in the OB internal table.
 const int64_t OB_MAX_DBLINK_NAME_LENGTH = 128;  // Compatible with Oracle
+const int64_t OB_MAX_DOMIN_NAME_LENGTH = 240;   // max length of domin name, refer to max domin name of oracle
 const int64_t OB_MAX_QB_NAME_LENGTH = 20;  // Compatible with Oracle, hint specifies the length of the maximum qb_name.
 const int64_t OB_MAX_SEQUENCE_NAME_LENGTH = 128; // Compatible with Oracle, error is reported when the logic is greater than
 const int64_t OB_MAX_KEYSTORE_NAME_LENGTH = 128;

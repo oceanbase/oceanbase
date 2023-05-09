@@ -3685,7 +3685,7 @@ int ObInnerTableSchema::all_virtual_dblink_real_agent_ora_schema(ObTableSchema &
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      MAX_IP_ADDR_LENGTH, //column_length
+      OB_MAX_DOMIN_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -3986,6 +3986,21 @@ int ObInnerTableSchema::all_virtual_dblink_real_agent_ora_schema(ObTableSchema &
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
       OB_MAX_ENCRYPTED_PASSWORD_LENGTH, //column_length
+      2, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("DATABASE_NAME", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_UTF8MB4_BIN, //column_collation_type
+      OB_MAX_DATABASE_NAME_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable

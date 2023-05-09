@@ -92,11 +92,12 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     ObNameCaseMode mode = OB_NAME_CASE_INVALID;
     bool perserve_lettercase = false; // lib::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
     ObArray<ObString> column_list;
+    bool has_dblink_node = false;
     if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[VIEW_NODE],
                                             view_name, db_name,
-                                            false, false, &dblink_name_ptr, &dblink_name_len))) {
+                                            false, false, &dblink_name_ptr, &dblink_name_len, &has_dblink_node))) {
       LOG_WARN("failed to resolve table relation node!", K(ret));
-    } else if (NULL != dblink_name_ptr) { //don't care about dblink_name_len
+    } else if (has_dblink_node) { //don't care about dblink_name_len
       ret = OB_ERR_MISSING_KEYWORD;
       LOG_WARN("missing keyword when create view", K(ret));
       LOG_USER_ERROR(OB_ERR_MISSING_KEYWORD);

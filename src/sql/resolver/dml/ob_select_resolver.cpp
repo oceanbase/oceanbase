@@ -1370,6 +1370,9 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
     } else if (table_item->is_basic_table()) {
       table_item->for_update_ = true;
       table_item->for_update_wait_us_ = wait_us;
+    } else if (table_item->is_link_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("mysql dblink not support select for update", K(ret));
     }
   }
   return ret;

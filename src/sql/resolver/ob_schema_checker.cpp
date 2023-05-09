@@ -2048,6 +2048,18 @@ int ObSchemaChecker::get_dblink_user(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSchemaChecker::get_dblink_schema(uint64_t tenant_id, const common::ObString &dblink_name, const share::schema::ObDbLinkSchema *&dblink_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_mgr_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("invalid argument", K(ret), K(schema_mgr_));
+  } else if (OB_FAIL(schema_mgr_->get_dblink_schema(tenant_id, dblink_name, dblink_schema))) {
+    LOG_WARN("failed to get dblink schema", K(ret), K(tenant_id), K(dblink_name));
+  }
+  return ret;
+}
+
 int ObSchemaChecker::get_directory_id(const uint64_t tenant_id,
                                       const common::ObString &directory_name,
                                       uint64_t &directory_id)

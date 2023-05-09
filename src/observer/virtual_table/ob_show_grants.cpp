@@ -544,6 +544,12 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_REPL_CLIENT) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" REPLICATION CLIENT,");
         }
+        if ((priv_set & OB_PRIV_DROP_DATABASE_LINK) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" DROP DATABASE LINK,");
+        }
+        if ((priv_set & OB_PRIV_CREATE_DATABASE_LINK) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE DATABASE LINK,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

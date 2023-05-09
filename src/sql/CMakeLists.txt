@@ -366,6 +366,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_contains_path.cpp
   engine/expr/ob_expr_json_depth.cpp
   engine/expr/ob_expr_json_keys.cpp
+  engine/expr/ob_expr_current_scn.cpp
   engine/expr/ob_expr_json_overlaps.cpp
   engine/expr/ob_expr_json_remove.cpp
   engine/expr/ob_expr_json_replace.cpp

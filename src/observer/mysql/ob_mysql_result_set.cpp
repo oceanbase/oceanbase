@@ -42,7 +42,6 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
     mfield.charsetnr_ = field.charsetnr_;
     mfield.flags_ = field.flags_;
     mfield.length_ = field.length_;
-
     // 对于Varchar类，检查charset：
     mfield.flags_ &= (~BINARY_FLAG);
     bool is_oracle_lob = false;

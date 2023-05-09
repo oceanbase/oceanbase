@@ -2911,6 +2911,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
     ObDMLStmt *stmt = static_cast<ObDMLStmt*>(basic_stmt);
     SQL_LOG(DEBUG, "stmt", "stmt", *stmt);
     SQL_LOG(DEBUG, "stmt success", "query", SJ(*stmt));
+    stmt->get_query_ctx()->root_stmt_ = stmt;
     const ObGlobalHint &global_hint = stmt->get_query_ctx()->get_global_hint();
     sql_ctx.session_info_->set_early_lock_release(global_hint.enable_lock_early_release_);
     ObOptimizerContext optctx(sql_ctx.session_info_,

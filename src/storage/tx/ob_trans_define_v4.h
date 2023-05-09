@@ -234,6 +234,7 @@ struct ObTxReadSnapshot
   void init_special_read(const share::SCN snapshot);
   void init_none_read() { valid_ = true; source_ = SRC::NONE; }
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
+  void specify_snapshot_scn(const share::SCN snapshot);
   void wait_consistency();
   ObString get_source_name() const;
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };

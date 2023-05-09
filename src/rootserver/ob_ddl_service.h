@@ -735,6 +735,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                  const share::schema::ObNeedPriv &need_priv,
                                  const share::ObRawObjPrivArray &obj_priv_array,
                                  const uint64_t option,
+                                 const bool is_from_inner_sql,
                                  share::schema::ObObjPrivSortKey &obj_priv_key,
                                  share::schema::ObSchemaGetterGuard &schema_guard);
   virtual int grant_table_and_col_privs_to_user(
@@ -748,6 +749,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                 const uint64_t user_id,
                                 const ObPrivSet priv_set,
                                 const bool grant,
+                                const bool is_from_inner_sql,
                                 const common::ObString *ddl_stmt_str,
                                 share::schema::ObSchemaGetterGuard &schema_guard);
 

@@ -5008,6 +5008,7 @@ public:
   inline void set_host_addr(const common::ObAddr &addr) { host_addr_ = addr; }
   int set_host_ip(const common::ObString &host_ip);
   inline void set_host_port(const int32_t host_port) { host_addr_.set_port(host_port); }
+  inline int set_database_name(const common::ObString &name) { return deep_copy_str(name, database_name_); }
   inline int set_reverse_cluster_name(const common::ObString &name) { return deep_copy_str(name, reverse_cluster_name_); }
   inline int set_reverse_tenant_name(const common::ObString &name) { return deep_copy_str(name, reverse_tenant_name_); }
   inline int set_reverse_user_name(const common::ObString &name) { return deep_copy_str(name, reverse_user_name_); }
@@ -5039,6 +5040,7 @@ public:
   inline const common::ObString &get_plain_password() const { return plain_password_; }
   inline const common::ObAddr &get_host_addr() const { return host_addr_; }
   inline int32_t get_host_port() const { return host_addr_.get_port(); }
+  inline const common::ObString &get_database_name() const { return database_name_; }
   inline const common::ObString &get_reverse_cluster_name() const { return reverse_cluster_name_; }
   inline const common::ObString &get_reverse_tenant_name() const { return reverse_tenant_name_; }
   inline const common::ObString &get_reverse_user_name() const { return reverse_user_name_; }
@@ -5051,6 +5053,8 @@ public:
 
   inline int64_t get_driver_proto() const { return driver_proto_; }
   inline void set_driver_proto(int64_t proto) { driver_proto_ = proto; }
+  inline bool get_if_not_exist() const { return if_not_exist_; }
+  inline void set_if_not_exist(bool value) { if_not_exist_ = value; }
   inline int64_t get_flag() const { return flag_; }
   inline void set_flag(int64_t flag) { flag_ = flag; }
   inline const common::ObString &get_service_name() const { return service_name_; }
@@ -5061,8 +5065,9 @@ public:
 
   void reset();
   virtual bool is_valid() const;
-  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(owner_id), K_(dblink_id), K_(dblink_name),
-                       K_(cluster_name), K_(tenant_name), K_(user_name), K_(host_addr),
+  VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(owner_id), K_(if_not_exist), K_(dblink_id), K_(dblink_name),
+                       K_(cluster_name), K_(tenant_name), K_(database_name), K_(user_name),
+                       K_(host_addr),
                        K_(driver_proto), K_(flag), K_(service_name), K_(conn_string),
                        K_(authusr), K_(authpwd), K_(passwordx), K_(authpwdx),
                        K_(password), K_(encrypted_password), K_(plain_password),
@@ -5100,6 +5105,8 @@ protected:
   common::ObString reverse_password_;  // used for reverse dblink
   common::ObString plain_reverse_password_; // used for reverse dblink
   common::ObAddr reverse_host_addr_;  // used for reverse dblink
+  common::ObString database_name_; // used for mysql dblink
+  bool if_not_exist_; // used for mysql dblink
 };
 
 struct ObTenantDbLinkId
@@ -5200,7 +5207,8 @@ public:
          + reverse_tenant_name_.length() + 1
          + reverse_user_name_.length() + 1
          + reverse_password_.length() + 1
-         + plain_reverse_password_.length() + 1;
+         + plain_reverse_password_.length() + 1
+         + database_name_.length() + 1;
   }
 };
 

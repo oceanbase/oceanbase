@@ -41,7 +41,8 @@ int ObStmtResolver::resolve_table_relation_node(const ParseNode *node,
                                                 bool is_org/*false*/,
                                                 bool is_oracle_sys_view,
                                                 char **dblink_name_ptr,
-                                                int32_t *dblink_name_len)
+                                                int32_t *dblink_name_len,
+                                                bool *has_dblink_node)
 {
   int ret = OB_SUCCESS;
   bool is_db_explicit = false;
@@ -53,7 +54,8 @@ int ObStmtResolver::resolve_table_relation_node(const ParseNode *node,
                                              is_org,
                                              is_oracle_sys_view,
                                              dblink_name_ptr,
-                                             dblink_name_len))) {
+                                             dblink_name_len,
+                                             has_dblink_node))) {
     LOG_WARN("failed to resolve table name", K(ret));
   } else {
     // do nothing
@@ -75,7 +77,8 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
                                                    bool is_org/*false*/,
                                                    bool is_oracle_sys_view,
                                                    char **dblink_name_ptr,
-                                                   int32_t *dblink_name_len)
+                                                   int32_t *dblink_name_len,
+                                                   bool *has_dblink_node)
 {
   int ret = OB_SUCCESS;
   is_db_explicit = false;
@@ -85,6 +88,12 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
   table_name.assign_ptr(const_cast<char*>(relation_node->str_value_), table_len);
   ObNameCaseMode mode = OB_NAME_CASE_INVALID;
   ObCollationType cs_type = CS_TYPE_INVALID;
+  if (OB_NOT_NULL(has_dblink_node)) {
+    *has_dblink_node = false;
+    if (node->num_child_ >= 3 && NULL != node->children_[2]) {
+      *has_dblink_node = true;
+    }
+  }
   if (NULL != dblink_name_ptr &&
       NULL != dblink_name_len &&
       node->num_child_ >= 3 && 
@@ -170,7 +179,7 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
   return ret;
 }
 
-int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node)
+int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, uint64_t tenant_id, ObString &dblink_name, bool &is_reverse_link, bool &has_dblink_node)
 {
   int ret = OB_SUCCESS;
   dblink_name.reset();
@@ -178,11 +187,24 @@ int ObStmtResolver::resolve_dblink_name(const ParseNode *table_node, ObString &d
       !OB_ISNULL(table_node->children_) && !OB_ISNULL(table_node->children_[2])) {
     const ParseNode *dblink_node = table_node->children_[2];
     has_dblink_node = true;
-    if (2 == dblink_node->num_child_ && !OB_ISNULL(dblink_node->children_) &&
-        !OB_ISNULL(dblink_node->children_[0]) && !OB_ISNULL(dblink_node->children_[1])) {
+    if (!lib::is_oracle_mode()) {
+      uint64_t compat_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_2_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (2 == dblink_node->num_child_ && !OB_ISNULL(dblink_node->children_) &&
+        !OB_ISNULL(dblink_node->children_[0])) {
       int32_t dblink_name_len = static_cast<int32_t>(dblink_node->children_[0]->str_len_);
       dblink_name.assign_ptr(dblink_node->children_[0]->str_value_, dblink_name_len);
-      is_reverse_link = dblink_node->children_[1]->value_;
+      if (!OB_ISNULL(dblink_node->children_[1])) {
+        is_reverse_link = dblink_node->children_[1]->value_;
+      }
     }
   }
   return ret;

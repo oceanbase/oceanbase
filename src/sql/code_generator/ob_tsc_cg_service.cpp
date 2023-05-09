@@ -78,6 +78,7 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     } else {
       const ObExecContext *exec_ctx = nullptr;
       tsc_ctdef.flashback_item_.flashback_query_type_ = op.get_flashback_query_type();
+      tsc_ctdef.flashback_item_.fq_read_tx_uncommitted_ = op.get_fq_read_tx_uncommitted();
       if (OB_ISNULL(exec_ctx = cg_.opt_ctx_->get_exec_ctx())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret));

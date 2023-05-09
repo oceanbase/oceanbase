@@ -74,7 +74,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   return ret;
 }
 
@@ -94,7 +95,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -117,7 +119,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   return len;
 }
 
@@ -238,7 +241,9 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tenant_schema_version_ = scan_rtdef_->tenant_schema_version_;
   scan_param_.limit_param_ = scan_rtdef_->limit_param_;
   scan_param_.need_scn_ = scan_rtdef_->need_scn_;
-  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_; scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_;
+  scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -1215,6 +1220,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.need_scn_ = lookup_rtdef_->need_scn_;
   scan_param_.pd_storage_flag_ = lookup_ctdef_->pd_expr_spec_.pd_storage_flag_;
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
+  scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
   if (lookup_rtdef_->is_for_foreign_check_) {

@@ -6643,6 +6643,7 @@ int ObDDLOperator::grant_revoke_user(
     const uint64_t user_id,
     const ObPrivSet priv_set,
     const bool grant,
+    const bool is_from_inner_sql,
     const ObString *ddl_stmt_str,
     common::ObMySQLTransaction &trans)
 {
@@ -6679,7 +6680,7 @@ int ObDDLOperator::grant_revoke_user(
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_sql_service->get_user_sql_service().grant_revoke_user(
-                         new_user_info, new_schema_version, ddl_stmt_str, trans))) {
+                         new_user_info, new_schema_version, ddl_stmt_str, trans, is_from_inner_sql))) {
         LOG_WARN("Failed to grant or revoke user", K(tenant_id), K(user_id), K(grant), K(ret));
       }
     }

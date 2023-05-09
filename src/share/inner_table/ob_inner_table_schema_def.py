@@ -408,6 +408,8 @@ all_user_def = dict(
       ('max_user_connections', 'int', 'false', '0'),
       ('priv_repl_slave', 'int', 'false', '0'),
       ('priv_repl_client', 'int', 'false', '0'),
+      ('priv_drop_database_link', 'int', 'false', '0'),
+      ('priv_create_database_link', 'int', 'false', '0'),
     ],
 )
 
@@ -1951,7 +1953,7 @@ all_dblink_def = dict(
   normal_columns = [
     ('dblink_name', 'varchar:OB_MAX_DBLINK_NAME_LENGTH', 'false'),
     ('owner_id', 'int', 'false'),
-    ('host_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('host_ip', 'varchar:OB_MAX_DOMIN_NAME_LENGTH', 'false'),
     ('host_port', 'int', 'false'),
     ('cluster_name', 'varchar:OB_MAX_CLUSTER_NAME_LENGTH', 'true'),
     ('tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false'),
@@ -1972,6 +1974,7 @@ all_dblink_def = dict(
     ('reverse_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'true'),
     ('reverse_user_name', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
     ('reverse_password', 'varchar:OB_MAX_ENCRYPTED_PASSWORD_LENGTH', 'true'),
+    ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
   ],
 )
 
@@ -8315,6 +8318,8 @@ def_table_schema(
   ('authentication_string', 'varchar:1024'),
   ('password_expired', 'varchar:1'),
   ('account_locked', 'varchar:1'),
+  ('drop_database_link_priv', 'varchar:1'),
+  ('create_database_link_priv', 'varchar:1'),
   ],
 )
 
@@ -24693,7 +24698,9 @@ def_table_schema(
           MAX_CONNECTIONS,
           MAX_USER_CONNECTIONS,
           (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
-          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT
+          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT,
+          (CASE WHEN PRIV_DROP_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP_DATABASE_LINK,
+          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -24745,7 +24752,9 @@ def_table_schema(
           MAX_CONNECTIONS,
           MAX_USER_CONNECTIONS,
           (CASE WHEN PRIV_REPL_SLAVE = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_SLAVE,
-          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT
+          (CASE WHEN PRIV_REPL_CLIENT = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_REPL_CLIENT,
+          (CASE WHEN PRIV_DROP_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_DROP_DATABASE_LINK,
+          (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -25232,6 +25241,10 @@ def_table_schema(
                      AND U.PRIV_REPL_SLAVE = 1 THEN 'REPLICATION SLAVE'
                 WHEN V1.C1 = 34
                      AND U.PRIV_REPL_CLIENT = 1 THEN 'REPLICATION CLIENT'
+                WHEN V1.C1 = 35
+                     AND U.PRIV_DROP_DATABASE_LINK = 1 THEN 'DROP DATABASE LINK'
+                WHEN V1.C1 = 36
+                     AND U.PRIV_CREATE_DATABASE_LINK = 1 THEN 'CREATE DATABASE LINK'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -25254,7 +25267,9 @@ def_table_schema(
                      AND U.PRIV_CREATE_RESOURCE_POOL = 0
                      AND U.PRIV_CREATE_RESOURCE_UNIT = 0
                      AND U.PRIV_REPL_SLAVE = 0
-                     AND U.PRIV_REPL_CLIENT = 0 THEN 'USAGE'
+                     AND U.PRIV_REPL_CLIENT = 0
+                     AND U.PRIV_DROP_DATABASE_LINK = 0
+                     AND U.PRIV_CREATE_DATABASE_LINK = 0 THEN 'USAGE'
             END PRIVILEGE_TYPE ,
             CASE
                 WHEN U.PRIV_GRANT_OPTION = 0 THEN 'NO'
@@ -25279,7 +25294,9 @@ def_table_schema(
                      AND U.PRIV_CREATE_RESOURCE_POOL = 0
                      AND U.PRIV_CREATE_RESOURCE_UNIT = 0
                      AND U.PRIV_REPL_SLAVE = 0
-                     AND U.PRIV_REPL_CLIENT = 0 THEN 'NO'
+                     AND U.PRIV_REPL_CLIENT = 0
+                     AND U.PRIV_DROP_DATABASE_LINK = 0
+                     AND U.PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO'
                 WHEN U.PRIV_GRANT_OPTION = 1 THEN 'YES'
             END IS_GRANTABLE
      FROM oceanbase.__all_user U,
@@ -25305,7 +25322,9 @@ def_table_schema(
         UNION ALL SELECT 30 AS C1
         UNION ALL SELECT 31 AS C1
         UNION ALL SELECT 33 AS C1
-        UNION ALL SELECT 34 AS C1) V1,
+        UNION ALL SELECT 34 AS C1
+        UNION ALL SELECT 35 AS C1
+        UNION ALL SELECT 36 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -26971,7 +26990,6 @@ JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
 )
 
 # 21424: V$OB_LS_LOG_RESTORE_STATUS
-
 def_table_schema(
   owner           = 'jim.wjh',
   table_name      = 'CDB_OB_EXTERNAL_TABLE_FILES',
@@ -26994,6 +27012,42 @@ def_table_schema(
        INNER JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE C ON B.DATABASE_ID = C.DATABASE_ID AND B.TENANT_ID=C.TENANT_ID
     WHERE B.TABLE_TYPE = 14 AND (A.DELETE_VERSION = 9223372036854775807 OR A.DELETE_VERSION < A.CREATE_VERSION)
 """.replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'ailing.lcq',
+    table_name     = 'DBA_DB_LINKS',
+    table_id       = '21426',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+           convert(B.USER_NAME, char(128)) AS OWNER,
+           convert(A.DBLINK_NAME, char(128)) AS DB_LINK,
+           convert(A.USER_NAME, char(128)) AS USERNAME,
+           convert('', char(128)) AS CREDENTIAL_NAME,
+           convert('', char(128)) AS CREDENTIAL_OWNER,
+           convert(CONCAT_WS(':', A.HOST_IP,convert(A.HOST_PORT, char)), char(2000)) AS HOST,
+           convert(A.GMT_CREATE, datetime) AS CREATED,
+           convert('', char(3)) AS HIDDEN,
+           convert('', char(3)) AS SHARD_INTERNAL,
+           convert('YES', char(3)) AS VALID,
+           convert('', char(3)) AS INTRA_CDB,
+           convert(A.TENANT_NAME, char(128)) AS TENANT_NAME,
+           convert(A.DATABASE_NAME, char(128)) AS DATABASE_NAME,
+           convert(A.REVERSE_TENANT_NAME, char(128)) AS REVERSE_TENANT_NAME,
+           convert(A.CLUSTER_NAME, char(128)) AS CLUSTER_NAME,
+           convert(A.REVERSE_CLUSTER_NAME, char(128)) AS REVERSE_CLUSTER_NAME,
+           convert(A.REVERSE_HOST_IP, char(2000)) AS REVERSE_HOST,
+           A.REVERSE_HOST_PORT AS REVERSE_PORT
+    FROM OCEANBASE.__ALL_DBLINK A,
+         OCEANBASE.__ALL_USER B
+    WHERE A.OWNER_ID = B.USER_ID
+""".replace("\n", " "),
+    normal_columns = [
+    ],
 )
 
 ################################################################################

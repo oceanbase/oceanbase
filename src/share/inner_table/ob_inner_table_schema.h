@@ -1422,6 +1422,7 @@ public:
   static int v_sql_join_filter_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_table_stat_stale_info_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_external_table_files_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_db_links_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -3716,6 +3717,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_sql_join_filter_schema,
   ObInnerTableSchema::dba_ob_table_stat_stale_info_schema,
   ObInnerTableSchema::cdb_ob_external_table_files_schema,
+  ObInnerTableSchema::dba_db_links_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -5072,6 +5074,7 @@ const uint64_t tenant_space_tables [] = {
   OB_GV_SQL_JOIN_FILTER_TID,
   OB_V_SQL_JOIN_FILTER_TID,
   OB_DBA_OB_TABLE_STAT_STALE_INFO_TID,
+  OB_DBA_DB_LINKS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -7166,6 +7169,7 @@ const char* const tenant_space_table_names [] = {
   OB_GV_SQL_JOIN_FILTER_TNAME,
   OB_V_SQL_JOIN_FILTER_TNAME,
   OB_DBA_OB_TABLE_STAT_STALE_INFO_TNAME,
+  OB_DBA_DB_LINKS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -10519,10 +10523,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 233;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 671;
-const int64_t OB_SYS_VIEW_COUNT = 713;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1622;
+const int64_t OB_SYS_VIEW_COUNT = 714;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1623;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1625;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1626;
 
 } // end namespace share
 } // end namespace oceanbase

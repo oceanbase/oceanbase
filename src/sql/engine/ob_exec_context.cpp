@@ -125,7 +125,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     register_op_id_(OB_INVALID_ID),
     tmp_alloc_used_(false),
     table_direct_insert_ctx_(),
-    errcode_(OB_SUCCESS)
+    errcode_(OB_SUCCESS),
+    dblink_snapshot_map_()
 {
 }
 

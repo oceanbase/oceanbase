@@ -3511,6 +3511,7 @@ int ObDMLResolver::resolve_flashback_query_node(const ParseNode *time_node, Tabl
     tmp_time_node = time_node->children_[0];
     if (OB_NOT_NULL(tmp_time_node)) {
       ObRawExpr *expr = nullptr;
+      ObQueryCtx *query_ctx = NULL;
       if (OB_FAIL(resolve_sql_expr(*tmp_time_node, expr))) {
         LOG_WARN("resolve sql expr failed", K(ret));
       } else if (OB_ISNULL(expr)) {
@@ -7802,7 +7803,7 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret));
-  } else if (OB_FAIL(resolve_dblink_name(node, dblink_name, is_reverse_link, has_dblink_node))) {
+  } else if (OB_FAIL(resolve_dblink_name(node, tenant_id, dblink_name, is_reverse_link, has_dblink_node))) {
     LOG_WARN("resolve dblink name failed", K(ret));
   } else {
     LOG_DEBUG("resolve dblink name", K(dblink_name), K(is_reverse_link));
@@ -8011,56 +8012,48 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
                                                         bool is_reverse_link)
 {
   int ret = OB_SUCCESS;
-  // db name node may null
-  ParseNode *dbname_node = table_node->children_[0];
-  if (is_reverse_link) {
-    dblink_id = 0; //set reverse link's dblink id to 0
+  ParseNode *dbname_node = table_node->children_[0]; // db name node maybe null, maybe not
+  const ObDbLinkSchema *dblink_schema = NULL;
+  ObString tmp_dbname;
+  if (OB_NOT_NULL(dbname_node)) {
+    int32_t database_name_len = static_cast<int32_t>(dbname_node->str_len_);
+    tmp_dbname.assign_ptr(dbname_node->str_value_, database_name_len);
   }
   if (OB_ISNULL(table_node) || OB_ISNULL(table_node->children_) ||
       OB_ISNULL(table_node->children_[1])) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table node or children is NULL", K(ret));
-  } else if (!is_reverse_link && OB_FAIL(schema_checker_->get_dblink_id(tenant_id, dblink_name, dblink_id))) {
-    LOG_WARN("failed to get dblink info", K(ret), K(dblink_name));
-  } else if (OB_INVALID_ID == dblink_id) {
+  } else if (is_reverse_link) {
+    dblink_id = 0; //set reverse link's dblink id to 0
+    database_name = tmp_dbname;
+  } else if (OB_FAIL(schema_checker_->get_dblink_schema(tenant_id, dblink_name, dblink_schema))) {
+    LOG_WARN("failed to get dblink schema", K(ret));
+  } else if (OB_ISNULL(dblink_schema)) {
     ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
-    LOG_WARN("dblink not exist", K(ret), K(tenant_id), K(dblink_name));
-  } else {
-    if (OB_ISNULL(allocator_)) {
-      ret = OB_ERR_NULL_VALUE;
-      LOG_WARN("allocator is null", K(ret));
-    } else if (!is_reverse_link && OB_FAIL(schema_checker_->get_dblink_user(tenant_id, dblink_name,
-                                                        database_name, *allocator_))){
-      LOG_WARN("failed to get dblink user name", K(tenant_id), K(database_name));
-    } else if (!is_reverse_link && database_name.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dblink user name is empty", K(ret));
-    } else {
-      ObString tmp_dbname;
-      if (OB_NOT_NULL(dbname_node)) {
-        int32_t database_name_len = static_cast<int32_t>(dbname_node->str_len_);
-        tmp_dbname.assign_ptr(dbname_node->str_value_, database_name_len);
-        // the one saved in the schema may different from the one in the parse node, check it.
-        if (0 != database_name.case_compare(tmp_dbname)) {
-          LOG_DEBUG("user name is not same", K(database_name), K(tmp_dbname));
-          database_name = tmp_dbname;
-        }
-      }
-      // database name may lower char, translate to upper, for all_object's user name is upper
-      // why we use database_name, but not dbname_node, because dbname_node is not always exist
-      char letter;
-      char *src_ptr = database_name.ptr();
-      for(ObString::obstr_size_t i = 0; i < database_name.length(); ++i) {
-        letter = src_ptr[i];
-        if(letter >= 'a' && letter <= 'z'){
-          src_ptr[i] = static_cast<char>(letter - 32);
-        }
+    LOG_WARN("cat not find dblink", K(dblink_name), K(ret));
+  } else if (FALSE_IT([&]{dblink_id = dblink_schema->get_dblink_id();}())) {
+  } else if (lib::is_oracle_mode()) {
+    database_name = dblink_schema->get_user_name();
+    if (!tmp_dbname.empty() && 0 != database_name.case_compare(tmp_dbname)) {
+      database_name = tmp_dbname;
+    }
+    char letter;
+    char *src_ptr = database_name.ptr();
+    for(ObString::obstr_size_t i = 0; i < database_name.length(); ++i) {
+      letter = src_ptr[i];
+      if(letter >= 'a' && letter <= 'z'){
+        src_ptr[i] = static_cast<char>(letter - 32);
       }
     }
-    if (OB_SUCC(ret)) {
-      int32_t table_name_len = static_cast<int32_t>(table_node->children_[1]->str_len_);
-      table_name.assign_ptr(table_node->children_[1]->str_value_, table_name_len);
+  } else { // mysql dblink
+    database_name = dblink_schema->get_database_name();
+    if (!tmp_dbname.empty() && database_name.case_compare(tmp_dbname)) {
+      database_name = tmp_dbname;
     }
+  }
+  if (OB_SUCC(ret)) {
+    int32_t table_name_len = static_cast<int32_t>(table_node->children_[1]->str_len_);
+    table_name.assign_ptr(table_node->children_[1]->str_value_, table_name_len);
   }
   return ret;
 }
@@ -12428,6 +12421,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_GATHER_OPTIMIZER_STATISTICS: {
       CHECK_HINT_PARAM(hint_node, 0) {
         global_hint.merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_OPT_STATS_GATHER);
+      }
+      break;
+    }
+    case T_FLASHBACK_READ_TX_UNCOMMITTED: {
+      CHECK_HINT_PARAM(hint_node, 0) {
+        global_hint.set_flashback_read_tx_uncommitted(true);
       }
       break;
     }
