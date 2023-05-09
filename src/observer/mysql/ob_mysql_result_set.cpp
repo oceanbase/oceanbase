@@ -57,6 +57,7 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
     }
 
     ObScale decimals = mfield.accuracy_.get_scale();
+    ObPrecision pre = mfield.accuracy_.get_precision();
     // TIMESTAMP、UNSIGNED通过map直接映射
     if (0 == field.type_name_.case_compare("SYS_REFCURSOR")) {
       mfield.type_ = MYSQL_TYPE_CURSOR;
@@ -69,6 +70,17 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
 
     mfield.type_owner_ = field.type_owner_;
     mfield.type_name_ = field.type_name_;
+   //  In this scenario, the precsion and scale of number are undefined,
+   //  and the internal implementation of ob is represented by an illegal value (-1, -85).
+   //  However, oracle is represented by 0. In order to be compatible with
+   //  the behavior of oracle, it is corrected to 0 here.
+    if ((ObNumberType == field.type_.get_type()
+          || ObUNumberType == field.type_.get_type())
+        && lib::is_oracle_mode()) { // was decimal
+      decimals = (decimals==NUMBER_SCALE_UNKNOWN_YET ? 0:decimals);
+      pre = (pre==PRECISION_UNKNOWN_YET ? 0:pre);
+    }
+    mfield.accuracy_.set_precision(pre);
     mfield.accuracy_.set_scale(decimals);
     mfield.inout_mode_ = field.inout_mode_;
     if (OB_SUCC(ret)
