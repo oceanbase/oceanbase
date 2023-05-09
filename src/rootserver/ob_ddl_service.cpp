@@ -24468,16 +24468,11 @@ int ObDDLService::refresh_schema(uint64_t tenant_id)
         break;
       } else {
         ++refresh_count;
-        if (refresh_count > 2) {
-          LOG_ERROR("refresh schema failed", K(refresh_count), "refresh_schema_interval",
-              static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
-          if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
-            LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
-                          "msg", "refresh schema failed", KR(ret), K(refresh_count));
-          }
-        } else {
-          LOG_WARN("refresh schema failed", K(refresh_count), "refresh_schema_interval",
-              static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
+        LOG_WARN("refresh schema failed", KR(ret), K(refresh_count), "refresh_schema_interval",
+                 static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
+        if (refresh_count > 2 && REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
+          LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
+                        "msg", "refresh schema failed", KR(ret), K(refresh_count));
         }
         ob_usleep(REFRESH_SCHEMA_INTERVAL_US);
       }
