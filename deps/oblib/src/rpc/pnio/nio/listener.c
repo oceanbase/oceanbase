@@ -74,7 +74,7 @@ static int dispatch_handle_event(dispatch_sk_t* s)
       err = EIO;
     }
   } else if ((uint64_t)rbytes < sizeof(dispatch_head_t)) {
-    // do nothing;
+    err = EAGAIN;
   } else if (h->magic != DISPATCH_MAGIC) {
     listen_t* l = structof(s->fty, listen_t, sf);
     int fd = 0;
@@ -98,6 +98,7 @@ static int dispatch_handle_event(dispatch_sk_t* s)
     err = -EINVAL;
   } else if (h->len + sizeof(*h) > (uint64_t)rbytes) {
     // need read more
+    err = EAGAIN;
   } else {
     err = call_dispatch_func(s, (const char*)(h+1), h->len);
   }
