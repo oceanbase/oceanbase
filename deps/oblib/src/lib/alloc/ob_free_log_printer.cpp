@@ -109,7 +109,7 @@ void ObFreeLogPrinter::print_free_log(int64_t tenant_id, int64_t ctx_id, AObject
         MEMCPY((char*)addrs, &obj->data_[offset], sizeof(addrs));
         IGNORE_RETURN parray(buf, sizeof(buf), addrs, ARRAYSIZEOF(addrs));
         allow_next_syslog();
-        _OB_LOG(INFO, "[MEMORY][FREE_LOG] tenant_id=%ld, ctx_name=%s, mod=%s, alloc_bytes=%u, malloc_bt=%s\n",
+        _OB_LOG(INFO, "[MEM_FREE_LOG] tenant_id=%ld, ctx_name=%s, mod=%s, alloc_bytes=%u, malloc_bt=%s\n",
                 tenant_id, get_global_ctx_info().get_ctx_name(ctx_id),
                 obj->label_, obj->alloc_bytes_, buf);
       }
