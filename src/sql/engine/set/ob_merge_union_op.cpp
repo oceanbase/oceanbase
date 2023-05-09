@@ -637,7 +637,7 @@ int ObMergeUnionOp::do_strict_distinct_vectorize(ObOperator &child_op,
   int ret = OB_SUCCESS;
   found_valid_row = false;
   //if compare_row is nullptr, means we do row compare in a batch, get values from expr
-  if (OB_NOT_NULL(op_info.op_brs_) && OB_SUCC(ret) && op_info.op_idx_ < batch_size) {
+  if (OB_NOT_NULL(op_info.op_brs_) && OB_SUCC(ret) && op_info.op_idx_ < op_info.op_brs_->size_) {
     for (int64_t i = op_info.op_idx_; OB_SUCC(ret)
                                       && !found_valid_row
                                       && i < op_info.op_brs_->size_; ++i, ++op_info.op_idx_) {
