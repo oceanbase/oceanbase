@@ -153,7 +153,7 @@ private:
                             const int64_t abs_timeout_ts);
   // freeze all the ls of this tenant.
   // return the first failed code.
-  static int tenant_freeze_();
+  int tenant_freeze_();
   // we can only deal with freeze one by one.
   // set tenant freezing will prevent a new freeze.
   int set_tenant_freezing_();

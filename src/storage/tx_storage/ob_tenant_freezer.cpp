@@ -316,6 +316,7 @@ int ObTenantFreezer::tenant_freeze_()
   ObLSService *ls_srv = MTL(ObLSService *);
   FLOG_INFO("[TenantFreezer] tenant_freeze start", KR(ret));
 
+  ObTenantFreezeGuard freeze_guard(allocator_mgr_, ret);
   if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
@@ -1362,6 +1363,8 @@ int ObTenantFreezer::do_major_if_need_(const bool need_freeze)
     // update frozen scn
   } else if (!need_freeze) {
     // no need major
+  } else if (!is_major_freeze_turn_()) {
+    // do nothing
   } else if (OB_FAIL(get_global_frozen_scn_(frozen_scn))) {
     LOG_WARN("fail to get global frozen version", K(ret));
   } else if (0 != frozen_scn && OB_FAIL(tenant_info_.update_frozen_scn(frozen_scn))) {

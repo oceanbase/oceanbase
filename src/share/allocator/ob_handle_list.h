@@ -45,6 +45,16 @@ public:
       }
       return iter;
     }
+    DLink* prev(DLink* iter) {
+      if (NULL == iter) {
+        iter = &tail_;
+      }
+      iter = (DLink*)iter->prev_;
+      if (&head_ == iter) {
+        iter = NULL;
+      }
+      return iter;
+    }
     static void dlink_insert(ObDLink* cur, ObDLink* x)
     {
       ObDLink* next = (ObDLink*)cur->next_;
@@ -129,6 +139,7 @@ public:
   bool is_empty() const { return ATOMIC_LOAD(&total_count_) <= 0; }
   int64_t hazard() const { return ATOMIC_LOAD(&hazard_); }
   DLink* next(DLink* iter) { return total_list_.next(iter); }
+  DLink* prev(DLink* iter) { return total_list_.prev(iter); }
 protected:
   void set_frozen_(Handle& handle);
   int64_t alloc_id() { return ATOMIC_AAF(&id_, 1); }

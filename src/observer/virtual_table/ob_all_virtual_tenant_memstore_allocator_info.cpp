@@ -37,7 +37,7 @@ public:
     memtable::ObMemtable& mt = handle->mt_;
     ObLSID ls_id;
     item.protection_clock_ = handle->get_protection_clock();
-    item.is_active_ = mt.is_active_memtable();
+    item.is_active_ = handle->is_active();
     item.ls_id_ = (OB_SUCCESS == mt.get_ls_id(ls_id)) ? ls_id.id() : ObLSID::INVALID_LS_ID;
     item.tablet_id_ = mt.get_key().tablet_id_.id();
     item.scn_range_ = mt.get_scn_range();

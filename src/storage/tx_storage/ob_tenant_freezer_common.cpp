@@ -10,7 +10,14 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX STORAGE
+
+#include "lib/oblog/ob_log.h"
 #include "lib/alloc/alloc_func.h"
+#include "share/allocator/ob_gmemstore_allocator.h"
+#include "share/allocator/ob_memstore_allocator_mgr.h"
+#include "share/ob_force_print_log.h"
+#include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer_common.h"
 
 namespace oceanbase
@@ -18,6 +25,7 @@ namespace oceanbase
 using namespace lib;
 namespace storage
 {
+typedef ObMemstoreAllocatorMgr::TAllocator ObTenantMemstoreAllocator;
 
 DEF_TO_STRING(ObTenantFreezeArg)
 {
@@ -142,6 +150,64 @@ void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const
   ctx.mem_lower_limit_ = mem_lower_limit_;
   ctx.mem_upper_limit_ = mem_upper_limit_;
   ctx.mem_memstore_limit_ = mem_memstore_limit_;
+}
+
+ObTenantFreezeGuard::ObTenantFreezeGuard(common::ObMemstoreAllocatorMgr *allocator_mgr,
+                                         int &err_code,
+                                         const int64_t warn_threshold)
+  : allocator_mgr_(nullptr),
+    pre_retire_pos_(0),
+    error_code_(err_code),
+    time_guard_("FREEZE_CHECKER", warn_threshold)
+{
+  int ret = OB_SUCCESS;
+  ObTenantMemstoreAllocator *tenant_allocator = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_NOT_NULL(allocator_mgr)) {
+    allocator_mgr_ = allocator_mgr;
+    if (OB_FAIL(allocator_mgr_->get_tenant_memstore_allocator(tenant_id,
+                                                              tenant_allocator))) {
+      LOG_WARN("[FREEZE_CHECKER] failed to get_tenant_memstore_allocator", KR(ret), K(tenant_id));
+    } else if (NULL == tenant_allocator) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("[FREEZE_CHECKER] tenant memstore allocator is NULL", KR(ret), K(tenant_id));
+    } else {
+      pre_retire_pos_ = tenant_allocator->get_retire_clock();
+    }
+  }
+}
+
+ObTenantFreezeGuard::~ObTenantFreezeGuard()
+{
+  int ret = OB_SUCCESS;
+  ObTenantMemstoreAllocator *tenant_allocator = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  int64_t curr_frozen_pos = 0;
+  if (OB_ISNULL(allocator_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[FREEZE_CHECKER]freeze guard invalid", KR(ret), K_(allocator_mgr), K(lbt()));
+  } else if (OB_FAIL(error_code_)) {
+    LOG_WARN("[FREEZE_CHECKER]tenant freeze failed, skip check frozen memstore", KR(ret));
+  } else if (OB_FAIL(allocator_mgr_->get_tenant_memstore_allocator(tenant_id,
+                                                                   tenant_allocator))) {
+    LOG_WARN("[FREEZE_CHECKER] failed to get_tenant_memstore_allocator", KR(ret), K(tenant_id));
+  } else if (NULL == tenant_allocator) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("[FREEZE_CHECKER] tenant memstore allocator is NULL", KR(ret), K(tenant_id));
+  } else {
+    curr_frozen_pos = tenant_allocator->get_frozen_memstore_pos();
+    const bool retired_mem_frozen = (curr_frozen_pos >= pre_retire_pos_);
+    const bool has_no_active_memtable = (curr_frozen_pos == 0);
+    if (!(retired_mem_frozen || has_no_active_memtable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("[FREEZE_CHECKER]there may be frequent tenant freeze", KR(ret), K(curr_frozen_pos),
+                K_(pre_retire_pos), K(retired_mem_frozen), K(has_no_active_memtable));
+      char active_mt_info[DEFAULT_BUF_LENGTH];
+      tenant_allocator->log_active_memstore_info(active_mt_info,
+                                                 sizeof(active_mt_info));
+      FLOG_INFO("[FREEZE_CHECKER] oldest active memtable", "list", active_mt_info);
+    }
+  }
 }
 
 } // storage

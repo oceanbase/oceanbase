@@ -18,6 +18,10 @@
 #define OCEABASE_STORAGE_TENANT_FREEZER_COMMON_
 namespace oceanbase
 {
+namespace common
+{
+class ObMemstoreAllocatorMgr;
+}
 namespace storage
 {
 struct ObTenantFreezeArg
@@ -114,6 +118,20 @@ private:
   int64_t mem_memstore_limit_; // the max memstore limit
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantInfo);
+};
+
+class ObTenantFreezeGuard
+{
+public:
+  ObTenantFreezeGuard(common::ObMemstoreAllocatorMgr *allocator_mgr,
+                      int &ret,
+                      const int64_t warn_threshold = 60 * 1000 * 1000 /* 1 min */);
+  ~ObTenantFreezeGuard();
+private:
+  common::ObMemstoreAllocatorMgr *allocator_mgr_;
+  int64_t pre_retire_pos_;
+  int &error_code_;
+  ObTimeGuard time_guard_;
 };
 
 } // storage
