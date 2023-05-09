@@ -88,7 +88,7 @@ int ObDASUtils::check_nested_sql_mutating(ObTableID ref_table_id, ObExecContext 
     FOREACH_X(node, parent_das_ctx.get_table_loc_list(), OB_SUCC(ret)) {
       ObDASTableLoc *table_loc = *node;
       if (table_loc->loc_meta_->ref_table_id_ == ref_table_id
-          && (table_loc->is_writing_ || (table_loc->is_reading_ && !is_reading && lib::is_mysql_mode()))) {
+          && (table_loc->is_writing_ || (!is_reading && lib::is_mysql_mode()))) {
         ObSchemaGetterGuard schema_guard;
         const ObTableSchema *table_schema = NULL;
         uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
