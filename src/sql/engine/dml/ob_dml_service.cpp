@@ -1159,28 +1159,7 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
       }
     }
   }
-  //related local index tablet_id pruning only can be used in local plan or remote plan(all operator
-  //use the same das context),
-  //because the distributed plan will transfer tablet_id through exchange operator,
-  //but the related tablet_id map can not be transfered by exchange operator,
-  //unused related pruning in distributed plan's dml operator,
-  //we will use get_all_tablet_and_object_id() to build the related tablet_id map when
-  //dml operator's table loc was inited
-  if (OB_SUCC(ret) && !das_ctdef.table_param_.get_data_table().is_index_table()) {
-    const ObDASTableLocMeta *final_loc_meta = das_rtdef.table_loc_->loc_meta_;
-    if (!final_loc_meta->related_table_ids_.empty() &&
-        dml_rtctx.op_.get_spec().plan_->is_distributed_plan()) {
-      ObDASTabletMapper tablet_mapper;
-      ObArray<ObTabletID> tablet_ids;
-      ObArray<ObObjectID> partition_ids;
-      if (OB_FAIL(das_ctx.get_das_tablet_mapper(ref_table_id, tablet_mapper,
-                                                &final_loc_meta->related_table_ids_))) {
-        LOG_WARN("get das tablet mapper failed", K(ret));
-      } else if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(tablet_ids, partition_ids))) {
-        LOG_WARN("build related tablet_id map failed", K(ret), KPC(final_loc_meta));
-      }
-    }
-  }
+
   return ret;
 }
 

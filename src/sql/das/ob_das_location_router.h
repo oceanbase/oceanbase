@@ -70,28 +70,49 @@ class DASRelatedTabletMap : public share::schema::IRelatedTabletMap
 {
   friend class ObDASCtx;
 public:
-  struct MapEntry
+  struct Key
   {
-    OB_UNIS_VERSION(1);
-  public:
+    int hash(uint64_t &res)
+    {
+      res += common::murmurhash(&src_tablet_id_, sizeof(src_tablet_id_), res);
+      res += common::murmurhash(&related_table_id_, sizeof(related_table_id_), res);
+      return common::OB_SUCCESS;
+    }
+
+    bool operator ==(const Key &other) const
+    {
+      return (other.src_tablet_id_ == src_tablet_id_
+          && other.related_table_id_ == related_table_id_);
+    }
+
     TO_STRING_KV(K_(src_tablet_id),
-                 K_(related_table_id),
-                 K_(related_tablet_id),
-                 K_(related_part_id));
+                 K_(related_table_id));
     common::ObTabletID src_tablet_id_;
     common::ObTableID related_table_id_;
-    common::ObTabletID related_tablet_id_;
-    common::ObObjectID related_part_id_;
-    // only valid if partition level of related table is level two
-    common::ObObjectID related_first_level_part_id_;
   };
-  struct Value {
+
+  struct Value
+  {
+    TO_STRING_KV(K_(tablet_id),
+                 K_(part_id),
+                 K_(first_level_part_id));
     common::ObTabletID tablet_id_;
     common::ObObjectID part_id_;
     // only valid if partition level of related table is level two
     common::ObObjectID first_level_part_id_;
   };
+
+  struct MapEntry
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    TO_STRING_KV(K_(key),
+                 K_(val));
+    Key key_;
+    Value val_;
+  };
   typedef common::ObList<MapEntry, common::ObIAllocator> RelatedTabletList;
+  typedef common::hash::ObHashMap<Key*, Value*, common::hash::NoPthreadDefendMode> RelatedTabletMap;
 public:
   DASRelatedTabletMap(common::ObIAllocator &allocator)
     : list_(allocator),
@@ -104,17 +125,25 @@ public:
                                     common::ObTabletID related_tablet_id,
                                     common::ObObjectID related_part_id,
                                     common::ObObjectID related_first_level_part_id) override;
-  int get_related_tablet_id(common::ObTabletID src_tablet_id,
-                            common::ObTableID related_table_id,
-                            Value &val);
-  void clear() { list_.clear(); }
-  RelatedTabletList &get_list() { return list_; }
+  const Value *get_related_tablet_id(common::ObTabletID src_tablet_id,
+                                     common::ObTableID related_table_id);
+  int assign(const RelatedTabletList &list);
+  int insert_related_tablet_map();
+  void clear()
+  {
+    list_.clear();
+    map_.clear();
+  }
+  const RelatedTabletList &get_list() const { return list_; }
   TO_STRING_KV(K_(list));
 private:
+  const int64_t FAST_LOOP_LIST_LEN = 100;
   //There are usually not many tablets for a query.
   //At this stage, use list to simulate map search,
   //and then optimize if there are performance problems later.
   RelatedTabletList list_;
+  //
+  RelatedTabletMap map_;
   common::ObIAllocator &allocator_;
 };
 
