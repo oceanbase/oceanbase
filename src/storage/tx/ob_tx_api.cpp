@@ -1511,6 +1511,11 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
   }
   int64_t start_ts = ObTimeUtility::current_time();
   int retries = 0;
+  if (OB_UNLIKELY(tx.flags_.INTERRUPTED_)) {
+    ret = OB_ERR_INTERRUPTED;
+    tx.clear_interrupt();
+    TRANS_LOG(WARN, "interrupted", K(ret), K(tx));
+  }
   if (OB_SUCC(ret)) {
     // setup state before release lock
     auto save_state = tx.state_;
@@ -1529,7 +1534,7 @@ inline int ObTransService::rollback_savepoint_slowpath_(ObTxDesc &tx,
     // mask_set need clear
     tx.brpc_mask_set_.reset();
     // clear interrupt flag
-    tx.flags_.INTERRUPTED_ = false;
+    tx.clear_interrupt();
   }
   if (OB_NOT_NULL(tmp_tx_desc)) {
     msg.tx_ptr_ = NULL;

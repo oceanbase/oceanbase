@@ -527,6 +527,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   OX (session_id = session->get_sessid());
   OX (tx_desc = session->get_tx_desc());
   OX (is_plain_select = plan->is_plain_select());
+  OX (tx_desc->clear_interrupt());
   if (OB_SUCC(ret) && !is_plain_select) {
     OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level), session_id, *tx_desc);
   }

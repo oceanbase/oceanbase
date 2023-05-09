@@ -819,8 +819,8 @@ int ObTransService::interrupt(ObTxDesc &tx, int cause)
   bool busy_wait = false;
   {
     ObSpinLockGuard guard(tx.lock_);
+    tx.flags_.INTERRUPTED_ = true;
     if (tx.flags_.BLOCK_) {
-      tx.flags_.INTERRUPTED_ = true;
       TRANS_LOG(INFO, "will busy wait tx quit from block state", K(tx));
       busy_wait = true;
     }
@@ -1545,6 +1545,7 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   [&]() -> bool { return tx.flags_.INTERRUPTED_; });
   tx.lock_.lock();
   bool interrupted = tx.flags_.INTERRUPTED_;
+  tx.clear_interrupt();
   tx.flags_.BLOCK_ = false;
   if (OB_SUCC(ret)) {
     if (op_sn != tx.op_sn_) {
