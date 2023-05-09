@@ -1363,6 +1363,7 @@ int FetchLogARpcResultPool::init(const uint64_t tenant_id, const int64_t cached_
     LOG_ERROR("init result obj pool fail", KR(ret), K(tenant_id), K(cached_obj_count));
   } else {
     inited_ = true;
+    LOG_INFO("FetchLogARpcResultPool init succ", K(tenant_id), K(cached_obj_count));
   }
 
   return ret;

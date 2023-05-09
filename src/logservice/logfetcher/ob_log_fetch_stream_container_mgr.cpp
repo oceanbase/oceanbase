@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX  OBLOG_FETCHER
 
+#include "share/rc/ob_tenant_base.h"  // MTL_ID
 #include "ob_log_fetch_stream_container_mgr.h"
 
 namespace oceanbase
@@ -61,7 +62,7 @@ int ObFsContainerMgr::init(
     LOG_ERROR("init FetchStreamContainer pool fail", KR(ret));
   } else if (OB_FAIL(fs_pool_.init(fetch_stream_cached_count))) {
     LOG_ERROR("init fetch stream pool fail", KR(ret), K(fetch_stream_cached_count));
-  } else if (OB_FAIL(rpc_result_pool_.init(tenant_id, rpc_result_cached_count))) {
+  } else if (OB_FAIL(rpc_result_pool_.init(MTL_ID(), rpc_result_cached_count))) {
     LOG_ERROR("init rpc result pool fail", KR(ret), K(tenant_id), K(rpc_result_cached_count));
   } else {
     rpc_ = &rpc;
