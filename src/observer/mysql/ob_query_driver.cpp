@@ -212,15 +212,12 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         // break;
       } else {
         LOG_DEBUG("response row succ", K(*row));
-        ObArenaAllocator *allocator = NULL;
-        if (OB_FAIL(result.get_exec_context().get_convert_charset_allocator(allocator))) {
-          LOG_WARN("fail to get lob fake allocator", K(ret));
-        } else if (OB_NOT_NULL(allocator)) {
-          allocator->reset_remain_one_page();
-        }
       }
       if (OB_SUCC(ret)) {
         ++row_num;
+        if (0 == row_num % RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS) {
+          (void) result.get_exec_context().try_reset_convert_charset_allocator();
+        }
       }
     }
   }

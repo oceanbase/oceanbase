@@ -638,6 +638,13 @@ int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
   return ret;
 }
 
+void ObExecContext::try_reset_convert_charset_allocator()
+{
+  if (OB_NOT_NULL(convert_allocator_)) {
+    convert_allocator_->reset_remain_one_page();
+  }
+}
+
 int ObExecContext::get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr)
 {
   int ret = OB_SUCCESS;
