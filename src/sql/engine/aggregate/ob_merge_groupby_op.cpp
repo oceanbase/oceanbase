@@ -782,10 +782,7 @@ int ObMergeGroupByOp::get_child_next_batch_row(
         K(const_cast<ObBatchRows *>(batch_rows)->size_));
     }
   } else {
-    if (aggr_processor_.get_need_advance_collect() &&
-      brs_holder_.is_saved() && OB_FAIL(brs_holder_.restore())) {
-      LOG_WARN("failed to restore child exprs", K(ret));
-    } else if (OB_FAIL(child_->get_next_batch(max_row_cnt, batch_rows))) {
+    if (OB_FAIL(child_->get_next_batch(max_row_cnt, batch_rows))) {
       LOG_WARN("failed to get child row", K(ret));
     } else if (aggr_processor_.get_need_advance_collect() &&
       OB_FAIL(brs_holder_.save(MY_SPEC.max_batch_size_))) {
@@ -896,6 +893,8 @@ int ObMergeGroupByOp::advance_collect_result(int64_t group_id)
   clear_evaluated_flag();
   if (OB_FAIL(aggr_processor_.advance_collect_result(group_id))) {
     LOG_WARN("failed to calc and material distinct result", K(ret), K(group_id));
+  } else if (OB_FAIL(brs_holder_.restore())) {
+    LOG_WARN("failed to restore child exprs", K(ret));
   }
   return ret;
 }
@@ -947,7 +946,13 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("failed to process_batch_result", K(ret));
         } else if (stop_batch_iterating(*child_brs, output_batch_cnt)) {
           // backup child exprs for this round
-          OZ(brs_holder_.save(std::min(MY_SPEC.max_batch_size_, get_output_queue_cnt())));
+          // for the vectorized merge distinct scenario, the result will be calculated and materialized
+          // in advance. therefore, when a backup is performed after a batch processing is completed
+          // the output expression of the child has been refilled. so, it is necessary to perform backup
+          // after get next batch from the child operator, and there is no need to backup again.
+          if (!aggr_processor_.get_need_advance_collect()) {
+            OZ(brs_holder_.save(std::min(MY_SPEC.max_batch_size_, get_output_queue_cnt())));
+          }
           LOG_DEBUG("break out of iteratation", K(child_brs->end_),
                     K(output_batch_cnt), K(output_queue_cnt_));
           break;
