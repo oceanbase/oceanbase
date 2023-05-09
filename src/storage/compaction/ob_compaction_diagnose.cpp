@@ -92,7 +92,15 @@ int ObScheduleSuspectInfoMgr::init()
 
 void ObScheduleSuspectInfoMgr::destroy()
 {
+  common::SpinWLockGuard guard(lock_);
   if (info_map_.created()) {
+    auto free_map_entry = [this](common::hash::HashMapPair<int64_t, ObScheduleSuspectInfo *> &entry) {
+      ObScheduleSuspectInfo *info = entry.second;
+      info->~ObScheduleSuspectInfo();
+      allocator_.free((void *)info);
+      return OB_SUCCESS;
+    };
+    info_map_.foreach_refactored(free_map_entry);
     info_map_.destroy();
   }
 }
@@ -189,18 +197,26 @@ int ObScheduleSuspectInfoMgr::gc_info()
     int tmp_ret = OB_SUCCESS;
     int64_t gc_cnt = 0;
     ObScheduleSuspectInfo *info = nullptr;
+    ObSEArray<int64_t, 128> remove_info_keys;
     const int64_t gc_time = ObTimeUtility::fast_current_time() - GC_INFO_TIME_LIMIT;
     common::SpinWLockGuard guard(lock_);
     for (InfoMap::iterator iter = info_map_.begin(); iter != info_map_.end(); ++iter) {
       if (OB_NOT_NULL(info = iter->second)) {
-        if (info->add_time_ < gc_time) {
-          if (OB_TMP_FAIL(info_map_.erase_refactored(iter->first))) {
-            LOG_WARN("failed to erase from map", K(tmp_ret), K(iter->first));
-          } else {
-            gc_cnt++;
-            allocator_.free(info);
-            info = nullptr;
-          }
+        if (info->add_time_ < gc_time && OB_TMP_FAIL(remove_info_keys.push_back(iter->first))) {
+          LOG_WARN("failed to push back remove info key", K(tmp_ret), K(iter->first));
+        }
+      }
+    }
+    for (int64_t i = 0; i < remove_info_keys.count(); ++i) {
+      if (OB_TMP_FAIL(info_map_.get_refactored(remove_info_keys.at(i), info))) {
+        LOG_WARN("failed to get from map", K(tmp_ret), K(remove_info_keys.at(i)));
+      } else if (OB_NOT_NULL(info)) {
+        if (OB_TMP_FAIL(info_map_.erase_refactored(remove_info_keys.at(i)))) {
+          LOG_WARN("failed to erase from map", K(tmp_ret), K(remove_info_keys.at(i)));
+        } else {
+          gc_cnt++;
+          allocator_.free(info);
+          info = nullptr;
         }
       }
     }
