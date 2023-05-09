@@ -84,6 +84,7 @@ public:
     is_index_back_ = false;
     is_weak_read_ = false;
     is_get_ = false;
+    read_latest_ = true;
     index_schema_ = nullptr;
     limit_ = -1;
     offset_ = 0;
@@ -99,32 +100,33 @@ public:
   }
   virtual ~ObTableCtx()
   {}
-  TO_STRING_KV("is_init", is_init_,
-               "tenant_id", tenant_id_,
-               "database_id", database_id_,
-               "table_name", table_name_,
-               "ref_table_id", ref_table_id_,
-               "index_table_id", index_table_id_,
-               "tablet_id", tablet_id_,
-               "index_tablet_id", index_tablet_id_,
-               "ls_id", ls_id_,
-               "tenant_schema_version", tenant_schema_version_,
+  TO_STRING_KV(K_(is_init),
+               K_(tenant_id),
+               K_(database_id),
+               K_(table_name),
+               K_(ref_table_id),
+               K_(index_table_id),
+               K_(tablet_id),
+               K_(index_tablet_id),
+               K_(ls_id),
+               K_(tenant_schema_version),
                // scan to string
-               "is_scan", is_scan_,
-               "is_index_scan", is_index_scan_,
-               "is_index_back", is_index_back_,
-               "is_weak_read", is_weak_read_,
-               "is_get_", is_get_,
-               "limit", limit_,
-               "offset", offset_,
-               "query_col_names", query_col_names_,
-               "select_col_ids", select_col_ids_,
+               K_(is_scan),
+               K_(is_index_scan),
+               K_(is_index_back),
+               K_(is_weak_read),
+               K_(is_get),
+               K_(read_latest),
+               K_(limit),
+               K_(offset),
+               K_(query_col_names),
+               K_(select_col_ids),
                // update to string
-               "is_update", is_for_update_,
+               K_(is_for_update),
                // insert up to string
-               "is_for_insertup", is_for_insertup_,
-               "entity_type", entity_type_,
-               "cur_cluster_version", cur_cluster_version_);
+               K_(is_for_insertup),
+               K_(entity_type),
+               K_(cur_cluster_version));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -157,6 +159,7 @@ public:
   OB_INLINE bool is_weak_read() const { return is_weak_read_; }
   OB_INLINE bool is_index_back() const { return is_index_back_; }
   OB_INLINE bool is_get() const { return is_get_; }
+  OB_INLINE bool is_read_latest() const { return read_latest_; }
   OB_INLINE common::ObQueryFlag::ScanOrder get_scan_order() const { return scan_order_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_select_exprs() const { return select_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_rowkey_exprs() const { return rowkey_exprs_; }
@@ -210,6 +213,7 @@ public:
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
+  OB_INLINE void set_read_latest(bool read_latest) { read_latest_ = read_latest; }
   // for dml
   OB_INLINE void set_entity(const ObITableEntity *entity) { entity_ = entity; }
   OB_INLINE void set_entity_type(const ObTableEntityType &type) { entity_type_ = type; }
@@ -308,6 +312,7 @@ private:
   bool is_index_back_;
   bool is_weak_read_;
   bool is_get_;
+  bool read_latest_; // default true, false in single get and multi get
   common::ObQueryFlag::ScanOrder scan_order_;
   common::ObArray<sql::ObRawExpr*> select_exprs_;
   common::ObArray<sql::ObRawExpr*> rowkey_exprs_;

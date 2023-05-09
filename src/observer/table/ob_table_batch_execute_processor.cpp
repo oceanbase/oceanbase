@@ -381,6 +381,7 @@ int ObTableBatchExecuteP::multi_get()
                                                                                spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
+    tb_ctx_.set_read_latest(false);
     const ObTableSchema *table_schema = tb_ctx_.get_table_schema();
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_operation.count(); ++i) {
       const ObTableOperation &table_operation = batch_operation.at(i);

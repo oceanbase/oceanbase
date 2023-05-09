@@ -347,6 +347,8 @@ int ObTableApiExecuteP::process_get()
     LOG_WARN("fail to init wead read trans", K(ret), K(tb_ctx_));
   } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
     LOG_WARN("fail to init trans", K(ret), K(tb_ctx_));
+  } else if (FALSE_IT(tb_ctx_.set_read_latest(false))) {
+    // do nothing
   } else if (OB_FAIL(ObTableOpWrapper::process_get(tb_ctx_, row))) {
     if (ret == OB_ITER_END) {
       ret = OB_SUCCESS;

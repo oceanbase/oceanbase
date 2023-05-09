@@ -33,8 +33,7 @@ int ObTableApiScanExecutor::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
   das_rtdef.timeout_ts_ = tb_ctx.get_timeout_ts();
   das_rtdef.scan_flag_.scan_order_ = tb_ctx.get_scan_order();
   das_rtdef.scan_flag_.index_back_ = tb_ctx.is_index_back();
-  bool is_get_op = tb_ctx.get_opertion_type() == ObTableOperationType::Type::GET;
-  das_rtdef.scan_flag_.read_latest_ = is_get_op ? false : true;
+  das_rtdef.scan_flag_.read_latest_ = tb_ctx.is_read_latest();
   das_rtdef.need_check_output_datum_ = false;
   das_rtdef.sql_mode_ = SMO_DEFAULT;
   das_rtdef.stmt_allocator_.set_alloc(&das_ref_.get_das_alloc());
