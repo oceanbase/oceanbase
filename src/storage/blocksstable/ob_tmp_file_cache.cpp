@@ -990,13 +990,14 @@ int ObTmpTenantMemBlockManager::wash(const int64_t block_nums,
   int ret = OB_SUCCESS;
   TmpMacroBlockMap::iterator iter;
   common::ObArray<ObTmpMacroBlock*> blks;
+  ObArenaAllocator allocator("TmpFileRank");
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpTenantMemBlockManager has not been inited", K(ret));
   } else if (OB_FAIL(wait_write_io_finish())) {
     STORAGE_LOG(WARN, "fail to wait previous write io", K(ret));
   } else {
-    Heap heap(compare_, allocator_);
+    Heap heap(compare_, &allocator);
     int64_t cur_time = ObTimeUtility::fast_current_time();
     for (iter = t_mblk_map_.begin(); OB_SUCC(ret) && iter != t_mblk_map_.end(); ++iter) {
       ObTmpMacroBlock *m_blk = iter->second;
