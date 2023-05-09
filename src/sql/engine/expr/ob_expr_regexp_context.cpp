@@ -860,5 +860,33 @@ int ObExprRegexContext::check_need_utf8(ObRawExpr *expr, bool &need_utf8)
   return ret;
 }
 
+int ObExprRegexContext::check_binary_compatible(const ObExprResType *types, int64_t num) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(types)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    int64_t binary_param_idx = -1;
+    int64_t nobinary_param_idx = -1;
+    for (int64_t i = 0; i < num; ++i) {
+      if (ObExprRegexContext::is_binary_string(types[i])) {
+        binary_param_idx = i;
+      } else if (!ObExprRegexContext::is_binary_compatible(types[i])) {
+        nobinary_param_idx = i;
+      }
+    }
+    if (-1 != binary_param_idx && -1 != nobinary_param_idx) {
+      const char *coll_name1 = ObCharset::collation_name(types[binary_param_idx].get_collation_type());
+      const char *coll_name2 = ObCharset::collation_name(types[nobinary_param_idx].get_collation_type());
+      ObString collation1 = ObString::make_string(coll_name1);
+      ObString collation2 = ObString::make_string(coll_name2);
+      ret = OB_ERR_MYSQL_CHARACTER_SET_MISMATCH;
+      LOG_USER_ERROR(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, collation1.length(), collation1.ptr(), collation2.length(), collation2.ptr());
+      LOG_WARN("If one of the params is binary string, all of the params should be implicitly castable to binary charset.", K(ret), K(*types));
+    }
+  }
+  return ret;
+}
+
 }
 }

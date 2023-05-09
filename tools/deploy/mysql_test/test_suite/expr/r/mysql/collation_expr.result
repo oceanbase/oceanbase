@@ -407,11 +407,9 @@ select collation(unhex(null));
 collation(unhex(null))
 binary
 select collation(uc regexp b) from coll_test;
-collation(uc regexp b)
-binary
+ERROR HY000: Character set 'utf8mb4_general_ci' cannot be used in conjunction with 'binary' in regexp function call.
 select cmp_meta(uc regexp b) from coll_test;
-cmp_meta(uc regexp b)
-{type:"INT", collation:"binary", coercibility:"NUMERIC"}
+ERROR HY000: Character set 'utf8mb4_general_ci' cannot be used in conjunction with 'binary' in regexp function call.
 select cmp_meta(uc regexp ub) from coll_test;
 cmp_meta(uc regexp ub)
 {type:"INT", collation:"binary", coercibility:"NUMERIC"}
@@ -419,8 +417,7 @@ select cmp_meta(b regexp b) from coll_test;
 cmp_meta(b regexp b)
 {type:"INT", collation:"binary", coercibility:"NUMERIC"}
 select cmp_meta(uc regexp b) from coll_test;
-cmp_meta(uc regexp b)
-{type:"INT", collation:"binary", coercibility:"NUMERIC"}
+ERROR HY000: Character set 'utf8mb4_general_ci' cannot be used in conjunction with 'binary' in regexp function call.
 select cmp_meta(uc regexp 'abc') from coll_test;
 cmp_meta(uc regexp 'abc')
 {type:"INT", collation:"binary", coercibility:"NUMERIC"}
