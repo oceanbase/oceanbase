@@ -760,6 +760,14 @@ int ObExprResultTypeUtil::deduce_max_string_length_oracle(const ObDataTypeCastPa
           length /= ObCharset::get_charset(target_type.get_collation_type())->mbminlen;
         }
       }
+    } else if (orig_type.is_user_defined_sql_type() || orig_type.is_ext()) {
+      // udt types like xml can cast to string, the accuracy in pl extend is used for udt id
+      if (LS_CHAR == length_semantics) {
+        int64_t mbminlen = ObCharset::get_charset(target_type.get_collation_type())->mbminlen;
+        length = OB_MAX_VARCHAR_LENGTH_KEY / mbminlen;
+      } else {
+        length = OB_MAX_VARCHAR_LENGTH_KEY; // issue 49536718: CREATE INDEX index ON table (UPPER(c1));
+      }
     } else {
       int64_t ascii_bytes = 0;
       if (orig_type.is_null()) {

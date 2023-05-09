@@ -634,6 +634,10 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type, ObExprResTyp
         LOG_WARN("cast unsupported sql udt type to pl udt type", K(ret), K(src_type), K(dst_type));
       }
     }
+  } else if (src_type.is_null()) {
+    if (dst_type.get_type() == ObUserDefinedSQLType) {
+      dst_type.set_sql_udt(ObXMLSqlType);
+    }
   }
   return ret;
 }
