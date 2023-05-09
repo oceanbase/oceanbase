@@ -160,6 +160,11 @@ int ObTabletDDLKvMgr::ddl_start(ObTablet &tablet,
       saved_start_scn = start_scn_;
       saved_snapshot_version = table_key_.get_snapshot_version();
       commit_scn_ = get_commit_scn_nolock(tablet.get_tablet_meta());
+      if (checkpoint_scn.is_valid_and_not_min()) {
+        if (tablet.get_tablet_meta().table_store_flag_.with_major_sstable() && tablet.get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min()) {
+          success_start_scn_ = tablet.get_tablet_meta().ddl_start_scn_;
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && !checkpoint_scn.is_valid_and_not_min()) {
@@ -349,39 +354,43 @@ int ObTabletDDLKvMgr::get_rec_scn(SCN &rec_scn)
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
+  const bool is_commit_succ = is_commit_success();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
-                                                    tablet_handle,
-                                                    ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
-    LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   }
-
-  // rec scn of ddl start log
-  if (OB_SUCC(ret)) {
-    const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
-    if (start_scn_.is_valid_and_not_min() && start_scn_ != tablet_meta.ddl_start_scn_) {
-      // has a latest start log and not flushed to tablet meta, keep it
-      rec_scn = SCN::min(rec_scn, start_scn_);
+  if (OB_SUCC(ret) && !is_commit_succ) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
+                                                      tablet_handle,
+                                                      ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
+      LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
     }
-  }
 
-  // rec scn of ddl commit log
-  if (OB_SUCC(ret)) {
-    const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-    if (tablet_meta.ddl_commit_scn_.is_valid_and_not_min()) {
-      // has commit log and already dumped to tablet meta, skip
-    } else {
-      const SCN commit_scn = get_commit_scn(tablet_meta);
-      if (commit_scn.is_valid_and_not_min()) {
-        // has commit log and not yet dumped to tablet meta
-        rec_scn = SCN::min(rec_scn, commit_scn);
+    // rec scn of ddl start log
+    if (OB_SUCC(ret)) {
+      const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+      ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+      if (start_scn_.is_valid_and_not_min() && start_scn_ != tablet_meta.ddl_start_scn_) {
+        // has a latest start log and not flushed to tablet meta, keep it
+        rec_scn = SCN::min(rec_scn, start_scn_);
+      }
+    }
+
+    // rec scn of ddl commit log
+    if (OB_SUCC(ret)) {
+      const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+      if (tablet_meta.ddl_commit_scn_.is_valid_and_not_min()) {
+        // has commit log and already dumped to tablet meta, skip
       } else {
-        // no commit log
+        const SCN commit_scn = get_commit_scn(tablet_meta);
+        if (commit_scn.is_valid_and_not_min()) {
+          // has commit log and not yet dumped to tablet meta
+          rec_scn = SCN::min(rec_scn, commit_scn);
+        } else {
+          // no commit log
+        }
       }
     }
   }
