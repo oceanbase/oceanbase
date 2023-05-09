@@ -781,6 +781,9 @@ int ObMajorMergeScheduler::try_update_epoch_and_reload()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("latest epoch should not less than cached epoch", KR(ret), K(latest_epoch), "cached_epoch", get_epoch());
     }
+  } else { // ObRole::LEADER != role
+    ret = OB_NOT_MASTER;
+    LOG_INFO("not master ls", KR(ret), K(role), "cur_epoch", get_epoch(), K(latest_epoch));
   }
   return ret;
 }
