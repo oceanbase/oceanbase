@@ -2122,7 +2122,6 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
       const int64_t log_flush_ts = log_task->get_flushed_ts();
       const int64_t log_first_ack_ts = log_task->get_first_ack_ts();
       const int64_t log_commit_ts = log_task->get_committed_ts();
-      PALF_LOG(INFO, "sliding_cb log_task", K(log_commit_ts), KPC(log_task));
       log_task->unlock();
 
       // Verifying accum_checksum firstly.
