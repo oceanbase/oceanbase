@@ -442,9 +442,10 @@ void ObDASScanOp::reset_access_datums_ptr()
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
-    FOREACH_CNT(e, get_result_outputs()) {
-      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
-      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+    if (OB_NOT_NULL(scan_ctdef_->trans_info_expr_)) {
+      ObExpr *trans_expr = scan_ctdef_->trans_info_expr_;
+      trans_expr->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
@@ -453,6 +454,13 @@ void ObDASScanOp::reset_access_datums_ptr()
       (*e)->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
                                      get_lookup_rtdef()->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*get_lookup_rtdef()->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
+    if (OB_NOT_NULL(get_lookup_ctdef()->trans_info_expr_)) {
+      ObExpr *trans_expr = get_lookup_ctdef()->trans_info_expr_;
+      trans_expr->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
+                                           get_lookup_rtdef()->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
