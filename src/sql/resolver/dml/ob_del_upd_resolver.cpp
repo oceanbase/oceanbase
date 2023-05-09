@@ -1726,6 +1726,41 @@ int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
   return ret;
 }
 
+int ObDelUpdResolver::add_all_lob_columns_to_stmt(const TableItem &table_item,
+                                                  ObIArray<ObColumnRefRawExpr*> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  const TableItem& base_table_item = table_item.get_base_table_item();
+  if (OB_ISNULL(params_.session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params_.session_info_ is null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                       base_table_item.ref_id_,
+                                                       table_schema,
+                                                       base_table_item.is_link_table()))) {
+    LOG_WARN("not find table schema", K(ret), K(base_table_item));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(table_schema), K(ret));
+  } else {
+    ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+    ObTableSchema::const_column_iterator end = table_schema->column_end();
+    for (; OB_SUCC(ret) && iter != end; ++iter) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(column));
+      } else if (!column->get_meta_type().is_lob_storage()) {
+        // do nothing
+      } else if (OB_FAIL(add_column_to_stmt(table_item, *column, column_exprs))) {
+        LOG_WARN("add column item to stmt failed", K(ret));
+      }
+    } //end for
+  }
+  return ret;
+}
+
 int ObDelUpdResolver::add_all_columns_to_stmt_for_trigger(const TableItem &table_item,
                                                           ObIArray<ObColumnRefRawExpr*> &column_exprs)
 {
