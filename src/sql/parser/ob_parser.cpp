@@ -911,6 +911,7 @@ int ObParser::parse_sql(const ObString &stmt,
     // if is multi_values_parser opt not need retry
     if (lib::is_mysql_mode() && !parse_result.is_multi_values_parser_) {
       parse_result.enable_compatible_comment_ = false;
+      parse_result.mysql_compatible_comment_ = false;
       if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
         //do nothing.
       }
