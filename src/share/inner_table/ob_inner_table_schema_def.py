@@ -3375,9 +3375,6 @@ def_table_schema(
 )
 
 # the table id from 337 to 341 have been used for new backup validation system table,
-# the table id from 342 to 345 have been used for new log stream table,
-# relation code will patch from 32x later, please use new table id from 345, thanks!
-# (
 
 # __all_ls_meta_table
 def_table_schema(
@@ -4085,7 +4082,6 @@ def_table_schema(
   ],
 )
 
-# 370: __all_ls_recovery_stat
 def_table_schema(
   owner = 'msy164651',
   table_name    = '__all_ls_recovery_stat',
@@ -4169,7 +4165,6 @@ def_table_schema(
   ],
 )
 
-# 373: __all_tablet_checksum
 # do checksum(user tenant) between primary cluster and standby cluster
 # differ from __all_tablet_replica_checksum, it is tablet level
 def_table_schema(
@@ -4863,7 +4858,6 @@ def_table_schema(
   ],
 )
 
-# table_id 399 preserved for __all_log_archive_dest_parameter
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name = '__all_log_archive_dest_parameter',
@@ -4884,7 +4878,6 @@ def_table_schema(
   ],
 )
 
-# table_id 400 preserved for __all_backup_parameter
 all_backup_parameter_def = dict(
   owner = 'wangxiaohui.wxh',
   table_name    = '__all_backup_parameter',
@@ -4904,7 +4897,6 @@ all_backup_parameter_def = dict(
 )
 def_table_schema(**all_backup_parameter_def)
 
-# table_id 401 preserved for __all_ls_restore_progress
 all_ls_restore_progress_def = dict(
   owner = 'wangxiaohui.wxh',
   table_name    = '__all_ls_restore_progress',
@@ -4937,7 +4929,6 @@ all_ls_restore_progress_def = dict(
 )
 def_table_schema(**all_ls_restore_progress_def)
 
-# table_id 402 preserved for __all_ls_restore_history
 all_ls_restore_history_def = dict(
   owner = 'wangxiaohui.wxh',
   table_name    = '__all_ls_restore_history',
@@ -4969,7 +4960,6 @@ all_ls_restore_history_def = dict(
 )
 def_table_schema(**all_ls_restore_history_def)
 
-# 403 : __all_backup_storage_info_history
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name = '__all_backup_storage_info_history',
@@ -4994,7 +4984,6 @@ def_table_schema(
   ],
 )
 
-# 404 : __all_backup_delete_policy
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name    = '__all_backup_delete_policy',
@@ -5063,7 +5052,6 @@ def_table_schema(**all_mock_fk_parent_table_column_def)
 
 def_table_schema(**gen_history_table_def(408, all_mock_fk_parent_table_column_def))
 
-# 409 : __all_log_restore_source
 def_table_schema(
     owner = 'shuning.tsn',
     table_name    = '__all_log_restore_source',
@@ -5485,9 +5473,6 @@ def_table_schema(
   ],
   in_tenant_space = True,
 )
-
-# 451 : __all_task_opt_stat_gather_history
-# 452 : __all_table_opt_stat_gather_history
 
 def_table_schema(
     owner = 'jiangxiu.wt',
@@ -10784,19 +10769,16 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12296: __all_virtual_backup_set_files
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12296',
   table_name = '__all_virtual_backup_set_files',
   keywords = all_def_keywords['__all_backup_set_files'],
   in_tenant_space = True))
-# 12297: __all_virtual_backup_job
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12297',
   table_name = '__all_virtual_backup_job',
   keywords = all_def_keywords['__all_backup_job'],
   in_tenant_space = True))
-# 12298: __all_virtual_backup_job_history
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12298',
   table_name = '__all_virtual_backup_job_history',
@@ -10884,77 +10866,66 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# table_id 12304 preserved for __all_virtual_log_archive_dest_parameter
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12304',
   table_name = '__all_virtual_log_archive_dest_parameter',
   keywords = all_def_keywords['__all_log_archive_dest_parameter'],
   in_tenant_space = True))
 
-# table id 12305 preserved for __all_virtual_backup_parameter
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12305',
   table_name = '__all_virtual_backup_parameter',
   keywords = all_def_keywords['__all_backup_parameter'],
   in_tenant_space = True))
 
-# table id 12306 preserved for __all_virtual_restore_job
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12306',
   table_name = '__all_virtual_restore_job',
   keywords = all_def_keywords['__all_restore_job'],
   in_tenant_space = True))
 
-# table id 12307 preserved for __all_virtual_restore_job_history
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12307',
   table_name = '__all_virtual_restore_job_history',
   keywords = all_def_keywords['__all_restore_job_history'],
   in_tenant_space = True))
 
-# table id 12308 preserved for __all_virtual_restore_progress
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12308',
   table_name = '__all_virtual_restore_progress',
   keywords = all_def_keywords['__all_restore_progress'],
   in_tenant_space = True))
 
-# table id 12309 preserved for __all_virtual_ls_restore_progress
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12309',
   table_name = '__all_virtual_ls_restore_progress',
   keywords = all_def_keywords['__all_ls_restore_progress'],
   in_tenant_space = True))
 
-# table id 12310 preserved for __all_virtual_ls_restore_history
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12310',
   table_name = '__all_virtual_ls_restore_history',
   keywords = all_def_keywords['__all_ls_restore_history'],
   in_tenant_space = True))
 
-# 12311: __all_virtual_backup_storage_info_history
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12311',
   table_name = '__all_virtual_backup_storage_info_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_backup_storage_info_history']))
 
-# 12312: __all_virtual_backup_delete_job
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12312',
   table_name = '__all_virtual_backup_delete_job',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_backup_delete_job']))
 
-# 12313: __all_virtual_backup_delete_job_history
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12313',
   table_name = '__all_virtual_backup_delete_job_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_backup_delete_job_history']))
 
-# 12314: __all_virtual_backup_delete_policy
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12314',
   table_name = '__all_virtual_backup_delete_policy',
@@ -11290,7 +11261,6 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12339: __all_virtual_show_trace
 def_table_schema(
   owner = 'guoyun.lgy',
   table_name     = '__all_virtual_show_trace',
@@ -11692,7 +11662,6 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12385: __all_virtual_arbitration_member_info
 def_table_schema(
   owner = 'debin.jdb',
   table_name = '__all_virtual_arbitration_member_info',
@@ -11721,7 +11690,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12387: __all_virtual_arbitration_service_status
+# 12386: __all_virtual_server_storage
+
 def_table_schema(
   owner = 'debin.jdb',
   table_name = '__all_virtual_arbitration_service_status',
@@ -11743,14 +11713,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-#
-# 12381: __all_virtual_task_opt_stat_gather_history
-# 12382: __all_virtual_table_opt_stat_gather_history
-# 12383: __all_virtual_opt_stat_gather_monitor
 
-
-# 12385: __all_virtual_arbitration_member_info
-# 12386: __all_virtual_server_storage
 # 12388: __all_virtual_wr_active_session_history
 # 12389: __all_virtual_wr_snapshot
 # 12390: __all_virtual_wr_statname
@@ -11782,13 +11745,6 @@ def_table_schema(
 )
 
 # 12396: __all_virtual_resource_pool_mysql_sys_agent
-# 12397: __all_virtual_px_p2p_datahub
-# 12398: __all_virtual_column_group
-# 12399: __all_virtual_storage_leak_info
-#
-# 12400 __all_virtual_ls_log_restore_status
-# 12401: __all_virtual_tenant_parameter
-#
 
 def_table_schema(
   owner = 'mingdou.tmd',
@@ -11813,6 +11769,12 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+# 12398: __all_virtual_column_group
+# 12399: __all_virtual_storage_leak_info
+# 12400 __all_virtual_ls_log_restore_status
+# 12401: __all_virtual_tenant_parameter
+
+#
 # 余留位置
 #
 
@@ -11990,15 +11952,10 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15223', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15224', all_def_keywords['__all_virtual_zone_merge_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15225', all_def_keywords['__all_virtual_merge_info'])))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15226', all_def_keywords['__all_tenant_object_type'])))
-## 15227 for __all_virtual_backup_job
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15227', all_def_keywords['__all_virtual_backup_job'])))
-## 15228 for __all_virtual_backup_job_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15228', all_def_keywords['__all_virtual_backup_job_history'])))
-## 15229 for __all_virtual_backup_task
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15229', all_def_keywords['__all_virtual_backup_task'])))
-## 15230 for __all_virtual_backup_task_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15230', all_def_keywords['__all_virtual_backup_task_history'])))
-## 15231 for __all_virtual_backup_set_files
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15231', all_def_keywords['__all_virtual_backup_set_files'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15232', all_def_keywords['__all_plan_baseline']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15233', all_def_keywords['__all_plan_baseline_item']))
@@ -12007,56 +11964,34 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15235'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15236', all_def_keywords['__all_virtual_ash'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15237', all_def_keywords['__all_virtual_dml_stats'])))
 
-# table_id 15238 preserved for __all_virtual_log_archive_dest_parameter
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15238', all_def_keywords['__all_virtual_log_archive_dest_parameter'])))
-# table_id 15239 preserved for __all_virtual_log_archive_progress
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15239', all_def_keywords['__all_virtual_log_archive_progress'])))
-# table_id 15240 preserved for __all_virtual_log_archive_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15240', all_def_keywords['__all_virtual_log_archive_history'])))
-# table_id 15241 preserved for __all_virtual_log_archive_piece_files
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15241', all_def_keywords['__all_virtual_log_archive_piece_files'])))
-# table_id 15242 preserved for __all_virtual_ls_log_archive_progress
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15242', all_def_keywords['__all_virtual_ls_log_archive_progress']))
-# table id 15243 preserved for __all_virtual_backup_parameter
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15243', all_def_keywords['__all_virtual_backup_parameter'])))
-# table id 15244 preserved for __all_virtual_restore_job
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15244', all_def_keywords['__all_virtual_restore_job'])))
-# table id 15245 preserved for __all_virtual_restore_job_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15245', all_def_keywords['__all_virtual_restore_job_history'])))
-# table id 15246 preserved for __all_virtual_restore_progress
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15246', all_def_keywords['__all_virtual_restore_progress'])))
-# table id 15247 preserved for __all_virtual_ls_restore_progress
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15247', all_def_keywords['__all_virtual_ls_restore_progress']))
-# table id 15248 preserved for __all_virtual_ls_restore_history
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15248', all_def_keywords['__all_virtual_ls_restore_history']))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15249', all_def_keywords['__all_outline'])))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15250', all_def_keywords['__all_outline_history'])))
 
-# 15251: __all_virtual_backup_storage_info
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15251', all_def_keywords['__all_virtual_backup_storage_info'])))
-# 15252: __all_virtual_backup_storage_info_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15252', all_def_keywords['__all_virtual_backup_storage_info_history'])))
-# 15253: __all_virtual_backup_delete_job
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15253', all_def_keywords['__all_virtual_backup_delete_job'])))
-# 15254: __all_virtual_backup_delete_job_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15254', all_def_keywords['__all_virtual_backup_delete_job_history'])))
-# 15255: __all_virtual_backup_delete_task
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15255', all_def_keywords['__all_virtual_backup_delete_task'])))
-# 15256: __all_virtual_backup_delete_task_history
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15256', all_def_keywords['__all_virtual_backup_delete_task_history'])))
-# 15257: __all_virtual_backup_delete_policy
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15257', all_def_keywords['__all_virtual_backup_delete_policy'])))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15258', all_def_keywords['__all_virtual_deadlock_event_history'])))
-# 15259: __all_virtual_log_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15259', all_def_keywords['__all_virtual_log_stat'])))
-# 15260: __all_virtual_replay_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15260', all_def_keywords['__all_virtual_replay_stat'])))
-# 15261: __all_virtual_apply_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15261', all_def_keywords['__all_virtual_apply_stat'])))
-# 15262: __all_virtual_archive_stat
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15262', all_def_keywords['__all_virtual_archive_stat'])))
 
 # 15263: __all_virtual_kv_ttl_task
@@ -12070,7 +12005,6 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15270', all_def_ke
 # 15271: __all_virtual_switchover_checkpoint
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272', all_def_keywords['__all_virtual_ls_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
-# 15274: __all_virtual_show_trace
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15274', all_def_keywords['__all_virtual_show_trace']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15275', all_def_keywords['__all_database_privilege']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15276', all_def_keywords['__all_rls_policy'])))
@@ -12100,29 +12034,13 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15295'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15296', all_def_keywords['__all_virtual_opt_stat_gather_monitor'])))
 def_table_schema(**gen_sys_agent_virtual_table_def('15297', all_def_keywords['__all_virtual_long_ops_status']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15298', all_def_keywords['__all_virtual_thread'])))
-# 15303: __all_virtual_arbitration_member_info
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
-# 15304: __all_virtual_arbitration_service_status
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
-# 15294: __all_task_opt_stat_gather_history
-# 15295: __all_table_opt_stat_gather_history
-# 15296: __all_virtual_opt_stat_gather_monitor
-
 # 15299: __all_virtual_wr_active_session_history
 # 15300: __all_virtual_wr_snapshot
 # 15301: __all_virtual_wr_statname
 # 15302: __all_virtual_wr_sysstat
-# 15303: __all_virtual_arbitration_member_info
-# 15304: __all_virtual_arbitration_service_status
-
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15303', all_def_keywords['__all_virtual_arbitration_member_info'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15304', all_def_keywords['__all_virtual_arbitration_service_status'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keywords['__all_virtual_obj_lock']))
-
-# 15305: ALL_VIRTUAL_LONG_OPS_STATUS_SYS_AGENT
-
-
-# [15306, 15375] for oracle inner_table index
-
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keywords['__all_virtual_log_restore_source']))
 
 #######################################################################
 # oracle agent table index is defined after the System table Index area
@@ -12201,7 +12119,8 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keyword
 # end for oracle agent table index
 #######################################################################
 
-# 15376: __all_virtual_log_restore_source
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keywords['__all_virtual_log_restore_source']))
+
 # 15377: __all_virtual_balance_job
 # 15378: __all_virtual_balance_job_history
 # 15379: __all_virtual_balance_task
@@ -12209,7 +12128,6 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keyword
 # 15381: __all_virtual_transfer_task
 # 15382: __all_virtual_transfer_task_history
 # 15383: __all_virtual_resource_pool_sys_agent
-# 15384: __all_virtual_px_p2p_datahub
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
@@ -14853,7 +14771,6 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 # 21108: CDB_OB_BACKUP_CLEAN_HISTORY, abandoned on 4.0
 # 21109: CDB_OB_BACKUP_TASK_CLEAN_HISTORY, abandoned on 4.0
 
-# 21110: CDB_OB_RESTORE_PROGRESS
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_RESTORE_PROGRESS',
@@ -14961,7 +14878,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21111: CDB_OB_RESTORE_HISTORY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_RESTORE_HISTORY',
@@ -15704,7 +15620,6 @@ def_table_schema(
   ],
 )
 
-# view id from 21152 to 211555 are use for new backup data
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'CDB_OB_BACKUP_JOBS',
@@ -16979,7 +16894,6 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 21184 DBA_OB_ZONE_MAJOR_COMPACTION
 def_table_schema(
   owner           = 'donglou.zl',
   table_name      = 'DBA_OB_ZONE_MAJOR_COMPACTION',
@@ -17004,7 +16918,7 @@ def_table_schema(
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
-# 21185 CDB_OB_ZONE_MAJOR_COMPACTION
+
 def_table_schema(
   owner           = 'donglou.zl',
   table_name      = 'CDB_OB_ZONE_MAJOR_COMPACTION',
@@ -17028,7 +16942,7 @@ def_table_schema(
   FROM OCEANBASE.__ALL_VIRTUAL_ZONE_MERGE_INFO
   """.replace("\n", " "),
 )
-# 21186 DBA_OB_MAJOR_COMPACTION
+
 def_table_schema(
   owner           = 'donglou.zl',
   table_name      = 'DBA_OB_MAJOR_COMPACTION',
@@ -17061,7 +16975,7 @@ def_table_schema(
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
   """.replace("\n", " "),
 )
-# 21187 CDB_OB_MAJOR_COMPACTION
+
 def_table_schema(
   owner           = 'donglou.zl',
   table_name      = 'CDB_OB_MAJOR_COMPACTION',
@@ -21964,7 +21878,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21260: DBA_OB_BACKUP_JOBS
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_JOBS',
@@ -22004,7 +21917,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21261: DBA_OB_BACKUP_JOB_HISTORY
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_JOB_HISTORY',
@@ -22044,7 +21956,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21262: DBA_OB_BACKUP_TASKS
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_TASKS',
@@ -22097,7 +22008,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21263: DBA_OB_BACKUP_TASK_HISTORY
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_TASK_HISTORY',
@@ -22150,7 +22060,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21264: DBA_OB_BACKUP_SET_FILES
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_SET_FILES',
@@ -22568,7 +22477,6 @@ def_table_schema(
     ],
 )
 
-# 21274 : CDB_OB_BACKUP_STORAGE_INFO_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'CDB_OB_BACKUP_STORAGE_INFO_HISTORY',
@@ -22592,7 +22500,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21275 : DBA_OB_BACKUP_STORAGE_INFO
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_STORAGE_INFO',
@@ -22618,7 +22525,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21276 : DBA_OB_BACKUP_STORAGE_INFO_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_STORAGE_INFO_HISTORY',
@@ -22644,7 +22550,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21277 : DBA_OB_BACKUP_DELETE_POLICY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_POLICY',
@@ -22663,7 +22568,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21278 : DBA_OB_BACKUP_DELETE_JOBS
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_JOBS',
@@ -22700,7 +22604,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21279 : DBA_OB_BACKUP_DELETE_JOB_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_JOB_HISTORY',
@@ -22737,7 +22640,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21280 : DBA_OB_BACKUP_DELETE_TASKS
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_TASKS',
@@ -22774,7 +22676,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21281 : DBA_OB_BACKUP_DELETE_TASK_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_TASK_HISTORY',
@@ -22873,7 +22774,6 @@ def_table_schema(
     ],
 )
 
-# 21284 : DBA_OB_RESTORE_PROGRESS
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_RESTORE_PROGRESS',
@@ -22982,7 +22882,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21285 : DBA_OB_RESTORE_HISTORY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_RESTORE_HISTORY',
@@ -23050,7 +22949,6 @@ def_table_schema(
 
 # 21286 : DBA_OB_ARCHIVE_MODE
 
-# 21287 : DBA_OB_ARCHIVE_DEST
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVE_DEST',
@@ -23070,7 +22968,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21288 : DBA_OB_ARCHIVELOG
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG',
@@ -23164,7 +23061,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21289 : DBA_OB_ARCHIVELOG_SUMMARY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG_SUMMARY',
@@ -23301,7 +23197,6 @@ SELECT DEST_ID,
 """.replace("\n", " ")
 )
 
-# 21290 : DBA_OB_ARCHIVELOG_PIECE_FILES
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG_PIECE_FILES',
@@ -23379,7 +23274,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21291 : DBA_OB_BACKUP_PARAMETER
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_BACKUP_PARAMETER',
@@ -23400,7 +23294,6 @@ def_table_schema(
 
 # 21292 : CDB_OB_ARCHIVE_MODE
 
-# 21293 : CDB_OB_OB_ARCHIVE_DEST
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_ARCHIVE_DEST',
@@ -23419,7 +23312,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21294 : CDB_OB_ARCHIVELOG
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_ARCHIVELOG',
@@ -23512,7 +23404,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21295 : CDB_OB_ARCHIVELOG_SUMMARY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_ARCHIVELOG_SUMMARY',
@@ -23650,7 +23541,6 @@ SELECT TENANT_ID,
 """.replace("\n", " ")
 )
 
-# 21296 : CDB_OB_BACKUP_PARAMETER
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'CDB_OB_BACKUP_PARAMETER',
@@ -23773,7 +23663,6 @@ def_table_schema(
 # 21300:  DBA_OB_KV_TTL_TASKS
 # 21301:  DBA_OB_KV_TTL_TASK_HISTORY
 
-# 21302: GV$OB_LOG_STAT
 def_table_schema(
   owner = 'xianlin.lh',
   table_name     = 'GV$OB_LOG_STAT',
@@ -23812,7 +23701,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21303: V$OB_LOG_STAT
 def_table_schema(
     owner = 'xianlin.lh',
     table_name     = 'V$OB_LOG_STAT',
@@ -23829,7 +23717,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21304:  ST_GEOMETRY_COLUMNS
 def_table_schema(
   owner = 'tonghui.ht',
   tablegroup_id   = 'OB_INVALID_ID',
@@ -23867,7 +23754,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21305:  ST_SPATIAL_REFERENCE_SYSTEMS
 def_table_schema(
   owner = 'tonghui.ht',
   tablegroup_id   = 'OB_INVALID_ID',
@@ -26318,10 +26204,6 @@ def_table_schema(
     FROM OCEANBASE.__ALL_DATA_DICTIONARY_IN_LOG
   """.replace("\n", " "),
 )
-# 21372: CDB_OB_ACCESS_POINT
-# 21373: DBA_OB_ACCESS_POINT
-# 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
-# 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
 
 def_table_schema(
     owner = 'jiangxiu.wt',
@@ -26484,7 +26366,6 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
-# 21382: GV$OB_ARBITRATION_MEMBER_INFO
 def_table_schema(
   owner = 'debin.jdb',
   table_name     = 'GV$OB_ARBITRATION_MEMBER_INFO',
@@ -26511,7 +26392,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21383: V$OB_ARBITRATION_MEMBER_INFO
 def_table_schema(
     owner = 'debin.jdb',
     table_name     = 'V$OB_ARBITRATION_MEMBER_INFO',
@@ -26528,7 +26408,10 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21387: GV$OB_ARBITRATION_SERVICE_STATUS
+# 21384: DBA_OB_ZONE_STORAGE
+# 21385: GV$OB_SERVER_STORAGE
+# 21386: V$OB_SERVER_STORAGE
+
 def_table_schema(
   owner = 'debin.jdb',
   table_name     = 'GV$OB_ARBITRATION_SERVICE_STATUS',
@@ -26548,7 +26431,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21388: V$OB_ARBITRATION_SERVICE_STATUS
 def_table_schema(
     owner = 'debin.jdb',
     table_name     = 'V$OB_ARBITRATION_SERVICE_STATUS',
@@ -26565,22 +26447,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 21372: CDB_OB_ACCESS_POINT
-# 21373: DBA_OB_ACCESS_POINT
-# 21374: CDB_OB_DATA_DICTIONARY_IN_LOG
-# 21375: DBA_OB_DATA_DICTIONARY_IN_LOG
-# 21376: GV$OB_OPT_STAT_GATHER_MONITOR
-# 21377: V$OB_OPT_STAT_GATHER_MONITOR
-# 21378: DBA_OB_TASK_OPT_STAT_GATHER_HISTORY
-# 21379: DBA_OB_TABLE_OPT_STAT_GATHER_HISTORY
-
-# 21382: GV$OB_ARBITRATION_MEMBER_INFO
-# 21383: V$OB_ARBITRATION_MEMBER_INFO
-# 21384: DBA_OB_ZONE_STORAGE
-# 21385: GV$OB_SERVER_STORAGE
-# 21386: V$OB_SERVER_STORAGE
-# 21387: GV$OB_ARBITRATION_SERVICE_STATUS
-# 21388: V$OB_ARBITRATION_SERVICE_STATUS
 # 21389: DBA_WR_ACTIVE_SESSION_HISTORY
 # 21390: CDB_WR_ACTIVE_SESSION_HISTORY
 # 21391: DBA_WR_SNAPSHOT
@@ -26736,10 +26602,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21401: CDB_OB_LOG_RESTORE_SOURCE
-# 21402: DBA_OB_LOG_RESTORE_SOURCE
-# 21403: DBA_OB_EXTERNAL_TABLE_FILE
-
 def_table_schema(
   owner           = 'shuning.tsn',
   table_name      = 'CDB_OB_LOG_RESTORE_SOURCE',
@@ -26779,6 +26641,8 @@ def_table_schema(
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
 )
+
+# 21403: DBA_OB_EXTERNAL_TABLE_FILE
 
 def_table_schema(
   owner           = 'lixinze.lxz',
@@ -42359,7 +42223,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25176: DBA_OB_BACKUP_JOBS
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_JOBS',
@@ -42402,7 +42265,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25177: DBA_OB_BACKUP_JOB_HISTORY
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_JOB_HISTORY',
@@ -42444,7 +42306,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25178: DBA_OB_BACKUP_TASKS
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_TASKS',
@@ -42499,7 +42360,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25179: DBA_OB_BACKUP_TASK_HISTORY
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_TASK_HISTORY',
@@ -42554,7 +42414,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25180: DBA_OB_BACKUP_SET_FILES
 def_table_schema(
   owner = 'chongrong.th',
   table_name      = 'DBA_OB_BACKUP_SET_FILES',
@@ -42811,7 +42670,6 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 25184 : DBA_OB_BACKUP_STORAGE_INFO
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_STORAGE_INFO',
@@ -42839,7 +42697,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25185 : DBA_OB_BACKUP_STORAGE_INFO_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_STORAGE_INFO_HISTORY',
@@ -42867,7 +42724,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25186 : DBA_OB_BACKUP_DELETE_POLICY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_POLICY',
@@ -42888,7 +42744,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25187 : DBA_OB_BACKUP_DELETE_JOBS
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_JOBS',
@@ -42927,7 +42782,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25188 : DBA_OB_BACKUP_DELETE_JOB_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_JOB_HISTORY',
@@ -42966,7 +42820,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25189 : DBA_OB_BACKUP_DELETE_TASKS
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_TASKS',
@@ -43005,7 +42858,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25190 : DBA_OB_BACKUP_DELETE_TASK_HISTORY
 def_table_schema(
   owner = 'wenjinyu.wjy',
   table_name      = 'DBA_OB_BACKUP_DELETE_TASK_HISTORY',
@@ -43044,7 +42896,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25191 : DBA_OB_RESTORE_PROGRESS
 # TODO: fix truncate from longtext to varchar(4096)
 def_table_schema(
   owner = 'wangxiaohui.wxh',
@@ -43154,7 +43005,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25192 : DBA_OB_RESTORE_HISTORY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_RESTORE_HISTORY',
@@ -43219,7 +43069,6 @@ def_table_schema(
 
 # 25193 : DBA_OB_ARCHIVE_MODE
 
-# 25194 : DBA_OB_ARCHIVE_DEST
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVE_DEST',
@@ -43242,7 +43091,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25195 : DBA_OB_ARCHIVELOG
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG',
@@ -43328,7 +43176,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25196 : DBA_OB_ARCHIVELOG_SUMMARY
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG_SUMMARY',
@@ -43457,7 +43304,6 @@ SELECT DEST_ID,
 """.replace("\n", " ")
 )
 
-# 25197 : DBA_OB_ARCHIVELOG_PIECE_FILES
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_ARCHIVELOG_PIECE_FILES',
@@ -43522,7 +43368,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25198 : DBA_OB_BACKUP_PARAMETER
 def_table_schema(
   owner = 'wangxiaohui.wxh',
   table_name      = 'DBA_OB_BACKUP_PARAMETER',
@@ -44824,7 +44669,6 @@ def_table_schema(
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
-# 25247: DBA_OB_TABLE_STAT_STALE_INFO
 
 def_table_schema(
   owner = 'yibo.tyf',
@@ -49024,9 +48868,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28118 GV$OB_PROCESSLIST
-# 28119 V$OB_PROCESSLIST
-
 def_table_schema(
   owner = 'xiaochu.yh',
   table_name      = 'GV$OB_PROCESSLIST',
@@ -49881,7 +49722,6 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-#28147: GV$OB_LOG_STAT
 def_table_schema(
   owner = 'xianlin.lh',
   table_name     = 'GV$OB_LOG_STAT',
@@ -49922,7 +49762,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#28148: V$OB_LOG_STAT
 def_table_schema(
     owner = 'xianlin.lh',
     table_name     = 'V$OB_LOG_STAT',
@@ -50953,9 +50792,6 @@ def_table_schema(
   WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 )
-
-# 28183:  GV$OB_OPT_STAT_GATHER_MONITOR
-# 28184:  V$OB_OPT_STAT_GATHER_MONITOR
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
