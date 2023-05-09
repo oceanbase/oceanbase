@@ -848,6 +848,7 @@ int ObTableLoadStore::px_start_trans(const ObTableLoadTransId &trans_id)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support trans id", KR(ret), K(trans_id), K(param_.session_count_));
   } else {
+    LOG_INFO("store px start trans", K(trans_id));
     ObTableLoadStoreTrans *trans = nullptr;
     if (OB_FAIL(store_ctx_->start_trans(trans_id, trans))) {
       LOG_WARN("fail to start trans", KR(ret), K(trans_id));
