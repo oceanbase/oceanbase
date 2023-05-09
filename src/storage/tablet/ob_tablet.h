@@ -504,6 +504,7 @@ private:
       const share::SCN &scn,
       const bool for_replay,
       const memtable::MemtableRefOp ref_op);
+  void print_memtables_for_table();
 
 private:
   static const int32_t TABLET_VERSION = 1;
@@ -651,6 +652,7 @@ int ObTablet::prepare_data(T &multi_source_data_unit, const transaction::ObMulSo
     TRANS_LOG(WARN, "invalid args", K(ret), K(multi_source_data_unit));
   } else if (OB_UNLIKELY(multi_source_data_unit.is_tx_end())) {
     TRANS_LOG(INFO, "skip for is_tx_end is true", K(multi_source_data_unit));
+    print_memtables_for_table();
   } else if (FALSE_IT(multi_source_data_unit.set_tx_end(true))) {
   } else if (OB_FAIL(save_multi_source_data_unit(&multi_source_data_unit, scn, trans_flags.for_replay_/*for_replay*/, memtable::MemtableRefOp::INC_REF))) {
     TRANS_LOG(WARN, "failed to save multi_source_data", K(ret), K(multi_source_data_unit), K(scn));
