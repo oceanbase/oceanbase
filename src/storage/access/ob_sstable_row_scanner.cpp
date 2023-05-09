@@ -435,7 +435,7 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
 
 // Explicit instantiations.
 template class ObSSTableRowScanner<ObIndexTreeMultiPassPrefetcher<32, 3>>;
-template class ObSSTableRowScanner<ObIndexTreeMultiPassPrefetcher<2, 1>>;
+template class ObSSTableRowScanner<ObIndexTreeMultiPassPrefetcher<2, 2>>;
 
 }
 }

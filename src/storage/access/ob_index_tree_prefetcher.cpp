@@ -1545,7 +1545,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
 
 // Explicit instantiations.
 template class ObIndexTreeMultiPassPrefetcher<32, 3>;
-template class ObIndexTreeMultiPassPrefetcher<2, 1>;
+template class ObIndexTreeMultiPassPrefetcher<2, 2>;
 
 }
 }
