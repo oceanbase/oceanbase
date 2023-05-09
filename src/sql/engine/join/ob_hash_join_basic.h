@@ -210,7 +210,7 @@ public:
   int finish_dump(bool memory_need_dump);
   int dump(bool all_dump, int64_t dumped_size);
 
-  bool has_next() { return store_iter_.has_next_block(); }
+  bool has_next() { return store_iter_.has_next(); }
   int set_iterator();
   int init_progressive_iterator();
 

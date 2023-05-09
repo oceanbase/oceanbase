@@ -934,12 +934,12 @@ private:
                             bool is_left_side);
   int read_hashrow_batch();
   int read_hashrow_batch_for_left_semi_anti();
-  void convert_right_exprs_batch_one(int64_t batch_idx);
-  void convert_exprs_batch_one(const ObHashJoinStoredJoinRow *store_row,
+  int convert_right_exprs_batch_one(int64_t batch_idx);
+  int convert_exprs_batch_one(const ObHashJoinStoredJoinRow *store_row,
                               const ObIArray<ObExpr*> &exprs);
   int inner_join_read_hashrow_going_batch();
   int inner_join_read_hashrow_end_batch();
-  void join_rows_with_left_null_batch_one(int64_t batch_idx);
+  int join_rows_with_left_null_batch_one(int64_t batch_idx);
   int left_anti_semi_read_hashrow_going_batch();
   int left_anti_semi_read_hashrow_end_batch();
   int right_anti_semi_read_hashrow_going_batch();
