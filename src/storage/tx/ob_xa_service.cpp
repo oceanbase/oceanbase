@@ -1638,7 +1638,10 @@ int ObXAService::xa_rollback(const ObXATransID &xid,
                                           tx_id,
                                           end_flag))) {
     if (OB_ITER_END == ret) {
-      if (CLUSTER_VERSION_4_1_0_0) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+        TRANS_LOG(WARN, "fail to get min data version", KR(ret), K(tenant_id));
+      } else if (data_version < DATA_VERSION_4_2_0_0) {
         if (OB_FAIL(query_xa_coordinator_with_xid(tenant_id, xid, tx_id, coordinator))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
@@ -2857,9 +2860,14 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
           state, end_flag))) {
     if (OB_ITER_END == ret) {
       TRANS_LOG(INFO, "record not exist in global transaction", K(ret), K(xid));
-      if (CLUSTER_VERSION_4_1_0_0) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+        TRANS_LOG(WARN, "fail to get min data version", KR(ret), K(tenant_id));
+      } else if (data_version < DATA_VERSION_4_2_0_0) {
         ret = OB_SUCCESS;
         record_in_tableone = false;
+      } else {
+        ret = OB_TRANS_XA_NOTA;
       }
     } else {
       TRANS_LOG(WARN, "fail to qeery record from global transaction", K(ret), K(xid));
@@ -2912,6 +2920,14 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
       } else {
         if (OB_SUCCESS != (tmp_ret = delete_xa_branch(tenant_id, xid, is_tightly_coupled))) {
           TRANS_LOG(WARN, "delete xa branch failed", K(tmp_ret), K(xid), K(tenant_id), K(tx_id));
+        }
+        uint64_t data_version = 0;
+        if (OB_SUCCESS != (tmp_ret = GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+          TRANS_LOG(WARN, "fail to get min data version", KR(ret), K(tenant_id));
+        } else if (data_version < DATA_VERSION_4_2_0_0) {
+          if (OB_SUCCESS != (tmp_ret = delete_xa_pending_record(tenant_id, tx_id))) {
+            TRANS_LOG(WARN, "fail to delete xa record from pending trans", K(ret), K(xid), K(tx_id));
+          }
         }
       }
     }

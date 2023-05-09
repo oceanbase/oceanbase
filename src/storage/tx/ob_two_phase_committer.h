@@ -304,7 +304,8 @@ public:
   // for xa
   bool is_prepared_sub2pc()
   {
-    return is_sub2pc() && ObTxState::REDO_COMPLETE == get_upstream_state()
+    return is_sub2pc()
+           && ObTxState::REDO_COMPLETE == get_downstream_state()
            && all_downstream_collected_();
   }
 

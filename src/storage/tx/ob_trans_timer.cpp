@@ -160,7 +160,7 @@ void ObTxTimeoutTask::runTimerTask()
     // it is unsafe to use any member field after call handle func.
     auto txs = txs_; auto tx_desc = tx_desc_;
     DEFER({ txs->release_tx_ref(*tx_desc); });
-    if (tx_desc_->is_xa_trans()) {
+    if (tx_desc_->is_xa_trans() && tx_desc_->is_sub2pc()) {
       if (OB_FAIL(txs_->handle_timeout_for_xa(*tx_desc_, delay_))) {
         TRANS_LOG(WARN, "fail to handle timeout", K(ret), KPC_(tx_desc));
       }

@@ -34,14 +34,15 @@ void ObXACtx::destroy()
 {
   if (is_inited_) {
     if (OB_NOT_NULL(xa_branch_info_)) {
-      ob_free(xa_branch_info_);
+      xa_branch_info_->~ObXABranchInfoArray();
+      mtl_free(xa_branch_info_);
       xa_branch_info_ = NULL;
     }
     for (int i = 0; i < dblink_client_array_.count(); i++) {
       ObDBLinkClient *client = dblink_client_array_.at(i);
       if (NULL != client) {
         client->~ObDBLinkClient();
-        ob_free(client);
+        mtl_free(client);
       }
       client = NULL;
     }
@@ -90,7 +91,7 @@ void ObXACtx::reset()
     ObDBLinkClient *client = dblink_client_array_.at(i);
     if (NULL != client) {
       client->~ObDBLinkClient();
-      ob_free(client);
+      mtl_free(client);
     }
     client = NULL;
   }
@@ -297,7 +298,7 @@ int ObXACtx::init_xa_branch_info_()
 
   if (NULL == xa_branch_info_) {
     void *ptr = NULL;
-    if (NULL == (ptr = ob_malloc(sizeof(ObXABranchInfoArray), "XABranchInfo"))) {
+    if (NULL == (ptr = mtl_malloc(sizeof(ObXABranchInfoArray), "XABranchInfo"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", K(ret), K(*this));
     } else {
@@ -1125,7 +1126,7 @@ int ObXACtx::get_dblink_client_(const DblinkDriverProto dblink_type,
     if (dblink_client_array_.count() >= OB_MAX_DBLINK_CLIENT_COUNT) {
       ret = OB_SIZE_OVERFLOW;
       TRANS_LOG(WARN, "create unexpected dblink client num", K(ret), K(*this));
-    } else if (NULL == (ptr = ob_malloc(sizeof(ObDBLinkClient), "ObDBLinkClient"))) {
+    } else if (NULL == (ptr = mtl_malloc(sizeof(ObDBLinkClient), "ObDBLinkClient"))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       TRANS_LOG(WARN, "allocate memory failed", K(ret), K(*this));
     } else {
@@ -1139,7 +1140,7 @@ int ObXACtx::get_dblink_client_(const DblinkDriverProto dblink_type,
       }
       if (OB_SUCCESS != ret) {
         client->~ObDBLinkClient();
-        ob_free(client);
+        mtl_free(client);
         client = NULL;
       } else {
         dblink_client = client;
@@ -1177,7 +1178,7 @@ int ObXACtx::remove_dblink_client(ObDBLinkClient *client)
           TRANS_LOG(WARN, "fail to remove dblink_client in array", K(ret), K(i), K(*this), KPC(client));
         } else {
           client->~ObDBLinkClient();
-          ob_free(client);
+          mtl_free(client);
           client = NULL;
         }
         break;
@@ -2758,7 +2759,7 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
         } else if (unprepared_count > 1) {
           target_info.state_ = ObXATransState::PREPARED;
           xa_trans_state_ = ObXATransState::PREPARING;
-          (void)unregister_timeout_task_();
+          register_xa_timeout_task_();
           ret = OB_TRANS_XA_RDONLY;
         } else {
           // the last branch which do xa prepare
@@ -2770,6 +2771,7 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
           tx_desc_->set_xid(xid);
           share::ObLSID coord;
           (void)unregister_timeout_task_();
+          uint64_t data_version = 0;
           if (OB_FAIL(MTL(ObTransService*)->prepare_tx_coord(*tx_desc_, coord))) {
             if (OB_ERR_READ_ONLY_TRANSACTION == ret) {
               TRANS_LOG(WARN, "fail to prepare tx coord", K(ret), K(*this));
@@ -2785,8 +2787,10 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
                   affected_rows)) || 0 == affected_rows) {
             TRANS_LOG(WARN, "fail to update xa trans record", K(ret), K(xid), K(coord),
                 K(affected_rows), K(*this));
-          } else if (CLUSTER_VERSION_4_1_0_0 && OB_FAIL(MTL(ObXAService*)->insert_xa_pending_record(tenant_id_, xid, trans_id_,
-                  coord, original_sche_addr_))) {
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+            TRANS_LOG(WARN, "fail to get min data version", KR(ret), K(tenant_id_));
+          } else if (data_version < DATA_VERSION_4_2_0_0 && OB_FAIL(MTL(ObXAService*)->
+            insert_xa_pending_record(tenant_id_, xid, trans_id_, coord, original_sche_addr_))) {
             TRANS_LOG(WARN, "fail to insert xa trans record", K(ret), K(xid), K(coord), K(*this));
           } else if (OB_FAIL(drive_prepare_(xid, timeout_us))) {
             // TODO, sche ctx should provide interfaces to drive xa prepare,

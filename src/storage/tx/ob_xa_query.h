@@ -22,6 +22,7 @@ class ObXAQuery
 {
 public:
   ObXAQuery() {}
+  virtual ~ObXAQuery() {}
 public:
   virtual int xa_start(const ObXATransID &xid, const int64_t flags) = 0;
   virtual int xa_end(const ObXATransID &xid, const int64_t flags) = 0;
