@@ -5703,6 +5703,7 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
                                                ObDatum &concat_result)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_alloc;
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -5745,7 +5746,7 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
           const bool has_lob_header = aggr_info.expr_->args_[0]->obj_meta_.has_lob_header();
           ObString cell_string;
           ObTextStringIter text_iter(datum_meta.type_, datum_meta.cs_type_, datum.get_string(), has_lob_header);
-          if (OB_FAIL(text_iter.init(0, NULL, &aggr_alloc_))) {
+          if (OB_FAIL(text_iter.init(0, NULL, &tmp_alloc))) {
             LOG_WARN("fail to init text reader", K(ret), K(text_iter));
           } else if (OB_FAIL(text_iter.get_full_data(cell_string))) {
             LOG_WARN("fail to get full data", K(ret), K(text_iter));
@@ -5758,10 +5759,11 @@ int ObAggregateProcessor::get_wm_concat_result(const ObAggrInfo &aggr_info,
             } else if (buf_len < append_len) {
               char *tmp_buf = NULL;
               buf_len = append_len * 2;
-              if (OB_ISNULL(tmp_buf = static_cast<char*>(aggr_alloc_.alloc(buf_len)))) {
+              if (OB_ISNULL(tmp_buf = static_cast<char*>(tmp_alloc.alloc(buf_len)))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
                 LOG_WARN("fail alloc memory", K(tmp_buf), K(buf_len), K(ret));
               } else {
+                // Note: buf may be nullptr, but str_len = 0 at that time, NO ISSUE
                 MEMCPY(tmp_buf, buf, str_len);
                 buf = tmp_buf;
               }
