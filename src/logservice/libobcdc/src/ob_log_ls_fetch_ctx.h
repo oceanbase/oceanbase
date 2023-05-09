@@ -99,6 +99,7 @@ public:
       IObLogLSFetchMgr &ls_fetch_mgr);
 
   int append_log(const char *buf, const int64_t buf_len);
+  void reset_memory_storage();
   int get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn);
   int get_next_remote_group_entry(
       palf::LogGroupEntry &group_entry,
