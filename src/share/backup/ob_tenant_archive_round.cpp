@@ -266,6 +266,8 @@ int ObArchiveRoundHandler::disable_archive(const int64_t dest_no, ObTenantArchiv
     LOG_WARN("cannot stop log archive", K(ret), K(round));
   } else if (OB_FAIL(archive_table_op_.switch_round_state_to(trans, round, next_state))) {
     LOG_WARN("failed to switch state", K(ret), K(round), K(next_state));
+  } else if (OB_FAIL(archive_table_op_.clean_round_comment(trans, dest_no))) {
+    LOG_WARN("failed to clean comment", K(ret), K(round));
   } else if (OB_FAIL(trans.end(true))) {
     LOG_WARN("failed to commit trans", K(ret), K(round));
   } else {
@@ -302,6 +304,8 @@ int ObArchiveRoundHandler::defer_archive(const int64_t dest_no, ObTenantArchiveR
     LOG_WARN("cannot defer log archive", K(ret), K(round));
   } else if (OB_FAIL(archive_table_op_.switch_round_state_to(trans, round, next_state))) {
     LOG_WARN("failed to switch state", K(ret), K(round), K(next_state));
+  } else if (OB_FAIL(archive_table_op_.clean_round_comment(trans, dest_no))) {
+    LOG_WARN("failed to clean comment", K(ret), K(round));
   } else if (OB_FAIL(trans.end(true))) {
     LOG_WARN("failed to commit trans", K(ret), K(round));
   } else {
