@@ -585,9 +585,9 @@ public:
   virtual int handle_notify_rebuild_req(const common::ObAddr &server,
                                         const LSN &base_lsn,
                                         const LogInfo &base_prev_log_info) = 0;
-  virtual int config_change_pre_check(const ObAddr &server,
-                              const LogGetMCStReq &req,
-                              LogGetMCStResp &resp) = 0;
+  virtual int handle_config_change_pre_check(const ObAddr &server,
+                                             const LogGetMCStReq &req,
+                                             LogGetMCStResp &resp) = 0;
   virtual int handle_register_parent_req(const LogLearner &child,
                                          const bool is_to_leader) = 0;
   virtual int handle_register_parent_resp(const LogLearner &server,
@@ -928,9 +928,9 @@ public:
                             const int64_t prev_log_id,
                             const int64_t &prev_log_proposal_id,
                             const LSN &committed_end_lsn) override final;
-  int config_change_pre_check(const ObAddr &server,
-                              const LogGetMCStReq &req,
-                              LogGetMCStResp &resp) override final;
+  int handle_config_change_pre_check(const ObAddr &server,
+                                     const LogGetMCStReq &req,
+                                     LogGetMCStResp &resp) override final;
   int revoke_leader(const int64_t proposal_id) override final;
   int stat(PalfStat &palf_stat) override final;
   int handle_register_parent_req(const LogLearner &child,

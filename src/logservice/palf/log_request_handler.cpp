@@ -453,7 +453,7 @@ int LogRequestHandler::handle_sync_request<LogGetMCStReq, LogGetMCStResp>(
       PALF_LOG(WARN, "check_disk_space_enough returns false", K(req), K(resp));
     } else if (OB_FAIL(palf_env_impl_->get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "PalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id));
-    } else if (OB_FAIL(guard.get_palf_handle_impl()->config_change_pre_check(server, req, resp))) {
+    } else if (OB_FAIL(guard.get_palf_handle_impl()->handle_config_change_pre_check(server, req, resp))) {
       PALF_LOG(WARN, "PalfHandleImpl config_change_pre_check failed", K(ret), K(palf_id), K(server), K(req), KPC(palf_env_impl_));
     } else {
       PALF_LOG(INFO, "PalfHandleImpl config_change_pre_check success", K(ret), K(palf_id), K(server), K(req), K(resp), KPC(palf_env_impl_));

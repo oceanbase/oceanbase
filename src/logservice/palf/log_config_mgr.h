@@ -325,6 +325,9 @@ public:
                                  const ObMemberList &new_member_list,
                                  const int64_t new_replica_num,
                                  bool &added_member_has_new_version) const;
+  int wait_log_barrier_(const LogConfigChangeArgs &args,
+                        const ObMemberList &new_member_list,
+                        const int64_t new_replica_num) const;
   int sync_meta_for_arb_election_leader();
   bool need_sync_to_degraded_learners() const;
   // ================ Config Change ==================
@@ -434,6 +437,7 @@ private:
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
                                   const bool need_purge_throttling,
+                                  const bool need_remote_check,
                                   const int64_t conn_timeout_us,
                                   LSN &committed_end_lsn,
                                   bool &added_member_has_new_version,
@@ -442,7 +446,6 @@ private:
   int check_follower_sync_status_(const LogConfigChangeArgs &args,
                                   const ObMemberList &new_member_list,
                                   const int64_t new_replica_num,
-                                  const bool is_check_log_barrier,
                                   bool &added_member_has_new_version) const;
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
