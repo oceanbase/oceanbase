@@ -607,8 +607,6 @@ int ObMultiTenant::create_hidden_sys_tenant()
     LOG_ERROR("fail to construct meta", K(ret));
   } else if (OB_FAIL(create_tenant(meta, true/* write_slog*/))) {
     LOG_ERROR("create hidden sys tenant failed", K(ret));
-  } else {
-    LOG_INFO("create hidden sys tenant success", K(ret), K(meta));
   }
 
   return ret;
@@ -730,7 +728,7 @@ int ObMultiTenant::convert_hidden_to_real_sys_tenant(const ObUnitInfoGetter::ObT
     LOG_WARN("must be hidden sys tenant", K(ret));
   } else if (FALSE_IT(new_super_block = tenant->get_super_block())) {
   } else if (FALSE_IT(new_super_block.is_hidden_ = false)) {
-  } else if (OB_FAIL(update_tenant_unit_no_lock(unit, UpdateTenantConfigOpt::CONVERT_HIDDEN_TO_REAL_SYS_TENANT))) {
+  } else if (OB_FAIL(update_tenant_unit_no_lock(unit))) {
     LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit));
   } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance()
       .write_tenant_super_block_slog(new_super_block))) {
@@ -764,7 +762,6 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   int64_t bucket_lock_idx = -1;
   const int64_t log_disk_size = meta.unit_.config_.log_disk_size();
   int64_t lock_timeout_ts = abs_timeout_us - 5000000; // reserve 5s for creating tenant
-  bool is_hidden_sys = meta.is_hidden();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -818,17 +815,15 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
       create_step = ObTenantCreateStep::STEP_CTX_MEM_CONFIG_SETTED; // step1
     }
   }
-
   if (OB_SUCC(ret)) {
     if (!is_virtual_tenant_id(tenant_id)
-        && !is_hidden_sys
         && OB_FAIL(GCTX.log_block_mgr_->create_tenant(log_disk_size))) {
       LOG_ERROR("create_tenant in ObServerLogBlockMgr failed", KR(ret));
     }
     // if create_tenant in ObServerLogBlockMGR success, the log disk size need by this tenant has been pinned,
     // otherwise, the assigned log disk size of ObServerLogBlockMGR is origin.
     if (OB_SUCC(ret)) {
-      create_step = ObTenantCreateStep::STEP_LOG_DISK_SIZE_PINNED;
+      create_step = ObTenantCreateStep::STEP_LOG_DISK_SIZE_PINNED;  // step2
     }
   }
 
@@ -842,6 +837,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("new tenant fail", K(ret));
   } else if (FALSE_IT(create_step = ObTenantCreateStep::STEP_TENANT_NEWED)) { //step3
+
   } else if (OB_FAIL(tenant->init_ctx())) {
     LOG_WARN("init ctx fail", K(tenant_id), K(ret));
   } else if (write_slog) {
@@ -941,7 +937,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     do {
       tmp_ret = OB_SUCCESS;
       if (create_step >= ObTenantCreateStep::STEP_LOG_DISK_SIZE_PINNED) {
-        if (!is_virtual_tenant_id(tenant_id) && !is_hidden_sys) {
+        if (!is_virtual_tenant_id(tenant_id)) {
           GCTX.log_block_mgr_->abort_create_tenant(log_disk_size);
         }
       }
@@ -965,8 +961,7 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   return ret;
 }
 
-int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantConfig &unit,
-                                              const UpdateTenantConfigOpt &opt)
+int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantConfig &unit)
 {
   int ret = OB_SUCCESS;
 
@@ -975,9 +970,6 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
   const double max_cpu = static_cast<double>(unit.config_.max_cpu());
   const uint64_t tenant_id = unit.tenant_id_;
   int64_t allowed_mem_limit = 0;
-  // when opt is UpdateTenantConfigOpt::CONVERT_REAL_TO_HIDDEN_SYS_TENANT, the new_log_disk_size should set to zero.
-  const int64_t new_log_disk_size =
-      opt == UpdateTenantConfigOpt::CONVERT_REAL_TO_HIDDEN_SYS_TENANT ? 0 : unit.config_.log_disk_size();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -995,7 +987,7 @@ int ObMultiTenant::update_tenant_unit_no_lock(const ObUnitInfoGetter::ObTenantCo
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
   } else if (OB_FAIL(tenant->update_thread_cnt(max_cpu))) {
     LOG_WARN("fail to update mtl module thread_cnt", K(ret), K(tenant_id));
-  } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, new_log_disk_size, opt))) {
+  } else if (OB_FAIL(update_tenant_log_disk_size(tenant_id, unit.config_.log_disk_size()))) {
       LOG_WARN("fail to update tenant log disk size", K(ret), K(tenant_id));
   } else if (FALSE_IT(tenant->update_memory_size(unit.config_.memory_size()))) {
     // unreachable
@@ -1026,7 +1018,7 @@ int ObMultiTenant::update_tenant_unit(const ObUnitInfoGetter::ObTenantConfig &un
   } else if (OB_FAIL(bucket_lock_.wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
     LOG_WARN("fail to try_wrlock for update tenant unit", K(ret), K(tenant_id), K(bucket_lock_idx));
   } else if (FALSE_IT(lock_succ = true)) {
-  } else if (OB_FAIL(update_tenant_unit_no_lock(unit, UpdateTenantConfigOpt::NORMAL_UPDATE_TENANT_CONFIG_OPT))) {
+  } else if (OB_FAIL(update_tenant_unit_no_lock(unit))) {
     LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(unit));
   }
 
@@ -1076,8 +1068,7 @@ int ObMultiTenant::update_tenant_memory(const uint64_t tenant_id, const int64_t 
 }
 
 int ObMultiTenant::update_tenant_log_disk_size(const uint64_t tenant_id,
-                                               const int64_t expected_log_disk_size,
-                                               const UpdateTenantConfigOpt &opt)
+                                               const int64_t expected_log_disk_size)
 {
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
@@ -1087,26 +1078,20 @@ int ObMultiTenant::update_tenant_log_disk_size(const uint64_t tenant_id,
     ObLogService *log_service = MTL(ObLogService *);
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
-    // when opt is UpdateTenantConfigOpt::CONVERT_HIDDEN_TO_REAL_SYS_TENANT, the old_log_disk_size is zero.
-    } else if (opt != UpdateTenantConfigOpt::CONVERT_HIDDEN_TO_REAL_SYS_TENANT
-               && OB_FAIL(log_service->get_palf_disk_usage(unused_log_disk_size, old_log_disk_size))) {
+    } else if (OB_FAIL(log_service->get_palf_disk_usage(unused_log_disk_size, old_log_disk_size))) {
       LOG_WARN("failed to get_palf_disk_usage", K(ret), K(unused_log_disk_size), K(old_log_disk_size),
           K(expected_log_disk_size));
     } else if(OB_FAIL(GCTX.log_block_mgr_->update_tenant(old_log_disk_size, expected_log_disk_size))) {
       LOG_WARN("failed to update_tenant in ObServerLogBlockMgr", K(ret), K(old_log_disk_size),
           K(expected_log_disk_size));
     } else {
-        // Only when opt is UpdateTenantConfigOpt::NORMAL_UPDATE_TENANT_CONFIG_OPT update palf.
-        if (opt == UpdateTenantConfigOpt::NORMAL_UPDATE_TENANT_CONFIG_OPT) {
-         if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
-          LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id),
-                 K(expected_log_disk_size));
-        } else {
-          LOG_INFO("update_tenant_log_disk_size success", K(ret), K(tenant_id), K(opt),
-                 K(expected_log_disk_size));
-        }
+      if (OB_FAIL(log_service->update_log_disk_usage_limit_size(expected_log_disk_size))) {
+        LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id),
+               K(expected_log_disk_size));
+      } else {
+        LOG_INFO("update_tenant_log_disk_size success", K(ret), K(tenant_id),
+               K(expected_log_disk_size));
       }
-
       if (false == is_virtual_tenant_id(tenant_id) && OB_FAIL(ret)) {
         GCTX.log_block_mgr_->abort_update_tenant(expected_log_disk_size, old_log_disk_size);
       }
@@ -1488,11 +1473,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
           KP(removed_tenant), K(removed_tenant->lock_));
       removed_tenant->lock_.ld_.print();
     } else {
-      const share::ObUnitInfoGetter::ObTenantConfig &config = removed_tenant->get_unit();
-      const int64_t log_disk_size = config.config_.log_disk_size();
-      if (!removed_tenant->is_hidden() && !is_virtual_tenant_id(tenant_id)) {
-        GCTX.log_block_mgr_->remove_tenant(log_disk_size);
-      }
       ObTenant *removed_tenant_tmp = nullptr;
       SpinWLockGuard guard(lock_);
       // This locking should be held after tenant->wait
@@ -1509,6 +1489,11 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     }
 
     if (OB_SUCC(ret)) {
+      const share::ObUnitInfoGetter::ObTenantConfig &config = removed_tenant->get_unit();
+      const int64_t log_disk_size = config.config_.log_disk_size();
+      if (!is_virtual_tenant_id(tenant_id)) {
+        GCTX.log_block_mgr_->remove_tenant(log_disk_size);
+      }
       removed_tenant->destroy();
       ob_delete(removed_tenant);
       LOG_INFO("remove tenant success", K(tenant_id));
@@ -1708,7 +1693,7 @@ int ObMultiTenant::convert_real_to_hidden_sys_tenant()
   } else if (OB_FAIL(bucket_lock_.try_wrlock(bucket_lock_idx = get_tenant_lock_bucket_idx(tenant_id)))) {
     LOG_WARN("fail to try_wrlock for delete tenant", K(ret), K(tenant_id), K(bucket_lock_idx));
   } else if (FALSE_IT(lock_succ = true)) {
-  } else if (OB_FAIL(update_tenant_unit_no_lock(tenant_meta.unit_, UpdateTenantConfigOpt::CONVERT_REAL_TO_HIDDEN_SYS_TENANT))) {
+  } else if (OB_FAIL(update_tenant_unit_no_lock(tenant_meta.unit_))) {
     LOG_WARN("fail to update_tenant_unit_no_lock", K(ret), K(tenant_meta));
   } else {
     ObTenantSwitchGuard guard(tenant);

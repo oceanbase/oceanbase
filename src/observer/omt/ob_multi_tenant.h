@@ -74,12 +74,6 @@ typedef common::ObSortedVector<ObTenant*> TenantList;
 typedef TenantList::iterator TenantIterator;
 typedef common::ObVector<uint64_t> TenantIdList;
 
-enum class UpdateTenantConfigOpt {
-  CONVERT_HIDDEN_TO_REAL_SYS_TENANT = 0,
-  CONVERT_REAL_TO_HIDDEN_SYS_TENANT = 1,
-  NORMAL_UPDATE_TENANT_CONFIG_OPT = 2
-};
-
 // This is the entry class of OMT module.
 class ObMultiTenant
     : public share::ObThreadPool
@@ -117,8 +111,7 @@ public:
   int update_tenant_cpu(const uint64_t tenant_id, const double min_cpu, const double max_cpu);
   int update_tenant_memory(const uint64_t tenant_id, const int64_t mem_limit, int64_t &allowed_mem_limit);
   int update_tenant_log_disk_size(const uint64_t tenant_id,
-                                  const int64_t expected_log_disk_size,
-                                  const UpdateTenantConfigOpt &opt);
+                                  const int64_t expected_log_disk_size);
   int modify_tenant_io(const uint64_t tenant_id, const share::ObUnitConfig &unit_config);
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
@@ -183,19 +176,18 @@ protected:
   int create_virtual_tenants();
   int remove_tenant(const uint64_t tenant_id, bool &remove_tenant_succ);
   uint32_t get_tenant_lock_bucket_idx(const uint64_t tenant_id);
-  int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit,
-                                 const UpdateTenantConfigOpt &opt);
+  int update_tenant_unit_no_lock(const share::ObUnitInfoGetter::ObTenantConfig &unit);
 
 protected:
       static const int DEL_TRY_TIMES = 30;
-  enum class ObTenantCreateStep {
-      STEP_BEGIN = 0, // begin
-      STEP_CTX_MEM_CONFIG_SETTED = 1, // set_tenant_ctx_idle succ
-      STEP_LOG_DISK_SIZE_PINNED = 2,  // pin log disk size succ
-      STEP_TENANT_NEWED = 3, // new tenant succ
-      STEP_WRITE_PREPARE_SLOG = 4, // write_prepare_create_tenant_slog succ
-      STEP_FINISH,
-  };
+      enum class ObTenantCreateStep {
+        STEP_BEGIN = 0, // begin
+        STEP_CTX_MEM_CONFIG_SETTED = 1, // set_tenant_ctx_idle succ
+        STEP_LOG_DISK_SIZE_PINNED = 2,  // pin log disk size succ
+        STEP_TENANT_NEWED = 3, // new tenant succ
+        STEP_WRITE_PREPARE_SLOG = 4, // write_prepare_create_tenant_slog succ
+        STEP_FINISH,
+      };
 
   bool is_inited_;
   storage::ObStorageLogger *server_slogger_;

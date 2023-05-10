@@ -703,7 +703,7 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
 bool ObTenant::is_hidden()
 {
   TCRLockGuard guard(meta_lock_);
-  return tenant_meta_.is_hidden();
+  return tenant_meta_.super_block_.is_hidden_;
 }
 
 ObTenantCreateStatus ObTenant::get_create_status()
