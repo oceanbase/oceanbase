@@ -587,6 +587,7 @@ int ObAccessPathEstimation::add_index_info(ObOptimizerContext &ctx,
     index_est_arg->tablet_id_ = part.tablet_id_;
     index_est_arg->ls_id_ = part.ls_id_;
     index_est_arg->tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
+    index_est_arg->tx_id_ = ctx.get_session_info()->get_tx_id();
   }
   // FIXME, move following codes
   if (OB_SUCC(ret)) {
@@ -1101,6 +1102,7 @@ int ObAccessPathEstimation::storage_estimate_full_table_rowcount(ObOptimizerCont
       path_arg.tablet_id_ = best_index_part.tablet_id_;
       path_arg.ls_id_ = best_index_part.ls_id_;
       path_arg.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
+      path_arg.tx_id_ = ctx.get_session_info()->get_tx_id();
       if (OB_FAIL(ObSQLUtils::make_whole_range(arena,
                                                meta.ref_table_id_,
                                                meta.table_rowkey_count_,

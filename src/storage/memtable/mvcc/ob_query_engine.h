@@ -201,7 +201,8 @@ public:
                   const ObMemtableKey *end_key,
                   int64_t part_count,
                   common::ObIArray<common::ObStoreRange> &range_array);
-  int estimate_row_count(const ObMemtableKey *start_key, const int start_exclude,
+  int estimate_row_count(const transaction::ObTransID &tx_id,
+                         const ObMemtableKey *start_key, const int start_exclude,
                          const ObMemtableKey *end_key, const int end_exclude,
                          int64_t &logical_row_count, int64_t &physical_row_count);
   int dump_keyhash(FILE *fd) const
@@ -246,6 +247,7 @@ public:
 private:
   int sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtableKey *start_key,
                   const int start_exclude, const ObMemtableKey *end_key, const int end_exclude,
+                  const transaction::ObTransID &tx_id,
                   int64_t &logical_row_count, int64_t &physical_row_count, double &ratio);
   int init_raw_iter_for_estimate(Iterator<BtreeRawIterator>*& iter,
                                  const ObMemtableKey *start_key,

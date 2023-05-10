@@ -5648,7 +5648,7 @@ int ObLSTabletService::estimate_row_count(
       }
     }
     if (OB_SUCC(ret) && tables.count() > 0) {
-      ObTableEstimateBaseInput base_input(param.scan_flag_, param.index_id_, tables, tablet_iter.tablet_handle_);
+      ObTableEstimateBaseInput base_input(param.scan_flag_, param.index_id_, param.tx_id_, tables, tablet_iter.tablet_handle_);
       if (scan_range.is_get()) {
         if (OB_FAIL(ObTableEstimator::estimate_row_count_for_get(base_input, scan_range.get_rowkeys(), batch_est))) {
           LOG_WARN("failed to estimate row count", K(ret), K(param), K(scan_range));

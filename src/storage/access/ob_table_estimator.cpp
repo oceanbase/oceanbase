@@ -117,7 +117,7 @@ int ObTableEstimator::estimate_multi_scan_row_count(
         LOG_WARN("failed to estimate sstable row count", K(ret), K(*current_table));
       }
     } else if (current_table->is_data_memtable()) {
-      if (OB_FAIL(estimate_memtable_scan_row_count(base_input.query_flag_, base_input.table_id_,
+      if (OB_FAIL(estimate_memtable_scan_row_count(base_input,
           static_cast<const memtable::ObMemtable*>(current_table), range, tmp_cost))) {
         LOG_WARN("failed to estimate memtable row count", K(ret), K(*current_table));
       }
@@ -157,12 +157,13 @@ int ObTableEstimator::estimate_sstable_scan_row_count(
           K(key_range), K(part_est), K(sizeof(scan_estimator)));
     }
   }
+  LOG_DEBUG("[STORAGE ESTIMATE ROW]", K(ret), K(base_input.table_id_),
+      K(base_input.tx_id_), K(part_est), K(key_range), KPC(sstable));
   return ret;
 }
 
 int ObTableEstimator::estimate_memtable_scan_row_count(
-    const common::ObQueryFlag query_flag,
-    const uint64_t table_id,
+    const ObTableEstimateBaseInput &base_input,
     const memtable::ObMemtable *memtable,
     const ObDatumRange &key_range,
     storage::ObPartitionEst &part_est)
@@ -179,15 +180,17 @@ int ObTableEstimator::estimate_memtable_scan_row_count(
   } else {
     memtable::ObMvccScanRange mvcc_scan_range;
     ObDatumRange real_range;
-    memtable->m_get_real_range(real_range, key_range, query_flag.is_reverse_scan());
+    memtable->m_get_real_range(real_range, key_range, base_input.query_flag_.is_reverse_scan());
     memtable::ObMemtableKey start_key(&(real_range.get_start_key().get_store_rowkey()));
     memtable::ObMemtableKey end_key(&(real_range.get_end_key().get_store_rowkey()));
     mvcc_scan_range.border_flag_ = real_range.get_border_flag();
     mvcc_scan_range.start_key_ = &start_key;
     mvcc_scan_range.end_key_ = &end_key;
-    if (OB_FAIL(memtable->get_mvcc_engine().estimate_scan_row_count(mvcc_scan_range, part_est))){
-      LOG_WARN("Fail to estimate cost of scan.", K(ret), K(table_id));
+    if (OB_FAIL(memtable->get_mvcc_engine().estimate_scan_row_count(base_input.tx_id_, mvcc_scan_range, part_est))){
+      LOG_WARN("Fail to estimate cost of scan.", K(ret), K(base_input.table_id_));
     }
+    LOG_DEBUG("[STORAGE ESTIMATE ROW]", K(ret), K(base_input.table_id_), K(base_input.tx_id_),
+        K(part_est), K(key_range), KPC(memtable));
   }
 
   return ret;
