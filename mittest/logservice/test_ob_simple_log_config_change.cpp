@@ -225,6 +225,12 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_config_change_defensive)
     PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
 
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_member(ObMember(palf_list[remove_follower_idx]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+    // majority of members should be normal
+    palf_list[lag_follower_idx]->palf_handle_impl_->disable_vote(false);
+    EXPECT_EQ(OB_TIMEOUT, leader.palf_handle_impl_->remove_member(ObMember(palf_list[remove_follower_idx]->palf_handle_impl_->self_, 1), 2, CONFIG_CHANGE_TIMEOUT / 2));
+    palf_list[lag_follower_idx]->palf_handle_impl_->enable_vote();
+
     block_net(leader_idx, lag_follower_idx);
 
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
