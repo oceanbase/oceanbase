@@ -537,7 +537,8 @@ ObAggregateProcessor::DllUdfExtra::~DllUdfExtra()
 
 ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
                                            ObIArray<ObAggrInfo> &aggr_infos,
-                                           const lib::ObLabel &label)
+                                           const lib::ObLabel &label,
+                                           const int64_t tenant_id)
     : has_distinct_(false),
       has_order_by_(false),
       has_group_concat_(false),
@@ -546,7 +547,7 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       eval_ctx_(eval_ctx),
       aggr_alloc_(label,
                   common::OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                  OB_SERVER_TENANT_ID,
+                  tenant_id,
                   ObCtxIds::WORK_AREA),
       cur_batch_group_idx_(0),
       cur_batch_group_buf_(nullptr),

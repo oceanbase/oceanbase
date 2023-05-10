@@ -548,7 +548,8 @@ public:
 public:
   ObAggregateProcessor(ObEvalCtx &eval_ctx,
                        ObIArray<ObAggrInfo> &aggr_infos,
-                       const lib::ObLabel &label);
+                       const lib::ObLabel &label,
+                       const int64_t tenant_id);
   ~ObAggregateProcessor() { destroy(); };
 
   int init();

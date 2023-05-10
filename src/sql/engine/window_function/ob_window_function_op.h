@@ -556,10 +556,10 @@ public:
   class AggrCell : public WinFuncCell
   {
   public:
-    AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos)
+    AggrCell(WinFuncInfo &wf_info, ObWindowFunctionOp &op, ObIArray<ObAggrInfo> &aggr_infos, const int64_t tenant_id)
       : WinFuncCell(wf_info, op),
         finish_prepared_(false),
-        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc"),
+        aggr_processor_(op_.eval_ctx_, aggr_infos, "WindowAggProc", tenant_id),
         result_(),
         got_result_(false),
         remove_type_(wf_info.remove_type_)
