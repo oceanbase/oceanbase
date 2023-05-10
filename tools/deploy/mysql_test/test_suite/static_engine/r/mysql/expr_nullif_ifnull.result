@@ -7475,7 +7475,7 @@ select collation(nullif('a', binary'b'));
 +-----------------------------------+
 | collation(nullif('a', binary'b')) |
 +-----------------------------------+
-| binary                            |
+| utf8mb4_general_ci                |
 +-----------------------------------+
 select NULLIF(14152561829011783680, 1);
 +---------------------------------+
@@ -7661,7 +7661,7 @@ select collation(nullif('a', binary 'b'));
 +------------------------------------+
 | collation(nullif('a', binary 'b')) |
 +------------------------------------+
-| binary                             |
+| utf8mb4_general_ci                 |
 +------------------------------------+
 
 ## test nullif with enumset parameter.
