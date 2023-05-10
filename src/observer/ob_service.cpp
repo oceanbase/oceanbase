@@ -1074,6 +1074,8 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
       if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
+      } else if (freezer->exist_ls_freezing()) {
+        LOG_INFO("exist running ls_freeze", K(ret), K(tenant_id));
       } else if (OB_FAIL(freezer->tenant_freeze())) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
