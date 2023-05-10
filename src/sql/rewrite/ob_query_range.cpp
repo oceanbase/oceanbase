@@ -6195,7 +6195,10 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
     } else if (OB_ISNULL(dest_val)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cast failed.", K(ret));
-    } else { // 下面这个比较是目的是检查上面的cast有没有丢失数值的精度
+    } else if (ob_is_double_tc(expect_type.get_type())) {
+      const_cast<ObObj *>(dest_val)->set_scale(cur->pos_.column_type_.get_accuracy().get_scale());
+    }
+    if (OB_SUCC(ret)) { // 下面这个比较是目的是检查上面的cast有没有丢失数值的精度
       int64_t cmp = 0;
       ObObjType cmp_type = ObMaxType;
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
@@ -6919,7 +6922,10 @@ if (OB_SUCC(ret) ) { \
     } else if (OB_ISNULL(dest_val)) { \
       ret = OB_ERR_UNEXPECTED; \
       LOG_WARN("dest_val is null.", K(ret)); \
-    } else { /* 下面这个比较是目的是检查上面的cast有没有丢失数值的精度 */ \
+    } else if (ob_is_double_tc(expect_type.get_type())) { \
+      const_cast<ObObj *>(dest_val)->set_scale(column_type.get_accuracy().get_scale()); \
+    } \
+    if (OB_SUCC(ret)) { /* 下面这个比较是目的是检查上面的cast有没有丢失数值的精度 */ \
       int64_t cmp = 0; \
       ObObjType cmp_type = ObMaxType; \
       if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, start.get_type(), dest_val->get_type()))) { \
@@ -6944,7 +6950,10 @@ if (OB_SUCC(ret) ) { \
         EXPR_CAST_OBJ_V2(expect_type, tmp_end, dest_val); \
       if (OB_FAIL(ret)) { \
         LOG_WARN("cast obj to dest type failed", K(ret), K(end), K(expect_type)); \
-      } else { \
+      } else if (ob_is_double_tc(expect_type.get_type())) { \
+        const_cast<ObObj *>(dest_val)->set_scale(column_type.get_accuracy().get_scale()); \
+      } \
+      if (OB_SUCC(ret)) { \
         int64_t cmp = 0; \
         ObObjType cmp_type = ObMaxType; \
         if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, end.get_type(), dest_val->get_type()))) { \
@@ -8621,6 +8630,8 @@ int ObQueryRange::cast_like_obj_if_needed(const ObObj &string_obj,
     expect_type.set_type_infos(&out_key_part.pos_.get_enum_set_values());
     if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, string_obj, buf_obj, obj_ptr))) {
       LOG_WARN("cast obj to dest type failed", K(ret), K(string_obj), K(col_res_type));
+    } else if (ob_is_double_tc(expect_type.get_type())) {
+      const_cast<ObObj *>(obj_ptr)->set_scale(col_res_type.get_accuracy().get_scale());
     }
   }
   return ret;
