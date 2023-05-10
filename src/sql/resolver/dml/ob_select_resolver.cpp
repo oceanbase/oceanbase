@@ -2052,7 +2052,8 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           }
         } else if (is_oracle_mode()
                     && T_QUESTIONMARK == sel_expr->get_expr_type()
-                    && T_OBJ_ACCESS_REF == project_node->type_) {
+                    && T_OBJ_ACCESS_REF == project_node->type_
+                    && T_IDENT == project_node->children_[0]->type_) {
           while (OB_SUCC(ret) && NULL != project_node->children_[1]) {
             project_node = project_node->children_[1];
           }
