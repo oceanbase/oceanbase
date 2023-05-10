@@ -11230,7 +11230,9 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
   } else if (is_oracle_mode() && (clob_in || ob_is_number_tc(orig_type) || ob_is_int_tc(orig_type)
                                   || ob_is_datetime_tc(orig_type)) && blob_out) {
     bret = false;
-  } else if (is_oracle_mode() && ObTinyIntType == orig_type && ob_is_text_tc(expect_type)) {
+  } else if (is_oracle_mode() &&
+             (ObTinyIntType == orig_type || ObDateTimeType == orig_type) &&
+             ob_is_text_tc(expect_type)) {
     bret = false;
   } else {
     ObObjTypeClass orig_tc = ob_obj_type_class(orig_type);

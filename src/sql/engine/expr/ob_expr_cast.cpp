@@ -273,22 +273,33 @@ bool ObExprCast::check_cast_allowed(const ObObjType orig_type,
   bool res = true;
   ObObjTypeClass ori_tc = ob_obj_type_class(orig_type);
   ObObjTypeClass expect_tc = ob_obj_type_class(expect_type);
-  if (is_oracle_mode() && is_explicit_cast) {
-    // can't cast lob to other type except char/varchar/nchar/nvarchar2/raw. clob to raw not allowed too.
-    if (ObLobTC == ori_tc || ObTextTC == ori_tc) {
-      if (expect_tc == ObJsonTC) {
-        /* oracle mode, json text use lob store */
-      } else if (ObStringTC == expect_tc) {
-        // do nothing
-      } else if (ObRawTC == expect_tc) {
-        res = CS_TYPE_BINARY == orig_cs_type;
-      } else {
+  bool is_expect_lob_tc = (ObLobTC == expect_tc || ObTextTC == expect_tc);
+  bool is_ori_lob_tc = (ObLobTC == ori_tc || ObTextTC == ori_tc);
+  if (is_oracle_mode()) {
+    if (is_explicit_cast) {
+      // can't cast lob to other type except char/varchar/nchar/nvarchar2/raw. clob to raw not allowed too.
+      if (is_ori_lob_tc) {
+        if (expect_tc == ObJsonTC) {
+          /* oracle mode, json text use lob store */
+        } else if (ObStringTC == expect_tc) {
+          // do nothing
+        } else if (ObRawTC == expect_tc) {
+          res = CS_TYPE_BINARY == orig_cs_type;
+        } else {
+          res = false;
+        }
+      }
+      // any type to lob type not allowed.
+      if (is_expect_lob_tc) {
         res = false;
       }
-    }
-    // any type to lob type not allowed.
-    if (ObLobTC == expect_tc || ObTextTC == expect_tc) {
-      res = false;
+    } else {
+      // BINARY FLOAT/DOUBLE not allow cast lob whether explicit
+      if (is_ori_lob_tc) {
+        if (expect_tc == ObFloatTC || expect_tc == ObDoubleTC) {
+          res = false;
+        }
+      }
     }
   }
   return res;
