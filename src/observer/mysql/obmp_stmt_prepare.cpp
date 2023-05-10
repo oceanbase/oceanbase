@@ -194,9 +194,6 @@ int ObMPStmtPrepare::process()
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(sql),
                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(), K(ret));
-    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
-      ret = OB_ERR_NET_PACKET_TOO_LARGE;
-      LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
     } else if (OB_FAIL(session.get_query_timeout(query_timeout))) {
       LOG_WARN("fail to get query timeout", K_(sql), K(ret));
     } else if (OB_FAIL(gctx_.schema_service_->get_tenant_received_broadcast_version(
@@ -217,6 +214,9 @@ int ObMPStmtPrepare::process()
       need_response_error = false;
       LOG_WARN("fail to update sess info", K(ret));
     } else if (FALSE_IT(session.post_sync_session_info())) {
+    } else if (OB_UNLIKELY(packet_len > session.get_max_packet_size())) {
+      ret = OB_ERR_NET_PACKET_TOO_LARGE;
+      LOG_WARN("packet too large than allowd for the session", K_(sql), K(ret));
     } else if (OB_FAIL(sql::ObFLTUtils::init_flt_info(pkt.get_extra_info(), session,
                             conn->proxy_cap_flags_.is_full_link_trace_support()))) {
       LOG_WARN("failed to init flt extra info", K(ret));
