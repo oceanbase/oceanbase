@@ -4399,10 +4399,10 @@ int ObRawExprPrinter::print_xml_serialize_expr(ObSysFunRawExpr *expr)
     if (OB_SUCC(ret)) {
       ObExprOperatorType expr_type_1 = expr->get_param_expr(7)->get_expr_type();
       ObExprOperatorType expr_type_2 = expr->get_param_expr(8)->get_expr_type();
-      int64_t indent_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
-      int64_t value = static_cast<ObConstRawExpr*>(expr->get_param_expr(6))->get_value().get_int();
+      int64_t indent_type = static_cast<ObConstRawExpr*>(expr->get_param_expr(7))->get_value().get_int();
+      int64_t value = static_cast<ObConstRawExpr*>(expr->get_param_expr(8))->get_value().get_int();
       if (expr_type_1 == T_INT && expr_type_2 == T_INT) {
-        if (indent_type == 0) {
+        if (indent_type == 4) {
         } else if (indent_type == 1) {
           DATA_PRINTF(" no indent ");
         } else if (indent_type == 2) {
