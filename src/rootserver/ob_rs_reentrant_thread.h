@@ -34,6 +34,7 @@ public:
   virtual void run2() override {
     int ret = common::OB_SUCCESS;
     CREATE_WITH_TEMP_ENTITY(RESOURCE_OWNER, common::OB_RS_TENANT_ID) {
+      thread_id_ = (pid_t)syscall(__NR_gettid); // only called by thread self
       run3();
     }
   }
@@ -56,6 +57,7 @@ public:
 
   int64_t get_last_run_timestamp() const;
   void update_last_run_timestamp();
+  pid_t get_thread_id() const { return thread_id_; }
 
   int create(const int64_t thread_cnt, const char* name = nullptr);
   int destroy();
@@ -69,6 +71,7 @@ private:
   // =0 :pause check thread;
   // =-1 :close check thread;
   int64_t last_run_timestamp_;
+  pid_t thread_id_;
 #ifdef ERRSIM   //for obtest
   static const int64_t MAX_THREAD_SCHEDULE_OVERRUN_TIME = 5LL * 1000LL * 1000LL;
 #else
