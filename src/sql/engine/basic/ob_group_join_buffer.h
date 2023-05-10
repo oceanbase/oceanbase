@@ -77,6 +77,7 @@ public:
   int has_next_left_row(bool &has_next);
   int init_above_group_params();
   int fill_cur_row_group_param();
+  int drain_left();
   int rescan_left();
   int rescan_right();
   int fill_group_buffer();
