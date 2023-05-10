@@ -13058,6 +13058,8 @@ int ObTransformUtils::create_udt_hidden_columns(ObTransformerCtx *ctx,
   } else if (table->is_view_table_ && (!view_table_do_transform)) {
     // do nothing.
     LOG_INFO("udt columns in views does not need transfrom", K(udt_expr.get_table_id()), K(table));
+  } else if (table->is_view_table_ && table->view_base_item_ == NULL) {
+    // do nothing
   } else if (OB_FAIL(ctx->schema_checker_->get_table_schema(ctx->session_info_->get_effective_tenant_id(),
                                                             table->ref_id_, table_schema))) {
     if ((table->is_generated_table() || table->is_temp_table()) && OB_NOT_NULL(table->ref_query_)) {
