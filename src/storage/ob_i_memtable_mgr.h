@@ -294,7 +294,6 @@ public:
   { // do nothing
     return OB_NOT_SUPPORTED;
   }
-  virtual int remove_memtables_from_data_checkpoint() { return OB_SUCCESS; }
   virtual int set_frozen_for_all_memtables() { return OB_SUCCESS; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
