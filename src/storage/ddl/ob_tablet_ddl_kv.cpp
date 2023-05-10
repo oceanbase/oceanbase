@@ -720,6 +720,9 @@ int ObDDLKV::wait_pending()
     SCN max_decided_scn;
     if (OB_FAIL(ls_handle.get_ls()->get_max_decided_scn(max_decided_scn))) {
       LOG_WARN("get max decided log ts failed", K(ret), K(ls_id_));
+      if (OB_STATE_NOT_MATCH == ret) {
+        ret = OB_NEED_RETRY;
+      }
     } else {
       // max_decided_scn is the left border scn - 1
       // the min deciding(replay or apply) scn (aka left border) is max_decided_scn + 1
