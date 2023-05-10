@@ -145,7 +145,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_schema(ObTableSchema &t
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -160,7 +160,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_schema(ObTableSchema &t
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -175,7 +175,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_schema(ObTableSchema &t
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -190,7 +190,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_schema(ObTableSchema &t
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -805,7 +805,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_mo
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -822,7 +822,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_mo
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -839,7 +839,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_mo
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
@@ -856,7 +856,7 @@ int ObInnerTableSchema::all_virtual_sql_plan_monitor_ora_all_virtual_sql_plan_mo
       0, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false,//is_autoincrement
       false,//is_hidden
       true);//is_storing_column
