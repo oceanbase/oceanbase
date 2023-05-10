@@ -1555,7 +1555,7 @@ int ObTransformJoinElimination::check_all_column_primary_key(const ObDMLStmt *st
     LOG_WARN("parameters have null", K(ret), K(stmt), K(info));
   } else {
     const ObIArray<ColumnItem> &all_columns = stmt->get_column_items();
-    for(int64_t i = 0; all_primary_key && i < all_columns.count(); ++i) {
+    for(int64_t i = 0; all_primary_key && OB_SUCC(ret) && i < all_columns.count(); ++i) {
       const ColumnItem &item = all_columns.at(i);
       if(item.table_id_ == table_id) {
         bool find = false;
@@ -1565,6 +1565,17 @@ int ObTransformJoinElimination::check_all_column_primary_key(const ObDMLStmt *st
           }
         }
         all_primary_key =  find;
+      }
+      if (all_primary_key) {
+        const ObExprResType *res_type = item.get_column_type();
+        if (OB_ISNULL(res_type)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else {
+          // Only replace exprs with bin sort foreign keys
+          all_primary_key = !ob_is_string_type(res_type->get_type()) ||
+                            ObCharset::is_bin_sort(res_type->get_collation_type());
+        }
       }
     }
   }
