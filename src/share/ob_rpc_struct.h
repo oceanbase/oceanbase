@@ -700,6 +700,12 @@ public:
   {
     return seq_schema_;
   }
+  uint64_t get_sequence_id() const {
+    return seq_schema_.get_sequence_id();
+  }
+  uint64_t get_tenant_id() const {
+    return seq_schema_.get_tenant_id();
+  }
   common::ObBitSet<> &get_option_bitset()
   {
     return option_bitset_;

@@ -765,6 +765,14 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_DROP_SEQUENCE: {
         DEFINE_EXECUTE_CMD(ObDropSequenceStmt, ObDropSequenceExecutor);
+        if (OB_SUCC(ret)) {
+          ObDropSequenceStmt &stmt = *(static_cast<ObDropSequenceStmt*>(&cmd));
+          const uint64_t tenant_id = stmt.get_arg().get_tenant_id();
+          const uint64_t sequence_id = stmt.get_arg().get_sequence_id();
+          if (OB_FAIL(my_session->drop_sequence_value_if_exists(tenant_id, sequence_id))) {
+            LOG_WARN("failed to drop sequence value from session", K(ret));
+          }
+        }
         break;
       }
       case stmt::T_ALTER_SEQUENCE: {

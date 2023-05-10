@@ -2083,7 +2083,26 @@ int ObSQLSessionInfo::set_sequence_value(uint64_t tenant_id,
   } else if (OB_FAIL(sequence_currval_map_.set_refactored(seq_id, value, overwrite_exits))) {
     LOG_WARN("fail get seq", K(tenant_id), K(seq_id), K(ret));
   } else {
-    // ok
+    sequence_currval_encoder_.is_changed_ = true;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
+      OB_INVALID_ID == seq_id)) {
+    LOG_WARN("invalid args", K(tenant_id), K(seq_id), K(ret));
+  } else if (OB_FAIL(sequence_currval_map_.erase_refactored(seq_id))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      LOG_INFO("drop sequence value not exists", K(ret),  K(tenant_id), K(seq_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("drop sequence value failed", K(ret), K(tenant_id), K(seq_id));
+    }
+  } else {
+    sequence_currval_encoder_.is_changed_ = true;
   }
   return ret;
 }
@@ -3223,6 +3242,137 @@ int ObAppCtxInfoEncoder::display_sess_info(ObSQLSessionInfo &sess, const char* c
     LOG_TRACE("success to verify app ctx info", K(ret));
   }
 
+  return ret;
+}
+
+int ObSequenceCurrvalEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OB_UNIS_ENCODE(map.size());
+  int64_t count = 0;
+  for (auto it = map.begin(); OB_SUCC(ret) && it != map.end(); ++it, ++count) {
+    OB_UNIS_ENCODE(it->first);
+    OB_UNIS_ENCODE(it->second);
+  }
+  CK (count == map.size());
+  return ret;
+}
+
+int ObSequenceCurrvalEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t map_size = 0;
+  OB_UNIS_DECODE(map_size);
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OX (sess.reuse_all_sequence_value());
+  uint64_t seq_id = 0;
+  ObSequenceValue seq_val;
+  for (int64_t i = 0; OB_SUCC(ret) && i < map_size; ++i) {
+    OB_UNIS_DECODE(seq_id);
+    OB_UNIS_DECODE(seq_val);
+    OZ (map.set_refactored(seq_id, seq_val, true /*overwrite_exits*/));
+  }
+  return ret;
+}
+
+int64_t ObSequenceCurrvalEncoder::get_serialize_size(ObSQLSessionInfo& sess) const
+{
+  int64_t len = 0;
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  OB_UNIS_ADD_LEN(map.size());
+  for (auto it = map.begin(); it != map.end(); ++it) {
+    OB_UNIS_ADD_LEN(it->first);
+    OB_UNIS_ADD_LEN(it->second);
+  }
+  return len;
+}
+
+int ObSequenceCurrvalEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                                              const int64_t length, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialize(sess, buf, length, pos))) {
+    LOG_WARN("failed to fetch session info.", K(ret), K(pos), K(length));
+  }
+  return ret;
+}
+
+int64_t ObSequenceCurrvalEncoder::get_fetch_sess_info_size(ObSQLSessionInfo& sess)
+{
+  return get_serialize_size(sess);
+}
+
+int ObSequenceCurrvalEncoder::compare_sess_info(const char* current_sess_buf,
+                                                int64_t current_sess_length,
+                                                const char* last_sess_buf,
+                                                int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  if (current_sess_length != last_sess_length) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
+    LOG_TRACE("success to compare session info", K(ret));
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to compare buf session info", K(ret),
+      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
+  }
+  return ret;
+}
+
+int ObSequenceCurrvalEncoder::display_sess_info(ObSQLSessionInfo &sess,
+                                                const char* current_sess_buf,
+                                                int64_t current_sess_length,
+                                                const char* last_sess_buf,
+                                                int64_t last_sess_length)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  const char *buf = last_sess_buf;
+  int64_t pos = 0;
+  int64_t data_len = last_sess_length;
+  int64_t map_size = 0;
+  OB_UNIS_DECODE(map_size);
+  ObSequenceCurrvalMap &map = sess.get_sequence_currval_map();
+  if (map_size != map.size()) {
+    share::ObTaskController::get().allow_next_syslog();
+    LOG_WARN("Sequence currval map size mismatch", K(ret), "current_map_size", map.size(),
+             "last_map_size", map_size);
+  } else {
+    bool found_mismatch = false;
+    uint64_t seq_id = 0;
+    ObSequenceValue seq_val_decode;
+    ObSequenceValue seq_val_origin;
+    for (int64_t i = 0; OB_SUCC(ret) && !found_mismatch && i < map_size; ++i) {
+      OB_UNIS_DECODE(seq_id);
+      OB_UNIS_DECODE(seq_val_decode);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(map.get_refactored(seq_id, seq_val_origin))) {
+          if (ret == OB_HASH_NOT_EXIST) {
+            found_mismatch = true;
+            share::ObTaskController::get().allow_next_syslog();
+            LOG_WARN("Decoded sequence id not found", K(ret), K(i), K(map_size), K(seq_id));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("Fail to get refactored from map", K(ret), K(seq_id));
+          }
+        } else if (seq_val_decode.val() != seq_val_origin.val()) {
+          found_mismatch = true;
+          share::ObTaskController::get().allow_next_syslog();
+          LOG_WARN("Sequence currval mismatch", K(ret), K(i), K(map_size), K(seq_id),
+                   "current_seq_val", seq_val_origin, "last_seq_val", seq_val_decode);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !found_mismatch) {
+      share::ObTaskController::get().allow_next_syslog();
+      LOG_WARN("All sequence currval is matched", K(ret), K(map_size));
+    }
+  }
   return ret;
 }
 
