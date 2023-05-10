@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX LIB
 
 #include "dirent.h"
+#include <dlfcn.h>
 #include "lib/utility/utility.h"
 #include "lib/ob_define.h"
 #include "util/easy_inet.h"
@@ -36,52 +37,6 @@ extern "C"
   void do_breakpad_init() __attribute__((weak));
   void do_breakpad_init()
   {}
-}
-char *parray(char *buf, int64_t len, int64_t *array, int size)
-{
-  //As used in lbt, and lbt used when print error log.
-  //Can not print error log this function.
-  if (NULL != buf && len > 0 && NULL != array) {
-    int64_t pos = 0;
-    int64_t count = 0;
-    for (int64_t i = 0; i < size; i++) {
-      if (0 == i) {
-        count = snprintf(buf + pos, len - pos, "0x%lx", array[i]);
-      } else {
-        count = snprintf(buf + pos, len - pos, " 0x%lx", array[i]);
-      }
-      if (count >= 0 && pos + count < len) {
-        pos += count;
-      } else {
-        // buf not enough
-        break;
-      }
-    }
-    buf[pos] = 0;
-  }
-  return buf;
-}
-
-constexpr int MAX_ADDRS_COUNT = 100;
-using PointerBuf = void *[MAX_ADDRS_COUNT];
-RLOCAL(PointerBuf, addrs);
-RLOCAL(ByteBuf<LBT_BUFFER_LENGTH>, buffer);
-
-char *lbt()
-{
-  int size = backtrace(addrs, MAX_ADDRS_COUNT);
-  return parray(*&buffer, LBT_BUFFER_LENGTH, (int64_t *)*&addrs, size);
-}
-
-char *lbt(char *buf, int32_t len)
-{
-  int size = backtrace(addrs, MAX_ADDRS_COUNT);
-  return parray(buf, len, (int64_t *)*&addrs, size);
-}
-
-char *lbt(void **addrs, int32_t size)
-{
-  return parray(*&buffer, LBT_BUFFER_LENGTH, (int64_t *)*&addrs, size);
 }
 
 void hex_dump(const void *data, const int32_t size,

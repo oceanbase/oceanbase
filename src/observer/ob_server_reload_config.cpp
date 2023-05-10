@@ -298,6 +298,10 @@ int ObServerReloadConfig::operator()()
   {
     ObSysVariables::set_value("datadir", GCONF.data_dir);
   }
+
+  {
+    common::g_enable_backtrace = GCONF._enable_backtrace_function;
+  }
   return real_ret;
 }
 

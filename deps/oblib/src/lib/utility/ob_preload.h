@@ -26,7 +26,7 @@ inline int64_t &bt(const char *msg)
   static int64_t enable_bt = 0;
   if (enable_bt > 0) {
     void *buffer[100];
-    int size = backtrace(buffer, 100);
+    int size = ob_backtrace(buffer, 100);
     char **strings = backtrace_symbols(buffer, size);
     _OB_LOG(DEBUG, "%s", msg);
     if (NULL != strings) {

@@ -20,29 +20,13 @@
 #define USECSTEP 10
 #define USECSTART 100
 static const double EASY_DOUBLE_EPSINON = 1e-14;
-static char *parray(char *buf, int64_t len, int64_t *array, int size)
-{
-    int64_t pos = 0;
-    int64_t count = 0;
-    int64_t i = 0;
-    for (i = 0; i < size; i++) {
-        count = snprintf(buf + pos, len - pos, "0x%lx ", array[i]);
-        if (count >= 0 && pos + count + 1 < len) {
-            pos += count;
-        } else {
-            break;
-        }
-    }
-    buf[pos + 1] = 0;
-    return buf;
-}
-
+extern char *parray_c(char *buf, int64_t len, int64_t *array, int size);
 const char *easy_lbt()
 {
     static __thread void *addrs[100];
     static __thread char buf[1024];
-    int size = backtrace(addrs, 100);
-    return parray(buf, sizeof(buf), (int64_t *)addrs, size);
+    int size = ob_backtrace_c(addrs, 100);
+    return parray_c(buf, sizeof(buf), (int64_t *)addrs, size);
 }
 
 const char *easy_lbt_str()
@@ -57,7 +41,7 @@ const char *easy_lbt_str()
     sprintf(buf, "\n");
     pos++;
 
-    size    = backtrace(addrs, 100);
+    size    = ob_backtrace_c(addrs, 100);
     symbols = backtrace_symbols(addrs, 100);
     if (NULL == symbols) {
         return buf;
@@ -211,7 +195,7 @@ double easy_get_cpu_mhz(int no_cpu_freq_fail)
     proc = proc_get_cpu_mhz(no_cpu_freq_fail);
 
     easy_debug_log("Got CPU mhz, sample(%lf), proc(%lf).\n", sample, proc);
-	if ((fabs(proc) < EASY_DOUBLE_EPSINON) || 
+	if ((fabs(proc) < EASY_DOUBLE_EPSINON) ||
 		(fabs(sample) < EASY_DOUBLE_EPSINON)) {
 		return 0;
 	}
@@ -223,4 +207,3 @@ double easy_get_cpu_mhz(int no_cpu_freq_fail)
     }
     return proc;
 }
-

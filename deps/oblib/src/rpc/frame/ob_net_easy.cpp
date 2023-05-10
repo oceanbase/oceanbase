@@ -579,6 +579,14 @@ int ObNetEasy::load_ssl_config(const bool use_bkmi,
   return ret;
 }
 
+template <class T>
+void do_not_optimize(T const& value)
+{
+  asm volatile("" : : "g"(value) : "memory");
+}
+
+// If there is a hang problem in the lbt,
+// you can use the disaster recovery capability of the observer to switch traffic
 static void rpc_easy_timer_cb(EV_P_ ev_timer *w, int revents)
 {
   UNUSED(loop);
@@ -635,6 +643,17 @@ static void batch_rpc_easy_timer_cb(EV_P_ ev_timer *w, int revents)
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "EASY_IOTH_SELF is NULL");
   }
 }
+
+#define DEFINE_CB_WITH_LBT(cb)                             \
+static void cb##_with_lbt(EV_P_ ev_timer *w, int revents)  \
+{                                                          \
+  do_not_optimize(lbt());                                  \
+  cb(loop, w, revents);                                    \
+}
+
+DEFINE_CB_WITH_LBT(rpc_easy_timer_cb)
+DEFINE_CB_WITH_LBT(high_prio_rpc_easy_timer_cb)
+DEFINE_CB_WITH_LBT(batch_rpc_easy_timer_cb)
 
 static void mysql_easy_timer_cb(EV_P_ ev_timer *w, int revents)
 {
@@ -710,7 +729,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
       {
         if (!OB_ISNULL(ioth)) {
           ev_timer_init(&ioth->user_timer,
-                        rpc_easy_timer_cb, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
+                        rpc_easy_timer_cb_with_lbt, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
           ev_timer_start(ioth->loop, &(ioth->user_timer));
         }
       }
@@ -721,7 +740,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
         {
           if (!OB_ISNULL(ioth)) {
             ev_timer_init(&ioth->user_timer,
-                          high_prio_rpc_easy_timer_cb, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
+                          high_prio_rpc_easy_timer_cb_with_lbt, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
             ev_timer_start(ioth->loop, &(ioth->user_timer));
           }
         }
@@ -732,7 +751,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
       {
         if (!OB_ISNULL(ioth)) {
           ev_timer_init(&ioth->user_timer,
-                        batch_rpc_easy_timer_cb, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
+                        batch_rpc_easy_timer_cb_with_lbt, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
           ev_timer_start(ioth->loop, &(ioth->user_timer));
         }
       }
@@ -766,7 +785,7 @@ int ObNetEasy::init(const ObNetOptions &opts, uint8_t negotiation_enable)
         {
           if (!OB_ISNULL(ioth)) {
             ev_timer_init(&ioth->user_timer,
-                        rpc_easy_timer_cb, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
+                        rpc_easy_timer_cb_with_lbt, EASY_STAT_INTERVAL, EASY_STAT_INTERVAL);
             ev_timer_start(ioth->loop, &(ioth->user_timer));
           }
         }

@@ -187,7 +187,7 @@ TEST_F(TestJsonPath, test_parse_array_node)
   ObArenaAllocator allocator(ObModIds::TEST);
   ObJsonPath test_path1("$[  *   ]", &allocator);
   test_path1.index_ = 1;
-  
+
   ret = test_path1.parse_single_array_node();
   ASSERT_EQ(1, test_path1.path_node_cnt());
   ASSERT_EQ(ret, OB_SUCCESS);
@@ -683,7 +683,8 @@ TEST_F(TestJsonPath, test_member_node)
   // 只有一个节点
   ASSERT_EQ(1, test_path.path_node_cnt());
   ASSERT_EQ(JPN_MEMBER,test_path.path_nodes_[0]->get_node_type());
-  ObString str(test_path.path_nodes_[0]->get_node_content().member_.object_name_);
+  const auto &member = test_path.path_nodes_[0]->get_node_content().member_;
+  ObString str(member.len_, member.object_name_);
   ASSERT_TRUE(str.case_compare("name") == 0);
   std::cout<<test_path.path_nodes_[0]->get_node_content().member_.object_name_<<std::endl;
 }
@@ -735,7 +736,7 @@ TEST_F(TestJsonPath, test_parse_path)
         ASSERT_EQ(true,test_path.path_nodes_[i]->get_node_content().array_range_.is_first_index_from_end_);
         ASSERT_EQ(1,test_path.path_nodes_[i]->get_node_content().array_range_.last_index_);
         ASSERT_EQ(true,test_path.path_nodes_[i]->get_node_content().array_range_.is_last_index_from_end_);
-        
+
       }
     }
   } else {
@@ -875,27 +876,27 @@ TEST_F(TestJsonPath, test_random)
       // 添加 JPN_MEMBER_WILDCARD
         str.append(".*");
         break;
-        
+
       case 2:
       // JPN_ARRAY_CELL
         str.append("[last-5]");
         break;
-        
+
       case 3:
       // JPN_ARRAY_RANGE
         str.append("[10 to last-1]");
         break;
-        
+
       case 4:
       // JPN_ARRAY_CELL_WILDCARD
         str.append("[*]");
         break;
-        
+
       case 5:
       // JPN_WILDCARD_ELLIPSIS
         str.append("**");
         break;
-        
+
       default:
         break;
     }
@@ -906,7 +907,7 @@ TEST_F(TestJsonPath, test_random)
   int ret = OB_SUCCESS;
   ObString str_origin(str.ptr());
   std::cout<<str_origin.ptr()<<std::endl;
-  
+
   ObJsonPath test_path(str_origin, &allocator);
   test_path.is_mysql_ = true;
   if(test_path.is_mysql_ == false){
@@ -924,7 +925,7 @@ TEST_F(TestJsonPath, test_random)
   ObString str3(str2.ptr());
   ASSERT_EQ(str_origin, str3);
   std::cout<<str2.ptr()<<std::endl;
-  
+
 }
 
 // test good path including func_node
@@ -1343,7 +1344,7 @@ TEST_F(TestJsonPath, test_good_path)
   ObJsonBuffer str2(&allocator);
   ret = test_path.to_string(str2);
   ASSERT_EQ(OB_SUCCESS, ret);
-  
+
   for(int i=0; i<test_path.path_node_cnt(); ++i)
   {
     std::cout<<"type:"<<test_path.path_nodes_[i]->get_node_type()<<std::endl;
@@ -1355,7 +1356,7 @@ TEST_F(TestJsonPath, test_good_path)
       std::cout<<"content:"<<test_path.path_nodes_[i]->get_node_content().array_cell_.is_index_from_end_<<std::endl;
     }
   }
-  
+
   // 验证是否相等 （ObSqlString直接相比会报错，因为没有重载==
   ObString str3(str2.ptr());
   std::cout<<str2.ptr()<<std::endl;
@@ -1367,7 +1368,7 @@ TEST_F(TestJsonPath, test_good_path)
 TEST_F(TestJsonPath, test_pathcache_funcion) {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
-  
+
   ObJsonPathCache path_cache(&allocator);
   ObString ok_path1 = "$.\"abc d\"";
 
@@ -1405,7 +1406,7 @@ TEST_F(TestJsonPath, test_pathcache_funcion) {
 TEST_F(TestJsonPath, test_pathcache_exprire) {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
-  
+
   ObJsonPathCache path_cache(&allocator);
   ObString ok_path1 = "$.\"abc d\"";
 
@@ -1434,7 +1435,7 @@ TEST_F(TestJsonPath, test_pathcache_exprire) {
 TEST_F(TestJsonPath, test_pathcache_reset) {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(ObModIds::TEST);
-  
+
   ObJsonPathCache path_cache(&allocator);
   ObString ok_path1 = "$.\"abc d\"";
 

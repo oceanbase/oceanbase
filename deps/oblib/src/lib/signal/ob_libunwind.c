@@ -34,6 +34,7 @@ int safe_backtrace(char *buf, int64_t len, int64_t *pos)
   return ret;
 }
 
+extern int64_t get_rel_offset_c(int64_t addr);
 static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
                    int64_t *pos)
 {
@@ -46,7 +47,8 @@ static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
     ret = -1;
   } else {
     for (int i = 0; i < n; i++) {
-      int count = safe_snprintf(buf + *pos, len - *pos, "0x%lx", addrs[i]);
+      int64_t addr = get_rel_offset_c(addrs[i]);
+      int count = safe_snprintf(buf + *pos, len - *pos, "0x%lx", addr);
       count++; // for space
       if (count > 0 && *pos + count < len) {
         *pos += count;

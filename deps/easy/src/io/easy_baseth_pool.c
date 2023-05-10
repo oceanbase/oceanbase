@@ -293,7 +293,7 @@ static void easy_baseth_pool_sighand(int sig, siginfo_t *sinfo, void *ucontext)
         int i, idx = 0;
         char _buffer_stack_[512];
 
-        int n = backtrace(array, 25);
+        int n = ob_backtrace_c(array, 25);
 
         if (n > 2) {
             for (i = 2; i < n; i++) idx += lnprintf(idx + _buffer_stack_, 20, "%p ", array[i]);

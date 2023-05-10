@@ -22,6 +22,7 @@
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/utility/ob_utility.h"
+#include "lib/utility/ob_backtrace.h"
 #include "lib/oblog/ob_trace_log.h"
 #include "lib/container/ob_iarray.h"
 
@@ -63,11 +64,6 @@ struct ObObj;
 class ObObjParam;
 class ObAddr;
 
-const int64_t LBT_BUFFER_LENGTH = 1024;
-char *parray(char *buf, int64_t len, int64_t *array, int size);
-char *lbt();
-char *lbt(char *buf, int32_t len);
-char *lbt(void **addrs, int32_t size);
 void hex_dump(const void *data, const int32_t size,
               const bool char_type = true, const int32_t log_level = OB_LOG_LEVEL_DEBUG);
 int32_t parse_string_to_int_array(const char *line,

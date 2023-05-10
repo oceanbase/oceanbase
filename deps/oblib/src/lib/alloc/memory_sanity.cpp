@@ -53,7 +53,7 @@ void memory_sanity_abort()
     abort();
   }
   void *addrs[128];
-  int n_addr = backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
+  int n_addr = ob_backtrace(addrs, sizeof(addrs)/sizeof(addrs[0]));
   void *vip_addr = NULL;
   for (int i = 0; NULL == vip_addr && i < n_addr; i++) {
     for (int j = 0; NULL == vip_addr && j < sizeof(vips)/sizeof(vips[0]); j++) {
@@ -71,7 +71,7 @@ void memory_sanity_abort()
   if (vip_addr != NULL) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       fprintf(stderr, "[ERROR] sanity check failed, vip_addr: %p, lbt: %s\n",
-              vip_addr, oceanbase::common::lbt(addrs, n_addr));
+              vip_addr, oceanbase::common::parray((int64_t*)addrs, n_addr));
     }
   } else {
     char buf[8192];
@@ -103,7 +103,7 @@ void memory_sanity_abort()
     oceanbase::common::backtrace_symbolize(addrs, n_addr, check_vip);
     while (pos > 0 && '\n' == buf[pos - 1]) pos--;
     fprintf(stderr, "[ERROR] sanity check failed, vip_func: %s, lbt: %s\nsymbolize:\n%.*s\n", vip_func,
-            oceanbase::common::lbt(addrs, n_addr), pos, buf);
+            oceanbase::common::parray((int64_t*)addrs, n_addr), pos, buf);
     if ('\0' == vip_func[0]) {
       abort();
     }
