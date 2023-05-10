@@ -202,6 +202,7 @@
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
+#include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 
 namespace oceanbase
 {
@@ -2376,6 +2377,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               opt_stats_gather_stat->set_allocator(&allocator);
               opt_stats_gather_stat->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(opt_stats_gather_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_TID: {
+            ObVirtualLSLogRestoreStatus *ls_log_restore_status = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualLSLogRestoreStatus, ls_log_restore_status))) {
+              SERVER_LOG(ERROR, "failed to init ObVirtualLSLogRestoreStatus", K(ret));
+            } else if (ls_log_restore_status->init(omt)) {
+              SERVER_LOG(WARN, "fail to init ObVirtualLSLogRestoreStatus with omt", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ls_log_restore_status);
             }
             break;
           }

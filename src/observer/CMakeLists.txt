@@ -370,6 +370,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_table_iterator_factory.cpp
   virtual_table/ob_all_virtual_dml_stats.cpp
   virtual_table/ob_all_virtual_archive_dest_status.cpp
+  virtual_table/ob_all_virtual_ls_log_restore_status.cpp
   virtual_table/ob_virtual_span_info.cpp
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp

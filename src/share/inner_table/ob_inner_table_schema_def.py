@@ -11776,9 +11776,32 @@ def_table_schema(
 
 # 12398: __all_virtual_column_group
 # 12399: __all_virtual_storage_leak_info
-# 12400 __all_virtual_ls_log_restore_status
-# 12401: __all_virtual_tenant_parameter
 
+def_table_schema(
+  owner = 'zhaoyongheng.zyh',
+  table_name = '__all_virtual_ls_log_restore_status',
+  table_id = '12400',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('sync_lsn', 'uint'),
+    ('sync_scn', 'uint'),
+    ('sync_status', 'varchar:128'),
+    ('err_code', 'int'),
+    ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+# 12401: __all_virtual_tenant_parameter
 #
 # 余留位置
 #
@@ -12136,7 +12159,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
-# 15387: __all_virtual_ls_log_restore_status
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15387', all_def_keywords['__all_virtual_ls_log_restore_status'])))
 # 15388: __all_virtual_tenant_parameter
 
 
@@ -26989,7 +27012,28 @@ JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
 """.replace("\n", " ")
 )
 
-# 21424: V$OB_LS_LOG_RESTORE_STATUS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_LS_LOG_RESTORE_STATUS',
+  table_id        = '21424',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT TENANT_ID,
+           LS_ID,
+           SYNC_LSN,
+           SYNC_SCN,
+           SYNC_STATUS,
+           ERR_CODE,
+           COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_LOG_RESTORE_STATUS;
+  """.replace("\n", " ")
+)
+
 def_table_schema(
   owner           = 'jim.wjh',
   table_name      = 'CDB_OB_EXTERNAL_TABLE_FILES',
@@ -50874,7 +50918,29 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28194: V$OB_LS_LOG_RESTORE_STATUS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_LS_LOG_RESTORE_STATUS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28194',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         LS_ID,
+         SYNC_LSN,
+         SYNC_SCN,
+         SYNC_STATUS,
+         ERR_CODE,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_LS_LOG_RESTORE_STATUS;
+  """.replace("\n", " ")
+)
 
 ################################################################################
 # Lob Table (50000, 70000)
