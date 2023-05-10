@@ -279,7 +279,7 @@ int ObTxCycleTwoPhaseCommitter::continue_execution(const bool is_rollback)
   const ObTxState state = get_downstream_state();
   bool no_need_submit_log = false;
 
-  if (ObTxState::REDO_COMPLETE != get_upstream_state()) {
+  if (ObTxState::REDO_COMPLETE != get_upstream_state() && !is_rollback) {
     TRANS_LOG(INFO, "already in second phase", K(ret), K(*this));
   } else {
     if (is_rollback) {
