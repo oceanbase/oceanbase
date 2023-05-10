@@ -143,10 +143,15 @@ private:
 class ObServerMemoryConfig
 {
 public:
+  enum CapacityType {
+    SYSTEM_MEMORY,
+    HIDDEN_SYS_MEMORY,
+  };
   friend class unittest::ObSimpleClusterTestBase;
   ObServerMemoryConfig();
   static ObServerMemoryConfig &get_instance();
   int reload_config(const ObServerConfig& server_config);
+  int64_t get_capacity_default_memory(CapacityType type, int64_t memory_limit);
   int64_t get_server_memory_limit() { return memory_limit_; }
   int64_t get_reserved_server_memory() { return system_memory_; }
   int64_t get_server_memory_avail() { return memory_limit_ - system_memory_; }
