@@ -1875,7 +1875,6 @@ int ObTenantLSInfo::balance_ls_primary_zone(
   } else {
     int64_t max_count = -1, max_index = 0;
     int64_t min_count = INT64_MAX, min_index = 0;
-    const int64_t each_ls_max_count = ceil((double)(ls_count)/primary_zone_count);
     do {
       max_count = -1, max_index = 0;
       min_count = INT64_MAX, min_index = 0;
@@ -1898,16 +1897,15 @@ int ObTenantLSInfo::balance_ls_primary_zone(
             K(primary_zone_array), K(primary_zone_count), K(ls_primary_zone));
       } else if (max_count - min_count > 1) {
         //choose the max count to min count
-        int64_t need_change = min(each_ls_max_count - min_count, max_count - each_ls_max_count);
-        for (int64_t i = 0; OB_SUCC(ret) && i < ls_count && need_change > 0; ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ls_count; ++i) {
           if (ls_primary_zone.at(i) == primary_zone_array.at(max_index)) {
             if (OB_FAIL(ls_primary_zone.at(i).assign(primary_zone_array.at(min_index)))) {
               LOG_WARN("failed to push back ls primary zone", KR(ret), K(min_index));
             } else {
-              need_change--;
               count_group_by_zone.at(max_index)--;
               count_group_by_zone.at(min_index)++;
             }
+            break;
           }
         }
       }
