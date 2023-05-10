@@ -198,7 +198,10 @@ private:
                              ObIArray<PushDownParam> &params, 
                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                               bool disassemble_join = true);
-  int check_hint_valid(ObDMLStmt &stmt, ObIArray<PushDownParam> &params, bool &is_valid);
+  int check_hint_valid(ObDMLStmt &stmt,
+                       ObIArray<PushDownParam> &params,
+                       bool &hint_force_pushdown,
+                       bool &is_valid);
 
 private:
   // help functions

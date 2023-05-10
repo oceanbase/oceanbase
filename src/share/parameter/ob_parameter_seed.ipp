@@ -1410,3 +1410,15 @@ DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000"
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_with_subquery, OB_TENANT_PARAMETER, "0", "[0,2]",
+        "WITH subquery transformation，0: optimizer，1: materialize，2: inline",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
+        "OLAP API generates WITH clause",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
+        "enable group by placement transform rule",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

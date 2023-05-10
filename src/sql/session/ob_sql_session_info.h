@@ -908,6 +908,10 @@ public:
   void set_expect_group_id(int64_t group_id) { expect_group_id_ = group_id; }
 	bool get_group_id_not_expected() const { return group_id_not_expected_; }
   void set_group_id_not_expected(bool value) { group_id_not_expected_ = value; }
+  int is_force_temp_table_inline(bool &force_inline) const;
+  int is_force_temp_table_materialize(bool &force_materialize) const;
+  int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
+  int is_groupby_placement_transformation_enabled(bool &transformation_enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }

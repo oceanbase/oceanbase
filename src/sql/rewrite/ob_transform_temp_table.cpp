@@ -53,16 +53,29 @@ int ObTransformTempTable::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &
   hash::ObHashMap<uint64_t, uint64_t> param_level;
   uint64_t min_param_level = 0;
   trans_happened = false;
+  bool enable_temp_table_transform = false;
+  bool force_temp_table_inline = false;
+  ObSQLSessionInfo *session_info = NULL;
   //当前stmt是root stmt时才改写
   if (parent_stmts.empty()) {
     void *buf = NULL;
-    if (OB_ISNULL(buf = allocator_.alloc(sizeof(TempTableTransParam)))) {
+    if (OB_ISNULL(ctx_) ||
+        OB_ISNULL(session_info = ctx_->session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null param", K(ctx_), K(ret));
+    } else if (OB_FAIL(session_info->is_temp_table_transformation_enabled(enable_temp_table_transform))) {
+      LOG_WARN("failed to check temp table transform enabled", K(ret));
+    } else if (OB_FAIL(session_info->is_force_temp_table_inline(force_temp_table_inline))) {
+      LOG_WARN("failed to check temp table force inline", K(ret));
+    } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(TempTableTransParam)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to allocate memory", K(ret));
     } else {
       trans_param_ = new(buf)TempTableTransParam;
     }
     if (OB_FAIL(ret)) {
+    } else if (!enable_temp_table_transform || force_temp_table_inline) {
+      OPT_TRACE("session variable disable temp table transform");
     } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
       LOG_WARN("failed to init stmt map", K(ret));
     } else if (OB_FAIL(param_level.create(128, "TempTable"))) {
@@ -137,11 +150,25 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
+  bool system_force_inline_cte = false;
+  bool system_force_materialize_cte = false;
+  ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
+      OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_) ||
+      OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ctx_), K(ret));
+  } else if (OB_FAIL(session_info->is_force_temp_table_inline(system_force_inline_cte))) {
+    LOG_WARN("failed to check temp table force inline", K(ret));
+  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(system_force_materialize_cte))) {
+    LOG_WARN("failed to check temp table force materialize", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.count(); ++i) {
     TempTableInfo &helper = temp_table_info.at(i);
     bool can_materia = false;
     bool force_materia = false;
     bool force_inline = false;
+    bool need_expand = false;
     OPT_TRACE("try to expand temp table:", helper.temp_table_query_);
     if (OB_ISNULL(helper.temp_table_query_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -150,20 +177,28 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
                                                 force_inline,
                                                 force_materia))) {
       LOG_WARN("failed to check force materialize", K(ret));
+    } else if (force_inline) {
+      need_expand = true;
+      OPT_TRACE("hint force inline CTE");
     } else if (force_materia) {
-      OPT_TRACE("hint force materialize");
-    } else if (!force_inline &&
-               OB_FAIL(check_stmt_can_materialize(helper.temp_table_query_, can_materia))) {
+      //do nothing
+      OPT_TRACE("hint force materialize CTE");
+    } else if (system_force_materialize_cte) {
+      //do nothing
+      OPT_TRACE("system variable force materialize CTE");
+    } else if (system_force_inline_cte) {
+      need_expand = true;
+      OPT_TRACE("system variable force inline CTE");
+    } else if (1 == helper.table_infos_.count()) {
+      need_expand = true;
+      OPT_TRACE("CTE`s refer once, force inline");
+    } else if (OB_FAIL(check_stmt_can_materialize(helper.temp_table_query_, can_materia))) {
       LOG_WARN("failed to check extract cte valid", K(ret));
-    } else if (!can_materia ||
-               force_inline ||
-               1 == helper.table_infos_.count()) {
-      if (force_inline) {
-        OPT_TRACE("hint force extend temp table");
-      }
-      if (1 == helper.table_infos_.count()) {
-        OPT_TRACE("temp table if used once, will extend");
-      }
+    } else if (!can_materia) {
+      need_expand = true;
+      OPT_TRACE("transform rule force inline CTE");
+    }
+    if (OB_SUCC(ret) && need_expand) {
       //深拷贝每一份查询，还原成generate table
       ObDMLStmt *orig_stmt = helper.temp_table_query_;
       if (OB_FAIL(inner_expand_temp_table(helper))) {
