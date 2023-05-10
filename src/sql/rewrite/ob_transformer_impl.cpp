@@ -411,6 +411,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     need_types = 0; //如果是batch优化暂时不做改写
   } else if (OB_FAIL(check_stmt_functions(stmt, func))) {
     LOG_WARN("failed to check stmt functions", K(ret));
+  } else if (OB_FAIL(check_temp_table_functions(stmt, func))) {
+    LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
     if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_) {
@@ -443,6 +445,30 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, SIMPLIFY_EXPR);
     }
     need_types = ObTransformRule::ALL_TRANSFORM_RULES & (~disable_list);
+  }
+  return ret;
+}
+
+int ObTransformerImpl::check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDMLStmt::TempTableInfo, 8> temp_table_infos;
+  if (func.all_found()) {
+    // do nothing
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
+    LOG_WARN("failed to collect temp table infos", K(ret));
+  }
+  for(int64_t i = 0; OB_SUCC(ret) && !func.all_found() && i < temp_table_infos.count(); ++i) {
+    ObDMLStmt *child_stmt = temp_table_infos.at(i).temp_table_query_;
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null child stmt", K(ret));
+    } else if (OB_FAIL(check_stmt_functions(child_stmt, func))) {
+      LOG_WARN("failed to check stmt functions", K(ret));
+    }
   }
   return ret;
 }

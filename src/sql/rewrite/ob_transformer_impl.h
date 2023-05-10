@@ -142,6 +142,7 @@ public:
     bool contain_link_table_;
   };
   int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
+  int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
 private:
 
