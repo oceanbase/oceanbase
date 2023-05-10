@@ -358,6 +358,62 @@ bool ObSQLSessionInfo::is_encrypt_tenant()
   return ret;
 }
 
+int ObSQLSessionInfo::is_force_temp_table_inline(bool &force_inline) const
+{
+  int ret = OB_SUCCESS;
+  int64_t with_subquery_policy = 0;
+  force_inline = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    int64_t with_subquery_policy = tenant_config->_with_subquery;
+    if (2 == with_subquery_policy) {
+      force_inline = true;
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::is_force_temp_table_materialize(bool &force_materialize) const
+{
+  int ret = OB_SUCCESS;
+  int64_t with_subquery_policy = 0;
+  force_materialize = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    int64_t with_subquery_policy = tenant_config->_with_subquery;
+    if (1 == with_subquery_policy) {
+      force_materialize = true;
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::is_temp_table_transformation_enabled(bool &transformation_enabled) const
+{
+  int ret = OB_SUCCESS;
+  transformation_enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    transformation_enabled = tenant_config->_xsolapi_generate_with_clause;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::is_groupby_placement_transformation_enabled(bool &transformation_enabled) const
+{
+  int ret = OB_SUCCESS;
+  transformation_enabled = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    transformation_enabled = tenant_config->_optimizer_group_by_placement;
+  }
+  return ret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {

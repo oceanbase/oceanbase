@@ -316,6 +316,7 @@ _ob_query_rate_limit
 _ob_ssl_invited_nodes
 _ob_trans_rpc_timeout
 _optimizer_ads_time_limit
+_optimizer_group_by_placement
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time
@@ -349,8 +350,10 @@ _temporary_file_io_area_size
 _trace_control_info
 _tx_result_retention
 _upgrade_stage
+_with_subquery
 _xa_gc_interval
 _xa_gc_timeout
+_xsolapi_generate_with_clause
 __balance_controller
 __easy_memory_limit
 __easy_memory_reserved_percentage

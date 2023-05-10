@@ -655,8 +655,11 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   ObSqlBitSet<> outer_table_set;
   trans_happend = false;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_group_by_placement_transform = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
-      OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
+      OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_) ||
+      OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt));
   } else if (OB_FAIL(ctx_->stmt_factory_->create_stmt(trans_stmt))) {
@@ -717,10 +720,19 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
       }
     }
     LOG_TRACE("push down params", K(ret));
+    bool hint_force_pushdown = false;
     if (OB_FAIL(ret) || !is_valid) {
-    } else if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt), params, is_valid))) {
+    } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
+      LOG_WARN("failed to check group by placement transform enabled", K(ret));
+    } else if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
+                                        params,
+                                        hint_force_pushdown,
+                                        is_valid))) {
       LOG_WARN("check hint failed", K(ret));
     } else if (!is_valid) {
+      OPT_TRACE("hint disable group by pushdown");
+    } else if (!enable_group_by_placement_transform && !hint_force_pushdown) {
+      OPT_TRACE("system variable disable group by pushdown");
     } else if (OB_FAIL(transform_groupby_push_down(trans_stmt,
                                                    flattern_joined_tables,
                                                    outer_table_set,
@@ -1633,10 +1645,14 @@ int ObTransformGroupByPushdown::has_group_by_op(ObLogicalOperator *op, bool &bre
   return ret;
 }
 
-int ObTransformGroupByPushdown::check_hint_valid(ObDMLStmt &stmt, ObIArray<PushDownParam> &params, bool &is_valid)
+int ObTransformGroupByPushdown::check_hint_valid(ObDMLStmt &stmt,
+                                                 ObIArray<PushDownParam> &params,
+                                                 bool &hint_force_pushdown,
+                                                 bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
+  hint_force_pushdown = false;
   const ObQueryHint *query_hint = NULL; 
   const ObGroupByPlacementHint *hint = static_cast<const ObGroupByPlacementHint*>(get_hint(stmt.get_stmt_hint()));
   const ObHint *no_rewrite = stmt.get_stmt_hint().get_no_rewrite_hint();
@@ -1657,6 +1673,9 @@ int ObTransformGroupByPushdown::check_hint_valid(ObDMLStmt &stmt, ObIArray<PushD
         LOG_WARN("get unexpected null", K(ret), K(trans_tables));
       } else {
         is_valid = hint->enable_groupby_placement(query_hint->cs_type_, trans_tables.at(i));
+        if (is_valid) {
+          hint_force_pushdown = true;
+        }
         LOG_TRACE("succeed hint valid", K(is_valid), K(*trans_tables.at(i).at(0)), K(*hint));
         if (!is_valid) { break; }
       }

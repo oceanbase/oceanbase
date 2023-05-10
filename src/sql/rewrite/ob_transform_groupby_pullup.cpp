@@ -298,8 +298,16 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     ObSelectStmt *sub_stmt = NULL;
     ObString dummy_str;
     const ObViewMergeHint *myhint = NULL;
+    ObSQLSessionInfo *session_info = NULL;
+    bool enable_group_by_placement_transform = false;
     OPT_TRACE("try", table);
-    if (OB_ISNULL(sub_stmt = table->ref_query_)) {
+    if (OB_ISNULL(ctx_) ||
+        OB_ISNULL(session_info = ctx_->session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null param", K(ctx_), K(ret));
+    } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
+      LOG_WARN("failed to check group by placement transform enabled", K(ret));
+    } else if (OB_ISNULL(sub_stmt = table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid generated table item", K(ret), K(*table));
     } else if (OB_FAIL(check_hint_valid(*stmt, *table->ref_query_, hint_valid))) {
@@ -308,6 +316,8 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       // can not set is_valid as false, may pullup other table
       OPT_TRACE("hint reject transform");
     } else if (OB_FALSE_IT(myhint = static_cast<const ObViewMergeHint*>(sub_stmt->get_stmt_hint().get_normal_hint(T_MERGE_HINT)))) {
+    } else if (!enable_group_by_placement_transform && (NULL == myhint || myhint->enable_no_group_by_pull_up())) {
+      OPT_TRACE("system var disable group by placemebt");
     } else if (ignore_tables.has_member(stmt->get_table_bit_index(table->table_id_))) {
       // skip the generated table
       OPT_TRACE("ignore this table");

@@ -1457,3 +1457,15 @@ DEF_STR_WITH_CHECKER(rpc_server_authentication_method, OB_CLUSTER_PARAMETER, "AL
 DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
          "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_with_subquery, OB_TENANT_PARAMETER, "0", "[0,2]",
+        "WITH subquery transformation，0: optimizer，1: materialize，2: inline",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
+        "OLAP API generates WITH clause",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
+        "enable group by placement transform rule",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
