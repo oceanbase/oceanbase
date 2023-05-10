@@ -2395,8 +2395,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         // 4. merge all this info
         char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
         int64_t pos = 0;
-        MEMSET(tmp, 0, length);
-        if (OB_FAIL(ObMySQLUtil::store_length(tmp, length, count, pos))) {
+        if (OB_ISNULL(tmp)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else if (FALSE_IT(MEMSET(tmp, 0, length))) {
+        } else if (OB_FAIL(ObMySQLUtil::store_length(tmp, length, count, pos))) {
           LOG_WARN("store length fail.", K(ret), K(stmt_id_), K(param_id));
         } else {
           MEMCPY(tmp+pos, is_null_map, bitmap_bytes);
@@ -2434,8 +2437,11 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
       } else {
         char *tmp = static_cast<char*>(piece->get_allocator()->alloc(length));
         int64_t pos = 0;
-        MEMSET(tmp, 0, length);
-        if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.at(0).string(), pos))) {
+        if (OB_ISNULL(tmp)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory", K(ret));
+        } else if (FALSE_IT(MEMSET(tmp, 0, length))) {
+        } else if (OB_FAIL(ObMySQLUtil::store_obstr(tmp, length, str_buf.at(0).string(), pos))) {
           LOG_WARN("store string fail.", K(ret), K(stmt_id_), K(param_id));
         } else {
           const char* src = tmp;
