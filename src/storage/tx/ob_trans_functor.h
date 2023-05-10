@@ -442,7 +442,7 @@ public:
       tmp_ret = OB_INVALID_ARGUMENT;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", KP(ls_tx_ctx_mgr));
     } else {
-      const share::ObLSID &ls_id = ls_tx_ctx_mgr->get_ls_id();
+      const share::ObLSID ls_id = ls_tx_ctx_mgr->get_ls_id();
 
       if (!ls_id.is_valid()) {
         tmp_ret = OB_INVALID_ARGUMENT;
@@ -456,8 +456,8 @@ public:
         ls_tx_ctx_mgr = NULL;
         bool_ret = true;
       }
+      TRANS_LOG_RET(INFO, tmp_ret, "remove ls", K(ls_id), KP(ls_tx_ctx_mgr));
     }
-    UNUSED(tmp_ret);
     return bool_ret;
   }
 };
