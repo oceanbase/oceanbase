@@ -138,8 +138,8 @@ int ObTableDirectInsertService::open_task(const uint64_t table_id, const int64_t
 }
 
 int ObTableDirectInsertService::close_task(const uint64_t table_id,
-                                    const int64_t task_id,
-                                    const int error_code)
+                                           const int64_t task_id,
+                                           const int error_code)
 {
   int ret = OB_SUCCESS;
   ObTableLoadTableCtx *table_ctx = nullptr;
@@ -150,19 +150,17 @@ int ObTableDirectInsertService::close_task(const uint64_t table_id,
     table::ObTableLoadTransId trans_id;
     trans_id.segment_id_ = task_id;
     trans_id.trans_gid_ = 1;
-    ObTableLoadStore store(table_ctx);
-    if (OB_FAIL(store.init())) {
-      LOG_WARN("fail to init store", KR(ret));
-    } else {
-      if (OB_SUCC(error_code)) {
-        if (OB_FAIL(store.px_finish_trans(trans_id))) {
-          LOG_WARN("fail to finish direct load trans", KR(ret), K(trans_id));
-        }
+    if (OB_SUCC(error_code)) {
+      ObTableLoadStore store(table_ctx);
+      if (OB_FAIL(store.init())) {
+        LOG_WARN("fail to init store", KR(ret));
+      } else if (OB_FAIL(store.px_finish_trans(trans_id))) {
+        LOG_WARN("fail to finish direct load trans", KR(ret), K(trans_id));
       }
-      if (OB_FAIL(ret)){
-        if (OB_FAIL(store.px_abandon_trans(trans_id))) {
-          LOG_WARN("fail to abandon direct load trans", KR(ret));
-        }
+    }
+    if (OB_FAIL(ret)) {
+      if (OB_FAIL(ObTableLoadStore::px_abandon_trans(table_ctx, trans_id))) {
+        LOG_WARN("fail to abandon direct load trans", KR(ret), K(trans_id));
       }
     }
   }
