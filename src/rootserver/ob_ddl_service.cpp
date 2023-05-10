@@ -16039,6 +16039,12 @@ int ObDDLService::check_db_and_table_is_exist(const obrpc::ObTruncateTableArg &a
           LOG_WARN("truncate oracle tmp table not supported",
                   KR(ret), K(tenant_id), K(table_name), K(database_name));
         }
+      } else if (OB_FAIL(ret) && OB_ITER_END == ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("can not find table",
+                KR(ret), K(tenant_id), K(table_name), K(database_name));
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_name),
+                                            to_cstring(table_name));
       }
     }
   }
