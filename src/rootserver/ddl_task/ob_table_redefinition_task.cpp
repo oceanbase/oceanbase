@@ -676,7 +676,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
     ObAddr unused_addr;
     TCRLockGuard guard(lock_);
     for (common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator iter = dependent_task_result_map_.begin();
-        iter != dependent_task_result_map_.end(); ++iter) {
+        OB_SUCC(ret) && iter != dependent_task_result_map_.end(); ++iter) {
       const uint64_t task_key = iter->first;
       const int64_t target_object_id = -1;
       const int64_t child_task_id = iter->second.task_id_;
@@ -706,10 +706,15 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
         finished_task_cnt++;
         if (iter->second.ret_code_ != OB_SUCCESS) {
           ret = iter->second.ret_code_;
+          if (get_is_ignore_errors()) {
+            ret = OB_SUCCESS;
+          }
         }
       }
     }
-    if (finished_task_cnt == dependent_task_result_map_.size()) {
+    if (finished_task_cnt == dependent_task_result_map_.size() || OB_FAIL(ret)) {
+      // 1. all child tasks finish.
+      // 2. the parent task exits if any child task fails.
       state_finish = true;
     }
   }
