@@ -621,9 +621,16 @@ int ObDDLRedoLogWriter::write(
   SCN base_scn = SCN::min_scn();
   SCN scn;
   uint32_t lock_tid = 0;
+  int64_t real_sleep_us = 0;
+  int tmp_ret = OB_SUCCESS;
   if (!log.is_valid() || nullptr == log_handler || !ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id || nullptr == buffer || 0 == task_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(log), K(ls_id), K(tenant_id), KP(buffer));
+  } else if (OB_TMP_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id, buffer_size, task_id, real_sleep_us))) {
+    LOG_WARN("fail to limit and sleep", K(tmp_ret), K(tenant_id), K(task_id), K(ls_id), K(buffer_size), K(real_sleep_us));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->rdlock(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, lock_tid))) {
     LOG_WARN("failed to rdlock", K(ret));
   } else if (ddl_kv_mgr_handle.get_obj()->get_commit_scn_nolock(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
@@ -663,12 +670,6 @@ int ObDDLRedoLogWriter::write(
   }
   if (0 != lock_tid) {
     ddl_kv_mgr_handle.get_obj()->unlock(lock_tid);
-  }
-  if (OB_SUCC(ret)) {
-    int64_t real_sleep_us = 0;
-    if (OB_FAIL(ObDDLCtrlSpeedHandle::get_instance().limit_and_sleep(tenant_id, ls_id, buffer_size, task_id, real_sleep_us))) {
-      LOG_WARN("fail to limit and sleep", K(ret), K(tenant_id), K(task_id), K(ls_id), K(buffer_size), K(real_sleep_us));
-    }
   }
   if (OB_FAIL(ret)) {
     if (nullptr != cb) {
