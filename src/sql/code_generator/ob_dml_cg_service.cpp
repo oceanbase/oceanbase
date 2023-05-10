@@ -1625,6 +1625,15 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
       dml_base_ctdef.is_heap_table_ = is_heap_table;
     }
   }
+
+  if (OB_SUCC(ret) &&
+      log_op_def::LOG_INSERT == op.get_type()) {
+    ObLogInsert &log_ins_op = static_cast<ObLogInsert &>(op);
+    if (log_ins_op.get_insert_up()) {
+      dml_base_ctdef.das_base_ctdef_.is_insert_up_ = true;
+    }
+  }
+
   return ret;
 }
 
