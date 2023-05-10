@@ -592,17 +592,29 @@ int ObCrossClusterTabletChecksumValidator::validate_cross_cluster_checksum(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(frozen_scn), K(expected_epoch), KP(simple_schema));
   } else {
+    FREEZE_TIME_GUARD;
     // check whether waiting all tablet checksum has timed out
     bool is_wait_tablet_checksum_timeout = check_waiting_tablet_checksum_timeout();
     if (OB_UNLIKELY(is_wait_tablet_checksum_timeout)) {
-      LOG_ERROR("waiting all tablet checksum has timed out, validate cross-cluster"
-        " checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
-        K_(major_merge_start_us), "current_time_us",
-        ObTimeUtil::current_time());
+      bool is_match = true;
+      if (OB_FAIL(ObServiceEpochProxy::check_service_epoch(*sql_proxy_, tenant_id_,
+                  ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+        LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
+      } else if (!is_match) {
+        ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
+        LOG_WARN("no need to validate cross-cluster checksum, cuz freeze_service_epoch mismatch",
+                 K_(tenant_id), K(frozen_scn), K(expected_epoch));
+      } else {
+        // only LOG_ERROR when freeze_service_epoch match.
+        //
+        LOG_ERROR("waiting all tablet checksum has timed out, validate cross-cluster"
+          " checksum with available tablet checksum" , K_(tenant_id), K(frozen_scn),
+          K(expected_epoch), K_(major_merge_start_us), "current_time_us",
+          ObTimeUtil::current_time());
+      }
     }
     // check whether all tablet checksum has already exist
-    FREEZE_TIME_GUARD;
-    if (OB_FAIL(check_if_all_tablet_checksum_exist(frozen_scn))) {
+    if (FAILEDx(check_if_all_tablet_checksum_exist(frozen_scn))) {
       LOG_WARN("fail to check if all tablet checksum exist", KR(ret), K_(tenant_id), K(frozen_scn));
     } else if (is_all_tablet_checksum_exist_ || is_wait_tablet_checksum_timeout) { // all tablet checksum exist or timeout
       if (OB_FAIL(check_cross_cluster_checksum(*simple_schema, frozen_scn))) {
