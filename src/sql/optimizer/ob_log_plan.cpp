@@ -11584,7 +11584,7 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
                  OB_FAIL(static_cast<ObLogJoin*>(op)->check_and_set_use_batch())) {
         LOG_WARN("failed to set use batch nlj", K(ret));
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type() &&
-                 OB_FAIL(static_cast<ObLogSubPlanFilter*>(op)->check_and_set_use_batch())) {
+                 OB_FAIL(static_cast<ObLogSubPlanFilter*>(op)->check_and_set_das_group_rescan())) {
         LOG_WARN("failed to set use batch spf", K(ret));
       } else { /*do nothing*/ }
     }

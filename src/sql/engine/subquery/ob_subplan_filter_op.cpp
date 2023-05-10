@@ -376,7 +376,7 @@ ObSubPlanFilterSpec::ObSubPlanFilterSpec(ObIAllocator &alloc, const ObPhyOperato
     exec_param_array_(alloc),
     exec_param_idxs_inited_(false),
     enable_px_batch_rescans_(alloc),
-    enable_das_batch_rescans_(false),
+    enable_das_group_rescan_(false),
     filter_exprs_(alloc),
     output_exprs_(alloc),
     left_rescan_params_(alloc),
@@ -393,7 +393,7 @@ OB_SERIALIZE_MEMBER((ObSubPlanFilterSpec, ObOpSpec),
                     exec_param_array_,
                     exec_param_idxs_inited_,
                     enable_px_batch_rescans_,
-                    enable_das_batch_rescans_,
+                    enable_das_group_rescan_,
                     filter_exprs_,
                     output_exprs_,
                     left_rescan_params_,
@@ -492,7 +492,7 @@ int ObSubPlanFilterOp::rescan()
   }
 
   if (OB_SUCC(ret) &&
-      (MY_SPEC.enable_das_batch_rescans_ || enable_left_px_batch_)) {
+      (MY_SPEC.enable_das_group_rescan_ || enable_left_px_batch_)) {
     left_rows_.reset();
     left_rows_iter_.reset();
     is_left_end_ = false;
@@ -500,7 +500,7 @@ int ObSubPlanFilterOp::rescan()
     last_store_row_.reset();
   }
 
-  if (OB_SUCC(ret) && MY_SPEC.enable_das_batch_rescans_) {
+  if (OB_SUCC(ret) && MY_SPEC.enable_das_group_rescan_) {
     //We do not need alloc memory again in rescan.
     //das_batch_params_.reset();
     current_group_ = 0;
@@ -514,7 +514,7 @@ int ObSubPlanFilterOp::rescan()
     brs_holder_.reset();
   }
 
-  if (!MY_SPEC.enable_das_batch_rescans_) {
+  if (!MY_SPEC.enable_das_group_rescan_) {
     for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
       if (OB_FAIL(children_[i]->rescan())) {
         LOG_WARN("rescan child operator failed", K(ret),
@@ -652,7 +652,7 @@ int ObSubPlanFilterOp::inner_open()
   }
 
   //BATCH SUBPLAN FILTER {
-  if (OB_SUCC(ret) && MY_SPEC.enable_das_batch_rescans_) {
+  if (OB_SUCC(ret) && MY_SPEC.enable_das_group_rescan_) {
     max_group_size_ = OB_MAX_BULK_JOIN_ROWS;
     if(OB_FAIL(alloc_das_batch_params(max_group_size_+MY_SPEC.max_batch_size_))) {
       LOG_WARN("Fail to alloc das batch params.", K(ret));
@@ -661,7 +661,7 @@ int ObSubPlanFilterOp::inner_open()
   //} BATCH SUBPLAN FILTER END
   //left_rows used by px_batch and das batch.
   if (OB_SUCC(ret) &&
-      (enable_left_px_batch_ || MY_SPEC.enable_das_batch_rescans_) &&
+      (enable_left_px_batch_ || MY_SPEC.enable_das_group_rescan_) &&
       OB_ISNULL(last_store_row_mem_)) {
     ObSQLSessionInfo *session = ctx_.get_my_session();
     uint64_t tenant_id =session->get_effective_tenant_id();
@@ -693,7 +693,7 @@ int ObSubPlanFilterOp::inner_close()
 {
   destroy_subplan_iters();
   destroy_update_set_mem();
-  if (MY_SPEC.enable_das_batch_rescans_) {
+  if (MY_SPEC.enable_das_group_rescan_) {
     das_batch_params_.reset();
   }
   return OB_SUCCESS;
@@ -726,14 +726,14 @@ int ObSubPlanFilterOp::handle_next_row()
     OZ(prepare_onetime_exprs());
   }
   if (OB_FAIL(ret)) {
-  } else if (enable_left_px_batch_ || MY_SPEC.enable_das_batch_rescans_) {
+  } else if (enable_left_px_batch_ || MY_SPEC.enable_das_group_rescan_) {
     //DAS batch spf is conflict with PX batch spf
-    OB_ASSERT(!(enable_left_px_batch_ && MY_SPEC.enable_das_batch_rescans_));
+    OB_ASSERT(!(enable_left_px_batch_ && MY_SPEC.enable_das_group_rescan_));
     bool has_row = false;
     int batch_count = 0;
-    batch_count = MY_SPEC.enable_das_batch_rescans_ ? max_group_size_ : PX_RESCAN_BATCH_ROW_COUNT;
+    batch_count = MY_SPEC.enable_das_group_rescan_ ? max_group_size_ : PX_RESCAN_BATCH_ROW_COUNT;
     if (left_rows_iter_.is_valid() && left_rows_iter_.has_next()) {
-      if(MY_SPEC.enable_das_batch_rescans_) {
+      if(MY_SPEC.enable_das_group_rescan_) {
         //das batch branch
         //Consume the remaining batch data in left store.
         current_group_++;
@@ -749,7 +749,7 @@ int ObSubPlanFilterOp::handle_next_row()
       if(enable_left_px_batch_) {
         batch_rescan_ctl_.reuse();
       }
-      if (MY_SPEC.enable_das_batch_rescans_) {
+      if (MY_SPEC.enable_das_group_rescan_) {
         current_group_ = 0;
         //Always OB_SUCCESS in current implement.
         if(OB_FAIL(init_das_batch_params())) {
@@ -788,7 +788,7 @@ int ObSubPlanFilterOp::handle_next_row()
           LOG_WARN("fail to add row", K(ret));
         } else if (enable_left_px_batch_ && OB_FAIL(prepare_rescan_params(true))) {
           LOG_WARN("fail to prepare rescan params", K(ret));
-        } else if (MY_SPEC.enable_das_batch_rescans_ && OB_FAIL(deep_copy_dynamic_obj())) {
+        } else if (MY_SPEC.enable_das_group_rescan_ && OB_FAIL(deep_copy_dynamic_obj())) {
           LOG_WARN("fail to deep copy dynamic obj", K(ret));
         } else {
           has_row = true;
@@ -807,7 +807,7 @@ int ObSubPlanFilterOp::handle_next_row()
         ret = OB_SUCCESS;
         OZ(left_rows_.finish_add_row(false));
         OZ(left_rows_.begin(left_rows_iter_));
-        if (MY_SPEC.enable_das_batch_rescans_) {
+        if (MY_SPEC.enable_das_group_rescan_) {
           //Lazy batch rescan right iterator.
           //Just set the flag, do the rescan when call the iter->rewind().
           for(int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
@@ -828,7 +828,7 @@ int ObSubPlanFilterOp::handle_next_row()
         OZ(fill_cur_row_rescan_param());
       } else {
         //das batch spf branch
-        OB_ASSERT(MY_SPEC.enable_das_batch_rescans_);
+        OB_ASSERT(MY_SPEC.enable_das_group_rescan_);
         if (OB_FAIL(fill_cur_row_das_batch_param(eval_ctx_, current_group_))) {
           LOG_WARN("Filed to prepare das batch rescan params", K(ret));
         }
@@ -1129,7 +1129,7 @@ int ObSubPlanFilterOp::inner_get_next_batch(const int64_t max_row_cnt)
   clear_evaluated_flag();
   if(OB_FAIL(ret)) {
     LOG_WARN("prepare_onetime_expr fail.", K(ret));
-  } else if (MY_SPEC.enable_das_batch_rescans_) {
+  } else if (MY_SPEC.enable_das_group_rescan_) {
     if (OB_FAIL(handle_next_batch_with_group_rescan(op_max_batch_size))) {
       LOG_WARN("handle_next_batch_with_group_rescan failed", K(ret));
     }

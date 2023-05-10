@@ -32,7 +32,7 @@ public:
         init_plan_idxs_(),
         one_time_idxs_(),
         update_set_(false),
-        enable_das_batch_rescans_(false)
+        enable_das_group_rescan_(false)
   {}
   ~ObLogSubPlanFilter() {}
   virtual int est_cost() override;
@@ -100,11 +100,10 @@ public:
   int add_px_batch_rescan_flag(bool flag) { return enable_px_batch_rescans_.push_back(flag); }
   common::ObIArray<bool> &get_px_batch_rescans() {  return enable_px_batch_rescans_; }
 
-  inline bool enable_das_batch_rescans() { return enable_das_batch_rescans_; }
-  inline void set_enable_das_batch_rescans(bool flag) { enable_das_batch_rescans_ = flag; }
-  int check_and_set_use_batch();
-  int check_if_match_das_batch_rescan(ObLogicalOperator *root,
-                                      bool &enable_das_batch_rescans);
+  inline bool enable_das_group_rescan() { return enable_das_group_rescan_; }
+  inline void set_enable_das_group_rescan(bool flag) { enable_das_group_rescan_ = flag; }
+  int check_and_set_das_group_rescan();
+  int check_if_match_das_group_rescan(ObLogicalOperator *root, bool &group_rescan);
   int set_use_das_batch(ObLogicalOperator* root);
 
   int allocate_startup_expr_post() override;
@@ -152,7 +151,7 @@ protected:
 
   common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
   common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
-  bool enable_das_batch_rescans_;
+  bool enable_das_group_rescan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogSubPlanFilter);
 };

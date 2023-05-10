@@ -4855,7 +4855,7 @@ int ObStaticEngineCG::generate_spec(
     }
   }
   if (OB_SUCC(ret)) {
-    spec.enable_das_batch_rescans_ = op.enable_das_batch_rescans();
+    spec.enable_das_group_rescan_ = op.enable_das_group_rescan();
   }
   return ret;
 }
