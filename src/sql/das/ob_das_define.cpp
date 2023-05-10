@@ -309,7 +309,7 @@ int TabletHashMap::get(const ObTabletID key, ObDASTabletLoc *&value)
       LOG_WARN("find node failed", KR(ret));
     } else if (NULL == dst_node) {
       ret = OB_HASH_NOT_EXIST;
-      LOG_WARN("key dost not exist", KR(ret), K(key));
+      LOG_DEBUG("key dose not exist", KR(ret), K(key));
     } else {
       value = dst_node->value_;
     }

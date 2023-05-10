@@ -589,11 +589,12 @@ int ObCandiTableLoc::replace_local_index_loc(DASRelatedTabletMap &map, ObTableID
   ref_table_id_ = ref_table_id;
   for (int64_t i = 0; i < candi_tablet_locs_.count(); ++i) {
     ObOptTabletLoc &tablet_loc = candi_tablet_locs_.at(i).get_partition_location();
-    DASRelatedTabletMap::Value rv;
-    if (OB_FAIL(map.get_related_tablet_id(tablet_loc.get_tablet_id(), ref_table_id, rv))) {
-      LOG_WARN("related tablet info is invalid", K(ret));
+    const DASRelatedTabletMap::Value *rv = nullptr;
+    if (OB_ISNULL(rv = map.get_related_tablet_id(tablet_loc.get_tablet_id(), ref_table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("related tablet info is invalid", K(ret), K(tablet_loc.get_tablet_id()), K(ref_table_id));
     } else {
-      tablet_loc.set_tablet_info(rv.first, rv.second);
+      tablet_loc.set_tablet_info(rv->tablet_id_, rv->part_id_);
     }
   }
   return ret;

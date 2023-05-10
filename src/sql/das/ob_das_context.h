@@ -102,6 +102,7 @@ public:
   bool is_partition_hit();
   void unmark_need_check_server();
 
+  int build_related_tablet_map(const ObDASTableLocMeta &loc_meta);
   TO_STRING_KV(K_(table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
