@@ -40,6 +40,9 @@ using namespace share;
 namespace logservice
 {
 const char *ObServerLogBlockMgr::LOG_POOL_PATH = "log_pool";
+const int64_t ObServerLogBlockMgr::NORMAL_STATUS = 0;
+const int64_t ObServerLogBlockMgr::EXPANDING_STATUS = 1;
+const int64_t ObServerLogBlockMgr::SHRINKING_STATUS = 2;
 
 int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, bool &result)
 {
@@ -501,7 +504,13 @@ int ObServerLogBlockMgr::scan_log_pool_dir_and_do_trim_()
   int ret = OB_SUCCESS;
   GetBlockIdListFunctor functor;
   BlockIdArray &block_id_array = functor.block_id_array_;
-  if (OB_FAIL(palf::scan_dir(log_pool_path_, functor))) {
+  // NB: try to clear tmp file or directory in log loop. consider like this:
+  //     there may be a expand operation in progress before restarting, if we
+  //     not delete tmp directory which used to expand, the new expand operation
+  //     will be failed.
+  if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(log_pool_path_))) {
+    CLOG_LOG(WARN, "delete_tmp_file_or_directory_at log pool failed", KPC(this));
+  } else if (OB_FAIL(palf::scan_dir(log_pool_path_, functor))) {
     CLOG_LOG(ERROR, "scan_dir failed", K(ret), KPC(this));
   } else if (true == block_id_array.empty()) {
     CLOG_LOG(INFO, "the log pool is empty, no need trime", K(ret), KPC(this));
