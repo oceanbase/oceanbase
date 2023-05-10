@@ -110,6 +110,21 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       type.set_type(ObRawType);
       type.set_collation_level(CS_LEVEL_NUMERIC);
       type.set_collation_type(CS_TYPE_BINARY);
+    } else if (lib::is_mysql_mode() && types_stack[RESULT_TYPE_INDEX].is_integer_type()) {
+      bool has_number = false;
+      for (int64_t i = RESULT_TYPE_INDEX; i < param_num && !has_number; i += 2 /*skip conditions */) {
+        if (ob_is_number_tc(types_stack[i].get_type())) {
+          has_number = true;
+        }
+      }
+      if (has_default && !has_number) {
+        has_number = ob_is_number_tc(types_stack[param_num - 1].get_type());
+      }
+      if (has_number) {
+        type.set_number();
+      } else {
+        type.set_type(types_stack[RESULT_TYPE_INDEX].get_type());
+      }
     } else {
       type.set_type(types_stack[RESULT_TYPE_INDEX].get_type());
     }
@@ -176,8 +191,31 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
         }
       }
     }
-    if (lib::is_oracle_mode() && type.is_number()) {
-      type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+    if (OB_FAIL(ret)) {
+    } else if (type.is_number()) {
+      if (lib::is_oracle_mode()) {
+        type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+      } else {
+        ObExprResTypes res_types;
+        for (int64_t i = RESULT_TYPE_INDEX; OB_SUCC(ret) && i < param_num; i += 2) {
+          if (OB_FAIL(res_types.push_back(types_stack[i]))) {
+            LOG_WARN("fail to push back res type", K(ret));
+          }
+        }
+        if (has_default) {
+          if (OB_FAIL(res_types.push_back(types_stack[param_num - 1]))) {
+            LOG_WARN("fail to push back res type", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (res_types.count() == 0) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected result type count", K(ret));
+        } else if (OB_FAIL(aggregate_numeric_accuracy_for_merge(type, &res_types.at(0),
+                                                                res_types.count(), false))) {
+          LOG_WARN("fail to merge numeric accuracy", K(ret));
+        }
+      }
     } else {
       type.set_scale(SCALE_UNKNOWN_YET);//the scale of res in decode should be calced dynamically during runtime
     }
