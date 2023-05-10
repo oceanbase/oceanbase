@@ -173,7 +173,7 @@ int ObTransformExprPullup::need_transform(const ObIArray<ObParentDMLStmt> &paren
           need_trans = false;
           OPT_TRACE("outline reject transform");
         } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
+          for (int64_t i = 0; !need_trans && OB_SUCC(ret) && i < stmt.get_table_size(); ++i) {
             const TableItem *table = NULL;
             if (OB_ISNULL(table = stmt.get_table_item(i))) {
               ret = OB_ERR_UNEXPECTED;
