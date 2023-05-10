@@ -203,7 +203,7 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(plan_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text, /*ignore_parallel*/false))) {
+    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else {
       BUF_PRINT_CONST_STR(" END_OUTLINE_DATA*/", plan_text);
@@ -606,7 +606,7 @@ int ObSqlPlan::get_plan_used_hint_info(PlanText &plan_text,
       LOG_WARN("failed to print qb name hints", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(temp_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(temp_text, false))) {
+    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(temp_text))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else {
       BUF_PRINT_CONST_STR(NEW_LINE, temp_text);
@@ -702,7 +702,7 @@ int ObSqlPlan::get_plan_outline_info(PlanText &plan_text,
       LOG_WARN("failed to get plan tree outline", K(ret));
     } else if (OB_FAIL(query_hint.print_transform_hints(temp_text))) {
       LOG_WARN("failed to print all transform hints", K(ret));
-    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(temp_text, false))) {
+    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(temp_text))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else {
       BUF_PRINT_CONST_STR(NEW_LINE, temp_text);

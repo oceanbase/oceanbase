@@ -5496,14 +5496,15 @@ int JoinPath::compute_join_path_parallel_and_server_info(const common::ObAddr &l
                                   ? left_path : right_path;
       parallel = inherit_child->parallel_;
       server_cnt = inherit_child->server_cnt_;
-      const ObShardingInfo *inherit_sharding = NULL;
-      if (OB_ISNULL(inherit_sharding = inherit_child->get_sharding())) {
+      const ObShardingInfo *sharding = NULL;
+      int64_t part_cnt = 0;
+      if (OB_ISNULL(sharding = inherit_child->try_get_sharding_with_table_location())
+          || OB_UNLIKELY((part_cnt = sharding->get_part_cnt()) <= 0)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected partition wise", K(ret), K(parallel), KPC(inherit_sharding));
+        LOG_WARN("get unexpected partition wise", K(ret), K(parallel), KPC(sharding), K(part_cnt));
       } else if (OB_FAIL(server_list.assign(inherit_child->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       } else {
-        int64_t part_cnt = inherit_sharding->get_part_cnt();
         parallel = parallel > part_cnt ? part_cnt : parallel;
       }
     } else if (DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo) {

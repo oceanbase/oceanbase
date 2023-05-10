@@ -378,13 +378,14 @@ int ObGlobalHint::assign(const ObGlobalHint &other)
 // hints below not print
 // MAX_CONCURRENT
 // ObDDLSchemaVersionHint
-int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_parallel) const
+int ObGlobalHint::print_global_hint(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
   char *buf = plan_text.buf_;
   int64_t &buf_len = plan_text.buf_len_;
   int64_t &pos = plan_text.pos_;
   const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+  const bool ignore_parallel_for_dblink = EXPLAIN_DBLINK_STMT == plan_text.type_;
 
   #define PRINT_GLOBAL_HINT_STR(hint_str)           \
   if (OB_FAIL(BUF_PRINTF("%s%s", outline_indent, hint_str))) {  \
@@ -410,7 +411,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
 
   //DOP
-  if (OB_SUCC(ret) && !dops_.empty() && !ignore_parallel) {
+  if (OB_SUCC(ret) && !dops_.empty() && !ignore_parallel_for_dblink) {
     for (int64_t i = 0; OB_SUCC(ret) && i < dops_.count(); ++i) {
       if (OB_FAIL(BUF_PRINTF("%sDOP(%lu, %lu)", outline_indent, dops_.at(i).dfo_, dops_.at(i).dop_))) {
         LOG_WARN("failed to print dop hint", K(ret));
@@ -466,9 +467,11 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
       LOG_WARN("failed to print log level hint", K(ret));
     }
   }
-  if (OB_SUCC(ret) && has_parallel_hint() && !ignore_parallel) { //PARALLEL
+  if (OB_SUCC(ret) && has_parallel_hint() && !ignore_parallel_for_dblink) { //PARALLEL
     if (has_parallel_degree()) {
       PRINT_GLOBAL_HINT_NUM("PARALLEL", parallel_);
+    } else if (plan_text.is_outline_data_) {
+      /* do not print parallel policy for outline data */
     } else if (enable_auto_dop()) {
       PRINT_GLOBAL_HINT_STR("PARALLEL( AUTO )");
     } else if (enable_manual_dop()) {
@@ -480,7 +483,7 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && ObPDMLOption::NOT_SPECIFIED != pdml_option_) { //PDML
     if (ObPDMLOption::ENABLE == pdml_option_) {
-      if (!ignore_parallel) {
+      if (!ignore_parallel_for_dblink) {
         PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DML");
       }
     } else if (ObPDMLOption::DISABLE == pdml_option_) {

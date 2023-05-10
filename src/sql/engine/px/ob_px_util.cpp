@@ -718,7 +718,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
   } else if (OB_FAIL(get_location_addrs<DASTabletLocArray>(locations, addrs))) {
     LOG_WARN("fail get location addrs", K(ret));
   } else {
-    int64_t parallel = child.get_assigned_worker_count();
+    int64_t parallel = parent.get_assigned_worker_count();
     if (0 >= parallel) {
       parallel = 1;
     }

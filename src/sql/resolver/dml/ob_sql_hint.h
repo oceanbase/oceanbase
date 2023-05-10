@@ -137,8 +137,7 @@ struct ObQueryHint {
                                                      || global_hint_.has_hint_exclude_concurrent(); }
 
   // print hint
-  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt,
-                      const bool is_root_stmt, const bool ignore_parallel) const;
+  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_root_stmt) const;
   int print_outline_data(PlanText &plan_text) const;
   int print_qb_name_hints(PlanText &plan_text) const;
   int print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const;
@@ -206,7 +205,7 @@ struct ObStmtHint
   int init_stmt_hint(const ObDMLStmt &stmt,
                      const ObQueryHint &query_hint,
                      bool use_stmt_id_hints);
-  int print_stmt_hint(PlanText &plan_text, const bool ignore_parallel) const;
+  int print_stmt_hint(PlanText &plan_text) const;
   const ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL) const;
   ObHint *get_normal_hint(ObItemType hint_type, int64_t *idx = NULL);
   void set_query_hint(const ObQueryHint *query_hint) { query_hint_ = query_hint; }

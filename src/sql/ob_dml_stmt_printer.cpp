@@ -67,14 +67,15 @@ int ObDMLStmtPrinter::print_hint()
     DATA_PRINTF("%s", hint_begin);
     if (OB_SUCC(ret)) {
       const ObQueryHint &query_hint = stmt_->get_query_ctx()->get_query_hint();
-      // just for print hint, ExplainType set as invalid type
       PlanText plan_text;
       plan_text.buf_ = buf_;
       plan_text.buf_len_ = buf_len_;
       plan_text.pos_ = *pos_;
       plan_text.is_oneline_ = true;
-      bool ignore_parallel = print_params_.for_dblink_;
-      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_root_, ignore_parallel))) {
+      plan_text.type_ = print_params_.for_dblink_
+                        ? EXPLAIN_DBLINK_STMT
+                        : EXPLAIN_UNINITIALIZED;  // just for print hint, ExplainType set as invalid type
+      if (OB_FAIL(query_hint.print_stmt_hint(plan_text, *stmt_, is_root_))) {
         LOG_WARN("failed to print stmt hint", K(ret));
       } else if (plan_text.pos_ == *pos_) {
         // no hint, roolback buffer!

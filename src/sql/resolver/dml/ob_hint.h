@@ -154,7 +154,7 @@ struct ObGlobalHint {
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
 
   bool has_hint_exclude_concurrent() const;
-  int print_global_hint(PlanText &plan_text, const bool ignore_parallel) const;
+  int print_global_hint(PlanText &plan_text) const;
   int print_monitoring_hints(PlanText &plan_text) const;
 
   ObPDMLOption get_pdml_option() const { return pdml_option_; }
