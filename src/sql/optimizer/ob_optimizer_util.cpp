@@ -6679,15 +6679,11 @@ int ObOptimizerUtil::rename_set_op_pushdown_filter(const ObSelectStmt &parent_st
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> child_select_list;
-  ObSEArray<ObRawExpr *, 4> parent_select_list;
   ObSEArray<ObRawExpr *, 4> parent_set_exprs;
   ObRawExprCopier copier(expr_factory);
   if (OB_FAIL(subquery.get_select_exprs(child_select_list))) {
     LOG_WARN("get child stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(parent_stmt.get_select_exprs(parent_select_list))) {
-    LOG_WARN("get parent stmt select exprs failed", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(parent_select_list,
-                                                        parent_set_exprs))) {
+  } else if (OB_FAIL(parent_stmt.get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get expr in cast", K(ret));
   } else if (OB_FAIL(copier.add_replaced_expr(parent_set_exprs, child_select_list))) {
     LOG_WARN("failed to add exprs", K(ret));

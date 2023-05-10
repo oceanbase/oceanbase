@@ -1804,7 +1804,11 @@ int ObSelectLogPlan::update_set_sharding_info(const ObIArray<ObSelectLogPlan*> &
   ObSEArray<ObRawExpr*, 8> old_exprs;
   ObSEArray<ObRawExpr*, 8> new_exprs;
   ObSEArray<ObRawExpr*, 8> partition_keys;
-  if (OB_FAIL(get_pure_set_exprs(pure_set_exprs))) {
+  const ObSelectStmt *sel_stmt = NULL;
+  if (OB_ISNULL(sel_stmt = get_stmt()) || OB_UNLIKELY(!sel_stmt->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret));
+  } else if (OB_FAIL(sel_stmt->get_pure_set_exprs(pure_set_exprs))) {
     LOG_WARN("failed to get pure set exprs", K(ret));
   } else {
     ObSEArray<ObShardingInfo*, 8> dist_shardings;
@@ -2785,33 +2789,6 @@ int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*
     } else if (OB_FAIL(prune_and_keep_best_plans(all_plans))) {
       LOG_WARN("failed to add all plans", K(ret));
     } else { /*do nothing*/ }
-  }
-  return ret;
-}
-
-int ObSelectLogPlan::get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs)
-{
-  int ret = OB_SUCCESS;
-  const ObSelectStmt *sel_stmt = NULL;
-  ObSEArray<ObRawExpr*, 8> set_exprs;
-  if (OB_ISNULL(sel_stmt = get_stmt()) || OB_UNLIKELY(!sel_stmt->is_select_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
-  } else if (OB_FAIL(sel_stmt->get_select_exprs(set_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < set_exprs.count(); i++) {
-      ObRawExpr *output_expr = NULL;
-      if (OB_ISNULL(set_exprs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_ISNULL(output_expr = ObTransformUtils::get_expr_in_cast(set_exprs.at(i)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get first set op expr", K(ret));
-      } else if (OB_FAIL(pure_set_exprs.push_back(output_expr))) {
-        LOG_WARN("failed to push back output expr", K(ret));
-      } else { /*do nothing*/ }
-    }
   }
   return ret;
 }

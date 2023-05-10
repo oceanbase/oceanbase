@@ -601,6 +601,8 @@ public:
   share::schema::ViewCheckOption get_check_option() const { return check_option_; }
   void set_check_option(share::schema::ViewCheckOption check_option) { check_option_ = check_option; }
   // this function will only be called while resolving with clause.
+  int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
+  static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
 
 private:
   SetOperator set_op_;

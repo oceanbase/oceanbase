@@ -1272,7 +1272,7 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> out_raw_exprs;
-  if (OB_FAIL(op.extra_set_exprs(out_raw_exprs))) {
+  if (OB_FAIL(op.get_pure_set_exprs(out_raw_exprs))) {
     LOG_WARN("failed to get output exprs", K(ret));
   } else if (OB_FAIL(mark_expr_self_produced(out_raw_exprs))) { // set expr
     LOG_WARN("fail to mark exprs self produced", K(ret));
@@ -1443,7 +1443,7 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> out_raw_exprs;
-  if (OB_FAIL(op.extra_set_exprs(out_raw_exprs))) {
+  if (OB_FAIL(op.get_pure_set_exprs(out_raw_exprs))) {
     LOG_WARN("failed to get output exprs", K(ret));
   } else if (OB_FAIL(mark_expr_self_produced(out_raw_exprs))) { // set expr
     LOG_WARN("fail to mark exprs self produced", K(ret));
