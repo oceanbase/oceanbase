@@ -329,6 +329,9 @@ int ObPLParser::parse_stmt_block(ObParseCtx &parse_ctx, ObStmtNodeTree *&multi_s
                K_(parse_ctx.is_dynamic),
                K_(parse_ctx.is_for_preprocess),
                K(ret));
+      if (OB_NOT_SUPPORTED == ret) {
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, parse_ctx.global_errmsg_);
+      }
     }
   } else {
     multi_stmt = parse_ctx.stmt_tree_;
