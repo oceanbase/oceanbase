@@ -913,6 +913,7 @@ int ObTabletDDLUtil::report_ddl_checksum(const share::ObLSID &ls_id,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_INFO("table not exit", K(ret), K(tenant_id), K(table_id));
+    ret = OB_TASK_EXPIRED; // for ignore warning
   } else {
     ObArray<ObColDesc> column_ids;
     ObArray<ObDDLChecksumItem> ddl_checksum_items;
