@@ -264,6 +264,8 @@ int ObDirectLoadOriginTableScanner::init_table_access_param()
 int ObDirectLoadOriginTableScanner::init_table_access_ctx()
 {
   int ret = OB_SUCCESS;
+  const uint64_t table_id = origin_table_->get_meta().table_id_;
+  const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   const int64_t snapshot_version = ObTimeUtil::current_time_ns();
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
@@ -288,6 +290,7 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
     LOG_WARN("fail to init table access context", KR(ret));
   } else {
     table_access_ctx_.io_callback_ = &io_callback_;
+    table_access_ctx_.lob_locator_helper_->update_lob_locator_ctx(table_id, tablet_id.id(), 0);
   }
   return ret;
 }
