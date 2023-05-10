@@ -8719,17 +8719,30 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("json table error node should not be null", K(ret));
             } else {
-              const ParseNode* error_node = on_err_node->children_[2];
-              const ParseNode* empty_node = on_err_node->children_[0];
+              ParseNode* error_node = NULL;
+              ParseNode* empty_node = NULL;
+              ParseNode *empty_default_value = NULL;
+              ParseNode *error_default_value = NULL;
+              if (on_err_node->children_[0]->is_input_quoted_ == 1) { // empty error clause order
+                empty_node = on_err_node->children_[2];
+                empty_default_value = on_err_node->children_[3];
+                error_node = on_err_node->children_[0];
+                error_default_value = on_err_node->children_[1];
+              } else {
+                empty_node = on_err_node->children_[0];
+                empty_default_value = on_err_node->children_[1];
+                error_node = on_err_node->children_[2];
+                error_default_value = on_err_node->children_[3];
+              }
               const ParseNode* mismatch_node = on_err_node->children_[4];
-              if (OB_ISNULL(error_node) || OB_ISNULL(empty_node) || OB_ISNULL(mismatch_node)) {
+              if (OB_ISNULL(error_node) || OB_ISNULL(empty_node)
+                  || OB_ISNULL(mismatch_node)
+                  || OB_ISNULL(empty_default_value)
+                  || OB_ISNULL(error_default_value)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("error node is null", K(ret));
               } else if (error_node->value_ == 2) {
-                if (OB_ISNULL(on_err_node->children_[3])) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("default expr node is null", K(ret));
-                } else if (OB_FAIL(resolve_sql_expr(*(on_err_node->children_[3]), error_expr))) {
+                if (OB_FAIL(resolve_sql_expr(*(error_default_value), error_expr))) {
                   LOG_WARN("resolver sql expr fail", K(ret));
                 } else if (OB_ISNULL(error_expr)) {
                   ret = OB_ERR_UNEXPECTED;
@@ -8762,10 +8775,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
               // empty default value
               if (OB_FAIL(ret)) {
               } else if (empty_node->value_ == 2) {
-                if (OB_ISNULL(on_err_node->children_[1])) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("default empty node is null", K(ret));
-                } else if (OB_FAIL(resolve_sql_expr(*(on_err_node->children_[1]), empty_expr))) {
+                if (OB_FAIL(resolve_sql_expr(*(empty_default_value), empty_expr))) {
                   LOG_WARN("resolver sql expr fail", K(ret));
                 } else {
                   uint64_t extra = empty_expr->get_extra();

@@ -5507,11 +5507,25 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
       }
     }
   }
-  // if use defualt, value should not be null
+  // empty type i, error type i + 3 , distinct empty and error clause
+  ParseNode *empty_type = NULL;
+  ParseNode *empty_default_value = NULL;
+  ParseNode *error_type = NULL;
+  ParseNode *error_default_value = NULL;
+  if (node->children_[4]->is_input_quoted_ == 1) {
+    empty_type = node->children_[6];
+    empty_default_value = node->children_[7];
+    error_type = node->children_[4];
+    error_default_value = node->children_[5];
+  } else {
+    empty_type = node->children_[4];
+    empty_default_value = node->children_[5];
+    error_type = node->children_[6];
+    error_default_value = node->children_[7];
+  }
+  // if use defualt, value should not be null , support
   if (OB_SUCC(ret)) {
-    const ParseNode *empty_type = node->children_[4];
     if (OB_NOT_NULL(empty_type) && empty_type->value_ == 2) {
-      const ParseNode *empty_default_value = node->children_[5];
       if (OB_NOT_NULL(empty_default_value) && empty_default_value->type_ == T_NULL) {
         if (lib::is_oracle_mode()) {
           ret = OB_ERR_DEFAULT_VALUE_NOT_LITERAL;
@@ -5520,9 +5534,7 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
         }
       }
     }
-    const ParseNode *error_type = node->children_[6];
     if (OB_SUCC(ret) && OB_NOT_NULL(error_type) && error_type->value_ == 2) {
-      const ParseNode *error_default_value = node->children_[7];
       if (OB_NOT_NULL(error_default_value) && error_default_value->type_ == T_NULL) {
         if (lib::is_oracle_mode()) {
           ret = OB_ERR_DEFAULT_VALUE_NOT_LITERAL;
@@ -5547,19 +5559,30 @@ int ObRawExprResolverImpl::process_json_value_node(const ParseNode *node, ObRawE
         LOG_WARN("parse mismatch has error", K(ret), K(mismatch_arr.size()));
       } else {
         // [json_text][json_path][returning_type][empty_type][empty_default_value][error_type][error_default_value]
+        ParseNode *cur_node = NULL;
         for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
+          cur_node = node->children_[i];
+          if (i == 4) {
+            cur_node = empty_type;
+          } else if (i == 5) {
+            cur_node = empty_default_value;
+          } else if (i == 6) {
+            cur_node = error_type;
+          } else if (i == 7) {
+            cur_node = error_default_value;
+          }
           if (node->children_[i]->type_ == T_LINK_NODE || node->children_[i]->type_ == T_VALUE_VECTOR) {
           } else {
             ObRawExpr *para_expr = NULL;
-            CK(OB_NOT_NULL(node->children_[i]));
-            OZ(SMART_CALL(recursive_resolve(node->children_[i], para_expr)));
+            CK(OB_NOT_NULL(cur_node));
+            OZ(SMART_CALL(recursive_resolve(cur_node, para_expr)));
             CK(OB_NOT_NULL(para_expr));
             OZ(func_expr->add_param_expr(para_expr));
           }
           if (OB_SUCC(ret) && (i == 5 || i == 7)) {
             ObRawExpr *para_expr = NULL;
-            CK(OB_NOT_NULL(node->children_[i]));
-            OZ(SMART_CALL(recursive_resolve(node->children_[i], para_expr)));
+            CK(OB_NOT_NULL(cur_node));
+            OZ(SMART_CALL(recursive_resolve(cur_node, para_expr)));
             CK(OB_NOT_NULL(para_expr));
             OZ(func_expr->add_param_expr(para_expr));
           }
