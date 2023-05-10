@@ -2951,7 +2951,15 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObDirectReceiveSpec &spec
   UNUSED(op);
   UNUSED(spec);
   UNUSED(in_root_job);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExpr *, 2> dynamic_consts;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec.output_.count(); i++) {
+    if (spec.output_.at(i)->is_dynamic_const_ && !spec.output_.at(i)->is_static_const_) {
+      OZ(dynamic_consts.push_back(spec.output_.at(i)));
+    }
+  }
+  OZ(spec.dynamic_const_exprs_.assign(dynamic_consts));
+  return ret;
 }
 
 int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job)
