@@ -425,6 +425,7 @@ int ObTransService::end_1pc_trans(ObTxDesc &trans_desc,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(trans_desc));
   } else if (is_rollback) {
+    interrupt(trans_desc, ObTxAbortCause::EXPLICIT_ROLLBACK);
     if (OB_FAIL(rollback_tx(trans_desc))) {
       TRANS_LOG(WARN, "rollback 1pc trans fail", KR(ret));
     }

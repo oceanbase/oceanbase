@@ -513,6 +513,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     OZ (txs->sql_stmt_start_hook(session->get_xid(), *session->get_tx_desc(), session->get_sessid(), get_real_session_id(*session)));
     if (OB_SUCC(ret)) {
       start_hook = true;
+      OX (session->get_tx_desc()->clear_interrupt());
     }
   }
   if (OB_SUCC(ret)
