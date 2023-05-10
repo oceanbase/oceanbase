@@ -4306,62 +4306,61 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
       for (r_cur = r_gt; OB_SUCC(ret) && !always_true && NULL != r_cur; r_cur = r_cur->or_next_) {
         ObKeyPart *result = NULL;
         ObKeyPart *rest = NULL;
-        if (l_cur->is_like_key() && r_cur->is_like_key()) {
+        ObKeyPart *new_l_cur = NULL;
+        ObKeyPart *new_r_cur = NULL;
+        if (OB_FAIL(deep_copy_key_part_and_items(l_cur, new_l_cur))) {
+          LOG_WARN("Light copy key part and items failed", K(ret));
+        } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
+          LOG_WARN("Right copy key part and items failed", K(ret));
+        } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur) ||
+                  (OB_UNLIKELY(new_l_cur->is_like_key() && new_r_cur->is_like_key()))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("l_cur and r_cur are both like key", K(ret), K(*l_cur), K(*r_cur));
-        } else if (l_cur->is_like_key()) {
-          result = r_cur;
-        } else if (r_cur->is_like_key()) {
-          result = l_cur;
-        } else if (l_cur->is_in_key()) {
-          result = l_cur;
-        } else if (r_cur->is_in_key()) {
-          result = r_cur;
-        } else if (!l_cur->is_normal_key() || !r_cur->is_normal_key()
-                   || l_cur->is_always_true() || l_cur->is_always_false()
-                   || r_cur->is_always_true() || r_cur->is_always_false()) {
+          LOG_WARN("new_l_cur and r_cur are both like key", K(ret), K(*new_l_cur), K(*new_r_cur));
+        } else if (new_l_cur->is_like_key()) {
+          result = new_r_cur;
+        } else if (new_r_cur->is_like_key()) {
+          result = new_l_cur;
+        } else if (new_l_cur->is_in_key()) {
+          result = new_l_cur;
+        } else if (new_r_cur->is_in_key()) {
+          result = new_r_cur;
+        } else if (OB_UNLIKELY(!new_l_cur->is_normal_key() || !new_r_cur->is_normal_key()
+                   || new_l_cur->is_always_true() || new_l_cur->is_always_false()
+                   || new_r_cur->is_always_true() || new_r_cur->is_always_false())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("l_cur and r_cur are not always true or false.", K(*l_cur), K(*r_cur));
+          LOG_WARN("new_l_cur and r_cur are not always true or false.", K(*new_l_cur), K(*new_r_cur));
+        } else if (OB_FAIL(do_key_part_node_and(new_l_cur, new_r_cur, result))) {  // do AND of each key part node only
+          LOG_WARN("Do key part node intersection failed", K(ret));
+        } else if(OB_ISNULL(result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null.", K(ret));
+        } else if (result->is_always_true()) {
+          always_true = true;
+          res_gt = result;
+        } else if (result->is_always_false()) {
+          // ignore
+          find_false = result;
         } else {
-          ObKeyPart *new_l_cur = NULL;
-          ObKeyPart *new_r_cur = NULL;
-          if (OB_FAIL(deep_copy_key_part_and_items(l_cur, new_l_cur))) {
-            LOG_WARN("Light copy key part and items failed", K(ret));
-          } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
-            LOG_WARN("Right copy key part and items failed", K(ret));
-          } else if (OB_FAIL(do_key_part_node_and(new_l_cur, new_r_cur, result))) {  // do AND of each key part node only
-            LOG_WARN("Do key part node intersection failed", K(ret));
-          } else if(NULL == result) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("result is null.", K(ret));
-          } else if (result->is_always_true()) {
-            always_true = true;
-            res_gt = result;
-          } else if (result->is_always_false()) {
-            // ignore
+          // set other value of row
+          ObRowBorderType s_border = OB_FROM_NONE;
+          ObRowBorderType e_border = OB_FROM_NONE;
+          bool is_always_false = false;
+          if (OB_FAIL(intersect_border_from(l_cur, r_cur,
+              s_border, e_border, is_always_false))) {
+            LOG_WARN("Find row border failed", K(ret));
+          } else if (is_always_false) {
+            result->normal_keypart_->always_false_ = true;
+            result->normal_keypart_->always_true_ = true;
+            result->normal_keypart_->start_.set_max_value();
+            result->normal_keypart_->end_.set_min_value();
             find_false = result;
-          } else {
-            // set other value of row
-            ObRowBorderType s_border = OB_FROM_NONE;
-            ObRowBorderType e_border = OB_FROM_NONE;
-            bool is_always_false = false;
-            if (OB_FAIL(intersect_border_from(l_cur, r_cur,
-                s_border, e_border, is_always_false))) {
-              LOG_WARN("Find row border failed", K(ret));
-            } else if (is_always_false) {
-              result->normal_keypart_->always_false_ = true;
-              result->normal_keypart_->always_true_ = true;
-              result->normal_keypart_->start_.set_max_value();
-              result->normal_keypart_->end_.set_min_value();
-              find_false = result;
-            } else if (OB_FAIL(set_partial_row_border(l_gt_next, r_gt_next,
-                s_border, e_border, rest))) {
-              LOG_WARN("Set row border failed", K(ret));
-            } else if (OB_ISNULL(rest)) {
-              //如果做向量条件融合，导致条件被丢弃掉，说明抽取有放大，需要清除掉精确抽取的filter标记，不能去除对应的filter
-              if (OB_FAIL(remove_precise_range_expr(result->pos_.offset_ + 1))) {
-                LOG_WARN("remove precise range expr failed", K(ret));
-              }
+          } else if (OB_FAIL(set_partial_row_border(l_gt_next, r_gt_next,
+              s_border, e_border, rest))) {
+            LOG_WARN("Set row border failed", K(ret));
+          } else if (OB_ISNULL(rest)) {
+            //如果做向量条件融合，导致条件被丢弃掉，说明抽取有放大，需要清除掉精确抽取的filter标记，不能去除对应的filter
+            if (OB_FAIL(remove_precise_range_expr(result->pos_.offset_ + 1))) {
+              LOG_WARN("remove precise range expr failed", K(ret));
             }
           }
         }
