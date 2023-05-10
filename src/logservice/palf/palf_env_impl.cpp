@@ -479,7 +479,7 @@ int PalfEnvImpl::create_directory(const char *base_dir)
   char tmp_base_dir[MAX_PATH_SIZE] = {'\0'};
   char log_dir[MAX_PATH_SIZE] = {'\0'};
   char meta_dir[MAX_PATH_SIZE] = {'\0'};
-  if (0 > (pret = snprintf(tmp_base_dir, MAX_PATH_SIZE, "%s.tmp", base_dir))) {
+  if (0 > (pret = snprintf(tmp_base_dir, MAX_PATH_SIZE, "%s%s", base_dir, TMP_SUFFIX))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprinf failed", K(pret), K(base_dir));
   } else if (0 > (pret = snprintf(log_dir, MAX_PATH_SIZE, "%s/log", tmp_base_dir))) {
@@ -506,8 +506,8 @@ int PalfEnvImpl::create_directory(const char *base_dir)
     PALF_LOG(INFO, "prepare_directory_for_creating_ls success", K(ret), K(base_dir));
   }
   if (OB_FAIL(ret)) {
-    FileDirectoryUtils::delete_directory_rec(tmp_base_dir);
-    FileDirectoryUtils::delete_directory_rec(base_dir);
+    remove_directory_rec(tmp_base_dir, log_block_pool_);
+    remove_directory_rec(base_dir, log_block_pool_);
   }
   return ret;
 }
@@ -522,7 +522,7 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
   int ret = OB_SUCCESS;
   int pret = 0;
   char tmp_log_dir[MAX_PATH_SIZE] = {'\0'};
-  if (0 > (pret = snprintf(tmp_log_dir, MAX_PATH_SIZE, "%s.tmp", log_dir))) {
+  if (0 > (pret = snprintf(tmp_log_dir, MAX_PATH_SIZE, "%s%s", log_dir, TMP_SUFFIX))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprintf failed", K(ret), K(pret), K(log_dir), K(tmp_log_dir));
   } else if (-1 == ::rename(log_dir, tmp_log_dir)) {
@@ -1033,19 +1033,26 @@ int PalfEnvImpl::wait_until_reference_count_to_zero_(const int64_t palf_id)
   int ret = OB_SUCCESS;
   int pret = 0;
   char base_dir[MAX_PATH_SIZE] = {'\0'};
+  char tmp_base_dir[MAX_PATH_SIZE] = {'\0'};
   if (false == is_valid_palf_id(palf_id)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), K(palf_id));
   } else if (0 > (pret = snprintf(base_dir, MAX_PATH_SIZE, "%s/%ld", log_dir_, palf_id))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "snprinf failed", K(ret), K(pret), K(palf_id));
+  } else if (0 > (pret = snprintf(tmp_base_dir, MAX_PATH_SIZE, "%s/%ld%s", log_dir_, palf_id, TMP_SUFFIX))) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "snprinf failed", K(ret), K(pret), K(palf_id));
   } else {
-    bool result = true;
-    while (OB_SUCC(FileDirectoryUtils::is_exists(base_dir, result))) {
-      if (false == result) {
+    bool normal_dir_exist = true;
+    bool tmp_dir_exist = true;
+    while (OB_SUCC(FileDirectoryUtils::is_exists(base_dir, normal_dir_exist))
+           && OB_SUCC(FileDirectoryUtils::is_exists(tmp_base_dir, tmp_dir_exist))) {
+      if (!normal_dir_exist && !tmp_dir_exist) {
         break;
       }
-      PALF_LOG(INFO, "wait_until_reference_count_to_zero_ failed, may be reference count has leaked", K(palf_id));
+      PALF_LOG(INFO, "wait_until_reference_count_to_zero_ failed, may be reference count has leaked", K(palf_id),
+          K(normal_dir_exist), K(tmp_dir_exist), K(base_dir), K(tmp_base_dir));
       ob_usleep(1000);
     }
   }
