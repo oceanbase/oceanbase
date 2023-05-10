@@ -1324,3 +1324,23 @@ int ObArchivePersistHelper::do_parse_dest_pair_(sqlclient::ObMySQLResult &result
 
   return ret;
 }
+
+
+int ObArchivePersistHelper::clean_round_comment(common::ObISQLClient &proxy, const int64_t dest_no) const
+{
+  int ret = OB_SUCCESS;
+
+  ObInnerTableOperator round_table_operator;
+  ObTenantArchiveRoundAttr::Key key = {tenant_id_, dest_no};
+  int64_t affected_rows = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(round_table_operator.init(OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME, *this))) {
+    LOG_WARN("failed to init round progress table", K(ret));
+  } else if (OB_FAIL(round_table_operator.update_string_column(proxy, key, "comment"/* column name */, "", affected_rows))) {
+    LOG_WARN("failed to clean round comment", K(ret), K(key));
+  }
+
+  return ret;
+}

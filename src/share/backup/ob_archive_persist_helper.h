@@ -112,6 +112,7 @@ public:
   // dest round operation
   int get_round(common::ObISQLClient &proxy, const int64_t dest_no,
       const bool need_lock, ObTenantArchiveRoundAttr &round) const;
+  int clean_round_comment(common::ObISQLClient &proxy, const int64_t dest_no) const;
   int get_round_by_dest_id(common::ObISQLClient &proxy, const int64_t dest_id,
       const bool need_lock, ObTenantArchiveRoundAttr &round) const;
   int del_round(common::ObISQLClient &proxy, const int64_t dest_no) const;
