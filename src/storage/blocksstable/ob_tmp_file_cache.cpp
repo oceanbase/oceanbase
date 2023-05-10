@@ -1140,6 +1140,10 @@ int ObTmpTenantMemBlockManager::wash_block(ObTmpMacroBlock *wash_block, bool &is
             STORAGE_LOG(INFO, "succeed to wash a block", K(*wash_block));
           }
         }
+
+        if (OB_FAIL(ret)) {
+          mb_handle.reset();
+        }
       }
     } else {
       STORAGE_LOG(INFO, "this block has some the unclosed extent", K(*wash_block));
