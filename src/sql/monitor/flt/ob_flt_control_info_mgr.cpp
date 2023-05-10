@@ -48,8 +48,8 @@ bool ObFLTResetSessOp::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessionInf
       } else {
         sess_info->set_send_control_info(false);
         sess_info->get_control_info().reset();
-        (void)sess_info->unlock_thread_data();
       }
+      (void)sess_info->unlock_thread_data();
       (void)sess_info->unlock_query();
     }
   }
