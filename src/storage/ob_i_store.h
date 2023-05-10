@@ -319,6 +319,9 @@ public:
       const blocksstable::ObDatumRow &row,
       const int64_t rowkey_cnt,
       bool is_memtable_iter_row_check);
+  static int check_lock_row_valid(
+      const blocksstable::ObDatumRow &row,
+      const ObTableReadInfo &read_info);
 };
 
 #define STORE_ITER_ROW_IN_GAP 1

@@ -1155,8 +1155,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           int64_t rowkey_read_cnt = MIN(read_info_->get_seq_read_column_count(), read_info_->get_rowkey_count());
           if (OB_FAIL(ObLockRowChecker::check_lock_row_valid(
                       *row,
-                      rowkey_read_cnt,
-                      false/*is_memtable_iter_row_check*/))) {
+                      *read_info_))) {
             LOG_WARN("micro block reader fail to get block_row", K(ret), K(current_), KPC(row), KPC_(read_info));
           } else if (row->is_uncommitted_row()) {
             version_fit = false;
@@ -1165,6 +1164,7 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
         }
         if (OB_SUCC(ret) && version_fit) {
           if (0 != context_->trans_version_range_.base_version_ && is_determined_state) {
+            // major read rows
             LOG_DEBUG("success to set trans_version on uncommitted row", K(ret), K(trans_version));
             row->storage_datums_[read_info_->get_schema_rowkey_count()].set_int(-trans_version);
           }
