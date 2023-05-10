@@ -249,8 +249,13 @@ public:
 private:
   void default_init_();
   int init_memtable_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  bool is_in_2pc_() const;
+  // Please use it carefully, because it only refer to the downstream_state_
+  bool is_in_durable_2pc_() const;
   bool is_logging_() const;
+
+  // It is decided based on both durable 2pc state and on the fly logging.
+  // So it can be used safely at any time.
+  bool is_in_2pc_() const;
 
   // force abort but not submit abort log
   bool need_force_abort_() const;

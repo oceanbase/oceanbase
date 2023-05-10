@@ -1000,8 +1000,14 @@ int ObPartTransCtx::replay_start_working_log(const SCN start_working_ts)
   return ret;
 }
 
-// The txn is in the state between prepare and clear
 bool ObPartTransCtx::is_in_2pc_() const
+{
+  // The order is important if you use it without lock.
+  return is_2pc_logging_() || is_in_durable_2pc_();
+}
+
+// The txn is in the durable state between prepare and clear
+bool ObPartTransCtx::is_in_durable_2pc_() const
 {
   ObTxState state = exec_info_.state_;
   return state >= ObTxState::PREPARE;
@@ -2119,7 +2125,8 @@ int ObPartTransCtx::try_submit_next_log_(const bool for_freeze)
 {
   int ret = OB_SUCCESS;
   ObTxLogType log_type = ObTxLogType::UNKNOWN;
-  if (ObPartTransAction::COMMIT == part_trans_action_ && !is_2pc_logging_() && !is_in_2pc_()
+  if (ObPartTransAction::COMMIT == part_trans_action_
+      && !is_in_2pc_()
       && !need_force_abort_()) {
     if (is_follower_()) {
       ret = OB_NOT_MASTER;
