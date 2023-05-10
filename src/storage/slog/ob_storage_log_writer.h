@@ -47,7 +47,7 @@ public:
   virtual int start() override;
   virtual void wait() override;
   void destroy();
-  common::ObLogCursor get_cur_cursor() const { return cursor_; }
+  common::ObLogCursor get_cur_cursor();
 
   int delete_log_file(const int64_t file_id);
   int get_using_disk_space(int64_t &using_space) const;
@@ -136,7 +136,7 @@ private:
   // because it won't count the offset on the write buffer
   int64_t write_offset_;
   common::ObLogCursor cursor_;
-
+  common::ObSpinLock cursor_lock_;
   common::ObLogRetryWritePolicy retry_write_policy_;
   common::ObLogWritePolicy log_write_policy_;
 
