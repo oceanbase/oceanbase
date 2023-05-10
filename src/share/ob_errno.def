@@ -1681,6 +1681,7 @@ DEFINE_ORACLE_ERROR(OB_TRANS_FREE_ROUTE_NOT_SUPPORTED, -6279, 6279, "HY000", "Qu
 
 DEFINE_ERROR(OB_TRANS_LIVE_TOO_MUCH_TIME, -6280, -1, "HY000", "Transaction cost too much without commit or rollback");
 DEFINE_ERROR(OB_TRANS_COMMIT_TOO_MUCH_TIME, -6281, -1, "HY000", "Transaction commit cost too much");
+DEFINE_ORACLE_ERROR(OB_TRANS_TOO_MANY_PARTICIPANTS, -6282, 6002, "40000", "too many transaction participants", 24761, "transaction rolled back: too many transaction participants");
 
 // for clog
 DEFINE_ERROR(OB_LOG_ID_NOT_FOUND, -6301, -1, "HY000", "log id not found");

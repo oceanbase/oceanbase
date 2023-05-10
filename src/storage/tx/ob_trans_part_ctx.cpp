@@ -6132,9 +6132,13 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
   } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
                                             + trans_id_.hash() % USEC_PER_SEC))) {
     TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
-  } else if (ObTxState::REDO_COMPLETE != upstream_state_) {
+  } else if (!is_rollback && ObTxState::REDO_COMPLETE > get_downstream_state()) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "not in prepare state", K(ret), KPC(this));
-    // TODO, check state
+  } else if (!is_rollback && ObTxState::REDO_COMPLETE < get_upstream_state()) {
+    // do nothing
+  } else if (!is_rollback && ObTxState::REDO_COMPLETE == get_upstream_state() && ObTxState::REDO_COMPLETE == get_downstream_state() && !all_downstream_collected_()) {
+    // do nothing
   } else {
     tmp_scheduler_= tmp_scheduler;
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::VERSION_PREPARING);

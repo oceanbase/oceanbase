@@ -1310,6 +1310,7 @@ constexpr int OB_TRANS_IDLE_TIMEOUT = -6278;
 constexpr int OB_TRANS_FREE_ROUTE_NOT_SUPPORTED = -6279;
 constexpr int OB_TRANS_LIVE_TOO_MUCH_TIME = -6280;
 constexpr int OB_TRANS_COMMIT_TOO_MUCH_TIME = -6281;
+constexpr int OB_TRANS_TOO_MANY_PARTICIPANTS = -6282;
 constexpr int OB_LOG_ID_NOT_FOUND = -6301;
 constexpr int OB_LSR_THREAD_STOPPED = -6302;
 constexpr int OB_NO_LOG = -6303;
@@ -3243,6 +3244,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__USER_ERROR_MSG "Query is not supported to be executed on txn temporary node"
 #define OB_TRANS_LIVE_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction cost too much without commit or rollback"
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__USER_ERROR_MSG "Transaction commit cost too much"
+#define OB_TRANS_TOO_MANY_PARTICIPANTS__USER_ERROR_MSG "too many transaction participants"
 #define OB_LOG_ID_NOT_FOUND__USER_ERROR_MSG "log id not found"
 #define OB_LSR_THREAD_STOPPED__USER_ERROR_MSG "log scan runnable thread stop"
 #define OB_NO_LOG__USER_ERROR_MSG "no log ever scanned"
@@ -5285,6 +5287,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRANS_FREE_ROUTE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-06279: Query is not supported to be executed on txn temporary node"
 #define OB_TRANS_LIVE_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6280, Transaction cost too much without commit or rollback"
 #define OB_TRANS_COMMIT_TOO_MUCH_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6281, Transaction commit cost too much"
+#define OB_TRANS_TOO_MANY_PARTICIPANTS__ORA_USER_ERROR_MSG "ORA-24761: transaction rolled back: too many transaction participants"
 #define OB_LOG_ID_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6301, log id not found"
 #define OB_LSR_THREAD_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6302, log scan runnable thread stop"
 #define OB_NO_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6303, no log ever scanned"
@@ -5793,7 +5796,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2038];
+extern int g_all_ob_errnos[2039];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

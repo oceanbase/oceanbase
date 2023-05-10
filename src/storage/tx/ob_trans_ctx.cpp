@@ -310,7 +310,7 @@ int ObTransCtx::set_app_trace_info_(const ObString &app_trace_info)
   const int64_t len = app_trace_info.length();
 
   if (OB_UNLIKELY(len < 0) || OB_UNLIKELY(len > OB_MAX_TRACE_ID_BUFFER_SIZE)) {
-    TRANS_LOG(WARN, "invalid argument", K(app_trace_info), "context", *this);
+    TRANS_LOG(WARN, "invalid argument", "context", *this);
     ret = OB_INVALID_ARGUMENT;
   } else if (0 == trace_info_.get_app_trace_info().length()) {
     // set for the first time
