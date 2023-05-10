@@ -329,10 +329,12 @@ int ObDCLResolver::mask_password_for_users(ObIAllocator *allocator,
   return ret;
 }
 
-int ObDCLResolver::mask_password_for_passwd_node(ObIAllocator *allocator,
+int ObDCLResolver::mask_password_for_passwd_node(
+    ObIAllocator *allocator,
     const common::ObString &src,
     const ParseNode *passwd_node,
-    common::ObString &masked_sql)
+    common::ObString &masked_sql,
+    bool skip_enclosed_char)
 {
   int ret = OB_SUCCESS;
   const ObString::obstr_size_t src_len = src.length();
@@ -351,9 +353,14 @@ int ObDCLResolver::mask_password_for_passwd_node(ObIAllocator *allocator,
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("last column overflow", K(src_len), K(passwd_node->stmt_loc_.last_column_), K(ret));
   } else {
-    uint64_t pwd_len = passwd_node->stmt_loc_.last_column_ -
-                        passwd_node->stmt_loc_.first_column_ + 1;
-    MEMSET(tmp_sql.ptr() + passwd_node->stmt_loc_.first_column_, password_mask_, pwd_len);
+    int64_t start_pos = passwd_node->stmt_loc_.first_column_;
+    int64_t end_pos = passwd_node->stmt_loc_.last_column_ + 1;
+    if (skip_enclosed_char && end_pos - start_pos >= 2) {
+      start_pos += 1;
+      end_pos -= 1;
+    }
+    uint64_t pwd_len = end_pos - start_pos;
+    MEMSET(tmp_sql.ptr() + start_pos, password_mask_, pwd_len);
   }
   if (OB_SUCC(ret)) {
     masked_sql = tmp_sql;

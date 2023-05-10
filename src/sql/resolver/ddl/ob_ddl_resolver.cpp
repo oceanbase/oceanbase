@@ -39,6 +39,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/resolver/dcl/ob_dcl_resolver.h"
 
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
@@ -1946,12 +1947,12 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
       }
       case T_EXTERNAL_FILE_LOCATION: {
         ParseNode *string_node = NULL;
-        ObTableSchema *schema = NULL;
         if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
-          ret = OB_ERR_UNEXPECTED; //TODO-EXTERNAL-TABLE add new error code
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid file format option", K(ret));
         } else {
-          ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+          ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+          ObCreateTableArg &arg = create_table_stmt->get_create_table_arg();
           if (!arg.schema_.is_external_table()) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "location option");
@@ -1994,6 +1995,21 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             OZ (storage_info.get_storage_info_str(storage_info_buf, sizeof(storage_info_buf), true));
             OZ (arg.schema_.set_external_file_location(tmp_location.string()));
             OZ (arg.schema_.set_external_file_location_access_info(storage_info_buf));
+          }
+
+          if (OB_SUCC(ret)) {
+            if (OB_ISNULL(params_.session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+            } else {
+              ObString cur_sql = params_.session_info_->get_current_query_string();
+              ObString masked_sql;
+              if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(
+                            params_.allocator_, cur_sql, string_node, masked_sql, true))) {
+                LOG_WARN("fail to gen masked sql", K(ret));
+              } else {
+                create_table_stmt->set_masked_sql(masked_sql);
+              }
+            }
           }
         }
         break;

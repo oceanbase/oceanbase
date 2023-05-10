@@ -2644,6 +2644,14 @@ int ObSql::generate_stmt(ParseResult &parse_result,
             context.is_sensitive_ = true;
             break;
           }
+          case T_CREATE_TABLE: {
+            ParseNode *special_type_node = parse_result.result_tree_->children_[0]->children_[0];
+            if (OB_NOT_NULL(special_type_node) && T_EXTERNAL == special_type_node->type_) {
+              //external table location may contain sensitive access info
+              context.is_sensitive_ = true;
+            }
+            break;
+          }
           default: {
             break;
           }

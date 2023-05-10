@@ -200,6 +200,14 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       alter_table_stmt->set_tenant_id(table_schema_->get_tenant_id());
       alter_table_stmt->set_table_id(table_schema_->get_table_id());
+      if (table_schema_->is_external_table()) {
+        ObTableSchema &alter_schema = alter_table_stmt->get_alter_table_schema();
+        alter_schema.set_table_type(table_schema_->get_table_type());
+        OZ (alter_schema.set_external_file_format(table_schema_->get_external_file_format()));
+        OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
+        OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
+        OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+      }
     }
     //resolve action list
     if (OB_SUCCESS == ret && NULL != parse_tree.children_[ACTION_LIST]){

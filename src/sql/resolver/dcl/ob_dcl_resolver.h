@@ -28,6 +28,11 @@ public:
   virtual ~ObDCLResolver()
   {
   }
+  static int mask_password_for_passwd_node(ObIAllocator *allocator,
+                                           const common::ObString &src,
+                                           const ParseNode *passwd_node,
+                                           common::ObString &masked_sql,
+                                           bool skip_enclosed_char = false);
 protected:
   int check_and_convert_name(common::ObString &db, common::ObString &table);
   int check_password_strength(common::ObString &password, common::ObString &user_name);
@@ -57,10 +62,6 @@ protected:
                                      const ParseNode *users,
                                      int64_t pwd_idx,
                                      common::ObString &masked_sql);
-  static int mask_password_for_passwd_node(ObIAllocator *allocator,
-                                           const common::ObString &src,
-                                           const ParseNode *passwd_node,
-                                           common::ObString &masked_sql);
   enum ObPasswordPolicy {LOW = 0, MEDIUM};
   static const char password_mask_ = '*';
 private:

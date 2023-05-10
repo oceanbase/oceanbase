@@ -29,6 +29,7 @@ public:
   ObCreateTableStmt();
   virtual ~ObCreateTableStmt();
 
+  int get_first_stmt(ObString &first_stmt) override;
   void set_if_not_exists(const bool if_not_exists);
   uint64_t get_table_id() const;
   const common::ObString &get_table_name() const;
@@ -75,6 +76,9 @@ public:
   ObSelectStmt *get_view_define() { return view_define_; }
   void set_sequence_ddl_arg(const obrpc::ObSequenceDDLArg sequence_ddl_arg);
   const obrpc::ObSequenceDDLArg &get_sequence_ddl_arg() const;
+  void set_masked_sql(const common::ObString &masked_sql) { masked_sql_ = masked_sql; }
+  common::ObString get_masked_sql() const { return masked_sql_; }
+  ObTableType get_table_type() const { return create_table_arg_.schema_.get_table_type(); }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(create_table_arg), K_(index_arg_list));
 private:
   int set_table_id(ObStmtResolver &ctx, const uint64_t table_id);
@@ -83,6 +87,7 @@ private:
   bool is_view_stmt_;
   share::schema::ObStmtNeedPrivs::NeedPrivs view_need_privs_;
   common::ObSArray<obrpc::ObCreateIndexArg> index_arg_list_;
+  common::ObString masked_sql_;
   //common::ObSEArray<ObRawExpr *, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> partition_fun_expr_; // for range fun expr
   //common::ObSEArray<ObRawExpr *, OB_DEFAULT_ARRAY_SIZE, common::ModulePageAllocator, true> range_values_exprs_; //range partition expr
   // for future use: create table xxx as select ......
