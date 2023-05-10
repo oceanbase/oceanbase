@@ -102,7 +102,7 @@ void ObFreezeInfoDetector::run3()
 
       if (OB_FAIL(obtain_proposal_id_from_ls(is_primary_service_, proposal_id, role))) {
         LOG_WARN("fail to obtain proposal_id from ls", KR(ret));
-      } else if (ObRole::FOLLOWER == role) {
+      } else if (ObRole::LEADER != role) {
         LOG_INFO("follower should not run freeze_info_detector", K_(tenant_id), K(role),
                  K_(is_primary_service));
       } else if (OB_FAIL(can_start_work(can_work))) {
