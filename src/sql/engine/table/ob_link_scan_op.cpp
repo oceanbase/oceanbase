@@ -419,7 +419,7 @@ bool ObLinkScanOp::need_tx(const ObSQLSessionInfo *my_session) const
   if (MY_SPEC.has_for_update_) {
     // case 1, if select for update, tm_rm_start is required to be called.
     ret_bool = true;
-  } else if (my_session->is_in_transaction()) {
+  } else if (false && my_session->is_in_transaction()) {
     // case 2, if select in transaction, tm_rm_start is required to be called.
     ret_bool = true;
   }
