@@ -706,7 +706,10 @@ int ObLSStatusOperator::set_member_list_with_hex_str_(const common::ObString &st
   } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
-  } else if (deserialize_pos < deserialize_size) {
+  } else if (deserialize_pos < deserialize_size - 1) {
+    //When deserialize_buf applies for memory, it applies for one more storage '\0',
+    //so after member_list is deserialized,
+    //pos can only go to the position of deserialize_size - 1, and will not point to '\0'
     // have to parse flag
     ObMemberListFlag flag;
     if (OB_FAIL(flag.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
