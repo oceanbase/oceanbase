@@ -370,8 +370,14 @@ public:
   static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObObjectID> &target_part_ids);
 
+  static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
+                                      common::ObIArray<int64_t> &target_part_ids);
+
   static int update_stat_cache(const uint64_t rpc_tenant_id,
                                const ObTableStatParam &param);
+
+  static int update_stat_cache(const uint64_t tenant_id,
+                               const obrpc::ObUpdateStatCacheArg &stat_arg);
 
   static int parse_set_table_stat_options(ObExecContext &ctx,
                                           const ObObjParam &stattab,

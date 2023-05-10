@@ -1465,6 +1465,7 @@ int ObDDLRedefinitionTask::sync_stats_info()
     int64_t timeout = 0;
     const int64_t start_time = ObTimeUtility::current_time();
     bool need_sync_history = check_need_sync_stats_history();
+    ObSEArray<uint64_t, 8> new_tab_column_ids;
 
     if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tanant schema guard failed", K(ret), K(tenant_id_));
@@ -1495,8 +1496,11 @@ int ObDDLRedefinitionTask::sync_stats_info()
                                                     *data_table_schema,
                                                     *new_table_schema,
                                                     schema_guard,
+                                                    new_tab_column_ids,
                                                     need_sync_history))) {
       LOG_WARN("fail to sync column level stats", K(ret));
+    } else if (OB_FAIL(update_stat_cache(tenant_id_, *new_table_schema, new_tab_column_ids))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     }
 
     if (trans.is_started()) {
@@ -1614,6 +1618,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
                                                         const ObTableSchema &data_table_schema,
                                                         const ObTableSchema &new_table_schema,
                                                         ObSchemaGetterGuard &schema_guard,
+                                                        ObIArray<uint64_t> &new_tab_column_ids,
                                                         const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
@@ -1644,6 +1649,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
       } else if (OB_ISNULL(new_col = new_table_schema.get_column_schema(new_col_name))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new column schema should not be null", K(ret), K(new_col_name), K(new_table_schema));
+      } else if (OB_FAIL(new_tab_column_ids.push_back(new_col->get_column_id()))) {
+        LOG_WARN("failed to push back", K(ret));
       // if this column is changed in a offline rule, meaning the data will change in this ddl, therefore
       // the column stat will be invalidated.
       } else if (OB_FAIL(data_table_schema.check_alter_column_is_offline(col,
@@ -2328,5 +2335,26 @@ int ObDDLRedefinitionTask::reap_old_replica_build_task(bool &need_exec_new_inner
       }
     }
   }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::update_stat_cache(const uint64_t tenant_id,
+                                             const ObTableSchema &table_schema,
+                                             const ObIArray<uint64_t> &new_tab_column_ids)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObUpdateStatCacheArg stat_arg;
+  stat_arg.tenant_id_ = tenant_id;
+  stat_arg.table_id_ = table_schema.get_table_id();
+  int64_t global_part_id = table_schema.is_partitioned_table() ? -1 : target_object_id_;
+  if (OB_FAIL(stat_arg.partition_ids_.push_back(global_part_id))) {
+    LOG_WARN("failed to push back partition id", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::get_part_ids_from_schema(&table_schema, stat_arg.partition_ids_))) {
+    LOG_WARN("fail to get part ids from schema", K(ret));
+  } else if (OB_FAIL(append(stat_arg.column_ids_, new_tab_column_ids))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(tenant_id, stat_arg))) {
+    LOG_WARN("failed to update stat cache", K(ret));
+  } else {/*do nothing*/}
   return ret;
 }

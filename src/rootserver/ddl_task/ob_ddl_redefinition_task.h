@@ -174,6 +174,7 @@ protected:
                                    const ObTableSchema &data_table_schema,
                                    const ObTableSchema &new_table_schema,
                                    ObSchemaGetterGuard &schema_guard,
+                                   ObIArray<uint64_t> &new_tab_column_ids,
                                    const bool need_sync_history = true);
   int sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                              const ObTableSchema &data_table_schema,
@@ -211,6 +212,9 @@ protected:
   int get_child_task_ids(char *buf, int64_t len);
   int get_estimated_timeout(const share::schema::ObTableSchema *dst_table_schema, int64_t &estimated_timeout);
   int get_orig_all_index_tablet_count(ObSchemaGetterGuard &schema_guard, int64_t &all_tablet_count);
+  int update_stat_cache(const uint64_t tenant_id,
+                        const ObTableSchema &table_schema,
+                        const ObIArray<uint64_t> &new_tab_column_ids);
 protected:
   struct DependTaskStatus final
   {

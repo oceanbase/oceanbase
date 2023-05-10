@@ -2928,42 +2928,53 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_TRACE("update stat cache", K(stat_arg));
-    bool evict_plan_failed = false;
-    int64_t timeout = -1;
-    ObSEArray<ObServerLocality, 4> all_server_arr;
-    bool has_read_only_zone = false; // UNUSED;
-    if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.locality_manager_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("rpc_proxy or session is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.locality_manager_));
-    } else if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
-                                                                         has_read_only_zone))) {
-      LOG_WARN("fail to get server locality", K(ret));
+    if (OB_FAIL(update_stat_cache(rpc_tenant_id, stat_arg))) {
+      LOG_WARN("failed to update stat cache", K(ret));
     } else {
-      ObSEArray<ObServerLocality, 4> failed_server_arr;
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
-        if (!all_server_arr.at(i).is_active()
-            || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
-            || 0 == all_server_arr.at(i).get_start_service_time()
-            || 0 != all_server_arr.at(i).get_server_stop_time()) {
-        //server may not serving
-        } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
-          ret = OB_TIMEOUT;
-          LOG_WARN("query timeout is reached", K(ret), K(timeout));
-        } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
-                                                  .timeout(timeout)
-                                                  .by(rpc_tenant_id)
-                                                  .update_local_stat_cache(stat_arg))) {
-          LOG_WARN("failed to update local stat cache caused by unknow error",
-                                           K(ret), K(all_server_arr.at(i).get_addr()), K(stat_arg));
-          //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later
-          if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
-            LOG_WARN("failed to push back", K(ret));
-          }
+      LOG_TRACE("succeed to update stat cache", K(param), K(stat_arg));
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStats::update_stat_cache(const uint64_t tenant_id,
+                                   const obrpc::ObUpdateStatCacheArg &stat_arg)
+{
+  LOG_TRACE("begin to update stat cache", K(stat_arg));
+  int ret = OB_SUCCESS;
+  int64_t timeout = -1;
+  ObSEArray<ObServerLocality, 4> all_server_arr;
+  bool has_read_only_zone = false; // UNUSED;
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.locality_manager_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rpc_proxy or session is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.locality_manager_));
+  } else if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
+                                                                        has_read_only_zone))) {
+    LOG_WARN("fail to get server locality", K(ret));
+  } else {
+    ObSEArray<ObServerLocality, 4> failed_server_arr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_server_arr.count(); i++) {
+      if (!all_server_arr.at(i).is_active()
+          || ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
+          || 0 == all_server_arr.at(i).get_start_service_time()
+          || 0 != all_server_arr.at(i).get_server_stop_time()) {
+      //server may not serving
+      } else if (0 >= (timeout = THIS_WORKER.get_timeout_remain())) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("query timeout is reached", K(ret), K(timeout));
+      } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
+                                                .timeout(timeout)
+                                                .by(tenant_id)
+                                                .update_local_stat_cache(stat_arg))) {
+        LOG_WARN("failed to update local stat cache caused by unknow error",
+                                          K(ret), K(all_server_arr.at(i).get_addr()), K(stat_arg));
+        //ignore flush cache failed, TODO @jiangxiu.wt can aduit it and flush cache manually later
+        if (OB_FAIL(failed_server_arr.push_back(all_server_arr.at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
         }
       }
-      LOG_TRACE("update stat cache", K(param), K(stat_arg), K(failed_server_arr), K(all_server_arr));
     }
+    LOG_TRACE("update stat cache", K(stat_arg), K(failed_server_arr), K(all_server_arr));
   }
   return ret;
 }
@@ -4418,35 +4429,43 @@ int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
                                           common::ObIArray<ObObjectID> &target_part_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexptect null pointer", K(ret));
-  } else {
-    if (!table_schema->is_partitioned_table()) {
-      if (OB_FAIL(target_part_ids.push_back(table_schema->get_object_id()))) {
-        LOG_WARN("fail to push back part id", K(ret));
-      }
-    } else {
-      ObSEArray<PartInfo, 4> dummy_part_infos;
-      ObSEArray<PartInfo, 4> dummy_subpart_infos;
-      ObSEArray<int64_t, 4> part_ids;
-      ObSEArray<int64_t, 4> subpart_ids;
-      if (OB_FAIL(get_table_part_infos(table_schema,
-                                       dummy_part_infos,
-                                       dummy_subpart_infos,
-                                       part_ids,
-                                       subpart_ids))) {
-        LOG_WARN("fail to get part infos", K(ret));
-      } else if (OB_FAIL(append(target_part_ids, part_ids))) {
-        LOG_WARN("fail to append target part id", K(ret));
-      } else if (OB_FAIL(append(target_part_ids, subpart_ids))) {
-        LOG_WARN("fail to append target part id", K(ret));
-      }
-    }
+  ObSEArray<int64_t, 4> partition_ids;
+  if (OB_FAIL(get_part_ids_from_schema(table_schema, partition_ids))) {
+    LOG_WARN("fail to get part infos", K(ret));
+  } else if (OB_FAIL(append(target_part_ids, partition_ids))) {
+    LOG_WARN("fail to append target part id", K(ret));
   }
   return ret;
 }
 
+int ObDbmsStats::get_part_ids_from_schema(const ObTableSchema *table_schema,
+                                          common::ObIArray<int64_t> &partition_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexptect null pointer", K(ret));
+  } else if (!table_schema->is_partitioned_table()) {
+    //do nothing
+  } else {
+    ObSEArray<PartInfo, 4> dummy_part_infos;
+    ObSEArray<PartInfo, 4> dummy_subpart_infos;
+    ObSEArray<int64_t, 4> part_ids;
+    ObSEArray<int64_t, 4> subpart_ids;
+    if (OB_FAIL(get_table_part_infos(table_schema,
+                                      dummy_part_infos,
+                                      dummy_subpart_infos,
+                                      part_ids,
+                                      subpart_ids))) {
+      LOG_WARN("fail to get part infos", K(ret));
+    } else if (OB_FAIL(append(partition_ids, part_ids))) {
+      LOG_WARN("fail to append partition ids", K(ret));
+    } else if (OB_FAIL(append(partition_ids, subpart_ids))) {
+      LOG_WARN("fail to append partition ids", K(ret));
+    }
+  }
+  return ret;
+}
 /*
 * epc          NUMBER    DEFAULT NULL, Number of buckets in histogram
 * minval       RAW       DEFAULT NULL, Minimum value
