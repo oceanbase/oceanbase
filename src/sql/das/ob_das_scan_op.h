@@ -109,6 +109,7 @@ public:
       need_scn_(false),
       force_refresh_lc_(false),
       need_check_output_datum_(false),
+      fb_read_tx_uncommitted_(false),
       frozen_version_(-1),
       fb_snapshot_(),
       timeout_ts_(-1),
@@ -129,6 +130,7 @@ public:
                        K_(force_refresh_lc),
                        K_(frozen_version),
                        K_(fb_snapshot),
+                       K_(fb_read_tx_uncommitted),
                        K_(timeout_ts),
                        K_(tx_lock_timeout),
                        K_(sql_mode),
@@ -141,6 +143,7 @@ public:
   bool need_scn_;
   bool force_refresh_lc_;
   bool need_check_output_datum_;
+  bool fb_read_tx_uncommitted_;
   int64_t frozen_version_;
   share::SCN fb_snapshot_;
   int64_t timeout_ts_;

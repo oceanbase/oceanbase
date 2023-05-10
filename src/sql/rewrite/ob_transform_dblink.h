@@ -162,6 +162,8 @@ private:
 
   int check_link_oracle(int64_t dblink_id, bool &link_oracle);
 
+  int add_flashback_query_for_dblink(ObDMLStmt *stmt);
+
   int has_invalid_link_expr(ObDMLStmt &stmt, bool &has_invalid_expr);
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformDBlink);

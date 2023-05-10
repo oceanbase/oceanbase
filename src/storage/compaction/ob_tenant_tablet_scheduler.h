@@ -78,6 +78,11 @@ public:
   int get_next_tablet(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
   void reset();
   bool is_valid() const;
+  void skip_cur_ls()
+  {
+    ++ls_idx_;
+    tablet_ids_.reuse();
+  }
   OB_INLINE int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   static const int64_t LS_ID_ARRAY_CNT = 10;
@@ -148,7 +153,12 @@ public:
   {
     (void)ATOMIC_AAF(&error_tablet_cnt_, delta_cnt);
   }
-
+  OB_INLINE bool schedule_ignore_error(const int ret)
+  {
+    return OB_ITER_END == ret
+      || OB_STATE_NOT_MATCH == ret
+      || OB_LS_NOT_EXIST == ret;
+  }
   // major merge status control
   void stop_major_merge();
   void resume_major_merge();

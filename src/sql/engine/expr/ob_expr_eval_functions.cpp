@@ -310,6 +310,7 @@
 #include "ob_expr_encrypt.h"
 #include "ob_expr_coalesce.h"
 #include "ob_expr_cast.h"
+#include "ob_expr_current_scn.h"
 #include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
 #include "ob_expr_priv_xml_binary.h"
@@ -1030,7 +1031,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprXmlcast::eval_xmlcast,                                        /* 602 */
   ObExprUpdateXml::eval_update_xml,                                   /* 603 */
   ObExprJoinFilter::eval_range_filter,                                /* 604 */
-  ObExprJoinFilter::eval_in_filter                                    /* 605 */
+  ObExprJoinFilter::eval_in_filter,                                   /* 605 */
+  ObExprCurrentScn::eval_current_scn                                  /* 606 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

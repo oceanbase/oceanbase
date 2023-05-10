@@ -213,14 +213,6 @@ protected:
       const ObTableScanParam &scan_param,
       ObStoreCtxGuard &ctx_guard,
       share::SCN user_specified_snapshot);
-  int check_read_allowed_(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const ObStoreAccessType access_type,
-      const ObDMLBaseParam &dml_param,
-      const transaction::ObTxDesc &tx_desc,
-      const transaction::ObTxReadSnapshot &snapshot,
-      ObStoreCtxGuard &ctx_guard);
   int check_write_allowed_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,

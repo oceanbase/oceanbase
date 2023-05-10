@@ -25,11 +25,11 @@ namespace rootserver
 CheckThreadSet ObRsReentrantThread::check_thread_set_;
 
 ObRsReentrantThread::ObRsReentrantThread()
-  :last_run_timestamp_(-1)
+  :last_run_timestamp_(-1), thread_id_(-1)
 {}
 
 ObRsReentrantThread::ObRsReentrantThread(bool need_check)
-  :last_run_timestamp_(need_check ? 0 : -1)
+  :last_run_timestamp_(need_check ? 0 : -1), thread_id_(-1)
 {}
 
 ObRsReentrantThread::~ObRsReentrantThread()
@@ -126,7 +126,7 @@ int64_t ObRsReentrantThread::get_last_run_timestamp() const
 void ObRsReentrantThread::check_alert(const ObRsReentrantThread &thread)
 { 
   if (thread.need_monitor_check()) {
-    const pid_t thread_id = syscall(__NR_gettid); // only called by thread self
+    const pid_t thread_id = thread.get_thread_id();
     const char *thread_name = thread.get_thread_name();
     int64_t last_run_timestamp = thread.get_last_run_timestamp();
     int64_t last_run_interval = ObTimeUtility::current_time() - last_run_timestamp;

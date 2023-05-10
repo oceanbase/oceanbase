@@ -216,6 +216,31 @@ ObServerMemoryConfig &ObServerMemoryConfig::get_instance()
   return memory_config;
 }
 
+int64_t ObServerMemoryConfig::get_capacity_default_memory(CapacityType type, int64_t memory_limit)
+{
+  // According to different memory_limit, the kernel can provide adaptive memory_size for default capacity.
+  // For example, memory_limit = 16G, adaptive system_memory and hidden_sys_memory are 6G and 2G.
+  static const int64_t      memory_limit_array[] = {4LL<<30, 8LL<<30, 14LL<<30, 28LL<<30, 48LL<<30, 56LL<<30, 65LL<<30, 96LL<<30, 128LL<<30};
+  static const int64_t     system_memory_array[] = {2LL<<30, 3LL<<30,  6LL<<30, 10LL<<30, 12LL<<30, 13LL<<30, 15LL<<30, 18LL<<30,  20LL<<30};
+  static const int64_t hidden_sys_memory_array[] = {1LL<<30, 2LL<<30,  2LL<<30,  2LL<<30,  4LL<<30,  4LL<<30,  6LL<<30,  7LL<<30,   8LL<<30};
+
+  int64_t memory_size = 0;
+  for (int i = ARRAYSIZEOF(memory_limit_array) - 1; i >= 0; --i) {
+    if (memory_limit_array[i] <= memory_limit) {
+      switch (type) {
+        case SYSTEM_MEMORY:
+          memory_size = system_memory_array[i];
+          break;
+        case HIDDEN_SYS_MEMORY:
+          memory_size = hidden_sys_memory_array[i];
+          break;
+      }
+      break;
+    }
+  }
+  return memory_size;
+}
+
 int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
 {
   int ret = OB_SUCCESS;
@@ -225,34 +250,22 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
     memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
   }
   int64_t system_memory = server_config.system_memory;
-  bool is_valid_config = true;
-  if (0 == system_memory) {
-    int64_t memory_limit_g = memory_limit >> 30;
-    if (memory_limit_g < 1) {
-      // memory_limit should not be less than 1G for arbitration mode
-      is_valid_config = false;
+  if (memory_limit < (1 << 30) ) {
+    // The memory_limit should not be less than 1G for arbitration mode
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+  } else if (is_arbitration_mode) {
+    // do nothing
+  } else if (0 == system_memory) {
+    system_memory = get_capacity_default_memory(SYSTEM_MEMORY, memory_limit);
+    if (0 == system_memory) {
+      ret = OB_INVALID_CONFIG;
       LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
-    } else if (is_arbitration_mode) {
-      // keep system_memory = 0 for arbitration mode
-    } else if (memory_limit_g < 4) {
-      // memory_limit should not be less than 4G for non arbitration mode
-      is_valid_config = false;
-      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
-    } else if (memory_limit_g <= 8) {
-      system_memory = 2LL << 30;
-    } else if (memory_limit_g <= 16) {
-      system_memory = 3LL << 30;
-    } else if (memory_limit_g <= 32) {
-      system_memory = 5LL << 30;
-    } else if (memory_limit_g <= 48) {
-      system_memory = 7LL << 30;
-    } else if (memory_limit_g <= 64) {
-      system_memory = 10LL << 30;
-    } else {
-      system_memory = int64_t(15 + 3 * (sqrt(memory_limit_g) - 8)) << 30;
     }
   }
-  if (!is_valid_config) {
+
+  if (OB_FAIL(ret)) {
+  // do nothing
   } else if (memory_limit > system_memory) {
     memory_limit_ = memory_limit;
     system_memory_ = system_memory;

@@ -8804,7 +8804,7 @@ int ObRootService::ObSelfCheckTask::process()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(root_service_.self_check())) {
-    LOG_ERROR("fail to do root inspection check, please check it", K(ret));
+    LOG_WARN("fail to do root inspection check, please check it", K(ret));
   } else {
     LOG_INFO("self check success!");
   }

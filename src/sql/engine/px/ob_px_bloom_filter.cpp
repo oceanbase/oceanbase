@@ -90,6 +90,8 @@ int ObPxBloomFilter::assign(const ObPxBloomFilter &filter)
   true_count_ = filter.true_count_;
   might_contain_ = filter.might_contain_;
   void *bits_array_buf = NULL;
+  begin_idx_ = filter.get_begin_idx();
+  end_idx_ = filter.get_end_idx();
   if (OB_ISNULL(bits_array_buf = allocator_.alloc((bits_array_length_ + CACHE_LINE_SIZE)* sizeof(int64_t)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc filter", K(bits_array_length_), K(begin_idx_), K(end_idx_), K(ret));
@@ -309,6 +311,34 @@ int ObPxBloomFilter::generate_receive_count_array(int64_t piece_size)
       begin_idx = bits_array_length_ - 1;
     }
     OZ(receive_count_array_.push_back(BloomFilterReceiveCount(begin_idx, 0)));
+  }
+  return ret;
+}
+
+int ObPxBloomFilter::regenerate()
+{
+  int ret = OB_SUCCESS;
+  int64_t bits_array_length = ceil((double)bits_count_ / 64);
+  void *bits_array_buf = NULL;
+  if (bits_array_length <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected bits array length", K(ret));
+  } else if (OB_ISNULL(bits_array_buf = allocator_.alloc((bits_array_length + CACHE_LINE_SIZE)* sizeof(int64_t)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc filter", K(bits_array_length), K(ret));
+  } else {
+    // cache line aligned address.
+    int64_t align_addr = ((reinterpret_cast<int64_t>(bits_array_buf)
+                          + CACHE_LINE_SIZE - 1) >> LOG_CACHE_LINE_SIZE) << LOG_CACHE_LINE_SIZE;
+    int64_t *bits_array = reinterpret_cast<int64_t *>(align_addr);
+    MEMSET(bits_array, 0, bits_array_length * sizeof(int64_t));
+    for (int i = 0; i < bits_array_length_; ++i) {
+      bits_array[i + begin_idx_] |= bits_array_[i];
+    }
+    bits_array_length_ = bits_array_length;
+    bits_array_ = bits_array;
+    begin_idx_ = 0;
+    end_idx_ = bits_array_length - 1;
   }
   return ret;
 }

@@ -2158,6 +2158,10 @@ int ObTransformSimplifySubquery::check_can_trans_as_exists(ObRawExpr* expr, bool
     LOG_WARN("param expr is null", K(ret));
   } else if (left_hand->has_flag(CNT_SUB_QUERY)) {
     // do nothing
+  } else if (T_OP_ROW == left_hand->get_expr_type() &&
+             (!(expr->get_expr_type() == T_OP_SQ_EQ && expr->has_flag(IS_WITH_ANY)) &&
+              !(expr->get_expr_type() == T_OP_SQ_NE && expr->has_flag(IS_WITH_ALL)))) {
+    // do nothing
   } else if (OB_FALSE_IT(right_hand = static_cast<ObQueryRefRawExpr*>(expr->get_param_expr(1)))) {
   } else if (right_hand->get_ref_count() > 1) {
     // do nothing

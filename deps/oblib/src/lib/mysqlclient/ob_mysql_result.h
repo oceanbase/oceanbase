@@ -1372,7 +1372,7 @@ public:
   virtual int get_col_meta(const int64_t col_idx, bool old_max_length,
                            oceanbase::common::ObString &name, ObObjMeta &meta,
                            ObAccuracy &acc) const = 0;
-  void format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length, 
+  int format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
                                      oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
                                      DblinkDriverProto link_type, bool old_max_length) const;
   /// @note return OB_SUCCESS instead of OB_ERR_NULL_VALUE when obj is null

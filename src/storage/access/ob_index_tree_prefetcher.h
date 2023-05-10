@@ -304,6 +304,7 @@ private:
       const bool force_prefetch);
 };
 
+template <int32_t DATA_PREFETCH_DEPTH = 32, int32_t INDEX_PREFETCH_DEPTH = 3>
 class ObIndexTreeMultiPassPrefetcher : public ObIndexTreePrefetcher
 {
 public:
@@ -409,8 +410,8 @@ private:
   }
 
   static const int32_t DEFAULT_SCAN_RANGE_PREFETCH_CNT = 4;
-  static const int32_t DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT = 32;
-  static const int32_t INDEX_TREE_PREFETCH_DEPTH = 3;
+  static const int32_t DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT = DATA_PREFETCH_DEPTH;
+  static const int32_t INDEX_TREE_PREFETCH_DEPTH = INDEX_PREFETCH_DEPTH;
   struct ObIndexBlockReadHandle {
     ObIndexBlockReadHandle() :
         end_prefetched_row_idx_(-1),

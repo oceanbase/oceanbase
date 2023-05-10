@@ -474,12 +474,17 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     * During the switch to standby process, some LS may be in RO state. GTS & STS may not work.
     * This also ensures the consistency of tenant_role cache and the tenant role field in all_tenant_info
     */
-    MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
     SpinWLockGuard guard(lock_);
-    (void)tenant_info_.assign(new_tenant_info);
-    last_sql_update_time_ = new_refresh_time_us;
-    ora_rowscn_ = ora_rowscn;
-    refreshed = true;
+    if (ora_rowscn > ora_rowscn_) {
+      MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
+      (void)tenant_info_.assign(new_tenant_info);
+      last_sql_update_time_ = new_refresh_time_us;
+      ora_rowscn_ = ora_rowscn;
+      refreshed = true;
+    } else {
+      LOG_WARN("refresh tenant info conflict", K(new_tenant_info), K(new_refresh_time_us),
+                                      K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_), K(ora_rowscn));
+    }
   }
 
   if (dump_tenant_info_interval_.reach()) {

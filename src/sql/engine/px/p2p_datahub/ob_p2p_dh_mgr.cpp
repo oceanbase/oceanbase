@@ -71,7 +71,6 @@ int ObP2PDatahubManager::process_msg(ObP2PDatahubMsgBase &msg)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected new msg", K(ret));
   } else if (OB_FAIL(new_msg->process_msg_internal(need_free))) {
-    need_free = true;
     LOG_WARN("fail to process msg", K(ret));
   }
   if (need_free && OB_NOT_NULL(new_msg)) {
@@ -188,6 +187,18 @@ int ObP2PDatahubManager::P2PMsgMergeCall::operator() (common::hash::HashMapPair<
   need_free_ = true;
   return ret;
 }
+
+int ObP2PDatahubManager::P2PRegenerateCall::operator() (common::hash::HashMapPair<ObP2PDhKey,
+    ObP2PDatahubMsgBase *> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(entry.second->regenerate())) {
+    LOG_WARN("fail to do regenerate", K(ret));
+  }
+  ret_ = ret;
+  return ret;
+}
+
 
 int ObP2PDatahubManager::send_local_msg(ObP2PDatahubMsgBase *msg)
 {

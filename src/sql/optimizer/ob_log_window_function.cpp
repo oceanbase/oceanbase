@@ -340,7 +340,7 @@ int ObLogWindowFunction::compute_op_ordering()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("first child is null", K(ret), K(child));
   } else if (!single_part_parallel_) {
-    is_local_order_ = (range_dist_parallel_ || is_fully_paratition_wise()
+    is_local_order_ = (range_dist_parallel_ || is_fully_partition_wise()
                        || (get_sort_keys().empty()
                            && LOG_EXCHANGE == child->get_type()
                            && child->get_is_local_order())

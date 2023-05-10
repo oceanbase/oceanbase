@@ -12,6 +12,7 @@
  */
 
 #include "ob_expr_xmlparse.h"
+#include "sql/engine/ob_exec_context.h"
 #include "ob_expr_xml_func_helper.h"
 
 #define USING_LOG_PREFIX SQL_ENG

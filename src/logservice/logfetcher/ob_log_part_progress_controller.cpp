@@ -39,7 +39,8 @@ PartProgressController::PartProgressController() :
     valid_progress_cnt_(0),
     thread_counter_(0),
     last_global_count_and_timeval_(),
-    global_count_and_timeval_()
+    global_count_and_timeval_(),
+    global_fetch_log_upper_limit_(OB_INVALID_TIMESTAMP)
 {
   last_global_count_and_timeval_.lo = 0;
   last_global_count_and_timeval_.hi = 0;
@@ -108,6 +109,7 @@ void PartProgressController::destroy()
   last_global_count_and_timeval_.hi = 0;
   global_count_and_timeval_.lo = 0;
   global_count_and_timeval_.hi = 0;
+  global_fetch_log_upper_limit_ = OB_INVALID_TIMESTAMP;
 }
 
 int PartProgressController::acquire_progress(int64_t &progress_id, const int64_t start_progress)
@@ -244,6 +246,26 @@ int PartProgressController::get_min_progress(int64_t &progress)
     execution_time = get_timestamp() - execution_time ;
     // Update execution time, print execution time periodically
     update_execution_time_(execution_time);
+  }
+
+  return ret;
+}
+
+int PartProgressController::set_global_upper_limit(const int64_t global_upper_limit)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_ERROR("not init");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == global_upper_limit
+        || global_upper_limit < ATOMIC_LOAD(&global_fetch_log_upper_limit_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(global_upper_limit), K(global_fetch_log_upper_limit_));
+  } else {
+    ATOMIC_STORE(&global_fetch_log_upper_limit_, global_upper_limit);
+
+    LOG_TRACE("[FETCHER] [SET_GLOBAL_UPPER_LIMIT]", K_(global_fetch_log_upper_limit));
   }
 
   return ret;

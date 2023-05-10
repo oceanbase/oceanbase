@@ -39,7 +39,7 @@ public:
   ObRFBloomFilterMsg() : phase_(), bloom_filter_(),
       next_peer_addrs_(), expect_first_phase_count_(0),
       piece_size_(0), filter_indexes_(), receive_count_array_(),
-      filter_idx_(nullptr), create_finish_(nullptr) {}
+      filter_idx_(nullptr), create_finish_(nullptr), is_finish_regen_(false) {}
   ~ObRFBloomFilterMsg() { destroy(); }
   virtual int assign(const ObP2PDatahubMsgBase &) final;
   virtual int merge(ObP2PDatahubMsgBase &) final;
@@ -78,6 +78,7 @@ public:
   int process_first_phase_recieve_count(
       ObRFBloomFilterMsg &msg, bool &first_phase_end);
   virtual int process_msg_internal(bool &need_free);
+  virtual int regenerate() override;
 private:
 int calc_hash_value(
     const common::ObIArray<ObExpr *> &expr_array,
@@ -86,7 +87,7 @@ int calc_hash_value(
     ObEvalCtx &eval_ctx,
     uint64_t &hash_value, bool &ignore);
 int shadow_copy(const ObRFBloomFilterMsg &msg);
-int generate_receive_count_array(int64_t piece_size);
+int generate_receive_count_array(int64_t piece_size, int64_t cur_begin_idx);
 public:
   ObSendBFPhase phase_;
   ObPxBloomFilter bloom_filter_;
@@ -97,6 +98,7 @@ public:
   common::ObArray<BloomFilterReceiveCount> receive_count_array_;
   int64_t *filter_idx_; //for shared msg
   bool *create_finish_; //for shared msg
+  bool is_finish_regen_;
 };
 
 class ObRFRangeFilterMsg : public ObP2PDatahubMsgBase

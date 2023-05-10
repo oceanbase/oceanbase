@@ -59,7 +59,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   int64_t data_disk_abnormal_time = 0;
   logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
 
-  int64_t clog_free_size_byte = 0;
+  int64_t clog_in_use_size_byte = 0;
   int64_t clog_total_size_byte = 0;
 
   int64_t reserved_size = 4 * 1024 * 1024 * 1024L; // default RESERVED_DISK_SIZE -> 4G
@@ -74,7 +74,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
   } else if (OB_ISNULL(GCTX.omt_) || OB_ISNULL(log_block_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "omt is NULL", KR(ret), K(GCTX.omt_), K(log_block_mgr));
-  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
+  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_in_use_size_byte, clog_total_size_byte))) {
     SERVER_LOG(ERROR, "Failed to get clog stat ", KR(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().get_device_health_status(dhs,
       data_disk_abnormal_time))) {
@@ -98,7 +98,7 @@ int ObAllVirtualServer::inner_get_next_row(ObNewRow *&row)
     const int64_t log_disk_capacity = clog_total_size_byte;
     const int64_t data_disk_in_use =
         OB_SERVER_BLOCK_MGR.get_used_macro_block_count() * OB_SERVER_BLOCK_MGR.get_macro_block_size();
-    const int64_t clog_disk_in_use = clog_total_size_byte - clog_free_size_byte;
+    const int64_t clog_disk_in_use = clog_in_use_size_byte;
     const char *data_disk_health_status = device_health_status_to_str(dhs);
     const int64_t ssl_cert_expired_time = GCTX.ssl_key_expired_time_;
 

@@ -204,7 +204,7 @@ int ObTableLoadTransBucketWriter::handle_partition_with_autoinc_identity(
   int ret = OB_SUCCESS;
   const int64_t row_count = obj_rows.count();
   ObArenaAllocator autoinc_allocator("TLD_Autoinc", OB_MALLOC_NORMAL_BLOCK_SIZE, param_.tenant_id_);
-  ObDataTypeCastParams cast_params(&(coordinator_ctx_->partition_calc_.tz_info_));
+  ObDataTypeCastParams cast_params(coordinator_ctx_->partition_calc_.session_info_->get_timezone_info());
   ObCastCtx cast_ctx(&autoinc_allocator, &cast_params, CM_NONE,
                       ObCharset::get_system_collation());
   ObTableLoadCastObjCtx cast_obj_ctx(param_, &(coordinator_ctx_->partition_calc_.time_cvrt_), &cast_ctx,

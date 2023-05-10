@@ -298,6 +298,10 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
           LOG_WARN("failed to update dml stat local cache", K(ret));
         }
       }
+      // persistence col stat once a merge task finished
+      if (OB_SUCC(ret) && OB_FAIL(sql_statistics.persistence_col_stats())) {
+        LOG_WARN("failed to persistence col stats");
+      }
     }
   }
   return ret;

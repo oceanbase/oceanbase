@@ -215,12 +215,14 @@ void ObMySQLConnectionPool::stop()
   if (! is_stop_) {
     int ret = OB_SUCCESS;
     if (tg_id_ != -1) {
+      int origin_tg_id = tg_id_;
       if (OB_FAIL(TG_CANCEL_ALL(tg_id_))) {
-        LOG_ERROR("fail to cancel timer task", K(ret), K(this));
+        LOG_ERROR("fail to cancel timer task", K(ret), K(tg_id_), K(is_stop_), K(this));
       } else {
         TG_STOP(tg_id_);
         TG_WAIT(tg_id_);
         tg_id_ = -1;
+        LOG_INFO("ObMySQLConnectionPool stop succ", K(origin_tg_id));
       }
     }
     is_stop_ = true;
@@ -858,6 +860,7 @@ int ObMySQLConnectionPool::do_acquire_dblink(uint64_t dblink_id, const dblink_pa
   } else {
     ATOMIC_INC((uint64_t *)&busy_conn_count_);
     dblink_conn1->set_busy(true);
+    dblink_conn1->set_dblink_id(dblink_id);
     dblink_conn1->set_timestamp(::oceanbase::common::ObTimeUtility::current_time());
     dblink_conn = static_cast<ObISQLConnection *>(dblink_conn1);
     LOG_TRACE("acquire connection from mysql connection pool", K(this), K(busy_conn_count_), KP(dblink_conn), K(dblink_conn1->is_closed()), K(dblink_pool), K(sessid));

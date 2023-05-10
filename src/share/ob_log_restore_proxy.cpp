@@ -242,7 +242,7 @@ void ObLogRestoreProxyUtil::destroy()
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   connection_.stop();
-  TG_DESTROY(tg_id_);
+  destroy_tg_();
   connection_.destroy();
   server_prover_.destroy();
   user_name_.reset();
@@ -328,6 +328,7 @@ int ObLogRestoreProxyUtil::try_init(const uint64_t tenant_id,
   if (OB_FAIL(ret)) {
     LOG_WARN("proxy connect to primary db failed");
     RESTORE_PROXY_USER_ERROR("connection");
+    destroy();
   }
   return ret;
 }
@@ -610,6 +611,16 @@ int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &
     }
   }
   return ret;
+}
+
+void ObLogRestoreProxyUtil::destroy_tg_()
+{
+  if (-1 != tg_id_) {
+    int origin_tg_id = tg_id_;
+    TG_DESTROY(tg_id_);
+    tg_id_ = -1;
+    LOG_INFO("destroy_tg_ succ", K(origin_tg_id));
+  }
 }
 } // namespace share
 } // namespace oceanbase

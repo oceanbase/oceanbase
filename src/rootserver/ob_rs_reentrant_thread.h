@@ -33,6 +33,7 @@ public:
 
   virtual void run2() override {
     int ret = common::OB_SUCCESS;
+    thread_id_ = (pid_t)syscall(__NR_gettid); // only called by thread self
     run3();
   }
   virtual void run3() = 0;
@@ -61,6 +62,7 @@ public:
   void stop();
   void wait();
   void reset_last_run_timestamp() { ATOMIC_STORE(&last_run_timestamp_, 0); }
+  pid_t get_thread_id() const { return thread_id_; }
   TO_STRING_KV("name", get_thread_name());
 
 private:
@@ -68,6 +70,7 @@ private:
   // =0 :pause check thread;
   // =-1 :close check thread;
   int64_t last_run_timestamp_;
+  pid_t thread_id_;
 #ifdef ERRSIM   //for obtest
   static const int64_t MAX_THREAD_SCHEDULE_OVERRUN_TIME = 5LL * 1000LL * 1000LL;
 #else

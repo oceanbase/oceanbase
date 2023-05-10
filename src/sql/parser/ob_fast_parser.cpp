@@ -1481,12 +1481,19 @@ int ObFastParserBase::process_double_quote()
 int ObFastParserBase::process_comment_content(bool is_mysql_comment)
 {
   int ret = OB_SUCCESS;
-  // if is in /*! xxx */ the token tyep should be normal
+  // if is in /*! xxx */ the token type should be normal
   cur_token_type_ = is_mysql_comment ? NORMAL_TOKEN : IGNORE_TOKEN;
   bool is_match = false;
   char ch = raw_sql_.scan();
   while (!raw_sql_.is_search_end()) {
-    if ('*' == ch && '/' == raw_sql_.peek()) {
+    if (is_mysql_comment && '/' == ch && '*' == raw_sql_.peek()) {
+      raw_sql_.scan();
+      if (OB_FAIL(process_comment_content())) {
+        LOG_WARN("failed to process comment content", K(ret));
+      } else {
+        cur_token_type_ = NORMAL_TOKEN;
+      }
+    } else if ('*' == ch && '/' == raw_sql_.peek()) {
       // scan '\/'
       raw_sql_.scan();
       is_match = true;
@@ -2351,6 +2358,7 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
               tmp_buf_ += byte_len;
               tmp_buf_len_ -= (2 * byte_len);
               is_quote_end = true;
+              break;
             } else if (tmp_buf_len_ >= 2 &&
                 ((tmp_buf_[0] == tmp_buf_[tmp_buf_len_ - 1] && tmp_buf_[0] != '(' &&
                 tmp_buf_[0] != '[' && tmp_buf_[0] != '{' && tmp_buf_[0] != '<' &&

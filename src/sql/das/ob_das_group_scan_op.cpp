@@ -32,6 +32,12 @@ ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
 
 ObDASGroupScanOp::~ObDASGroupScanOp()
 {
+  if (nullptr != group_lookup_op_) {
+    group_lookup_op_->~ObGroupLookupOp();
+    //Memory of lookupop come from op_alloc,We do not need free,just set ptr to null.
+    group_lookup_op_ = nullptr;
+  }
+
   if (result_iter_ != nullptr && result_iter_->get_type() == ObNewRowIterator::ObTableScanIterator) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "table group scan iter is not released, maybe some bug occured",
               KPC(scan_ctdef_), K(scan_param_), KPC(scan_rtdef_));

@@ -451,7 +451,8 @@ int ObDbLinkProxy::acquire_dblink(uint64_t dblink_id,
                                   const dblink_param_ctx &param_ctx,
                                   ObISQLConnection *&dblink_conn,
                                   uint32_t sessid,
-                                  int64_t sql_request_level)
+                                  int64_t sql_request_level,
+                                  const char *set_sql_mode_cstr)
 {
   int ret = OB_SUCCESS;
   ObISQLConnectionPool *dblink_pool = NULL;
@@ -462,7 +463,7 @@ int ObDbLinkProxy::acquire_dblink(uint64_t dblink_id,
     LOG_WARN("failed to get dblink interface", K(ret), K(dblink_type));
   } else if (OB_FAIL(dblink_pool->acquire_dblink(dblink_id, param_ctx, dblink_conn, sessid, sql_request_level))) {
     LOG_WARN("acquire dblink failed", K(ret), K(dblink_id), K(dblink_type));
-  } else if (OB_FAIL(prepare_enviroment(dblink_conn, dblink_type))) {
+  } else if (OB_FAIL(prepare_enviroment(dblink_conn, dblink_type, set_sql_mode_cstr))) {
     LOG_WARN("failed to prepare dblink env", K(ret));
   } else {
     dblink_conn->set_dblink_id(dblink_id);
@@ -471,16 +472,19 @@ int ObDbLinkProxy::acquire_dblink(uint64_t dblink_id,
   return ret;
 }
 
-int ObDbLinkProxy::prepare_enviroment(ObISQLConnection *dblink_conn, int link_type)
+int ObDbLinkProxy::prepare_enviroment(ObISQLConnection *dblink_conn, int link_type, const char *set_sql_mode_cstr)
 {
   int ret = OB_SUCCESS;
+  bool is_inited = false;
   if (OB_ISNULL(dblink_conn)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dblink is null", K(ret));
-  } else if (dblink_conn->get_init_remote_env()) {
-    // do nothing;
+  } else if (OB_FAIL(dblink_conn->is_session_inited(set_sql_mode_cstr, is_inited))) {
+    LOG_WARN("failed to get init status", K(ret));
+  } else if (is_inited) {
+    // do nothing
   } else {
-    if (OB_FAIL(execute_init_sql(dblink_conn, link_type))) {
+    if (OB_FAIL(execute_init_sql(dblink_conn, link_type, set_sql_mode_cstr))) {
       LOG_WARN("failed to execute init sql", K(ret));
     } else {
       LOG_DEBUG("set session variable nls_date_format");
@@ -490,21 +494,42 @@ int ObDbLinkProxy::prepare_enviroment(ObISQLConnection *dblink_conn, int link_ty
   return ret;
 }
 
-int ObDbLinkProxy::execute_init_sql(ObISQLConnection *dblink_conn, int link_type)
+int ObDbLinkProxy::execute_init_sql(ObISQLConnection *dblink_conn, int link_type, const char *set_sql_mode_cstr)
 {
   int ret = OB_SUCCESS;
   typedef const char * sql_ptr_type;
-  if (DBLINK_DRV_OB == link_type) {
+  if (!lib::is_oracle_mode()) {
+    const int64_t sql_ptr_count = 2;
+    sql_ptr_type sql_ptr[sql_ptr_count] = {set_sql_mode_cstr,
+                                           "set character_set_results = NULL"};
+    if (OB_ISNULL(set_sql_mode_cstr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), KP(set_sql_mode_cstr));
+    } else {
+      ObMySQLStatement stmt;
+      ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
+      for (int i = 0; OB_SUCC(ret) && i < sql_ptr_count; ++i) {
+        if (OB_FAIL(stmt.init(*mysql_conn, sql_ptr[i]))) {
+          LOG_WARN("create statement failed", K(ret), K(link_type));
+        } else if (OB_FAIL(stmt.execute_update())) {
+          LOG_WARN("execute sql failed",  K(ret), K(link_type));
+        } else {
+          // do nothing
+        }
+      }
+    }
+  } else if (DBLINK_DRV_OB == link_type) {
     static sql_ptr_type sql_ptr[] = {
       "set character_set_results = NULL",
       "set nls_date_format='YYYY-MM-DD HH24:MI:SS'",
       "set nls_timestamp_format = 'YYYY-MM-DD HH24:MI:SS.FF'",
       "set nls_timestamp_tz_format = 'YYYY-MM-DD HH24:MI:SS.FF TZR TZD'"
     };
+    int64_t sql_ptr_count = sizeof(sql_ptr) / sizeof(sql_ptr_type);
     // todo statement may different
     ObMySQLStatement stmt;
     ObMySQLConnection *mysql_conn = static_cast<ObMySQLConnection *>(dblink_conn);
-    for (int i = 0; OB_SUCC(ret) && i < sizeof(sql_ptr) / sizeof(sql_ptr_type); ++i) {
+    for (int i = 0; OB_SUCC(ret) && i < sql_ptr_count; ++i) {
       if (OB_FAIL(stmt.init(*mysql_conn, sql_ptr[i]))) {
         LOG_WARN("create statement failed", K(ret), K(link_type));
       } else if (OB_FAIL(stmt.execute_update())) {

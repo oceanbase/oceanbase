@@ -382,6 +382,7 @@
 #include "sql/engine/expr/ob_expr_st_contains.h"
 #include "sql/engine/expr/ob_expr_st_within.h"
 #include "sql/engine/expr/ob_expr_priv_st_asewkb.h"
+#include "sql/engine/expr/ob_expr_current_scn.h"
 #include "sql/engine/expr/ob_expr_name_const.h"
 #include "sql/engine/expr/ob_expr_format_bytes.h"
 #include "sql/engine/expr/ob_expr_format_pico_time.h"
@@ -984,6 +985,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprDesDecrypt);
     REG_OP(ObExprDesEncrypt);
     REG_OP(ObExprEncrypt);
+    REG_OP(ObExprCurrentScn);
     REG_OP(ObExprEncode);
     REG_OP(ObExprDecode);
     REG_OP(ObExprICUVersion);
@@ -1282,6 +1284,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprJsonExists);
   REG_OP_ORCL(ObExprJsonArray);
   REG_OP_ORCL(ObExprJsonObject);
+  REG_OP_ORCL(ObExprCurrentScn);
   REG_OP_ORCL(ObExprTreat);
   REG_OP_ORCL(ObExprGeneratorFunc);
   REG_OP_ORCL(ObExprZipf);

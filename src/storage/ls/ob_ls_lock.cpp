@@ -35,7 +35,7 @@ ObLSLock::~ObLSLock()
 {
 }
 
-int64_t ObLSLock::lock(const ObLS *ls, int64_t hold, int64_t change)
+int64_t ObLSLock::lock(const ObLS *ls, int64_t hold, int64_t change, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS; // tmp_ret, rewrite every time
   int64_t pos = 0;
@@ -46,14 +46,16 @@ int64_t ObLSLock::lock(const ObLS *ls, int64_t hold, int64_t change)
   ObTimeGuard tg("ObLSLock::lock", LOCK_CONFLICT_WARN_TIME);
   while (hold | change) {
     if (change & 1) {
-      if (OB_FAIL(locks_[pos].wrlock(ObLatchIds::LS_LOCK))) {
-        LOG_ERROR("wrlock error", K(ret), K(pos));
+      if (OB_FAIL(locks_[pos].wrlock(ObLatchIds::LS_LOCK, abs_timeout_us))) {
+        // maybe timeout, it is expected error code.
+        LOG_WARN("wrlock failed", KR(ret), K(pos));
       } else {
         res |= 1L << pos;
       }
     } else if (hold & 1) {
-      if (OB_FAIL(locks_[pos].rdlock(ObLatchIds::LS_LOCK))) {
-        LOG_ERROR("rdlock error", K(ret), K(pos));
+      if (OB_FAIL(locks_[pos].rdlock(ObLatchIds::LS_LOCK, abs_timeout_us))) {
+        // maybe timeout, it is expected error code.
+        LOG_WARN("rdlock failed", KR(ret), K(pos));
       } else {
         res |= 1L << pos;
       }
@@ -151,6 +153,29 @@ ObLSLockGuard::ObLSLockGuard(ObLS *ls,
       mark_ = 0;
     }
   }
+}
+
+ObLSLockGuard::ObLSLockGuard(ObLS *ls,
+                             ObLSLock &lock,
+                             int64_t hold,
+                             int64_t change,
+                             const int64_t abs_timeout_us)
+  : lock_(lock),
+    mark_(0),
+    start_ts_(INT64_MAX),
+    ls_(ls)
+{
+  hold &= LSLOCKMASK;
+  change &= LSLOCKMASK;
+  // upgrade hold to change
+  hold ^= hold & change;
+
+  if ((hold | change) != (mark_ = lock_.lock(ls, hold, change, abs_timeout_us))) {
+    // reset the the one we have locked.
+    lock_.unlock(mark_);
+    mark_ = 0;
+  }
+  start_ts_ = ObTimeUtility::current_time();
 }
 
 ObLSLockGuard::ObLSLockGuard(ObLS *ls, const bool rdlock)

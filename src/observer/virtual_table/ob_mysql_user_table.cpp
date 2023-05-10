@@ -138,6 +138,8 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   NO_EXIST_PRIV_CASE(EXECUTE);
                   EXIST_PRIV_CASE(REPL_SLAVE);
                   EXIST_PRIV_CASE(REPL_CLIENT);
+                  EXIST_PRIV_CASE(DROP_DATABASE_LINK);
+                  EXIST_PRIV_CASE(CREATE_DATABASE_LINK);
                   EXIST_PRIV_CASE(CREATE_VIEW);
                   EXIST_PRIV_CASE(SHOW_VIEW);
                   NO_EXIST_PRIV_CASE(CREATE_ROUTINE);

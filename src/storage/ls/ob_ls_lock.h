@@ -66,7 +66,7 @@ public:
   ObLSLock(const ObLSLock&) = delete;
   ObLSLock& operator=(const ObLSLock&) = delete;
 private:
-  int64_t lock(const ObLS *ls, int64_t hold, int64_t change);
+  int64_t lock(const ObLS *ls, int64_t hold, int64_t change, const int64_t abs_timeout_us = INT64_MAX);
   int64_t try_lock(const ObLS *ls, int64_t hold, int64_t change);
   void unlock(int64_t target);
 
@@ -81,6 +81,11 @@ public:
                 int64_t hold,
                 int64_t change,
                 const bool trylock = false);
+  ObLSLockGuard(ObLS *ls,
+                ObLSLock &lock,
+                int64_t hold,
+                int64_t change,
+                const int64_t abs_timeout_us);
   // lock all by default.
   // WARNING: make sure ls is not null.
   ObLSLockGuard(ObLS *ls, const bool rdlock = false);

@@ -784,6 +784,9 @@ int ObMergeGroupByOp::get_child_next_batch_row(
   } else {
     if (OB_FAIL(child_->get_next_batch(max_row_cnt, batch_rows))) {
       LOG_WARN("failed to get child row", K(ret));
+    } else if (aggr_processor_.get_need_advance_collect() &&
+      OB_FAIL(brs_holder_.save(MY_SPEC.max_batch_size_))) {
+      LOG_WARN("failed to backup child exprs", K(ret));
     }
   }
   return ret;
@@ -884,6 +887,18 @@ int ObMergeGroupByOp::batch_process_rollup_distributor(const int64_t max_row_cnt
   return ret;
 }
 
+int ObMergeGroupByOp::advance_collect_result(int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  clear_evaluated_flag();
+  if (OB_FAIL(aggr_processor_.advance_collect_result(group_id))) {
+    LOG_WARN("failed to calc and material distinct result", K(ret), K(group_id));
+  } else if (OB_FAIL(brs_holder_.restore())) {
+    LOG_WARN("failed to restore child exprs", K(ret));
+  }
+  return ret;
+}
+
 int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   // TODO qubin.qb: support rollup in next release
@@ -914,6 +929,7 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
     }
 
     if (OB_SUCC(ret)) {
+      brs_holder_.reset();
       while (OB_SUCC(ret) &&
              OB_SUCC(get_child_next_batch_row(child_batch_cnt, child_brs))) {
         if (child_brs->end_ && child_brs->size_ == 0) {
@@ -930,7 +946,13 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
           LOG_WARN("failed to process_batch_result", K(ret));
         } else if (stop_batch_iterating(*child_brs, output_batch_cnt)) {
           // backup child exprs for this round
-          OZ(brs_holder_.save(std::min(MY_SPEC.max_batch_size_, get_output_queue_cnt())));
+          // for the vectorized merge distinct scenario, the result will be calculated and materialized
+          // in advance. therefore, when a backup is performed after a batch processing is completed
+          // the output expression of the child has been refilled. so, it is necessary to perform backup
+          // after get next batch from the child operator, and there is no need to backup again.
+          if (!aggr_processor_.get_need_advance_collect()) {
+            OZ(brs_holder_.save(std::min(MY_SPEC.max_batch_size_, get_output_queue_cnt())));
+          }
           LOG_DEBUG("break out of iteratation", K(child_brs->end_),
                     K(output_batch_cnt), K(output_queue_cnt_));
           break;
@@ -941,6 +963,7 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
       if (OB_SUCC(ret) && child_brs->end_ && !OB_ISNULL(cur_group_row_)) {
         // add last unfinised grouprow into output group
         inc_output_queue_cnt();
+        const int64_t advance_collect_group_id = curr_group_rowid_;
         if (MY_SPEC.has_rollup_) {
           int64_t start_rollup_id = MY_SPEC.group_exprs_.count() - 1;
           int64_t end_rollup_id = all_groupby_exprs_.count() - 1;
@@ -971,6 +994,11 @@ int ObMergeGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
                 curr_group_rowid_))) {
               LOG_WARN("failed to genereate rollup group row", K(ret));
           }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (aggr_processor_.get_need_advance_collect()
+          && OB_FAIL(advance_collect_result(advance_collect_group_id))) {
+          LOG_WARN("failed to collect distinct result", K(ret), K(advance_collect_group_id));
         }
       }
       if (OB_SUCC(ret) &&
@@ -1247,7 +1275,10 @@ int ObMergeGroupByOp::gen_rollup_group_rows(
       ++curr_group_rowid_;
       curr_group_row = nullptr;
       inc_output_queue_cnt();
-      if (OB_FAIL(get_empty_rollup_row(curr_group_rowid_, curr_group_row))) {
+      if (aggr_processor_.get_need_advance_collect()
+        && OB_FAIL(advance_collect_result(prev_group_row_id))) {
+        LOG_WARN("failed to calc and material distinct result", K(ret), K(prev_group_row_id));
+      } else if (OB_FAIL(get_empty_rollup_row(curr_group_rowid_, curr_group_row))) {
         LOG_WARN("failed to get one new group row", K(ret));
       } else if (OB_FAIL(aggr_processor_.swap_group_row(prev_group_row_id, curr_group_rowid_))) {
         LOG_WARN("failed to swap group row", K(ret));
@@ -1353,6 +1384,7 @@ int ObMergeGroupByOp::process_batch(const ObBatchRows &brs)
           LOG_WARN("failed to aggregate_group_rows", K(curr_group_rowid_), K(ret),
                   K(group_start_idx), K(group_end_idx));
         } else {
+          const int64_t advance_collect_group_id = curr_group_rowid_;
           if (MY_SPEC.has_rollup_) {
             int64_t start_rollup_id = diff_group_idx;
             int64_t end_rollup_id = all_groupby_exprs_.count() - 1;
@@ -1385,14 +1417,19 @@ int ObMergeGroupByOp::process_batch(const ObBatchRows &brs)
               LOG_WARN("failed to genereate rollup group row", K(ret));
             }
           }
-          ++curr_group_rowid_;
-          // create new group
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(get_cur_group_row(curr_group_rowid_, cur_group_row_,
-              all_groupby_exprs_, all_groupby_exprs_.count()))) {
-            LOG_WARN("failed to get one new group row", K(ret));
+          } else if (aggr_processor_.get_need_advance_collect()
+            && OB_FAIL(advance_collect_result(advance_collect_group_id))) {
+            LOG_WARN("failed to collect distinct result", K(ret), K(advance_collect_group_id));
           } else {
-            group_start_idx = idx; // record new start idx in next round
+            ++curr_group_rowid_;
+            // create new group
+            if (OB_FAIL(get_cur_group_row(curr_group_rowid_, cur_group_row_,
+                all_groupby_exprs_, all_groupby_exprs_.count()))) {
+              LOG_WARN("failed to get one new group row", K(ret));
+            } else {
+              group_start_idx = idx; // record new start idx in next round
+            }
           }
         }
       }

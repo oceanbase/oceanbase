@@ -21,15 +21,17 @@ namespace sql
 class ObCreateDbLinkStmt;
 class ObCreateDbLinkResolver: public ObDDLResolver
 {
-  static const int64_t DBLINK_NAME = 0;
-  static const int64_t USER_NAME = 1;
-  static const int64_t TENANT_NAME = 2;
-  static const int64_t PASSWORD = 3;
-  static const int64_t OPT_DRIVER = 4;
-  static const int64_t IP_PORT = 5;
-  static const int64_t OPT_CLUSTER = 6;
-  static const int64_t OPT_REVERSE_LINK = 7;
-  static const int64_t DBLINK_NODE_COUNT = 8;
+  static const int64_t IF_NOT_EXIST = 0;
+  static const int64_t DBLINK_NAME = 1;
+  static const int64_t USER_NAME = 2;
+  static const int64_t TENANT_NAME = 3;
+  static const int64_t DATABASE_NAME = 4;
+  static const int64_t PASSWORD = 5;
+  static const int64_t OPT_DRIVER = 6;
+  static const int64_t IP_PORT = 7;
+  static const int64_t OPT_CLUSTER =8;
+  static const int64_t OPT_REVERSE_LINK = 9;
+  static const int64_t DBLINK_NODE_COUNT = 10;
 
   static const int64_t REVERSE_LINK_USER_NAME = 0;
   static const int64_t REVERSE_LINK_TENANT_NAME = 1;

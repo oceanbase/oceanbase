@@ -31,11 +31,11 @@ using namespace transaction;
 namespace sql
 {
 OB_SERIALIZE_MEMBER(DASRelatedTabletMap::MapEntry,
-                    src_tablet_id_,
-                    related_table_id_,
-                    related_tablet_id_,
-                    related_part_id_,
-                    related_first_level_part_id_);
+                    key_.src_tablet_id_,
+                    key_.related_table_id_,
+                    val_.tablet_id_,
+                    val_.part_id_,
+                    val_.first_level_part_id_);
 
 int VirtualSvrPair::init(ObIAllocator &allocator,
                          ObTableID vt_id,
@@ -119,34 +119,93 @@ int DASRelatedTabletMap::add_related_tablet_id(ObTabletID src_tablet_id,
                                                ObObjectID related_part_id,
                                                ObObjectID related_first_level_part_id)
 {
-  MapEntry map_entry;
-  map_entry.src_tablet_id_ = src_tablet_id;
-  map_entry.related_table_id_ = related_table_id;
-  map_entry.related_tablet_id_ = related_tablet_id;
-  map_entry.related_part_id_ = related_part_id;
-  map_entry.related_first_level_part_id_ = related_first_level_part_id;
-  return list_.push_back(map_entry);
-}
-
-int DASRelatedTabletMap::get_related_tablet_id(ObTabletID src_tablet_id,
-                                               ObTableID related_table_id,
-                                               Value &val)
-{
   int ret = OB_SUCCESS;
-  MapEntry *final_entry = nullptr;
-  FOREACH_X(node, list_, final_entry == nullptr) {
-    MapEntry &entry = *node;
-    if (entry.src_tablet_id_ == src_tablet_id && entry.related_table_id_ == related_table_id) {
-      final_entry = &entry;
+  if (nullptr == get_related_tablet_id(src_tablet_id, related_table_id)) {
+    MapEntry map_entry;
+    map_entry.key_.src_tablet_id_ = src_tablet_id;
+    map_entry.key_.related_table_id_ = related_table_id;
+    map_entry.val_.tablet_id_ = related_tablet_id;
+    map_entry.val_.part_id_ = related_part_id;
+    map_entry.val_.first_level_part_id_ = related_first_level_part_id;
+    if (OB_FAIL(list_.push_back(map_entry))) {
+      LOG_WARN("store the related tablet entry failed", K(ret), K(map_entry));
+    } else if (list_.size() > FAST_LOOP_LIST_LEN) {
+      //The length of the list is already long enough,
+      //and searching through it using iteration will be slow.
+      //Therefore, constructing a map can accelerate the search in this situation.
+      if (OB_FAIL(insert_related_tablet_map())) {
+        LOG_WARN("create related tablet map failed", K(ret));
+      }
     }
   }
-  if (OB_LIKELY(final_entry != nullptr)) {
-    val.tablet_id_ = final_entry->related_tablet_id_;
-    val.part_id_ = final_entry->related_part_id_;
-    val.first_level_part_id_ = final_entry->related_first_level_part_id_;
+  return ret;
+}
+
+const DASRelatedTabletMap::Value *DASRelatedTabletMap::get_related_tablet_id(ObTabletID src_tablet_id,
+                                                                             ObTableID related_table_id)
+{
+  const Value *val = nullptr;
+  if (list_.size() > FAST_LOOP_LIST_LEN) {
+    Key tmp_key;
+    tmp_key.src_tablet_id_ = src_tablet_id;
+    tmp_key.related_table_id_ = related_table_id;
+    Value* const *val_ptr = map_.get(&tmp_key);
+    val = (val_ptr != nullptr ? *val_ptr : nullptr);
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get related tablet id failed", K(ret), K(src_tablet_id), K(related_table_id), K(list_));
+    MapEntry *final_entry = nullptr;
+    FOREACH_X(node, list_, final_entry == nullptr) {
+      MapEntry &entry = *node;
+      if (entry.key_.src_tablet_id_ == src_tablet_id &&
+          entry.key_.related_table_id_ == related_table_id) {
+        final_entry = &entry;
+      }
+    }
+    if (OB_LIKELY(final_entry != nullptr)) {
+      val = &final_entry->val_;
+    }
+  }
+  return val;
+}
+
+int DASRelatedTabletMap::assign(const RelatedTabletList &list)
+{
+  int ret = OB_SUCCESS;
+  clear();
+  FOREACH_X(node, list, OB_SUCC(ret)) {
+    const MapEntry &entry = *node;
+    if (OB_FAIL(add_related_tablet_id(entry.key_.src_tablet_id_,
+                                      entry.key_.related_table_id_,
+                                      entry.val_.tablet_id_,
+                                      entry.val_.part_id_,
+                                      entry.val_.first_level_part_id_))) {
+      LOG_WARN("add related tablet id failed", K(ret), K(entry));
+    }
+  }
+  return ret;
+}
+
+int DASRelatedTabletMap::insert_related_tablet_map()
+{
+  int ret = OB_SUCCESS;
+  if (!map_.created()) {
+    if (OB_FAIL(map_.create(1000, "DASRelTblKey", "DASRelTblVal", MTL_ID()))) {
+      LOG_WARN("create related tablet map failed", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (map_.empty()) {
+      FOREACH_X(node, list_, OB_SUCC(ret)) {
+        MapEntry &entry = *node;
+        if (OB_FAIL(map_.set_refactored(&entry.key_, &entry.val_))) {
+          LOG_WARN("insert entry to map failed", K(ret), K(entry));
+        }
+      }
+    } else if (!list_.empty()) {
+      MapEntry &final_entry = list_.get_last();
+      if (OB_FAIL(map_.set_refactored(&final_entry.key_, &final_entry.val_))) {
+        LOG_WARN("insert final entry to map failed", K(ret), K(final_entry));
+      }
+    }
   }
   return ret;
 }
@@ -342,7 +401,7 @@ int ObDASTabletMapper::get_non_partition_tablet_id(ObIArray<ObTabletID> &tablet_
     } else {
       DASRelatedTabletMap *map = static_cast<DASRelatedTabletMap *>(related_info_.related_map_);
       if (OB_NOT_NULL(map) && OB_NOT_NULL(related_list_)
-          && OB_FAIL(map->get_list().assign(*related_list_))) {
+          && OB_FAIL(map->assign(*related_list_))) {
         LOG_WARN("failed to assign related map list", K(ret));
       }
     }

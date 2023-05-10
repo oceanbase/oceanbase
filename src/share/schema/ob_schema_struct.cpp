@@ -8023,6 +8023,12 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_REPL_CLIENT) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" REPLICATION CLIENT,");
   }
+  if ((priv_set_ & OB_PRIV_DROP_DATABASE_LINK) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" DROP DATABASE LINK,");
+  }
+  if ((priv_set_ & OB_PRIV_CREATE_DATABASE_LINK) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE DATABASE LINK,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }
@@ -10097,6 +10103,7 @@ void ObDbLinkBaseInfo::reset()
   plain_password_.reset();
   host_addr_.reset();
   driver_proto_ = 0;
+  if_not_exist_ = false;
   flag_ = 0;
   service_name_.reset();
   conn_string_.reset();
@@ -10110,6 +10117,7 @@ void ObDbLinkBaseInfo::reset()
   reverse_password_.reset();
   plain_reverse_password_.reset();
   reverse_host_addr_.reset();
+  database_name_.reset();
 }
 
 bool ObDbLinkBaseInfo::is_valid() const
@@ -10226,7 +10234,9 @@ OB_SERIALIZE_MEMBER(ObDbLinkInfo,
                     reverse_user_name_,
                     reverse_password_,
                     plain_reverse_password_,
-                    reverse_host_addr_);
+                    reverse_host_addr_,
+                    database_name_,
+                    if_not_exist_);
 
 ObDbLinkSchema::ObDbLinkSchema(const ObDbLinkSchema &other)
   : ObDbLinkBaseInfo()
@@ -10246,6 +10256,7 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
     dblink_id_ = other.dblink_id_;
     schema_version_ = other.schema_version_;
     driver_proto_ = other.driver_proto_;
+    if_not_exist_ = other.if_not_exist_;
     flag_ = other.flag_;
     if (OB_FAIL(deep_copy_str(other.dblink_name_, dblink_name_))) {
       LOG_WARN("Fail to deep copy dblink name", K(ret));
@@ -10258,31 +10269,33 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
     } else if (OB_FAIL(deep_copy_str(other.password_, password_))) {
       LOG_WARN("Fail to deep copy password", K(ret), K(other.password_));
     } else if (OB_FAIL(deep_copy_str(other.encrypted_password_, encrypted_password_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.encrypted_password_));
+      LOG_WARN("Fail to deep copy encrypted_password", K(ret), K(other.encrypted_password_));
     } else if (OB_FAIL(deep_copy_str(other.plain_password_, plain_password_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.plain_password_));
+      LOG_WARN("Fail to deep copy plain_password", K(ret), K(other.plain_password_));
     } else if (OB_FAIL(deep_copy_str(other.service_name_, service_name_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.service_name_));
+      LOG_WARN("Fail to deep copy service_name", K(ret), K(other.service_name_));
     } else if (OB_FAIL(deep_copy_str(other.conn_string_, conn_string_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.conn_string_));
+      LOG_WARN("Fail to deep copy conn_string", K(ret), K(other.conn_string_));
     } else if (OB_FAIL(deep_copy_str(other.authusr_, authusr_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.authusr_));
+      LOG_WARN("Fail to deep copy authusr", K(ret), K(other.authusr_));
     } else if (OB_FAIL(deep_copy_str(other.authpwd_, authpwd_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.authpwd_));
+      LOG_WARN("Fail to deep copy authpwd", K(ret), K(other.authpwd_));
     } else if (OB_FAIL(deep_copy_str(other.passwordx_, passwordx_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.passwordx_));
+      LOG_WARN("Fail to deep copy passwordx", K(ret), K(other.passwordx_));
     } else if (OB_FAIL(deep_copy_str(other.authpwdx_, authpwdx_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.authpwdx_));
+      LOG_WARN("Fail to deep copy authpwdx", K(ret), K(other.authpwdx_));
     } else if (OB_FAIL(deep_copy_str(other.reverse_cluster_name_, reverse_cluster_name_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_cluster_name_));
+      LOG_WARN("Fail to deep copy reverse_cluster_name", K(ret), K(other.reverse_cluster_name_));
     } else if (OB_FAIL(deep_copy_str(other.reverse_tenant_name_, reverse_tenant_name_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_tenant_name_));
+      LOG_WARN("Fail to deep copy reverse_tenant_name", K(ret), K(other.reverse_tenant_name_));
     } else if (OB_FAIL(deep_copy_str(other.reverse_user_name_, reverse_user_name_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_user_name_));
+      LOG_WARN("Fail to deep copy reverse_user_name", K(ret), K(other.reverse_user_name_));
     } else if (OB_FAIL(deep_copy_str(other.reverse_password_, reverse_password_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.reverse_password_));
+      LOG_WARN("Fail to deep copy reverse_password", K(ret), K(other.reverse_password_));
     } else if (OB_FAIL(deep_copy_str(other.plain_reverse_password_, plain_reverse_password_))) {
-      LOG_WARN("Fail to deep copy password", K(ret), K(other.plain_reverse_password_));
+      LOG_WARN("Fail to deep copy plain_reverse_password", K(ret), K(other.plain_reverse_password_));
+    } else if (OB_FAIL(deep_copy_str(other.database_name_, database_name_))) {
+      LOG_WARN("Fail to deep copy database_name", K(ret), K(other.database_name_));
     }
     host_addr_ = other.host_addr_;
     reverse_host_addr_ = other.reverse_host_addr_;
@@ -10320,7 +10333,9 @@ bool ObDbLinkSchema::operator==(const ObDbLinkSchema &other) const
        && reverse_user_name_ == other.reverse_user_name_
        && reverse_password_ == other.reverse_password_
        && plain_reverse_password_ == other.plain_reverse_password_
-       && reverse_host_addr_ == other.reverse_host_addr_);
+       && reverse_host_addr_ == other.reverse_host_addr_
+       && database_name_ == other.database_name_
+       && if_not_exist_ == other.if_not_exist_);
 }
 
 ObSynonymInfo::ObSynonymInfo(common::ObIAllocator *allocator):

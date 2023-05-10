@@ -1405,8 +1405,10 @@ int FetchStream::read_log_(
         decode_log_entry_time += (get_timestamp() - begin_time);
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn,
             stop_flag, kick_out_info, tsi))) {
-          if (OB_IN_STOP_STATE != ret) {
-            LOG_ERROR("read group entry failed", KR(ret));
+          if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
+            LOG_ERROR("read group entry failed", KR(ret), KPC(this));
+          } else if (OB_NEED_RETRY == ret) {
+            ls_fetch_ctx_->reset_memory_storage();
           }
         }
 

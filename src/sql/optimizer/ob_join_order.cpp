@@ -5233,8 +5233,8 @@ int JoinPath::compute_join_path_ordering()
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
-          is_range_order_ = is_fully_paratition_wise() && left_path_->is_range_order_;
-          is_local_order_ = is_fully_paratition_wise() && !left_path_->is_range_order_;
+          is_range_order_ = is_fully_partition_wise() && left_path_->is_range_order_;
+          is_local_order_ = is_fully_partition_wise() && !left_path_->is_range_order_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -5246,7 +5246,7 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_paratition_wise();
+          is_local_order_ = is_fully_partition_wise();
         }
       }
     } else { /*do nothing*/ }
@@ -8482,8 +8482,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         if (use_shared_hash_join && HASH_JOIN == join_algo) {
           distributed_methods &= ~DIST_BC2HOST_NONE;
         }
-        need_pull_to_local = (right_path.contain_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0)
-                             || right_path.exchange_allocated_;
+        need_pull_to_local = right_path.exchange_allocated_;
       }
     }
   }
@@ -8553,7 +8552,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         OPT_TRACE("plan will use none partition method and prune none broadcast/hash method");
         distributed_methods &= ~DIST_NONE_BROADCAST;
         distributed_methods &= ~DIST_NONE_HASH;
-        need_pull_to_local = left_path.contain_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0;
+        need_pull_to_local = false;
       }
     }
   }
@@ -8618,9 +8617,9 @@ bool ObJoinOrder::is_repart_valid(const Path &left_path, const Path &right_path,
   if (DistAlgo::DIST_PARTITION_NONE == dist_algo && right_path.exchange_allocated_ && is_nl) {
     is_valid = false;
   } else if (DistAlgo::DIST_PARTITION_NONE == dist_algo && right_path.contain_pw_merge_op()) {
-    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+    is_valid = true;
   } else if (DistAlgo::DIST_NONE_PARTITION == dist_algo && left_path.contain_pw_merge_op()) {
-    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+    is_valid = true;
   } else {
     is_valid = true;
   }
@@ -9382,6 +9381,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
     }
   } else if (right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
+    is_fully_partition_wise |= join_path.is_fully_partition_wise();
     if (OB_ISNULL(join_path.left_path_) ||
                OB_ISNULL(join_path.left_path_->parent_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -9393,7 +9393,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                           right_tables,
                                                           config_disable,
                                                           !join_path.is_left_need_exchange() && is_current_dfo,
-                                                          join_path.is_fully_paratition_wise(),
+                                                          is_fully_partition_wise,
                                                           left_join_conditions,
                                                           right_join_conditions,
                                                           join_filter_infos)))) {
@@ -9411,7 +9411,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                         right_tables,
                                                         config_disable,
                                                         !join_path.is_right_need_exchange() && is_current_dfo,
-                                                        join_path.is_fully_paratition_wise(),
+                                                        is_fully_partition_wise,
                                                         left_join_conditions,
                                                         right_join_conditions,
                                                         join_filter_infos)))) {

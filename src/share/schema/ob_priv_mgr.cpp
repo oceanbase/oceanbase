@@ -71,6 +71,8 @@ const char *ObPrivMgr::priv_names_[] = {
     "DEBUG",
     "REPLICATION SLAVE",
     "REPLICATION CLIENT",
+    "DROP DATABASE LINK",
+    "CREATE DATABASE LINK",
 };
 
 ObPrivMgr::ObPrivMgr()

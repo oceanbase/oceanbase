@@ -5569,12 +5569,13 @@ struct ObDropDbLinkArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDropDbLinkArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), dblink_name_() {}
+  ObDropDbLinkArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), dblink_name_(), if_exist_(false) {}
   virtual ~ObDropDbLinkArg() {}
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(dblink_name));
+  TO_STRING_KV(K_(tenant_id), K_(dblink_name), K_(if_exist));
   uint64_t tenant_id_;
   common::ObString dblink_name_;
+  bool if_exist_;
 };
 
 struct ObUseDatabaseArg : public ObDDLArg

@@ -128,6 +128,7 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
         }
       }
     } else if (OB_SUCCESS == ret) {
+      (void)check_finish_receive();
       // set_refactored success, means this msg is in map, so register check item into dm
       int reg_ret = ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(register_dm_info_,
           dh_key, dm_cb_node_seq_id_);

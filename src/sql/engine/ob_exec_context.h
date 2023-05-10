@@ -159,6 +159,7 @@ public:
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  void try_reset_convert_charset_allocator();
 
   void destroy_eval_allocator();
 
@@ -464,6 +465,7 @@ public:
   ObTableDirectInsertCtx &get_table_direct_insert_ctx() { return table_direct_insert_ctx_; }
   void set_errcode(const int errcode) { ATOMIC_STORE(&errcode_, errcode); }
   int get_errcode() const { return ATOMIC_LOAD(&errcode_); }
+  hash::ObHashMap<uint64_t, void*> &get_dblink_snapshot_map() { return dblink_snapshot_map_; }
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
 private:
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
@@ -639,6 +641,7 @@ protected:
   ObTableDirectInsertCtx table_direct_insert_ctx_;
   // for deadlock detect, set in do_close_plan
   int errcode_;
+  hash::ObHashMap<uint64_t, void*> dblink_snapshot_map_;
   // for feedback
   ObExecFeedbackInfo fb_info_;
   //---------------

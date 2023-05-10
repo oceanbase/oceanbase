@@ -1221,7 +1221,7 @@ int ObWindowFunctionOp::init()
             } else if (OB_FAIL(aggr_infos->push_back(wf_info.aggr_info_))) {
               LOG_WARN("failed to push_back", K(wf_info.aggr_info_), K(ret));
             } else {
-              AggrCell *aggr_func = new (tmp_ptr) AggrCell(wf_info, *this, *aggr_infos);
+              AggrCell *aggr_func = new (tmp_ptr) AggrCell(wf_info, *this, *aggr_infos, tenant_id);
               aggr_func->aggr_processor_.set_in_window_func();
               if (OB_FAIL(aggr_func->aggr_processor_.init())) {
                 LOG_WARN("failed to initialize init_group_rows", K(ret));

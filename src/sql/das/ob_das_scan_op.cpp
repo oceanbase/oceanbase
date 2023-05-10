@@ -74,7 +74,8 @@ OB_DEF_SERIALIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   return ret;
 }
 
@@ -94,7 +95,8 @@ OB_DEF_DESERIALIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -117,7 +119,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScanRtDef)
     scan_flag_,
     pd_storage_flag_,
     need_check_output_datum_,
-    is_for_foreign_check_);
+    is_for_foreign_check_,
+    fb_read_tx_uncommitted_);
   return len;
 }
 
@@ -238,7 +241,9 @@ int ObDASScanOp::init_scan_param()
   scan_param_.tenant_schema_version_ = scan_rtdef_->tenant_schema_version_;
   scan_param_.limit_param_ = scan_rtdef_->limit_param_;
   scan_param_.need_scn_ = scan_rtdef_->need_scn_;
-  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_; scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_;
+  scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
+  scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -442,9 +447,10 @@ void ObDASScanOp::reset_access_datums_ptr()
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
-    FOREACH_CNT(e, get_result_outputs()) {
-      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
-      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+    if (OB_NOT_NULL(scan_ctdef_->trans_info_expr_)) {
+      ObExpr *trans_expr = scan_ctdef_->trans_info_expr_;
+      trans_expr->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
@@ -453,6 +459,13 @@ void ObDASScanOp::reset_access_datums_ptr()
       (*e)->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
                                      get_lookup_rtdef()->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*get_lookup_rtdef()->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
+    if (OB_NOT_NULL(get_lookup_ctdef()->trans_info_expr_)) {
+      ObExpr *trans_expr = get_lookup_ctdef()->trans_info_expr_;
+      trans_expr->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
+                                           get_lookup_rtdef()->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
@@ -1207,6 +1220,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.need_scn_ = lookup_rtdef_->need_scn_;
   scan_param_.pd_storage_flag_ = lookup_ctdef_->pd_expr_spec_.pd_storage_flag_;
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
+  scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
   if (lookup_rtdef_->is_for_foreign_check_) {

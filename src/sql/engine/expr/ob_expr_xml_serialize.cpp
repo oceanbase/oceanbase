@@ -43,6 +43,10 @@ int ObExprXmlSerialize::calc_result_typeN(ObExprResType& type,
   if (OB_UNLIKELY(param_num != 10)) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
+  } else if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_XMLSERIALIZE));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_XMLSERIALIZE)), N_XMLSERIALIZE);
   } else {
     if (!ob_is_integer_type(types[0].get_type())) {
       ret = OB_ERR_UNEXPECTED;
@@ -72,6 +76,7 @@ int ObExprXmlSerialize::calc_result_typeN(ObExprResType& type,
       } else {
         type.set_collation_type(dst_type.get_collation_type());
       }
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
       type.set_full_length(dst_type.get_length(), dst_type.get_length_semantics());
     }
   }
@@ -92,7 +97,7 @@ int ObExprXmlSerialize::get_dest_type(const ObExprResType as_type, ObExprResType
     ObCollationType cs_type = static_cast<ObCollationType>(parse_node.int16_values_[OB_NODE_CAST_COLL_IDX]);
     dst_type.set_type(obj_type);
     dst_type.set_collation_type(cs_type);
-    if (ob_is_varchar_type(dst_type.get_type(), dst_type.get_collation_type())) {
+    if (ob_is_varchar_type(dst_type.get_type(), dst_type.get_collation_type()) || ob_is_nvarchar2(obj_type)) {
       dst_type.set_full_length(parse_node.int32_values_[1], as_type.get_accuracy().get_length_semantics());
     } else if (ob_is_clob(dst_type.get_type(), dst_type.get_collation_type()) ||
                ob_is_blob(dst_type.get_type(), dst_type.get_collation_type())) {

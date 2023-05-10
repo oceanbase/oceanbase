@@ -500,16 +500,14 @@ class FetchLogARpcResultPool : public IFetchLogARpcResultPool
 {
   typedef common::ObSmallObjPool<FetchLogARpcResult> ResultPool;
   // 16M
-  //static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = 1L << 24;
-  // 32M
-  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = 1L << 25;
+  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = (1 << 24L) + (1 << 20L);
 
 public:
   FetchLogARpcResultPool() : inited_(false), pool_() {}
   virtual ~FetchLogARpcResultPool() { destroy(); }
 
 public:
-  int init(const int64_t cached_obj_count);
+  int init(const uint64_t tenant_id, const int64_t cached_obj_count);
   void destroy();
   void print_stat();
 

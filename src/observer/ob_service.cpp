@@ -1070,11 +1070,11 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
     LOG_INFO("no need to freeze virtual tenant", K(ret), K(tenant_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      checkpoint::ObCheckPointService* checkpoint_serv = nullptr;
-      if (OB_ISNULL(checkpoint_serv = MTL(checkpoint::ObCheckPointService*))) {
+      storage::ObTenantFreezer* freezer = nullptr;
+      if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ObCheckPointService shouldn't be null", K(ret), K(tenant_id));
-      } else if (OB_FAIL(checkpoint_serv->do_minor_freeze())) {
+        LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
+      } else if (OB_FAIL(freezer->tenant_freeze())) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -1560,7 +1560,7 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
 {
   int ret = OB_SUCCESS;
   omt::ObTenantNodeBalancer::ServerResource svr_res_assigned;
-  int64_t clog_free_size_byte = 0;
+  int64_t clog_in_use_size_byte = 0;
   int64_t clog_total_size_byte = 0;
   logservice::ObServerLogBlockMgr *log_block_mgr = GCTX.log_block_mgr_;
   resource_info.reset();
@@ -1574,7 +1574,7 @@ int ObService::get_server_resource_info(share::ObServerResourceInfo &resource_in
     LOG_WARN("log_block_mgr is null", KR(ret), K(GCTX.log_block_mgr_));
   } else if (OB_FAIL(omt::ObTenantNodeBalancer::get_instance().get_server_allocated_resource(svr_res_assigned))) {
     LOG_WARN("fail to get server allocated resource", KR(ret));
-  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_free_size_byte, clog_total_size_byte))) {
+  } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_in_use_size_byte, clog_total_size_byte))) {
     LOG_WARN("Failed to get clog stat ", KR(ret));
   } else if (OB_FAIL(SLOGGERMGR.get_reserved_size(reserved_size))) {
     LOG_WARN("Failed to get reserved size ", KR(ret));

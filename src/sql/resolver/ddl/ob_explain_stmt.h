@@ -52,6 +52,8 @@ public:
   const common::ObString& get_statement_id() const { return statement_id_; }
   void set_statement_id(const common::ObString& statement_id) { statement_id_ = statement_id; }
   virtual bool is_affect_found_rows() const { return is_select_explain(); }
+  bool is_explain_extended() const { return EXPLAIN_EXTENDED == format_
+                                            || EXPLAIN_EXTENDED_NOADDR == format_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

@@ -81,7 +81,8 @@ public:
   virtual int grant_revoke_user(const ObUserInfo &user_info,
                                 const int64_t new_schema_version,
                                 const common::ObString *ddl_stmt_str,
-                                common::ObISQLClient &sql_client);
+                                common::ObISQLClient &sql_client,
+                                const bool is_from_inner_sql);
   virtual int lock_user(const ObUserInfo &user_info,
                         const int64_t new_schema_version,
                         const common::ObString *ddl_stmt_str,
@@ -95,11 +96,13 @@ public:
                                  common::ObISQLClient &sql_client);
   static int add_user_history(const ObUserInfo &user, 
                               const int64_t schema_version,
-                              common::ObISQLClient &sql_client);
+                              common::ObISQLClient &sql_client,
+                              const bool is_from_inner_sql);
                               
   static int gen_user_dml(const uint64_t exec_tenant_id, 
                           const ObUserInfo &user, 
-                          share::ObDMLSqlSplicer &dml);
+                          share::ObDMLSqlSplicer &dml,
+                          const bool is_from_inner_sql);
   virtual int replace_user(
       const ObUserInfo &user,
       const int64_t new_schema_version,

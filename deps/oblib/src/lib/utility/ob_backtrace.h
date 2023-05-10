@@ -20,7 +20,6 @@ namespace common
 {
 void init_proc_map_info();
 extern bool g_enable_backtrace;
-extern bool g_use_rel_offset;
 const int64_t LBT_BUFFER_LENGTH = 1024;
 int ob_backtrace(void **buffer, int size);
 // save one layer of call stack

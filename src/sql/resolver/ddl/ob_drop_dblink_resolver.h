@@ -20,8 +20,9 @@ namespace sql
 {
 class ObDropDbLinkResolver: public ObDDLResolver
 {
-  static const int64_t DBLINK_NAME = 0;
-  static const int64_t DBLINK_NODE_COUNT = 1;
+  static const int64_t IF_EXIST = 0;
+  static const int64_t DBLINK_NAME = 1;
+  static const int64_t DBLINK_NODE_COUNT = 2;
 public:
   explicit ObDropDbLinkResolver(ObResolverParams &params);
   virtual ~ObDropDbLinkResolver();

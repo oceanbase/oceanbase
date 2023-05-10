@@ -543,6 +543,21 @@ public:
     }
     return ret;
   }
+
+  int persistence_col_stats()
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {
+      if (OB_ISNULL(col_stat_array_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        OB_LOG(WARN, "get unexpected null");
+      } else if (OB_FAIL(col_stat_array_.at(i)->set_min_max_datum_to_obj())) {
+        OB_LOG(WARN, "failed to persistence min max");
+      }
+    }
+    return ret;
+  }
+
   TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 public:
   common::ObSEArray<ObOptTableStat *, 64> table_stat_array_;

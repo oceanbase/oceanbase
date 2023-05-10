@@ -97,7 +97,9 @@ public:
   ObArenaAllocator inner_max_allocator_;
   ObArenaAllocator inner_allocator_;
   ObIAllocator &allocator_;
-  TO_STRING_KV(K_(col_stat));
+  TO_STRING_KV(K_(col_stat),
+               K_(min_val),
+               K_(max_val));
 private:
   int inner_merge_min(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int inner_merge_max(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);

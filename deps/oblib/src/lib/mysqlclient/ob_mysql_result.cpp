@@ -74,49 +74,103 @@ int ObMySQLResult::print_info() const
   return OB_SUCCESS;
 }
 
-void ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length, 
-                                                  oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType cs_type,
-                                                  DblinkDriverProto link_type, bool old_max_length) const
+int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &scale, int32_t &length,
+                                                  oceanbase::common::ObObjType ob_type, oceanbase::common::ObCollationType meta_cs_type,DblinkDriverProto link_type, bool old_max_length) const
 {
+  int ret = OB_SUCCESS;
   int16_t tmp_precision = precision;
   int16_t tmp_scale = scale;
   int32_t tmp_length = length;
+  int64_t mbmaxlen = 0;
   // format precision from others to oceanbase
-  if (ob_is_nstring(ob_type)) {
-    precision = LS_CHAR; // precision is LS_CHAR means national character set (unicode)
-  } else if (ObNumberFloatType == ob_type) {
-    precision = tmp_precision; //bit precision, not decimal precision
-  } else if (tmp_precision < OB_MIN_NUMBER_PRECISION || tmp_precision > OB_MAX_NUMBER_PRECISION) {
-    precision = -1; // for other data type, need format it to -1 if precison out of range
-  } else {
-    precision = tmp_precision; // for a valid precison([OB_MIN_NUMBER_PRECISION, OB_MAX_NUMBER_PRECISION]), just set it
-  }
-
-  // format scale from others to oceanbase
-  if (DBLINK_DRV_OCI == link_type && (ObFloatType == ob_type || ObDoubleType == ob_type)) {
-    scale = OB_MIN_NUMBER_SCALE - 1; // binary_float and binar_double scale from oci is 0, need set to -85
-  } else if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
-    scale = 0;
-  } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE) {
-    scale = OB_MIN_NUMBER_SCALE - 1; // format it to -85 if scale out of range
-  } else {
-    scale = tmp_scale; //  for a valid scale, just set it
-  }
-
-  // format length from others to oceanbase
-  if (ob_is_accuracy_length_valid_tc(ob_type)) {
-    int32_t max_length = 0;
-    if (old_max_length) {
-      max_length = OB_MAX_LONGTEXT_LENGTH_OLD;
-    } else {
-      max_length = OB_MAX_LONGTEXT_LENGTH;
+  if (!lib::is_oracle_mode()) {
+    switch (ob_type) {
+      case ObNumberType: { // for mysql decimal
+        if (2 == length) {
+          precision = 1;
+        } else {
+           precision = length - 2;
+        }
+        length = -1;
+        break;
+      }
+      case ObDoubleType: // for mysql double type and float type
+      case ObFloatType: {
+        precision = length;
+        length = -1;
+        if (scale > precision) {
+          scale = -1;
+          precision = -1;
+        }
+        break;
+      }
+      case ObCharType:
+      case ObVarcharType: {
+        if (OB_FAIL(common::ObCharset::get_mbmaxlen_by_coll(meta_cs_type, mbmaxlen))) {
+          LOG_WARN("fail to get mbmaxlen", K(meta_cs_type), K(ret));
+        } else {
+          length /= mbmaxlen;
+          precision = -1;
+          scale = -1;
+        }
+        break;
+      }
+      case ObTinyIntType:
+      case ObSmallIntType:
+      case ObInt32Type:
+      case ObIntType:
+      case ObBitType: {
+        precision = length;
+        length = -1;
+        scale = -1;
+        break;
+      }
+      default:
+       break;
     }
-    if (tmp_length < 1 || tmp_length > max_length) {
-      length = max_length;
+  } else {
+    if (ob_is_nstring(ob_type)) {
+      precision = LS_CHAR; // precision is LS_CHAR means national character set (unicode)
+    } else if (ObNumberFloatType == ob_type) {
+      precision = tmp_precision; //bit precision, not decimal precision
+    } else if (tmp_precision < OB_MIN_NUMBER_PRECISION || tmp_precision > OB_MAX_NUMBER_PRECISION) {
+      precision = -1; // for other data type, need format it to -1 if precison out of range
     } else {
-      length = tmp_length;
+      precision = tmp_precision; // for a valid precison([OB_MIN_NUMBER_PRECISION, OB_MAX_NUMBER_PRECISION]), just set it
+    }
+
+    // format scale from others to oceanbase
+    if (DBLINK_DRV_OCI == link_type && (ObFloatType == ob_type || ObDoubleType == ob_type)) {
+      scale = OB_MIN_NUMBER_SCALE - 1; // binary_float and binar_double scale from oci is 0, need set to -85
+    } else if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
+      scale = 0;
+    } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE) {
+      scale = OB_MIN_NUMBER_SCALE - 1; // format it to -85 if scale out of range
+    } else {
+      scale = tmp_scale; //  for a valid scale, just set it
+    }
+
+    // format length from others to oceanbase
+    if (ob_is_accuracy_length_valid_tc(ob_type)) {
+      int32_t max_length = 0;
+      if (old_max_length) {
+        max_length = OB_MAX_LONGTEXT_LENGTH_OLD;
+      } else {
+        max_length = OB_MAX_LONGTEXT_LENGTH;
+      }
+      if (tmp_length < 1 || tmp_length > max_length) {
+        length = max_length;
+      } else {
+        length = tmp_length;
+      }
+    }
+    if (ObDoubleType == ob_type || ObFloatType == ob_type) {
+      precision = -1;
+      scale = -1;
+      length = -1;
     }
   }
+  return ret;
 }
 
 } // end namespace sqlclient

@@ -126,7 +126,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 %nonassoc LOWER_PARENS
 //%nonassoc STRING_VALUE
 %left   '(' ')'
-%nonassoc SQL_CACHE SQL_NO_CACHE /*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
+%nonassoc SQL_CACHE SQL_NO_CACHE CHARSET DATABASE_ID REPLICA_NUM/*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
 %nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY /*for simple_expr conflict*/
 %left   '.'
 %right  NOT NOT2
@@ -184,7 +184,7 @@ USE_DISTRIBUTED_DML NO_USE_DISTRIBUTED_DML
 // direct load data hint
 DIRECT
 // hint related to optimizer statistics
-APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS DBMS_STATS
+APPEND NO_GATHER_OPTIMIZER_STATISTICS GATHER_OPTIMIZER_STATISTICS DBMS_STATS FLASHBACK_READ_TX_UNCOMMITTED
 // optimizer dynamic sampling hint
 DYNAMIC_SAMPLING
 // other
@@ -259,7 +259,7 @@ END_P SET_VAR DELIMITER
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION
         COMPRESSED COMPRESSION COMPUTE CONCURRENT CONDENSED CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
-        CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID
+        CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
         DAG DATA DATAFILE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
         DEFAULT_AUTH DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS
@@ -289,7 +289,8 @@ END_P SET_VAR DELIMITER
 
         LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
-        LEVEL LN LOG LS LOG_RESTORE_SOURCE LINE_DELIMITER
+
+        LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
 
         MAJOR MANUAL MASTER MASTER_AUTO_POSITION MASTER_CONNECT_RETRY MASTER_DELAY MASTER_HEARTBEAT_PERIOD
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
@@ -299,7 +300,7 @@ END_P SET_VAR DELIMITER
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
         MIGRATE MIN MIN_CPU MIN_IOPS MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
-        MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE
+        MATERIALIZED MEMBER MEMSTORE_PERCENT MINVALUE MY_NAME
 
         NAME NAMES NAMESPACE NATIONAL NCHAR NDB NDBCLUSTER NEW NEXT NO NOAUDIT NODEGROUP NONE NORMAL NOW NOWAIT
         NOMINVALUE NOMAXVALUE NOORDER NOCYCLE NOCACHE NO_WAIT NULLS NUMBER NVARCHAR NTILE NTH_VALUE NOARCHIVELOG NETWORK NOPARALLEL
@@ -367,6 +368,7 @@ END_P SET_VAR DELIMITER
 %type <node> create_restore_point_stmt drop_restore_point_stmt
 %type <node> create_resource_stmt drop_resource_stmt alter_resource_stmt
 %type <node> cur_timestamp_func cur_time_func cur_date_func now_synonyms_func utc_timestamp_func utc_time_func utc_date_func sys_interval_func sysdate_func
+%type <node> create_dblink_stmt drop_dblink_stmt dblink tenant opt_cluster opt_dblink
 %type <node> opt_create_resource_pool_option_list create_resource_pool_option alter_resource_pool_option_list alter_resource_pool_option
 %type <node> opt_shrink_unit_option id_list opt_shrink_tenant_unit_option
 %type <node> opt_resource_unit_option_list resource_unit_option
@@ -633,6 +635,8 @@ stmt:
   | purge_stmt              { $$ = $1; check_question_mark($$, result); }
   | analyze_stmt            { $$ = $1; check_question_mark($$, result); }
   | load_data_stmt          { $$ = $1; check_question_mark($$, result); }
+  | create_dblink_stmt      { $$ = $1; check_question_mark($$, result); }
+  | drop_dblink_stmt        { $$ = $1; check_question_mark($$, result); }
   | create_sequence_stmt    { $$ = $1; check_question_mark($$, result); }
   | alter_sequence_stmt     { $$ = $1; check_question_mark($$, result); }
   | drop_sequence_stmt      { $$ = $1; check_question_mark($$, result); }
@@ -3894,13 +3898,37 @@ DROP RESTORE POINT relation_name
  *****************************************************************************/
 
 create_database_stmt:
-create_with_opt_hint database_key opt_if_not_exists database_factor opt_database_option_list
+create_with_opt_hint DATABASE database_factor opt_database_option_list
 {
   (void)($1);
-  (void)($2);
   ParseNode *database_option = NULL;
-  merge_nodes(database_option, result, T_DATABASE_OPTION_LIST, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DATABASE, 3, $3, $4, database_option);
+  merge_nodes(database_option, result, T_DATABASE_OPTION_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DATABASE, 3, NULL, $3, database_option);
+}
+| create_with_opt_hint SCHEMA database_factor opt_database_option_list
+{
+  (void)($1);
+  ParseNode *database_option = NULL;
+  merge_nodes(database_option, result, T_DATABASE_OPTION_LIST, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DATABASE, 3, NULL, $3, database_option);
+}
+| create_with_opt_hint DATABASE IF not EXISTS database_factor opt_database_option_list
+{
+  (void)($1);
+  (void)($4);
+  ParseNode *database_option = NULL;
+  merge_nodes(database_option, result, T_DATABASE_OPTION_LIST, $7);
+  malloc_terminal_node($$, result->malloc_pool_, T_IF_NOT_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DATABASE, 3, $$, $6, database_option);
+}
+| create_with_opt_hint SCHEMA IF not EXISTS database_factor opt_database_option_list
+{
+  (void)($1);
+  (void)($4);
+  ParseNode *database_option = NULL;
+  merge_nodes(database_option, result, T_DATABASE_OPTION_LIST, $7);
+  malloc_terminal_node($$, result->malloc_pool_, T_IF_NOT_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DATABASE, 3, $$, $6, database_option);
 }
 ;
 
@@ -4026,10 +4054,23 @@ READ WRITE { malloc_terminal_node($$, result->malloc_pool_, T_OFF); }
  *
  *****************************************************************************/
 drop_database_stmt:
-DROP database_key opt_if_exists database_factor
+DROP DATABASE database_factor
 {
-  (void)($2);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, NULL, $3);
+}
+| DROP SCHEMA database_factor
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, NULL, $3);
+}
+| DROP DATABASE IF EXISTS database_factor
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IF_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, $$, $5);
+}
+| DROP SCHEMA IF EXISTS database_factor
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IF_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DATABASE, 2, $$, $5);
 }
 ;
 
@@ -8713,6 +8754,10 @@ READ_CONSISTENCY '(' consistency_level ')'
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DBMS_STATS);
 }
+| FLASHBACK_READ_TX_UNCOMMITTED
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_FLASHBACK_READ_TX_UNCOMMITTED);
+}
 ;
 
 transform_hint:
@@ -10462,14 +10507,14 @@ opt_with_star:
 ;
 
 normal_relation_factor:
-relation_name
+relation_name opt_dblink
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, NULL, $1, $2);
   dup_node_string($1, $$, result->malloc_pool_);
 }
-| relation_name '.' relation_name
+| relation_name '.' relation_name opt_dblink
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 3, $1, $3, $4);
   dup_node_string($3, $$, result->malloc_pool_);
 }
 | relation_name '.' mysql_reserved_keyword
@@ -10494,6 +10539,15 @@ dot_relation_factor:
   malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, table_name);
   dup_node_string(table_name, $$, result->malloc_pool_);
 }
+;
+
+opt_dblink:
+USER_VARIABLE  /* USER_VARIABLE is '@xxxx', see sql_parser.l */
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DBLINK_NAME, 2, $1, NULL);
+}
+|
+{ $$ = NULL; }
 ;
 
 relation_factor_in_hint:
@@ -12578,7 +12632,69 @@ ALTER SEQUENCE relation_factor opt_sequence_option_list
 }
 ;
 
+/*****************************************************************************
+ *
+ *   create / drop database link grammer
+ *
+ ******************************************************************************/
+create_dblink_stmt:
+create_with_opt_hint DATABASE LINK dblink CONNECT TO user tenant DATABASE database_factor IDENTIFIED BY password ip_port opt_cluster
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DBLINK, 10,
+                           NULL,    /* opt_if_not_exists */
+                           $4,    /* dblink name */
+                           $7,    /* user name */
+                           $8,    /* tenant name */
+                           $10,   /* database name */
+                           $13,   /* password */
+                           NULL,   /* driver */
+                           $14,   /* host ip port*/
+                           $15,   /* optional cluster */
+                           NULL    /* optional self credential */);
+}
+| create_with_opt_hint DATABASE LINK IF not EXISTS dblink CONNECT TO user tenant DATABASE database_factor IDENTIFIED BY password ip_port opt_cluster
+{
+  (void)($1);
+  (void)($5);
+  malloc_terminal_node($$, result->malloc_pool_, T_IF_NOT_EXISTS);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_DBLINK, 10,
+                           $$,    /* opt_if_not_exists */
+                           $7,    /* dblink name */
+                           $10,    /* user name */
+                           $11,    /* tenant name */
+                           $13,   /* database name */
+                           $16,   /* password */
+                           NULL,   /* driver */
+                           $17,   /* host ip port*/
+                           $18,   /* optional cluster */
+                           NULL    /* optional self credential */);
+}
+;
 
+drop_dblink_stmt:
+DROP DATABASE LINK opt_if_exists dblink
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_DBLINK, 2, $4, $5);
+}
+;
+
+dblink:
+relation_name
+{ $$ = $1; }
+;
+
+tenant:
+USER_VARIABLE    /* USER_VARIABLE is '@xxxx', see sql_parser.l */
+{ $$ = $1; }
+;
+
+opt_cluster:
+CLUSTER STRING_VALUE
+{ $$ = $2; }
+|
+{ $$ = NULL; }
+;
 
 
 /*****************************************************************************
@@ -12909,7 +13025,16 @@ ALTER
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_REPL_CLIENT;
 }
-
+| DROP DATABASE LINK
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_DROP_DATABASE_LINK;
+}
+| CREATE DATABASE LINK
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_DATABASE_LINK;
+}
 
 ;
 
@@ -15482,6 +15607,11 @@ SERVER opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_IP_PORT, 1, $3);
 }
+|
+HOST STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_IP_PORT, 1, $2);
+}
 ;
 
 zone_desc :
@@ -17751,6 +17881,9 @@ ACCOUNT
 |       BACKED
 |       NAMESPACE
 |       LIB
+|       LINK %prec LOWER_PARENS
+|       MY_NAME
+|       CONNECT
 |       STATEMENT_ID
 ;
 

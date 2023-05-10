@@ -396,6 +396,7 @@ int ObAccessService::check_read_allowed_(
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
+  LOG_TRACE("print check read allowed, scan param", K(ls_id), K(tablet_id), K(scan_param.fb_read_tx_uncommitted_));
   if (OB_FAIL(ctx_guard.init(ls_id))) {
     LOG_WARN("ctx_guard init fail", K(ret), K(ls_id));
   } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD))) {
@@ -408,7 +409,7 @@ int ObAccessService::check_read_allowed_(
     ctx.ls_ = ls;
     ctx.timeout_ = scan_param.timeout_;
     ctx.tablet_id_ = tablet_id;
-    if (user_specified_snapshot.is_valid()) {
+    if (user_specified_snapshot.is_valid() && !scan_param.fb_read_tx_uncommitted_) {
       if (OB_FAIL(ls->get_read_store_ctx(user_specified_snapshot,
                                          scan_param.tx_lock_timeout_,
                                          ctx))) {
@@ -416,12 +417,24 @@ int ObAccessService::check_read_allowed_(
       }
     } else {
       bool read_latest = access_type == ObStoreAccessType::READ_LATEST;
-      auto &snapshot = scan_param.snapshot_;
-      if (OB_FAIL(ls->get_read_store_ctx(snapshot,
-                                         read_latest,
-                                         scan_param.tx_lock_timeout_,
-                                         ctx))) {
-        LOG_WARN("get read store ctx fail", K(read_latest), K(snapshot), K(ls_id), K(ret));
+      if (user_specified_snapshot.is_valid()) {
+        transaction::ObTxReadSnapshot spec_snapshot;
+        if (OB_FAIL(spec_snapshot.assign(scan_param.snapshot_))) {
+          LOG_WARN("copy snapshot fail", K(ret));
+        } else if (FALSE_IT(spec_snapshot.specify_snapshot_scn(user_specified_snapshot))) {
+        } else if (OB_FAIL(ls->get_read_store_ctx(spec_snapshot,
+                                                  read_latest,
+                                                  scan_param.tx_lock_timeout_,
+                                                  ctx))) {
+          LOG_WARN("get read store ctx fail", K(ret), K(read_latest), K(spec_snapshot), K(user_specified_snapshot), K(ls_id));
+        }
+      } else if (OB_FAIL(ls->get_read_store_ctx(scan_param.snapshot_,
+                                                read_latest,
+                                                scan_param.tx_lock_timeout_,
+                                                ctx))) {
+        LOG_WARN("get read store ctx fail", K(ret), K(read_latest), K(scan_param.snapshot_), K(ls_id));
+      }
+      if (OB_FAIL(ret)) {
       } else if (read_latest) {
         if (!scan_param.tx_id_.is_valid()) {
           ret = OB_INVALID_ARGUMENT;
@@ -453,52 +466,6 @@ int ObAccessService::check_read_allowed_(
   return ret;
 }
 
-/*
- * check_read_allowed - check replica can serve read
- *
- * NOTE: this function only be used by DML pre-check conflict
- * it's better to use SCAN_PARAM + SNAPSHOT in the future
- */
-int ObAccessService::check_read_allowed_(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    const ObStoreAccessType access_type,
-    const ObDMLBaseParam &dml_param,
-    const transaction::ObTxDesc &tx_desc,
-    const transaction::ObTxReadSnapshot &snapshot,
-    ObStoreCtxGuard &ctx_guard)
-{
-  int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  if (OB_FAIL(ctx_guard.init(ls_id))) {
-    LOG_WARN("ctx_guard init fail", K(ret), K(ls_id), K(tx_desc));
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD))) {
-    LOG_WARN("get log stream failed.", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
-  } else {
-    auto &ctx = ctx_guard.get_store_ctx();
-    ctx.ls_ = ls;
-    ctx.timeout_ = dml_param.timeout_;
-    ctx.tablet_id_ = tablet_id;
-    bool read_latest = access_type == ObStoreAccessType::READ_LATEST;
-    if (OB_FAIL(ls->get_read_store_ctx(snapshot,
-                                       read_latest,
-                                       tx_desc.get_tx_lock_timeout(),
-                                       ctx))) {
-      LOG_WARN("get read store ctx fail", K(read_latest), K(snapshot), K(ls_id), K(ret));
-    } else if (read_latest) {
-      if (!tx_desc.get_tx_id().is_valid()) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("readlatest need trans_desc.tx_id_ valid", K(ret));
-      } else {
-        ctx.mvcc_acc_ctx_.tx_id_ = tx_desc.get_tx_id();
-      }
-    }
-  }
-  return ret;
-}
 
 /*
  * check_write_allowed - check replica can serve transactional write

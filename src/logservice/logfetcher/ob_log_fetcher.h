@@ -195,7 +195,6 @@ public:
   virtual void resume();
   virtual bool is_paused();
   virtual void mark_stop_flag();
-  int set_restore_log_upper_limit(const share::SCN &upper_limit) { return 0; }
 
 public:
   virtual void configure(const ObLogFetcherConfig &cfg);

@@ -40,6 +40,9 @@ using namespace share;
 namespace logservice
 {
 const char *ObServerLogBlockMgr::LOG_POOL_PATH = "log_pool";
+const int64_t ObServerLogBlockMgr::NORMAL_STATUS = 0;
+const int64_t ObServerLogBlockMgr::EXPANDING_STATUS = 1;
+const int64_t ObServerLogBlockMgr::SHRINKING_STATUS = 2;
 
 int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, bool &result)
 {
@@ -78,6 +81,7 @@ ObServerLogBlockMgr::ObServerLogBlockMgr()
       min_block_id_(0),
       max_block_id_(0),
       min_log_disk_size_for_all_tenants_(0),
+      block_cnt_in_use_(0),
       is_inited_(false)
 {
   memset(log_pool_path_, '\0', OB_MAX_FILE_NAME_LENGTH);
@@ -119,6 +123,7 @@ void ObServerLogBlockMgr::destroy()
 {
   CLOG_LOG_RET(WARN, OB_SUCCESS, "ObServerLogBlockMgr  destroy", KPC(this));
   is_inited_ = false;
+  block_cnt_in_use_ = 0;
   min_log_disk_size_for_all_tenants_ = 0;
   max_block_id_ = 0;
   min_block_id_ = 0;
@@ -208,7 +213,7 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
   return ret;
 }
 
-int ObServerLogBlockMgr::get_disk_usage(int64_t &free_size_byte, int64_t &total_size_byte)
+int ObServerLogBlockMgr::get_disk_usage(int64_t &in_use_size_byte, int64_t &total_size_byte)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -216,7 +221,7 @@ int ObServerLogBlockMgr::get_disk_usage(int64_t &free_size_byte, int64_t &total_
     CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", K(ret), KPC(this));
   } else {
     total_size_byte = get_total_size_guarded_by_lock_();
-    free_size_byte = get_free_size_guarded_by_lock_();
+    in_use_size_byte = get_in_use_size_guarded_by_lock_();
   }
   return ret;
 }
@@ -236,7 +241,7 @@ int ObServerLogBlockMgr::create_block_at(const FileDesc &dest_dir_fd,
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "Invalid argument", K(ret), KPC(this), K(dest_dir_fd),
              K(dest_block_path), K(block_size));
-  } else if (OB_FAIL(get_and_inc_min_block_id_guarded_by_lock_(src_block_id))) {
+  } else if (OB_FAIL(get_and_inc_min_block_id_guarded_by_lock_(src_block_id, true))) {
     CLOG_LOG(WARN, "get_and_inc_min_block_id_guarded_by_lock_ failed", K(ret), KPC(this),
              K(dest_dir_fd), K(dest_block_path));
   } else if (OB_FAIL(block_id_to_string(src_block_id, src_block_path, OB_MAX_FILE_NAME_LENGTH))) {
@@ -274,7 +279,7 @@ int ObServerLogBlockMgr::remove_block_at(const FileDesc &src_dir_fd,
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       CLOG_LOG(ERROR, "ObServerLogBlockMGR has not inited", K(ret), KPC(this));
-    } else if (OB_FAIL(get_and_inc_max_block_id_guarded_by_lock_(dest_block_id))) {
+    } else if (OB_FAIL(get_and_inc_max_block_id_guarded_by_lock_(dest_block_id, true))) {
       CLOG_LOG(ERROR, "get_and_inc_max_block_id_guarded_by_lock_ failed", K(ret), KPC(this),
                K(src_dir_fd), K(src_block_path));
     } else if (OB_FAIL(block_id_to_string(dest_block_id, dest_block_path, OB_MAX_FILE_NAME_LENGTH))) {
@@ -485,6 +490,7 @@ int ObServerLogBlockMgr::do_load_(const char *log_disk_path)
     CLOG_LOG(ERROR, "check_log_pool_whehter_is_integrity_ failed, unexpected error",
              K(ret), KPC(this), K(log_disk_path), K(has_allocated_block_cnt));
   } else {
+    block_cnt_in_use_ = has_allocated_block_cnt;
     CLOG_LOG(INFO, "do_load_ success", K(ret), KPC(this), K(time_guard));
   }
   return ret;
@@ -501,7 +507,13 @@ int ObServerLogBlockMgr::scan_log_pool_dir_and_do_trim_()
   int ret = OB_SUCCESS;
   GetBlockIdListFunctor functor;
   BlockIdArray &block_id_array = functor.block_id_array_;
-  if (OB_FAIL(palf::scan_dir(log_pool_path_, functor))) {
+  // NB: try to clear tmp file or directory in log loop. consider like this:
+  //     there may be a expand operation in progress before restarting, if we
+  //     not delete tmp directory which used to expand, the new expand operation
+  //     will be failed.
+  if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(log_pool_path_))) {
+    CLOG_LOG(WARN, "delete_tmp_file_or_directory_at log pool failed", KPC(this));
+  } else if (OB_FAIL(palf::scan_dir(log_pool_path_, functor))) {
     CLOG_LOG(ERROR, "scan_dir failed", K(ret), KPC(this));
   } else if (true == block_id_array.empty()) {
     CLOG_LOG(INFO, "the log pool is empty, no need trime", K(ret), KPC(this));
@@ -712,6 +724,12 @@ int64_t ObServerLogBlockMgr::get_free_size_guarded_by_lock_()
   return BLOCK_SIZE * (max_block_id_ - min_block_id_);
 }
 
+int64_t ObServerLogBlockMgr::get_in_use_size_guarded_by_lock_()
+{
+  RLockGuard guard(block_id_range_lock_);
+  return block_cnt_in_use_*BLOCK_SIZE;
+}
+
 int ObServerLogBlockMgr::update_log_pool_meta_guarded_by_lock_(const LogPoolMeta &meta)
 {
   int ret = OB_SUCCESS;
@@ -743,7 +761,8 @@ ObServerLogBlockMgr::get_log_pool_meta_guarded_by_lock_() const
 }
 
 int ObServerLogBlockMgr::get_and_inc_max_block_id_guarded_by_lock_(
-    block_id_t &out_block_id)
+    block_id_t &out_block_id,
+    const bool remove_block)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(block_id_range_lock_);
@@ -754,12 +773,17 @@ int ObServerLogBlockMgr::get_and_inc_max_block_id_guarded_by_lock_(
   } else {
     // max_block_id_ is exclusive range
     out_block_id = max_block_id_++;
+    if (remove_block) {
+      block_cnt_in_use_--;
+    }
+    OB_ASSERT(block_cnt_in_use_ >= 0);
   }
   return ret;
 }
 
 int ObServerLogBlockMgr::get_and_inc_min_block_id_guarded_by_lock_(
-    block_id_t &out_block_id)
+    block_id_t &out_block_id,
+    const bool create_block)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(block_id_range_lock_);
@@ -772,6 +796,9 @@ int ObServerLogBlockMgr::get_and_inc_min_block_id_guarded_by_lock_(
              K(ret), KPC(this));
   } else {
     out_block_id = min_block_id_++;
+    if (create_block) {
+      block_cnt_in_use_++;
+    }
   }
   return ret;
 }

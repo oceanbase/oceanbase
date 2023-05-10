@@ -2969,7 +2969,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       set_dist_methods &= ~DistAlgo::DIST_PARTITION_NONE;
       OPT_TRACE("plan will not use partition none method");
     } else {
-      need_pull_to_local = right_child.get_contains_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0;
+      need_pull_to_local = false;
       set_dist_methods &= ~DistAlgo::DIST_HASH_NONE;
       OPT_TRACE("plan will use partition none method");
     }
@@ -3005,7 +3005,7 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
       set_dist_methods &= ~DistAlgo::DIST_NONE_PARTITION;
       OPT_TRACE("plan will not use none partition method");
     } else {
-      need_pull_to_local = left_child.get_contains_pw_merge_op() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0;
+      need_pull_to_local = false;
       set_dist_methods &= ~DistAlgo::DIST_NONE_HASH;
       OPT_TRACE("plan will use none partition method");
     }
@@ -3059,9 +3059,9 @@ bool ObSelectLogPlan::is_set_repart_valid(const ObLogicalOperator &left_plan,
 {
   bool is_valid = true;
   if (DistAlgo::DIST_PARTITION_NONE == dist_algo && right_plan.get_contains_pw_merge_op()) {
-    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+    is_valid = true;
   } else if (DistAlgo::DIST_NONE_PARTITION == dist_algo && left_plan.get_contains_pw_merge_op()) {
-    is_valid = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
+    is_valid = true;
   } else {
     is_valid = true;
   }
@@ -5203,8 +5203,6 @@ int ObSelectLogPlan::check_winfunc_pushdown(
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("top is null", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_1_0_0) {
-    is_pushdown = false;
   } else if (WinDistAlgo::HASH != method) {
     is_pushdown = false;
   } else {
@@ -6504,6 +6502,7 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_location_type(index_scan->get_location_type());
     table_scan->set_flashback_query_expr(index_scan->get_flashback_query_expr());
     table_scan->set_flashback_query_type(index_scan->get_flashback_query_type());
+    table_scan->set_fq_read_tx_uncommitted(index_scan->get_fq_read_tx_uncommitted());
     table_scan->set_part_ids(index_scan->get_part_ids());
     table_scan->get_table_name() = table_item->alias_name_.length() > 0 ?
                                    table_item->alias_name_ : table_item->table_name_;

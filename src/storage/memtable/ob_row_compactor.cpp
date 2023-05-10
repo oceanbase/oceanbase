@@ -288,7 +288,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
           dml_flag = mtd->dml_flag_;
           compact_datum_row.row_flag_.set_flag(dml_flag);
         }
-        for (int64_t i = 0; i < compact_datum_row.get_column_count(); ++i) {
+        for (int64_t i = 0; i < datum_row->get_column_count(); ++i) {
           if (compact_datum_row.storage_datums_[i].is_nop()) {
             compact_datum_row.storage_datums_[i] = datum_row->storage_datums_[i];
           }

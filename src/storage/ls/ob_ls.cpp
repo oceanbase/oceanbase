@@ -1344,7 +1344,7 @@ int ObLS::replay_get_tablet(const common::ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::logstream_freeze(const bool is_sync)
+int ObLS::logstream_freeze(const bool is_sync, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1352,8 +1352,11 @@ int ObLS::logstream_freeze(const bool is_sync)
   {
     int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
     int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-    if (IS_NOT_INIT) {
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+    if (!lock_myself.locked()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("lock ls failed, please retry later", K(ret), K(ls_meta_));
+    } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_stopped_)) {
@@ -1376,7 +1379,9 @@ int ObLS::logstream_freeze(const bool is_sync)
   return ret;
 }
 
-int ObLS::tablet_freeze(const ObTabletID &tablet_id, const bool is_sync)
+int ObLS::tablet_freeze(const ObTabletID &tablet_id,
+                        const bool is_sync,
+                        const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1384,8 +1389,11 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id, const bool is_sync)
   {
     int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
     int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-    if (IS_NOT_INIT) {
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+    if (!lock_myself.locked()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+    } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_stopped_)) {
@@ -1408,13 +1416,16 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id, const bool is_sync)
   return ret;
 }
 
-int ObLS::force_tablet_freeze(const ObTabletID &tablet_id)
+int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
   int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-  if (IS_NOT_INIT) {
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+  if (!lock_myself.locked()) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_UNLIKELY(is_stopped_)) {
@@ -1431,7 +1442,9 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id)
   return ret;
 }
 
-int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool is_sync)
+int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
+                              const bool is_sync,
+                              const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   ObFuture<int> result;
@@ -1439,8 +1452,11 @@ int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool
   {
     int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
     int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-    if (IS_NOT_INIT) {
+    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+    if (!lock_myself.locked()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+    } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_stopped_)) {
@@ -1463,12 +1479,19 @@ int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, const bool
   return ret;
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts)
 {
+  int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
   int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-  return checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+  if (!lock_myself.locked()) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+  } else {
+    ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+  }
+  return ret;
 }
 
 int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,

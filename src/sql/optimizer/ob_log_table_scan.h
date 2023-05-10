@@ -69,6 +69,7 @@ public:
         diverse_path_count_(0),
         fq_expr_(NULL),
         fq_type_(TableItem::NOT_USING),
+        fq_read_tx_uncommitted_(false),
         bf_info_(),
         group_id_expr_(nullptr),
         use_batch_(false),
@@ -404,6 +405,8 @@ public:
   inline int64_t get_diverse_path_count() const { return diverse_path_count_; }
   inline TableItem::FlashBackQueryType get_flashback_query_type() const {return fq_type_; }
   inline void set_flashback_query_type(TableItem::FlashBackQueryType type) { fq_type_ = type; }
+  inline bool get_fq_read_tx_uncommitted() const { return fq_read_tx_uncommitted_; }
+  inline void set_fq_read_tx_uncommitted(bool v) { fq_read_tx_uncommitted_ = v; }
   inline const ObRawExpr* get_flashback_query_expr() const { return fq_expr_; }
   inline ObRawExpr* &get_flashback_query_expr() { return fq_expr_; }
   inline void set_flashback_query_expr(ObRawExpr *expr) { fq_expr_ = expr; }
@@ -557,6 +560,7 @@ protected: // memeber variables
 
   ObRawExpr* fq_expr_; //flashback query expr
   TableItem::FlashBackQueryType fq_type_; //flashback query type
+  bool fq_read_tx_uncommitted_; // whether flashback query read uncommitted changes in transaction
 
   ObPxBFStaticInfo bf_info_; // for join partition filter
   // end for partition join filter

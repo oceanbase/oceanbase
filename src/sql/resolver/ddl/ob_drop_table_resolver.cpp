@@ -135,7 +135,7 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
         if (NULL == table_node) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table_node is null", K(ret));
-        } else if (OB_FAIL(resolve_dblink_name(table_node, dblink_name, has_reverse_link, has_dblink_node))) {
+        } else if (OB_FAIL(resolve_dblink_name(table_node, session_info_->get_effective_tenant_id(), dblink_name, has_reverse_link, has_dblink_node))) {
           SQL_RESV_LOG(WARN, "failed to resolv dblink name", K(ret));
         } else if (has_dblink_node) {
           if (has_reverse_link || !dblink_name.empty()) {

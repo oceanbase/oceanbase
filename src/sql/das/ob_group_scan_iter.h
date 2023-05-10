@@ -27,6 +27,8 @@ public:
   {
   }
 
+  ~ObGroupResultRows() { reset(); }
+
   int init(const common::ObIArray<ObExpr *> &exprs,
            ObEvalCtx &eval_ctx,
            common::ObIAllocator &das_op_allocator,
@@ -91,6 +93,7 @@ class ObGroupScanIter : public ObNewRowIterator
   OB_UNIS_VERSION(1);
 public:
   ObGroupScanIter();
+  virtual ~ObGroupScanIter() = default;
   //virtual int rescan() override;
   int switch_scan_group();
   int set_scan_group(int64_t group_id);

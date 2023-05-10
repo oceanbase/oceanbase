@@ -641,7 +641,7 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "session is NULL", PRINT_WRAPPER);
   } else if (++step && session->is_inner()) {
-    DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
+    DETECT_LOG(TRACE, "inner session no need register to deadlock", PRINT_WRAPPER);
   } else if (++step && OB_ISNULL(desc = session->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "desc in session is NULL", PRINT_WRAPPER);
@@ -670,13 +670,16 @@ int ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(sql::Ob
     }
   } else {// statment is done, will not try again, all related deadlock info should be resetted
     unregister_from_deadlock_detector(desc->tid(), UnregisterPath::END_STMT_DONE);
-    DETECT_LOG(INFO, "try unregister from deadlock detector", KR(ret), K(desc->tid()));
+    DETECT_LOG(TRACE, "try unregister from deadlock detector", KR(ret), K(desc->tid()));
   }
   if (OB_NOT_NULL(desc)) {// whether registered or not, clean conflict info anyway
     desc->reset_conflict_txs();
   }
-  if (OB_SUCCESS != exec_ctx.get_errcode()) {
-    DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+  int exec_ctx_err_code = exec_ctx.get_errcode();
+  if (OB_SUCCESS != exec_ctx_err_code) {
+    if ((OB_ITER_END != exec_ctx_err_code) && (2 != step)) {
+      DETECT_LOG(INFO, "maintain deadlock info", PRINT_WRAPPER);
+    }
   }
   return ret;
   #undef PRINT_WRAPPER

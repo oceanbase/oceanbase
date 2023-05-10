@@ -1983,6 +1983,11 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
              && (type_ >= T_OP_EQ && type_ <= T_OP_NE)) {
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_WARN("incorrect cmp type with json arguments", K(type1), K(type2), K(type_), K(ret));
+  } else if (is_oracle_mode()
+             && (type1.is_user_defined_sql_type() || type2.is_user_defined_sql_type())
+             && (type_ >= T_OP_EQ && type_ <= T_OP_NE)) {
+    ret = OB_ERR_INVALID_XML_DATATYPE;
+    LOG_WARN("incorrect cmp type with xml arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                             type1.get_type(),
                                                             type2.get_type()))) {

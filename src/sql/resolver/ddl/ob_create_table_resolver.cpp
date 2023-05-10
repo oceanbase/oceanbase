@@ -449,6 +449,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   bool is_temporary_table = false;
+  bool has_dblink_node = false;
   const bool is_mysql_mode = !is_oracle_mode();
   ParseNode *create_table_node = const_cast<ParseNode*>(&parse_tree);
   CHECK_COMPATIBILITY_MODE(session_info_);
@@ -528,9 +529,9 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         ret = OB_NOT_INIT;
         SQL_RESV_LOG(WARN, "session_info is null.", K(ret));
       } else if (OB_FAIL(resolve_table_relation_node(create_table_node->children_[2], table_name, database_name,
-                                                     false, false, &dblink_name_ptr, &dblink_name_len))) {
+                                                     false, false, &dblink_name_ptr, &dblink_name_len, &has_dblink_node))) {
         SQL_RESV_LOG(WARN, "failed to resolve table relation node!", K(ret));
-      } else if (NULL != dblink_name_ptr) { //don't care about dblink_name_len
+      } else if (has_dblink_node) { //don't care about dblink_name_len
         // Check whether the child nodes of table_node have dblink ParseNode,
         // If so, an error will be reported.
         ret = OB_ERR_DDL_ON_REMOTE_DATABASE;

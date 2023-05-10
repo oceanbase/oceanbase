@@ -36,45 +36,49 @@ int ob_backtrace(void **buffer, int size)
   return rv;
 }
 
-bool read_codesegment_addr_range(int64_t &start_addr, int64_t &end_addr)
+bool read_min_max_addr(int64_t &min_addr, int64_t &max_addr)
 {
   bool bret = false;
-  char fn[64];
-  snprintf(fn, sizeof(fn), "/proc/%d/maps", getpid());
-  FILE *map_file = fopen(fn, "rt");
-  if (!map_file) return bret;
-  DEFER(fclose(map_file));
-  char buff[1024];
-  while (fgets(buff, sizeof buff, map_file) != NULL) {
-    int len = strlen(buff);
-    if (len > 0 && buff[len-1] == '\n') {
-      buff[--len] = '\0';
-    }
-    char* tokens[8];
-    int n_token = 0;
-    for (char *saveptr = NULL, *value = strtok_r(buff, " ", &saveptr);
-         NULL != value && n_token < ARRAYSIZEOF(tokens);
-         value = strtok_r(NULL, " ", &saveptr)) {
-      tokens[n_token++] = value;
-    }
-    if (n_token < 6) {
+  FILE *fp = fopen("/proc/self/maps", "r");
+  if (!fp) return bret;
+  DEFER(fclose(fp));
+  char line[512];
+  min_addr = INT64_MAX;
+  max_addr = -1;
+  int64_t addr = (int64_t)__func__;
+  while (fgets(line, sizeof(line), fp) != NULL) {
+    int64_t start, end, inode, offset, major, minor;
+    char perms[8];
+    char path[256];
+    int n = sscanf(line,
+                   "%lx-%lx %4s %lx %lx:%lx %ld %255s",
+                   &start, &end, perms,
+                   &offset, &major, &minor, &inode, path);
+    if (n < 8) {
       continue;
     }
-    char *perms = tokens[1];
-    if (strlen(perms) == 4 && perms[2] != 'x') {
-      continue;
-    }
-    int64_t a0 = 0, a1 = 0;
-    sscanf(tokens[0], "%lx-%lx", &a0, &a1);
-    char *path = tokens[5];
-    if (path[0] == '[') {
-      continue;
-    }
-    int64_t addr = (int64_t)__func__;
-    if (addr >= a0 && addr < a1) {
-      start_addr = a0;
-      end_addr = a1;
+    uint64_t dst_inode = inode;
+    if (start <= addr && addr < end) {
       bret = true;
+      fseek(fp, 0, SEEK_SET);
+      while (fgets(line, sizeof(line), fp) != NULL) {
+        int n = sscanf(line,
+                       "%lx-%lx %4s %lx %lx:%lx %ld %255s",
+                       &start, &end, perms,
+                       &offset, &major, &minor, &inode, path);
+        if (n < 8) {
+          continue;
+        }
+        if (dst_inode != inode) {
+          continue;
+        }
+        if (start < min_addr) {
+          min_addr = start;
+        }
+        if (end > max_addr) {
+          max_addr = end;
+        }
+      }
       break;
     }
   }
@@ -82,7 +86,6 @@ bool read_codesegment_addr_range(int64_t &start_addr, int64_t &end_addr)
 }
 
 bool g_enable_backtrace = true;
-bool g_use_rel_offset = false;
 struct ProcMapInfo
 {
   int64_t code_start_addr_;
@@ -94,25 +97,23 @@ ProcMapInfo g_proc_map_info{.code_start_addr_ = -1, .code_end_addr_ = -1, .is_in
 
 void init_proc_map_info()
 {
-  read_codesegment_addr_range(g_proc_map_info.code_start_addr_, g_proc_map_info.code_end_addr_);
+  read_min_max_addr(g_proc_map_info.code_start_addr_, g_proc_map_info.code_end_addr_);
   g_proc_map_info.is_inited_ = true;
 }
 
 int64_t get_rel_offset(int64_t addr)
 {
-  if (g_use_rel_offset) {
-    int64_t code_start_addr = -1;
-    int64_t code_end_addr = -1;
-    if (OB_UNLIKELY(!g_proc_map_info.is_inited_)) {
-      read_codesegment_addr_range(code_start_addr, code_end_addr);
-    } else {
-      code_start_addr = g_proc_map_info.code_start_addr_;
-      code_end_addr = g_proc_map_info.code_end_addr_;
-    }
-    if (code_start_addr != -1) {
-      if (OB_LIKELY(addr >= code_start_addr && addr < code_end_addr)) {
-        addr -= code_start_addr;
-      }
+  int64_t code_start_addr = -1;
+  int64_t code_end_addr = -1;
+  if (OB_UNLIKELY(!g_proc_map_info.is_inited_)) {
+    read_min_max_addr(code_start_addr, code_end_addr);
+  } else {
+    code_start_addr = g_proc_map_info.code_start_addr_;
+    code_end_addr = g_proc_map_info.code_end_addr_;
+  }
+  if (code_start_addr != -1) {
+    if (OB_LIKELY(addr >= code_start_addr && addr < code_end_addr)) {
+      addr -= code_start_addr;
     }
   }
   return addr;

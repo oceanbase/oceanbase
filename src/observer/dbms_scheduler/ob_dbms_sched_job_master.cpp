@@ -305,11 +305,11 @@ int ObDBMSSchedJobMaster::start()
 int ObDBMSSchedJobMaster::stop()
 {
   int ret = OB_SUCCESS;
-  scheduler_task_.stop();
   stoped_ = true;
   while (running_) {
     sleep(1);
   }
+  scheduler_task_.stop();
   ready_queue_.clear();
   alive_jobs_.clear();
   stoped_ = false;

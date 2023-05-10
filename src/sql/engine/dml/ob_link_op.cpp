@@ -6,6 +6,7 @@
 #include "share/schema/ob_dblink_mgr.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/mysqlclient/ob_mysql_connection_pool.h"
+#include "common/sql_mode/ob_sql_mode_utils.h"
 #include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
@@ -136,7 +137,7 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
                                                       dblink_schema_->get_tenant_name(),
                                                       dblink_schema_->get_user_name(),
                                                       dblink_schema_->get_plain_password(),
-                                                      ObString(""),
+                                                      dblink_schema_->get_database_name(),
                                                       dblink_schema_->get_conn_string(),
                                                       dblink_schema_->get_cluster_name(),
                                                       param_ctx))) {
@@ -145,17 +146,21 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
     LOG_WARN("failed to get dblink connection from session", K(my_session), K(sessid_), K(ret));
   } else {
     if (NULL == dblink_conn) {
-      if (OB_FAIL(dblink_proxy->acquire_dblink(dblink_id,
-                                              link_type_,
-                                              param_ctx,
-                                              dblink_conn_,
-                                              sessid_,
-                                              next_sql_req_level_))) {
-        ObDblinkUtils::process_dblink_errno(link_type_, dblink_conn_, ret);
+      const char *set_sql_mode_sql = NULL;
+      if (!is_oracle_mode() && OB_FAIL(ObDblinkService::get_set_sql_mode_cstr(my_session, set_sql_mode_sql, allocator_))) {
+      LOG_WARN("failed to get set_sql_mode_sql", K(ret));
+      } else if (OB_FAIL(dblink_proxy->acquire_dblink(dblink_id,
+                                                      link_type_,
+                                                      param_ctx,
+                                                      dblink_conn_,
+                                                      sessid_,
+                                                      next_sql_req_level_,
+                                                      set_sql_mode_sql))) {
         LOG_WARN("failed to acquire dblink", K(ret), K(dblink_id));
       } else if (OB_FAIL(my_session->get_dblink_context().register_dblink_conn_pool(dblink_conn_->get_common_server_pool()))) {
         LOG_WARN("failed to register dblink conn pool to current session", K(ret));
-      } else if (in_xa_trascaction_ && OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
+      } else if (in_xa_trascaction_ && lib::is_oracle_mode() &&
+                 OB_FAIL(my_session->get_dblink_context().set_dblink_conn(dblink_conn_))) {
         LOG_WARN("failed to set dblink connection to session", K(my_session), K(sessid_), K(ret));
       } else {
         LOG_INFO("link op get connection from dblink pool", KP(dblink_conn_), K(lbt()));
@@ -241,6 +246,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
         obj_print_params.cs_type_ = ctx_.get_my_session()->get_nls_collation();
       }
       obj_print_params.need_cast_expr_ = true;
+      obj_print_params.print_const_expr_type_ = true;
       while (OB_SUCC(ret) && link_stmt_pos == saved_stmt_pos) {
         //Previously, the format parameter of the print sql literal function was NULL.
         //In the procedure scenario, when dblink reverse spell trunc(date type), it will treat the date type as a string,

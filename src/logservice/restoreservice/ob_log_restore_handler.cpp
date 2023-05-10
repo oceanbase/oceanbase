@@ -343,8 +343,6 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
           if (parent_->set_to_end(scn)) {
             // To stop and clear all restore log tasks and restore context, reset context and advance issue version
             CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
-            context_.reset();
-            context_.set_issue_version();
           }
         }
       }
@@ -420,11 +418,6 @@ int ObLogRestoreHandler::try_retire_task(ObFetchLogTask &task, bool &done)
     CLOG_LOG(INFO, "stale task, just skip it", K(task), KPC(this));
   } else if (context_.max_fetch_lsn_.is_valid() && context_.max_fetch_lsn_ >= task.end_lsn_) {
     CLOG_LOG(INFO, "restore max_lsn bigger than task end_lsn, just skip it", K(task), KPC(this));
-    done = true;
-    context_.issue_task_num_--;
-  } else if (restore_to_end_unlock_()) {
-    // when restore is set to_end, issue_version_ is advanced, and all issued tasks before are stale tasks as stale issue_version_
-    CLOG_LOG(ERROR, "error unexpected, log restored to_end, just skip it", K(task), KPC(this), K(parent_));
     done = true;
     context_.issue_task_num_--;
   }
@@ -689,9 +682,6 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
     ret = OB_NOT_INIT;
   } else if (! is_strong_leader(role_)) {
     ret = OB_NOT_MASTER;
-  } else if (NULL != parent_ && restore_to_end_unlock_()) {
-    // if restore to end, free all cached tasks
-    ret = context_.reset_sorted_tasks();
   } else if (context_.submit_array_.empty()) {
     // sorted_array is empty, do nothing
   } else if (FALSE_IT(first = context_.submit_array_.at(0))) {
@@ -747,6 +737,12 @@ int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info)
     CLOG_LOG(WARN, "append restore_context_info failed", K(ret), K(context_));
   }
   return ret;
+}
+
+bool ObLogRestoreHandler::restore_to_end() const
+{
+  RLockGuard guard(lock_);
+  return restore_to_end_unlock_();
 }
 
 int ObLogRestoreHandler::check_restore_to_newest_from_service_(

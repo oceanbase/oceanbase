@@ -30,9 +30,9 @@ void ObDBLinkClient::reset()
   state_ = ObDBLinkClientState::IDLE;
   dblink_type_ = sqlclient::DblinkDriverProto::DBLINK_UNKNOWN;
   dblink_conn_ = NULL;
-  impl_ = NULL;
   if (NULL != impl_) {
-    ob_free(impl_);
+    impl_->~ObXAQuery();
+    mtl_free(impl_);
     impl_ = NULL;
   }
   is_inited_ = false;
@@ -329,7 +329,7 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
   if (NULL == impl_) {
     if (DblinkDriverProto::DBLINK_DRV_OB == dblink_type_) {
       void *ptr = NULL;
-      if (NULL == (ptr = ob_malloc(sizeof(ObXAQueryObImpl), "ObXAQuery"))) {
+      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryObImpl), "ObXAQuery"))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "fail to allocate memory", K(ret), K(*this));
       } else {
@@ -357,13 +357,14 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
           }
         }
         if (OB_SUCCESS != ret) {
-          ob_free(impl_);
+          impl_->~ObXAQuery();
+          mtl_free(impl_);
           impl_ = NULL;
         }
       }
     } else if (DblinkDriverProto::DBLINK_DRV_OCI == dblink_type_) {
       void *ptr = NULL;
-      if (NULL == (ptr = ob_malloc(sizeof(ObXAQueryOraImpl), "ObXAQuery"))) {
+      if (NULL == (ptr = mtl_malloc(sizeof(ObXAQueryOraImpl), "ObXAQuery"))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         TRANS_LOG(WARN, "fail to allocate memory", K(ret), K(*this));
       } else {
@@ -378,7 +379,8 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
           // do nothing
         }
         if (OB_SUCCESS != ret) {
-          ob_free(impl_);
+          impl_->~ObXAQuery();
+          mtl_free(impl_);
           impl_ = NULL;
         }
       }

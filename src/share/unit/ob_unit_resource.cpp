@@ -685,8 +685,6 @@ int ObUnitResource::gen_sys_tenant_default_unit_resource()
 int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t sys_tenant_default_memory_percentage = SYS_TENANT_DEFAULT_MEMORY_PERCENTAGE;
-  const int64_t sys_tenant_default_memory_max =  SYS_TENANT_DEFAULT_MEMORY_MAX;
   const int64_t unit_min_memory = UNIT_MIN_MEMORY;
   const int64_t __min_full_resource_pool_memory = GCONF.__min_full_resource_pool_memory;
   const int64_t sys_tenant_memory = GCONF._hidden_sys_tenant_memory;
@@ -718,17 +716,15 @@ int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
         KR(ret), K(sys_tenant_memory), K(__min_full_resource_pool_memory));
   } else {
     if (0 == sys_tenant_memory) {
-      // SYS tenant MEMORY is auto computed by server_avail_memory
-      const int64_t sys_mem_based_on_svr_avail_mem = server_avail_memory * sys_tenant_default_memory_percentage / 100;
-      int64_t sys_mem = min(sys_mem_based_on_svr_avail_mem, sys_tenant_default_memory_max);
+      // SYS tenant MEMORY is auto computed by memory_limit
+      memory_size = GMEMCONF.get_capacity_default_memory(ObServerMemoryConfig::HIDDEN_SYS_MEMORY,
+                                                         server_memory_limit);
 
       // SYS tenant MEMORY is restricted by UNIT_MIN_MEMORY
-      sys_mem = max(sys_mem, UNIT_MIN_MEMORY);
+      memory_size = max(memory_size, UNIT_MIN_MEMORY);
 
       // SYS tenant MEMORY is restricted by __min_full_resource_pool_memory
-      sys_mem = max(sys_mem, __min_full_resource_pool_memory);
-
-      memory_size = sys_mem;
+      memory_size = max(memory_size, __min_full_resource_pool_memory);
     } else {
       memory_size = sys_tenant_memory;
     }
@@ -736,8 +732,6 @@ int ObUnitResource::get_sys_tenant_default_memory(int64_t &memory_size)
         "sys_tenant_default_memory_G", memory_size/GB,
         "sys_tenant_memory_G", sys_tenant_memory/GB,
         "server_avail_memory_G", server_avail_memory/GB,
-        K(sys_tenant_default_memory_percentage),
-        "sys_tenant_default_memory_max_G", sys_tenant_default_memory_max/GB,
         "unit_min_memory_G", unit_min_memory/GB,
         "__min_full_resource_pool_memory_G", __min_full_resource_pool_memory/GB,
         "server_memory_limit_G", server_memory_limit/GB,

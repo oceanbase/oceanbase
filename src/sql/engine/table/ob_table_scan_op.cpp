@@ -59,6 +59,7 @@ int FlashBackItem::set_flashback_query_info(ObEvalCtx &eval_ctx, ObDASScanRtDef 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL value", K(ret));
   } else {
+    scan_rtdef.fb_read_tx_uncommitted_ = fq_read_tx_uncommitted_;
     if (TableItem::USING_TIMESTAMP == flashback_query_type_) {
       if (ObTimestampTZType != expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
@@ -123,6 +124,7 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   }
   OB_UNIS_ENCODE(calc_part_id_expr_);
   OB_UNIS_ENCODE(global_index_rowkey_exprs_);
+  OB_UNIS_ENCODE(flashback_item_.fq_read_tx_uncommitted_);
   return ret;
 }
 
@@ -149,6 +151,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   }
   OB_UNIS_ADD_LEN(calc_part_id_expr_);
   OB_UNIS_ADD_LEN(global_index_rowkey_exprs_);
+  OB_UNIS_ADD_LEN(flashback_item_.fq_read_tx_uncommitted_);
   return len;
 }
 
@@ -192,6 +195,7 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   }
   OB_UNIS_DECODE(calc_part_id_expr_);
   OB_UNIS_DECODE(global_index_rowkey_exprs_);
+  OB_UNIS_DECODE(flashback_item_.fq_read_tx_uncommitted_);
   return ret;
 }
 

@@ -56,6 +56,24 @@ int ObDropDbLinkResolver::resolve(const ParseNode &parse_tree)
     stmt_ = drop_dblink_stmt;
     drop_dblink_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
   }
+   if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
+    uint64_t compat_version = 0;
+    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
+    } else if (NULL != node->children_[IF_EXIST]) {
+      if (T_IF_EXISTS != node->children_[IF_EXIST]->type_) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_RESV_LOG(WARN, "invalid argument.",
+                      K(ret), K(node->children_[1]->type_));
+      } else {
+        drop_dblink_stmt->set_if_exist(true);
+      }
+    }
+  }
   if (OB_SUCC(ret)) {
     ObString dblink_name;
     ParseNode *name_node = node->children_[DBLINK_NAME];

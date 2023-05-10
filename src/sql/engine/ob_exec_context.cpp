@@ -125,7 +125,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     register_op_id_(OB_INVALID_ID),
     tmp_alloc_used_(false),
     table_direct_insert_ctx_(),
-    errcode_(OB_SUCCESS)
+    errcode_(OB_SUCCESS),
+    dblink_snapshot_map_()
 {
 }
 
@@ -636,6 +637,13 @@ int ObExecContext::get_convert_charset_allocator(ObArenaAllocator *&allocator)
   }
 
   return ret;
+}
+
+void ObExecContext::try_reset_convert_charset_allocator()
+{
+  if (OB_NOT_NULL(convert_allocator_)) {
+    convert_allocator_->reset_remain_one_page();
+  }
 }
 
 int ObExecContext::get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr)

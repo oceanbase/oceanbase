@@ -504,6 +504,7 @@ public:
                       const common::ObString &dblink_name,
                       common::ObString &dblink_user,
                       common::ObIAllocator &allocator);
+  int get_dblink_schema(uint64_t tenant_id, const common::ObString &dblink_name, const share::schema::ObDbLinkSchema *&dblink_schema);
 
   // directory
   int get_directory_id(const uint64_t tenant_id,

@@ -294,7 +294,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || !monitoring_ids_.empty()
          || !dops_.empty()
          || !opt_params_.empty()
-         || !ob_ddl_schema_versions_.empty();
+         || !ob_ddl_schema_versions_.empty()
+         || flashback_read_tx_uncommitted_;
 }
 
 void ObGlobalHint::reset()
@@ -326,6 +327,7 @@ void ObGlobalHint::reset()
   enable_append_ = false;
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
+  flashback_read_tx_uncommitted_ = false;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
 }
 
@@ -353,6 +355,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
+  flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
@@ -531,6 +534,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text, const bool ignore_paral
   }
   if (OB_SUCC(ret) && has_dbms_stats_hint()) {
     PRINT_GLOBAL_HINT_STR("DBMS_STATS");
+  }
+  if (OB_SUCC(ret) && get_flashback_read_tx_uncommitted()) {
+    PRINT_GLOBAL_HINT_STR("FLASHBACK_READ_TX_UNCOMMITTED");
   }
   return ret;
 }

@@ -1219,7 +1219,6 @@ constexpr int OB_ERR_CHECK_OPTION_VIOLATED = -5971;
 constexpr int OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW = -5972;
 constexpr int OB_ERR_NO_DESC_FOR_POS = -5973;
 constexpr int OB_ERR_ILL_OBJ_FLAG = -5974;
-constexpr int OB_ERR_DBLINK_REMOTE_ECODE = -5975;
 constexpr int OB_ERR_PARTITION_EXTENDED_ON_VIEW = -5977;
 constexpr int OB_ERR_NOT_ALL_VARIABLE_BIND = -5978;
 constexpr int OB_ERR_BIND_VARIABLE_NOT_EXIST = -5979;
@@ -3177,7 +3176,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW__USER_ERROR_MSG "CHECK OPTION on non-updatable view '%.*s.%.*s'"
 #define OB_ERR_NO_DESC_FOR_POS__USER_ERROR_MSG "no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__USER_ERROR_MSG "object specified is incompatible with the flag specified"
-#define OB_ERR_DBLINK_REMOTE_ECODE__USER_ERROR_MSG "dblink remote ora error code: %d"
+#define OB_ERR_DBLINK_REMOTE_ECODE__USER_ERROR_MSG "Unknown errorcode: %d"
 #define OB_ERR_DBLINK_NO_LIB__USER_ERROR_MSG "oci lib not founded"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__USER_ERROR_MSG "partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__USER_ERROR_MSG "not all variables bound"
@@ -5253,7 +5252,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5972, CHECK OPTION on non-updatable view '%.*s.%.*s'"
 #define OB_ERR_NO_DESC_FOR_POS__ORA_USER_ERROR_MSG "ORA-24334: no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__ORA_USER_ERROR_MSG "ORA-04047: object specified is incompatible with the flag specified"
-#define OB_ERR_DBLINK_REMOTE_ECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5975, dblink remote ora error code: %d"
+#define OB_ERR_DBLINK_REMOTE_ECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5975, Unknown errorcode: %d"
 #define OB_ERR_DBLINK_NO_LIB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, oci lib not founded"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__ORA_USER_ERROR_MSG "ORA-14109: partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__ORA_USER_ERROR_MSG "ORA-01008: not all variables bound"

@@ -202,7 +202,8 @@ public:
                               ObTableSchema *&table_schema,
                               sql::ObSQLSessionInfo *session_info,
                               const ObString &dblink_name,
-                              bool is_reverse_link);
+                              bool is_reverse_link,
+                              uint64_t *current_scn);
 
   // get the latest schema version
   // if core_schema_version = false, return user schema version

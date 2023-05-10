@@ -19,6 +19,7 @@
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/allocator/ob_memstore_allocator_mgr.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_share_util.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_ls_handle.h"
@@ -30,6 +31,7 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
+
 
 typedef ObMemstoreAllocatorMgr::TAllocator ObTenantMemstoreAllocator;
 
@@ -191,21 +193,115 @@ bool ObTenantFreezer::exist_ls_freezing()
   return exist_ls_freezing_;
 }
 
-int ObTenantFreezer::ls_freeze_(ObLS *ls)
+// force freeze means we must do another freeze rather than use the freeze
+// result of others
+int ObTenantFreezer::ls_freeze_(ObLS *ls,
+                                const bool is_sync,
+                                const bool force_freeze,
+                                const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_TS = 1000 * 1000; // 1s
+  int64_t current_ts = 0;
   int64_t retry_times = 0;
-  // wait if there is a freeze is doing
+  bool is_timeout = false;
+  bool need_retry = false;
+  // wait and retry if there is a freeze is doing
+  // or if we can not get the ls lock.
   do {
+    need_retry = false;
     retry_times++;
-    if (OB_FAIL(ls->logstream_freeze(true/*is_sync*/)) && OB_ENTRY_EXIST == ret) {
+    if (OB_SUCC(ls->logstream_freeze(is_sync, abs_timeout_ts))) {
+    } else {
+      current_ts = ObTimeUtil::current_time();
+      is_timeout = (current_ts >= abs_timeout_ts);
+      // retry condition 1
+      need_retry = (!is_timeout);
+      // retry condition 2, 3
+      need_retry = need_retry && ((OB_EAGAIN == ret) || (force_freeze && OB_ENTRY_EXIST == ret));
+    }
+    if (need_retry) {
       ob_usleep(SLEEP_TS);
     }
     if (retry_times % 10 == 0) {
       LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
     }
-  } while (ret == OB_ENTRY_EXIST);
+  } while (need_retry);
+  if (OB_NOT_RUNNING == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObTenantFreezer::ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  const int64_t SLEEP_TS = 1000 * 1000; // 1s
+  int64_t current_ts = 0;
+  int64_t retry_times = 0;
+  bool is_timeout = false;
+  bool need_retry = false;
+  // wait and retry if we can not get the ls lock.
+  do {
+    need_retry = false;
+    retry_times++;
+    if (OB_SUCC(ls->advance_checkpoint_by_flush(SCN::max_scn(), abs_timeout_ts))) {
+    } else {
+      current_ts = ObTimeUtil::current_time();
+      is_timeout = (current_ts >= abs_timeout_ts);
+      // retry condition 1
+      need_retry = (!is_timeout);
+      // retry condition 2
+      need_retry = need_retry && (OB_EAGAIN == ret);
+    }
+    if (need_retry) {
+      ob_usleep(SLEEP_TS);
+    }
+    if (retry_times % 10 == 0) {
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
+    }
+  } while (need_retry);
+  if (OB_NOT_RUNNING == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObTenantFreezer::tablet_freeze_(ObLS *ls,
+                                    const common::ObTabletID &tablet_id,
+                                    const bool force_tablet_freeze,
+                                    const bool is_sync,
+                                    const int64_t abs_timeout_ts)
+{
+  int ret = OB_SUCCESS;
+  const int64_t SLEEP_TS = 1000 * 1000; // 1s
+  int64_t current_ts = 0;
+  int64_t retry_times = 0;
+  bool is_timeout = false;
+  bool need_retry = false;
+  // wait and retry if there is a freeze is doing
+  // or if we can not get the ls lock.
+  do {
+    need_retry = false;
+    retry_times++;
+    if (OB_SUCC(force_tablet_freeze
+                ? ls->force_tablet_freeze(tablet_id, abs_timeout_ts)
+                : ls->tablet_freeze(tablet_id, is_sync, abs_timeout_ts))) {
+    } else {
+      current_ts = ObTimeUtil::current_time();
+      is_timeout = (current_ts >= abs_timeout_ts);
+      // retry condition 1
+      need_retry = (!is_timeout);
+      // retry condition 2, 3
+      need_retry = need_retry && (OB_EAGAIN == ret);
+    }
+    if (need_retry) {
+      ob_usleep(SLEEP_TS);
+    }
+    if (retry_times % 10 == 0) {
+      LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
+    }
+  } while (need_retry);
   if (OB_NOT_RUNNING == ret) {
     ret = OB_SUCCESS;
   }
@@ -220,6 +316,7 @@ int ObTenantFreezer::tenant_freeze_()
   ObLSService *ls_srv = MTL(ObLSService *);
   FLOG_INFO("[TenantFreezer] tenant_freeze start", KR(ret));
 
+  ObTenantFreezeGuard freeze_guard(allocator_mgr_, ret);
   if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
@@ -252,22 +349,64 @@ int ObTenantFreezer::tenant_freeze_()
   return ret;
 }
 
+int ObTenantFreezer::tenant_freeze()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObLSService *ls_svr = MTL(ObLSService *);
+  common::ObSharedGuard<ObLSIterator> guard;
+  ObLSIterator *iter = NULL;
+  ObLS *ls = nullptr;
+  int ls_cnt = 0;
+  int64_t abs_timeout_ts = INT64_MAX;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US /* default timeout */,
+                                                  abs_timeout_ts))) {
+    LOG_WARN("get timeout ts failed", KR(ret));
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("get log stream iter failed", K(ret));
+  } else if (OB_ISNULL(iter = guard.get_ptr())) {
+    LOG_WARN("iter is NULL", K(ret));
+  } else {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+      if (OB_TMP_FAIL(ls_freeze_all_unit_(ls, abs_timeout_ts))) {
+        LOG_WARN("ls freeze all unit failed", K(tmp_ret), K(ls->get_ls_id()));
+      }
+    }
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+  }
+  LOG_INFO("tenant_freeze finished", KR(ret), K(abs_timeout_ts));
+
+  return ret;
+}
+
 int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_srv = MTL(ObLSService *);
   ObLSHandle handle;
   ObLS *ls = nullptr;
+  const bool is_sync = false;
+  const bool force_freeze = false;
+  int64_t abs_timeout_ts = INT64_MAX;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US /* default timeout */,
+                                                  abs_timeout_ts))) {
+    LOG_WARN("get timeout ts failed", KR(ret));
   } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
     LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
-  } else if (OB_FAIL(ls->logstream_freeze())) {
+  } else if (OB_FAIL(ls_freeze_(ls, is_sync, force_freeze, abs_timeout_ts))) {
     LOG_WARN("[TenantFreezer] logstream freeze failed", KR(ret), K(ls_id));
   }
 
@@ -278,7 +417,10 @@ int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
                                    const bool is_force_freeze,
                                    const bool is_sync)
 {
-  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID), tablet_id, is_force_freeze, is_sync);
+  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID),
+                       tablet_id,
+                       is_force_freeze,
+                       is_sync);
 }
 
 int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
@@ -291,11 +433,15 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
   ObLSService *ls_srv = MTL(ObLSService *);
   ObLSHandle handle;
   ObLS *ls = nullptr;
+  int64_t abs_timeout_ts = INT64_MAX;
   FLOG_INFO("[TenantFreezer] tablet_freeze start", KR(ret), K(tablet_id));
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US/* default timeout */,
+                                                  abs_timeout_ts))) {
+    LOG_WARN("get timeout ts failed", KR(ret));
   } else if (!ls_id.is_valid()) {
     // if ls_id is invalid, get ls id by tablet id
     if (OB_FAIL(GCTX.location_service_->get(tenant_info_.tenant_id_, tablet_id, INT64_MAX, is_cache_hit, ls_id))) {
@@ -309,9 +455,11 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
-  } else if (OB_FAIL(is_force_freeze
-                     ? ls->force_tablet_freeze(tablet_id)
-                     : ls->tablet_freeze(tablet_id, is_sync))) {
+  } else if (OB_FAIL(tablet_freeze_(ls,
+                                    tablet_id,
+                                    is_force_freeze,
+                                    is_sync,
+                                    abs_timeout_ts))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
   }
 
@@ -337,10 +485,10 @@ int ObTenantFreezer::get_ls_tx_data_mem_used_(ObLS *ls, int64_t &ls_tx_data_mem_
   } else if (OB_FAIL(memtable_mgr->get_active_memtable(memtable_handle))) {
     LOG_WARN("get active memtable from tx data memtable mgr failed.", KR(ret));
   } else if (OB_FAIL(memtable_handle.get_tx_data_memtable(memtable))) {
-    STORAGE_LOG(ERROR, "get tx data memtable failed.", KR(ret), K(tenant_info_.tenant_id_));
+    LOG_ERROR("get tx data memtable failed.", KR(ret), K(tenant_info_.tenant_id_));
   } else if (OB_ISNULL(memtable)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "unexpected nullptr of tx data memtable", KR(ret), K(tenant_info_.tenant_id_));
+    LOG_ERROR("unexpected nullptr of tx data memtable", KR(ret), K(tenant_info_.tenant_id_));
   } else {
     ls_tx_data_mem_used = memtable->get_occupied_size();
   }
@@ -921,7 +1069,7 @@ int ObTenantFreezer::check_tenant_out_of_memstore_limit(bool &is_out_of_mem)
       } else if (OB_FAIL(get_tenant_mem_usage_(ctx))) {
         LOG_WARN("[TenantFreezer] fail to get mem usage", KR(ret), K(tenant_info_.tenant_id_));
       } else {
-        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_ + REPLAY_RESERVE_MEMSTORE_BYTES);
+        is_out_of_mem = (ctx.total_memstore_hold_ > ctx.mem_memstore_limit_ - REPLAY_RESERVE_MEMSTORE_BYTES);
       }
       last_check_timestamp = current_time;
     }
@@ -1213,6 +1361,10 @@ int ObTenantFreezer::do_major_if_need_(const bool need_freeze)
   if (!tenant_info_.is_loaded_) {
     // do nothing
     // update frozen scn
+  } else if (!need_freeze) {
+    // no need major
+  } else if (!is_major_freeze_turn_()) {
+    // do nothing
   } else if (OB_FAIL(get_global_frozen_scn_(frozen_scn))) {
     LOG_WARN("fail to get global frozen version", K(ret));
   } else if (0 != frozen_scn && OB_FAIL(tenant_info_.update_frozen_scn(frozen_scn))) {

@@ -84,7 +84,7 @@ int ObUserSqlService::replace_user(
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(gen_user_dml(exec_tenant_id, user, dml))) {
+    if (OB_FAIL(gen_user_dml(exec_tenant_id, user, dml, false))) {
       LOG_WARN("gen_user_dml failed", K(ret));
     }
 
@@ -98,7 +98,7 @@ int ObUserSqlService::replace_user(
     }
 
     // insert into __all_user_history
-    if (FAILEDx(add_user_history(user, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user), K(new_schema_version), K(ret));
     }
 
@@ -368,7 +368,7 @@ int ObUserSqlService::rename_user(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -462,7 +462,7 @@ int ObUserSqlService::set_passwd_impl(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -521,7 +521,7 @@ int ObUserSqlService::set_max_connections(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -582,7 +582,7 @@ int ObUserSqlService::alter_user_require(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -607,7 +607,8 @@ int ObUserSqlService::grant_revoke_user(
     const ObUserInfo &user_info,
     const int64_t new_schema_version,
     const ObString *ddl_stmt_str,
-    ObISQLClient &sql_client)
+    ObISQLClient &sql_client,
+    const bool is_from_inner_sql)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
@@ -622,7 +623,7 @@ int ObUserSqlService::grant_revoke_user(
     int64_t affected_rows = 0;
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     ObDMLSqlSplicer dml;
-    if (OB_FAIL(gen_user_dml(exec_tenant_id, user_info, dml))) {
+    if (OB_FAIL(gen_user_dml(exec_tenant_id, user_info, dml, is_from_inner_sql))) {
       LOG_WARN("gen_user_dml failed", K(user_info), K(ret));
     }
 
@@ -635,7 +636,7 @@ int ObUserSqlService::grant_revoke_user(
     }
 
     // insert into __all_user_history
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, is_from_inner_sql))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -694,7 +695,7 @@ int ObUserSqlService::alter_user_profile(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, user_info.get_schema_version(), sql_client))) {
+    if (FAILEDx(add_user_history(user_info, user_info.get_schema_version(), sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(ret));
     }
 
@@ -753,7 +754,7 @@ int ObUserSqlService::lock_user(
     }
 
     // update __all_user history table
-    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client))) {
+    if (FAILEDx(add_user_history(user_info, new_schema_version, sql_client, false))) {
       LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
     }
 
@@ -777,7 +778,8 @@ int ObUserSqlService::lock_user(
 int ObUserSqlService::add_user_history(
     const ObUserInfo &user_info,
     const int64_t schema_version,
-    common::ObISQLClient &sql_client)
+    common::ObISQLClient &sql_client,
+    const bool is_from_inner_sql)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = user_info.get_tenant_id();
@@ -785,7 +787,7 @@ int ObUserSqlService::add_user_history(
   ObDMLExecHelper exec(sql_client, exec_tenant_id);
   ObDMLSqlSplicer dml;
   int64_t affected_rows = 0;
-  if (OB_FAIL(gen_user_dml(exec_tenant_id, user_info, dml))) {
+  if (OB_FAIL(gen_user_dml(exec_tenant_id, user_info, dml, is_from_inner_sql))) {
     LOG_WARN("gen_user_dml failed", K(user_info), K(ret));
   } else {
     const int64_t is_deleted = 0;
@@ -805,12 +807,16 @@ int ObUserSqlService::add_user_history(
 int ObUserSqlService::gen_user_dml(
     const uint64_t exec_tenant_id,
     const ObUserInfo &user,
-    ObDMLSqlSplicer &dml)
+    ObDMLSqlSplicer &dml,
+    const bool is_from_inner_sql)
 {
   int ret = OB_SUCCESS;
   const bool is_ssl_support = (user.get_ssl_type() != ObSSLType::SSL_TYPE_NOT_SPECIFIED);
-  LOG_INFO("gen_user_dml", K(is_ssl_support), K(user));
-  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+  LOG_INFO("gen_user_dml", K(is_ssl_support), K(user), K(is_from_inner_sql));
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user.get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(user.get_tenant_id()));
+  } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, user.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id,user.get_user_id())))
@@ -856,6 +862,16 @@ int ObUserSqlService::gen_user_dml(
       || OB_FAIL(dml.add_time_column("password_last_changed", user.get_password_last_changed()))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
+  } else if (!is_from_inner_sql && compat_version < DATA_VERSION_4_2_0_0) {
+    if (1 == user.get_priv(OB_PRIV_DROP_DATABASE_LINK) ||
+        1 == user.get_priv(OB_PRIV_CREATE_DATABASE_LINK)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret), K(user.get_priv(OB_PRIV_DROP_DATABASE_LINK)), K(user.get_priv(OB_PRIV_CREATE_DATABASE_LINK)));
+    }
+  } else if (OB_FAIL(dml.add_column("PRIV_DROP_DATABASE_LINK", user.get_priv(OB_PRIV_DROP_DATABASE_LINK) ? 1 : 0))) {
+    LOG_WARN("add  PRIV_DROP_DATABASE_LINK column failed", K(user.get_priv(OB_PRIV_DROP_DATABASE_LINK)), K(ret));
+  } else if (OB_FAIL(dml.add_column("PRIV_CREATE_DATABASE_LINK", user.get_priv(OB_PRIV_CREATE_DATABASE_LINK) ? 1 : 0))) {
+    LOG_WARN("add  PRIV_CREATE_DATABASE_LINK column failed", K(user.get_priv(OB_PRIV_CREATE_DATABASE_LINK)), K(ret));
   }
   return ret;
 }
@@ -879,7 +895,7 @@ int ObUserSqlService::update_user_schema_version(
       const ObUserInfo &user_info = user_infos.at(i);
       if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, OB_INVALID_VERSION, new_schema_version))) {
         LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-      } else if (OB_FAIL(add_user_history(user_info, new_schema_version, sql_client))) {
+      } else if (OB_FAIL(add_user_history(user_info, new_schema_version, sql_client, false))) {
         LOG_WARN("add_user_history failed", K(user_info), K(new_schema_version), K(ret));
       }
       // log operation

@@ -1832,10 +1832,6 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.savepoint_,
                                   ctx_born_epoch,
                                   msg.tx_ptr_);
-  if (OB_NOT_NULL(msg.tx_ptr_)) {
-    ob_free((void*)msg.tx_ptr_);
-    msg.tx_ptr_ = NULL;
-  }
   result.status_ = ret;
   result.addr_ = self_;
   result.born_epoch_ = ctx_born_epoch;
@@ -2761,17 +2757,30 @@ int ObTransService::handle_sub_prepare_result_(ObTxDesc &tx,
   bool commit_fin = true;
   int commit_out = OB_SUCCESS;
   switch (result) {
+  case OB_EAGAIN:
   case OB_BLOCK_FROZEN:
+  case OB_SWITCHING_TO_FOLLOWER_GRACEFULLY:
   case OB_NOT_MASTER:
     commit_fin = false;
     if (tx.commit_task_.is_registered()) {
       // the task maybe already registred:
       // 1. location cache stale: leader on local actually
       // 2. L--(regier)-->F-->L--(here)-->F
-    } else if (OB_FAIL(register_commit_retry_task_(tx))) {
-      commit_fin = true;
-      tx.state_ = ObTxDesc::State::ROLLED_BACK;
-      commit_out = OB_TRANS_ROLLBACKED;
+      if (OB_FAIL(unregister_commit_retry_task_(tx))) {
+        TRANS_LOG(ERROR, "deregister timeout task fail", K(tx));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int64_t max_delay = INT64_MAX;
+      if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == result) {
+        max_delay = 300 * 1000;
+      }
+
+      if (OB_FAIL(register_commit_retry_task_(tx, max_delay))) {
+        commit_fin = true;
+        tx.state_ = ObTxDesc::State::ROLLED_BACK;
+        tx.commit_out_ = OB_TRANS_ROLLBACKED;
+      }
     }
     break;
   case OB_SUCCESS:
@@ -2989,17 +2998,30 @@ int ObTransService::handle_sub_end_tx_result_(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   bool commit_fin = true;
   switch (result) {
+    case OB_EAGAIN:
     case OB_BLOCK_FROZEN:
+    case OB_SWITCHING_TO_FOLLOWER_GRACEFULLY:
     case OB_NOT_MASTER: {
       commit_fin = false;
       if (tx.commit_task_.is_registered()) {
         // the task maybe already registred:
         // 1. location cache stale: leader on local actually
         // 2. L--(regier)-->F-->L--(here)-->F
-      } else if (OB_FAIL(register_commit_retry_task_(tx))) {
-        commit_fin = true;
-        tx.state_ = ObTxDesc::State::ROLLED_BACK;
-        tx.commit_out_ = OB_TRANS_ROLLBACKED;
+        if (OB_FAIL(unregister_commit_retry_task_(tx))) {
+          TRANS_LOG(ERROR, "deregister timeout task fail", K(tx));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        int64_t max_delay = INT64_MAX;
+        if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == result) {
+          max_delay = 300 * 1000;
+        }
+
+        if (OB_FAIL(register_commit_retry_task_(tx, max_delay))) {
+          commit_fin = true;
+          tx.state_ = ObTxDesc::State::ROLLED_BACK;
+          tx.commit_out_ = OB_TRANS_ROLLBACKED;
+        }
       }
       break;
     }

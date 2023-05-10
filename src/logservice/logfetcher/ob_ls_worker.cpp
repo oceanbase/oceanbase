@@ -198,10 +198,10 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
   }
   // Recycle deleted partitions and add them to DEAD POOL
   else if (OB_UNLIKELY(task.is_discarded())) {
-    LOG_DEBUG("[STAT] [STREAM_WORKER] [RECYCLE_FETCH_TASK]", "task", &task, K(task));
+    LOG_INFO("[STAT] [STREAM_WORKER] [RECYCLE_FETCH_TASK]", "task", &task, K(task));
 
     if (OB_FAIL(dead_pool_->push(&task))) {
-      LOG_DEBUG("push task into dead pool fail", KR(ret), K(task));
+      LOG_ERROR("push task into dead pool fail", KR(ret), K(task));
     }
   } else if (is_integrated_fetching_mode(task.get_fetching_mode())) {
     ObAddr request_svr;

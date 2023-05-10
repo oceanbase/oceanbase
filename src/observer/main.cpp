@@ -406,7 +406,6 @@ int main(int argc, char *argv[])
     snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "observer");
   }
   ObStackHeaderGuard stack_header_guard;
-  g_use_rel_offset = true;
 #ifndef OB_USE_ASAN
   init_malloc_hook();
 #endif

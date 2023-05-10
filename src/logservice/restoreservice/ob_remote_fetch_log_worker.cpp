@@ -293,6 +293,8 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   } else if (OB_FAIL(task->iter_.init(tenant_id_, task->id_, task->pre_scn_,
           task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool()))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
+  } else if (!need_fetch_log_(task->id_)) {
+    LOG_TRACE("no need fetch log", KPC(task));
   } else if (OB_FAIL(task->iter_.pre_read(empty))) {
     LOG_WARN("pre_read failed", K(ret), KPC(task));
   } else if (empty) {
@@ -328,6 +330,16 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   }
 #endif
   return ret;
+}
+
+bool ObRemoteFetchWorker::need_fetch_log_(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  GET_RESTORE_HANDLER_CTX(id) {
+    bret = !restore_handler->restore_to_end();
+  }
+  return bret;
 }
 
 int ObRemoteFetchWorker::submit_entries_(ObFetchLogTask &task)

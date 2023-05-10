@@ -53,17 +53,17 @@ TEST_F(ObserverExpandShink, observer_start)
 TEST_F(ObserverExpandShink, basic_func)
 {
   omt::ObTenantNodeBalancer::get_instance().refresh_interval_ = 1 * 1000 * 1000;
-  int64_t origin_server_log_free_size, origin_server_log_total_size;
-  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(origin_server_log_free_size, origin_server_log_total_size));
+  int64_t origin_server_in_use_size, origin_server_log_total_size;
+  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(origin_server_in_use_size, origin_server_log_total_size));
   GCONF.log_disk_size = GCTX.log_block_mgr_->lower_align_(2 * origin_server_log_total_size);
   sleep(6);
-  int64_t new_server_log_free_size, new_server_log_total_size;
-  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(new_server_log_free_size, new_server_log_total_size));
+  int64_t new_server_in_use_size, new_server_log_total_size;
+  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(new_server_in_use_size, new_server_log_total_size));
   EXPECT_EQ(new_server_log_total_size, 2 * origin_server_log_total_size);
   LOG_INFO("first resize success");
   GCONF.log_disk_size = 0;
   sleep(3);
-  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(new_server_log_free_size, new_server_log_total_size));
+  EXPECT_EQ(OB_SUCCESS, GCTX.log_block_mgr_->get_disk_usage(new_server_in_use_size, new_server_log_total_size));
   EXPECT_NE(new_server_log_total_size, 0);
   LOG_INFO("second resize success");
 

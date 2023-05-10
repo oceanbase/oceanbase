@@ -32,6 +32,7 @@ class ObDblinkService
 public:
   static int check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob);
   static int get_length_from_type_text(ObString &type_text, int32_t &length);
+  static int get_set_sql_mode_cstr(sql::ObSQLSessionInfo *session_info, const char *&set_sql_mode_cstr, ObIAllocator &allocator);
 };
 
 enum DblinkGetConnType {
@@ -99,8 +100,6 @@ private:
 class ObDblinkUtils
 {
 public:
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, common::sqlclient::ObISQLConnection *dblink_conn, int &ob_errno);
-  static int process_dblink_errno(common::sqlclient::DblinkDriverProto dblink_type, int &ob_errno);
   static int has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink = false);
 };
 

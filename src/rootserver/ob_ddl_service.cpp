@@ -24468,16 +24468,11 @@ int ObDDLService::refresh_schema(uint64_t tenant_id)
         break;
       } else {
         ++refresh_count;
-        if (refresh_count > 2) {
-          LOG_ERROR("refresh schema failed", K(refresh_count), "refresh_schema_interval",
-              static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
-          if (REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
-            LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
-                          "msg", "refresh schema failed", KR(ret), K(refresh_count));
-          }
-        } else {
-          LOG_WARN("refresh schema failed", K(refresh_count), "refresh_schema_interval",
-              static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US), K(ret));
+        LOG_WARN("refresh schema failed", KR(ret), K(refresh_count), "refresh_schema_interval",
+                 static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
+        if (refresh_count > 2 && REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
+          LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
+                        "msg", "refresh schema failed", KR(ret), K(refresh_count));
         }
         ob_usleep(REFRESH_SCHEMA_INTERVAL_US);
       }
@@ -25922,6 +25917,7 @@ int ObDDLService::grant_table_and_col_privs_to_user(
                          need_priv,
                          arg.obj_priv_array_,
                          arg.option_,
+                         false,
                          obj_priv_key,
                          schema_guard));
   /* 2. deal with cols privs */
@@ -25945,6 +25941,7 @@ int ObDDLService::grant_table_and_col_privs_to_user(
                            need_priv,
                            obj_priv_array,
                            arg.option_,
+                           false,
                            obj_priv_key,
                            schema_guard));
   }
@@ -25965,6 +25962,7 @@ int ObDDLService::grant_table_and_col_privs_to_user(
                            need_priv,
                            obj_priv_array,
                            arg.option_,
+                           false,
                            obj_priv_key,
                            schema_guard));
   }
@@ -25985,6 +25983,7 @@ int ObDDLService::grant_table_and_col_privs_to_user(
                            need_priv,
                            obj_priv_array,
                            arg.option_,
+                           false,
                            obj_priv_key,
                            schema_guard));
   }
@@ -26291,6 +26290,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
                                               need_priv,
                                               arg.obj_priv_array_,
                                               arg.option_,
+                                              arg.is_inner_,
                                               obj_priv_key,
                                               schema_guard))) {
                   LOG_WARN("Grant priv to user failed", K(ret));
@@ -26403,7 +26403,9 @@ int ObDDLService::revoke(const ObRevokeUserArg &arg)
       LOG_WARN("gen user_priv sql failed", K(arg), K(ret));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(grant_revoke_user(arg.tenant_id_, arg.user_id_,
-                                         arg.priv_set_, grant, &ddl_sql,
+                                         arg.priv_set_, grant,
+                                         false,
+                                         &ddl_sql,
                                          schema_guard))) {
       LOG_WARN("Revoke user failed", K(arg), K(grant), K(ret));
     }
@@ -26424,6 +26426,7 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                      const ObNeedPriv &need_priv,
                                      const share::ObRawObjPrivArray &obj_priv_array,
                                      const uint64_t option,
+                                     const bool is_from_inner_sql,
                                      ObObjPrivSortKey &obj_priv_key,
                                      share::schema::ObSchemaGetterGuard &schema_guard)
 {
@@ -26443,7 +26446,7 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
           LOG_WARN("gen user_priv sql failed", K(ret), K(user_name), K(host_name));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(grant_revoke_user(tenant_id, user_id, need_priv.priv_set_,
-                                             true, &ddl_sql, schema_guard))) {
+                                             true, is_from_inner_sql, &ddl_sql, schema_guard))) {
           LOG_WARN("Grant user error", KR(ret), K(tenant_id), K(user_id), K(ddl_sql), K(need_priv));
         }
         break;
@@ -26515,7 +26518,7 @@ int ObDDLService::revoke_all(
       } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
       } else if (OB_FAIL(ddl_operator.grant_revoke_user(tenant_id, user_id,
                                                         OB_PRIV_ALL|OB_PRIV_GRANT,
-                                                        false, &ddl_sql, trans))) {
+                                                        false, false, &ddl_sql, trans))) {
         LOG_WARN("Revoke user error", K(ret));
       } else if (OB_FAIL(ddl_operator.drop_db_table_privs(tenant_id, user_id, trans))) {
         LOG_WARN("Drop db table priv error", K(ret));
@@ -26544,6 +26547,7 @@ int ObDDLService::grant_revoke_user(
     const uint64_t user_id,
     const ObPrivSet priv_set,
     const bool grant,
+    const bool is_from_inner_sql,
     const ObString *ddl_stmt_str,
     share::schema::ObSchemaGetterGuard &schema_guard)
 {
@@ -26562,7 +26566,7 @@ int ObDDLService::grant_revoke_user(
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.grant_revoke_user(tenant_id, user_id, priv_set, grant, ddl_stmt_str, trans))) {
+      if (OB_FAIL(ddl_operator.grant_revoke_user(tenant_id, user_id, priv_set, grant, is_from_inner_sql, ddl_stmt_str, trans))) {
         LOG_WARN("fail to grant revoke user", K(ret), K(tenant_id), K(user_id), K(priv_set), K(grant));
       }
       if (trans.is_started()) {
@@ -27995,8 +27999,12 @@ int ObDDLService::create_dblink(const obrpc::ObCreateDbLinkArg &arg, const ObStr
   } else if (OB_FAIL(schema_guard.check_dblink_exist(tenant_id, dblink_name, is_exist))) {
     LOG_WARN("failed to check dblink exist", K(ret), K(dblink_info));
   } else if (is_exist) {
-    ret = OB_OBJ_ALREADY_EXIST;
-    LOG_WARN("dblink already exist", K(ret), K(dblink_info.get_dblink_name()));
+    if (arg.dblink_info_.get_if_not_exist()) {
+      // do nothing
+    } else {
+      ret = OB_OBJ_ALREADY_EXIST;
+      LOG_WARN("dblink already exist", K(ret), K(dblink_info.get_dblink_name()));
+    }
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
@@ -28039,8 +28047,13 @@ int ObDDLService::drop_dblink(const obrpc::ObDropDbLinkArg &arg, const ObString 
   } else if (OB_FAIL(schema_guard.get_dblink_schema(tenant_id, dblink_name, dblink_schema))) {
     LOG_WARN("failed to get dblink schema", K(ret), K(tenant_id), K(dblink_name));
   } else if (OB_ISNULL(dblink_schema)) {
-    ret = OB_DBLINK_NOT_EXIST_TO_DROP;
-    LOG_WARN("dblink not exist", K(ret), K(tenant_id), K(dblink_name));
+    if (arg.if_exist_) {
+      // do nothing
+      LOG_WARN("loglcq dblink not exist", K(ret), K(tenant_id), K(dblink_name));
+    } else {
+      ret = OB_DBLINK_NOT_EXIST_TO_DROP;
+      LOG_WARN("dblink not exist", K(ret), K(tenant_id), K(dblink_name));
+    }
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);

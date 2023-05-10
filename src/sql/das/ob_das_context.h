@@ -110,6 +110,7 @@ public:
 
   int build_external_table_location(
       uint64_t table_loc_id, uint64_t ref_table_id, common::ObIArray<ObAddr> &locations);
+  int build_related_tablet_map(const ObDASTableLocMeta &loc_meta);
 
   TO_STRING_KV(K_(table_locs),
                K_(external_table_locs),

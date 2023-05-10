@@ -309,7 +309,7 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
     ObTableID related_table_id = tablet_loc.loc_meta_->related_table_ids_.at(i);
     ObDASTableLoc *related_table_loc = nullptr;
     ObDASTabletLoc *related_tablet_loc = nullptr;
-    DASRelatedTabletMap::Value rv;
+    const DASRelatedTabletMap::Value *rv = nullptr;
     void *related_loc_buf = allocator_.alloc(sizeof(ObDASTabletLoc));
     if (OB_ISNULL(related_loc_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -319,18 +319,32 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get table loc by id failed", K(ret), KPC(tablet_loc.loc_meta_),
                K(related_table_id), K(table_locs_));
-    } else if (OB_FAIL(related_tablet_map_.get_related_tablet_id(
-        tablet_loc.tablet_id_, related_table_id, rv))) {
-      LOG_WARN("get related tablet id failed", K(ret));
-    } else {
+    } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_loc.tablet_id_,
+                                                                        related_table_id))) {
+      //related local index tablet_id pruning only can be used in local plan or remote plan(all operator
+      //use the same das context),
+      //because the distributed plan will transfer tablet_id through exchange operator,
+      //but the related tablet_id map can not be transfered by exchange operator,
+      //unused related pruning in distributed plan's dml operator,
+      //we will use get_all_tablet_and_object_id() to build the related tablet_id map when
+      //dml operator's table loc was inited
+      if (OB_FAIL(build_related_tablet_map(*tablet_loc.loc_meta_))) {
+        LOG_WARN("build related tablet map failed", K(ret), KPC(tablet_loc.loc_meta_));
+      } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_loc.tablet_id_,
+                                                                          related_table_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get related tablet id failed", K(ret), K(tablet_loc.tablet_id_), K(related_table_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
       related_tablet_loc = new(related_loc_buf) ObDASTabletLoc();
-      related_tablet_loc->tablet_id_ = rv.tablet_id_;
+      related_tablet_loc->tablet_id_ = rv->tablet_id_;
       related_tablet_loc->ls_id_ = tablet_loc.ls_id_;
       related_tablet_loc->server_ = tablet_loc.server_;
       related_tablet_loc->loc_meta_ = related_table_loc->loc_meta_;
       related_tablet_loc->next_ = tablet_loc.next_;
-      related_tablet_loc->partition_id_ = rv.part_id_;
-      related_tablet_loc->first_level_part_id_ = rv.first_level_part_id_;
+      related_tablet_loc->partition_id_ = rv->part_id_;
+      related_tablet_loc->first_level_part_id_ = rv->first_level_part_id_;
       tablet_loc.next_ = related_tablet_loc;
       if (OB_FAIL(related_table_loc->add_tablet_loc(related_tablet_loc))) {
         LOG_WARN("add related tablet location failed", K(ret));
@@ -553,6 +567,20 @@ void ObDASCtx::unmark_need_check_server()
   if (!table_locs_.empty() && !table_locs_.get_first()->get_tablet_locs().empty()) {
     need_check_server_ = false;
   }
+}
+
+int ObDASCtx::build_related_tablet_map(const ObDASTableLocMeta &loc_meta)
+{
+  int ret = OB_SUCCESS;
+  ObDASTabletMapper tablet_mapper;
+  ObArray<ObTabletID> tablet_ids;
+  ObArray<ObObjectID> partition_ids;
+  if (OB_FAIL(get_das_tablet_mapper(loc_meta.ref_table_id_, tablet_mapper, &loc_meta.related_table_ids_))) {
+    LOG_WARN("get das tablet mapper failed", K(ret));
+  } else if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(tablet_ids, partition_ids))) {
+    LOG_WARN("build related tablet_id map failed", K(ret), K(loc_meta));
+  }
+  return ret;
 }
 
 OB_DEF_SERIALIZE(ObDASCtx)

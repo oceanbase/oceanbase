@@ -813,7 +813,8 @@ int ObPrivSqlService::alter_user_default_role(
       if (OB_FAIL((schema_service_.get_user_sql_service()).grant_revoke_user(user_info,
           new_schema_version,
           ddl_stmt_str,
-          sql_client))) {
+          sql_client,
+          false))) {
         LOG_WARN("fail to push back", K(ret), K(user_info));
       }
     }
@@ -946,7 +947,8 @@ int ObPrivSqlService::grant_revoke_role(
     if (OB_FAIL((schema_service_.get_user_sql_service()).grant_revoke_user(user_info,
         new_schema_version,
         ddl_stmt_str,
-        sql_client))) {
+        sql_client,
+        false))) {
       LOG_WARN("fail to push back", K(ret), K(user_info));
     }
   }

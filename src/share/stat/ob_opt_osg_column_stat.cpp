@@ -244,11 +244,13 @@ int ObOptOSGColumnStat::inner_merge_min(const ObDatum &datum, const ObObjMeta &m
       min_val_.meta_ = meta;
       min_val_.cmp_func_ = cmp_func;
     }
+    LOG_TRACE("succeed to merge min datum", K(*min_val_.datum_), K(datum), K(meta));
   } else if (min_val_.datum_->is_null()) {
     inner_min_allocator_.reuse();
     if (OB_FAIL(min_val_.datum_->deep_copy(datum, inner_min_allocator_))) {
       LOG_WARN("failed to deep copy datum");
     }
+    LOG_TRACE("succeed to merge min datum", K(*min_val_.datum_), K(datum), K(meta));
   } else {
     int cmp_ret = 0;
     if (OB_FAIL(min_val_.cmp_func_(*min_val_.datum_, datum, cmp_ret))) {

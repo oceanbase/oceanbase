@@ -112,7 +112,6 @@ int ObLinkDmlOp::inner_execute_link_stmt(const char *link_stmt)
   } else if (MY_SPEC.is_reverse_link_ && OB_FAIL(send_reverse_link_info(tx_id))) {
     LOG_WARN("failed to send reverse link info", K(ret), K(link_stmt));
   } else if (OB_FAIL(dblink_proxy_->dblink_write(dblink_conn_, affected_rows_, link_stmt))) {
-    ObDblinkUtils::process_dblink_errno(link_type_, dblink_conn_, ret);
     LOG_WARN("write failed", K(ret), K(link_stmt));
   } else {
     LOG_DEBUG("LINKDMLOP succ to dblink write", K(affected_rows_), K(link_stmt), KP(dblink_conn_), K(ret));

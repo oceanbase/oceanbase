@@ -177,7 +177,8 @@ public:
                      const sqlclient::dblink_param_ctx &param_ctx,
                      sqlclient::ObISQLConnection *&dblink_conn,
                      uint32_t sessid = 0,
-                     int64_t sql_request_level = 0);
+                     int64_t sql_request_level = 0,
+                     const char *set_sql_mode_cstr = NULL);
   int release_dblink(/*uint64_t dblink_id,*/sqlclient::DblinkDriverProto dblink_type, sqlclient::ObISQLConnection *dblink_conn, uint32_t sessid = 0);
   int dblink_read(sqlclient::ObISQLConnection *dblink_conn, ReadResult &result, const char *sql);
   int dblink_write(sqlclient::ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql);
@@ -185,9 +186,11 @@ public:
   int switch_dblink_conn_pool(sqlclient::DblinkDriverProto type, sqlclient::ObISQLConnectionPool *&dblink_conn_pool);
   int set_dblink_pool_charset(uint64_t dblink_id);
   inline sqlclient::ObDbLinkConnectionPool *get_dblink_conn_pool() { return link_pool_; }
-  static int execute_init_sql(sqlclient::ObISQLConnection *dblink_conn, int link_type);
+  static int execute_init_sql(sqlclient::ObISQLConnection *dblink_conn, int link_type,
+                              const char *set_sql_mode_cstr = NULL);
 private:
-  int prepare_enviroment(sqlclient::ObISQLConnection *dblink_conn, int link_type);
+  int prepare_enviroment(sqlclient::ObISQLConnection *dblink_conn, int link_type,
+                         const char *set_sql_mode_cstr = NULL);
   sqlclient::ObDbLinkConnectionPool *link_pool_;
 };
 

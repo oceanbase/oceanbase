@@ -519,13 +519,15 @@ int PalfHandleImpl::get_election_leader(ObAddr &addr) const
   return ret;
 }
 
-int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
-                                            const LogGetMCStReq &req,
-                                            LogGetMCStResp &resp)
+int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
+                                                   const LogGetMCStReq &req,
+                                                   LogGetMCStResp &resp)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
   int tmp_ret = common::OB_SUCCESS;
+  const bool is_vote_enabled = state_mgr_.is_allow_vote();
+  const bool is_sync_enabled = state_mgr_.is_sync_enabled();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret), K_(palf_id));
@@ -534,13 +536,17 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
     //       to be added in the Paxos group. Check PalfHandleImpl only
     resp.is_normal_replica_ = false;
     PALF_LOG(WARN, "get tenant data version failed", K(tmp_ret), K(req), K(resp));
+  } else if (false == is_vote_enabled || false == is_sync_enabled) {
+    resp.is_normal_replica_ = false;
+    PALF_LOG(WARN, "replica has been disabled vote/sync", K(ret), K(req), K(resp),
+        K(is_vote_enabled), K(is_sync_enabled));
   } else {
     RLockGuard guard(lock_);
     if (req.need_purge_throttling_) {
       int tmp_ret = OB_SUCCESS;
       const PurgeThrottlingType purge_type = PurgeThrottlingType::PURGE_BY_GET_MC_REQ;
       if (OB_SUCCESS != (tmp_ret = log_engine_.submit_purge_throttling_task(purge_type))) {
-        PALF_LOG_RET(WARN, tmp_ret, "failed to submit_purge_throttling_task with config_change_pre_check", K_(palf_id));
+        PALF_LOG_RET(WARN, tmp_ret, "failed to submit_purge_throttling_task with handle_config_change_pre_check", K_(palf_id));
       }
     }
     int64_t curr_proposal_id = state_mgr_.get_proposal_id();
@@ -570,7 +576,7 @@ int PalfHandleImpl::config_change_pre_check(const ObAddr &server,
     } else {
       PALF_LOG(INFO, "try_fetch_log with ADD_MEMBER_PRE_CHECK success", KR(tmp_ret), KPC(this));
     }
-    PALF_LOG(INFO, "config_change_pre_check success", K(ret), KPC(this), K(server),
+    PALF_LOG(INFO, "handle_config_change_pre_check success", K(ret), KPC(this), K(server),
         K(req), K(resp), K(curr_config_version));
   }
   return ret;

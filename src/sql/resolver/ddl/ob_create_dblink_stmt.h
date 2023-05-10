@@ -29,12 +29,14 @@ public:
   inline void set_tenant_id(const uint64_t id) { create_dblink_arg_.dblink_info_.set_tenant_id(id); }
   inline void set_user_id(const uint64_t id) { create_dblink_arg_.dblink_info_.set_owner_id(id); }
   inline int set_dblink_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_dblink_name(name); }
+  inline void set_if_not_exist(const bool if_not_exist) { return create_dblink_arg_.dblink_info_.set_if_not_exist(if_not_exist); }
   inline int set_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_cluster_name(name); }
   inline int set_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_tenant_name(name); }
   inline int set_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_user_name(name); }
   int set_password(const common::ObString &pwd);
   inline void set_reverse_host_addr(const common::ObAddr &addr) { create_dblink_arg_.dblink_info_.set_reverse_host_addr(addr); }
   inline int set_reverse_cluster_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_cluster_name(name); }
+  inline int set_database_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_database_name(name); }
   inline int set_reverse_tenant_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_tenant_name(name); }
   inline int set_reverse_user_name(const common::ObString &name) { return create_dblink_arg_.dblink_info_.set_reverse_user_name(name); }
   int set_reverse_password(const common::ObString &pwd);

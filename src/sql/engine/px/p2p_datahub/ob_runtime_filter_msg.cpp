@@ -26,10 +26,49 @@ using namespace oceanbase::common;
 using namespace oceanbase::sql;
 using namespace oceanbase::share;
 
-OB_SERIALIZE_MEMBER((ObRFBloomFilterMsg, ObP2PDatahubMsgBase),
-    phase_, bloom_filter_, next_peer_addrs_,
-    expect_first_phase_count_, piece_size_);
 OB_SERIALIZE_MEMBER(ObRFRangeFilterMsg::MinMaxCellSize, min_datum_buf_size_, max_datum_buf_size_);
+
+OB_DEF_SERIALIZE(ObRFBloomFilterMsg)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((ObRFBloomFilterMsg, ObP2PDatahubMsgBase));
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              phase_,
+              bloom_filter_,
+              next_peer_addrs_,
+              expect_first_phase_count_,
+              piece_size_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObRFBloomFilterMsg)
+{
+  int ret = OB_SUCCESS;
+  BASE_DESER((ObRFBloomFilterMsg, ObP2PDatahubMsgBase));
+  bloom_filter_.allocator_.set_tenant_id(tenant_id_);
+  bloom_filter_.allocator_.set_label("ObPxBFDESER");
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              phase_,
+              bloom_filter_,
+              next_peer_addrs_,
+              expect_first_phase_count_,
+              piece_size_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRFBloomFilterMsg)
+{
+  int64_t len = 0;
+  BASE_ADD_LEN((ObRFBloomFilterMsg, ObP2PDatahubMsgBase));
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              phase_,
+              bloom_filter_,
+              next_peer_addrs_,
+              expect_first_phase_count_,
+              piece_size_);
+  return len;
+}
 
 OB_DEF_SERIALIZE(ObRFRangeFilterMsg)
 {
@@ -171,42 +210,63 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
   int ret = OB_SUCCESS;
   ObP2PDhKey dh_key(p2p_datahub_id_, px_sequence_id_, task_id_);
   ObP2PDatahubManager::P2PMsgMergeCall call(*this);
+  ObP2PDatahubManager::P2PRegenerateCall regen_call(*this);
   ObP2PDatahubManager::MsgMap &map = PX_P2P_DH.get_map();
   start_time_ = ObTimeUtility::current_time();
-  if (OB_FAIL(generate_receive_count_array(piece_size_))) {
+
+  bool need_merge = true;
+  if (OB_FAIL(generate_receive_count_array(piece_size_, bloom_filter_.get_begin_idx()))) {
     LOG_WARN("fail to generate receive count array", K(ret));
-  }
-  ObP2PDatahubMsgGuard guard(this);
-  do {
-    if (OB_HASH_EXIST == (ret = map.set_refactored(dh_key, this))) {
-      if (OB_FAIL(map.read_atomic(dh_key, call))) {
-        if (OB_HASH_NOT_EXIST != ret) {
-          LOG_WARN("fail to merge p2p dh msg", K(ret));
-        }
+  } else {
+    //set msg
+    ObP2PDatahubMsgGuard guard(this);
+    if (OB_FAIL(map.set_refactored(dh_key, this))) {
+      if (OB_HASH_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to set refactored", K(ret));
       }
-    } else if (OB_SUCCESS == ret) {
+      need_free = true;
+    } else {
+      need_merge = false;
       // set_refactored success, means this msg is in map, so register check item into dm
       int reg_ret = ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(register_dm_info_,
-          dh_key, dm_cb_node_seq_id_);
+        dh_key, dm_cb_node_seq_id_);
       if (OB_SUCCESS != reg_ret) {
         LOG_WARN("[DM] failed to register check item to dm", K(reg_ret));
       }
       LOG_TRACE("[DM] rf register check item to dm", K(reg_ret), K(register_dm_info_),
           K(dh_key), K(dm_cb_node_seq_id_), K(this));
     }
-  } while (ret == OB_HASH_NOT_EXIST);
-  if (call.need_free_) {
-    need_free = true;
-    // msg not in map, dec ref count
-    guard.dec_msg_ref_count();
+    // create whole bloom filter, no need wait
+    if (OB_SUCC(ret)) {
+      if (map.atomic_refactored(dh_key, regen_call)) {
+        LOG_WARN("fail to update bloom filter msg", K(ret));
+      }
+    }
+    // merge piece bloom filter
+    if (OB_SUCC(ret) && need_merge) {
+      if (OB_FAIL(map.read_atomic(dh_key, call))) {
+        if (OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to merge p2p dh msg", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !need_merge) {
+      (void)check_finish_receive();
+    }
+    if (need_free) {
+       // msg not in map, dec ref count
+      guard.dec_msg_ref_count();
+    }
   }
   return ret;
 }
 
-int ObRFBloomFilterMsg::generate_receive_count_array(int64_t piece_size)
+int ObRFBloomFilterMsg::generate_receive_count_array(int64_t piece_size, int64_t cur_begin_idx)
 {
   int ret = OB_SUCCESS;
-  int64_t bits_array_length = bloom_filter_.get_bits_array_length();
+  int64_t bits_array_length = ceil((double)bloom_filter_.get_bits_count() / 64);
   int64_t count = ceil(bits_array_length / (double)piece_size);
   int64_t begin_idx = 0;
   for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
@@ -214,7 +274,12 @@ int ObRFBloomFilterMsg::generate_receive_count_array(int64_t piece_size)
     if (begin_idx >= bits_array_length) {
       begin_idx = bits_array_length - 1;
     }
-    OZ(receive_count_array_.push_back(BloomFilterReceiveCount(begin_idx, 0)));
+    if (cur_begin_idx != begin_idx) {
+      OZ(receive_count_array_.push_back(BloomFilterReceiveCount(begin_idx, 0)));
+    } else {
+      OZ(receive_count_array_.push_back(BloomFilterReceiveCount(begin_idx, 1)));
+    }
+
   }
   return ret;
 }
@@ -265,6 +330,7 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
   bool first_phase_end = false;
   ObRFBloomFilterMsg &bf_msg = static_cast<ObRFBloomFilterMsg &>(rf_msg);
   auto process_second_phase = [&](ObRFBloomFilterMsg &bf_msg) {
+    LOG_WARN("process second phase", K(ret));
     if (OB_FAIL(ObP2PDatahubMsgBase::process_receive_count(bf_msg))) {
       LOG_WARN("fail to process receive count", K(ret));
     }
@@ -278,7 +344,7 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
     }
     return ret;
   };
-  if (is_first_phase()) {
+  if (bf_msg.is_first_phase()) {
     if (OB_FAIL(process_first_phase(bf_msg))) {
       LOG_WARN("fail to process first phase", K(ret));
     } else if (first_phase_end && !bf_msg.get_next_phase_addrs().empty()) {
@@ -289,7 +355,10 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
       if (OB_FAIL(second_phase_msg.shadow_copy(*this))) {
         LOG_WARN("fail to shadow copy second phase msg", K(ret));
       } else {
+        second_phase_msg.phase_ = SECOND_LEVEL;
         second_phase_msg.set_msg_cur_cnt(expect_first_phase_count_);
+        second_phase_msg.bloom_filter_.set_begin_idx(bf_msg.bloom_filter_.get_begin_idx());
+        second_phase_msg.bloom_filter_.set_end_idx(bf_msg.bloom_filter_.get_end_idx());
       }
       for (int i = 0; OB_SUCC(ret) && i < bf_msg.get_next_phase_addrs().count(); ++i) {
         if (bf_msg.get_next_phase_addrs().at(i) != GCTX.self_addr()) {
@@ -302,6 +371,7 @@ int ObRFBloomFilterMsg::process_receive_count(ObP2PDatahubMsgBase &rf_msg)
           }
         }
       }
+      (void)check_finish_receive();
     } else if (bf_msg.get_next_phase_addrs().empty()) {
       (void)check_finish_receive();
     }
@@ -354,6 +424,24 @@ int ObRFBloomFilterMsg::shadow_copy(const ObRFBloomFilterMsg &other_msg)
     LOG_WARN("failed to assign base data", K(ret));
   } else if (OB_FAIL(bloom_filter_.init(&other_msg.bloom_filter_))) {
     LOG_WARN("fail to assign bf msg", K(ret));
+  }
+  return ret;
+}
+
+int ObRFBloomFilterMsg::regenerate()
+{
+  int ret = OB_SUCCESS;
+  if (!is_finish_regen_) {
+    if (receive_count_array_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to reset receive count array", K(ret));
+    } else if (1 == receive_count_array_.count()) {
+      is_finish_regen_ = true;
+    } else if (OB_FAIL(bloom_filter_.regenerate())) {
+      LOG_WARN("fail to to regnerate bloom filter", K(ret));
+    } else {
+      is_finish_regen_ = true;
+    }
   }
   return ret;
 }
@@ -636,18 +724,20 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
       timeout_ts_,
       p2p_datahub_id_);
   ObPxP2PDatahubArg arg;
-  if (OB_FAIL(msg.shadow_copy(*this))) {
-    LOG_WARN("fail to shadow copy second phase msg", K(ret));
-  } else if (OB_ISNULL(create_finish_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected create finish ptr", K(ret));
-  }
+
   arg.msg_ = &msg;
   while (!*create_finish_ && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail to check status", K(ret));
     }
     ob_usleep(10);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(msg.shadow_copy(*this))) {
+    LOG_WARN("fail to shadow copy second phase msg", K(ret));
+  } else if (OB_ISNULL(create_finish_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected create finish ptr", K(ret));
   }
   while (*filter_idx_ <  filter_indexes_.count() && OB_SUCC(ret)) {
     cur_idx = ATOMIC_FAA(filter_idx_, 1);

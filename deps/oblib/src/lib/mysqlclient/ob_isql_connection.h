@@ -80,9 +80,15 @@ public:
        sessid_(-1),
        consumer_group_id_(0),
        has_reverse_link_credentials_(false),
-       usable_(true)
+       usable_(true),
+       last_set_sql_mode_cstr_(NULL),
+       last_set_sql_mode_cstr_buf_size_(0)
   {}
-  virtual ~ObISQLConnection() {}
+  virtual ~ObISQLConnection() {
+    allocator_.reset();
+    last_set_sql_mode_cstr_buf_size_ = 0;
+    last_set_sql_mode_cstr_ = NULL;
+  }
 
   // sql execute interface
   virtual int execute_read(const uint64_t tenant_id, const char *sql,
@@ -135,7 +141,35 @@ public:
   virtual void set_use_external_session(bool v) { UNUSED(v); }
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_init_remote_env(bool flag) { is_init_remote_env_ = flag;}
-  bool get_init_remote_env() const { return is_init_remote_env_; }
+  int is_session_inited(const char * sql_mode_cstr, bool &is_inited) {
+    int ret = OB_SUCCESS;
+    is_inited = false;
+    int64_t sql_mode_len = 0;
+    if (lib::is_oracle_mode()) {
+      is_inited = is_init_remote_env_;
+    } else if (OB_ISNULL(sql_mode_cstr)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (FALSE_IT([&]{
+                              is_inited = (0 == ObString(sql_mode_cstr).compare(last_set_sql_mode_cstr_));
+                              sql_mode_len = STRLEN(sql_mode_cstr);
+                           }())) {
+    } else if (!is_inited) {
+      if (sql_mode_len >= last_set_sql_mode_cstr_buf_size_) {
+        void *buf = NULL;
+        if (OB_ISNULL(buf = allocator_.alloc((sql_mode_len * 2)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        } else {
+          last_set_sql_mode_cstr_ = (char *)buf;
+          last_set_sql_mode_cstr_buf_size_ = sql_mode_len * 2;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        MEMCPY(last_set_sql_mode_cstr_, sql_mode_cstr, sql_mode_len);
+        last_set_sql_mode_cstr_[sql_mode_len] = 0;
+      }
+    }
+    return ret;
+  }
   void set_group_id(const int64_t v) {consumer_group_id_ = v; }
   int64_t get_group_id() const {return consumer_group_id_; }
   void set_reverse_link_creadentials(bool flag) { has_reverse_link_credentials_ = flag; }
@@ -145,13 +179,16 @@ public:
   virtual int ping() { return OB_SUCCESS; }
 protected:
   bool oracle_mode_;
-  bool is_init_remote_env_; // for dblink, we have to init remote env with some sql
+  bool is_init_remote_env_; // for oracle dblink, we have to init remote env with some sql
   uint64_t dblink_id_; // for dblink, record dblink_id of a connection used by dblink
   int64_t dblink_driver_proto_; //for dblink, record DblinkDriverProto of a connection used by dblink
   uint32_t sessid_;
   int64_t consumer_group_id_; //for resource isolation
   bool has_reverse_link_credentials_; // for dblink, mark if this link has credentials set
   bool usable_;  // usable_ = false: connection is unusable, should not execute query again.
+  char *last_set_sql_mode_cstr_; // for mysql dblink to set sql mode
+  int64_t last_set_sql_mode_cstr_buf_size_;
+  common::ObArenaAllocator allocator_;
 };
 
 } // end namespace sqlclient

@@ -163,6 +163,7 @@ ob_set_subtarget(oblib_lib lock
 
 ob_set_subtarget(oblib_lib mysqlclient
   mysqlclient/ob_isql_client.cpp
+  mysqlclient/ob_dblink_error_trans.cpp
   mysqlclient/ob_mysql_connection.cpp
   mysqlclient/ob_mysql_connection_pool.cpp
   mysqlclient/ob_mysql_prepared_param.cpp

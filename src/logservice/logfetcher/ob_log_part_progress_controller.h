@@ -59,10 +59,15 @@ public:
   /// Get the current minimum progress value
   int get_min_progress(int64_t &progress);
 
+  int64_t get_global_upper_limit() const { return ATOMIC_LOAD(&global_fetch_log_upper_limit_); }
+
+  int set_global_upper_limit(const int64_t global_upper_limit);
+
   TO_STRING_KV(K_(progress_cnt),
       K_(valid_progress_cnt),
       "recycled_cnt", recycled_indices_.count(),
-      K_(max_progress_cnt));
+      K_(max_progress_cnt),
+      K_(global_fetch_log_upper_limit));
 private:
   // Assign IDs to each thread
   int64_t get_itid_();
@@ -119,6 +124,9 @@ private:
   // Low 64 bits: records the number of times the array was scanned; High 64 bits: records the total time the array was scanned
   types::uint128_t last_global_count_and_timeval_;
   types::uint128_t global_count_and_timeval_;
+
+  // global fetch log upper limit, used to control ls fetch log progress for net standby(timestamp with ns)
+  int64_t global_fetch_log_upper_limit_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartProgressController);

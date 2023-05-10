@@ -437,13 +437,11 @@ int ObTenantTabletScheduler::schedule_all_tablets_minor()
       LOG_WARN("ls is null", K(ret), K(ls));
     } else {
       const ObLSID &ls_id = ls->get_ls_id();
-      bool need_merge = false;
-      if (OB_FAIL(check_ls_state(*ls, need_merge))) {
-        LOG_WARN("failed to check ls state", K(ret), K(ls_id));
-      } else if (!need_merge) {
-        // no need to merge, do nothing
-      } else if (OB_TMP_FAIL(schedule_ls_minor_merge(ls_handle, schedule_tablet_cnt))) {
-        LOG_WARN("failed to schedule ls minor merge", K(tmp_ret), K(ls_id));
+      if (OB_TMP_FAIL(schedule_ls_minor_merge(ls_handle, schedule_tablet_cnt))) {
+        minor_ls_tablet_iter_.skip_cur_ls();
+        if (!schedule_ignore_error(tmp_ret)) {
+          LOG_WARN("failed to schedule ls minor merge", K(tmp_ret), K(ls_id));
+        }
       }
     }
   }
@@ -854,6 +852,7 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
     LOG_WARN("failed to check ls state", K(ret), K(ls));
   } else if (!need_merge) {
     // no need to merge, do nothing
+    ret = OB_STATE_NOT_MATCH;
   } else {
     ObTabletID tablet_id;
     ObTabletHandle tablet_handle;
@@ -863,10 +862,10 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
     while (OB_SUCC(ret) && schedule_minor_flag && schedule_tablet_cnt < SCHEDULE_TABLET_BATCH_CNT) { // loop all tablet in ls
       bool tablet_merge_finish = false;
       if (OB_FAIL(minor_ls_tablet_iter_.get_next_tablet(ls_handle, tablet_handle))) {
-        if (OB_ITER_END == ret || OB_LS_NOT_EXIST == ret) {
+        if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
-        } else {
+        } else if (OB_LS_NOT_EXIST != ret) {
           LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_handle));
         }
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
@@ -935,12 +934,14 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     LOG_WARN("failed to check ls state", K(ret), K(ls));
   } else if (!need_merge) {
     // no need to merge, do nothing
+    ret = OB_STATE_NOT_MATCH;
   } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls));
   } else if (OB_UNLIKELY(!restore_status.is_restore_none())) {
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("ls is in restore status, should not loop tablet to schedule", K(ret), K(ls));
     }
+    ret = OB_STATE_NOT_MATCH;
   } else {
     ObTabletID tablet_id;
     ObTabletHandle tablet_handle;
@@ -977,10 +978,10 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     while (OB_SUCC(ret) && schedule_tablet_cnt < SCHEDULE_TABLET_BATCH_CNT) { // loop all tablet in ls
       bool tablet_merge_finish = false;
       if (OB_FAIL(medium_ls_tablet_iter_.get_next_tablet(ls_handle, tablet_handle))) {
-        if (OB_ITER_END == ret || OB_LS_NOT_EXIST == ret) {
+        if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
-        } else {
+        } else if (OB_LS_NOT_EXIST != ret) {
           LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(tablet_handle));
         }
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
@@ -1122,10 +1123,11 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
       } else if (OB_TMP_FAIL(schedule_ls_medium_merge(
                      merge_version, ls_handle, ls_merge_finish,
                      all_ls_weak_read_ts_ready, schedule_tablet_cnt))) {
+        medium_ls_tablet_iter_.skip_cur_ls(); // for any errno, skip cur ls
         tenant_merge_finish = false;
         if (OB_SIZE_OVERFLOW == tmp_ret) {
           break;
-        } else if (OB_LS_NOT_EXIST != tmp_ret) {
+        } else if (!schedule_ignore_error(tmp_ret)) {
           LOG_WARN("failed to schedule ls merge", K(tmp_ret), KPC(ls));
         }
       } else {
@@ -1292,8 +1294,7 @@ int ObCompactionScheduleIterator::get_next_ls(ObLSHandle &ls_handle)
     } else if (OB_FAIL((MTL(storage::ObLSService *)->get_ls(ls_ids_[ls_idx_], ls_handle, mod_)))) {
       if (OB_LS_NOT_EXIST == ret) {
         LOG_TRACE("ls not exist", K(ret), K(ls_idx_), K(ls_ids_[ls_idx_]));
-        ++ls_idx_;
-        tablet_ids_.reuse();
+        skip_cur_ls();
       } else {
         LOG_WARN("failed to get ls", K(ret), K(ls_idx_), K(ls_ids_[ls_idx_]));
       }

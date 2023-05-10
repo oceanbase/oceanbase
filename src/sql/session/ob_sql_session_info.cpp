@@ -3308,17 +3308,7 @@ int ObControlInfoEncoder::compare_sess_info(const char* current_sess_buf, int64_
                                             const char* last_sess_buf, int64_t last_sess_length)
 {
   int ret = OB_SUCCESS;
-  if (current_sess_length != last_sess_length) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to compare session info", K(ret), K(current_sess_length), K(last_sess_length),
-      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
-  } else if (memcmp(current_sess_buf, last_sess_buf, current_sess_length) == 0) {
-    LOG_TRACE("success to compare session info", K(ret));
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to compare buf session info", K(ret),
-      KPHEX(current_sess_buf, current_sess_length), KPHEX(last_sess_buf, last_sess_length));
-  }
+  // todo The current control info does not meet the synchronization mechanism and cannot be verified
   return ret;
 }
 

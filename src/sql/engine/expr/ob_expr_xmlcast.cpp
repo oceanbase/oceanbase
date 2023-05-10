@@ -43,7 +43,11 @@ int ObExprXmlcast::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObObjType xml_type = type1.get_type();
   uint64_t subschema_id = type1.get_subschema_id();
-  if (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML) {
+  if (!is_called_in_sql()) {
+    ret = OB_ERR_SP_LILABEL_MISMATCH;
+    LOG_WARN("expr call in pl semantics disallowed", K(ret), K(N_XMLCAST));
+    LOG_USER_ERROR(OB_ERR_SP_LILABEL_MISMATCH, static_cast<int>(strlen(N_XMLCAST)), N_XMLCAST);
+  } else if (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML) {
       type1.get_calc_meta().set_sql_udt(ObXMLSqlType);
   } else if (!ob_is_xml_sql_type(xml_type, subschema_id)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -85,6 +89,9 @@ int ObExprXmlcast::set_dest_type(ObExprResType &param_type, ObExprResType &dst_t
       // use collation of current session
       dst_type.set_collation_type(ob_is_nstring_type(dst_type.get_type()) ?
                               collation_nation : collation_connection);
+    }
+    if (ob_is_string_or_lob_type(obj_type)) {
+      dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
     }
     // set accuracy
     if (ObStringTC == dest_tc) {

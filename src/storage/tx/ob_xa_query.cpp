@@ -369,5 +369,12 @@ int ObXAQueryOraImpl::convert_flag_(const int64_t xa_flag,
   return ret;
 }
 
+void ObXAQueryOraImpl::reset()
+{
+  conn_ = NULL;
+  is_inited_ = false;
+}
+
+
 } // end namespace of transaction
 } // end nemespace of oceanbase

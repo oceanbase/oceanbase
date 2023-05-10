@@ -19,6 +19,8 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text, ObSqlPlanItem &plan_item) override;
   inline void set_dml_type(stmt::StmtType type) { dml_type_ = type; }
 private:
+  virtual bool print_flashback_query() const override { return false; };
+private:
   stmt::StmtType dml_type_;
 };
 
