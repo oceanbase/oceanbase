@@ -2380,9 +2380,11 @@ int ObSessInfoVerificationP::process()
     // 1. Broken link reuse session，need verify proxy sess id
     // 2. Mixed running scene, need verify version
     // 3. Routing without synchronizing session information, judge is_has_query_executed
+    // 4. need guarantee the latest session information
     if (arg_.get_proxy_sess_id() == session->get_proxy_sessid() &&
         GET_MIN_CLUSTER_VERSION() == CLUSTER_CURRENT_VERSION &&
-        session->is_has_query_executed()
+        session->is_has_query_executed() &&
+        session->is_latest_sess_info()
         ) {
       if (OB_FAIL(ObSessInfoVerify::fetch_verify_session_info(*session,
           str_result, result_.allocator_))) {

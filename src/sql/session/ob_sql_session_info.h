@@ -637,7 +637,9 @@ public:
   bool is_has_query_executed() {return has_query_executed_; }
   void set_has_query_executed(bool has_query_executed) {
                             has_query_executed_ = has_query_executed; }
-
+  bool is_latest_sess_info() {return is_latest_sess_info_; }
+  void set_latest_sess_info(bool is_latest_sess_info) {
+                            is_latest_sess_info_ = is_latest_sess_info; }
 
   void reset_warnings_buf()
   {
@@ -1248,6 +1250,7 @@ private:
   // There is a scenario, when the connection is established for the first time,
   // the route is immediately switched and no request is initiated, and no verification is required at this time
   bool has_query_executed_;  //add for routing without synchronizing session information
+  bool is_latest_sess_info_; //add for the current session information is latest flag
   char module_buf_[common::OB_MAX_MOD_NAME_LENGTH];
   char action_buf_[common::OB_MAX_ACT_NAME_LENGTH];
   char client_info_buf_[common::OB_MAX_CLIENT_INFO_LENGTH];

@@ -175,6 +175,7 @@ ObSQLSessionInfo::ObSQLSessionInfo() :
       conn_res_user_id_(OB_INVALID_ID),
       mem_context_(nullptr),
       has_query_executed_(false),
+      is_latest_sess_info_(false),
       cur_exec_ctx_(nullptr),
       restore_auto_commit_(false),
       dblink_context_(this),
@@ -331,6 +332,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     coninfo_set_by_sess_ = false;
     is_ob20_protocol_ = false;
     is_session_var_sync_ = false;
+    is_latest_sess_info_ = false;
     int temp_ret = OB_SUCCESS;
     sql_req_level_ = 0;
     optimizer_tracer_.reset();

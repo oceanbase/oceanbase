@@ -503,6 +503,21 @@ int ObSessInfoVerify::create_tmp_sys_var(sql::ObSQLSessionInfo &sess,
   return ret;
 }
 
+int ObSessInfoVerify::sess_veri_control(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo *&session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session)) {
+    // do nothing
+  } else if (pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_ERR) {
+    // when error scene, can not guarantee the latest session information
+    session->set_latest_sess_info(false);
+  } else {
+    // when other scene, can guarantee the latest session information
+    session->set_latest_sess_info(true);
+  }
+  return ret;
+}
+
 // this function use for get another session id when 1:1 server list test
 bool GetAnotherSessID::operator()(ObSQLSessionMgr::Key key,
                                              ObSQLSessionInfo *sess_info)

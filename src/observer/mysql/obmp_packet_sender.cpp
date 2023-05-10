@@ -23,6 +23,7 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "observer/mysql/obmp_utils.h"
 #include "observer/mysql/ob_mysql_result_set.h"
+#include "sql/session/ob_sess_info_verify.h"
 
 namespace oceanbase
 {
@@ -269,6 +270,11 @@ int ObMPPacketSender::response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSes
     } else {
       // do nothing
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(ObSessInfoVerify::sess_veri_control(pkt, session))) {
+    // do nothing.
   }
 
   if (OB_FAIL(ret)) {
