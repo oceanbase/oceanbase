@@ -191,7 +191,7 @@ int ObStandbyTimestampService::switch_to_leader()
   if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::GTS_LS, role, tmp_epoch))) {
     TRANS_LOG(WARN, "get ObStandbyTimestampService role fail", KR(ret));
   } else {
-    ATOMIC_STORE(&switch_to_leader_ts_, ObTimeUtility::current_time());
+    ATOMIC_STORE(&switch_to_leader_ts_, ObClockGenerator::getCurrentTime());
     epoch_ = tmp_epoch;
     int64_t type = MTL(ObTimestampAccess *)->get_service_type();
     if (ObTimestampAccess::ServiceType::FOLLOWER == type) {
