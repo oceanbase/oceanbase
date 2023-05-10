@@ -191,14 +191,15 @@ int ObRevokeResolver::resolve_revoke_sysprivs_inner(
     const ObString &user_name = user_name_array.at(i);
     const ObString &host_name = host_name_array.at(i);
     OZ (revoke_stmt->add_grantee(user_name));
-    if (OB_SUCC(ret) && OB_FAIL(params_.schema_checker_->get_user_id(
-          revoke_stmt->get_tenant_id(), user_name, host_name, user_id))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(params_.schema_checker_->get_user_id(revoke_stmt->get_tenant_id(), user_name,
+                                                            host_name, user_id))) {
       if (OB_USER_NOT_EXIST == ret) {
         ret = OB_ERR_USER_OR_ROLE_DOES_NOT_EXIST;
         LOG_USER_ERROR(OB_ERR_USER_OR_ROLE_DOES_NOT_EXIST, user_name.length(), user_name.ptr());
       }
       LOG_WARN("fail to get user id", K(ret), K(user_name), K(host_name));
-    } else if (OB_FAIL(check_dcl_on_inner_user(revoke_role->type_,
+    }  else if (OB_FAIL(check_dcl_on_inner_user(revoke_role->type_,
                                                params_.session_info_->get_priv_user_id(),
                                                user_id))) {
       LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user", K(ret),
