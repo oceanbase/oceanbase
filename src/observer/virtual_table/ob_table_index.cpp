@@ -426,6 +426,11 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
+            //expression
+          case OB_APP_MIN_COLUMN_ID + 17: {
+            cells[cell_idx].set_null();
+            break;
+          }
 
           default: {
             ret = OB_ERR_UNEXPECTED;
@@ -757,6 +762,21 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
+          //expression
+          case OB_APP_MIN_COLUMN_ID + 17: {
+            if (column_schema->is_func_idx_column()) {
+              ObString col_def;
+              if (OB_FAIL(column_schema->get_cur_default_value().get_string(col_def))) {
+                LOG_WARN("get generated column definition failed", K(ret), K(*column_schema));
+              } else {
+                cells[cell_idx].set_varchar(col_def);
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              }
+            } else {
+              cells[cell_idx].set_null();
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
@@ -940,6 +960,11 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
             const ObString &is_visible = index_schema->is_index_visible() ? "YES" : "NO";
             cells[cell_idx].set_varchar(is_visible);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+            //expression
+          case OB_APP_MIN_COLUMN_ID + 17: {
+            cells[cell_idx].set_null();
             break;
           }
           default: {

@@ -5630,6 +5630,7 @@ def_table_schema(
   ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'true'),
   ('index_comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'false', ''),
   ('is_visible', 'varchar:MAX_COLUMN_YES_NO_LENGTH', 'false', ''),
+  ('expression', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true')
   ],
 )
 

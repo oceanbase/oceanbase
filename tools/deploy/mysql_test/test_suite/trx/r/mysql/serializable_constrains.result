@@ -65,9 +65,9 @@ create table t_global_index (pk int primary key) partition by hash(pk) partition
 insert into t_global_index values (1), (2), (3);
 create index index1 on t_global_index (pk) global;
 show index from t_global_index;
-Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible
-t_global_index	0	PRIMARY	1	pk	A	NULL	NULL	NULL		BTREE	available		YES
-t_global_index	1	index1	1	pk	A	NULL	NULL	NULL		BTREE	available		YES
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t_global_index	0	PRIMARY	1	pk	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+t_global_index	1	index1	1	pk	A	NULL	NULL	NULL		BTREE	available		YES	NULL
 begin;
 insert into xm_test_t1 values (7, 1);
 select * from xm_test_t1;
