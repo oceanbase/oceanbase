@@ -1910,6 +1910,8 @@ int ObSqlPlan::format_one_output_expr(char *buf,
     if (0 == print_len && need_new_line) {
       if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
+      } else {
+        line_begin_pos = pos;
       }
     }
     if (OB_FAIL(ret)) {
