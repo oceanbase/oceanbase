@@ -157,7 +157,7 @@ int ObTransService::acquire_tx(const char* buf,
   }
   if (tx) {
     REC_TRANS_TRACE_EXT(&tx->get_tlog(), deserialize,
-                        OB_ID(addr), (void*)&tx,
+                        OB_ID(addr), (void*)tx,
                         OB_ID(txid), tx->tx_id_);
   }
   TRANS_LOG(TRACE, "acquire tx by deserialize", K(ret), K(*this), KP(buf), KPC(tx));
