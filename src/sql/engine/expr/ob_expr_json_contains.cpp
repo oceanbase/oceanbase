@@ -294,6 +294,9 @@ int ObExprJsonContains::json_contains_array(ObIJsonBase* json_target,
         }
 
         ret_tmp = (t_i == t.size() || !found) ? false : true;
+        if (!ret_tmp) {
+          break;
+        }
       }
     }
   }
