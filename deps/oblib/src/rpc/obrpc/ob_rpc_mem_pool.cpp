@@ -42,13 +42,10 @@ static void* rpc_mem_pool_direct_alloc(int64_t tenant_id, const char* label, int
     tenant_id = OB_SERVER_TENANT_ID;
   }
   ObMemAttr attr(tenant_id, label, common::ObCtxIds::RPC_CTX_ID);
-  auto* ret = common::ob_malloc(sz, attr);
-  if (OB_ISNULL(ret)
-      && OB_ISNULL(lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, common::ObCtxIds::RPC_CTX_ID))) {
+  if (OB_ISNULL(lib::ObMallocAllocator::get_instance()->get_tenant_ctx_allocator_without_tlcache(tenant_id, common::ObCtxIds::RPC_CTX_ID))) {
     attr.tenant_id_ = OB_SERVER_TENANT_ID;
-    ret = common::ob_malloc(sz, attr);
   }
-  return ret;
+  return common::ob_malloc(sz, attr);
 }
 static void rpc_mem_pool_direct_free(void* p) { common::ob_free(p); }
 static ObRpcMemPool::Page* rpc_mem_pool_create_page(int64_t tenant_id, const char* label, int64_t sz) {

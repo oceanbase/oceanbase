@@ -124,6 +124,22 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   }
 }
 
+ObAddr ObPocServerHandleContext::get_peer()
+{
+  ObAddr addr;
+  struct sockaddr_storage sock_addr;
+  if (0 == pn_get_peer(resp_id_, &sock_addr)) {
+    if (AF_INET == sock_addr.ss_family) {
+      struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
+      addr.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
+    } else if (AF_INET6 == sock_addr.ss_family) {
+      struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
+      addr.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
+    }
+  }
+  return addr;
+}
+
 int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
 {
   int ret = OB_SUCCESS;
@@ -155,18 +171,19 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   int ret = OB_SUCCESS;
   // init pkt-nio framework
   int lfd = -1;
+  int rl_net_thread_count = max(1, net_thread_count/4);
   if ((lfd = pn_listen(port, serve_cb)) == -1) {
     ret = OB_SERVER_LISTEN_ERROR;
     RPC_LOG(ERROR, "pn_listen failed", K(ret));
   } else {
-    global_deliver = deliver;
+    ATOMIC_STORE(&global_deliver, deliver);
     int count = 0;
     if ((count = pn_provision(lfd, DEFAULT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
       ret = OB_ERR_SYS;
       RPC_LOG(WARN, "pn_provision error", K(count), K(net_thread_count));
-    } else if((count = pn_provision(lfd, RATELIMIT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
+    } else if((count = pn_provision(lfd, RATELIMIT_PNIO_GROUP, rl_net_thread_count)) != rl_net_thread_count) {
       ret = OB_ERR_SYS;
-      RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(net_thread_count));
+      RPC_LOG(WARN, "pn_provision for RATELIMIT_PNIO_GROUP error", K(count), K(rl_net_thread_count));
     } else {
       has_start_ = true;
     }
@@ -218,7 +235,7 @@ bool server_in_black(struct sockaddr* sa) {
 }
 int dispatch_to_ob_listener(int accept_fd) {
   int ret = -1;
-  if (oceanbase::obrpc::global_ob_listener) {
+  if (OB_NOT_NULL(ATOMIC_LOAD(&oceanbase::obrpc::global_ob_listener))) {
     ret = oceanbase::obrpc::global_ob_listener->do_one_event(accept_fd);
   }
   return ret;
