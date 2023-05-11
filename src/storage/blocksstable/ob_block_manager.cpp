@@ -304,7 +304,9 @@ int ObBlockManager::alloc_block(ObMacroBlockHandle &macro_handle)
     ret = OB_NOT_INIT;
     LOG_WARN("ObBlockManager not init", K(ret));
   } else if (OB_FAIL(io_device_->alloc_block(&opts, io_fd))) {
-    LOG_WARN("Failed to alloc block from io device", K(ret));
+    if (ret != OB_SERVER_OUTOF_DISK_SPACE) {
+      LOG_WARN("Failed to alloc block from io device", K(ret));
+    }
   }
   // try alloc block
   if (ret == OB_SERVER_OUTOF_DISK_SPACE) {
