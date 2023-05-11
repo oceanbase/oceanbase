@@ -436,6 +436,9 @@ public:
                        const bool is_index,
                        const ObTableSchema *&table_schema,
                        bool is_hidden = false);
+  int get_index_schemas_with_data_table_id(const uint64_t tenant_id,
+                                           const uint64_t data_table_id,
+                                           ObIArray<const ObSimpleTableSchemaV2 *> &aux_schemas);
   int get_sys_variable_schema(const common::ObString &tenant_name,
                               const ObSysVariableSchema *&sys_variable_schema);
   int get_sys_variable_schema(const uint64_t tenant_id,
