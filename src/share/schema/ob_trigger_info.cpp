@@ -361,7 +361,8 @@ int ObTriggerInfo::gen_package_source(const uint64_t tenant_id,
   CK (OB_NOT_NULL(trigger_info));
   if (OB_SUCC(ret)) {
     ObParser parser(alloc, trigger_info->get_sql_mode());
-    OZ (parser.parse(trigger_info->get_trigger_body(), parse_result, TRIGGER_MODE),
+    OZ (parser.parse(trigger_info->get_trigger_body(), parse_result,
+                     TRIGGER_MODE, false, false, true),
         trigger_info->get_trigger_body());
     // stmt list node.
     OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
@@ -1042,7 +1043,9 @@ int ObTriggerInfo::replace_table_name_in_body(ObTriggerInfo &trigger_info,
   const ParseNode *base_schema_node = NULL;
   const ParseNode *base_object_node = NULL;
 
-  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE), trigger_info.get_trigger_body());
+  OZ (parser.parse(trigger_info.get_trigger_body(), parse_result, TRIGGER_MODE,
+                   false, false, true),
+      trigger_info.get_trigger_body());
   // stmt list node
   OV (OB_NOT_NULL(stmt_list_node = parse_result.result_tree_));
   OV (stmt_list_node->type_ == T_STMT_LIST, OB_ERR_UNEXPECTED, stmt_list_node->type_);
