@@ -6398,7 +6398,7 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   } else if (OB_UNLIKELY(T_VARCHAR != node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node type is not T_VARCHAR", "type", get_type_name(node->type_));
-  } else if (OB_UNLIKELY(node->str_len_ <= 0)) {
+  } else if (OB_UNLIKELY(node->str_len_ < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty string");
   } else {
