@@ -422,7 +422,7 @@ bool LogReconfirm::is_majority_catch_up_()
   } else if (majority_match_lsn < majority_max_lsn_) {
     PALF_LOG_RET(WARN, OB_SUCCESS, "majority_match_lsn is smaller than majority_max_lsn_, need wait", K_(palf_id),
         K_(majority_max_lsn), K(majority_match_lsn));
-    if (palf_reach_time_interval(500 * 1000, last_fetch_log_time_us_)) {
+    if (palf_reach_time_interval(100 * 1000, last_notify_fetch_time_us_)) {
       ObMemberList lagged_list;
       if (OB_SUCCESS != (tmp_ret = sw_->get_lagged_member_list(majority_max_lsn_, lagged_list))) {
         PALF_LOG_RET(WARN, tmp_ret, "get_lagged_member_list_ failed", K(tmp_ret), K_(palf_id));

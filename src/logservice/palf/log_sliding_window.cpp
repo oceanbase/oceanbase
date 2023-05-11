@@ -1887,7 +1887,8 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     }
   } else if (false == need_execute_fetch_(fetch_log_type)) {
     if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
-      PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type));
+      PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type),
+          K_(last_fetch_trigger_type), K_(last_fetch_req_time));
     }
   } else if (FetchTriggerType::MODE_META_BARRIER == fetch_log_type) {
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
