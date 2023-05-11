@@ -28,6 +28,7 @@ static const int64_t easy_monitor_signal = 34;
 int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                       void *(*start_routine) (void *), void *arg);
 void ob_set_thread_name(const char* type);
+int64_t ob_update_loop_ts();
 /**
  * start
  */
@@ -251,6 +252,7 @@ static void *easy_baseth_pool_monitor_func(void *args)
     easy_info_log("monitor us :%ld sec :%f", us, sec);
 
     while(tp->stoped == 0) {
+        ob_update_loop_ts();
         usleep(us);
         ev_tstamp now = ev_time();
         easy_thread_pool_for_each(th, tp, 0) {

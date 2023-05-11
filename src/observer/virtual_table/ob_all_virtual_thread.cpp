@@ -115,6 +115,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               break;
             }
             case WAIT_EVENT: {
+              GET_OTHER_TSI_ADDR(char*, rpc_dest_addr, &Thread::rpc_dest_addr_);
               wait_event_[0] = '\0';
               if (0 != join_addr) {
                 IGNORE_RETURN snprintf(wait_event_, 64, "thread %u", *(uint32_t*)(thread_base + tid_offset));
@@ -132,6 +133,11 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 } else {
                   IGNORE_RETURN snprintf(wait_event_, 64, "%u rdlocks", val & 0x3fffffff);
                 }
+              } else if (OB_NOT_NULL(rpc_dest_addr)) {
+                bool has_segv = false;
+                do_with_crash_restore([&] {
+                  IGNORE_RETURN snprintf(wait_event_, 64, "rpc to %s", rpc_dest_addr);
+                }, has_segv);
               }
               cells[i].set_varchar(wait_event_);
               cells[i].set_collation_type(

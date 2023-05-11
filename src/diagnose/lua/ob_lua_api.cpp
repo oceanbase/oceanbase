@@ -1947,12 +1947,14 @@ int dump_thread_info(lua_State *L)
           GET_OTHER_TSI_ADDR(uint32_t*, wait_addr, &ObLatch::current_wait);
           GET_OTHER_TSI_ADDR(pthread_t, join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(int64_t, sleep_us, &Thread::sleep_us_);
-          char wait_event[32];
+          GET_OTHER_TSI_ADDR(char*, rpc_dest_addr, &Thread::rpc_dest_addr_);
+          constexpr int64_t BUF_LEN = 64;
+          char wait_event[BUF_LEN];
           wait_event[0] = '\0';
           if (0 != join_addr) {
-            IGNORE_RETURN snprintf(wait_event, 32, "thread %u", *(uint32_t*)(thread_base + tid_offset));
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "thread %u %ld", *(uint32_t*)(thread_base + tid_offset), tid_offset);
           } else if (0 != sleep_us) {
-            IGNORE_RETURN snprintf(wait_event, 32, "%ld us", sleep_us);
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%ld us", sleep_us);
           } else if (OB_NOT_NULL(wait_addr)) {
             bool has_segv = false;
             uint32_t val = 0;
@@ -1961,10 +1963,15 @@ int dump_thread_info(lua_State *L)
             }, has_segv);
             if (has_segv) {
             } else if (0 != (val & (1<<30))) {
-              IGNORE_RETURN snprintf(wait_event, 32, "wrlock on %u", val & 0x3fffffff);
+              IGNORE_RETURN snprintf(wait_event, BUF_LEN, "wrlock on %u", val & 0x3fffffff);
             } else {
-              IGNORE_RETURN snprintf(wait_event, 32, "%u rdlocks", val & 0x3fffffff);
+              IGNORE_RETURN snprintf(wait_event, BUF_LEN, "%u rdlocks", val & 0x3fffffff);
             }
+          } else if (OB_NOT_NULL(rpc_dest_addr)) {
+            bool has_segv = false;
+            do_with_crash_restore([&] {
+              IGNORE_RETURN snprintf(wait_event, BUF_LEN, "rpc to %s", rpc_dest_addr);
+            }, has_segv);
           }
           gen.next_column(wait_event);
         }

@@ -322,13 +322,13 @@ private:
 
 #define SLEEP(time)                           \
   do {                                                          \
-    oceanbase::common::ObWaitEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, 0, 0);    \
+    oceanbase::common::ObSleepEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, ((int64_t)time) * 1000 * 1000);    \
     ::sleep(time);                                                      \
   } while (0)
 
 #define USLEEP(time)                           \
   do {                                                          \
-    oceanbase::common::ObWaitEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, 0, 0);    \
+    oceanbase::common::ObSleepEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, (int64_t)time);    \
     ::usleep(time);                                         \
   } while (0)
 

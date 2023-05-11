@@ -611,6 +611,7 @@ static inline int64_t current_time();
 #endif
 
     static void ( *syserr_cb)(const char *msg);
+    int64_t ob_update_loop_ts();
 
     void
     ev_set_syserr_cb (void (*cb)(const char *msg))
@@ -2374,6 +2375,7 @@ static inline int64_t current_time();
         EV_INVOKE_PENDING; /* in case we recurse, ensure ordering stays nice and clean */
 
         do {
+            ob_update_loop_ts();
 #if EV_VERIFY >= 2
             ev_verify (EV_A);
 #endif

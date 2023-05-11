@@ -435,12 +435,15 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
     // Synchronous rpc always needs to return packets
     s->unneed_response = false;
     s->r.client_start_time = common::ObTimeUtility::current_time();
+    lib::Thread::update_loop_ts(s->r.client_start_time);
     if (0 == s->addr.cidx) {
       s->addr.cidx = balance_assign(s);
     }
 
     easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
+    lib::Thread::rpc_dest_addr_ = buff;
     pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
+    lib::Thread::rpc_dest_addr_ = nullptr;
     if (NULL == pkt) {
       SERVER_LOG(WARN, "send packet fail", "dst", buff, KP(s));
     } else {

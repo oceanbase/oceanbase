@@ -189,6 +189,11 @@ void ob_set_thread_name(const char* type)
   ::oceanbase::lib::set_thread_name(type);
 }
 
+int64_t ob_update_loop_ts()
+{
+  return ::oceanbase::lib::Thread::update_loop_ts();
+}
+
 } /* extern "C" */
 
 #endif /* _OCEABASE_TENANT_PRELOAD_H_ */
