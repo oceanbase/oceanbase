@@ -1067,6 +1067,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprAtLocal);
   REG_OP_ORCL(ObExprTimestampToScn);
   REG_OP_ORCL(ObExprScnToTimestamp);
+  REG_OP_ORCL(ObExprNlsInitCap);
   //部分内部使用的表达式
   REG_OP_ORCL(ObExprAdd);
   REG_OP_ORCL(ObExprAggAdd);
