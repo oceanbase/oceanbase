@@ -531,6 +531,10 @@ void ObServer::destroy()
     ob_service_.destroy();
     FLOG_INFO("ob service destroyed");
 
+    FLOG_INFO("begin to destroy session manager");
+    session_mgr_.destroy();
+    FLOG_INFO("session manager destroyed");
+
     FLOG_INFO("begin to destroy locality manager");
     locality_manager_.destroy();
     FLOG_INFO("locality manager destroyed");

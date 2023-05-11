@@ -72,6 +72,7 @@ public:
    * @param conn : connection information
    * @param sess_info : point to the ObSQLSessionInfo that the function created; used as value
    */
+  void destroy();
   int create_session(observer::ObSMConnection *conn, ObSQLSessionInfo *&sess_info);
   // create session by session id and proxy session id.
   // need call revert_session if return success.

@@ -286,6 +286,13 @@ int ObSQLSessionMgr::init()
   return ret;
 }
 
+void ObSQLSessionMgr::destroy()
+{
+  sessinfo_map_.destroy();
+  sessid_sequence_.destroy();
+  sess_hold_map_.destroy();
+}
+
 uint64_t ObSQLSessionMgr::extract_server_id(uint32_t sessid)
 {
   uint64_t server_id = sessid >> LOCAL_SEQ_LEN;
