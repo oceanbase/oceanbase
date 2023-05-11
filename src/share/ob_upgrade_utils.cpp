@@ -35,7 +35,8 @@ namespace share
 {
 const uint64_t ObUpgradeChecker::UPGRADE_PATH[DATA_VERSION_NUM] = {
   CALC_VERSION(4UL, 0UL, 0UL, 0UL),  // 4.0.0.0
-  CALC_VERSION(4UL, 1UL, 0UL, 0UL)   // 4.1.0.0
+  CALC_VERSION(4UL, 1UL, 0UL, 0UL),  // 4.1.0.0
+  CALC_VERSION(4UL, 1UL, 0UL, 1UL)   // 4.1.0.1
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -44,14 +45,15 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
 {
   int ret = OB_SUCCESS;
   switch (cluster_version) {
-    case CLUSTER_VERSION_4_0_0_0: {
-      data_version = DATA_VERSION_4_0_0_0;
-      break;
+#define CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION, DATA_VERSION) \
+    case CLUSTER_VERSION : { \
+      data_version = DATA_VERSION; \
+      break; \
     }
-    case CLUSTER_VERSION_4_1_0_0: {
-      data_version = DATA_VERSION_4_1_0_0;
-      break;
-    }
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_0_0_0, DATA_VERSION_4_0_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_1_0_0, DATA_VERSION_4_1_0_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_1_0_1, DATA_VERSION_4_1_0_1)
+#undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid cluster_version", KR(ret), K(cluster_version));
@@ -69,6 +71,14 @@ bool ObUpgradeChecker::check_data_version_exist(
     bret = (version == UPGRADE_PATH[i]);
   }
   return bret;
+}
+
+//FIXME:(yanmu.ztl) cluster version should be discrete.
+bool ObUpgradeChecker::check_cluster_version_exist(
+     const uint64_t version)
+{
+  return version >= CLUSTER_VERSION_4_0_0_0
+         && version <= CLUSTER_CURRENT_VERSION;
 }
 
 #define FORMAT_STR(str) ObHexEscapeSqlStr(str.empty() ? ObString("") : str)
@@ -596,6 +606,7 @@ int ObUpgradeProcesserSet::init(
     // order by data version asc
     INIT_PROCESSOR_BY_VERSION(4, 0, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 1, 0, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 1, 0, 1);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }

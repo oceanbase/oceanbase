@@ -166,9 +166,10 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_3_2_3_0 (oceanbase::common::cal_version(3, 2, 3, 0))
 #define CLUSTER_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define CLUSTER_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
+#define CLUSTER_VERSION_4_1_0_1 (oceanbase::common::cal_version(4, 1, 0, 1))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
-#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_1_0_0
+#define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_1_0_1
 #define GET_MIN_CLUSTER_VERSION() (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version())
 
 #define IS_CLUSTER_VERSION_BEFORE_4_1_0_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() < CLUSTER_VERSION_4_1_0_0)
@@ -179,10 +180,13 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
 #define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
+#define DATA_VERSION_4_1_0_1 (oceanbase::common::cal_version(4, 1, 0, 1))
 
+#define DATA_CURRENT_VERSION DATA_VERSION_4_1_0_1
+// ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
+// LAST_BARRIER_DATA_VERSION should be the latest barrier data version before DATA_CURRENT_VERSION
+#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_1_0_0
 // should check returned ret
-#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_0_0_0
-#define DATA_CURRENT_VERSION DATA_VERSION_4_1_0_0
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
