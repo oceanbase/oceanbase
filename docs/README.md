@@ -3,7 +3,7 @@
 ## About this guide
 
 * **The target audience** of this guide is OceanBase contributors, both new and experienced.
-* **The objective** of this guide is to help contributors become an expert of OceanBase, who is familiar with its design and implementation and thus is able to use it fluently in the real world as well as develop TiDB itself deeply.
+* **The objective** of this guide is to help contributors become an expert of OceanBase, who is familiar with its design and implementation and thus is able to use it fluently in the real world as well as develop OceanBase itself deeply.
 
 ## The structure of this guide
 
@@ -16,7 +16,7 @@ At present, the guide is composed of the following parts:
     4. Write and run unit tests
     5. Debug and profile
     6. Commit code and submit a pull request
-2. **Contribute to TiDB**: helps you quickly get involved in the OceanBase community, which illustrates what contributions you can make and how to quickly make one.
+2. **Contribute to OceanBase**: helps you quickly get involved in the OceanBase community, which illustrates what contributions you can make and how to quickly make one.
 
 ## User documents
 
