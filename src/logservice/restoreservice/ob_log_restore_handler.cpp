@@ -781,12 +781,12 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
     } else if (OB_FAIL(proxy_util.get_tenant_info(tenant_role, tenant_status))) {
       CLOG_LOG(WARN, "get tenant info failed", K(id_), K(service_attr));
     } else if (! tenant_role.is_standby() || share::schema::ObTenantStatus::TENANT_STATUS_NORMAL != tenant_status) {
-      ret = OB_EAGAIN;  // TODO 错误码
+      ret = OB_SOURCE_TENANT_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "tenant role or status not match", K(id_), K(tenant_role), K(tenant_status), K(service_attr));
     } else if (OB_FAIL(proxy_util.get_max_log_info(share::ObLSID(id_), access_mode, archive_scn))) {
       CLOG_LOG(WARN, "get max_log info failed", K(id_));
     } else if (!palf::is_valid_access_mode(access_mode) || palf::AccessMode::RAW_WRITE != access_mode) {
-      ret = OB_EAGAIN;   // TODO 错误码
+      ret = OB_SOURCE_LS_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "access_mode not match", K(id_), K(access_mode));
     } else if (end_scn < archive_scn) {
       CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_scn), K(end_scn));

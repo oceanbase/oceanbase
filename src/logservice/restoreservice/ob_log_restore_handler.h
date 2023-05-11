@@ -212,6 +212,11 @@ public:
   // 2. for standby based on net service, check the max log in primary is restored in the standby
   // @param[out] end_scn, the end_scn of palf
   // @param[out] archive_scn, the max scn in archive logs
+  // @ret_code OB_NOT_MASTER   the restore_handler is not master
+  //           OB_EAGAIN       the restore source not valid
+  //           OB_SOURCE_TENANT_STATE_NOT_MATCH     original tenant state not match to switchover
+  //           OB_SOURCE_LS_STATE_NOT_MATCH         original ls state not match to switchover
+  //           other code      unexpected ret_code
   int check_restore_to_newest(share::SCN &end_scn, share::SCN &archive_scn);
   // @brief Remote Fetch Log Workers fetch log from remote source in parallel, but raw write to palf in series
   // This interface to to sort and cache logs
