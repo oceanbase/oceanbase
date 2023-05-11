@@ -781,6 +781,7 @@ typedef enum ObItemType
   T_FUN_SYS_ST_X = 1678,
   T_FUN_SYS_ST_Y = 1679,
   T_FUN_SYS_ST_LATITUDE = 1680,
+  T_FUN_SYS_NLS_INITCAP = 1690,
   // gis expr should add above
   // please maintain is_geo_expr / is_mysql_geo_expr / is_priv_geo_expr if other gis expr added
 

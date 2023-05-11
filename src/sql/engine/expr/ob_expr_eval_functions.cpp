@@ -310,6 +310,7 @@
 #include "ob_expr_cast.h"
 #include "ob_expr_icu_version.h"
 #include "ob_expr_sql_mode_convert.h"
+#include "ob_expr_initcap.h"
 
 namespace oceanbase
 {
@@ -980,6 +981,16 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprDecode::eval_decode,                                          /* 580 */
   ObExprICUVersion::eval_version,                                     /* 581 */
   ObExprCast::eval_cast_multiset,                                     /* 582 */
+  NULL,                                                               /* 583 */
+  NULL,                                                               /* 584 */
+  NULL,                                                               /* 585 */
+  NULL,                                                               /* 586 */
+  NULL,                                                               /* 587 */
+  NULL,                                                               /* 588 */
+  NULL,                                                               /* 589 */
+  NULL,                                                               /* 590 */
+  NULL,                                                               /* 591 */
+  ObExprNlsInitCap::calc_nls_initcap_expr                             /* 592 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1093,7 +1104,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprEncode::eval_encode_batch,                                    /* 107 */
   ObExprDecode::eval_decode_batch,                                    /* 108 */
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
-  ObExprIsNot::calc_batch_is_not_null                                 /* 110 */
+  ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
+  ObExprNlsInitCap::calc_nls_initcap_batch                            /* 111 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

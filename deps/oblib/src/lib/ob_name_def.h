@@ -1045,5 +1045,5 @@
 #define N_ST_CONTAINS                       "st_contains"
 #define N_ST_WITHIN                         "st_within"
 #define N_SQL_MODE_CONVERT                  "sql_mode_convert"
-
+#define N_NLS_INITCAP                       "nls_initcap"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

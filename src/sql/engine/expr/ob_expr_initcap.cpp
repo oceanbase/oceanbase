@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprInitcap::ObExprInitcap(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1)
+    : ObExprInitcapCommon(alloc, T_FUN_SYS_INITCAP, N_INITCAP, 1)
 {
 }
 
@@ -60,7 +60,7 @@ int ObExprInitcap::calc_result_type1(ObExprResType &type,
 }
 
 // last_has_first_letter is used to assign has_first_letter at the beginning, and return last state of text
-int ObExprInitcap::initcap_string(const ObString &text,
+int ObExprInitcapCommon::initcap_string(const ObString &text,
                                   const ObCollationType cs_type,
                                   ObIAllocator *allocator,
                                   ObString &res_str,
@@ -188,7 +188,7 @@ int calc_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
               && buf_size > 0
               && (state = input_iter.get_next_block(input_data)) == TEXTSTRING_ITER_NEXT) {
           ObDataBuffer buf_alloc(res_buf, buf_size);
-          if (OB_FAIL(ObExprInitcap::initcap_string(input_data,
+          if (OB_FAIL(ObExprInitcapCommon::initcap_string(input_data,
                                                     cs_type,
                                                     &buf_alloc,
                                                     res_str,
@@ -223,6 +223,236 @@ int ObExprInitcap::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_initcap_expr;
+  return ret;
+}
+
+ObExprNlsInitCap::ObExprNlsInitCap(ObIAllocator &alloc)
+    : ObExprInitcapCommon(alloc, T_FUN_SYS_NLS_INITCAP, N_NLS_INITCAP, PARAM_NUM_UNKNOWN)
+{
+}
+
+int ObExprNlsInitCap::calc_result_typeN(ObExprResType &type,
+                                        ObExprResType *texts,
+                                        int64_t param_num,
+                                        ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObBasicSessionInfo *session = type_ctx.get_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (param_num <= 0) {
+    ret = OB_ERR_NOT_ENOUGH_ARGS_FOR_FUN;
+    LOG_WARN("nls_initcap require at least one parameter", K(ret), K(param_num));
+  } else if (param_num > 2) {
+    ret = OB_ERR_TOO_MANY_ARGS_FOR_FUN;
+    LOG_WARN("nls_initcap require at most two parameters", K(ret), K(param_num));
+  } else if (OB_ISNULL(texts)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(param_num), K(texts));
+  } else {
+    ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
+    CK(OB_NOT_NULL(session));
+    if (OB_FAIL(params.push_back(&texts[0]))) {
+      LOG_WARN("fail to push back param", K(ret));
+    } else if OB_FAIL(aggregate_string_type_and_charset_oracle(*session, params, type, true)) {
+      LOG_WARN("fail to aggregrate string type and charset", K(ret));
+    } else if (ObVarcharType != type.get_type() && ObNVarchar2Type != type.get_type()) {
+      type.set_varchar();
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(deduce_string_param_calc_type_and_charset(*session, type, params))) {
+        LOG_WARN("fail to deduce string param type", K(ret));
+      } else {
+        const ObCharsetInfo * cs_info = NULL;
+        if (OB_ISNULL(cs_info = ObCharset::get_charset(type.get_collation_type()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get charset info", K(ret), K(texts[0]));
+        } else {
+          int64_t len = texts[0].get_calc_length();
+          len = len * cs_info->mbmaxlen;
+          type.set_length(len > OB_MAX_ORACLE_VARCHAR_LENGTH ?
+                          OB_MAX_ORACLE_VARCHAR_LENGTH : len);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprNlsInitCap::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                           ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(expr_cg_ctx);
+  UNUSED(raw_expr);
+  rt_expr.eval_func_ = calc_nls_initcap_expr;
+  if ((1 == rt_expr.arg_cnt_ && rt_expr.args_[0]->is_batch_result())
+      || (2 == rt_expr.arg_cnt_
+          && rt_expr.args_[0]->is_batch_result()
+          && !rt_expr.args_[1]->is_batch_result())) {
+    rt_expr.eval_batch_func_ = calc_nls_initcap_batch;
+  }
+  return ret;
+}
+
+int ObExprNlsInitCap::calc_nls_initcap_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  bool is_null_result = false;
+  int64_t case_multiply = 1;
+  ObDatum *arg_datum = NULL;
+  if (OB_UNLIKELY(expr.arg_cnt_ <= 0 || expr.arg_cnt_ > 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param number", K(ret), K(expr.arg_cnt_));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, arg_datum))) {
+    LOG_WARN("eval arg 0 failed", K(ret), K(expr));
+  } else if (arg_datum->is_null()) {
+    res_datum.set_null();
+    is_null_result = true;
+  } else if (expr.arg_cnt_ == 2) {
+    ObDatum *param_datum = NULL;
+    if (OB_ISNULL(expr.args_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get nls parameter", K(ret));
+    } else if (OB_FAIL(expr.args_[1]->eval(ctx, param_datum))) {
+      LOG_WARN("eval nls parameter failed", K(ret));
+    } else if (param_datum->is_null()) {
+      // Second param_datum is null, set result null as well.
+      res_datum.set_null();
+      is_null_result = true;
+    } else {
+      const ObString &m_param = param_datum->get_string();
+      if (OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(m_param))) {
+        ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
+        LOG_WARN("invalid nls parameter", K(ret), K(m_param));
+      } else {
+        // Should set cs_type here, but for now, we do nothing
+        // since nls parameter only support BINARY
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_null_result) {
+    const ObCharsetInfo * cs_info = NULL;
+    if (OB_ISNULL(cs_info = ObCharset::get_charset(cs_type))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get charset info", K(ret), K(cs_type));
+    } else {
+      case_multiply = std::max(cs_info->caseup_multiply, cs_info->casedn_multiply);
+    }
+  }
+  if (OB_SUCC(ret) && !is_null_result) {
+    char *res_buf = NULL;
+    if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, arg_datum->len_ * case_multiply))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      ObDataBuffer buf_alloc(res_buf, arg_datum->len_ * case_multiply);
+      ObString res_str;
+      bool last_has_first_letter = false;
+      if (OB_FAIL(initcap_string(arg_datum->get_string(),
+                                  expr.args_[0]->datum_meta_.cs_type_,
+                                  &buf_alloc, res_str, last_has_first_letter))) {
+        LOG_WARN("initcap string failed", K(ret), K(arg_datum->get_string()));
+      } else if (0 == res_str.length()) {
+        // nls_initcap is only for oracle mode. set res be null when string length is 0.
+        res_datum.set_null();
+      } else {
+        res_datum.set_string(res_str);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprNlsInitCap::calc_nls_initcap_batch(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size) {
+  int ret = OB_SUCCESS;
+  ObDatum *results = expr.locate_batch_datums(ctx);
+  if (OB_ISNULL(results)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr results frame is not init", K(ret));
+  } else if (OB_UNLIKELY(expr.arg_cnt_ <= 0 || expr.arg_cnt_ > 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param number", K(ret), K(expr.arg_cnt_));
+  } else {
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    ObDatum *nlsparam_datum = NULL;
+    bool is_result_all_null = false;
+    ObCollationType cs_type = expr.args_[0]->datum_meta_.cs_type_;
+    int64_t case_multiply = 1;
+    ObDatum *datum_array = NULL;
+    if (OB_FAIL(expr.args_[0]->eval_batch(ctx, skip, batch_size))) {
+      LOG_WARN("failed to eval batch result args0", K(ret));
+    } else {
+      datum_array = expr.args_[0]->locate_batch_datums(ctx);
+    }
+    if (2 == expr.arg_cnt_) {
+      if (OB_FAIL(expr.args_[1]->eval(ctx, nlsparam_datum))) {
+        LOG_WARN("eval fmt_datum failed", K(ret));
+      } else if (nlsparam_datum->is_null()) {
+        is_result_all_null = true;
+      } else {
+        const ObString &m_param = nlsparam_datum->get_string();
+        if (OB_UNLIKELY(!ObExprOperator::is_valid_nls_param(m_param))) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+            if (skip.at(i) || eval_flags.at(i)) {
+              continue;
+            } else if (!datum_array[i].is_null()) {
+              ret = OB_ERR_INVALID_NLS_PARAMETER_STRING;
+              LOG_WARN("invalid nls parameter", K(ret), K(m_param));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            //if the nls_sort param is not valid, return null instead of an error when the param is null
+            is_result_all_null = true;
+          }
+        } else {
+          // Should set cs_type here, but for now, we do nothing
+          // since nls parameter only support BINARY=
+        }
+      }
+    }
+    if (OB_SUCC(ret) && !is_result_all_null) {
+      const ObCharsetInfo * cs_info = NULL;
+      if (OB_ISNULL(cs_info = ObCharset::get_charset(cs_type))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get charset info", K(ret), K(cs_type));
+      } else {
+        case_multiply = std::max(cs_info->caseup_multiply, cs_info->casedn_multiply);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+        char *res_buf = NULL;
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        } else if (is_result_all_null || datum_array[i].is_null()) {
+          results[i].set_null();
+          eval_flags.set(i);
+        } else if (OB_ISNULL(res_buf = expr.get_str_res_mem(ctx, datum_array[i].len_ * case_multiply, i))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          ObDataBuffer buf_alloc(res_buf, datum_array[i].len_ * case_multiply);
+          ObString res_str;
+          bool last_has_first_letter = false;
+          if (OB_FAIL(initcap_string(datum_array[i].get_string(),
+                                    cs_type,
+                                    &buf_alloc, res_str, last_has_first_letter))) {
+            LOG_WARN("initcap string failed", K(ret), K(datum_array[i].get_string()));
+          } else if (0 == res_str.length()) {
+            // nls_initcap is only for oracle mode. set res be null when string length is 0.
+            results[i].set_null();
+            eval_flags.set(i);
+          } else {
+            results[i].set_string(res_str);
+            eval_flags.set(i);
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 
