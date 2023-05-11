@@ -804,7 +804,8 @@ int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
 
 int ObPhysicalPlan::set_location_constraints(const ObIArray<LocationConstraint> &base_constraints,
                                              const ObIArray<ObPwjConstraint *> &strict_constraints,
-                                             const ObIArray<ObPwjConstraint *> &non_strict_constraints)
+                                             const ObIArray<ObPwjConstraint *> &non_strict_constraints,
+                                             const ObIArray<ObDupTabConstraint> &dup_table_replica_cons)
 {
   // deep copy location constraints
   int ret = OB_SUCCESS;
@@ -885,16 +886,76 @@ int ObPhysicalPlan::set_location_constraints(const ObIArray<LocationConstraint> 
     }
   }
 
+  if (OB_SUCC(ret) && dup_table_replica_cons.count() > 0) {
+    dup_table_replica_cons_.reset();
+    dup_table_replica_cons_.set_allocator(&allocator_);
+    if (OB_FAIL(dup_table_replica_cons_.init(dup_table_replica_cons.count()))) {
+      LOG_WARN("failed to init duplicate table constraints", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dup_table_replica_cons.count(); ++i) {
+        if(OB_FAIL(dup_table_replica_cons_.push_back(dup_table_replica_cons.at(i)))) {
+          LOG_WARN("failed to assign element", K(ret), K(dup_table_replica_cons.at(i)));
+        } else { /*do nothing*/ }
+      }
+    }
+  }
+
   if (OB_FAIL(ret)) {
     base_constraints_.reset();
     strict_constrinats_.reset();
     non_strict_constrinats_.reset();
+    dup_table_replica_cons_.reset();
   } else {
-    LOG_DEBUG("deep copied location constraints", K(base_constraints_),
-                K(strict_constrinats_), K(non_strict_constrinats_));
+    LOG_TRACE("deep copied location constraints", K(base_constraints_), K(strict_constrinats_),
+                            K(non_strict_constrinats_), K(dup_table_replica_cons_));
   }
 
   return ret;
+}
+
+bool ObPhysicalPlan::has_same_location_constraints(const ObPhysicalPlan &r) const
+{
+  bool is_same = true;
+  const ObIArray<LocationConstraint>& l_base_cons = get_base_constraints();
+  const ObIArray<LocationConstraint>& r_base_cons = r.get_base_constraints();
+  const ObIArray<ObPlanPwjConstraint>& l_non_strict_cons = get_non_strict_constraints();
+  const ObIArray<ObPlanPwjConstraint>& r_non_strict_cons = r.get_non_strict_constraints();
+  const ObIArray<ObPlanPwjConstraint>& l_strict_cons = get_strict_constraints();
+  const ObIArray<ObPlanPwjConstraint>& r_strict_cons = r.get_strict_constraints();
+  const ObIArray<ObDupTabConstraint>& l_dup_rep_cons = get_dup_table_replica_constraints();
+  const ObIArray<ObDupTabConstraint>& r_dup_rep_cons = r.get_dup_table_replica_constraints();
+  if (l_base_cons.count() != r_base_cons.count() ||
+      l_strict_cons.count() != r_strict_cons.count() ||
+      l_non_strict_cons.count() != r_non_strict_cons.count()||
+      l_dup_rep_cons.count() != r_dup_rep_cons.count()) {
+    is_same = false;
+  } else {
+    for (int64_t i = 0; is_same && i < l_base_cons.count(); i++) {
+      is_same = is_same && (l_base_cons.at(i) == r_base_cons.at(i));
+    }
+    for (int64_t i = 0; is_same && i < l_strict_cons.count(); i++) {
+      if (l_strict_cons.at(i).count() != r_strict_cons.at(i).count()) {
+        is_same = false;
+      } else {
+        for (int64_t j = 0; is_same && j < l_strict_cons.at(i).count(); j++) {
+          is_same = (l_strict_cons.at(i).at(j) == (r_strict_cons.at(i)).at(j));
+        }
+      }
+    }
+    for (int64_t i = 0; is_same && i < l_non_strict_cons.count(); i++) {
+      if (l_non_strict_cons.at(i).count() != r_non_strict_cons.at(i).count()) {
+        is_same = false;
+      } else {
+        for (int64_t j = 0; is_same && j < l_non_strict_cons.at(i).count(); j++) {
+          is_same = (l_non_strict_cons.at(i).at(j) == r_non_strict_cons.at(i).at(j));
+        }
+      }
+    }
+    for(int64_t i = 0; is_same && i < l_dup_rep_cons.count(); i++) {
+      is_same = is_same && (l_dup_rep_cons.at(i) == r_dup_rep_cons.at(i));
+    }
+  }
+  return is_same;
 }
 
 DEF_TO_STRING(FlashBackQueryItem)

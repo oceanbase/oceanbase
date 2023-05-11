@@ -13,12 +13,15 @@
 #include "ob_mock_tx_log_adapter.h"
 #include "logservice/ob_log_handler.h"
 #include "storage/tx/ob_trans_submit_log_cb.h"
+#include "logservice/ob_log_base_type.h"
 
-namespace oceanbase {
+namespace oceanbase
+{
 
 using namespace palf;
 using namespace logservice;
-namespace transaction {
+namespace transaction
+{
 int MockTxLogAdapter::init(ObITxLogParam *param)
 {
   int ret = OB_SUCCESS;
@@ -158,7 +161,7 @@ bool MockTxLogAdapter::is_cbs_finish_()
   return waiting_cbs_.empty();
 }
 
-void MockTxLogAdapter::push_all_cbs_()
+void MockTxLogAdapter::invoke_all_cbs()
 {
   ObSpinLockGuard cbs_guard(cbs_lock_);
 
@@ -193,10 +196,127 @@ bool MockTxLogAdapter::get_log(int64_t log_ts, std::string &log_string)
   return has_log;
 }
 
+int MockTxLogAdapter::get_next_log(int64_t log_ts, std::string &log_string, int64_t &next_log_ts)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard file_guard(log_file_lock_);
+
+  std::map<int64_t, std::string>::iterator file_iter = mock_log_file_.find(log_ts);
+
+  if (file_iter == mock_log_file_.end()) {
+    file_iter = mock_log_file_.begin();
+  }
+
+  file_iter++;
+
+  if (file_iter == mock_log_file_.end()) {
+    ret = OB_HASH_NOT_EXIST;
+  } else {
+    log_string = file_iter->second;
+    next_log_ts = file_iter->first;
+  }
+
+  return ret;
+}
+
 int64_t MockTxLogAdapter::get_cb_cnt()
 {
   return ATOMIC_LOAD(&CB_CNT_);
 }
+
+
+// int MockReplayMgr::init(MockTxLogAdapter * log_adapter)
+// {
+//   int ret = OB_SUCCESS;
+//
+//   log_adapter_ptr_ = log_adapter;
+//
+//   return ret;
+// }
+//
+// int MockReplayMgr::start()
+// {
+//   int ret = OB_SUCCESS;
+//
+//   ret = lib::ThreadPool::start();
+//
+//   return ret;
+// }
+//
+// void MockReplayMgr::stop()
+// {
+//   lib::ThreadPool::stop();
+// }
+//
+// void MockReplayMgr::wait()
+// {
+//   lib::ThreadPool::wait();
+// }
+//
+// void MockReplayMgr::destroy()
+// {
+//   lib::ThreadPool::destroy();
+// }
+//
+// void MockReplayMgr::run1()
+// {
+//   int ret = OB_SUCCESS;
+//   int64_t cur_time = 0;
+//   int64_t time_used = 0;
+//   std::string tmp_log_string;
+//
+//   palf::LSN tmp_lsn;
+//   while (!has_set_stop()) {
+//     cur_time = ObTimeUtility::current_time();
+//
+//     for (auto iter = replay_target_list_.begin(); iter != replay_target_list_.end(); iter++) {
+//
+//       while (OB_SUCC(log_adapter_ptr_->get_next_log(iter->replay_success_ts_, iter->replaying_log_,
+//                                                     iter->replaying_ts_))) {
+//
+//         if (OB_FAIL(iter->replay_target_->replay(tmp_log_string.c_str(), tmp_log_string.size(),
+//                                                  tmp_lsn, iter->replaying_ts_))) {
+//           TRANS_LOG(WARN, "replay one log error", KP(iter->replay_target_), K(iter->replaying_ts_));
+//         } else {
+//           iter->replay_success_ts_ = iter->replaying_ts_;
+//         }
+//       }
+//
+//       if (ret != OB_HASH_NOT_EXIST) {
+//         TRANS_LOG(WARN, "replay error", K(ret), K(iter->replay_success_ts_),
+//                   K(iter->replaying_ts_));
+//       }
+//     }
+//     time_used = ObTimeUtility::current_time() - cur_time;
+//     if (time_used < log_adapter_ptr_->get_cb_time()) {
+//       usleep(log_adapter_ptr_->get_cb_time() - time_used);
+//     }
+//   }
+// }
+//
+// void MockReplayMgr::register_replay_target(logservice::ObIReplaySubHandler *replay_target)
+// {
+//   MockReplayInfo tmp_replay_info;
+//   tmp_replay_info.replay_target_ = replay_target;
+//
+//   replay_target_list_.push_back(tmp_replay_info);
+//
+// }
+//
+// void MockReplayMgr::unregister_replay_target(logservice::ObIReplaySubHandler *replay_target)
+// {
+//   auto iter = replay_target_list_.begin();
+//   for (; iter != replay_target_list_.end(); iter++) {
+//
+//     if (iter->replay_target_ == replay_target) {
+//       break;
+//     }
+//   }
+//
+//   if (iter != replay_target_list_.end()) {
+//     replay_target_list_.erase(iter);
+//   }
+// }
 
 } // namespace transaction
 } // namespace oceanbase

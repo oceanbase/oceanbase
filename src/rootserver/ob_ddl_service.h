@@ -2314,6 +2314,8 @@ private:
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
 private:
+  int check_locality_compatible_(ObTenantSchema &schema);
+private:
   bool inited_;
   volatile bool stopped_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

@@ -674,7 +674,6 @@ void TestTxDataTable::fake_ls_(ObLS &ls)
   ls.ls_meta_.gc_state_ = logservice::LSGCState::NORMAL;
   ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   ls.ls_meta_.restore_status_ = ObLSRestoreStatus::RESTORE_NONE;
-  ls.ls_meta_.replica_type_ = ObReplicaType::REPLICA_TYPE_FULL;
   ls.ls_meta_.rebuild_seq_ = 0;
 }
 

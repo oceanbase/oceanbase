@@ -711,7 +711,7 @@ void ObDRTaskMgr::run3()
       if (!loaded_ && OB_FAIL(load_task_to_schedule_list_())) {
         LOG_WARN("fail to load task infos into schedule list, will retry until success", KR(ret));
       } else {
-        update_last_run_timestamp();      
+        update_last_run_timestamp();
 
         common::ObArenaAllocator allocator;
         ObDRTask *task = nullptr;
@@ -1152,20 +1152,13 @@ int ObDRTaskMgr::load_task_info_(
           LOG_WARN("fail to load ObLSTypeTransformTask into schedule list", KR(ret));
         }
       }
-    } else if (task_type == common::ObString("REMOVE PAXOS REPLICA")) {
-      SMART_VAR(ObRemoveLSPaxosReplicaTask, tmp_task) {
+    } else if (0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA))
+               || 0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_PAXOS_REPLICA))) {
+      SMART_VAR(ObRemoveLSReplicaTask, tmp_task) {
         if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
-          LOG_WARN("fail to build ObRemoveLSPaxosReplicaTask from res", KR(ret));
+          LOG_WARN("fail to build ObRemoveLSReplicaTask from res", KR(ret));
         } else if (OB_FAIL(queues_[priority].push_task_in_schedule_list(tmp_task))) {
-          LOG_WARN("fail to load ObRemoveLSPaxosReplicaTask into schedule list", KR(ret));
-        }
-      }
-    } else if (task_type == common::ObString("REMOVE NON PAXOS REPLICA")) {
-      SMART_VAR(ObRemoveLSNonPaxosReplicaTask, tmp_task) {
-        if (OB_FAIL(tmp_task.build_task_from_sql_result(res))) {
-          LOG_WARN("fail to build ObRemoveLSNonPaxosReplicaTask from res", KR(ret));
-        } else if (OB_FAIL(queues_[priority].push_task_in_schedule_list(tmp_task))) {
-          LOG_WARN("fail to load ObRemoveLSNonPaxosReplicaTask into schedule list", KR(ret));
+          LOG_WARN("fail to load ObRemoveLSReplicaTask into schedule list", KR(ret));
         }
       }
     } else if (task_type == common::ObString("MODIFY PAXOS REPLICA NUMBER")) {

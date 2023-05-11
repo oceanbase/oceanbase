@@ -73,16 +73,6 @@ public:
   int get_addr_by_virtual_partition_id(int64_t partition_id, common::ObAddr &addr);
   int set_table_locations(const ObTablePartitionInfoArray &table_partition_infos);
   int append_table_location(const ObCandiTableLoc &phy_location_info);
-  inline void set_need_renew_location_cache(bool need_renew_location_cache)
-  {
-    need_renew_location_cache_ = need_renew_location_cache;
-  }
-  inline bool is_need_renew_location_cache() const { return need_renew_location_cache_; }
-  inline const common::ObList<ObTabletID, common::ObIAllocator> &get_need_renew_tablet_keys() const
-  {
-    return need_renew_tablet_keys_;
-  }
-  int add_need_renew_tablet_keys_distinctly(const ObTabletID &tablet_id);
 
   const ObTablePartitionInfoArray &get_partition_infos() const;
   inline RemoteExecuteStreamHandle* get_stream_handler()
@@ -202,12 +192,6 @@ private:
   CalcVirtualPartitionIdParams calc_params_;
   //
   ObExecContext *exec_ctx_;
-  //
-  common::ObFixedArray<ObTablePartitionInfo*, common::ObIAllocator> partition_infos_;
-  // 每次执行完之后是否需要刷新location cache
-  bool need_renew_location_cache_;
-  // 需要刷新location cache的partition key
-  common::ObList<ObTabletID, common::ObIAllocator> need_renew_tablet_keys_;
   // PX 记录执行预期整个 Query 需要的线程数，以及实际分配的线程数
   int64_t expected_worker_cnt_; // query expected worker count computed by optimizer
   int64_t minimal_worker_cnt_;  // minimal worker count to support execute this query
@@ -255,7 +239,6 @@ public:
   static int get_stream_handler(ObExecContext &ctx, RemoteExecuteStreamHandle *&handler);
   static int get_task_executor_rpc(ObExecContext &ctx, ObExecutorRpcImpl *&rpc);
 
-  static int refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock);
   template<typename DEST_TYPE, typename SRC_TYPE>
   static int merge_task_result_meta(DEST_TYPE &dest, const SRC_TYPE &task_meta);
 }; /* class ObTaskExecutorCtxUtil */

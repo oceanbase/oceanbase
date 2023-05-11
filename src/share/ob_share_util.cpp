@@ -18,6 +18,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "share/ob_cluster_version.h" // for GET_MIN_DATA_VERSION
 #include "lib/mysqlclient/ob_isql_client.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -110,6 +111,31 @@ int ObShareUtil::generate_arb_replica_num(
                   || !ls_id.is_valid_with_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObShareUtil::check_compat_version_for_readonly_replica(
+    const uint64_t tenant_id,
+    bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  is_compatible = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("fail to get sys tenant data version", KR(ret));
+  } else if (DATA_VERSION_4_2_0_0 > data_version) {
+    is_compatible = false;
+  } else if (!is_sys_tenant(tenant_id)
+             && OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
+     LOG_WARN("fail to get meta tenant data version", KR(ret), "tenant_id", gen_meta_tenant_id(tenant_id));
+  } else if (!is_sys_tenant(tenant_id) && DATA_VERSION_4_2_0_0 > data_version) {
+    is_compatible = false;
+  } else {
+    is_compatible = true;
   }
   return ret;
 }

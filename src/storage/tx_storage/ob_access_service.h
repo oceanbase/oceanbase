@@ -195,10 +195,6 @@ public:
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
 
-  int check_replica_allow_access_(
-      const ObStoreAccessType access_type,
-      const ObReplicaType replica_type);
-
   int get_write_store_ctx_guard_(
       const share::ObLSID &ls_id,
       const int64_t timeout,

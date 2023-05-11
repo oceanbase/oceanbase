@@ -63,6 +63,7 @@ public:
                                          const IntFixedArray &row_projector,
                                          const ObDASWriteBuffer::DmlRow &dml_row,
                                          ObSpatIndexRow &spat_rows);
+  static int wait_das_retry(int64_t retry_cnt);
 };
 }  // namespace sql
 }  // namespace oceanbase

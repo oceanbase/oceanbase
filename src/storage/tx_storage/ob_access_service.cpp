@@ -327,28 +327,6 @@ int ObAccessService::table_rescan(
   return ret;
 }
 
-int ObAccessService::check_replica_allow_access_(
-    const ObStoreAccessType access_type,
-    const ObReplicaType replica_type)
-{
-  int ret = OB_SUCCESS;
-  if (ObAccessTypeCheck::is_write_access_type(access_type)) {
-    if (!ObReplicaTypeCheck::is_writable_replica(replica_type)) {
-      ret = OB_ERR_READ_ONLY;
-      LOG_WARN("replica is not writable", K(ret), K(replica_type));
-    }
-  } else if (ObAccessTypeCheck::is_read_access_type(access_type)) {
-    if (!ObReplicaTypeCheck::is_readable_replica(replica_type)) {
-      ret = OB_REPLICA_NOT_READABLE;
-      LOG_WARN("replica is not readable", K(ret), K(replica_type));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("unexpected access type", K(ret));
-  }
-  return ret;
-}
-
 int ObAccessService::get_write_store_ctx_guard_(
     const share::ObLSID &ls_id,
     const int64_t timeout,
@@ -505,9 +483,6 @@ int ObAccessService::check_write_allowed_(
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), K(ls_id), K_(tenant_id));
-  } else if (OB_FAIL(check_replica_allow_access_(access_type, ls->get_replica_type()))) {
-    LOG_WARN("replica can not be accessed", K(ret), K(access_type), "replica_type",
-             ls->get_replica_type(), K(ls_id));
   } else {
     // TODO: this may confuse user, because of txn timeout won't notify user proactively
     auto lock_expired_ts = MIN(dml_param.timeout_, tx_desc.get_expire_ts());
@@ -1001,10 +976,6 @@ int ObAccessService::get_multi_ranges_cost(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls hould not be null", K(ret), K(ls_id), K_(tenant_id));
-  } else if (OB_FAIL(check_replica_allow_access_(
-      ObStoreAccessType::READ,
-      ls->get_replica_type()))) {
-    LOG_WARN("replica can not be accessed", K(ret), "replica", ls->get_replica_type(), K(ls_id));
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null", K(ret), K(ls_id));
@@ -1080,10 +1051,6 @@ int ObAccessService::split_multi_ranges(
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls hould not be null", K(ret), K(ls_id), K_(tenant_id));
-  } else if (OB_FAIL(check_replica_allow_access_(
-      ObStoreAccessType::READ,
-      ls->get_replica_type()))) {
-    LOG_WARN("replica can not be accessed", K(ret), "replica", ls->get_replica_type(), K(ls_id));
   } else if (OB_ISNULL(tablet_service = ls->get_tablet_svr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet service should not be null", K(ret), K(ls_id));

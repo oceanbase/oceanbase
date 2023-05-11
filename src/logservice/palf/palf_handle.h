@@ -63,7 +63,8 @@ public:
   //    return OB_SUCCESS if success
   //    else return other errno
   int set_initial_member_list(const common::ObMemberList &member_list,
-                              const int64_t paxos_replica_num);
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list);
   int set_region(const common::ObRegion &region);
   int set_paxos_member_region_map(const common::ObArrayHashMap<common::ObAddr, common::ObRegion> &region_map);
   //================ 文件访问相关接口 =======================
@@ -181,6 +182,9 @@ public:
 
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const;
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const;
+  int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                             int64_t &paxos_replica_num,
+                                             GlobalLearnerList &learner_list) const;
   int get_election_leader(common::ObAddr &addr) const;
 
   // @brief: a special config change interface, change replica number of paxos group
@@ -269,6 +273,8 @@ public:
 
   // @brief: switch a learner(read only replica) to acceptor(full replica) in this clsuter
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
+  //            learner to acceptor (similar to add_member)
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
@@ -276,10 +282,13 @@ public:
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_learner_to_acceptor(const common::ObMember &learner,
+                                 const int64_t new_replica_num,
                                  const int64_t timeout_us);
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this clsuter
   // @param[in] const common::ObMember &member: acceptor will be switched to learner
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
+  //            acceptor to learner (similar to remove_member)
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
@@ -287,6 +296,7 @@ public:
   // - OB_TIMEOUT: switch_acceptor_to_learner timeout
   // - OB_NOT_MASTER: not leader or rolechange during membership changing
   int switch_acceptor_to_learner(const common::ObMember &member,
+                                 const int64_t new_replica_num,
                                  const int64_t timeout_us);
   int revoke_leader(const int64_t proposal_id);
   int change_leader_to(const common::ObAddr &dst_addr);

@@ -330,7 +330,7 @@ int ObDupTableLeaseTimer::init()
   if (is_inited_) {
     TRANS_LOG(WARN, "ObDupTableLeaseTimer inited twice");
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(tw_.init(TRANS_TIMEOUT_TASK_PRECISION_US, 1, timer_name))) {
+  } else if (OB_FAIL(tw_.init(DUP_TABLE_TIMEOUT_TASK_PRECISION_US, 1, timer_name))) {
     TRANS_LOG(ERROR, "dup table lease timer init error", K(ret));
   } else {
     TRANS_LOG(INFO, "dup table lease timer inited success");

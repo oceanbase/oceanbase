@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_se_array.h"        // SEArray
 #include "lib/container/ob_se_array_iterator.h"        // SEArrayIterator
+#include "lib/string/ob_sql_string.h"         // ObSqlString
 #include "lib/utility/ob_unify_serialize.h"   // serialize
 #include "common/ob_member.h"
 #include <algorithm>
@@ -54,6 +55,7 @@ public:
   int deep_copy(const BaseLearnerList<MAX_SIZE, T> &learner_list);
   template <int64_t ARG_MAX_SIZE>
   int deep_copy_to(BaseLearnerList<ARG_MAX_SIZE, common::ObMember> &learner_list) const;
+  int transform_to_string(common::ObSqlString &output_string) const;
   TO_STRING_KV("learner_num", learner_array_.count(), K_(learner_array));
   // by operator ==
   int64_t get_index_by_learner(const T &learner) const;

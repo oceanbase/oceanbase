@@ -477,6 +477,10 @@ int ObTransService::handle_tx_commit_result_(ObTxDesc &tx,
         max_delay = 300 * 1000;
       }
 
+      if (OB_EAGAIN == result) {
+        max_delay = 300 * 1000;
+      }
+
       if (OB_FAIL(register_commit_retry_task_(tx, max_delay))) {
         commit_fin = true;
         state = ObTxDesc::State::ROLLED_BACK;
@@ -983,6 +987,7 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       snapshot.source_,
                                       ls_id,
                                       store_ctx.timeout_,
+                                      store_ctx.tablet_id_,
                                       *store_ctx.ls_))) {
     TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
   }
@@ -1348,12 +1353,17 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
                                             const ObTxReadSnapshot::SRC src,
                                             const share::ObLSID &ls_id,
                                             const int64_t expire_ts,
+                                            const ObTabletID &tablet_id,
                                             ObLS &ls)
 {
   int ret = OB_SUCCESS;
   bool leader = false;
   int64_t epoch = 0;
+  bool dup_table_readable = false;
+  share::SCN max_replayed_scn;
+  max_replayed_scn.reset();
   bool readable = check_ls_readable_(ls, snapshot, src);
+
   if (!readable) {
     if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->get_role(leader, epoch))) {
       TRANS_LOG(WARN, "get replica status fail", K(ls_id));
@@ -1363,6 +1373,27 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
                ObTxReadSnapshot::SRC::WEAK_READ_SERVICE == src) {
       // to compatible with SQL's retry-logic, trigger re-choose replica
       ret = OB_REPLICA_NOT_READABLE;
+    } else if (OB_FAIL(ls.get_max_decided_scn(max_replayed_scn))) {
+      TRANS_LOG(WARN, "get max decided scn failed", K(ret));
+    } else if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
+                   tablet_id,
+                   snapshot,
+                   leader,
+                   max_replayed_scn,
+                   dup_table_readable))) {
+      TRANS_LOG(WARN, "check dup tablet readable error", K(ret));
+    } else if (dup_table_readable) {
+      TRANS_LOG(INFO,
+                "the dup tablet is readable now",
+                K(ret),
+                K(tablet_id),
+                K(snapshot),
+                K(leader),
+                K(max_replayed_scn),
+                K(dup_table_readable),
+                K(ls_id),
+                K(expire_ts));
+      ret = OB_SUCCESS;
     } else {
       if (OB_SUCC(wait_follower_readable_(ls, expire_ts, snapshot, src))) {
         TRANS_LOG(INFO, "read from follower", K(snapshot),  K(snapshot), K(ls));

@@ -43,7 +43,6 @@ public:
   ~ObLSMeta() {}
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
-           const ObReplicaType &replica_type,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
            const int64_t create_scn);
@@ -96,10 +95,12 @@ public:
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
-      const ObReplicaType &replica_type,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
       const share::SCN &create_scn);
+
+  ObReplicaType get_replica_type() const
+  { return unused_replica_type_; }
   class ObSpinLockTimeGuard
   {
   public:
@@ -111,7 +112,7 @@ public:
     ObTimeGuard time_guard_;
     ObSpinLockGuard lock_guard_;
   };
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(replica_type), K_(ls_create_status),
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_create_status),
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
@@ -122,8 +123,8 @@ public:
   mutable common::ObSpinLock lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
-  ObReplicaType replica_type_;
 private:
+  ObReplicaType unused_replica_type_;
   ObInnerLSStatus ls_create_status_;
   typedef common::ObFunction<int(ObLSMeta &)> WriteSlog;
   // for test

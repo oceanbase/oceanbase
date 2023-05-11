@@ -19,15 +19,65 @@ using namespace oceanbase;
 using namespace share;
 using namespace storage;
 
+ObLSChangeMemberType::ObLSChangeMemberType(const TYPE &type)
+  : type_(type)
+{
+}
+
+const char *ObLSChangeMemberType::get_type_str(const ObLSChangeMemberType &type)
+{
+  const char *str = "UNKNOWN";
+  const char *type_str[] = {
+      "LS_REMOVE_MEMBER",
+      "LS_MODIFY_REPLICA_NUMBER",
+      "LS_TRANSFORM_MEMBER",
+  };
+  STATIC_ASSERT(MAX == ARRAYSIZEOF(type_str), "type count mismatch");
+  if (type.type_ < 0 || type.type_ >= MAX) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid type", K(type));
+  } else {
+    str = type_str[type.type_];
+  }
+  return str;
+
+}
+
+int ObLSChangeMemberType::set_type(int32_t type)
+{
+  int ret = OB_SUCCESS;
+  if (0 > type || MAX <= type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid type", K(ret), K(type));
+  } else {
+    type_ = static_cast<TYPE>(type);
+  }
+  return ret;
+}
+
+ObLSChangeMemberType &ObLSChangeMemberType::operator=(const TYPE &type)
+{
+  type_ = type;
+  return *this;
+}
+
+void ObLSChangeMemberType::reset()
+{
+  type_ = MAX;
+}
+
+
 ObLSRemoveMemberArg::ObLSRemoveMemberArg()
   : task_id_(),
     tenant_id_(OB_INVALID_ID),
     ls_id_(),
+    type_(),
     remove_member_(),
     orig_paxos_replica_number_(0),
     new_paxos_replica_number_(0),
     is_paxos_member_(false),
-    member_list_()
+    member_list_(),
+    src_(),
+    dest_()
 {
 }
 
@@ -36,11 +86,14 @@ void ObLSRemoveMemberArg::reset()
   task_id_.reset();
   tenant_id_ = OB_INVALID_ID;
   ls_id_.reset();
+  type_.reset();
   remove_member_.reset();
   orig_paxos_replica_number_ = 0;
   new_paxos_replica_number_ = 0;
   is_paxos_member_ = false;
   member_list_.reset();
+  src_.reset();
+  dest_.reset();
 }
 
 bool ObLSRemoveMemberArg::is_valid() const
@@ -49,7 +102,20 @@ bool ObLSRemoveMemberArg::is_valid() const
   bool_ret = !task_id_.is_invalid()
       && OB_INVALID_ID != tenant_id_
       && ls_id_.is_valid()
-      && (remove_member_.is_valid() || member_list_.is_valid());
+      && type_.is_valid();
+
+  if (bool_ret) {
+    if (type_.is_remove_member()) {
+      bool_ret = remove_member_.is_valid();
+    } else if (type_.is_modify_replica_number()) {
+      bool_ret = member_list_.is_valid();
+    } else if (type_.is_transform_member()) {
+      bool_ret = src_.is_valid() && dest_.is_valid();
+    } else {
+      bool_ret = false;
+    }
+  }
+
   if (bool_ret && is_paxos_member_) {
     bool_ret = orig_paxos_replica_number_ > 0 && new_paxos_replica_number_ > 0;
   }
@@ -113,6 +179,7 @@ int ObLSRemoveMemberHandler::remove_paxos_member(
     remove_member_arg.new_paxos_replica_number_ = arg.new_paxos_replica_number_;
     remove_member_arg.orig_paxos_replica_number_ = arg.orig_paxos_replica_number_;
     remove_member_arg.is_paxos_member_ = true;
+    remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
 
     if (OB_FAIL(generate_remove_member_dag_(remove_member_arg))) {
       LOG_WARN("failed to generate remove member dag", K(ret), K(arg), K(remove_member_arg));
@@ -138,6 +205,7 @@ int ObLSRemoveMemberHandler::remove_learner_member(const obrpc::ObLSDropNonPaxos
     remove_member_arg.task_id_ = arg.task_id_;
     remove_member_arg.remove_member_ = arg.remove_member_;
     remove_member_arg.is_paxos_member_ = false;
+    remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
 
     if (OB_FAIL(generate_remove_member_dag_(remove_member_arg))) {
       LOG_WARN("failed to generate remove member dag", K(ret), K(arg), K(remove_member_arg));
@@ -164,6 +232,41 @@ int ObLSRemoveMemberHandler::modify_paxos_replica_number(const obrpc::ObLSModify
     remove_member_arg.new_paxos_replica_number_ = arg.new_paxos_replica_number_;
     remove_member_arg.orig_paxos_replica_number_ = arg.orig_paxos_replica_number_;
     remove_member_arg.member_list_ = arg.member_list_;
+    remove_member_arg.is_paxos_member_ = true;
+    remove_member_arg.type_ = ObLSChangeMemberType::LS_MODIFY_REPLICA_NUMBER;
+
+    if (OB_FAIL(generate_remove_member_dag_(remove_member_arg))) {
+      LOG_WARN("failed to generate remove member dag", KR(ret), K(arg), K(remove_member_arg));
+    }
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberHandler::transform_member(const obrpc::ObLSChangeReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObLSRemoveMemberArg remove_member_arg;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls remove member handler do not init", KR(ret), K(arg));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("transform member get invalid argument", KR(ret), K(arg));
+  } else if (arg.src_.get_replica_type() == arg.dst_.get_replica_type()
+      || !ObReplicaTypeCheck::change_replica_op_allow(arg.src_.get_replica_type(), arg.dst_.get_replica_type())) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("change replica op not allow", K(ret), K(arg));
+  } else {
+    remove_member_arg.tenant_id_ = arg.tenant_id_;
+    remove_member_arg.ls_id_ = arg.ls_id_;
+    remove_member_arg.task_id_ = arg.task_id_;
+    remove_member_arg.new_paxos_replica_number_ = arg.new_paxos_replica_number_;
+    remove_member_arg.orig_paxos_replica_number_ = arg.orig_paxos_replica_number_;
+    remove_member_arg.src_ = arg.src_;
+    remove_member_arg.dest_ = arg.dst_;
+    remove_member_arg.is_paxos_member_ = true;
+    remove_member_arg.type_ = ObLSChangeMemberType::LS_TRANSFORM_MEMBER;
 
     if (OB_FAIL(generate_remove_member_dag_(remove_member_arg))) {
       LOG_WARN("failed to generate remove member dag", KR(ret), K(arg), K(remove_member_arg));
@@ -228,6 +331,7 @@ int ObLSRemoveMemberHandler::check_task_exist(
     mock_remove_member_arg.ls_id_ = ls_->get_ls_id();
     mock_remove_member_arg.task_id_ = task_id;
     mock_remove_member_arg.is_paxos_member_ = false;
+    mock_remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
     param.arg_ = mock_remove_member_arg;
 
     if (OB_FAIL(mock_remove_member_arg.remove_member_.set_member(mock_member))) {

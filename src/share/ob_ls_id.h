@@ -103,7 +103,7 @@ static const ObLSID MAJOR_FREEZE_LS(ObLSID::MAJOR_FREEZE_LS_ID);
 static const ObLSID WRS_LS_ID(ObLSID::WRS_LS_ID);
 
 static const int64_t OB_DEFAULT_LS_COUNT = 3;
-typedef common::ObSEArray<ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;
+typedef common::ObSEArray<share::ObLSID, OB_DEFAULT_LS_COUNT> ObLSArray;
 } // end namespace share
 } // end namespace oceanbase
 

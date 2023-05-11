@@ -194,6 +194,8 @@ DEFINE_DESERIALIZE(ObDesExecContext)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_expr_op(phy_plan_ctx_->get_expr_op_size()))) {
       LOG_WARN("init exec context expr op failed", K(ret));
+    } else {
+      das_ctx_.get_location_router().set_retry_info(&my_session_->get_retry_info());
     }
   }
   use_temp_expr_ctx_cache_ = true;

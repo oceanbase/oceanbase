@@ -123,6 +123,13 @@ int MockObTxCtx::submit_log(const ObTwoPhaseCommitLogType& log_type)
   return OB_SUCCESS;
 }
 
+int ObPartTransCtx::search_unsubmitted_dup_table_redo_()
+{
+  int ret = OB_SUCCESS;
+
+  return ret;
+}
+
 int MockObTxCtx::register_timeout_task_(const int64_t interval_us)
 {
   return OB_SUCCESS;

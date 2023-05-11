@@ -14,7 +14,7 @@ explain select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.sub
 --sorted_result
 select /*+ USE_PX parallel(2) */ * from score, teacher where teacher.subject = score.subject and teacher.tid = 1;
 
-CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify));
+CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify))duplicate_scope="cluster";
 
 CREATE TABLE orders (oid bigint primary key,pid bigint,amount int, addr varchar(20),key k (pid) local) partition by hash (oid) partitions 100;
 

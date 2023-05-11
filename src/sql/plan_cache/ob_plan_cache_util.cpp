@@ -285,8 +285,7 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
         if (OB_FAIL(table_location.calculate_candi_tablet_locations(exec_ctx,
                                                                     params,
                                                                     candi_table_loc.get_phy_part_loc_info_list_for_update(),
-                                                                    dtc_params,
-                                                                    true /* non-block */))) {
+                                                                    dtc_params))) {
           LOG_WARN("failed to calculate partition location", K(ret));
         } else {
           NG_TRACE(calc_partition_location_end);

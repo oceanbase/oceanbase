@@ -2407,6 +2407,7 @@ int ObService::fill_ls_replica(
     share::ObLSReplica &replica)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t unit_id = common::OB_INVALID_ID;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -2426,10 +2427,13 @@ int ObService::fill_ls_replica(
       common::ObRole role = FOLLOWER;
       ObMemberList ob_member_list;
       ObLSReplica::MemberList member_list;
+      GlobalLearnerList learner_list;
       int64_t proposal_id = 0;
       int64_t paxos_replica_number = 0;
       ObLSRestoreStatus restore_status;
       ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
+      ObReplicaType replica_type = REPLICA_TYPE_FULL;
+      bool is_compatible_with_readonly_replica = false;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
@@ -2437,8 +2441,8 @@ int ObService::fill_ls_replica(
             ObLSID(ls_id),
             ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls handle failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list(ob_member_list, paxos_replica_number))) {
-        LOG_WARN("get paxos_member_list from ObLS failed", KR(ret));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
+        LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
         LOG_WARN("get restore status failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
@@ -2448,6 +2452,23 @@ int ObService::fill_ls_replica(
         LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
         LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
+                                          tenant_id, is_compatible_with_readonly_replica))) {
+        LOG_WARN("fail to check data version for read-only replica", KR(ret), K(tenant_id));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!is_compatible_with_readonly_replica) {
+        replica_type = REPLICA_TYPE_FULL;
+      } else if (learner_list.contains(gctx_.self_addr())) {
+        // if replica exists in learner_list, report it as R-replica.
+        // Otherwise, report as F-replica
+        replica_type = REPLICA_TYPE_READONLY;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
+        LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
       } else if (OB_FAIL(replica.init(
             0,          /*create_time_us*/
             0,          /*modify_time_us*/
@@ -2456,7 +2477,7 @@ int ObService::fill_ls_replica(
             gctx_.self_addr(),         /*server*/
             gctx_.config_->mysql_port, /*sql_port*/
             role,                      /*role*/
-            REPLICA_TYPE_FULL,         /*replica_type*/
+            replica_type,         /*replica_type*/
             proposal_id,              /*proposal_id*/
             is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
             restore_status,            /*restore_status*/
@@ -2465,13 +2486,11 @@ int ObService::fill_ls_replica(
             gctx_.config_->zone.str(), /*zone*/
             paxos_replica_number,                    /*paxos_replica_number*/
             0,                         /*data_size*/
-            0))) {                     /*required_size*/
+            0,
+            member_list,
+            learner_list))) {                     /*required_size*/
         LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role),
-                 K(proposal_id), K(unit_id), K(paxos_replica_number));
-      } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
-        LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
-      } else if (OB_FAIL(replica.set_member_list(member_list))) {
-        LOG_WARN("fail to set member_list", KR(ret), K(member_list), K(replica));
+                 K(proposal_id), K(unit_id), K(paxos_replica_number), K(member_list), K(learner_list));
       } else {
         LOG_TRACE("finish fill ls replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
       }

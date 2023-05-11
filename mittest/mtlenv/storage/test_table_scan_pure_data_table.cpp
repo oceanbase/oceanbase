@@ -21,6 +21,13 @@
 
 namespace oceanbase
 {
+namespace transaction {
+  int ObTransService::gen_trans_id_(ObTransID &trans_id) {
+    trans_id = ObTransID(1001);
+    return OB_SUCCESS;
+  }
+}
+
 namespace storage
 {
 class TestTableScanPureDataTable : public ::testing::Test
@@ -53,8 +60,8 @@ TestTableScanPureDataTable::TestTableScanPureDataTable()
 void TestTableScanPureDataTable::SetUpTestCase()
 {
   ASSERT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
-  MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
-    [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
+  // MTL(transaction::ObTransService*)->tx_desc_mgr_.tx_id_allocator_ =
+  //   [](transaction::ObTransID &tx_id) { tx_id = transaction::ObTransID(1001); return OB_SUCCESS; };
   SAFE_DESTROY_INSTANCE.init();
   SAFE_DESTROY_INSTANCE.start();
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;

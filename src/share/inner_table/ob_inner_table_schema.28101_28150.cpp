@@ -2410,7 +2410,7 @@ int ObInnerTableSchema::gv_ob_log_stat_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     TENANT_ID,     LS_ID,     SVR_IP,     SVR_PORT,     ROLE,     PROPOSAL_ID,     CONFIG_VERSION,     ACCESS_MODE,     PAXOS_MEMBER_LIST,     PAXOS_REPLICA_NUM,     CASE in_sync       WHEN 1 THEN 'YES'       ELSE 'NO' END     AS IN_SYNC,     BASE_LSN,     BEGIN_LSN,     BEGIN_SCN,     END_LSN,     END_SCN,     MAX_LSN,     MAX_SCN,     ARBITRATION_MEMBER,     DEGRADED_LIST   FROM SYS.ALL_VIRTUAL_LOG_STAT )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT     TENANT_ID,     LS_ID,     SVR_IP,     SVR_PORT,     ROLE,     PROPOSAL_ID,     CONFIG_VERSION,     ACCESS_MODE,     PAXOS_MEMBER_LIST,     PAXOS_REPLICA_NUM,     CASE in_sync       WHEN 1 THEN 'YES'       ELSE 'NO' END     AS IN_SYNC,     BASE_LSN,     BEGIN_LSN,     BEGIN_SCN,     END_LSN,     END_SCN,     MAX_LSN,     MAX_SCN,     ARBITRATION_MEMBER,     DEGRADED_LIST,     LEARNER_LIST   FROM SYS.ALL_VIRTUAL_LOG_STAT )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

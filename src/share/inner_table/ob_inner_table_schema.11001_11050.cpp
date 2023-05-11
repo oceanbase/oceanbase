@@ -341,6 +341,21 @@ int ObInnerTableSchema::all_virtual_core_meta_table_schema(ObTableSchema &table_
       required_size_default,
       required_size_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("learner_list", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObLongTextType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      0, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
   table_schema.set_index_using_type(USING_HASH);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

@@ -62,8 +62,6 @@ public:
     static TCRef tcref(16);
     return tcref;
   }
-  // why there is duplicate ls?
-  int remove_duplicate_ls();
 private:
   OB_INLINE void free_ls(ObLS *ls) const;
   void del_ls_impl(ObLS *ls);

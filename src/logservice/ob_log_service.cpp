@@ -370,7 +370,6 @@ int ObLogService::check_palf_exist(const ObLSID &id, bool &exist) const
 }
 
 int ObLogService::add_ls(const ObLSID &id,
-                         const ObReplicaType &replica_type,
                          ObLogHandler &log_handler,
                          ObLogRestoreHandler &restore_handler)
 {
@@ -386,8 +385,7 @@ int ObLogService::add_ls(const ObLSID &id,
     CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id));
   } else if (OB_FAIL(apply_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for apply_service", K(ret), K(id));
-  } else if (OB_FAIL(replay_service_.add_ls(id,
-                                            replica_type))) {
+  } else if (OB_FAIL(replay_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for replay_service", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
           &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {
@@ -399,7 +397,7 @@ int ObLogService::add_ls(const ObLSID &id,
   } else if (OB_FAIL(log_handler_palf_handle.set_location_cache_cb(loc_cache_cb))) {
     CLOG_LOG(WARN, "set_location_cache_cb failed", K(ret), K(id));
   } else {
-    FLOG_INFO("add_ls success", K(ret), K(id), K(replica_type), KP(this));
+    FLOG_INFO("add_ls success", K(ret), K(id), KP(this));
   }
 
   if (OB_FAIL(ret)) {
@@ -621,7 +619,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
     CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));
   } else if (OB_FAIL(apply_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls for apply engine", K(ret), K(id));
-  } else if (OB_FAIL(replay_service_.add_ls(id, replica_type))) {
+  } else if (OB_FAIL(replay_service_.add_ls(id))) {
     CLOG_LOG(WARN, "failed to add_ls", K(ret), K(id));
   } else if (OB_FAIL(log_handler.init(id.id(), self_, &apply_service_, &replay_service_,
           &role_change_service_, palf_handle, palf_env_, loc_cache_cb, &rpc_proxy_))) {

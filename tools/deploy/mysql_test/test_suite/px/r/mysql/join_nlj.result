@@ -185,7 +185,7 @@ sid	subject	score	tid	name	subject
 62	EN	90	1	Miss Zhang	EN
 63	EN	99	1	Miss Zhang	EN
 64	EN	87	1	Miss Zhang	EN
-CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify));
+CREATE TABLE product (pid bigint primary key,pname varchar(50),gmt_modify timestamp(6),gmt_create timestamp(6),thread_id bigint, key k (gmt_modify))duplicate_scope="cluster";
 CREATE TABLE orders (oid bigint primary key,pid bigint,amount int, addr varchar(20),key k (pid) local) partition by hash (oid) partitions 100;
 insert into product values(314265, "abcd", now(), now(), 1234);
 insert into orders values(314265, 314265, 678, "192.168.1.8");

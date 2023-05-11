@@ -173,7 +173,8 @@ int TestDmlCommon::create_ls(
     ObMemberList member_list;
     const int64_t paxos_replica_num = 1;
     (void) member_list.add_server(MockTenantModuleEnv::get_instance().self_addr_);
-    if (OB_FAIL(ls->set_initial_member_list(member_list, paxos_replica_num))) {
+    GlobalLearnerList learner_list;
+    if (OB_FAIL(ls->set_initial_member_list(member_list, paxos_replica_num, learner_list))) {
       STORAGE_LOG(WARN, "failed to set initial member list", K(ret),
           K(member_list), K(paxos_replica_num));
     }

@@ -114,7 +114,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
                  K(ret), K(cli_ret), K(retry_ctrl_.need_retry()));
         ret = cli_ret;
       } else {
-        ObResultSet::refresh_location_cache(result.get_exec_context().get_task_exec_ctx(), true, ret);
+        result.refresh_location_cache(true, ret);
       }
       int cret = result.close();
       if (cret != OB_SUCCESS) {

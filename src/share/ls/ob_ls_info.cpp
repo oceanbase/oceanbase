@@ -15,6 +15,8 @@
 #include "share/ls/ob_ls_info.h"      // for decalrations of functions in this cpp
 #include "share/config/ob_server_config.h"            // for KR(), common::ob_error_name(x)
 #include "share/ls/ob_ls_replica_filter.h" // ObLSReplicaFilter
+#include "share/ob_share_util.h"           // ObShareUtils
+#include "lib/string/ob_sql_string.h"      // ObSqlString
 
 namespace oceanbase
 {
@@ -119,7 +121,9 @@ ObLSReplica::ObLSReplica()
     data_size_(0),
     required_size_(0),
     in_member_list_(false),
-    member_time_us_(0)
+    member_time_us_(0),
+    learner_list_(),
+    in_learner_list_(false)
 {
 }
 
@@ -151,6 +155,8 @@ void ObLSReplica::reset()
   required_size_ = 0;
   in_member_list_ = false;
   member_time_us_ = 0;
+  learner_list_.reset();
+  in_learner_list_ = false;
 }
 
 int ObLSReplica::init(
@@ -170,7 +176,9 @@ int ObLSReplica::init(
     const ObString &zone,
     const int64_t paxos_replica_number,
     const int64_t data_size,
-    const int64_t required_size)
+    const int64_t required_size,
+    const MemberList &member_list,
+    const GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -182,6 +190,10 @@ int ObLSReplica::init(
     LOG_WARN("fail to assign memstore_percent", KR(ret), K(memstore_percent));
   } else if (OB_FAIL(zone_.assign(zone))) {
     LOG_WARN("fail to assign zone", KR(ret), K(zone));
+  } else if (OB_FAIL(member_list_.assign(member_list))) {
+    LOG_WARN("failed to assign member list", KR(ret), K(member_list));
+  } else if (OB_FAIL(learner_list_.deep_copy(learner_list))) {
+    LOG_WARN("failed to deep copy learner list", KR(ret), K(learner_list));
   } else {
     create_time_us_ = create_time_us;
     modify_time_us_ = modify_time_us;
@@ -209,6 +221,8 @@ int ObLSReplica::assign(const ObLSReplica &other)
     reset();
     if (OB_FAIL(copy_assign(member_list_, other.member_list_))) {
       LOG_WARN("failed to assign member_list_", KR(ret));
+    } else if (OB_FAIL(copy_assign(learner_list_, other.learner_list_))) {
+      LOG_WARN("failed to assign learner_list_", KR(ret));
     } else if (OB_FAIL(copy_assign(property_, other.property_))) {
       LOG_WARN("fail to assign property", KR(ret));
     } else if (OB_FAIL(zone_.assign(other.zone_))) {
@@ -233,6 +247,7 @@ int ObLSReplica::assign(const ObLSReplica &other)
       required_size_ = other.required_size_;
       in_member_list_ = other.in_member_list_;
       member_time_us_ = other.member_time_us_;
+      in_learner_list_ = other.in_learner_list_;
     }
   }
   return ret;
@@ -249,7 +264,6 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && sql_port_ == other.sql_port_
       && role_ == other.role_
       && member_list_is_equal(member_list_, other.member_list_)
-      && replica_type_ == other.replica_type_
       && replica_status_ == other.replica_status_
       && restore_status_ == other.restore_status_
       && property_ == other.property_
@@ -258,10 +272,44 @@ bool ObLSReplica::is_equal_for_report(const ObLSReplica &other) const
       && paxos_replica_number_ == other.paxos_replica_number_) {
     is_equal = true;
   }
+
   // only proposal_id of leader is meaningful
   // proposal_id of follower will be set to 0 in reporting process
   if (is_equal && ObRole::LEADER == role_) {
     is_equal = (proposal_id_ == other.proposal_id_);
+  }
+
+  // check replica_type and learner_list if necessary
+  bool is_compatible_with_readonly_replica = false;
+  int ret = OB_SUCCESS;
+  if (is_equal && OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
+                                           tenant_id_,
+                                           is_compatible_with_readonly_replica))) {
+    LOG_WARN("failed to check compat version for readonly replica", KR(ret), K_(tenant_id));
+  } else if (is_equal && is_compatible_with_readonly_replica) {
+    is_equal = learner_list_is_equal(learner_list_, other.learner_list_)
+               && replica_type_ == other.replica_type_;
+  }
+
+  return is_equal;
+}
+
+bool ObLSReplica::learner_list_is_equal(const common::GlobalLearnerList &a, const common::GlobalLearnerList &b) const
+{
+  bool is_equal = true;
+  if (a.get_member_number() != b.get_member_number()) {
+    is_equal = false;
+  } else {
+    for (int i = 0; is_equal && i < a.get_member_number(); ++i) {
+      ObAddr learner;
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(a.get_server_by_index(i, learner))) {
+        is_equal = false;
+        LOG_WARN("failed to get server by index", KR(ret), K(i), K(a), K(b));
+      } else {
+        is_equal = b.contains(learner);
+      }
+    }
   }
   return is_equal;
 }
@@ -311,7 +359,9 @@ int64_t ObLSReplica::to_string(char *buf, const int64_t buf_len) const
       K_(data_size),
       K_(required_size),
       K_(in_member_list),
-      K_(member_time_us));
+      K_(member_time_us),
+      K_(learner_list),
+      K_(in_learner_list));
   J_OBJ_END();
   return pos;
 }
@@ -338,44 +388,78 @@ OB_SERIALIZE_MEMBER(ObLSReplica,
                     data_size_,
                     required_size_,
                     in_member_list_,
-                    member_time_us_);
+                    member_time_us_,
+                    learner_list_,
+                    in_learner_list_);
 
-int ObLSReplica::member_list2text(const MemberList &member_list,
-                                         char *text,
-                                         const int64_t length)
+int ObLSReplica::member_list2text(
+    const MemberList &member_list,
+    ObSqlString &text)
 {
   int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  char buf[MAX_IP_PORT_LENGTH];
-  if (OB_ISNULL(text) || length <= 0 || member_list.count() < 0) {
+  text.reset();
+  if (0 > member_list.count()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(text), K(length),
-        "member count", member_list.count());
-  } else if (member_list.count() == 0) {
-    memset(text, 0, length);
-  }
-  FOREACH_CNT_X(m, member_list, OB_SUCCESS == ret) {
-    if (0 != pos) {
-      if (pos + 1 < length) {
-        text[pos++] = ',';
+    LOG_WARN("invalid argument", KR(ret), "member count", member_list.count());
+  } else if (0 == member_list.count()) {
+    text.reset();
+  } else {
+    bool need_comma = false;
+    char ip_port[MAX_IP_PORT_LENGTH];
+    FOREACH_CNT_X(m, member_list, OB_SUCC(ret)) {
+      if (OB_FAIL(m->get_server().ip_port_to_string(ip_port, sizeof(ip_port)))) {
+        LOG_WARN("convert server to string failed", KR(ret), "member", *m);
+      } else if (need_comma && OB_FAIL(text.append(","))) {
+        LOG_WARN("failed to append comma to string", KR(ret));
+      } else if (OB_FAIL(text.append_fmt("%.*s:%ld", static_cast<int>(sizeof(ip_port)), ip_port, m->get_timestamp()))) {
+        LOG_WARN("failed to append ip_port to string", KR(ret), "member", *m);
       } else {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("buffer not enough", KR(ret), K(pos), K(length));
+        need_comma = true;
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(m->get_server().ip_port_to_string(buf, sizeof(buf)))) {
-      LOG_WARN("convert server to string failed", KR(ret), "member", *m);
+  }
+  return ret;
+}
+
+int ObLSReplica::text2learner_list(const char *text, GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  char *learner_text = nullptr;
+  char *save_ptr1 = nullptr;
+  learner_list.reset();
+  if (nullptr == text) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(text));
+  }
+  while (OB_SUCC(ret)) {
+    learner_text = strtok_r((nullptr == learner_text ? const_cast<char *>(text) : nullptr), ",", &save_ptr1);
+    /*
+     * ipv4 format: a.b.c.d:port:timestamp,...
+     * ipv6 format: [a:b:c:d:e:f:g:h]:port:timestamp,...
+     */
+    if (nullptr != learner_text) {
+      char *timestamp_str = nullptr;
+      char *end_ptr = nullptr;
+      ObAddr learner_addr;
+      if (OB_NOT_NULL(timestamp_str = strrchr(learner_text, ':'))) {
+        *timestamp_str++ = '\0';
+        int64_t timestamp_val = strtoll(timestamp_str, &end_ptr, 10);
+        if (end_ptr == timestamp_str || *end_ptr != '\0') {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("strtoll failed", KR(ret));
+        } else if (OB_FAIL(learner_addr.parse_from_cstring(learner_text))) {
+          LOG_ERROR("parse from cstring failed", KR(ret), K(learner_text));
+        } else if (OB_FAIL(learner_list.add_learner(ObMember(learner_addr, timestamp_val)))) {
+          LOG_WARN("push back failed", KR(ret), K(learner_addr), K(timestamp_val));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("parse learner text failed", KR(ret), K(learner_text));
+      }
     } else {
-      int n = snprintf(text + pos, length - pos, "%s:%ld", buf, m->get_timestamp());
-      if (n < 0 || n >= length - pos) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(length), K(pos));
-      } else {
-        pos += n;
-      }
+      break;
     }
-  }
+  } // while
   return ret;
 }
 
@@ -440,15 +524,6 @@ int ObLSReplica::transform_ob_member_list(
         member.get_timestamp())))) {
       SERVER_LOG(WARN, "push_back failed", KR(ret), K(member));
     }
-  }
-  return ret;
-}
-
-int ObLSReplica::set_member_list(const MemberList &member_list)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(member_list_.assign(member_list))) {
-    LOG_WARN("fail to assign member_list", KR(ret), K(member_list), KPC(this));
   }
   return ret;
 }
@@ -689,9 +764,11 @@ int ObLSInfo::update_replica_status()
     LOG_WARN("invalid argument", KR(ret), "ls", *this);
   } else {
     const ObLSReplica::MemberList *member_list = NULL;
+    const common::GlobalLearnerList *learner_list = NULL;
     FOREACH_CNT_X(r, replicas_, OB_ISNULL(member_list) && OB_SUCCESS == ret) {
       if (r->is_strong_leader()) {
         member_list = &r->get_member_list();
+        learner_list = &r->get_learner_list();
       }
     }
 
@@ -699,7 +776,22 @@ int ObLSInfo::update_replica_status()
       bool in_leader_member_list = (OB_ISNULL(member_list)
         && ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type()));
       int64_t in_member_time_us = 0;
-      if (NULL != member_list) {
+      bool in_leader_learner_list = false;
+      ObMember learner;
+      // rectify replica_type_
+      if (OB_NOT_NULL(learner_list) && learner_list->contains(r->get_server())) {
+        r->set_replica_type(REPLICA_TYPE_READONLY);
+        in_leader_learner_list = true;
+        if (OB_FAIL(learner_list->get_learner_by_addr(r->get_server(), learner))) {
+          LOG_WARN("fail to get learner by addr", KR(ret));
+        } else if (in_leader_learner_list) {
+          in_member_time_us = learner.get_timestamp();
+        }
+      } else {
+        r->set_replica_type(REPLICA_TYPE_FULL);
+      }
+      // rectify in_member_list_ and in_member_list_time_
+      if (OB_NOT_NULL(member_list)) {
         ARRAY_FOREACH_X(*member_list, idx, cnt, !in_leader_member_list) {
           if (r->get_server() == member_list->at(idx)) {
             in_leader_member_list = true;
@@ -708,24 +800,19 @@ int ObLSInfo::update_replica_status()
         }
       }
       r->update_in_member_list_status(in_leader_member_list, in_member_time_us);
-      // replica_status_ rules:
-      // 1 paxos replicas (FULL,LOGONLY),NORMAL when in leader's member_list otherwise offline.
-      // 2 non_paxos replicas (READONLY),NORMAL all the time
+      r->update_in_learner_list_status(in_leader_learner_list, in_member_time_us);
+      // rectify replica_status_
+      // follow these rules below:
+      // 1 paxos replicas (FULL),NORMAL when in leader's member_list otherwise offline.
+      // 2 non_paxos replicas (READONLY),NORMAL when in leader's learner_list otherwise offline
       // 3 if non_paxos replicas are deleted by partition service, status in meta table is set to REPLICA_STATUS_OFFLINE,
       //    then set replica_status to REPLICA_STATUS_OFFLINE
       if (REPLICA_STATUS_OFFLINE == r->get_replica_status()) {
         // do nothing
-      } else if (in_leader_member_list) {
+      } else if (in_leader_member_list || in_leader_learner_list) {
         r->set_replica_status(REPLICA_STATUS_NORMAL);
-      } else if (!ObReplicaTypeCheck::is_replica_type_valid(r->get_replica_type())) {
-        // invalid replicas
-        r->set_replica_status(REPLICA_STATUS_OFFLINE);
-      } else if (ObReplicaTypeCheck::is_paxos_replica_V2(r->get_replica_type())) {
-        // FULL, LOGONLY.
-        r->set_replica_status(REPLICA_STATUS_OFFLINE);
       } else {
-        // READONLY and so on.
-        r->set_replica_status(REPLICA_STATUS_NORMAL);
+        r->set_replica_status(REPLICA_STATUS_OFFLINE);
       }
     }
   }

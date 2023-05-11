@@ -135,7 +135,7 @@ const char* ob_disaster_recovery_task_priority_strs(const rootserver::ObDRTaskPr
   } else {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid ObDRTask priority", K(task_priority));
   }
-  return str; 
+  return str;
 }
 
 static const char* disaster_recovery_task_type_strs[] = {
@@ -510,7 +510,7 @@ int ObMigrateLSReplicaTask::log_execute_start() const
              "src_member", src_member_.get_server(),
              "data_src_member", data_src_member_.get_server());
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_migrate_ls_replica",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -531,7 +531,7 @@ int ObMigrateLSReplicaTask::log_execute_result(
   if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
     LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_migrate_ls_replica",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -961,7 +961,7 @@ int ObAddLSReplicaTask::get_virtual_disaster_recovery_task_stat(
 int ObAddLSReplicaTask::log_execute_start() const
 {
   int ret = OB_SUCCESS;
-  ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_add_ls_replica",
+  ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
                         "tenant_id", get_tenant_id(),
                         "ls_id", get_ls_id().id(),
                         "task_id", get_task_id(),
@@ -981,7 +981,7 @@ int ObAddLSReplicaTask::log_execute_result(
   if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
     LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_add_ls_replica",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -1432,7 +1432,7 @@ int ObLSTypeTransformTask::get_virtual_disaster_recovery_task_stat(
 int ObLSTypeTransformTask::log_execute_start() const
 {
   int ret = OB_SUCCESS;
-  ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_type_transform_ls_replica",
+  ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
                         "tenant_id", get_tenant_id(),
                         "ls_id", get_ls_id().id(),
                         "task_id", get_task_id(),
@@ -1451,7 +1451,7 @@ int ObLSTypeTransformTask::log_execute_result(
   if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
     LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_type_transform_ls_replica",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -1886,8 +1886,8 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   return ret;
 }
 
-// ================================== ObRemoveLSPaxosReplicaTask ==================================
-int ObRemoveLSPaxosReplicaTask::get_execute_transmit_size(
+// ======================================== ObRemoveLSReplicaTask ======================================
+int ObRemoveLSReplicaTask::get_execute_transmit_size(
     int64_t &execute_transmit_size) const
 {
   int ret = OB_SUCCESS;
@@ -1895,7 +1895,7 @@ int ObRemoveLSPaxosReplicaTask::get_execute_transmit_size(
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::get_virtual_disaster_recovery_task_stat(
+int ObRemoveLSReplicaTask::get_virtual_disaster_recovery_task_stat(
     common::ObAddr &src,
     common::ObAddr &data_src,
     common::ObAddr &dst,
@@ -1909,10 +1909,10 @@ int ObRemoveLSPaxosReplicaTask::get_virtual_disaster_recovery_task_stat(
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::log_execute_start() const
+int ObRemoveLSReplicaTask::log_execute_start() const
 {
   int ret = OB_SUCCESS;
-  ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_remove_ls_paxos_replica",
+  ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
                         "tenant_id", get_tenant_id(),
                         "ls_id", get_ls_id().id(),
                         "task_id", get_task_id(),
@@ -1923,7 +1923,7 @@ int ObRemoveLSPaxosReplicaTask::log_execute_start() const
 }
 
 
-int ObRemoveLSPaxosReplicaTask::log_execute_result(
+int ObRemoveLSReplicaTask::log_execute_result(
     const int ret_code,
     const ObDRTaskRetComment &ret_comment) const
 {
@@ -1932,7 +1932,7 @@ int ObRemoveLSPaxosReplicaTask::log_execute_result(
   if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
     LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_remove_ls_paxos_replica",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -1944,43 +1944,63 @@ int ObRemoveLSPaxosReplicaTask::log_execute_result(
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::check_before_execute(
+int ObRemoveLSReplicaTask::check_before_execute(
     share::ObLSTableOperator &lst_operator,
     ObDRTaskRetComment &ret_comment) const
-{ 
+{
   int ret = OB_SUCCESS;
   UNUSED(lst_operator);
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::execute(
+int ObRemoveLSReplicaTask::execute(
     obrpc::ObSrvRpcProxy &rpc_proxy,
     int &ret_code,
     ObDRTaskRetComment &ret_comment) const
 {
   int ret = OB_SUCCESS;
-  
-  ObLSDropPaxosReplicaArg arg;
-  if (OB_FAIL(arg.init(
-          get_task_id(),
-          get_tenant_id(),
-          get_ls_id(),
-          get_remove_server(),
-          get_orig_paxos_replica_number(),
-          get_paxos_replica_number()))) {
-    LOG_WARN("fail to init arg", KR(ret));
-  } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
-        .by(get_tenant_id()).ls_remove_paxos_replica(arg))) {
-    ret_code = ret;
-    ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
-    LOG_WARN("fail to send ls remove paxos replica rpc", KR(ret), K(arg));
+  if (ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()) {
+    ObLSDropPaxosReplicaArg arg;
+    if (OB_FAIL(arg.init(
+            get_task_id(),
+            get_tenant_id(),
+            get_ls_id(),
+            get_remove_server(),
+            get_orig_paxos_replica_number(),
+            get_paxos_replica_number()))) {
+      LOG_WARN("fail to init arg", KR(ret));
+    } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
+          .by(get_tenant_id()).ls_remove_paxos_replica(arg))) {
+      ret_code = ret;
+      ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
+      LOG_WARN("fail to send ls remove paxos replica rpc", KR(ret), K(arg));
+    } else {
+      LOG_INFO("start to execute ls remove paxos replica", K(arg));
+    }
+  } else if (ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA == get_disaster_recovery_task_type()) {
+    ObLSDropNonPaxosReplicaArg arg;
+    if (OB_FAIL(arg.init(
+            get_task_id(),
+            get_tenant_id(),
+            get_ls_id(),
+            get_remove_server()))) {
+      LOG_WARN("fail to init arg", KR(ret));
+    } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
+          .by(get_tenant_id()).ls_remove_nonpaxos_replica(arg))) {
+      ret_code = ret;
+      ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
+      LOG_WARN("fail to send ls remove nonpaxos replica", KR(ret), K(arg));
+    } else {
+      LOG_INFO("start to execute ls remove nonpaxos replica", K(arg));
+    }
   } else {
-    LOG_INFO("start to execute ls remove paxos replica", K(arg));
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("task type not expected", KR(ret), "task_type", get_disaster_recovery_task_type());
   }
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::fill_dml_splicer(
+int ObRemoveLSReplicaTask::fill_dml_splicer(
     ObDMLSqlSplicer &dml_splicer) const
 {
   int ret = OB_SUCCESS;
@@ -1988,15 +2008,15 @@ int ObRemoveLSPaxosReplicaTask::fill_dml_splicer(
   char dest_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   char target_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   char task_id[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  char task_type[MAX_DISASTER_RECOVERY_TASK_TYPE_LENGTH] = "REMOVE PAXOS REPLICA";
   int64_t transmit_data_size = 0;
+  const char *task_type_to_set = ob_disaster_recovery_task_type_strs(get_disaster_recovery_task_type());
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid task", KR(ret));
   } else if (false == get_leader().ip_to_string(dest_ip, sizeof(dest_ip))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert dest_server ip to string failed", KR(ret), "dest_server", get_leader());
+    LOG_WARN("convert dest_server ip to string failed", KR(ret), "dest_server", get_dst_server());
   } else if (false == get_remove_server().get_server().ip_to_string(target_ip, sizeof(target_ip))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("convert target_server ip to string failed", KR(ret), "target_server", get_remove_server().get_server());
@@ -2005,7 +2025,7 @@ int ObRemoveLSPaxosReplicaTask::fill_dml_splicer(
   } else {
     if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id_))
         || OB_FAIL(dml_splicer.add_pk_column("ls_id", ls_id_.id()))
-        || OB_FAIL(dml_splicer.add_pk_column("task_type", task_type))
+        || OB_FAIL(dml_splicer.add_pk_column("task_type", task_type_to_set))
         || OB_FAIL(dml_splicer.add_pk_column("task_id", task_id_))
         || OB_FAIL(dml_splicer.add_column("task_status", TASK_STATUS))
         || OB_FAIL(dml_splicer.add_column("priority", static_cast<int64_t>(ObDRTaskPriority::HIGH_PRI)))
@@ -2028,22 +2048,22 @@ int ObRemoveLSPaxosReplicaTask::fill_dml_splicer(
   return ret;
 }
 
-int64_t ObRemoveLSPaxosReplicaTask::get_clone_size() const
+int64_t ObRemoveLSReplicaTask::get_clone_size() const
 {
   return sizeof(*this);
 }
 
-int ObRemoveLSPaxosReplicaTask::clone(
+int ObRemoveLSReplicaTask::clone(
     void *input_ptr,
     ObDRTask *&output_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == input_ptr)) {
+  if (OB_ISNULL(input_ptr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
   } else {
-    ObRemoveLSPaxosReplicaTask *my_task = new (input_ptr) ObRemoveLSPaxosReplicaTask();
-    if (OB_UNLIKELY(nullptr == my_task)) {
+    ObRemoveLSReplicaTask *my_task = new (input_ptr) ObRemoveLSReplicaTask();
+    if (OB_ISNULL(my_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to construct", KR(ret));
     } else if (OB_FAIL(my_task->deep_copy(*this))) {
@@ -2053,13 +2073,14 @@ int ObRemoveLSPaxosReplicaTask::clone(
       my_task->set_remove_server(get_remove_server());
       my_task->set_orig_paxos_replica_number(get_orig_paxos_replica_number());
       my_task->set_paxos_replica_number(get_paxos_replica_number());
+      my_task->set_replica_type(get_replica_type());
       output_task = my_task;
     }
   }
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::build(
+int ObRemoveLSReplicaTask::build(
     const ObDRTaskKey &task_key,
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
@@ -2075,7 +2096,8 @@ int ObRemoveLSPaxosReplicaTask::build(
     const common::ObAddr &leader,
     const common::ObReplicaMember &remove_server,
     const int64_t orig_paxos_replica_number,
-    const int64_t paxos_replica_number)
+    const int64_t paxos_replica_number,
+    const ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!leader.is_valid()
@@ -2113,14 +2135,16 @@ int ObRemoveLSPaxosReplicaTask::build(
     set_remove_server(remove_server);
     orig_paxos_replica_number_ = orig_paxos_replica_number;
     paxos_replica_number_ = paxos_replica_number;
+    replica_type_ = replica_type;
   }
   return ret;
 }
 
-int ObRemoveLSPaxosReplicaTask::build_task_from_sql_result(
+int ObRemoveLSReplicaTask::build_task_from_sql_result(
     const sqlclient::ObMySQLResult &res)
 {
   int ret = OB_SUCCESS;
+  common::ObString task_type;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   int64_t ls_id = ObLSID::INVALID_LS_ID;
   common::ObString task_id;
@@ -2135,6 +2159,7 @@ int ObRemoveLSPaxosReplicaTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
+  ObReplicaType replica_type = REPLICA_TYPE_MAX;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   {
@@ -2147,6 +2172,7 @@ int ObRemoveLSPaxosReplicaTask::build_task_from_sql_result(
   }
   (void)GET_COL_IGNORE_NULL(res.get_int, "ls_id", ls_id);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_id", task_id);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_type", task_type);
   (void)GET_COL_IGNORE_NULL(res.get_int, "priority", priority);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_exec_svr_ip", dest_ip);
   (void)GET_COL_IGNORE_NULL(res.get_int, "task_exec_svr_port", dest_port);
@@ -2190,6 +2216,14 @@ int ObRemoveLSPaxosReplicaTask::build_task_from_sql_result(
     } else {
       priority_to_set = ObDRTaskPriority::MAX_PRI;
     }
+    //transform task_type(string) -> replica_type(ObReplicaType)
+    if (0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_PAXOS_REPLICA))) {
+      replica_type_ = ObReplicaType::REPLICA_TYPE_FULL;
+    } else if (0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA))) {
+      replica_type_ = ObReplicaType::REPLICA_TYPE_READONLY;
+    } else {
+      replica_type_ = ObReplicaType::REPLICA_TYPE_MAX;
+    }
   }
   //STEP3_0: to build a task
   if (OB_FAIL(ret)) {
@@ -2207,310 +2241,13 @@ int ObRemoveLSPaxosReplicaTask::build_task_from_sql_result(
                     priority_to_set,             //(not used)
                     comment_to_set.ptr(),        //comment
                     dest_server,                 //(in used)leader
-                    ObReplicaMember(target_server, 0), //(in used)target_server                                 
+                    ObReplicaMember(target_server, 0), //(in used)target_server
                     src_paxos_replica_number,                  //(in used)
-                    dest_paxos_replica_number))) {             //(in used)
-    LOG_WARN("fail to build a ObRemoveLSPaxosReplicaTask", KR(ret));
+                    dest_paxos_replica_number,                 //(in used)
+                    replica_type_))) {            //(in used)
+    LOG_WARN("fail to build a ObRemoveLSReplicaTask", KR(ret));
   } else {
-    LOG_INFO("success to build a ObRemoveLSPaxosReplicaTask", KPC(this));
-  }
-  return ret;
-}
-
-// ================================== ObRemoveLSNonPaxosReplicaTask ==================================
-int ObRemoveLSNonPaxosReplicaTask::get_execute_transmit_size(
-    int64_t &execute_transmit_size) const
-{
-  int ret = OB_SUCCESS;
-  execute_transmit_size = 0;
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::get_virtual_disaster_recovery_task_stat(
-    common::ObAddr &src,
-    common::ObAddr &data_src,
-    common::ObAddr &dst,
-    common::ObAddr &offline) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(src);
-  UNUSED(data_src);
-  dst = remove_server_.get_server();
-  UNUSED(offline);
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::log_execute_start() const
-{
-  int ret = OB_SUCCESS;
-  ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_remove_non_ls_paxos_replica",
-                        "tenant_id", get_tenant_id(),
-                        "ls_id", get_ls_id().id(),
-                        "task_id", get_task_id(),
-                        "destination", remove_server_.get_server(),
-                        "comment", get_comment().ptr());
-  return ret;
-}
-
-
-int ObRemoveLSNonPaxosReplicaTask::log_execute_result(
-    const int ret_code,
-    const ObDRTaskRetComment &ret_comment) const
-{
-  int ret = OB_SUCCESS;
-  ObSqlString execute_result;
-  if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
-    LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
-  } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_remove_non_ls_paxos_replica",
-                          "tenant_id", get_tenant_id(),
-                          "ls_id", get_ls_id().id(),
-                          "task_id", get_task_id(),
-                          "destination", remove_server_.get_server(),
-                          "execute_result", execute_result,
-                          "comment", get_comment().ptr());
-  }
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::check_before_execute(
-    share::ObLSTableOperator &lst_operator,
-    ObDRTaskRetComment &ret_comment) const
-{
-  int ret = OB_SUCCESS;
-  UNUSED(lst_operator);
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::execute(
-    obrpc::ObSrvRpcProxy &rpc_proxy,
-    int &ret_code,
-    ObDRTaskRetComment &ret_comment) const
-{
-  int ret = OB_SUCCESS;
-  
-  ObLSDropNonPaxosReplicaArg arg;
-  if (OB_FAIL(arg.init(
-          get_task_id(),
-          get_tenant_id(),
-          get_ls_id(),
-          get_remove_server()))) {
-    LOG_WARN("fail to init arg", KR(ret));
-  } else if (OB_FAIL(rpc_proxy.to(get_dst_server())
-        .by(get_tenant_id()).ls_remove_nonpaxos_replica(arg))) {
-    ret_code = ret;
-    ret_comment = ObDRTaskRetComment::FAIL_TO_SEND_RPC;
-    LOG_WARN("fail to send ls remove nonpaxos replica", KR(ret), K(arg));
-  } else {
-    LOG_INFO("start to execute ls remove nonpaxos replica", K(arg));
-  }
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::fill_dml_splicer(
-    ObDMLSqlSplicer &dml_splicer) const
-{
-  int ret = OB_SUCCESS;
-  char src_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  char dest_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  char target_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  char task_id[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  char task_type[MAX_DISASTER_RECOVERY_TASK_TYPE_LENGTH] = "REMOVE NON PAXOS REPLICA";
-  int64_t transmit_data_size = 0;
-
-  if (OB_UNLIKELY(!is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid task", KR(ret));
-  } else if (false == get_dst_server().ip_to_string(dest_ip, sizeof(dest_ip))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert dest_server ip to string failed", KR(ret), "dest_server", get_dst_server());
-  } else if (false == get_remove_server().get_server().ip_to_string(target_ip, sizeof(target_ip))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert target_server ip to string failed", KR(ret), "target_server", get_remove_server().get_server());
-  } else if (OB_FAIL(get_execute_transmit_size(transmit_data_size))) {
-    LOG_WARN("fail to get transmit_data_size", KR(ret), K(transmit_data_size));
-  } else {
-    if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id_))
-        || OB_FAIL(dml_splicer.add_pk_column("ls_id", ls_id_.id()))
-        || OB_FAIL(dml_splicer.add_pk_column("task_type", task_type))
-        || OB_FAIL(dml_splicer.add_pk_column("task_id", task_id_))
-        || OB_FAIL(dml_splicer.add_column("task_status", TASK_STATUS))
-        || OB_FAIL(dml_splicer.add_column("priority", static_cast<int64_t>(ObDRTaskPriority::LOW_PRI)))
-        || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", target_ip))
-        || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_remove_server().get_server().get_port()))
-        || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", 0))
-        || OB_FAIL(dml_splicer.add_column("target_replica_type", ob_replica_type_strs(get_remove_server().get_replica_type())))
-        || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
-        || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", 0))
-        || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", 0))
-        || OB_FAIL(dml_splicer.add_column("source_replica_type", ""))
-        || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
-        || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))
-        || OB_FAIL(dml_splicer.add_time_column("generate_time", generate_time_))
-        || OB_FAIL(dml_splicer.add_time_column("schedule_time", schedule_time_))
-        || OB_FAIL(dml_splicer.add_column("comment", comment_.ptr()))) {
-      LOG_WARN("add column failed", KR(ret));
-    }
-  }
-  return ret;
-}
-
-int64_t ObRemoveLSNonPaxosReplicaTask::get_clone_size() const
-{
-  return sizeof(*this);
-}
-
-int ObRemoveLSNonPaxosReplicaTask::clone(
-    void *input_ptr,
-    ObDRTask *&output_task) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == input_ptr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret));
-  } else {
-    ObRemoveLSNonPaxosReplicaTask *my_task = new (input_ptr) ObRemoveLSNonPaxosReplicaTask();
-    if (OB_UNLIKELY(nullptr == my_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to construct", KR(ret));
-    } else if (OB_FAIL(my_task->deep_copy(*this))) {
-      LOG_WARN("fail to deep copy", KR(ret));
-    } else {
-      my_task->set_remove_server(get_remove_server());
-      output_task = my_task;
-    }
-  }
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::build(
-    const ObDRTaskKey &task_key,
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const share::ObTaskId &task_id,
-    const int64_t schedule_time_us,
-    const int64_t generate_time_us,
-    const int64_t cluster_id,
-    const int64_t transmit_data_size,
-    const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-    const bool skip_change_member_list,
-    const ObDRTaskPriority priority,
-    const ObString &comment,
-    const common::ObReplicaMember &dst_server)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!dst_server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret),
-             K(dst_server));
-  } else if (OB_FAIL(ObDRTask::build(
-          task_key,
-          tenant_id,
-          ls_id,
-          task_id,
-          schedule_time_us,
-          generate_time_us,
-          cluster_id,
-          transmit_data_size,
-          invoked_source,
-          skip_change_member_list,
-          priority,
-          comment))) {
-    LOG_WARN("fail to build ObDRTask", KR(ret),
-             K(task_key),
-             K(tenant_id),
-             K(ls_id),
-             K(task_id),
-             K(transmit_data_size),
-             K(invoked_source),
-             K(priority));
-  } else {
-    set_remove_server(dst_server);
-  }
-  return ret;
-}
-
-int ObRemoveLSNonPaxosReplicaTask::build_task_from_sql_result(
-    const sqlclient::ObMySQLResult &res)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = OB_INVALID_TENANT_ID;
-  int64_t ls_id = ObLSID::INVALID_LS_ID;
-  common::ObString task_id;
-  int64_t priority = 2;
-  common::ObString target_ip;
-  int64_t target_port = OB_INVALID_INDEX;
-  int64_t transmit_data_size = 0;
-  int64_t schedule_time_us = 0;
-  int64_t generate_time_us = 0;
-  common::ObString comment;
-  //STEP1_0: read certain members from sql result
-  EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
-  {
-    ObTimeZoneInfoWrap tz_info_wrap;
-    ObTZMapWrap tz_map_wrap;
-    OZ(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap));
-    tz_info_wrap.set_tz_info_map(tz_map_wrap.get_tz_map());
-    (void)GET_COL_IGNORE_NULL(res.get_timestamp, "generate_time", tz_info_wrap.get_time_zone_info(), generate_time_us);
-    (void)GET_COL_IGNORE_NULL(res.get_timestamp, "schedule_time", tz_info_wrap.get_time_zone_info(), schedule_time_us);
-  }
-  (void)GET_COL_IGNORE_NULL(res.get_int, "ls_id", ls_id);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "task_id", task_id);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "priority", priority);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_svr_ip", target_ip);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "target_replica_svr_port", target_port);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
-  //STEP2_0: make necessary members to build a task
-  ObDRTaskKey task_key;
-  common::ObAddr target_server;
-  rootserver::ObDRTaskPriority priority_to_set;
-  share::ObTaskId task_id_to_set;
-  ObSqlString comment_to_set;
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(comment_to_set.assign(comment))) {
-    LOG_WARN("fai to assign a ObString to ObSqlString", KR(ret), K(comment));
-  } else if (OB_FAIL(task_id_to_set.set(task_id.ptr()))) {
-    LOG_WARN("fail to init a task_id", KR(ret), K(task_id));
-  } else if (OB_FAIL(task_key.init(
-                tenant_id,
-                ls_id,
-                0/* set to 0 */,
-                0/* set to 0 */,
-                ObDRTaskKeyType::FORMAL_DR_KEY))) {
-    LOG_WARN("fail to init a ObDRTaskKey", KR(ret), K(tenant_id), K(ls_id));
-  } else if (false == target_server.set_ip_addr(target_ip, static_cast<uint32_t>(target_port))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid server address", K(target_ip), K(target_port));
-  } else {
-    //transform priority(int) -> priority_to_set(ObDRTaskPriority)
-    if (priority == 0) {
-      priority_to_set = ObDRTaskPriority::HIGH_PRI;
-    } else if (priority == 1) {
-      priority_to_set = ObDRTaskPriority::LOW_PRI;
-    } else {
-      priority_to_set = ObDRTaskPriority::MAX_PRI;
-    }
-  }
-  //STEP3_0: to build a task
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(build(
-                    task_key,                    //(in used)
-                    tenant_id,                   //(in used)
-                    ObLSID(ls_id),               //(in used)
-                    task_id_to_set,              //(in used)
-                    schedule_time_us,
-                    generate_time_us,
-                    GCONF.cluster_id,            //(not used)cluster_id
-                    transmit_data_size,          //(not used)
-                    obrpc::ObAdminClearDRTaskArg::TaskType::AUTO,//(not used)invoked_source
-                    true,                        //(not used)skip_change_member_list
-                    priority_to_set,             //(not used)
-                    comment_to_set.ptr(),              //comment
-                    ObReplicaMember(target_server, 0)))) { //(in used)target_server  
-    LOG_WARN("fail to build a ObRemoveLSNonPaxosReplicaTask", KR(ret));
-  } else {
-    LOG_INFO("success to build a ObRemoveLSNonPaxosReplicaTask", KPC(this));
+    LOG_INFO("success to build a ObRemoveLSReplicaTask", KPC(this));
   }
   return ret;
 }
@@ -2548,7 +2285,7 @@ int ObLSModifyPaxosReplicaNumberTask::log_execute_start() const
     LOG_WARN("fail to append to paxos_replica_number", KR(ret),
              K(orig_paxos_replica_number_), K(paxos_replica_number_));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "start_modify_paxos_replica_number",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_start_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),
@@ -2569,7 +2306,7 @@ int ObLSModifyPaxosReplicaNumberTask::log_execute_result(
   if (OB_FAIL(build_execute_result(ret_code, ret_comment, execute_result))) {
     LOG_WARN("fail to build execute result", KR(ret), K(ret_code), K(ret_comment));
   } else {
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", "finish_modify_paxos_replica_number",
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", get_log_finish_str(),
                           "tenant_id", get_tenant_id(),
                           "ls_id", get_ls_id().id(),
                           "task_id", get_task_id(),

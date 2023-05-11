@@ -204,7 +204,8 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
       } else {
         LOG_WARN("failed to check version", K(ret), K(tenant_id), K(ls_id), K(ls_info));
       }
-    } else if (!ObReplicaTypeCheck::is_full_replica(ls_info.ls_meta_package_.ls_meta_.replica_type_)) {
+    // TODO: muwei make sure this is right
+    } else if (!ObReplicaTypeCheck::is_full_replica(REPLICA_TYPE_FULL)) {
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(ls_info));
     } else if (local_clog_checkpoint_scn > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(local_clog_checkpoint_scn), K(ls_info));

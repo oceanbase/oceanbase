@@ -143,12 +143,13 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   ObTenantRole tenant_role(ObTenantRole::PRIMARY_TENANT);
   int64_t cluster_id = 1;
+  GlobalLearnerList learner_list;
   arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
   EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, arb_server->palf_env_mgr_.add_cluster(
             iserver->get_addr(), cluster_id, "arbserver_test", epoch));
   EXPECT_EQ(OB_ENTRY_NOT_EXIST, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
-        1000, get_member_list(), member, get_member_cnt()));
+        1000, get_member_list(), member, get_member_cnt(), learner_list));
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.create_arbitration_instance(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
         1000, tenant_role));
@@ -157,12 +158,12 @@ TEST_F(TestObSimpleMutilArbServer, out_interface)
         1000, tenant_role));
   EXPECT_EQ(OB_NOT_SUPPORTED, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
-        1000, get_member_list(), member, get_member_cnt()));
+        1000, get_member_list(), member, get_member_cnt(), learner_list));
   ObMemberList member_list = get_member_list();
   member_list.add_server(arb_server->self_);
   EXPECT_EQ(OB_NOT_SUPPORTED, arb_server->palf_env_mgr_.set_initial_member_list(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_,
-        1000, member_list, member, get_member_cnt()));
+        1000, member_list, member, get_member_cnt(), learner_list));
   EXPECT_EQ(OB_SUCCESS, arb_server->palf_env_mgr_.delete_arbitration_instance(
         palflite::PalfEnvKey(cluster_id, 1), arb_server->self_, 1000));
   palflite::PalfEnvLite *palf_env_lite = NULL;

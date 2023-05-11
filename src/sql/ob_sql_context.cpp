@@ -137,7 +137,6 @@ void ObQueryRetryInfo::reset()
 {
   inited_ = false;
   is_rpc_timeout_ = false;
-  invalid_servers_.reset();
   last_query_retry_err_ = OB_SUCCESS;
   retry_cnt_ = 0;
   query_switch_leader_retry_timeout_ts_ = 0;
@@ -147,25 +146,7 @@ void ObQueryRetryInfo::clear()
 {
   // 这里不能将inited_设为false
   is_rpc_timeout_ = false;
-  invalid_servers_.reset();
   //last_query_retry_err_ = OB_SUCCESS;
-}
-
-// 合并重试信息，用于主线程和调度线程的重试信息合并
-int ObQueryRetryInfo::merge(const ObQueryRetryInfo &other)
-{
-  int ret = OB_SUCCESS;
-  if (other.is_rpc_timeout_) {
-    is_rpc_timeout_ = other.is_rpc_timeout_;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < other.invalid_servers_.count(); ++i) {
-    if (OB_FAIL(add_invalid_server_distinctly(other.invalid_servers_.at(i)))) {
-      LOG_WARN("fail to add invalid server distinctly", K(ret), K(i),
-               K(other.invalid_servers_.at(i)), K(other.invalid_servers_), K(invalid_servers_));
-    }
-  }
-  // last_query_retry_err_不会在调度线程上修改，所以这里不用管
-  return ret;
 }
 
 void ObQueryRetryInfo::set_is_rpc_timeout(bool is_rpc_timeout)
@@ -176,27 +157,6 @@ void ObQueryRetryInfo::set_is_rpc_timeout(bool is_rpc_timeout)
 bool ObQueryRetryInfo::is_rpc_timeout() const
 {
   return is_rpc_timeout_;
-}
-
-int ObQueryRetryInfo::add_invalid_server_distinctly(const ObAddr &invalid_server,
-                                                    bool print_info_log/* = false*/)
-{
-  int ret = OB_SUCCESS;
-  bool is_found = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < invalid_servers_.count(); ++i) {
-    if (invalid_server == invalid_servers_.at(i)) {
-      is_found = true;
-    }
-  }
-  if (OB_SUCC(ret) && !is_found) {
-    if (OB_FAIL(invalid_servers_.push_back(invalid_server))) {
-      LOG_WARN("fail to push back invalid server", K(ret), K(invalid_server));
-    }
-  }
-  if (print_info_log) {
-    LOG_INFO("add a server to invalid server list", K(ret), K(invalid_server), K(invalid_servers_));
-  }
-  return ret;
 }
 
 ObSqlCtx::ObSqlCtx()
@@ -309,6 +269,7 @@ void ObSqlCtx::clear()
   base_constraints_.reset();
   strict_constraints_.reset();
   non_strict_constraints_.reset();
+  dup_table_replica_cons_.reset();
   multi_stmt_rowkey_pos_.reset();
   spm_ctx_.bl_key_.reset();
   cur_stmt_ = nullptr;
@@ -689,9 +650,11 @@ int ObSqlCtx::set_location_constraints(const ObLocationConstraintContext &locati
   base_constraints_.reset();
   strict_constraints_.reset();
   non_strict_constraints_.reset();
+  dup_table_replica_cons_.reset();
   const ObIArray<LocationConstraint> &base_constraints = location_constraint.base_table_constraints_;
   const ObIArray<ObPwjConstraint *> &strict_constraints = location_constraint.strict_constraints_;
   const ObIArray<ObPwjConstraint *> &non_strict_constraints = location_constraint.non_strict_constraints_;
+  const ObIArray<ObDupTabConstraint> &dup_table_replica_cons = location_constraint.dup_table_replica_cons_;
   if (base_constraints.count() > 0) {
     base_constraints_.set_allocator(&allocator);
     if (OB_FAIL(base_constraints_.init(base_constraints.count()))) {
@@ -732,6 +695,19 @@ int ObSqlCtx::set_location_constraints(const ObLocationConstraintContext &locati
         }
       }
       LOG_DEBUG("set non strict constraints", K(non_strict_constraints.count()));
+    }
+  }
+  if (OB_SUCC(ret) && dup_table_replica_cons.count() > 0) {
+    dup_table_replica_cons_.set_allocator(&allocator);
+    if (OB_FAIL(dup_table_replica_cons_.init(dup_table_replica_cons.count()))) {
+      LOG_WARN("init duplicate table replica constraints failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dup_table_replica_cons.count(); i++) {
+        if (OB_FAIL(dup_table_replica_cons_.push_back(dup_table_replica_cons.at(i)))) {
+          LOG_WARN("failed to push back location constraint", K(ret));
+        }
+      }
+      LOG_DEBUG("set duplicate table replica constraints", K(dup_table_replica_cons.count()));
     }
   }
   return ret;

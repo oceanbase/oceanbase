@@ -57,6 +57,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "sql/udr/ob_udr_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 
@@ -212,7 +213,40 @@ int ObRpcLSAddReplicaP::process()
 int ObRpcLSTypeTransformP::process()
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) FIX IT later ObRpcLSTypeTransformP::process
+  uint64_t tenant_id = arg_.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+
+  if (tenant_id != MTL_ID()) {
+    if (OB_FAIL(guard.switch_to(tenant_id))) {
+      LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "ls_type_transform start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
+                     "dest", arg_.src_.get_server());
+    LOG_INFO("start do ls type transform", K(arg_));
+
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), K(arg_));
+    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->transform_member(arg_))) {
+      LOG_WARN("failed to transform member", K(ret), K(arg_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "ls_type_transform failed", "tenant_id",
+        arg_.tenant_id_, "ls_id", arg_.ls_id_.id(), "result", ret);
+  }
   return ret;
 }
 
@@ -1359,7 +1393,7 @@ int ObRpcCreateLSP::process()
       COMMON_LOG(WARN, "failed create log stream", KR(ret), K(arg_));
     }
   }
-  (void)result_.init(ret, GCTX.self_addr());
+  (void)result_.init(ret, GCTX.self_addr(), arg_.get_replica_type());
   return ret;
 }
 
@@ -1557,13 +1591,12 @@ int ObRpcSetMemberListP::process()
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "ls should not be null", K(ret));
-  } else {
-    if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
-                                            arg_.get_paxos_replica_num()))) {
-      COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
-    }
+  } else if (OB_FAIL(ls->set_initial_member_list(arg_.get_member_list(),
+                                                 arg_.get_paxos_replica_num(),
+                                                 arg_.get_learner_list()))) {
+    COMMON_LOG(WARN, "failed to set member list", KR(ret), K(arg_));
   }
-  result_.set_result(ret);
+  result_.init(ret);
   return ret;
 }
 
@@ -2361,6 +2394,28 @@ int ObRpcSendHeartbeatP::process()
   } else if (OB_FAIL(gctx_.ob_service_->handle_heartbeat(arg_, result_))) {
     LOG_WARN("fail to call handle_heartbeat in ob service", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObRpcCreateDuplicateLSP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      rootserver::ObPrimaryLSService* primary_ls_service = MTL(rootserver::ObPrimaryLSService*);
+      if (OB_ISNULL(primary_ls_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("primary ls service is null", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(primary_ls_service->create_duplicate_ls())) {
+        LOG_WARN("failed to create duplicate log stream", KR(ret), K(tenant_id));
+      }
+    }
+  }
+  (void)result_.init(ret);
   return ret;
 }
 

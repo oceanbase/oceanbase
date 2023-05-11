@@ -140,6 +140,7 @@ int ObLobPieceBuilder::set_basic_infos(
   aux_lob_piece_schema.set_pctfree(data_schema.get_pctfree());
   aux_lob_piece_schema.set_storage_format_version(data_schema.get_storage_format_version());
   aux_lob_piece_schema.set_progressive_merge_round(data_schema.get_progressive_merge_round());
+  aux_lob_piece_schema.set_duplicate_scope(data_schema.get_duplicate_scope());
   if (OB_FAIL(aux_lob_piece_schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
     LOG_WARN("set_compress_func_name failed", K(data_schema));
   }

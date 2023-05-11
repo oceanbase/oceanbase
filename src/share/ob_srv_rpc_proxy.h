@@ -137,6 +137,7 @@ public:
   RPC_S(PR5 force_disable_blacklist, OB_FORCE_DISABLE_BLACKLIST);
   RPC_S(PR5 force_enable_blacklist, OB_FORCE_ENABLE_BLACKLIST);
   RPC_S(PR5 force_clear_srv_blacklist, OB_FORCE_CLEAR_BLACKLIST);
+  RPC_S(PR5 notify_create_duplicate_ls, OB_NOTIFY_CREATE_DUPLICATE_LS, (obrpc::ObCreateDupLSArg), obrpc::ObCreateDupLSResult);
 
   RPC_S(PR5 update_local_stat_cache, obrpc::OB_SERVER_UPDATE_STAT_CACHE, (ObUpdateStatCacheArg));
   // The optimizer estimates the number of rows

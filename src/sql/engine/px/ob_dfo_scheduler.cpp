@@ -1243,14 +1243,7 @@ int ObParallelDfoScheduler::deal_with_init_sqc_error(ObExecContext &exec_ctx,
     if (OB_ISNULL(session = GET_MY_SESSION(exec_ctx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL", K(ret));
-    } else {
-      ObQueryRetryInfo &retry_info = session->get_retry_info_for_update();
-      int add_ret = retry_info.add_invalid_server_distinctly(invalid_server, true);
-      if (OB_UNLIKELY(OB_SUCCESS != add_ret)) {
-        LOG_WARN("fail to add dist addr to invalid servers distinctly",
-                 K(rc), "sqc", sqc, K(add_ret));
-      }
-    }
+    } else { }
   }
   return ret;
 }

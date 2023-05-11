@@ -21,6 +21,7 @@ namespace oceanbase
 namespace unittest
 {
   class ObSimpleClusterTestBase;
+  class ObMultiReplicaTestBase;
 }
 namespace common
 {
@@ -149,6 +150,7 @@ public:
     HIDDEN_SYS_MEMORY,
   };
   friend class unittest::ObSimpleClusterTestBase;
+  friend class unittest::ObMultiReplicaTestBase;
   ObServerMemoryConfig();
   static ObServerMemoryConfig &get_instance();
   int reload_config(const ObServerConfig& server_config);

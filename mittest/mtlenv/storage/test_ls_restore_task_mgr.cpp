@@ -109,7 +109,6 @@ public:
   FakeLS(const int64_t &ls_id) {
     ls_meta_.tenant_id_ = 1001;
     ls_meta_.ls_id_ = ObLSID(ls_id);
-    ls_meta_.replica_type_ = common::ObReplicaType::REPLICA_TYPE_FULL;
     ls_meta_.migration_status_ = storage::ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
     ls_meta_.gc_state_ = logservice::LSGCState::NORMAL;
     ls_meta_.restore_status_ = ObLSRestoreStatus::Status::RESTORE_TABLETS_META;

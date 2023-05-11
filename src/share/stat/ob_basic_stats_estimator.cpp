@@ -344,7 +344,7 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
                                                 ObCandiTabletLocIArray &candi_tablet_locs)
 {
   int ret = OB_SUCCESS;
-  ObDASCtx &das_ctx = ctx.get_das_ctx();
+  ObDASLocationRouter &loc_router = ctx.get_das_ctx().get_location_router();
   ObSQLSessionInfo *session = ctx.get_my_session();
   if (OB_ISNULL(session) || OB_UNLIKELY(tablet_ids.count() != partition_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
@@ -355,29 +355,19 @@ int ObBasicStatsEstimator::get_tablet_locations(ObExecContext &ctx,
       LOG_WARN("Partitoin location list prepare error", K(ret));
     } else {
       ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
+      //This interface does not require the first_level_part_ids, so construct an empty array.
+      ObSEArray<ObObjectID, 8> first_level_part_ids;
       ObDASTableLocMeta loc_meta(allocator);
-      ObDASLocationRouter &loc_router = das_ctx.get_location_router();
-      share::ObLSLocation location;
       loc_meta.ref_table_id_ = ref_table_id;
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-        location.reset();
-        ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
-        if (OB_FAIL(loc_router.get(loc_meta, tablet_ids.at(i), location))) {
-          LOG_WARN("failed to get location", K(ret), K(loc_meta), K(tablet_ids.at(i)));
-        } else if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(
-                                                partition_ids.at(i),
-                                                OB_INVALID_INDEX,
-                                                tablet_ids.at(i), location,
-                                                session->get_retry_info().get_invalid_servers()))) {
-          LOG_WARN("fail to set partition location with only readable replica",
-                    K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids),
-                    K(session->get_retry_info().get_invalid_servers()));
-        } else {
-          LOG_TRACE("succeed to get partition location with only readable replica",
-                     K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids),
-                     K(session->get_retry_info().get_invalid_servers()));
-        }
-      } // for end
+      loc_meta.table_loc_id_ = ref_table_id;
+      loc_meta.select_leader_ = 0;
+      if (OB_FAIL(loc_router.nonblock_get_candi_tablet_locations(loc_meta,
+                                                                 tablet_ids,
+                                                                 partition_ids,
+                                                                 first_level_part_ids,
+                                                                 candi_tablet_locs))) {
+        LOG_WARN("nonblock get candi tablet location failed", K(ret), K(loc_meta), K(partition_ids), K(tablet_ids));
+      }
     }
   }
   return ret;

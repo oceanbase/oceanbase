@@ -717,16 +717,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
                NULL, session->get_effective_tenant_id())) {
           ret = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
         }
-        if (is_master_changed_error(ret)
-            || is_partition_change_error(ret)
-            || is_get_location_timeout_error(ret)) {
-          ObTaskExecutorCtx &task_exec_ctx = exec_ctx_.get_task_exec_ctx();
-          LOG_DEBUG("remote execute failed, begin to refresh location cache nonblocking", K(ret));
-          int refresh_err = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx, true);
-          if (OB_SUCCESS != refresh_err) {
-            LOG_WARN("refresh location cache failed", K(ret), K(refresh_err));
-          }
-        }
+        DAS_CTX(exec_ctx_).get_location_router().refresh_location_cache(true, ret);
       }
       //监控项统计结束
       exec_end_timestamp_ = ObTimeUtility::current_time();

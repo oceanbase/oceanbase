@@ -2754,6 +2754,41 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(purge_num), K_(expire_time), K_(auto_purge));
 };
 
+struct ObCreateDupLSArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateDupLSArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObCreateDupLSArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
+  void reset() { tenant_id_ = OB_INVALID_TENANT_ID; }
+  int assign(const ObCreateDupLSArg &arg);
+  int init(const uint64_t tenant_id);
+  int64_t get_tenant_id() const { return tenant_id_; }
+  DECLARE_TO_STRING;
+private:
+  uint64_t tenant_id_;
+private:
+   DISALLOW_COPY_AND_ASSIGN(ObCreateDupLSArg);
+};
+
+struct ObCreateDupLSResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateDupLSResult(): ret_(common::OB_SUCCESS) {}
+  ~ObCreateDupLSResult() {}
+  bool is_valid() const;
+  int assign(const ObCreateDupLSResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateDupLSResult);
+private:
+  int ret_;
+};
+
 struct ObCreateLSArg
 {
   OB_UNIS_VERSION(1);
@@ -2841,16 +2876,17 @@ struct ObCreateLSResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateLSResult(): ret_(common::OB_SUCCESS), addr_() {}
+  ObCreateLSResult(): ret_(common::OB_SUCCESS), addr_(), replica_type_(REPLICA_TYPE_FULL) {}
   ~ObCreateLSResult() {}
   bool is_valid() const;
   int assign(const ObCreateLSResult &other);
-  void init(const int ret, const ObAddr &addr)
+  void init(const int ret, const ObAddr &addr, const ObReplicaType &replica_type)
   {
     ret_ = ret;
     addr_ = addr;
+    replica_type_ = replica_type;
   }
-  TO_STRING_KV(K_(ret), K_(addr));
+  TO_STRING_KV(K_(ret), K_(addr), K_(replica_type));
   int get_result() const
   {
     return ret_;
@@ -2859,11 +2895,16 @@ public:
   {
     return addr_;
   }
+  const common::ObReplicaType &get_replica_type() const
+  {
+    return replica_type_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateLSResult);
 private:
   int ret_;
   ObAddr addr_;//for async rpc, dests and results not one-by-one mapping
+  common::ObReplicaType replica_type_;
 };
 
 
@@ -2873,7 +2914,7 @@ struct ObSetMemberListArgV2
 public:
   ObSetMemberListArgV2() : tenant_id_(OB_INVALID_TENANT_ID), id_(),
                            member_list_(), paxos_replica_num_(0),
-                           arbitration_service_() {}
+                           arbitration_service_(), learner_list_() {}
   ~ObSetMemberListArgV2() {}
   bool is_valid() const;
   void reset();
@@ -2882,7 +2923,8 @@ public:
            const share::ObLSID &id,
            const int64_t paxos_replica_num,
            const ObMemberList &member_list,
-           const ObMember &arbitration_service);
+           const ObMember &arbitration_service,
+           const common::GlobalLearnerList &learner_list);
   DECLARE_TO_STRING;
   const ObMemberList& get_member_list() const
   {
@@ -2904,12 +2946,17 @@ public:
   {
     return paxos_replica_num_;
   }
+  const common::GlobalLearnerList& get_learner_list() const
+  {
+    return learner_list_;
+  }
 private:
   int64_t tenant_id_;
   share::ObLSID id_;
   ObMemberList member_list_;
   int64_t paxos_replica_num_;
   ObMember arbitration_service_;
+  common::GlobalLearnerList learner_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetMemberListArgV2);
 };
@@ -2923,7 +2970,7 @@ public:
   bool is_valid() const;
   int assign(const ObSetMemberListResult &other);
   TO_STRING_KV(K_(ret));
-  void set_result(const int ret)
+  void init(const int ret)
   {
     ret_ = ret;
   }

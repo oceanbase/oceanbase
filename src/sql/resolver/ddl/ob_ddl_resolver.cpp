@@ -1814,9 +1814,9 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             duplicate_scope_ = my_duplicate_scope;
           }
           if (OB_SUCC(ret) && stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DUPLICATE_SCOPE))) {
-              LOG_WARN("fail to add member to bitset!", K(ret));
-            }
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("alter table duplicate scope not supported", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
           }
         }
         break;

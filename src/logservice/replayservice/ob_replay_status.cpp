@@ -544,12 +544,10 @@ ObReplayStatus::~ObReplayStatus()
 }
 
 int ObReplayStatus::init(const share::ObLSID &id,
-                         const common::ObReplicaType &replica_type,
                          PalfEnv *palf_env,
                          ObLogReplayService *rp_sv)
 {
   //TODO: use replica type init need_replay
-  UNUSED(replica_type);
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;

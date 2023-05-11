@@ -82,6 +82,7 @@ public:
     mock_election_->leader_epoch_ = INIT_ELE_EPOCH;
     mock_sw_->mock_last_submit_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
     mock_sw_->mock_last_submit_pid_ = INIT_PROPOSAL_ID;
+    mock_sw_->state_mgr_ = mock_state_mgr_;
     EXPECT_TRUE(config_info.is_valid());
     PALF_LOG(INFO, "init_test_log_config_env", K(role), K(state), K(mock_state_mgr_->leader_), K(mock_state_mgr_->role_));
     mock_log_engine_->reset_register_parent_resp_ret();
@@ -109,6 +110,41 @@ public:
   palf::MockLogReconfirm *mock_reconfirm_;
   palf::LogPlugins *mock_plugins_;
 };
+
+TEST_F(TestLogConfigMgr, test_set_initial_member_list)
+{
+  LogConfigInfo default_config_info;
+  common::ObMemberList init_member_list;
+  GlobalLearnerList learner_list;
+  LogConfigVersion init_config_version;
+  init_config_version.generate(1, 1);
+  init_member_list.add_server(addr1);
+  init_member_list.add_server(addr2);
+  EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
+
+  {
+    LogConfigMgr cm;
+    LogConfigVersion config_version;
+    init_test_log_config_env(addr1, default_config_info, cm);
+    // arb_member is self
+    EXPECT_EQ(OB_NOT_SUPPORTED, cm.set_initial_member_list(init_member_list, ObMember(addr1, 0), 3, learner_list, 1, config_version));
+    // arb_member overlaps with member_list
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr2, 0), 3, learner_list, 1, config_version));
+
+    // arb_member overlaps with learners
+    learner_list.add_learner(ObMember(addr4, 0));
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr4, 0), 3, learner_list, 1, config_version));
+    // learners overlap with member_list
+    init_member_list.add_server(addr4);
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 3, learner_list, 1, config_version));
+
+    init_member_list.add_server(addr3);
+    learner_list.reset();
+    // do not reach majority
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 3, learner_list, 1, config_version));
+    EXPECT_EQ(OB_SUCCESS, cm.set_initial_member_list(init_member_list, ObMember(addr5, 0), 4, learner_list, 1, config_version));
+  }
+}
 
 TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
 {
@@ -233,7 +269,7 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   GlobalLearnerList learner_list;
   LogConfigInfo default_config_info, one_f_one_a_config_info,
       two_f_one_a_config_info, four_f_one_a_config_info, five_f_config_info,
-      four_f_config_info, two_f_config_info;
+      four_f_config_info, two_f_config_info, three_f_one_learner_config_info;
   EXPECT_EQ(OB_SUCCESS, default_config_info.generate(init_member_list, 3, learner_list, init_config_version));
 
   EXPECT_EQ(OB_SUCCESS, one_f_one_a_config_info.generate(one_f_member_list, 1, learner_list, init_config_version));
@@ -245,6 +281,9 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   four_f_one_a_config_info.arbitration_member_ = ObMember(addr5, -1);
   EXPECT_EQ(OB_SUCCESS, four_f_config_info.generate(four_f_member_list, 4, learner_list, init_config_version));
   EXPECT_EQ(OB_SUCCESS, five_f_config_info.generate(five_f_member_list, 5, learner_list, init_config_version));
+
+  three_f_one_learner_config_info = default_config_info;
+  three_f_one_learner_config_info.learnerlist_.add_learner(ObMember(addr4, -1));
 
   std::vector<LogConfigInfo> config_info_list;
   std::vector<LogConfigChangeArgs> arg_list;
@@ -338,10 +377,9 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   // 14. acceptor -> learner
   config_info_list.push_back(default_config_info);
   arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 0, SWITCH_ACCEPTOR_TO_LEARNER));
-  expect_ret_list.push_back(OB_SUCCESS);
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
-  expect_member_list.back().remove_server(addr3);
   // 15. 3F, add_arb_member, replica_num 3
   config_info_list.push_back(default_config_info);
   arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, palf::ADD_ARB_MEMBER));
@@ -564,6 +602,69 @@ TEST_F(TestLogConfigMgr, test_apply_config_meta)
   expect_ret_list.push_back(OB_NOT_ALLOW_REMOVING_LEADER);
   expect_finished_list.push_back(false);
   expect_member_list.push_back(init_member_list);
+  // 44. acceptor -> learner, invalid replica_num
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 4, SWITCH_ACCEPTOR_TO_LEARNER));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 45. acceptor -> learner
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 2, SWITCH_ACCEPTOR_TO_LEARNER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().remove_server(addr3);
+  // 46. acceptor -> learner, member already, but replica_num do not match
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 2, SWITCH_ACCEPTOR_TO_LEARNER));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 47. acceptor -> learner, already finish
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, SWITCH_ACCEPTOR_TO_LEARNER));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(true);
+  expect_member_list.push_back(init_member_list);
+  // 48. learner -> acceptor, invalid replica_num
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 0, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 49. learner -> acceptor, invalid replica_num
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 3, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 50. learner -> acceptor, invalid member
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr5, -1), 3, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 51. learner -> acceptor, already finish
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 3, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(true);
+  expect_member_list.push_back(init_member_list);
+  // 52. learner -> acceptor, member already exists, but replica_num do not match
+  config_info_list.push_back(default_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr3, -1), 4, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_INVALID_ARGUMENT);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  // 53. learner -> acceptor
+  config_info_list.push_back(three_f_one_learner_config_info);
+  arg_list.push_back(LogConfigChangeArgs(ObMember(addr4, -1), 4, SWITCH_LEARNER_TO_ACCEPTOR));
+  expect_ret_list.push_back(OB_SUCCESS);
+  expect_finished_list.push_back(false);
+  expect_member_list.push_back(init_member_list);
+  expect_member_list.back().add_server(addr4);
+
   for (int i = 0; i < arg_list.size(); ++i) {
     PALF_LOG(INFO, "test_check_config_change_args begin case", K(i));
     LogConfigMgr cm;

@@ -68,7 +68,7 @@ ObResultSet::~ObResultSet()
       && OB_UNLIKELY(physical_plan->is_limited_concurrent_num())) {
     physical_plan->dec_concurrent_num();
   }
-  // when ObExecContext is destroyed, it also depends on the physical plan, so need to ensure 
+  // when ObExecContext is destroyed, it also depends on the physical plan, so need to ensure
   // that inner_exec_ctx_ is destroyed before cache_obj_guard_
   if (NULL != inner_exec_ctx_) {
     inner_exec_ctx_->~ObExecContext();
@@ -226,7 +226,7 @@ int ObResultSet::open_result()
       SQL_LOG(DEBUG, "get affected row", K(get_stmt_type()),
               K(get_exec_context().get_physical_plan_ctx()->get_affected_rows()));
         set_affected_rows(get_exec_context().get_physical_plan_ctx()->get_affected_rows());
-    } 
+    }
     if (OB_SUCC(ret) && get_stmt_type() == stmt::T_ANONYMOUS_BLOCK) {
       // Compatible with oracle anonymous block affect rows setting
       set_affected_rows(1);
@@ -1094,45 +1094,10 @@ int ObResultSet::init_cmd_exec_context(ObExecContext &exec_ctx)
   return ret;
 }
 
-void ObResultSet::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err)
-{
-  if (OB_NOT_MASTER == err || OB_PARTITION_NOT_EXIST == err || is_server_down_error(err)) {
-    int err2 = ObTaskExecutorCtxUtil::refresh_location_cache(task_exec_ctx,
-                                                             is_nonblock);
-    if (OB_SUCCESS != err2) {
-      LOG_WARN_RET(err2, "fail to refresh location cache", K(err2), K(is_nonblock), K(err));
-    }
-    LOG_TRACE("partition change or not master or no response, refresh location cache", K(err));
-  }
-}
-
 // obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
-int ObResultSet::refresh_location_cache(bool is_nonblock)
+void ObResultSet::refresh_location_cache(bool is_nonblock, int err)
 {
-  return ObTaskExecutorCtxUtil::refresh_location_cache(get_exec_context().get_task_exec_ctx(),
-                                                       is_nonblock);
-}
-
-int ObResultSet::check_and_nonblock_refresh_location_cache()
-{
-  int ret = OB_SUCCESS;
-  ObTaskExecutorCtx &task_exec_ctx = get_exec_context().get_task_exec_ctx();
-  if (task_exec_ctx.is_need_renew_location_cache()) {
-    const int64_t expire_renew_time = INT64_MAX; // 必须刷
-    const common::ObList<ObTabletID, common::ObIAllocator> &tablet_ids
-        = task_exec_ctx.get_need_renew_tablet_keys();
-    FOREACH_X(it, tablet_ids, OB_SUCC(ret)) {
-      bool is_limited = false;
-      if (OB_FAIL(task_exec_ctx.nonblock_renew_with_limiter(*it, expire_renew_time, is_limited))) {
-        LOG_WARN("LOCATION: fail to renew", K(ret), K(*it), K(expire_renew_time), K(is_limited));
-      } else {
-#if !defined(NDEBUG)
-        LOG_INFO("LOCATION: noblock renew with limiter", "key", *it);
-#endif
-      }
-    }
-  }
-  return ret;
+  DAS_CTX(get_exec_context()).get_location_router().refresh_location_cache(is_nonblock, err);
 }
 
 // 告诉mysql是否要传入一个EndTransCallback

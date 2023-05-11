@@ -990,7 +990,7 @@ int ObInnerTableSchema::all_ls_schema(ObTableSchema &table_schema)
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      100, //column_length
+      OB_MAX_LS_FLAG_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable

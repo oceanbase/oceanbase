@@ -37,6 +37,23 @@ class ObLSTableOperator;
 
 namespace rootserver
 {
+
+namespace drtask
+{
+  const static char * const REMOVE_LOCALITY_PAXOS_REPLICA = "remove redundant paxos replica according to locality";
+  const static char * const REMOVE_LOCALITY_NON_PAXOS_REPLICA = "remove redundant non-paxos replica according to locality";
+  const static char * const ADD_LOCALITY_PAXOS_REPLICA = "add paxos replica according to locality";
+  const static char * const ADD_LOCALITY_NON_PAXOS_REPLICA = "add non-paxos replica according to locality";
+  const static char * const TRANSFORM_LOCALITY_REPLICA_TYPE = "type transform according to locality";
+  const static char * const MODIFY_PAXOS_REPLICA_NUMBER = "modify paxos replica number according to locality";
+  const static char * const REMOVE_PERMANENT_OFFLINE_REPLICA = "remove permanent offline replica";
+  const static char * const REPLICATE_REPLICA = "replicate to unit task";
+  const static char * const CANCEL_MIGRATE_UNIT_WITH_PAXOS_REPLICA = "cancel migrate unit remove paxos replica";
+  const static char * const CANCEL_MIGRATE_UNIT_WITH_NON_PAXOS_REPLICA = "cancel migrate unit remove non-paxos replica";
+  const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_GROUP_NOT_MATCH = "migrate replica due to unit group not match";
+  const static char * const MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH = "migrate replica due to unit not match";
+};
+
 enum class ObDRTaskType : int64_t;
 enum class ObDRTaskPriority : int64_t;
 
@@ -320,6 +337,8 @@ public:
   // operations of comments
   ObString get_comment() const { return comment_.string(); }
   int set_comment(const ObString comment) { return comment_.assign(comment); }
+  virtual const char* get_log_start_str() const = 0;
+  virtual const char* get_log_finish_str() const = 0;
   // operations of schedule_time_
   int64_t get_schedule_time() const { return schedule_time_; }
   void set_schedule_time(const int64_t schedule_time) { schedule_time_ = schedule_time; }
@@ -432,8 +451,9 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
+  virtual const char* get_log_start_str() const override { return "start_migrate_ls_replica"; }
+  virtual const char* get_log_finish_str() const override { return "finish_migrate_ls_replica"; }
   virtual int64_t get_clone_size() const override;
-  
   virtual int clone(
       void *input_ptr,
       ObDRTask *&output_task) const override;
@@ -541,8 +561,9 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
+  virtual const char* get_log_start_str() const override { return "start_add_ls_replica"; }
+  virtual const char* get_log_finish_str() const override { return "finish_add_ls_replica"; }
   virtual int64_t get_clone_size() const override;
-  
   virtual int clone(
       void *input_ptr,
       ObDRTask *&output_task) const override;
@@ -653,8 +674,9 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
+  virtual const char* get_log_start_str() const override { return "start_type_transform_ls_replica"; }
+  virtual const char* get_log_finish_str() const override { return "finish_type_transform_ls_replica"; }
   virtual int64_t get_clone_size() const override;
-  
   virtual int clone(
       void *input_ptr,
       ObDRTask *&output_task) const override;
@@ -696,15 +718,16 @@ private:
   int64_t paxos_replica_number_;
 };
 
-class ObRemoveLSPaxosReplicaTask : public ObDRTask
+class ObRemoveLSReplicaTask : public ObDRTask
 {
 public:
-  ObRemoveLSPaxosReplicaTask() : ObDRTask(),
+  ObRemoveLSReplicaTask() : ObDRTask(),
                                  leader_(),
                                  remove_server_(),
                                  orig_paxos_replica_number_(0),
-                                 paxos_replica_number_(0) {}
-  virtual ~ObRemoveLSPaxosReplicaTask() {}
+                                 paxos_replica_number_(0),
+                                 replica_type_(REPLICA_TYPE_FULL) {}
+  virtual ~ObRemoveLSReplicaTask() {}
 public:
   int build(
       const ObDRTaskKey &task_key,
@@ -722,9 +745,10 @@ public:
       const common::ObAddr &leader,
       const common::ObReplicaMember &remove_server,
       const int64_t orig_paxos_replica_number,
-      const int64_t paxos_replica_number);
+      const int64_t paxos_replica_number,
+      const ObReplicaType &replica_type);
 
-  // build a ObRemoveLSPaxosReplicaTask from sql result read from inner table
+  // build a ObRemoveLSReplicaTask from sql result read from inner table
   // @param [in] res, sql result read from inner table
   int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
 public:
@@ -733,14 +757,17 @@ public:
   }
 
   virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_REMOVE_PAXOS_REPLICA;
+    return ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+           ? ObDRTaskType::LS_REMOVE_PAXOS_REPLICA
+           : ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
   }
 
   virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
                                K(leader_),
                                K(remove_server_),
                                K(orig_paxos_replica_number_),
-                               K(paxos_replica_number_));
+                               K(paxos_replica_number_),
+                               K(replica_type_));
 
   virtual int get_execute_transmit_size(
       int64_t &execute_transmit_size) const override;
@@ -750,7 +777,7 @@ public:
       common::ObAddr &data_src,
       common::ObAddr &dest,
       common::ObAddr &offline) const override;
-  
+
   virtual int log_execute_start() const override;
 
   virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
@@ -767,8 +794,20 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
+  virtual const char* get_log_start_str() const override
+  {
+    return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
+            ? "start_remove_ls_paxos_replica"
+            : "start_remove_ls_non_paxos_replica";
+  }
+  virtual const char* get_log_finish_str() const override
+  {
+    return  ObDRTaskType::LS_REMOVE_PAXOS_REPLICA == get_disaster_recovery_task_type()
+            ? "finish_remove_ls_paxos_replica"
+            : "finish_remove_ls_non_paxos_replica";
+  }
+
   virtual int64_t get_clone_size() const override;
-  
   virtual int clone(
       void *input_ptr,
       ObDRTask *&output_task) const override;
@@ -785,86 +824,15 @@ public:
   // operations of paxos_replica_number_
   void set_paxos_replica_number(const int64_t q) { paxos_replica_number_ = q; }
   int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
+  // operations of replica_type_
+  void set_replica_type(const ObReplicaType &replica_type) { replica_type_ = replica_type; }
+  const ObReplicaType &get_replica_type() const { return replica_type_; }
 private:
   common::ObAddr leader_;
   common::ObReplicaMember remove_server_;
   int64_t orig_paxos_replica_number_;
   int64_t paxos_replica_number_;
-};
-
-class ObRemoveLSNonPaxosReplicaTask : public ObDRTask
-{
-public:
-  ObRemoveLSNonPaxosReplicaTask() : ObDRTask(),
-                                    remove_server_() {}
-  virtual ~ObRemoveLSNonPaxosReplicaTask() {}
-public:
-  int build(
-      const ObDRTaskKey &task_key,
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const share::ObTaskId &task_id,
-      const int64_t schedule_time_us,
-      const int64_t generate_time_us,
-      const int64_t cluster_id,
-      const int64_t transmit_data_size,
-      const obrpc::ObAdminClearDRTaskArg::TaskType invoked_source,
-      const bool skip_change_member_list,
-      const ObDRTaskPriority priority,
-      const ObString &comment,
-      const common::ObReplicaMember &dst_server);
-
-  // build a ObRemoveLSNonPaxosReplicaTask from sql result read from inner table
-  // @param [in] res, sql result read from inner table
-  int build_task_from_sql_result(const sqlclient::ObMySQLResult &res);
-public:
-  virtual const common::ObAddr &get_dst_server() const override {
-    return remove_server_.get_server();
-  }
-
-  virtual ObDRTaskType get_disaster_recovery_task_type() const override {
-    return ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA;
-  }
-
-  virtual INHERIT_TO_STRING_KV("ObDRTask", ObDRTask,
-                               K(remove_server_));
-
-  virtual int get_execute_transmit_size(
-      int64_t &execute_transmit_size) const override;
-
-  virtual int get_virtual_disaster_recovery_task_stat(
-      common::ObAddr &src,
-      common::ObAddr &data_src,
-      common::ObAddr &dest,
-      common::ObAddr &offline) const override;
-  
-  virtual int log_execute_start() const override;
-
-  virtual int log_execute_result(const int ret_code, const ObDRTaskRetComment &ret_comment) const override;
-
-  virtual int check_before_execute(
-      share::ObLSTableOperator &lst_operator,
-      ObDRTaskRetComment &ret_comment) const override;
-
-  virtual int execute(
-      obrpc::ObSrvRpcProxy &rpc_proxy,
-      int &ret_code,
-      ObDRTaskRetComment &ret_comment) const override;
-
-  virtual int fill_dml_splicer(
-      share::ObDMLSqlSplicer &dml_splicer) const override;
-
-  virtual int64_t get_clone_size() const override;
-  
-  virtual int clone(
-      void *input_ptr,
-      ObDRTask *&output_task) const override;
-public:
-  // operations of server_
-  void set_remove_server(const common::ObReplicaMember &d) { remove_server_ = d; }
-  const common::ObReplicaMember &get_remove_server() const { return remove_server_; }
-private:
-  common::ObReplicaMember remove_server_;
+  ObReplicaType replica_type_;
 };
 
 class ObLSModifyPaxosReplicaNumberTask : public ObDRTask
@@ -937,8 +905,9 @@ public:
   virtual int fill_dml_splicer(
       share::ObDMLSqlSplicer &dml_splicer) const override;
 
+  virtual const char* get_log_start_str() const override { return "start_modify_paxos_replica_number"; }
+  virtual const char* get_log_finish_str() const override { return "finish_modify_paxos_replica_number"; }
   virtual int64_t get_clone_size() const override;
-  
   virtual int clone(
       void *input_ptr,
       ObDRTask *&output_task) const override;

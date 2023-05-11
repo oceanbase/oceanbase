@@ -116,7 +116,8 @@ inline bool is_upgrade_or_degrade(const LogConfigChangeType type)
 
 inline bool is_use_replica_num_args(const LogConfigChangeType type)
 {
-  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
+  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type ||
+      FORCE_SINGLE_MEMBER == type || SWITCH_LEARNER_TO_ACCEPTOR == type || SWITCH_ACCEPTOR_TO_LEARNER == type;
 }
 
 inline bool need_exec_on_leader_(const LogConfigChangeType type)
@@ -222,12 +223,14 @@ public:
   // require caller holds WLock in PalfHandleImpl
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const int64_t replica_num,
+                                      const common::GlobalLearnerList &learner_list,
                                       const int64_t proposal_id,
                                       LogConfigVersion &config_version);
   // require caller holds WLock in PalfHandleImpl
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
                                       const common::ObMember &arb_member,
                                       const int64_t replica_num,
+                                      const common::GlobalLearnerList &learner_list,
                                       const int64_t proposal_id,
                                       LogConfigVersion &config_version);
   // set region for self

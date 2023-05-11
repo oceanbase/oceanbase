@@ -6592,6 +6592,22 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     }
   }
 
+  // set location cons
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(sql_ctx)) {
+      // do nothing
+    } else if (OB_FAIL(phy_plan.set_location_constraints(sql_ctx->base_constraints_,
+                                                  sql_ctx->strict_constraints_,
+                                                  sql_ctx->non_strict_constraints_,
+                                                  sql_ctx->dup_table_replica_cons_))) {
+        LOG_WARN("failed to set location constraints", K(ret), K(phy_plan),
+                 K(sql_ctx->base_constraints_),
+                 K(sql_ctx->strict_constraints_),
+                 K(sql_ctx->non_strict_constraints_),
+                 K(sql_ctx->dup_table_replica_cons_));
+    }
+  }
+
   // set schema version and all base table version in phy plan
   if (OB_SUCC(ret)) {
     const ObIArray<ObSchemaObjVersion> *dependency_table = log_plan.get_stmt()->get_global_dependency_table();

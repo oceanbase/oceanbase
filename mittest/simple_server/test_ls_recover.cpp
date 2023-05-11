@@ -264,7 +264,6 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_100, arg));
   LOG_INFO("create_ls", K(arg), K(id_100));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
-                                                 arg.get_replica_type(),
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
                                                  arg.get_create_scn(),
@@ -293,7 +292,6 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_101, arg));
   LOG_INFO("create_ls", K(arg), K(id_101));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
-                                                 arg.get_replica_type(),
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
                                                  arg.get_create_scn(),
@@ -306,6 +304,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
   ASSERT_EQ(OB_SUCCESS, ls_svr->write_prepare_create_ls_slog_(ls_meta));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
+                                      arg.get_replica_type(),
                                       unused_allow_log_sync));
 }
 
@@ -327,7 +326,6 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_102, arg));
   LOG_INFO("create_ls", K(arg), K(id_102));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
-                                                 arg.get_replica_type(),
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
                                                  arg.get_create_scn(),
@@ -340,6 +338,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
   ASSERT_EQ(OB_SUCCESS, ls_svr->write_prepare_create_ls_slog_(ls_meta));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
+                                      arg.get_replica_type(),
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));
@@ -363,7 +362,6 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_103, arg));
   LOG_INFO("create_ls", K(arg), K(id_103));
   ASSERT_EQ(OB_SUCCESS, ls_svr->inner_create_ls_(arg.get_ls_id(),
-                                                 arg.get_replica_type(),
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE),
                                                  arg.get_create_scn(),
@@ -376,6 +374,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
   ASSERT_EQ(OB_SUCCESS, ls_svr->write_prepare_create_ls_slog_(ls_meta));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                       palf_base_info,
+                                      arg.get_replica_type(),
                                       unused_allow_log_sync));
   ASSERT_EQ(OB_SUCCESS, ls->create_ls_inner_tablet(arg.get_compat_mode(),
                                                    arg.get_create_scn()));

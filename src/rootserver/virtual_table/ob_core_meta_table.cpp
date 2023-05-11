@@ -17,6 +17,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_column_schema.h"
+#include "lib/string/ob_string.h"  // for ObString
 
 namespace oceanbase
 {
@@ -113,7 +114,10 @@ int ObCoreMetaTable::get_full_row(const ObTableSchema *table,
   int ret = OB_SUCCESS;
   char *ip = NULL;
   char *zone = NULL;
-  char *member_list = NULL;
+  ObString member_list;
+  ObString learner_list;
+  ObSqlString member_list_str;
+  ObSqlString learner_list_str;
   const char* replica_status = ob_replica_status_str(replica.get_replica_status());
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -131,20 +135,20 @@ int ObCoreMetaTable::get_full_row(const ObTableSchema *table,
     } else if (NULL == (zone = static_cast<char *>(allocator_->alloc(MAX_ZONE_LENGTH)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc zone buf failed", "size", MAX_ZONE_LENGTH, KR(ret));
-    } else if (NULL == (member_list =
-        static_cast<char *>(allocator_->alloc(MAX_MEMBER_LIST_LENGTH)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc member_list failed", "size", OB_MAX_SERVER_ADDR_SIZE, KR(ret));
     } else if (false == replica.get_server().ip_to_string(ip, OB_MAX_SERVER_ADDR_SIZE)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("convert server ip to string failed", KR(ret), "server", replica.get_server());
     } else if (OB_FAIL(databuff_printf(zone, MAX_ZONE_LENGTH, "%s", replica.get_zone().ptr()))) {
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("snprintf failed", "buf_len", MAX_ZONE_LENGTH,
-          "src_len", strlen(replica.get_zone().ptr()), KR(ret));
-    } else if (OB_FAIL(ObLSReplica::member_list2text(
-        replica.get_member_list(), member_list, MAX_MEMBER_LIST_LENGTH))) {
+      LOG_WARN("snprintf failed", "buf_len", MAX_ZONE_LENGTH, "src_len", strlen(replica.get_zone().ptr()), KR(ret));
+    } else if (OB_FAIL(ObLSReplica::member_list2text(replica.get_member_list(), member_list_str))) {
       LOG_WARN("member_list2text failed", K(replica), KR(ret));
+    } else if (OB_FAIL(replica.get_learner_list().transform_to_string(learner_list_str))) {
+      LOG_WARN("failed to transform GlobalLearnerList to ObString", KR(ret), K(replica));
+    } else if (OB_FAIL(ob_write_string(*allocator_, member_list_str.string(), member_list))) {
+      LOG_WARN("failed to construct member list", KR(ret), K(member_list_str));
+    } else if (OB_FAIL(ob_write_string(*allocator_, learner_list_str.string(), learner_list))) {
+      LOG_WARN("failed to construct learner list", KR(ret), K(learner_list_str));
     } else {
       ADD_COLUMN(set_int, table, "tenant_id", static_cast<int64_t>(OB_SYS_TENANT_ID), columns);
       ADD_COLUMN(set_int, table, "ls_id", ObLSID::SYS_LS_ID, columns);
@@ -163,6 +167,7 @@ int ObCoreMetaTable::get_full_row(const ObTableSchema *table,
       ADD_COLUMN(set_int, table, "paxos_replica_number", replica.get_paxos_replica_number(), columns);
       ADD_COLUMN(set_int, table, "data_size", replica.get_data_size(), columns);
       ADD_COLUMN(set_int, table, "required_size", replica.get_required_size(), columns);
+      ADD_TEXT_COLUMN(ObLongTextType, table, "learner_list", learner_list, columns);
     }
 
     if (OB_FAIL(ret)) {
@@ -173,10 +178,6 @@ int ObCoreMetaTable::get_full_row(const ObTableSchema *table,
       if (NULL != zone) {
         allocator_->free(zone);
         zone = NULL;
-      }
-      if (NULL != member_list) {
-        allocator_->free(member_list);
-        member_list = NULL;
       }
     }
   }

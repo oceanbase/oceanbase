@@ -7322,6 +7322,7 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
   } else {
     ObAddr basic_addr;
     bool has_duplicated = false;
+    bool can_reselect_replica = true;
     ObShardingInfo *sharding = NULL;
     ObSEArray<ObAddr, 8> valid_addrs;
     ObSEArray<ObAddr, 8> intersect_addrs;
@@ -7346,6 +7347,9 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
         } else {
           if (OB_FAIL(ObOptimizerUtil::intersect(valid_addrs, intersect_addrs, candidate_addrs))) {
             LOG_WARN("failed to intersect addrs", K(ret));
+          } else if (OB_FALSE_IT(can_reselect_replica = can_reselect_replica &&
+                                                        valid_addrs.count() == candidate_addrs.count())) {
+            // do nothing
           } else if (OB_FAIL(intersect_addrs.assign(candidate_addrs))) {
             LOG_WARN("failed to assign addrs", K(ret));
           } else { /*do nothing*/ }
@@ -7400,6 +7404,7 @@ int ObOptimizerUtil::compute_basic_sharding_info(const ObAddr &local_addr,
                                                                                allocator,
                                                                                *input_shardings.at(i),
                                                                                reselected_pos.at(i),
+                                                                               can_reselect_replica,
                                                                                result_sharding))) {
             LOG_WARN("failed to compute duplicate table sharding", K(ret));
           } else { /*do nothing*/ }
@@ -7475,6 +7480,7 @@ int ObOptimizerUtil::compute_duplicate_table_sharding(const ObAddr &local_addr,
                                                       ObIAllocator &allocator,
                                                       const ObShardingInfo &src_sharding,
                                                       const int64_t reselected_pos,
+                                                      bool can_reselect_replica,
                                                       ObShardingInfo *&target_sharding)
 {
   int ret = OB_SUCCESS;
@@ -7503,6 +7509,7 @@ int ObOptimizerUtil::compute_duplicate_table_sharding(const ObAddr &local_addr,
           phy_table_loc->get_phy_part_loc_info_list_for_update().at(0);
       phy_part_loc.set_selected_replica_idx(reselected_pos);
       target_sharding->set_phy_table_location_info(phy_table_loc);
+      target_sharding->set_can_reselect_replica(can_reselect_replica);
       if (OB_FAIL(phy_part_loc.get_selected_replica(replica_loc))) {
         LOG_WARN("failed to get selected replica", K(ret));
       } else if (replica_loc.get_server() == local_addr) {

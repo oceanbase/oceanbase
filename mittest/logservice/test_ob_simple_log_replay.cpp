@@ -133,7 +133,7 @@ TEST_F(TestObSimpleLogReplayFunc, basic_replay)
   rp_sv.init(palf_env, &ls_adapter, get_cluster()[0]->get_allocator());
   rp_sv.start();
   get_cluster()[0]->get_tenant_base()->update_thread_cnt(10);
-  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id, ObReplicaType::REPLICA_TYPE_FULL));
+  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id));
   EXPECT_EQ(OB_SUCCESS, rp_sv.enable(ls_id, basic_lsn, basic_scn));
   {
     ObReplayStatusGuard guard;
@@ -178,7 +178,7 @@ TEST_F(TestObSimpleLogReplayFunc, basic_replay)
   PalfHandleImplGuard leader_shadow;
   SCN first_new_scn = SCN::min_scn();
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_shadow, leader_idx, leader_shadow));
-  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id_shadow, ObReplicaType::REPLICA_TYPE_FULL));
+  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id_shadow));
   EXPECT_EQ(OB_ITER_END, read_log(leader));
   EXPECT_EQ(OB_SUCCESS, change_access_mode_to_raw_write(leader_shadow));
   EXPECT_EQ(OB_ITER_END, read_and_submit_group_log(leader, leader_shadow));
@@ -239,7 +239,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_flashback_to_padding)
     CLOG_LOG(INFO, "get_file_end_lsn", K(*iterator_end_lsn_ptr));
     return *iterator_end_lsn_ptr;
   };
-  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id, ObReplicaType::REPLICA_TYPE_FULL));
+  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id));
   EXPECT_EQ(OB_SUCCESS, rp_sv.enable(ls_id, basic_lsn, basic_scn));
   {
     ObReplayStatusGuard guard;
@@ -404,7 +404,7 @@ TEST_F(TestObSimpleLogReplayFunc, test_wait_replay_done)
     return *iterator_end_lsn_ptr;
   };
   iterator_end_lsn = LSN(PALF_BLOCK_SIZE);
-  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id, ObReplicaType::REPLICA_TYPE_FULL));
+  EXPECT_EQ(OB_SUCCESS, rp_sv.add_ls(ls_id));
   EXPECT_EQ(OB_SUCCESS, rp_sv.enable(ls_id, basic_lsn, basic_scn));
   {
     ObReplayStatusGuard guard;

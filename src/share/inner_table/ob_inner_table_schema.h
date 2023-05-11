@@ -875,6 +875,9 @@ public:
   static int all_virtual_archive_dest_status_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_io_scheduler_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_external_table_file_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dup_ls_lease_mgr_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dup_ls_tablet_set_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dup_ls_tablets_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tx_data_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_task_opt_stat_gather_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_opt_stat_gather_history_schema(share::schema::ObTableSchema &table_schema);
@@ -3084,6 +3087,9 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_archive_dest_status_schema,
   ObInnerTableSchema::all_virtual_io_scheduler_schema,
   ObInnerTableSchema::all_virtual_external_table_file_schema,
+  ObInnerTableSchema::all_virtual_dup_ls_lease_mgr_schema,
+  ObInnerTableSchema::all_virtual_dup_ls_tablet_set_schema,
+  ObInnerTableSchema::all_virtual_dup_ls_tablets_schema,
   ObInnerTableSchema::all_virtual_tx_data_schema,
   ObInnerTableSchema::all_virtual_task_opt_stat_gather_history_schema,
   ObInnerTableSchema::all_virtual_table_opt_stat_gather_history_schema,
@@ -4609,6 +4615,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_TID,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TID,
+  OB_ALL_VIRTUAL_DUP_LS_LEASE_MGR_TID,
+  OB_ALL_VIRTUAL_DUP_LS_TABLET_SET_TID,
+  OB_ALL_VIRTUAL_DUP_LS_TABLETS_TID,
   OB_ALL_VIRTUAL_TASK_OPT_STAT_GATHER_HISTORY_TID,
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_GATHER_HISTORY_TID,
   OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TID,
@@ -6710,6 +6719,9 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_TNAME,
   OB_ALL_VIRTUAL_LS_ARB_REPLICA_TASK_HISTORY_TNAME,
   OB_ALL_VIRTUAL_ARCHIVE_DEST_STATUS_TNAME,
+  OB_ALL_VIRTUAL_DUP_LS_LEASE_MGR_TNAME,
+  OB_ALL_VIRTUAL_DUP_LS_TABLET_SET_TNAME,
+  OB_ALL_VIRTUAL_DUP_LS_TABLETS_TNAME,
   OB_ALL_VIRTUAL_TASK_OPT_STAT_GATHER_HISTORY_TNAME,
   OB_ALL_VIRTUAL_TABLE_OPT_STAT_GATHER_HISTORY_TNAME,
   OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TNAME,
@@ -8302,6 +8314,9 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_INFO_TID,
   OB_ALL_VIRTUAL_SQL_PLAN_TID,
   OB_ALL_VIRTUAL_MALLOC_SAMPLE_INFO_TID,
+  OB_ALL_VIRTUAL_DUP_LS_LEASE_MGR_TID,
+  OB_ALL_VIRTUAL_DUP_LS_TABLET_SET_TID,
+  OB_ALL_VIRTUAL_DUP_LS_TABLETS_TID,
   OB_ALL_VIRTUAL_OPT_STAT_GATHER_MONITOR_TID,
   OB_ALL_VIRTUAL_THREAD_TID,
   OB_ALL_VIRTUAL_ARBITRATION_MEMBER_INFO_TID,
@@ -10543,11 +10558,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 233;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 673;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 676;
 const int64_t OB_SYS_VIEW_COUNT = 716;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1627;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1630;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1630;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1633;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -624,8 +624,7 @@ public:
       ObExecContext &exec_ctx,
       const ParamStore &params,
       ObCandiTabletLocIArray &candi_tablet_locs,
-      const common::ObDataTypeCastParams &dtc_params,
-      bool nonblock = false) const;
+      const common::ObDataTypeCastParams &dtc_params) const;
   /**
    * Calculate tablet ids from input parameters.
    */
@@ -663,13 +662,10 @@ public:
                                  common::ObIArray<common::ObObjectID> &partition_ids);
 
   int get_tablet_locations(ObDASCtx &das_ctx,
-                           ObSQLSessionInfo *session,
-                           const uint64_t ref_table_id,
                            const ObIArray<ObTabletID> &tablet_ids,
                            const ObIArray<ObObjectID> &partition_ids,
                            const ObIArray<ObObjectID> &first_level_part_ids,
-                           ObCandiTabletLocIArray &candi_tablet_locs,
-                           bool nonblock = false) const;
+                           ObCandiTabletLocIArray &candi_tablet_locs) const;
 
   static int send_add_interval_partition_rpc_new_engine(ObIAllocator &allocator,
                                                         ObSQLSessionInfo *session,
@@ -750,7 +746,7 @@ public:
       (part_get_all_ && subpart_get_all_ && (part_level_ == share::schema::PARTITION_LEVEL_TWO));
   }
 
-  inline bool is_part_or_subpart_all_partition() const 
+  inline bool is_part_or_subpart_all_partition() const
   {
     return (part_level_ == share::schema::PARTITION_LEVEL_ZERO) ||
            (part_level_ == share::schema::PARTITION_LEVEL_ONE && (part_get_all_ || !is_part_range_get_)) ||

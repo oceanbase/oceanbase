@@ -168,7 +168,8 @@ public:
   int create_new_ls_for_recovery(const share::ObLSID &ls_id,
                                     const uint64_t ls_group_id,
                                     const share::SCN &create_scn,
-                                    common::ObMySQLTransaction &trans);
+                                    common::ObMySQLTransaction &trans,
+                                    const share::ObLSFlag &ls_flag);
   //for recovery tenant, if ls is in creating in __all_ls_status, create the ls
   int process_ls_stats_for_recovery();
 
@@ -195,6 +196,8 @@ public:
       const share::ObLSStatusInfoIArray &statua_info_array,
       const share::ObLSAttrIArray &ls_array,
       common::ObIArray<ObLSStatusMachineParameter> &status_machine_array);
+
+  int create_duplicate_ls();
 
 private:
   int fix_ls_status_(const ObLSStatusMachineParameter &status_machine,
@@ -362,6 +365,7 @@ public:
     return OB_SUCCESS;
   }
 
+  int create_duplicate_ls();
 private:
 
   int process_user_tenant_(const share::schema::ObTenantSchema &tenant_schema);

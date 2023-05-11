@@ -748,10 +748,11 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
     } else {
       ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id_,
                                  GCTX.srv_rpc_proxy_, GCTX.lst_operator_);
+      ObLSFlag ls_flag = ls_attr.get_ls_flag();
       if (OB_FAIL(tenant_stat.gather_stat(true))) {
         LOG_WARN("failed to gather stat", KR(ret));
       } else if (OB_FAIL(tenant_stat.create_new_ls_for_recovery(ls_attr.get_ls_id(),
-              ls_attr.get_ls_group_id(), ls_attr.get_create_scn(), trans))) {
+              ls_attr.get_ls_group_id(), ls_attr.get_create_scn(), trans, ls_flag))) {
         LOG_WARN("failed to add new ls status info", KR(ret), K(ls_attr), K(sync_scn));
       }
     }

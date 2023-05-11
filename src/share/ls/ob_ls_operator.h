@@ -16,7 +16,6 @@
 #include "share/ob_ls_id.h"//share::ObLSID
 #include "lib/container/ob_array.h"//ObArray
 #include "lib/container/ob_iarray.h"//ObIArray
-#include "share/ls/ob_ls_status_operator.h" //ObLSStatus
 #include "share/ls/ob_ls_i_life_manager.h"//ObLSTemplateOperator
 #include "logservice/palf/log_define.h"//SCN
 #include "share/scn.h"//SCN
@@ -38,11 +37,61 @@ class ObMySQLResult;
 }
 namespace share
 {
+static const char* LS_FLAG_ARRAY[] = { ""/*NORMAL*/, "DUPLICATE", "BLOCK_TABLET_IN" };
+//maybe empty, DUPLICATE, BLOCK_TABLET_IN, DUPLICATE|BLOCK_TABLET_IN
+static const int64_t FLAG_STR_LENGTH = 100;
+typedef common::ObFixedLengthString<FLAG_STR_LENGTH> ObLSFlagStr;
 class SCN;
+bool ls_is_empty_status(const ObLSStatus &status);
+bool ls_is_creating_status(const ObLSStatus &status);
+bool ls_is_created_status(const ObLSStatus &status);
+bool ls_is_normal_status(const ObLSStatus &status);
+bool ls_is_tenant_dropping_status(const ObLSStatus &status);
+bool ls_is_dropping_status(const ObLSStatus &status);
+bool ls_is_wait_offline_status(const ObLSStatus &status);
+bool is_valid_status_in_ls(const ObLSStatus &status);
+bool ls_is_create_abort_status(const ObLSStatus &status);
+bool ls_need_create_abort_status(const ObLSStatus &status);
+bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status);
 //TODO for duplicate ls
-enum ObLSFlag
+enum ObLSFlagForCompatible
 {
   OB_LS_FLAG_NORMAL = 0,
+};
+class ObLSFlag
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  enum LSFlag
+  {
+    INVALID_TYPE = -1,
+    NORMAL_FLAG = 0,
+    //If the low 0 bit is 1, it means that this is duplicate ls
+    DUPLICATE_FLAG = 1,
+    //If the low 1 bit is 1, it means that this is block tablet in
+    BLOCK_TABLET_IN_FLAG = 2,
+    MAX_FLAG
+  };
+  ObLSFlag() : flag_(NORMAL_FLAG) {}
+  ObLSFlag(const int64_t flag) : flag_(flag) {}
+  ~ObLSFlag() {}
+  void reset() {flag_ = NORMAL_FLAG;}
+  int assign(const ObLSFlag &ls_flag);
+  bool is_valid() const { return flag_ >= 0; }
+  void set_block_tablet_in() { flag_ |= BLOCK_TABLET_IN_FLAG; }
+  void clear_block_tablet_in() { flag_ &= (~BLOCK_TABLET_IN_FLAG); }
+  bool is_normal_flag() const { return NORMAL_FLAG == flag_; }
+  bool is_block_tablet_in() const {return flag_ & BLOCK_TABLET_IN_FLAG;}
+  void set_duplicate() { flag_ |= DUPLICATE_FLAG; }
+  bool is_duplicate_ls() const { return flag_ & DUPLICATE_FLAG; }
+  int flag_to_str(ObLSFlagStr &str) const;
+  int str_to_flag(const common::ObString &sql);
+  int64_t get_flag_value() const { return flag_; }
+  TO_STRING_KV(K_(flag), "is_duplicate", is_duplicate_ls(), "is_block_tablet_in", is_block_tablet_in());
+
+private:
+  int64_t flag_;
 };
 enum ObLSOperationType
 {
@@ -75,7 +124,8 @@ struct ObLSAttr
   ObLSAttr()
       : id_(),
         ls_group_id_(OB_INVALID_ID),
-        flag_(OB_LS_FLAG_NORMAL),
+        flag_compatible_(OB_LS_FLAG_NORMAL),
+        flag_(ObLSFlag::NORMAL_FLAG),
         status_(OB_LS_EMPTY),
         operation_type_(OB_LS_OP_INVALID_TYPE)
   { create_scn_.set_min();}
@@ -142,6 +192,7 @@ struct ObLSAttr
 private:
   ObLSID id_;
   uint64_t ls_group_id_;
+  ObLSFlagForCompatible flag_compatible_;
   ObLSFlag flag_;
   ObLSStatus status_;
   ObLSOperationType operation_type_;
@@ -170,6 +221,16 @@ public:
   int fill_cell(common::sqlclient::ObMySQLResult *result, ObLSAttr &ls_attr);
 public:
   bool is_valid() const;
+
+  // get duplicate ls status info
+  // @params[in]  for_update, whether to lock line
+  // @params[in]  client, sql client to use
+  // @params[out] ls_attr, the result
+  int get_duplicate_ls_attr(
+      const bool for_update,
+      common::ObISQLClient &client,
+      ObLSAttr &ls_attr);
+
   int get_all_ls_by_order(
       ObLSAttrIArray &ls_array);
   /**

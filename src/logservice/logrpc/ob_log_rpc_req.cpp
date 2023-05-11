@@ -80,8 +80,7 @@ bool LogConfigChangeCmd::is_valid() const
       SWITCH_TO_LEARNER_CMD == cmd_type_)? added_member_.is_valid(): true);
   bool_ret = bool_ret && ((is_remove_member_list() || REMOVE_LEARNER_CMD == cmd_type_ ||        \
       SWITCH_TO_ACCEPTOR_CMD == cmd_type_)? removed_member_.is_valid(): true);
-  bool_ret = bool_ret && ((ADD_MEMBER_CMD == cmd_type_ || REMOVE_MEMBER_CMD == cmd_type_) ?      \
-      is_valid_replica_num(new_replica_num_): true);
+  bool_ret = bool_ret && ((is_set_new_replica_num())? is_valid_replica_num(new_replica_num_): true);
   bool_ret = bool_ret && ((CHANGE_REPLICA_NUM_CMD == cmd_type_)? curr_member_list_.is_valid()    \
       && is_valid_replica_num(curr_replica_num_) && is_valid_replica_num(new_replica_num_): true);
   return bool_ret;
@@ -98,6 +97,14 @@ bool LogConfigChangeCmd::is_add_member_list() const
 {
   return ADD_MEMBER_CMD == cmd_type_
         || REPLACE_MEMBER_CMD == cmd_type_
+        || SWITCH_TO_ACCEPTOR_CMD == cmd_type_;
+}
+
+bool LogConfigChangeCmd::is_set_new_replica_num() const
+{
+  return ADD_MEMBER_CMD == cmd_type_
+        || REMOVE_MEMBER_CMD == cmd_type_
+        || SWITCH_TO_LEARNER_CMD == cmd_type_
         || SWITCH_TO_ACCEPTOR_CMD == cmd_type_;
 }
 

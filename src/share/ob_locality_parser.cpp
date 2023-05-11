@@ -39,7 +39,7 @@ const char *ObLocalityParser::E_REPLICA_STR = "E";
 int ObLocalityParser::parse_type(const char *str, int64_t len, ObReplicaType &replica_type)
 {
   UNUSED(len);
-  // TODO: only support F-replica in 4.0 for now, will support others in the future
+  // TODO: only support F-replica in 4.0 and R-replica in 4.2 for now, will support others in the future
   int ret = OB_SUCCESS;
   if (OB_ISNULL(str)) {
     ret = OB_INVALID_ARGUMENT;
@@ -75,12 +75,8 @@ int ObLocalityParser::parse_type(const char *str, int64_t len, ObReplicaType &re
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup-replica");
   } else if ( 0 == STRCASECMP(READONLY_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_READONLY;
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "readonly-replica");
   } else if ( 0 == STRCASECMP(R_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_READONLY;
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "readonly-replica");
   } else if ( 0 == STRCASECMP(MEMONLY_REPLICA_STR, str)) {
     replica_type = REPLICA_TYPE_MEMONLY;
     ret = OB_NOT_SUPPORTED;

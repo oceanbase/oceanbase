@@ -132,8 +132,7 @@ public:
   };
 public:
   void handle(void *task);
-  int add_ls(const share::ObLSID &id,
-             const common::ObReplicaType &replica_type);
+  int add_ls(const share::ObLSID &id);
   int remove_ls(const share::ObLSID &id);
   int enable(const share::ObLSID &id,
              const palf::LSN &base_lsn,

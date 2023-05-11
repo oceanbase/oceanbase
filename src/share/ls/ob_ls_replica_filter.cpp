@@ -117,6 +117,5 @@ int ObLSReplicaFilterHolder::check(const ObLSReplica &replica, bool &pass) const
   }
   return ret;
 }
-
 } // end namespace share
 } // end namespace oceanbase

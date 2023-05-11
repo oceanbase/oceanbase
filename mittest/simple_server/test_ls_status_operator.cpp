@@ -140,7 +140,8 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObZone primary_zone("z1");
-  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone);
+  ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = status_operator.get_all_ls_status_by_order(OB_SYS_TENANT_ID, ls_array,
       get_curr_simple_server().get_observer().get_mysql_proxy());
@@ -152,7 +153,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
 
   //创建新日志流
   ObLSID ls_id(1001);
-  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone);
+  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);

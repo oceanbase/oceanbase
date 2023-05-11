@@ -5927,6 +5927,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);
 }
+| DUPLICATE_SCOPE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DUPLICATE_SCOPE, 1, $3);
+}
 | EXPIRE_INFO opt_equal_mark '(' expr ')'
 {
   (void)($2) ; /* make bison mute */

@@ -209,17 +209,27 @@ int ObDataAccessService::clear_task_exec_env(ObDASRef &das_ref, ObIDASTaskOp &ta
   return ret;
 }
 
-int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref, ObIDASTaskOp &task_op)
+int ObDataAccessService::refresh_partition_location(ObDASRef &das_ref,
+                                                    ObIDASTaskOp &task_op,
+                                                    int err_no)
 {
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = das_ref.get_exec_ctx();
   ObDASBaseRtDef *das_rtdef = task_op.get_rtdef();
   ObDASTableLoc *table_loc = das_rtdef->table_loc_;
   ObDASTabletLoc *tablet_loc = const_cast<ObDASTabletLoc*>(task_op.get_tablet_loc());
-  if (OB_SUCC(DAS_CTX(exec_ctx).refresh_tablet_loc(*tablet_loc))) {
+  int64_t retry_cnt = DAS_CTX(exec_ctx).get_location_router().get_retry_cnt();
+  DAS_CTX(exec_ctx).get_location_router().refresh_location_cache(tablet_loc->tablet_id_, true, err_no);
+  if (OB_FAIL(ObDASUtils::wait_das_retry(retry_cnt))) {
+    LOG_WARN("wait das retry failed", K(ret));
+  } else if (OB_FAIL(DAS_CTX(exec_ctx).get_location_router().get_tablet_loc(*tablet_loc->loc_meta_,
+                                                                            tablet_loc->tablet_id_,
+                                                                            *tablet_loc))) {
+    LOG_WARN("get tablet location failed", K(ret), KPC(tablet_loc));
+  } else {
     task_op.set_ls_id(tablet_loc->ls_id_);
   }
-  LOG_INFO("LOCATION: refresh tablet cache", K(ret), KPC(tablet_loc), KPC(tablet_loc));
+  LOG_INFO("LOCATION: refresh tablet cache", K(ret), KPC(table_loc), KPC(tablet_loc));
   return ret;
 }
 
@@ -235,12 +245,14 @@ int ObDataAccessService::retry_das_task(ObDASRef &das_ref, ObIDASTaskOp &task_op
     int tmp_ret = ret;
     if (!can_fast_fail(task_op)) {
       task_op.in_part_retry_ = true;
-      das_ref.get_exec_ctx().get_my_session()->set_session_in_retry(true, ret);
+      ObDASLocationRouter &location_router = DAS_CTX(das_ref.get_exec_ctx()).get_location_router();
+      location_router.set_last_errno(ret);
+      location_router.inc_retry_cnt();
       if (OB_FAIL(clear_task_exec_env(das_ref, task_op))) {
         LOG_WARN("clear task execution environment", K(ret));
       } else if (OB_FAIL(das_ref.get_exec_ctx().check_status())) {
         LOG_WARN("query is timeout, terminate retry", K(ret));
-      } else if (OB_FAIL(refresh_partition_location(das_ref, task_op))) {
+      } else if (OB_FAIL(refresh_partition_location(das_ref, task_op, task_op.errcode_))) {
         LOG_WARN("refresh partition location failed", K(ret), "ori_err_code", tmp_ret, K(lbt()));
       } else if (FALSE_IT(das_task_wrapper.reuse())) {
       } else if (FALSE_IT(task_op.set_task_status(ObDasTaskStatus::UNSTART))) {

@@ -77,17 +77,6 @@ int ObRemoteTaskExecutor::execute(ObExecContext &query_ctx, ObJob *job, ObTaskIn
                                     has_transfer_err))) {
         bool skip_failed_tasks = false;
         int check_ret = OB_SUCCESS;
-        int add_ret = OB_SUCCESS;
-        if (is_data_not_readable_err(ret) || is_server_down_error(ret)) {
-          // 读到落后太多的备机或者正在回放日志的副本了，
-          // 将远端的这个observer加进retry info的invalid servers中
-          if (OB_UNLIKELY(OB_SUCCESS != (
-                      add_ret = retry_info->add_invalid_server_distinctly(
-                          task_info->get_task_location().get_server(), true)))) {
-            LOG_WARN("fail to add remote addr to invalid servers distinctly", K(ret), K(add_ret),
-                     K(task_info->get_task_location().get_server()), K(*retry_info));
-          }
-        }
         if (OB_SUCCESS != (check_ret = should_skip_failed_tasks(*task_info, skip_failed_tasks))) {
           // check fail, set ret to check_ret
           LOG_WARN("fail to check if it should skip failed tasks", K(ret), K(check_ret), K(*job));

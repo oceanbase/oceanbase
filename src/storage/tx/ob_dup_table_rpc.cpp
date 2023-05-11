@@ -219,79 +219,129 @@ bool ObRedoLogSyncResponseMsg::is_valid() const
 namespace obrpc
 {
 
-int ObDupTableLeaseRequestMsgP::process()
-{
-  int ret = OB_SUCCESS;
-//  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
-//  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// int ObDupTableLeaseRequestMsgP::process()
+// {
+//   int ret = OB_SUCCESS;
+// //  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
+// //  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// //
+// //  if (OB_ISNULL(trans_service)) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
+// //  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
+// //  } else if (OB_FAIL(ctx_mgr->handle_dup_lease_request(arg_.get_partition(),
+// //                                                       arg_))) {
+// //    TRANS_LOG(WARN, "handle lease request error", K(ret), K(arg_.get_partition()));
+// //  } else {
+// //    //do nothing
+// //  }
+// //
+//   return ret;
+// }
 //
-//  if (OB_ISNULL(trans_service)) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
-//  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
-//  } else if (OB_FAIL(ctx_mgr->handle_dup_lease_request(arg_.get_partition(),
-//                                                       arg_))) {
-//    TRANS_LOG(WARN, "handle lease request error", K(ret), K(arg_.get_partition()));
-//  } else {
-//    //do nothing
-//  }
+// int ObDupTableLeaseResponseMsgP::process()
+// {
+//   int ret = common::OB_SUCCESS;
+// //  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
+// //  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// //
+// //  if (OB_ISNULL(trans_service)) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
+// //  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
+// //  } else if (OB_FAIL(ctx_mgr->handle_dup_lease_response(arg_.get_partition(),
+// //                                                        arg_,
+// //                                                        trans_service))) {
+// //    TRANS_LOG(WARN, "handle lease response error", K(ret), K(arg_.get_partition()));
+// //  } else {
+// //    //do nothing
+// //  }
+// //
+//   return ret;
+// }
 //
-  return ret;
-}
-
-int ObDupTableLeaseResponseMsgP::process()
-{
-  int ret = common::OB_SUCCESS;
-//  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
-//  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// int ObRedoLogSyncRequestP::process()
+// {
+//   int ret = OB_SUCCESS;
+// //  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
+// //  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// //
+// //  if (OB_ISNULL(trans_service)) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
+// //  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
+// //  } else if (OB_FAIL(ctx_mgr->handle_dup_redo_log_sync_request(arg_.get_partition(),
+// //                                                               arg_,
+// //                                                               trans_service))) {
+// //    TRANS_LOG(WARN, "handle redo log sync request error", K(ret), K(arg_.get_partition()));
+// //  } else {
+// //    //do nothing
+// //  }
+// //
+//   return ret;
+// }
 //
-//  if (OB_ISNULL(trans_service)) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
-//  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
-//  } else if (OB_FAIL(ctx_mgr->handle_dup_lease_response(arg_.get_partition(),
-//                                                        arg_,
-//                                                        trans_service))) {
-//    TRANS_LOG(WARN, "handle lease response error", K(ret), K(arg_.get_partition()));
-//  } else {
-//    //do nothing
-//  }
+// int ObRedoLogSyncResponseP::process()
+// {
+//   int ret = OB_SUCCESS;
+// //  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
+// //  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// //
+// //  if (OB_ISNULL(trans_service)) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
+// //  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
+// //    ret = OB_ERR_UNEXPECTED;
+// //    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
+// //  } else if (OB_FAIL(ctx_mgr->handle_dup_redo_log_sync_response(arg_.get_partition(),
+// //                                                                arg_))) {
+// //    TRANS_LOG(WARN, "handle redo log sync response error", K(ret), K(arg_.get_partition()));
+// //  } else {
+// //    //do nothing
+// //  }
+// //
+//   return ret;
+// }
 //
-  return ret;
-}
-
-int ObRedoLogSyncRequestP::process()
-{
-  int ret = OB_SUCCESS;
-//  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
-//  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+// int ObPreCommitRequestP::process()
+// {
+//   int ret = OB_SUCCESS;
+//   transaction::ObIDupTableRpc *dup_table_rpc = NULL;
+//   transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
 //
-//  if (OB_ISNULL(trans_service)) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "trans service is NULL", KR(ret));
-//  } else if (OB_ISNULL(ctx_mgr = &trans_service->get_part_trans_ctx_mgr())) {
-//    ret = OB_ERR_UNEXPECTED;
-//    TRANS_LOG(WARN, "ObPartTransCtxMgr is NULL", K(ret));
-//  } else if (OB_FAIL(ctx_mgr->handle_dup_redo_log_sync_request(arg_.get_partition(),
-//                                                               arg_,
-//                                                               trans_service))) {
-//    TRANS_LOG(WARN, "handle redo log sync request error", K(ret), K(arg_.get_partition()));
-//  } else {
-//    //do nothing
-//  }
+//   if (OB_ISNULL(trans_service)) {
+//     ret = OB_ERR_UNEXPECTED;
+//     TRANS_LOG(WARN, "trans service is NULL", KR(ret));
+//   } else if (OB_ISNULL(dup_table_rpc = trans_service->get_dup_table_rpc())) {
+//     ret = OB_ERR_UNEXPECTED;
+//     TRANS_LOG(WARN, "dup table rpc is null", KR(ret), K(arg_));
+//   } else {
+//     trans_service->get_tx_version_mgr().update_max_commit_ts(arg_.get_commit_version(), false);
+//     // respond leader
+//     // TODO, whether need to check lease_expired and update
+//     // ObPartitionTransCtxMgr::update_max_trans_version?
+//     transaction::ObPreCommitResponseMsg msg;
+//     if (OB_FAIL(msg.init(arg_.get_partition(),
+//                          arg_.get_trans_id(),
+//                          trans_service->get_server(),
+//                          OB_SUCCESS))) {
+//       TRANS_LOG(WARN, "init pre commit response msg failed", KR(ret), K(arg_), K(msg));
+//     } else if (OB_FAIL(msg.set_header(arg_.get_dst(), arg_.get_dst(), arg_.get_src()))) {
+//       TRANS_LOG(WARN, "ObPreCommitResponseMsg set header error", KR(ret), K(arg_), K(msg));
+//     } else if (OB_FAIL(dup_table_rpc->post_pre_commit_response(arg_.get_tenant_id(),
+//                                                                arg_.get_src(), msg))) {
+//       TRANS_LOG(WARN, "post pre commit response failed", KR(ret), K(arg_), K(msg));
+//     }
+//   }
 //
-  return ret;
-}
-
-int ObRedoLogSyncResponseP::process()
-{
-  int ret = OB_SUCCESS;
-//  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
-//  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
+//   return ret;
+// }
 //
 //  if (OB_ISNULL(trans_service)) {
 //    ret = OB_ERR_UNEXPECTED;
@@ -306,12 +356,12 @@ int ObRedoLogSyncResponseP::process()
 //    //do nothing
 //  }
 //
-  return ret;
-}
+//   return ret;
+// }
 
-int ObPreCommitRequestP::process()
-{
-  int ret = OB_NOT_SUPPORTED;
+// int ObPreCommitRequestP::process()
+// {
+//   int ret = OB_NOT_SUPPORTED;
   // transaction::ObIDupTableRpc *dup_table_rpc = NULL;
   // transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
 
@@ -340,12 +390,12 @@ int ObPreCommitRequestP::process()
   //   }
   // }
 
-  return ret;
-}
-
-int ObPreCommitResponseP::process()
-{
-  int ret = OB_SUCCESS;
+//   return ret;
+// }
+//
+// int ObPreCommitResponseP::process()
+// {
+//   int ret = OB_SUCCESS;
 //  transaction::ObPartTransCtxMgr *ctx_mgr = NULL;
 //  transaction::ObTransService *trans_service = global_ctx_.par_ser_->get_trans_service();
 //  if (OB_ISNULL(trans_service)) {
@@ -358,37 +408,31 @@ int ObPreCommitResponseP::process()
 //    TRANS_LOG(WARN, "handle dup pre commit response error", KR(ret), K(arg_));
 //  }
 //
-  return ret;
-}
-
 }// obrpc
 
 namespace transaction
 {
-int ObDupTableRpc::init(ObTransService *trans_service,
-                        rpc::frame::ObReqTransport *transport,
-                        const ObAddr &addr)
+int ObDupTableRpc_old::init(ObTransService *trans_service, rpc::frame::ObReqTransport *transport, const ObAddr &addr)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    TRANS_LOG(WARN, "duplicate table rpc init error", KR(ret));
-  } else if (OB_ISNULL(trans_service) || OB_ISNULL(transport)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), KP(trans_service), KP(transport));
-  } else if (OB_FAIL(rpc_proxy_.init(transport, addr))) {
-    TRANS_LOG(WARN, "init rpc proxy fail", K(ret));
-  } else {
-    trans_service_ = trans_service;
-    is_inited_ = true;
-    TRANS_LOG(INFO, "dup table rpc init success");
-  }
+  // if (OB_UNLIKELY(is_inited_)) {
+  //   ret = OB_INIT_TWICE;
+  //   TRANS_LOG(WARN, "duplicate table rpc init error", KR(ret));
+  // } else if (OB_ISNULL(trans_service) || OB_ISNULL(transport)) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), KP(trans_service), KP(transport));
+  // } else if (OB_FAIL(rpc_proxy_.init(transport, addr))) {
+  //   TRANS_LOG(WARN, "init rpc proxy fail", K(ret));
+  // } else {
+  //   trans_service_ = trans_service;
+  //   is_inited_ = true;
+  //   TRANS_LOG(INFO, "dup table rpc init success");
 
   return ret;
 }
 
-int ObDupTableRpc::start()
+int ObDupTableRpc_old::start()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -404,7 +448,7 @@ int ObDupTableRpc::start()
   return ret;
 }
 
-int ObDupTableRpc::stop()
+int ObDupTableRpc_old::stop()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -420,7 +464,7 @@ int ObDupTableRpc::stop()
   return ret;
 }
 
-int ObDupTableRpc::wait()
+int ObDupTableRpc_old::wait()
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -435,7 +479,7 @@ int ObDupTableRpc::wait()
   return ret;
 }
 
-void ObDupTableRpc::destroy()
+void ObDupTableRpc_old::destroy()
 {
   int tmp_ret = OB_SUCCESS;
   if (is_inited_) {
@@ -453,136 +497,136 @@ void ObDupTableRpc::destroy()
   }
 }
 
-int ObDupTableRpc::post_dup_table_lease_request(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_dup_table_lease_request(const uint64_t tenant_id,
                                                 const common::ObAddr &server,
                                                 const ObDupTableLeaseRequestMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server)
-                     .by(tenant_id)
-                     .post_dup_table_lease_request(msg, NULL))) {
-    TRANS_LOG(WARN, "post dup table lease message error", KR(ret), K(server), K(msg));
-  } else {
-    TRANS_LOG(DEBUG, "post dup table lease message success", K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server)
+  //                    .by(tenant_id)
+  //                    .post_dup_table_lease_request(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post dup table lease message error", KR(ret), K(server), K(msg));
+  // } else {
+  //   TRANS_LOG(DEBUG, "post dup table lease message success", K(server), K(msg));
+  // }
   return ret;
 }
 
-int ObDupTableRpc::post_dup_table_lease_response(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_dup_table_lease_response(const uint64_t tenant_id,
                                                  const common::ObAddr &server,
                                                  const ObDupTableLeaseResponseMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server)
-                     .by(tenant_id)
-                     .post_dup_table_lease_response(msg, NULL))) {
-    TRANS_LOG(WARN, "post dup table lease message error", KR(ret), K(server), K(msg));
-  } else {
-    TRANS_LOG(DEBUG, "post dup table lease message success", K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server)
+  //                    .by(tenant_id)
+  //                    .post_dup_table_lease_response(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post dup table lease message error", KR(ret), K(server), K(msg));
+  // } else {
+  //   TRANS_LOG(DEBUG, "post dup table lease message success", K(server), K(msg));
+  // }
   return ret;
 }
 
 
-int ObDupTableRpc::post_redo_log_sync_request(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_redo_log_sync_request(const uint64_t tenant_id,
                                               const common::ObAddr &server,
                                               const ObRedoLogSyncRequestMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server).by(tenant_id).post_redo_log_sync_request(msg, NULL))) {
-    TRANS_LOG(WARN, "post redo log sync request message error", KR(ret), K(server), K(msg));
-  } else {
-    TRANS_LOG(DEBUG, "post redo log sync request message success", K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server).by(tenant_id).post_redo_log_sync_request(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post redo log sync request message error", KR(ret), K(server), K(msg));
+  // } else {
+  //   TRANS_LOG(DEBUG, "post redo log sync request message success", K(server), K(msg));
+  // }
   return ret;
 }
 
-int ObDupTableRpc::post_redo_log_sync_response(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_redo_log_sync_response(const uint64_t tenant_id,
                                                const common::ObAddr &server,
                                                const ObRedoLogSyncResponseMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server).by(tenant_id).post_redo_log_sync_response(msg, NULL))) {
-    TRANS_LOG(WARN, "post redo log sync response message error", KR(ret), K(server), K(msg));
-  } else {
-    TRANS_LOG(DEBUG, "post redo log sync response message success", K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server).by(tenant_id).post_redo_log_sync_response(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post redo log sync response message error", KR(ret), K(server), K(msg));
+  // } else {
+  //   TRANS_LOG(DEBUG, "post redo log sync response message success", K(server), K(msg));
+  // }
   return ret;
 }
 
-int ObDupTableRpc::post_pre_commit_request(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_pre_commit_request(const uint64_t tenant_id,
                                            const common::ObAddr &server,
                                            const ObPreCommitRequestMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server).by(tenant_id).post_pre_commit_request(msg, NULL))) {
-    TRANS_LOG(WARN, "post pre commit request error", KR(ret), K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server).by(tenant_id).post_pre_commit_request(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post pre commit request error", KR(ret), K(server), K(msg));
+  // }
   return ret;
 }
 
-int ObDupTableRpc::post_pre_commit_response(const uint64_t tenant_id,
+int ObDupTableRpc_old::post_pre_commit_response(const uint64_t tenant_id,
                                             const common::ObAddr &server,
                                             const ObPreCommitResponseMsg &msg)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
-  } else if (!is_running_) {
-    ret = OB_NOT_RUNNING;
-    TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
-  } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
-  } else if (OB_FAIL(rpc_proxy_.to(server).by(tenant_id).post_pre_commit_response(msg, NULL))) {
-    TRANS_LOG(WARN, "post pre commit response error", KR(ret), K(server), K(msg));
-  }
+  // if (!is_inited_) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "dup table rpc not inited", KR(ret));
+  // } else if (!is_running_) {
+  //   ret = OB_NOT_RUNNING;
+  //   TRANS_LOG(WARN, "dup table rpc not running", KR(ret));
+  // } else if (!is_valid_tenant_id(tenant_id) || !server.is_valid() || !msg.is_valid()) {
+  //   ret = OB_INVALID_ARGUMENT;
+  //   TRANS_LOG(WARN, "invalid argument", KR(ret), K(tenant_id), K(server), K(msg));
+  // } else if (OB_FAIL(rpc_proxy_->to(server).by(tenant_id).post_pre_commit_response(msg, NULL))) {
+  //   TRANS_LOG(WARN, "post pre commit response error", KR(ret), K(server), K(msg));
+  // }
   return ret;
 }
 

@@ -51,6 +51,7 @@ private:
   };
 
   int write_ls_checkpoint(blocksstable::MacroBlockId &entry_block);
+  int write_ls_dup_table_checkpoint(blocksstable::MacroBlockId &entry_block);
   int write_tablet_checkpoint(const common::ObLogCursor &cursor, blocksstable::MacroBlockId &entry_block);
   int copy_one_tablet_item(ObLinkedMacroBlockItemWriter &tablet_item_writer,
     const ObMetaDiskAddr &addr, int64_t *item_idx);

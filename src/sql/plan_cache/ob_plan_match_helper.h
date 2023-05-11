@@ -73,7 +73,8 @@ private:
   int reselect_duplicate_table_best_replica(
       const ObIArray<LocationConstraint> &loc_cons,
       const common::ObAddr &server,
-      const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos) const;
+      const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
+      const ObIArray<ObDupTabConstraint> &dup_table_replica_cons) const;
   /**
    * @brief Compare table location types
    *

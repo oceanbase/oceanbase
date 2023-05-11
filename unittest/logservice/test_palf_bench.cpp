@@ -111,8 +111,8 @@ public:
     } else if (OB_FAIL(palf_env_->create(1, handle_))) {
       PALF_LOG(ERROR, "palf_env_ create failed", K(ret));
     }
-
-    EXPECT_EQ(OB_SUCCESS, handle_.set_initial_member_list(member_list, 1));
+    GlobalLearnerList learner_list;
+    EXPECT_EQ(OB_SUCCESS, handle_.set_initial_member_list(member_list, 1, learner_list));
 
     while (true) {
       ObRole role;

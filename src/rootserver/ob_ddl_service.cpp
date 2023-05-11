@@ -337,6 +337,8 @@ int ObDDLService::create_user_tables(
   int ret = OB_SUCCESS;
   RS_TRACE(create_user_tables_begin);
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  bool have_duplicate_table = false;
+  bool is_compatible = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("not init", K(ret));
   } else if (table_schemas.count() < 1) {
@@ -344,6 +346,7 @@ int ObDDLService::create_user_tables(
     LOG_WARN("table_schemas have no element", K(ret));
   } else {
     tenant_id = table_schemas.at(0).get_tenant_id();
+    have_duplicate_table = table_schemas.at(0).is_duplicate_table();
     // for checking unique index name duplicate when create user table in oracle mode
     bool is_oracle_mode = false;
     if (OB_FAIL(table_schemas.at(0).check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -377,6 +380,18 @@ int ObDDLService::create_user_tables(
       // mysql mode
       // do nothing, only oracle mode need this
     }
+  }
+
+  if (OB_FAIL(ret)) {
+    //do nothing
+  } else if (!have_duplicate_table) {
+    // do nothing
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id, is_compatible))) {
+    LOG_WARN("fail to check compat version for duplicate log stream", KR(ret), K(tenant_id));
+  } else if (!is_compatible) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("duplicate table is not supported below 4.2", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create duplicate table below 4.2");
   }
 
   if (OB_FAIL(ret)) {
@@ -1626,10 +1641,10 @@ int ObDDLService::set_tablegroup_id(ObTableSchema &table_schema)
     if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != table_schema.get_duplicate_scope()
         && OB_INVALID_ID != table_schema.get_tablegroup_id()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("replicated table in tablegroup is not supported", K(ret),
+      LOG_WARN("duplicated table in tablegroup is not supported", K(ret),
                "table_id", table_schema.get_table_id(),
                "tablegroup_id", table_schema.get_tablegroup_id());
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "replicated table in tablegroup");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicated table in tablegroup");
     }
   }
 
@@ -2172,10 +2187,10 @@ int ObDDLService::set_new_table_options(
   } else if (ObDuplicateScope::DUPLICATE_SCOPE_NONE != new_table_schema.get_duplicate_scope()
              && OB_INVALID_ID != new_table_schema.get_tablegroup_id()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("replicated table in tablegroup is not supported", K(ret),
+    LOG_WARN("duplicated table in tablegroup is not supported", K(ret),
              "table_id", new_table_schema.get_table_id(),
              "tablegroup_id", new_table_schema.get_tablegroup_id());
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "replicated table in tablegroup");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicated table in tablegroup");
   } else {
     if (OB_SUCC(ret)
         && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLEGROUP_NAME)) {
@@ -2543,6 +2558,34 @@ int ObDDLService::set_raw_table_options(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unknown option!", K(i));
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::check_locality_compatible_(
+    ObTenantSchema &schema)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  bool is_compatible_with_readonly_replica = false;
+  if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
+              schema.get_tenant_id(), is_compatible_with_readonly_replica))) {
+    LOG_WARN("fail to check compatible with readonly replica", KR(ret), K(schema));
+  } else if (is_compatible_with_readonly_replica) {
+  } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
+    LOG_WARN("fail to get locality from schema", K(ret), K(schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < zone_locality.count(); ++i) {
+      const share::ObZoneReplicaAttrSet &this_set = zone_locality.at(i);
+      if (this_set.zone_set_.count() <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("zone set count unexpected", K(ret), "zone_set_cnt", this_set.zone_set_.count());
+      } else if (0 != this_set.get_readonly_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with read-only replica below data version 4.2", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with R-replica in locality below data version 4.2");
       }
     }
   }
@@ -12223,6 +12266,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   int64_t cost_usec = 0;
   start_usec = ObTimeUtility::current_time();
   bool is_alter_sess_active_time = false;
+  bool is_alter_duplicate_scope = false;
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
   int64_t &task_id = res.task_id_;
@@ -12238,8 +12282,13 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
     schema_guard.set_session_id(alter_table_arg.session_id_);
     const ObTableSchema *orig_table_schema =  NULL;
     is_alter_sess_active_time = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::SESSION_ACTIVE_TIME);
+    is_alter_duplicate_scope = alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::DUPLICATE_SCOPE);
     ObTZMapWrap tz_map_wrap;
     if (OB_FAIL(ret)) {
+    } else if (is_alter_duplicate_scope) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("alter table duplicate scope not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table duplicate scope");
     } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
       LOG_WARN("get tenant timezone map failed", K(ret), K(tenant_id));
     } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
@@ -21483,7 +21532,7 @@ int ObDDLService::set_sys_ls_status(const uint64_t tenant_id)
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else {
     share::ObLSAttr new_ls;
-    share::ObLSFlag flag;//TODO
+    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     int64_t ls_group_id = 0;
     SCN create_scn = SCN::base_scn();
     share::ObLSAttrOperator ls_operator(tenant_id, sql_proxy_);
@@ -21850,6 +21899,8 @@ int ObDDLService::set_new_tenant_options(
     } else if (OB_FAIL(parse_and_set_create_tenant_new_locality_options(
             schema_guard, new_tenant_schema, resource_pool_names, zones_in_pool, zone_region_list))) {
       LOG_WARN("fail to parse and set new locality option", K(ret));
+    } else if (OB_FAIL(check_locality_compatible_(new_tenant_schema))) {
+      LOG_WARN("fail to check locality with data version", KR(ret), K(new_tenant_schema));
     } else if (OB_FAIL(check_alter_tenant_locality_type(
             schema_guard, orig_tenant_schema, new_tenant_schema, alter_locality_type))) {
       LOG_WARN("fail to check alter tenant locality allowed", K(ret));
@@ -29945,7 +29996,7 @@ int ObDDLService::set_schema_replica_num_options(
     }
     if (full_replica_num <= 0) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality, should have at least one paxos replica");
       LOG_WARN("full replica num is zero", K(ret), K(full_replica_num), K(schema));
     }
   }

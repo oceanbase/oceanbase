@@ -841,13 +841,6 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
                        plan_ctx->get_timeout_timestamp());
             }
           }
-        } else {
-          // end trans结束事务之后不能再改错误码
-          // 只有成功的时候才检查是否需要刷新location cache，否则已经在重试逻辑里面刷新了，不用刷新
-          int refresh_ret = OB_SUCCESS;
-          if (OB_UNLIKELY(OB_SUCCESS != (refresh_ret = result.check_and_nonblock_refresh_location_cache()))) {
-            LOG_WARN("fail to check and nonblock refresh location cache", K(ret), K(refresh_ret));
-          }
         }
       }
 

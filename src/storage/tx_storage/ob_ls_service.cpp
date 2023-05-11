@@ -245,7 +245,6 @@ int ObLSService::start()
 }
 
 int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
-                                  const ObReplicaType replica_type,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
                                   const SCN &create_scn,
@@ -263,12 +262,11 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
 
   } else if (OB_FAIL(ls->init(lsid,
                               tenant_id_,
-                              replica_type,
                               migration_status,
                               restore_status,
                               create_scn,
                               rs_reporter_))) {
-    LOG_WARN("fail to init ls", K(ret), K(lsid), K(replica_type));
+    LOG_WARN("fail to init ls", K(ret), K(lsid));
   }
   if (OB_FAIL(ret) && NULL != ls) {
     ls->~ObLS();
@@ -419,7 +417,6 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     ret = OB_EAGAIN;
     LOG_WARN("ls waiting for destroy, need retry later", K(ret), K(arg));
   } else if (OB_FAIL(inner_create_ls_(arg.get_ls_id(),
-                                      arg.get_replica_type(),
                                       migration_status,
                                       (is_ls_to_restore_(arg) ?
                                        ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START) :
@@ -443,6 +440,7 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
     } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_WRITE_PREPARE_SLOG)) {
     } else if (OB_FAIL(ls->create_ls(arg.get_tenant_info().get_tenant_role(),
                                      palf_base_info,
+                                     arg.get_replica_type(),
                                      unused_allow_log_sync))) {
       LOG_WARN("enable ls palf failed", K(ret), K(arg), K(palf_base_info));
       // only restore ls does not need enable replay
@@ -793,7 +791,6 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
   } else if (OB_FAIL(ls_meta.get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls_meta));
   } else if (OB_FAIL(inner_create_ls_(ls_meta.ls_id_,
-                                      ls_meta.replica_type_,
                                       migration_status,
                                       restore_status,
                                       ls_meta.get_clog_checkpoint_scn(),
@@ -1012,7 +1009,6 @@ int ObLSService::create_ls_for_ha(
   } else if (OB_FAIL(get_restore_status_(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(arg), K(task_id));
   } else if (OB_FAIL(inner_create_ls_(arg.ls_id_,
-                                      arg.dst_.get_replica_type(),
                                       migration_status,
                                       restore_status,
                                       ObScnRange::MIN_SCN, /* create scn */
@@ -1035,6 +1031,7 @@ int ObLSService::create_ls_for_ha(
     } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_WRITE_PREPARE_SLOG)) {
     } else if (OB_FAIL(ls->create_ls(share::RESTORE_TENANT_ROLE,
                                      palf_base_info,
+                                     arg.dst_.get_replica_type(),
                                      allow_log_sync))) {
       LOG_WARN("enable ls palf failed", K(ret), K(ls_meta));
     } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PALF_ENABLED)) {

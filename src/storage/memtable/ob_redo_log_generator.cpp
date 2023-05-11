@@ -206,7 +206,7 @@ int ObRedoLogGenerator::log_submitted(const ObCallbackScope &callbacks)
         // check dup table tx 
         if(check_dup_tablet_(iter))
         {
-          mem_ctx_->get_trans_ctx()->set_dup_table_tx();
+          // mem_ctx_->get_trans_ctx()->set_dup_table_tx_();
         }
       } else {
         TRANS_LOG(ERROR, "log_submitted error", K(ret), K(iter), K(iter->need_submit_log()));
@@ -352,17 +352,18 @@ int ObRedoLogGenerator::search_unsubmitted_dup_tablet_redo()
   if (!is_inited_) {
     TRANS_LOG(WARN, "redo log generate is not inited", K(ret));
   } else {
-    // ObTransCallbackMgr::RDLockGuard guard(callback_mgr_->get_rwlock());
-    // for (cursor = generate_cursor_ + 1; OB_SUCC(ret) && callback_mgr_->end() != cursor; ++cursor) {
-    //   ObITransCallback *iter = (ObITransCallback *)*cursor;
-    //
-    //   if (!iter->need_fill_redo() || !iter->need_submit_log()) {
-    //   } else if (check_dup_tablet_(iter)) {
-    //     ret = OB_SUCCESS;
-    //     mem_ctx_->get_trans_ctx()->set_dup_table_tx();
-    //     break;
-    //   }
-    // }
+    ObTransCallbackMgr::RDLockGuard guard(callback_mgr_->get_rwlock());
+    for (cursor = generate_cursor_ + 1; OB_SUCC(ret) && callback_mgr_->end() != cursor; ++cursor) {
+      ObITransCallback *iter = (ObITransCallback *)*cursor;
+
+      if (!iter->need_fill_redo() || !iter->need_submit_log()) {
+        //do nothing
+      } else if (check_dup_tablet_(iter)) {
+        // ret = OB_SUCCESS;
+        // mem_ctx_->get_trans_ctx()->set_dup_table_tx_();
+        // break;
+      }
+    }
   }
   return ret;
 }
@@ -370,13 +371,18 @@ int ObRedoLogGenerator::search_unsubmitted_dup_tablet_redo()
 bool ObRedoLogGenerator::check_dup_tablet_(const ObITransCallback *callback_ptr) const
 {
   bool is_dup_tablet = false;
+  int64_t tmp_ret = OB_SUCCESS;
 
   // If id is a dup table tablet => true
   // If id is not a dup table tablet => false
   if (MutatorType::MUTATOR_ROW == callback_ptr->get_mutator_type()) {
     const ObMvccRowCallback *row_iter = static_cast<const ObMvccRowCallback *>(callback_ptr);
     const ObTabletID &target_tablet = row_iter->get_tablet_id();
-    // check dup table 
+    if (OB_TMP_FAIL(mem_ctx_->get_trans_ctx()->merge_tablet_modify_record_(target_tablet))) {
+      TRANS_LOG_RET(WARN, tmp_ret, "merge tablet modify record failed", K(tmp_ret),
+                    K(target_tablet), KPC(row_iter));
+    }
+    // check dup table
   }
 
   return is_dup_tablet;

@@ -1120,8 +1120,9 @@ int ObLSMigrationHandler::build_rebuild_task_()
   } else {
     ObTaskId task_id;
     task_id.init(GCONF.self_addr_);
-    ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp, ls_->get_replica_type());
-    ObReplicaMember src_replica_member(leader_addr, timestamp, ls_->get_replica_type());
+    // TODO: muwei make sure this is right
+    ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp, REPLICA_TYPE_FULL);
+    ObReplicaMember src_replica_member(leader_addr, timestamp, REPLICA_TYPE_FULL);
     ObMigrationOpArg arg;
     arg.cluster_id_ = GCONF.cluster_id;
     arg.data_src_ = src_replica_member;

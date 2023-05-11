@@ -80,6 +80,7 @@ public:
   void reset();
   bool is_remove_member_list() const;
   bool is_add_member_list() const;
+  bool is_set_new_replica_num() const;
   TO_STRING_KV("cmd_type", log_config_change_cmd2str(cmd_type_), K_(src), K_(palf_id), \
   K_(added_member), K_(removed_member), K_(curr_member_list), K_(curr_replica_num),      \
   K_(new_replica_num), K_(timeout_us));

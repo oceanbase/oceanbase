@@ -29,7 +29,8 @@
 #include "sql/das/ob_das_rpc_processor.h"
 #include "storage/tx/ob_trans_rpc.h"
 #include "storage/tx/ob_gts_rpc.h"
-#include "storage/tx/ob_dup_table_rpc.h"
+// #include "storage/tx/ob_dup_table_rpc.h"
+#include "storage/tx/ob_dup_table_base.h"
 #include "storage/tx/ob_ts_response_handler.h"
 #include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
 #include "observer/ob_rpc_processor_simple.h"
@@ -134,12 +135,17 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxRollbackSPP);
   RPC_PROCESSOR(ObTxKeepaliveP);
   RPC_PROCESSOR(ObTxKeepaliveRespP);
-  RPC_PROCESSOR(ObDupTableLeaseRequestMsgP, gctx_);
-  RPC_PROCESSOR(ObDupTableLeaseResponseMsgP, gctx_);
-  RPC_PROCESSOR(ObRedoLogSyncRequestP, gctx_);
-  RPC_PROCESSOR(ObRedoLogSyncResponseP, gctx_);
-  RPC_PROCESSOR(ObPreCommitRequestP, gctx_);
-  RPC_PROCESSOR(ObPreCommitResponseP, gctx_);
+  //for dup_table
+  // RPC_PROCESSOR(ObDupTableLeaseRequestMsgP, gctx_);
+  // RPC_PROCESSOR(ObDupTableLeaseResponseMsgP, gctx_);
+  // RPC_PROCESSOR(ObRedoLogSyncRequestP, gctx_);
+  // RPC_PROCESSOR(ObRedoLogSyncResponseP, gctx_);
+  RPC_PROCESSOR(ObDupTableLeaseRequestP);
+  RPC_PROCESSOR(ObDupTableTsSyncRequestP);
+  RPC_PROCESSOR(ObDupTableTsSyncResponseP);
+  RPC_PROCESSOR(ObDupTableBeforePrepareRequestP);
+  // RPC_PROCESSOR(ObPreCommitRequestP, gctx_);
+  // RPC_PROCESSOR(ObPreCommitResponseP, gctx_);
   // for xa
   RPC_PROCESSOR(ObTxSubPrepareP);
   RPC_PROCESSOR(ObTxSubPrepareRespP);

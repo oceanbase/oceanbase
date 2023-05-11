@@ -28,6 +28,11 @@
 namespace oceanbase 
 {
 
+namespace logservice
+{
+class ObIReplaySubHandler;
+}
+
 namespace transaction 
 {
 
@@ -55,8 +60,9 @@ public:
   void wait();
   void destroy();
 
-  int push(void * task);
-  void handle(void * task); 
+  int push(void *task);
+  void handle(void *task);
+
 public:
   int submit_log(const char *buf,
                  const int64_t size,
@@ -70,10 +76,13 @@ public:
     return OB_SUCCESS;
   }
 
-  void push_all_cbs_();
+  void invoke_all_cbs();
+
 public:
-  bool get_log(int64_t log_ts ,std::string &log_string);
+  bool get_log(int64_t log_ts, std::string &log_string);
+  int get_next_log(int64_t log_ts, std::string &log_string, int64_t &next_log_ts);
   int64_t get_cb_cnt();
+  int64_t get_cb_time() { return submit_config_.cb_time_; }
 private:
   bool is_cbs_finish_();
 
@@ -91,14 +100,15 @@ private:
   // common::ObSEArray<logservice::AppendCb *, 10, TransModulePageAllocator> waiting_cbs_;
   std::map<int64_t,std::string> mock_log_file_; //ts , log record
   std::list<logservice::AppendCb *> waiting_cbs_;
-  
+
   ObTransTimer timer_;
-  ObITimeoutTask * task_ptr_;
+  ObITimeoutTask *task_ptr_;
 
   int64_t CB_CNT_;
 };
 
-class MockCbTimeoutTask : public ObITimeoutTask {
+class MockCbTimeoutTask : public ObITimeoutTask
+{
 public:
   MockCbTimeoutTask() : adapter_(nullptr) {}
   virtual ~MockCbTimeoutTask() {}
@@ -111,12 +121,51 @@ public:
   void reset() { adapter_ = nullptr; }
 
 public:
-  void runTimerTask() { adapter_->push_all_cbs_(); }
+  void runTimerTask() { adapter_->invoke_all_cbs(); }
   uint64_t hash() const { return 1; };
 
 private:
   MockTxLogAdapter *adapter_;
 };
+
+// struct MockReplayInfo
+// {
+//   logservice::ObIReplaySubHandler *replay_target_;
+//
+//   int64_t replay_success_ts_;
+//   int64_t replaying_ts_;
+//   std::string replaying_log_;
+//
+//   void reset()
+//   {
+//     replay_target_ = nullptr;
+//     replay_success_ts_ = -1;
+//     replaying_ts_ = -1;
+//     replaying_log_.clear();
+//   }
+//
+//   MockReplayInfo() { reset(); }
+// };
+//
+// class MockReplayMgr : public lib::ThreadPool
+// {
+// public:
+//   int init(MockTxLogAdapter * log_adapter);
+//   int start();
+//   void stop();
+//   void wait();
+//   void destroy();
+//
+//   virtual void run1();
+//
+//   void register_replay_target(logservice::ObIReplaySubHandler *replay_target);
+//   void unregister_replay_target(logservice::ObIReplaySubHandler *replay_target);
+//
+// private:
+//   MockTxLogAdapter * log_adapter_ptr_;
+//   std::list<MockReplayInfo> replay_target_list_;
+// };
+
 // class TestTxLogSubmitter : public ObSimpleThreadPool
 // {
 // public:

@@ -80,7 +80,6 @@ public:
   int extended_tablet_loc(ObDASTableLoc &table_loc,
                           const ObCandiTabletLoc &candi_tablet_loc,
                           ObDASTabletLoc *&talet_loc);
-  int refresh_tablet_loc(ObDASTabletLoc &tablet_loc);
   int extended_table_loc(const ObDASTableLocMeta &loc_meta, ObDASTableLoc *&table_loc);
   int add_candi_table_loc(const ObDASTableLocMeta &loc_meta, const ObCandiTableLoc &candi_table_loc);
   int get_das_tablet_mapper(const uint64_t ref_table_id,

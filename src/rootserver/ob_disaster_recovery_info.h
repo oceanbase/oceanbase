@@ -183,6 +183,7 @@ public:
   int64_t get_member_list_cnt() const { return member_list_cnt_; }
   int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
   bool has_leader() const { return has_leader_; }
+  bool is_duplicate_ls() const { return ls_status_info_.is_duplicate_ls(); }
   int get_tenant_id(
       uint64_t &tenant_id) const;
   int get_ls_id(
@@ -203,8 +204,12 @@ public:
       common::ObAddr &leader_addr) const;
   int get_leader_and_member_list(
       common::ObAddr &leader_addr,
-      common::ObMemberList &member_list);
+      common::ObMemberList &member_list,
+      GlobalLearnerList &learner_list);
 private:
+  int construct_filtered_ls_info_to_use_(
+      const share::ObLSInfo &input_ls_info,
+      share::ObLSInfo &output_ls_info);
   // init related private func
   int gather_server_unit_stat();
   int fill_servers();

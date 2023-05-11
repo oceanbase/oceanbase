@@ -139,7 +139,7 @@ public:
     // mock sequence no
     ObClockGenerator::init();
     // mock tx table
-    ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
+    ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01), (ObDupTableLSHandler *)(0x02));
     EXPECT_EQ(OB_SUCCESS,
               ls_tx_ctx_mgr_.init(tenant_id_, /*tenant_id*/
                                   ls_id_,

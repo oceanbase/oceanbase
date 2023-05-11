@@ -84,6 +84,8 @@ int ObTransService::mtl_init(ObTransService *&it)
     TRANS_LOG(ERROR, "rpc init error", KR(ret));
   } else if (OB_FAIL(it->dup_table_rpc_def_.init(it, req_transport, self))) {
     TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
+  } else if (OB_FAIL(it->dup_table_rpc_impl_.init(req_transport,self))) {
+    TRANS_LOG(ERROR, "dup table rpc init error", KR(ret));
   } else if (OB_FAIL(it->location_adapter_def_.init(schema_service, location_service))) {
     TRANS_LOG(ERROR, "location adapter init error", KR(ret));
   } else if (OB_FAIL(it->gti_source_def_.init(self, req_transport))) {
@@ -138,8 +140,8 @@ int ObTransService::init(const ObAddr &self,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(timer_.init("TransTimeWheel"))) {
     TRANS_LOG(ERROR, "timer init error", KR(ret));
-  } else if (OB_FAIL(dup_table_lease_timer_.init())) {
-    TRANS_LOG(ERROR, "dup table lease timer init error", K(ret));
+  } else if (OB_FAIL(dup_table_scan_timer_.init())) {
+    TRANS_LOG(ERROR, "dup table scan timer init error", K(ret));
   } else if (OB_FAIL(ObSimpleThreadPool::init(2, msg_task_cnt, "TransService", tenant_id))) {
     TRANS_LOG(WARN, "thread pool init error", KR(ret));
   } else if (OB_FAIL(tx_desc_mgr_.init(std::bind(&ObTransService::gen_trans_id_,
@@ -148,6 +150,12 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "ObTxDescMgr init error", K(ret));
   } else if (OB_FAIL(tx_ctx_mgr_.init(tenant_id, ts_mgr, this))) {
     TRANS_LOG(WARN, "tx_ctx_mgr_ init error", KR(ret));
+  } else if (OB_FAIL(dup_table_loop_worker_.init())) {
+    TRANS_LOG(WARN, "init dup table loop worker failed", K(ret));
+  } else if (OB_FAIL(dup_tablet_scan_task_.make(tenant_id,
+                                                &dup_table_scan_timer_,
+                                                &dup_table_loop_worker_))) {
+    TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -199,12 +207,16 @@ int ObTransService::start()
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(timer_.start())) {
     TRANS_LOG(WARN, "ObTransTimer start error", K(ret));
-  } else if (OB_FAIL(dup_table_lease_timer_.start())) {
-    TRANS_LOG(ERROR, "dup table lease timer start error", K(ret));
+  } else if (OB_FAIL(dup_table_scan_timer_.start())) {
+    TRANS_LOG(WARN, "dup_table_scan_timer_ start error", K(ret));
+  } else if (OB_FAIL(dup_table_scan_timer_.register_timeout_task(
+                     dup_tablet_scan_task_,
+                     ObDupTabletScanTask::DUP_TABLET_SCAN_INTERVAL))) {
+    TRANS_LOG(WARN, "register dup table scan task error", K(ret));
   } else if (OB_FAIL(rpc_->start())) {
     TRANS_LOG(WARN, "ObTransRpc start error", KR(ret));
-  } else if (OB_FAIL(dup_table_rpc_->start())) {
-    TRANS_LOG(WARN, "ObDupTableRpc start error", K(ret));
+  // } else if (OB_FAIL(dup_table_rpc_->start())) {
+  //   TRANS_LOG(WARN, "ObDupTableRpc start error", K(ret));
   } else if (OB_FAIL(gti_source_->start())) {
     TRANS_LOG(WARN, "ObGtiSource start error", KR(ret));
   } else if (OB_FAIL(tx_ctx_mgr_.start())) {
@@ -213,6 +225,7 @@ int ObTransService::start()
     TRANS_LOG(WARN, "tx_desc_mgr_ start error", KR(ret));
   } else {
     is_running_ = true;
+
     TRANS_LOG(INFO, "transaction service start success", KPC(this));
   }
 
@@ -235,12 +248,13 @@ void ObTransService::stop()
     TRANS_LOG(WARN, "tx_desc_mgr stop error", KR(ret));
   } else if (OB_FAIL(timer_.stop())) {
     TRANS_LOG(WARN, "ObTransTimer stop error", K(ret));
-  } else if (OB_FAIL(dup_table_lease_timer_.stop())) {
-    TRANS_LOG(ERROR, "dup table lease timer stop error", K(ret));
+  } else if (OB_FAIL(dup_table_scan_timer_.stop())) {
+    TRANS_LOG(WARN, "dup_table_scan_timer_ stop error", K(ret));
   } else {
     rpc_->stop();
     dup_table_rpc_->stop();
     gti_source_->stop();
+    dup_table_loop_worker_.stop();
     ObSimpleThreadPool::stop();
     is_running_ = false;
     TRANS_LOG(INFO, "transaction service stop success", KPC(this));
@@ -263,12 +277,13 @@ int ObTransService::wait_()
   TRANS_LOG(WARN, "tx_desc_mgr_ wait error", KR(ret));
   } else if (OB_FAIL(timer_.wait())) {
     TRANS_LOG(WARN, "ObTransTimer wait error", K(ret));
-  } else if (OB_FAIL(dup_table_lease_timer_.wait())) {
-    TRANS_LOG(ERROR, "dup table lease timer wait error", K(ret));
+  } else if (OB_FAIL(dup_table_scan_timer_.wait())) {
+    TRANS_LOG(WARN, "dup_table_scan_timer_ wait error", K(ret));
   } else {
     rpc_->wait();
-    dup_table_rpc_->wait();
+    // dup_table_rpc_->wait();
     gti_source_->wait();
+    dup_table_loop_worker_.wait();
     TRANS_LOG(INFO, "transaction service wait success", KPC(this));
   }
   return ret;
@@ -282,7 +297,9 @@ void ObTransService::destroy()
       wait();
     }
     timer_.destroy();
-    dup_table_lease_timer_.destroy();
+    dup_table_scan_timer_.destroy();
+    dup_tablet_scan_task_.destroy();
+    dup_table_loop_worker_.destroy();
     if (use_def_) {
       rpc_->destroy();
       location_adapter_->destroy();

@@ -1004,12 +1004,11 @@ int ObStartMigrationTask::try_remove_member_list_()
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K(*ctx_), KP(ls));
-    } else if (ls->get_replica_type() != src_type
-        || self_addr != ctx_->arg_.src_.get_server()
+      // TODO: muwei make sure this is right
+    } else if (self_addr != ctx_->arg_.src_.get_server()
         || self_addr != ctx_->arg_.dst_.get_server()) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("replica type do not match", K(ret), K(self_addr), K(src_type), K(dest_type),
-          "local log stream type", ls->get_replica_type());
+      LOG_WARN("replica type do not match", K(ret), K(self_addr), K(src_type), K(dest_type));
     } else if (src_type == dest_type) {
       ret = OB_ALREADY_DONE;
       LOG_WARN("src type and dest type is same, no need change", K(ret), K(src_type), K(dest_type));
@@ -1083,7 +1082,8 @@ int ObStartMigrationTask::deal_with_local_ls_()
       ctx_->local_clog_checkpoint_scn_ = local_ls_meta.get_clog_checkpoint_scn();
       ctx_->local_rebuild_seq_ = local_ls_meta.get_rebuild_seq();
       common::ObReplicaType replica_type = ctx_->arg_.dst_.get_replica_type();
-      common::ObReplicaType local_replica_type = ls->get_replica_type();
+      // TODO: muwei make sure this is right
+      common::ObReplicaType local_replica_type = REPLICA_TYPE_FULL;
       if (local_replica_type != replica_type
           && !ObReplicaTypeCheck::change_replica_op_allow(local_replica_type, replica_type)) {
         ret = OB_OP_NOT_ALLOW;
@@ -1253,6 +1253,8 @@ int ObStartMigrationTask::update_ls_()
     if (OB_FAIL(ls->update_ls_meta(update_restore_status,
                                    ctx_->src_ls_meta_package_.ls_meta_))) {
       LOG_WARN("failed to update ls meta", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(ls->set_dup_table_ls_meta(ctx_->src_ls_meta_package_.dup_ls_meta_))) {
+      LOG_WARN("failed to set dup table ls meta", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ls->get_end_lsn(end_lsn))) {
       LOG_WARN("failed to get end lsn", K(ret), KPC(ctx_));
     } else if (end_lsn >= ctx_->src_ls_meta_package_.palf_meta_.curr_lsn_) {
@@ -1410,7 +1412,8 @@ int ObStartMigrationTask::check_ls_need_copy_data_(bool &need_copy)
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_ &&
-      ObReplicaTypeCheck::is_readable_replica(ls_handle.get_ls()->get_replica_type())) {
+      // TODO: muwei make sure this is right
+      ObReplicaTypeCheck::is_readable_replica(REPLICA_TYPE_FULL)) {
     //no need generate copy task, only change member
     need_copy = false;
     LOG_INFO("no need change replica no need copy task", "src_type", ctx_->arg_.src_.get_replica_type(),

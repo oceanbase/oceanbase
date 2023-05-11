@@ -271,6 +271,12 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_ls_log_writer.cpp
   tx/ob_tx_msg.cpp
   tx/ob_tx_replay_executor.cpp
+  tx/ob_dup_table_util.cpp
+  tx/ob_dup_table_lease.cpp
+  tx/ob_dup_table_base.cpp
+  tx/ob_dup_table_tablets.cpp
+  tx/ob_dup_table_ts_sync.cpp
+  tx/ob_dup_table_stat.cpp
   tx/ob_xa_ctx.cpp
   tx/ob_xa_ctx_mgr.cpp
   tx/ob_xa_dblink_service.cpp

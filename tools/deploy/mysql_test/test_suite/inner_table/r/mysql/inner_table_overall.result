@@ -589,6 +589,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12366	__all_virtual_archive_dest_status	2	201001	1
 12369	__all_virtual_io_scheduler	2	201001	1
 12371	__all_virtual_external_table_file	2	201001	1
+12376	__all_virtual_dup_ls_lease_mgr	2	201001	1
+12378	__all_virtual_dup_ls_tablet_set	2	201001	1
+12379	__all_virtual_dup_ls_tablets	2	201001	1
 12380	__all_virtual_tx_data	2	201001	1
 12381	__all_virtual_task_opt_stat_gather_history	2	201001	1
 12382	__all_virtual_table_opt_stat_gather_history	2	201001	1

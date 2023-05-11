@@ -58,6 +58,7 @@ class ObEvolutionPlan;
 typedef common::ObFixedArray<common::ObFixedArray<int64_t, common::ObIAllocator>, common::ObIAllocator> PhyRowParamMap;
 typedef common::ObFixedArray<ObTableLocation, common::ObIAllocator> TableLocationFixedArray;
 typedef common::ObFixedArray<ObPlanPwjConstraint, common::ObIAllocator> PlanPwjConstraintArray;
+typedef common::ObFixedArray<ObDupTabConstraint, common::ObIAllocator> DupTabReplicaArray;
 typedef common::ObFixedArray<transaction::ObEncryptMetaCache, common::ObIAllocator> EncryptMetaCacheArray;
 
 //2.2.5版本之后已废弃
@@ -387,10 +388,17 @@ public:
   const ObIArray<ObPlanPwjConstraint>& get_strict_constraints() const { return strict_constrinats_; }
   ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() { return non_strict_constrinats_; }
   const ObIArray<ObPlanPwjConstraint>& get_non_strict_constraints() const { return non_strict_constrinats_; }
-
+  ObIArray<ObDupTabConstraint> &get_dup_table_replica_constraints() {
+    return dup_table_replica_cons_;
+  }
+  const ObIArray<ObDupTabConstraint> &get_dup_table_replica_constraints() const {
+    return dup_table_replica_cons_;
+  }
   int set_location_constraints(const ObIArray<LocationConstraint> &base_constraints,
                                const ObIArray<ObPwjConstraint *> &strict_constraints,
-                               const ObIArray<ObPwjConstraint *> &non_strict_constraints);
+                               const ObIArray<ObPwjConstraint *> &non_strict_constraints,
+                               const ObIArray<ObDupTabConstraint> &dup_table_replica_cons);
+  bool has_same_location_constraints(const ObPhysicalPlan &r) const;
 
   ObIArray<transaction::ObEncryptMetaCache>& get_encrypt_meta_array()
   { return encrypt_meta_array_; }
@@ -583,6 +591,9 @@ private:
   // 每个分组是一个array，保存了对应基表在base_table_constraints_中的偏移
   // 如果t1, t2需要满足非严格约束，则对于分区裁剪后t1的每一个分区，都要求有一个t2的分区与其在相同的物理机器上
   PlanPwjConstraintArray non_strict_constrinats_;
+  // constraint for duplicate table to choose replica
+  // dist plan will use this as (dup_tab_pos, advisor_tab_pos) pos is position in base constraint
+  DupTabReplicaArray dup_table_replica_cons_;
 
 public:
   ObExprFrameInfo expr_frame_info_;

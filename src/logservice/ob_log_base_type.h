@@ -87,6 +87,9 @@ enum ObLogBaseType
   // for padding log entry
   PADDING_LOG_BASE_TYPE = 25,
 
+  // for dup table trans
+  DUP_TABLE_LOG_BASE_TYPE = 26,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -153,6 +156,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"HEARTBEAT_SERVICE", str_len);
   } else if (log_type == PADDING_LOG_BASE_TYPE) {
     strncpy(str ,"PADDING_LOG_ENTRY", str_len);
+  } else if (log_type == DUP_TABLE_LOG_BASE_TYPE) {
+    strncpy(str ,"DUP_TABLE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
