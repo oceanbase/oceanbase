@@ -161,37 +161,40 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   //设置初始成员列表
   ObMemberList member_list;
   ObMember arb_member;
+  common::GlobalLearnerList learner_list;
   ObAddr server1(common::ObAddr::IPV4, "127.1.1.1", 2882);
   ObAddr server2(common::ObAddr::IPV4, "127.1.1.1", 3882);
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server1));
   ASSERT_EQ(OB_SUCCESS, member_list.add_server(server2));
   ret = status_operator.update_init_member_list(tenant_id_, ls_id, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member);
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLSStatusInfo new_status_info;
   ObMemberList new_list;
   ret = status_operator.get_ls_init_member_list(tenant_id_, ls_id, new_list, new_status_info,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member);
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //创建新日志流
   ObLSStatusInfo new_status_info2;
   ObLSID ls_id3(1003);
-  ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone);
+  ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(new_status_info2, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObAddr server4(common::ObAddr::IPV4, "127.1.1.1", 4882);
   ObMember arb_member2(server4, 0);
+  common::GlobalLearnerList learner_list2;
 
   ret = status_operator.update_init_member_list(tenant_id_, ls_id3, member_list,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member2);
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member2, learner_list2);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLSStatusInfo new_status_info3;
   ObMemberList new_list2;
   ObMember arb_member3;
+  common::GlobalLearnerList learner_list3;
   ret = status_operator.get_ls_init_member_list(tenant_id_, ls_id3, new_list2, new_status_info3,
-      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member3);
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member3, learner_list3);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //设置日志流offline的参数检查

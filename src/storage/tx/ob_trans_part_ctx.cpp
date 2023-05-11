@@ -6543,8 +6543,9 @@ int ObPartTransCtx::merge_tablet_modify_record(const common::ObTabletID &tablet_
   CtxLockGuard guard(lock_);
 
   if (is_exiting_) {
-    ret = OB_TRANS_CTX_NOT_EXIST;
-    TRANS_LOG(WARN, "exiting part_ctx", K(ret), K(tablet_id), KPC(this));
+    // ret = OB_TRANS_CTX_NOT_EXIST;
+    TRANS_LOG(WARN, "merge tablet modify record into a exiting part_ctx", K(ret), K(tablet_id),
+              KPC(this));
   } else if (!is_follower_()) {
     ret = OB_NOT_FOLLOWER;
     TRANS_LOG(WARN, "can not invoke on leader", K(ret), K(tablet_id), KPC(this));
