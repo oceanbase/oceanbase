@@ -548,12 +548,19 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
           && ObLobType == expr.datum_meta_.type_) {
         ObLobLocator *value = nullptr;
         char *total_buf = NULL;
-        const int64_t total_buf_len = sizeof(ObLobLocator) + result.get_string_len();
-        if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
+        ObString result_data = result.get_string();
+        if (is_lob_storage(result.get_type())) {
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator, result, result_data))) {
+            LOG_WARN("failed to get real data for lob", K(ret), K(result));
+          }
+        }
+        const int64_t total_buf_len = sizeof(ObLobLocator) + result_data.length();
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
         } else if (FALSE_IT(value = reinterpret_cast<ObLobLocator *> (total_buf))) {
-        } else if (OB_FAIL(value->init(result.get_string()))) {
+        } else if (OB_FAIL(value->init(result_data))) {
           LOG_WARN("Failed to init lob locator", K(ret), K(value));
         } else {
           result.set_lob_locator(*value);
