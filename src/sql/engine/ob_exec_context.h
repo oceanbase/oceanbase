@@ -159,6 +159,7 @@ public:
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  void try_reset_convert_charset_allocator();
 
   void destroy_eval_allocator();
 

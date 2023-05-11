@@ -38,6 +38,8 @@ class ObQueryRetryCtrl;
 class ObQueryDriver
 {
 public:
+  static const int64_t RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS = 32;
+public:
   ObQueryDriver(const ObGlobalContext &gctx,
                 const sql::ObSqlCtx &ctx,
                 sql::ObSQLSessionInfo &session,
