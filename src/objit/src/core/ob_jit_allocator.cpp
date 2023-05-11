@@ -161,14 +161,21 @@ int ObJitMemory::protect_mapped_memory(const ObJitMemoryBlock &block,
   if (OB_ISNULL(block.addr_) || 0 == block.size_ || (!p_flags)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(block), K(p_flags), K(ret));
-  } else if (0 != (tmp_ret = ::mprotect((void*)((uintptr_t)block.addr_& ~(page_size-1)),
-                                        page_size*((block.size_+page_size-1)/page_size),
-                                        p_flags))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("jit block mprotect failed", K(block), K(errno), K(tmp_ret), K(ret),
-             K((uintptr_t)block.addr_& ~(page_size - 1)),
-             K(page_size * ((block.size_ + page_size - 1) / page_size)),
-             K(p_flags));
+  } else {
+    do {
+      tmp_ret = 0;
+      if (0 != (tmp_ret = ::mprotect((void*)((uintptr_t)block.addr_& ~(page_size-1)),
+                                     page_size*((block.size_+page_size-1)/page_size),
+                                     p_flags))) {
+        if (REACH_TIME_INTERVAL(10000000)) {
+          LOG_ERROR("jit block mprotect failed", K(block), K(errno), K(tmp_ret),
+                    K((uintptr_t)block.addr_& ~(page_size - 1)),
+                    K(page_size * ((block.size_ + page_size - 1) / page_size)),
+                    K(p_flags));
+        }
+      }
+    } while (-1 == tmp_ret && 12 == errno);
+    // `-1 == tmp_ret` means `mprotect` failed, `12 == errno` means `Cannot allocate memory`
   }
 
   return ret;
