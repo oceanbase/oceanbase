@@ -32,6 +32,12 @@ ObCreateFuncResolver::~ObCreateFuncResolver()
 int ObCreateFuncResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  UNUSED(parse_tree);
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating loadable function");
+  return ret;
+
+#if 0
   ParseNode *create_func_node = const_cast<ParseNode*>(&parse_tree);
   ObCreateFuncStmt *create_func_stmt = NULL;
   if (OB_ISNULL(create_func_node)
@@ -142,6 +148,7 @@ int ObCreateFuncResolver::resolve(const ParseNode &parse_tree)
     }
   }
   return ret;
+#endif
 }
 
 }
