@@ -461,16 +461,24 @@ int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
   TCWLockGuard guard(lock_);
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to update_tablet_meta_addr", K(ret));
-  } else if (OB_FAIL(ckpt_writer.get_ls_block_list(meta_block_list))) {
-    LOG_WARN("fail to get_ls_block_list", K(ret));
-  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
-    LOG_WARN("fail to add_macro_blocks", K(ret));
-  } else if (OB_FAIL(ckpt_writer.get_tablet_block_list(meta_block_list))) {
-    LOG_WARN("fail to get_tablet_block_list", K(ret));
-  } else if (OB_FAIL(
-               tablet_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
-    LOG_WARN("fail to set_tablet_block_list", K(ret));
+  } else {
+    do {
+      if (OB_FAIL(ckpt_writer.get_ls_block_list(meta_block_list))) {
+        LOG_WARN("fail to get_ls_block_list", K(ret));
+      } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
+        LOG_WARN("fail to add_macro_blocks", K(ret));
+      } else if (OB_FAIL(ckpt_writer.get_tablet_block_list(meta_block_list))) {
+        LOG_WARN("fail to get_tablet_block_list", K(ret));
+      } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
+        LOG_WARN("fail to set_tablet_block_list", K(ret));
+      }
+      if (OB_UNLIKELY(OB_ALLOCATE_MEMORY_FAILED == ret)) {
+        LOG_WARN("memory is insufficient, retry", K(ret));
+        usleep(1 * 1000 * 1000L); // 1s
+      }
+    } while (OB_ALLOCATE_MEMORY_FAILED == ret);
   }
+
   return ret;
 }
 
