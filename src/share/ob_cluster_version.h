@@ -166,6 +166,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_3_2_3_0 (oceanbase::common::cal_version(3, 2, 3, 0))
 #define CLUSTER_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define CLUSTER_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
+#define CLUSTER_VERSION_4_1_0_1 (oceanbase::common::cal_version(4, 1, 0, 1))
 #define CLUSTER_VERSION_4_2_0_0 (oceanbase::common::cal_version(4, 2, 0, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
@@ -180,6 +181,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // 3. TODO: If you update data_version below, please update DATA_CURRENT_VERSION & ObUpgradeChecker too.
 #define DATA_VERSION_4_0_0_0 (oceanbase::common::cal_version(4, 0, 0, 0))
 #define DATA_VERSION_4_1_0_0 (oceanbase::common::cal_version(4, 1, 0, 0))
+#define DATA_VERSION_4_1_0_1 (oceanbase::common::cal_version(4, 1, 0, 1))
 #define DATA_VERSION_4_2_0_0 (oceanbase::common::cal_version(4, 2, 0, 0))
 
 #define DATA_CURRENT_VERSION DATA_VERSION_4_2_0_0

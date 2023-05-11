@@ -170,12 +170,13 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 3;
+  static const int64_t DATA_VERSION_NUM = 4;
   static const uint64_t UPGRADE_PATH[DATA_VERSION_NUM];
 };
 
 /* =========== special upgrade processor start ============= */
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 0, 0, 0)
+
 class ObUpgradeFor4100Processor : public ObBaseUpgradeProcessor
 {
 public:
@@ -189,6 +190,8 @@ private:
   int init_rewrite_rule_version(const uint64_t tenant_id);
   static int recompile_all_views_and_synonyms(const uint64_t tenant_id);
 };
+
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 1, 0, 1)
 
 class ObUpgradeFor4200Processor : public ObBaseUpgradeProcessor
 {
