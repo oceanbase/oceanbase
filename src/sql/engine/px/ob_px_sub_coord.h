@@ -54,7 +54,7 @@ public:
         thread_worker_factory_(gctx, allocator_),
         first_buffer_cache_(allocator_),
         is_single_tsc_leaf_dfo_(false),
-        rf_msgs_()
+        all_shared_rf_msgs_()
   {}
   virtual ~ObPxSubCoord() = default;
   int pre_process();
@@ -148,7 +148,7 @@ private:
   int64_t reserved_thread_count_;
   dtl::ObDtlLocalFirstBufferCache first_buffer_cache_;
   bool is_single_tsc_leaf_dfo_;
-  ObArray<ObP2PDatahubMsgBase *> rf_msgs_; // for clear
+  ObArray<int64_t> all_shared_rf_msgs_; // for clear
   DISALLOW_COPY_AND_ASSIGN(ObPxSubCoord);
 };
 }
