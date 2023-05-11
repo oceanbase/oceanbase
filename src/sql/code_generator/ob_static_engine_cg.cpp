@@ -690,9 +690,6 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = false;
         stop_checking = true;
       }
-      if (log_op_def::LOG_LINK_SCAN == op->get_type()) {
-        stop_checking = true;
-      }
       LOG_DEBUG("check_vectorie_supported", K(disable_vectorize), K(support), K(stop_checking),
                 K(op->get_num_of_child()));
       // continue searching until found an operator with vectorization explicitly disabled

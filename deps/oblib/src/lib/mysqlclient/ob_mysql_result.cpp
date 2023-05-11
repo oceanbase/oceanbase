@@ -144,7 +144,8 @@ int ObMySQLResult::format_precision_scale_length(int16_t &precision, int16_t &sc
       scale = OB_MIN_NUMBER_SCALE - 1; // binary_float and binar_double scale from oci is 0, need set to -85
     } else if (DBLINK_DRV_OCI == link_type && ObDateTimeType == ob_type) {
       scale = 0;
-    } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE) {
+    } else if (tmp_scale < OB_MIN_NUMBER_SCALE || tmp_scale > OB_MAX_NUMBER_SCALE ||
+              (-1 == precision && ObNumberType == ob_type)) {
       scale = OB_MIN_NUMBER_SCALE - 1; // format it to -85 if scale out of range
     } else {
       scale = tmp_scale; //  for a valid scale, just set it
