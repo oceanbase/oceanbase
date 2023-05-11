@@ -8,7 +8,7 @@ labels: ["type: bug"]
 **Describe the bug**
 <!-- A clear and concise description of bug. -->
 
-** Environment**
+**Environment**
 <!-- Environment Details sometimes important -->
 - OS Version and CPU Arch(`uname -a`):
   

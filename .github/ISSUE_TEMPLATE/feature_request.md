@@ -1,7 +1,7 @@
 ---
 name: 🚀 Feature Request
-description: Suggest an idea for this project
-title: "[feat.]: <title>"
+about: Suggest an idea for this project
+title: "[Feature]: <title>"
 labels: ["type: feature"]
 ---
 
