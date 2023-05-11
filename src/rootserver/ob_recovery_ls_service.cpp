@@ -117,6 +117,7 @@ void ObRecoveryLSService::do_work()
         }
       } else {
         if (!start_scn.is_valid()) {
+          SCN tmp_start_scn;
           ObLSRecoveryStat ls_recovery_stat;
           if (OB_FAIL(ls_recovery.get_ls_recovery_stat(tenant_id_,
                   SYS_LS, false, ls_recovery_stat, *proxy_))) {
@@ -133,10 +134,14 @@ void ObRecoveryLSService::do_work()
             if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) { // every minute
               LOG_INFO("has recovered to recovery_until_scn", KR(ret), K(ls_recovery_stat), K(tenant_info));
             }
-          } else if (OB_FAIL(seek_log_iterator_(ls_recovery_stat.get_sync_scn(), iterator))) {
-            LOG_WARN("failed to seek log iterator", KR(ret), K(ls_recovery_stat));
           } else {
-            start_scn = ls_recovery_stat.get_sync_scn();
+            tmp_start_scn = SCN::max(ls_recovery_stat.get_sync_scn(), tenant_info.get_sync_scn());
+          }
+
+          if (FAILEDx(seek_log_iterator_(tmp_start_scn, iterator))) {
+            LOG_WARN("failed to seek log iterator", KR(ret), K(tmp_start_scn), K(ls_recovery_stat), K(tenant_info));
+          } else {
+            start_scn = tmp_start_scn;
             LOG_INFO("start to seek at", K(start_scn));
           }
         }
@@ -523,10 +528,12 @@ int ObRecoveryLSService::process_gc_log_(logservice::ObGCLSLog &gc_log, const SC
   } else {
     ObLSRecoveryStatOperator ls_recovery;
     ObLSRecoveryStat ls_recovery_stat;
+
+    //only standby tenant can process gc log
     if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
       LOG_WARN("failed to construct ls recovery stat", KR(ret), K(sync_scn));
     } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat_in_trans(
-            ls_recovery_stat, trans))) {
+            ls_recovery_stat, share::STANDBY_TENANT_ROLE, trans))) {
       LOG_WARN("failed to update ls recovery stat", KR(ret), K(ls_recovery_stat));
     }
   }
@@ -581,10 +588,13 @@ int ObRecoveryLSService::process_ls_operator_(const share::ObLSAttr &ls_attr, co
   if (OB_SUCC(ret)) {
     ObLSRecoveryStat ls_recovery_stat;
     ObLSRecoveryStatOperator ls_recovery;
-    if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
+    share::ObTenantRole tenant_role;
+    if (OB_FAIL(get_and_check_tenant_role_(tenant_role))) {
+      LOG_WARN("failed to get tenant role", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
       LOG_WARN("failed to construct ls recovery stat", KR(ret), K(sync_scn));
     } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat_in_trans(
-            ls_recovery_stat, trans))) {
+            ls_recovery_stat, tenant_role, trans))) {
       LOG_WARN("failed to update ls recovery stat", KR(ret), K(ls_recovery_stat));
     }
   }
@@ -819,12 +829,39 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_(const SCN &sync_scn)
   } else if (SCN::base_scn() != sync_scn) {
     ObLSRecoveryStatOperator ls_recovery;
     ObLSRecoveryStat ls_recovery_stat;
-    if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
+    ObTenantRole tenant_role;
+    if (OB_FAIL(get_and_check_tenant_role_(tenant_role))) {
+      LOG_WARN("failed to get tenant role", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(construct_ls_recovery_stat(sync_scn, ls_recovery_stat))) {
       LOG_WARN("failed to construct ls recovery stat", KR(ret), K(sync_scn));
-    } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
-            *proxy_))) {
-      LOG_WARN("failed to update ls recovery stat", KR(ret),
+    } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat, tenant_role,
+                                                           *proxy_))) {
+      LOG_WARN("failed to update ls recovery stat", KR(ret), K(tenant_role),
           K(ls_recovery_stat));
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_and_check_tenant_role_(ObTenantRole &tenant_role)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else {
+    ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader *);
+    ObAllTenantInfo tenant_info;
+    //two thread for seed log and recovery_ls_manager
+    if (OB_ISNULL(tenant_info_loader)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else if (FALSE_IT(tenant_role = tenant_info.get_tenant_role())) {
+    } else if (!tenant_role.is_standby() && !tenant_role.is_restore()) {
+      ret = OB_IN_STOP_STATE;
+      LOG_WARN("not standby or restore tenant, no need do recovery", KR(ret), K(tenant_role), K(tenant_info));
     }
   }
   return ret;

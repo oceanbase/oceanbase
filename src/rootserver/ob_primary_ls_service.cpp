@@ -404,16 +404,21 @@ int ObTenantLSInfo::fix_ls_status_(const ObLSStatusMachineParameter &machine,
       if (OB_FAIL(ls_operator_.delete_ls(machine.ls_id_, machine.ls_info_, working_sw_status))) {
         LOG_WARN("failed to delete ls", KR(ret), K(machine));
       }
-    } else if (status_info.ls_is_creating() && working_sw_status.is_normal_status()) {
-      //TODO check the primary zone or unit group id is valid
-      ObLSRecoveryStat recovery_stat;
-      ObLSRecoveryStatOperator ls_recovery_operator;
-      if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, status_info.ls_id_,
-              false/*for_update*/, recovery_stat, *sql_proxy_))) {
-        LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id), K(status_info));
-      } else if (OB_FAIL(do_create_ls_(status_info, recovery_stat.get_create_scn()))) {
-        LOG_WARN("failed to create new ls", KR(ret), K(status_info),
-            K(recovery_stat));
+    } else if (status_info.ls_is_creating()) {
+      if (working_sw_status.is_normal_status()) {
+        //TODO check the primary zone or unit group id is valid
+        ObLSRecoveryStat recovery_stat;
+        ObLSRecoveryStatOperator ls_recovery_operator;
+        if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id, status_info.ls_id_,
+                false/*for_update*/, recovery_stat, *sql_proxy_))) {
+          LOG_WARN("failed to get ls recovery stat", KR(ret), K(tenant_id), K(status_info));
+        } else if (OB_FAIL(do_create_ls_(status_info, recovery_stat.get_create_scn()))) {
+          LOG_WARN("failed to create new ls", KR(ret), K(status_info),
+              K(recovery_stat));
+        }
+      } else {
+        //in switchover, if ls is in creating, no need create, it will set create_abort before switch access mode
+        LOG_INFO("tenant is in switching, no need to create ls", K(machine), K(working_sw_status));
       }
     } else if (status_info.ls_is_created()) {
       if (OB_FAIL(process_ls_status_after_created_(status_info, working_sw_status))) {
@@ -2282,7 +2287,8 @@ int ObPrimaryLSService::report_sys_ls_recovery_stat_()
     ObLSHandle ls_handle;
     if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
       LOG_WARN("failed to get ls", KR(ret));
-    } else if (OB_FAIL(ObTenantRecoveryReportor::update_ls_recovery(ls_handle.get_ls(), GCTX.sql_proxy_))) {
+    } else if (OB_FAIL(ObTenantRecoveryReportor::update_ls_recovery(ls_handle.get_ls(),
+                share::PRIMARY_TENANT_ROLE, GCTX.sql_proxy_))) {
       LOG_WARN("failed to update ls recovery", KR(ret));
     }
   }

@@ -40,6 +40,7 @@ class ObMySQLResult;
 namespace share
 {
 class SCN;
+class ObTenantRole;
 struct ObLSRecoveryStat
 {
   ObLSRecoveryStat()
@@ -172,14 +173,18 @@ public:
   /*
    * description: update ls recovery stat, only update sync_ts/readable_ts
    * @param[in] recovery_stat: new_recovery_stat
+   * @param[in] tenant_role: insure tenant_role is right
    * @param[in] proxy*/
   int update_ls_recovery_stat(const ObLSRecoveryStat &recovery_stat,
+                              const share::ObTenantRole &tenant_role,
                               ObMySQLProxy &proxy);
    /*
    * description: update ls recovery stat in trans, only update sync_ts/readable_ts
    * @param[in] recovery_stat
+   * @param[in] tenant_role: insure tenant_role is right
    * @param[in] client*/
   int update_ls_recovery_stat_in_trans(const ObLSRecoveryStat &recovery_stat,
+                                       const share::ObTenantRole &tenant_role,
                                        ObMySQLTransaction &trans);
   /*
    * description: get ls recovery stat

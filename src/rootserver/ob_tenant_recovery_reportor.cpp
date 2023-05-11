@@ -190,8 +190,8 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
           if (ls->is_sys_ls()) {
             // nothing todo
             // sys ls of user tenant is in ls_recovery
-          } else if (OB_FAIL(update_ls_recovery(ls, sql_proxy_))) {
-            LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls));
+          } else if (OB_FAIL(update_ls_recovery(ls, tenant_info.get_tenant_role(), sql_proxy_))) {
+            LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls), K(tenant_info));
           }
         }
       }//end while
@@ -208,13 +208,15 @@ int ObTenantRecoveryReportor::update_ls_recovery_stat_()
   return ret;
 }
 
-int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy *sql_proxy)
+int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls,
+const share::ObTenantRole &tenant_role, common::ObMySQLProxy *sql_proxy)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BLOCK_LS_RECOVERY_STAT_INC);
   logservice::ObLogService *ls_svr = MTL(logservice::ObLogService*);
-  if (OB_ISNULL(ls) || OB_ISNULL(sql_proxy)) {
+  if (OB_ISNULL(ls) || OB_ISNULL(sql_proxy) || !tenant_role.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls or sql proxy is null", KR(ret), KP(ls),  KP(sql_proxy));
+    LOG_WARN("invalid argument", KR(ret), KP(ls),  KP(sql_proxy), K(tenant_role));
   } else {
     SCN sync_scn;
     SCN readable_scn;
@@ -247,8 +249,8 @@ int ObTenantRecoveryReportor::update_ls_recovery(ObLS *ls, common::ObMySQLProxy 
         LOG_INFO("role change, try again", KR(ret), K(role),
                  K(first_proposal_id), K(second_proposal_id), KPC(ls));
       } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
-                                                             *sql_proxy))) {
-        LOG_WARN("failed to update ls recovery stat", KR(ret),
+                                                             tenant_role, *sql_proxy))) {
+        LOG_WARN("failed to update ls recovery stat", KR(ret), K(tenant_role),
                  K(ls_recovery_stat));
       }
     }

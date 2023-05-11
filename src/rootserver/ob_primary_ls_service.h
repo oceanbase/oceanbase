@@ -319,7 +319,6 @@ public:
       ka->mtl_thread_wait();\
     }\
   }
-
 protected:
   int tg_id_;
 private:

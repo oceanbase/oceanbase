@@ -101,6 +101,7 @@ private:
  int get_min_data_version_(uint64_t &compatible);
  int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
+  int get_and_check_tenant_role_(share::ObTenantRole &tenant_role);
 private:
   bool inited_;
   uint64_t tenant_id_;

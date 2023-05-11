@@ -60,7 +60,8 @@ public:
  }
  virtual void run2() override;
  //description: update ls recovery
- static int update_ls_recovery(storage::ObLS *ls, common::ObMySQLProxy *sql_proxy);
+ static int update_ls_recovery(storage::ObLS *ls,
+  const share::ObTenantRole &tenant_role, common::ObMySQLProxy *sql_proxy);
 
  int get_tenant_readable_scn(share::SCN &readable_scn);
  static int get_readable_scn(const share::ObLSID &id, share::SCN &read_scn);

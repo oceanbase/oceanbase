@@ -180,19 +180,20 @@ int ObLSRecoveryStatOperator::drop_ls(const uint64_t &tenant_id,
 }
 int ObLSRecoveryStatOperator::update_ls_recovery_stat(
     const ObLSRecoveryStat &ls_recovery,
+    const share::ObTenantRole &tenant_role,
     ObMySQLProxy &proxy)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ls_recovery.is_valid())) {
+  if (OB_UNLIKELY(!ls_recovery.is_valid() || !tenant_role.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_recovery));
+    LOG_WARN("invalid_argument", KR(ret), K(ls_recovery), K(tenant_role));
   } else {
     ObMySQLTransaction trans;
     const uint64_t exec_tenant_id = get_exec_tenant_id(ls_recovery.get_tenant_id());
     if (OB_FAIL(trans.start(&proxy, exec_tenant_id))) {
       LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(ls_recovery));
-    } else if (OB_FAIL(update_ls_recovery_stat_in_trans(ls_recovery, trans))) {
-      LOG_WARN("update ls recovery in trans", KR(ret), K(ls_recovery));
+    } else if (OB_FAIL(update_ls_recovery_stat_in_trans(ls_recovery, tenant_role, trans))) {
+      LOG_WARN("update ls recovery in trans", KR(ret), K(ls_recovery), K(tenant_role));
     }
     if (trans.is_started()) {
       int tmp_ret = OB_SUCCESS;
@@ -207,24 +208,25 @@ int ObLSRecoveryStatOperator::update_ls_recovery_stat(
 
 int ObLSRecoveryStatOperator::update_ls_recovery_stat_in_trans(
     const ObLSRecoveryStat &ls_recovery,
+    const share::ObTenantRole &tenant_role,
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
   ObLSRecoveryStat old_ls_recovery;
   ObAllTenantInfo tenant_info;
-  if (OB_UNLIKELY(!ls_recovery.is_valid())) {
+  if (OB_UNLIKELY(!ls_recovery.is_valid() || !tenant_role.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid_argument", KR(ret), K(ls_recovery));
+    LOG_WARN("invalid_argument", KR(ret), K(ls_recovery), K(tenant_role));
   } else if (OB_FAIL(get_ls_recovery_stat(ls_recovery.get_tenant_id(), ls_recovery.get_ls_id(),
         true, old_ls_recovery, trans))) {
     LOG_WARN("failed to get ls current recovery stat", KR(ret), K(ls_recovery));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(ls_recovery.get_tenant_id(), &trans,
                      true /* for update */, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(ls_recovery));
-  } else if (OB_UNLIKELY(!tenant_info.is_normal_status())) {
+  } else if (OB_UNLIKELY(!tenant_info.is_normal_status() || tenant_role != tenant_info.get_tenant_role())) {
     ret = OB_NEED_RETRY;
-    LOG_WARN("switchover status is not normal, do not update ls recovery", KR(ret),
-             K(ls_recovery), K(tenant_info));
+    LOG_WARN("switchover status or tenant role is not expected, do not update ls recovery", KR(ret),
+             K(ls_recovery), K(tenant_info), K(tenant_role));
   } else {
     const SCN sync_scn = ls_recovery.get_sync_scn() > old_ls_recovery.get_sync_scn() ?
         ls_recovery.get_sync_scn() : old_ls_recovery.get_sync_scn();

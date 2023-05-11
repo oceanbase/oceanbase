@@ -964,9 +964,8 @@ int ObRestoreService::restore_init_ls(const share::ObPhysicalRestoreJob &job_inf
         LOG_WARN("failed to init ls recovery stat", KR(ret), K(backup_ls_attr.backup_scn_),
                  K(sync_scn), K(readable_scn));
       } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat,
-                                                             *sql_proxy_))) {
-        LOG_WARN("failed to update ls recovery stat", KR(ret),
-                 K(ls_recovery_stat));
+                                      share::RESTORE_TENANT_ROLE, *sql_proxy_))) {
+        LOG_WARN("failed to update ls recovery stat", KR(ret), K(ls_recovery_stat));
       }
     }
     if (FAILEDx(create_all_ls_(*tenant_schema, backup_ls_attr.ls_attr_array_))) {
