@@ -108,6 +108,26 @@ void ObOptimizerStatsGatheringOp::reset()
   arena_.reset();
 }
 
+int ObOptimizerStatsGatheringOp::inner_rescan()
+{
+  int ret = OB_SUCCESS;
+  FOREACH(it, column_stats_map_) {
+    if (OB_NOT_NULL(it->second)) {
+      it->second->reset();
+      it->second->~ObOptColumnStat();
+      it->second = NULL;
+    }
+  }
+  table_stats_map_.reuse();
+  column_stats_map_.reuse();
+  part_map_.reuse();
+  arena_.reset();
+  if (OB_FAIL(ObOperator::inner_rescan())) {
+    LOG_WARN("failed to rescan");
+  }
+  return ret;
+}
+
 int ObOptimizerStatsGatheringOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -150,8 +170,8 @@ int ObOptimizerStatsGatheringOp::init_part_map()
   } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, MY_SPEC.table_id_, tab_schema))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(MY_SPEC.table_id_));
   } else if (OB_ISNULL(tab_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get table schema", K(ret));
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret));
   } else {
     if (MY_SPEC.is_part_table()) {
       if (OB_FAIL(pl::ObDbmsStats::get_table_partition_map(*tab_schema, part_map_))) {
