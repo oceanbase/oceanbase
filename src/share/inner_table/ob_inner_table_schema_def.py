@@ -5539,6 +5539,10 @@ def_table_schema(
 # 457 : __wr_statname
 # 458 : __wr_sysstat
 # 459 : __all_balance_task_helper
+
+# 460 : __all_tenant_snapshots
+# 461 : __all_tenant_snapshot_ls
+# 462 : __all_tenant_snapshot_ls_meta_table
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -11803,6 +11807,9 @@ def_table_schema(
 )
 
 # 12401: __all_virtual_tenant_parameter
+# 12402: __all_virtual_tenant_snapshots
+# 12403: __all_virtual_tenant_snapshot_ls
+# 12404: __all_virtual_tenant_snapshot_ls_meta_table
 #
 # 余留位置
 #
@@ -51708,6 +51715,7 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
 
+# 101089 : placeholder for unique index of __all_tenant_snapshots
 
 ################################################################################
 # Oracle Agent table Index [15306, 15375]
