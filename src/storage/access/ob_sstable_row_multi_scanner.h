@@ -18,7 +18,7 @@
 
 namespace oceanbase {
 namespace storage {
-class ObSSTableRowMultiScanner : public ObSSTableRowScanner
+class ObSSTableRowMultiScanner : public ObSSTableRowScanner<>
 {
 public:
   ObSSTableRowMultiScanner()

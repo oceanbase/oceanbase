@@ -125,8 +125,8 @@ void TestSSTableRowScanner::test_one_case(
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
   const ObDatumRow *prow = nullptr;
   const ObDatumRow *kv_prow = nullptr;
-  ObSSTableRowScanner scanner;
-  ObSSTableRowScanner kv_scanner;
+  ObSSTableRowScanner<> scanner;
+  ObSSTableRowScanner<> kv_scanner;
 
   if (HIT_PART == hit_mode) {
     const int64_t part_start = start + (end - start) / 3;

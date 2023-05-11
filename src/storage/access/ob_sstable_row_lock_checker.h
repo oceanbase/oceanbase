@@ -22,7 +22,7 @@ using namespace transaction;
 
 namespace storage {
 
-class ObSSTableRowLockChecker : public ObSSTableRowScanner {
+class ObSSTableRowLockChecker : public ObSSTableRowScanner<ObIndexTreeMultiPassPrefetcher<2, 2>> {
 public:
   ObSSTableRowLockChecker();
   virtual ~ObSSTableRowLockChecker();
