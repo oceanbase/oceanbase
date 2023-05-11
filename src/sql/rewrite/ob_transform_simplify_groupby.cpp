@@ -1022,7 +1022,6 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
     case T_FUN_SUM:
       //case T_FUN_APPROX_COUNT_DISTINCT: // return 1 or 0 //不进行改写
       //case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS://不进行改写
-    case T_FUN_GROUP_CONCAT:// return expr
       // case T_FUN_GROUP_RANK:// return 1 or 2    需要考虑order desc、nulls first、多列条件，暂不改写
       // case T_FUN_GROUP_DENSE_RANK:
       // case T_FUN_GROUP_PERCENT_RANK:// return 1 or 0
@@ -1047,6 +1046,15 @@ int ObTransformSimplifyGroupby::check_aggr_win_can_be_removed(const ObDMLStmt *s
     case T_WIN_FUN_DENSE_RANK: // return 1
     case T_WIN_FUN_PERCENT_RANK: { // return 0
       can_remove = true;
+      break;
+    }
+    case T_FUN_GROUP_CONCAT:{
+      if (OB_ISNULL(aggr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected func", K(ret));
+      } else {
+        can_remove = aggr->get_real_param_count() == 1;
+      }
       break;
     }
     case T_WIN_FUN_NTILE: {//return 1
