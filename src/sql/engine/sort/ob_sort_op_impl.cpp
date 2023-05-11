@@ -1976,10 +1976,9 @@ int ObSortOpImpl::add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
       LOG_WARN("failed to adjust topn heap", K(ret));
     }
   } else { // push back array
-    bool is_alloced = false;
     SortStoredRow *new_row = NULL;
     ObIAllocator &alloc = mem_context_->get_malloc_allocator();
-    if (OB_FAIL(generate_new_row(exprs, alloc, NULL, new_row, is_alloced))) {
+    if (OB_FAIL(copy_to_row(exprs, alloc, new_row))) {
       LOG_WARN("failed to generate new row", K(ret));
     } else if (OB_FAIL(topn_heap_->push(new_row))) {
       LOG_WARN("failed to push back row", K(ret));
@@ -2060,23 +2059,14 @@ int ObSortOpImpl::adjust_topn_heap(const common::ObIArray<ObExpr*> &exprs,
     LOG_WARN("unexpected error.top of the heap is NULL", K(ret), K(topn_heap_->count()));
   } else if (!topn_heap_->empty()) {
     if (comp_(&exprs, topn_heap_->top(), *eval_ctx_)) {
-      bool is_alloced = false;
-      SortStoredRow *new_row = NULL;
       ObIAllocator &alloc = mem_context_->get_malloc_allocator();
-      SortStoredRow *pre_heap_top_row = static_cast<SortStoredRow *>(topn_heap_->top());
-      if (OB_FAIL(generate_new_row(exprs, alloc, pre_heap_top_row, new_row, is_alloced))) {
+      SortStoredRow* new_row = NULL;
+      if (OB_FAIL(copy_to_topn_row(exprs, alloc, new_row))) {
         LOG_WARN("failed to generate new row", K(ret));
       } else if (OB_FAIL(topn_heap_->replace_top(new_row))) {
         LOG_WARN("failed to replace top", K(ret));
       } else {
         store_row = new_row;
-        if (is_alloced) {
-          sql_mem_processor_.alloc(-1 * pre_heap_top_row->get_max_size());
-          inmem_row_size_ -= pre_heap_top_row->get_max_size();
-          mem_context_->get_malloc_allocator().free(pre_heap_top_row);
-          pre_heap_top_row = NULL;
-        }
-        LOG_DEBUG("in memory topn sort check replace row", KPC(new_row));
       }
     } else {
       ret = comp_.ret_;
@@ -2104,6 +2094,7 @@ int ObSortOpImpl::adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &ex
   } else if (!topn_heap_->empty()) {
     int cmp = comp_.with_ties_cmp(&exprs, topn_heap_->top(), *eval_ctx_);
     bool is_alloced = false;
+    bool add_ties_array = false;
     SortStoredRow *new_row = NULL;
     SortStoredRow *copy_pre_heap_top_row = NULL;
     ObIAllocator &alloc = mem_context_->get_malloc_allocator();
@@ -2112,8 +2103,7 @@ int ObSortOpImpl::adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &ex
       /* do nothing */
     } else if (0 == cmp) {
       // equal to heap top, add row to ties array
-      bool ties_array_is_alloced = false;
-      if (OB_FAIL(generate_new_row(exprs, alloc, NULL, new_row, ties_array_is_alloced))) {
+      if (OB_FAIL(copy_to_row(exprs, alloc, new_row))) {
         LOG_WARN("failed to generate new row", K(ret));
       } else if (OB_FAIL(ties_array_.push_back(new_row))) {
         LOG_WARN("failed to push back ties array", K(ret));
@@ -2123,7 +2113,7 @@ int ObSortOpImpl::adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &ex
       }
     } else if (OB_FAIL(generate_new_row(pre_heap_top_row, alloc, copy_pre_heap_top_row))) {
       LOG_WARN("failed to generate new row", K(ret));
-    } else if (OB_FAIL(generate_new_row(exprs, alloc, pre_heap_top_row, new_row, is_alloced))) {
+    } else if (OB_FAIL(copy_to_topn_row(exprs, alloc, new_row))) {
       LOG_WARN("failed to generate new row", K(ret));
     } else if (OB_FAIL(topn_heap_->replace_top(new_row))) {
       LOG_WARN("failed to replace top", K(ret));
@@ -2144,73 +2134,93 @@ int ObSortOpImpl::adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &ex
       }
       ties_array_.reset();
       store_row = new_row;
-      sql_mem_processor_.alloc(-1 * copy_pre_heap_top_row->get_max_size());
-      inmem_row_size_ -= copy_pre_heap_top_row->get_max_size();
-      mem_context_->get_malloc_allocator().free(copy_pre_heap_top_row);
-      copy_pre_heap_top_row = NULL;
     } else if (OB_FAIL(ties_array_.push_back(copy_pre_heap_top_row))) {
       LOG_WARN("failed to push back ties array", K(ret));
     } else {
       // previous heap top equal to new heap top, add previous heap top to ties array
       store_row = new_row;
+      add_ties_array = true;
       LOG_DEBUG("in memory topn sort with ties add ties array",
                   KPC(new_row), KPC(copy_pre_heap_top_row));
     }
-    if (OB_SUCC(ret) && is_alloced) {
-      sql_mem_processor_.alloc(-1 * pre_heap_top_row->get_max_size());
-      inmem_row_size_ -= pre_heap_top_row->get_max_size();
-      mem_context_->get_malloc_allocator().free(pre_heap_top_row);
-      pre_heap_top_row = NULL;
+    if (!add_ties_array && OB_NOT_NULL(copy_pre_heap_top_row)) {
+      sql_mem_processor_.alloc(-1 * copy_pre_heap_top_row->get_max_size());
+      inmem_row_size_ -= copy_pre_heap_top_row->get_max_size();
+      mem_context_->get_malloc_allocator().free(copy_pre_heap_top_row);
+      copy_pre_heap_top_row = NULL;
     }
   }
   return ret;
 }
 
-//generate new_row from exprs.
-//if dt_row space is enough reuse the space, else use the alloc get new space.
-int ObSortOpImpl::generate_new_row(const common::ObIArray<ObExpr*> &exprs,
+// copy exprs values to topn heap top row.
+int ObSortOpImpl::copy_to_topn_row(const common::ObIArray<ObExpr*> &exprs,
                                    ObIAllocator &alloc,
-                                   SortStoredRow *dt_row,
-                                   SortStoredRow *&new_row,
-                                   bool &is_alloced)
+                                   SortStoredRow *&new_row)
 {
   int ret = OB_SUCCESS;
-  new_row = NULL;
+  SortStoredRow *top_row = static_cast<SortStoredRow *>(topn_heap_->top());
+  if (OB_FAIL(copy_to_row(exprs, alloc, top_row))) {
+    LOG_WARN("failed to copy to row", K(ret));
+  } else {
+    new_row = top_row;
+    topn_heap_->top() = static_cast<ObChunkDatumStore::StoredRow *>(top_row);
+  }
+  return ret;
+}
+
+// copy exprs values to row.
+// if row space is enough reuse the space, else use the alloc get new space.
+int ObSortOpImpl::copy_to_row(const common::ObIArray<ObExpr*> &exprs,
+                              ObIAllocator &alloc,
+                              SortStoredRow *&row)
+{
+  int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t row_size = 0;
   int64_t buffer_len = 0;
-  is_alloced = false;
+  SortStoredRow *dst = NULL;
+  SortStoredRow *reclaim_row = NULL;
   //check to see whether this old row's space is adequate for new one
   if (OB_FAIL(ObChunkDatumStore::Block::row_store_size(exprs,
                                                        *eval_ctx_,
                                                        row_size,
                                                        STORE_ROW_EXTRA_SIZE))) {
     LOG_WARN("failed to calc copy size", K(ret));
-  } else if (NULL != dt_row && dt_row->get_max_size() >= row_size) {
-    buf = reinterpret_cast<char*>(dt_row);
-    new_row = dt_row;
-    buffer_len = dt_row->get_max_size();
+  } else if (NULL != row && row->get_max_size() >= row_size) {
+    buf = reinterpret_cast<char*>(row);
+    buffer_len = row->get_max_size();
+    dst = row;
   } else {
     buffer_len = row_size * 2;
     if (OB_ISNULL(buf = reinterpret_cast<char*>(alloc.alloc(buffer_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("alloc buf failed", K(ret));
     } else {
-      is_alloced = true;
       sql_mem_processor_.alloc(buffer_len);
       inmem_row_size_ += buffer_len;
+      dst = reinterpret_cast<SortStoredRow *>(buf);
+      reclaim_row = row;
     }
   }
   if (OB_SUCC(ret)) {
-    ObStoredDatumRow *sr = NULL;
-    if (OB_FAIL(ObStoredDatumRow::build(
-                sr, exprs, *eval_ctx_, buf, buffer_len, STORE_ROW_EXTRA_SIZE))) {
+    ObChunkDatumStore::StoredRow *sr = static_cast<ObChunkDatumStore::StoredRow *>(dst);
+    if (OB_FAIL(ObChunkDatumStore::StoredRow::build(
+          sr, exprs, *eval_ctx_, buf, buffer_len, STORE_ROW_EXTRA_SIZE))) {
       LOG_WARN("build stored row failed", K(ret));
+      if (row != dst) {
+        reclaim_row = dst;
+      }
     } else {
-      static_assert(sizeof(*new_row) == sizeof(*sr), "unexpected SortStoredRow size");
-      new_row = static_cast<SortStoredRow *>(sr);
-      new_row->set_max_size(buffer_len);
+      row = dst;
+      row->set_max_size(buffer_len);
     }
+  }
+  if (NULL != reclaim_row) {
+    sql_mem_processor_.alloc(-1 * reclaim_row->get_max_size());
+    inmem_row_size_ -= reclaim_row->get_max_size();
+    mem_context_->get_malloc_allocator().free(reclaim_row);
+    reclaim_row = NULL;
   }
   return ret;
 }
