@@ -384,7 +384,9 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
           LOG_WARN("fail to process internal result", K(ret));
         }
       } else {
-        if (OB_FAIL(attach(buffer))) {
+        bool is_first_buffer_cached = false;
+        bool inc_recv_buf_cnt = false;
+        if (OB_FAIL(attach(buffer, is_first_buffer_cached, inc_recv_buf_cnt))) {
           LOG_WARN("fail to attach buffer", K(ret));
         } else {
           free_buffer_count();
