@@ -276,8 +276,8 @@ int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id, 
     if (OB_FAIL(all_check_items_.erase_if(detectable_id, remove_node_call, is_erased))) {
       if (OB_HASH_NOT_EXIST == ret) {
         // if not found, the possible reason is that node is removed by ObDetectCallbackNodeExecuteCall
-        LIB_LOG(WARN, "[DM] unregister cb failed, maybe removed by other thread",
-            K(ret), K(detectable_id), K(node_sequence_id));
+        LIB_LOG(TRACE, "[DM] unregister cb failed, maybe removed by other thread",
+            K(detectable_id), K(node_sequence_id));
       } else {
         LIB_LOG(WARN, "[DM] unregister cb failed", K(ret), K(detectable_id), K(node_sequence_id));
       }

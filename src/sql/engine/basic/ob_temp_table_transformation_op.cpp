@@ -233,7 +233,12 @@ int ObTempTableTransformationOp::destory_local_interm_results(ObIArray<uint64_t>
     dtl_int_key.channel_id_ = result_ids.at(i);
     if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_interm_result_info(
                                                                             dtl_int_key))) {
-      LOG_WARN("failed to erase interm result info in manager.", K(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_WARN("interm result may erased by DM", K(ret));
+      } else {
+        LOG_WARN("failed to erase interm result info in manager.", K(ret));
+      }
     }
   }
   return ret;
