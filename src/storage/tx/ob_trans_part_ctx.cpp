@@ -6080,11 +6080,6 @@ int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
   } else if (OB_FAIL(set_app_trace_info_(app_trace_info))) {
     TRANS_LOG(WARN, "set app trace info error", K(ret), K(app_trace_info), KPC(this));
   } else if (FALSE_IT(stmt_expired_time_ = expire_ts)) {
-  } else if (OB_FAIL(unregister_timeout_task_())) {
-    TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
-  } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
-                                            + trans_id_.hash() % USEC_PER_SEC))) {
-    TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
   } else {
     if (commit_time.is_valid()) {
       set_stc_(commit_time);
@@ -6099,6 +6094,11 @@ int ObPartTransCtx::sub_prepare(const ObLSArray &parts,
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::REDO_PREPARING);
     if (OB_FAIL(prepare_redo())) {
       TRANS_LOG(WARN, "fail to execute sub prepare", K(ret), KPC(this));
+    } else if (OB_FAIL(unregister_timeout_task_())) {
+      TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
+    } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
+                                              + trans_id_.hash() % USEC_PER_SEC))) {
+      TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
     } else {
       part_trans_action_ = ObPartTransAction::COMMIT;
     }
@@ -6132,11 +6132,6 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
   } else if (OB_UNLIKELY(is_exiting_)) {
     ret = OB_TRANS_IS_EXITING;
     TRANS_LOG(WARN, "transaction is exiting", K(ret), KPC(this));
-  } else if (OB_FAIL(unregister_timeout_task_())) {
-    TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
-  } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
-                                            + trans_id_.hash() % USEC_PER_SEC))) {
-    TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
   } else if (!is_rollback && ObTxState::REDO_COMPLETE > get_downstream_state()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "not in prepare state", K(ret), KPC(this));
@@ -6149,6 +6144,11 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
     // (void)set_sub2pc_coord_state(Ob2PCPrepareState::VERSION_PREPARING);
     if (OB_FAIL(continue_execution(is_rollback))) {
       TRANS_LOG(WARN, "fail to continue execution", KR(ret), KPC(this));
+    } else if (OB_FAIL(unregister_timeout_task_())) {
+      TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
+    } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
+                                              + trans_id_.hash() % USEC_PER_SEC))) {
+      TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
     }
     last_request_ts_ = ObClockGenerator::getClock();
   }
