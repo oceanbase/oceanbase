@@ -379,10 +379,16 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
       buffer->set_data_msg(true);
       buffer->seq_no() = 1;
       buffer->pos() = 0;
-      if (OB_FAIL(attach(buffer))) {
-        LOG_WARN("fail to attach buffer", K(ret));
+      if (use_interm_result_) {
+        if (OB_FAIL(ObDTLIntermResultManager::process_interm_result(buffer, id_))) {
+          LOG_WARN("fail to process internal result", K(ret));
+        }
       } else {
-        free_buffer_count();
+        if (OB_FAIL(attach(buffer))) {
+          LOG_WARN("fail to attach buffer", K(ret));
+        } else {
+          free_buffer_count();
+        }
       }
     }
     if (NULL != buffer) {
