@@ -510,12 +510,17 @@ int ObLogSubPlanFilter::check_if_match_das_group_rescan(ObLogicalOperator *root,
         group_rescan = false;
       } else {/*do nothing*/}
     }
-  } else if (root->get_num_of_child() == 1) {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(SMART_CALL(check_if_match_das_group_rescan(root->get_child(0),
-                                                             group_rescan)))) {
-        LOG_WARN("failed to check match das batch rescan", K(ret));
-      }
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type()) {
+    if (1 != root->get_num_of_child()) {
+      group_rescan = false;
+    } else if (OB_ISNULL(root->get_child(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (!root->get_child(0)->is_table_scan()) {
+      group_rescan = false;
+    } else if (OB_FAIL(SMART_CALL(check_if_match_das_group_rescan(root->get_child(0),
+                                                                  group_rescan)))) {
+      LOG_WARN("failed to check match das batch rescan", K(ret));
     }
   } else {/*do nothing*/}
   return ret;
