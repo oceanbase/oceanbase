@@ -137,7 +137,7 @@ struct ObQueryHint {
                                                      || global_hint_.has_hint_exclude_concurrent(); }
 
   // print hint
-  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_root_stmt) const;
+  int print_stmt_hint(PlanText &plan_text, const ObDMLStmt &stmt, const bool is_first_stmt_for_hint) const;
   int print_outline_data(PlanText &plan_text) const;
   int print_qb_name_hints(PlanText &plan_text) const;
   int print_qb_name_hint(PlanText &plan_text, int64_t stmt_id) const;
