@@ -42,7 +42,8 @@ struct DfoInfo {
     child_dfos_(),
     status_(DfoStatus::INIT),
     dop_(0),
-    location_addr_()
+    location_addr_(),
+    force_bushy_(false)
   {}
   DfoInfo *parent_;
   DfoInfo *depend_sibling_;
@@ -50,6 +51,7 @@ struct DfoInfo {
   DfoStatus status_;
   int64_t dop_;
   ObHashSet<ObAddr> location_addr_;
+  bool force_bushy_;
 
   void reset()
   {
@@ -59,6 +61,7 @@ struct DfoInfo {
     child_dfos_.reset();
     location_addr_.destroy();
   }
+  bool force_bushy() { return force_bushy_; }
   bool has_sibling() const { return nullptr != depend_sibling_; }
   void set_depend_sibling(DfoInfo *sibling) { depend_sibling_ = sibling; }
   inline bool has_child() const { return child_dfos_.count() > 0; }
@@ -95,7 +98,8 @@ struct DfoInfo {
 
 class ObLogExchange;
 struct PxInfo {
-  PxInfo() : root_op_(nullptr), root_dfo_(nullptr), threads_(0), acc_threads_(0) {}
+  PxInfo() : root_op_(nullptr), root_dfo_(nullptr), threads_(0),
+             acc_threads_(0) {}
   PxInfo(ObLogExchange *root_op, DfoInfo *root_dfo)
       : root_op_(root_op), root_dfo_(root_dfo), threads_(0), acc_threads_(0) {}
   void reset_dfo()
@@ -202,6 +206,7 @@ int DfoTreeNormalizer<T>::normalize(T &root)
   int ret = OB_SUCCESS;
   int64_t non_leaf_cnt = 0;
   int64_t non_leaf_pos = -1;
+  bool need_force_bushy = false;
   ARRAY_FOREACH_X(root.child_dfos_, idx, cnt, OB_SUCC(ret)) {
     T *dfo = root.child_dfos_.at(idx);
     if (0 < dfo->get_child_count()) {
@@ -210,8 +215,11 @@ int DfoTreeNormalizer<T>::normalize(T &root)
         non_leaf_pos = idx;
       }
     }
+    if (dfo->force_bushy() && !need_force_bushy) {
+      need_force_bushy = true;
+    }
   }
-  if (non_leaf_cnt > 1) {
+  if (non_leaf_cnt > 1 || need_force_bushy) {
     // UPDATE:
     // 考虑到这种场景很少见，对于 bushy tree 不做右深树变左深树的优化，
     // 直接按照树本来形态调度

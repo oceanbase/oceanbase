@@ -13300,6 +13300,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                 ObRelIds &right_tables,
                                                 bool is_current_dfo,
                                                 bool is_fully_partition_wise,
+                                                int64_t current_dfo_level,
                                                 const ObIArray<ObRawExpr*> &left_join_conditions,
                                                 const ObIArray<ObRawExpr*> &right_join_conditions,
                                                 ObIArray<JoinFilterInfo> &join_filter_infos)
@@ -13328,6 +13329,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         hint_info,
                                                                         is_current_dfo,
                                                                         is_fully_partition_wise,
+                                                                        current_dfo_level,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
                                                                         join_filter_infos))) {
@@ -13444,6 +13446,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                    hint_info,
                                    is_current_dfo,
                                    is_fully_partition_wise,
+                                   current_dfo_level,
                                    pushdown_left_quals,
                                    pushdown_right_quals,
                                    join_filter_infos))) {
@@ -13464,6 +13467,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     right_tables,
                                                                     is_current_dfo,
                                                                     is_fully_partition_wise,
+                                                                    current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13473,6 +13477,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     right_tables,
                                                                     is_current_dfo,
                                                                     is_fully_partition_wise,
+                                                                    current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13480,11 +13485,13 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     }
   } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
              static_cast<ObLogExchange*>(op)->is_consumer() &&
-             OB_FALSE_IT(is_current_dfo = false)) {
+             static_cast<ObLogExchange*>(op)->is_local()) {
     /* do nothing */
   } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
              static_cast<ObLogExchange*>(op)->is_consumer() &&
-             static_cast<ObLogExchange*>(op)->is_local()) {
+             (OB_FALSE_IT(is_current_dfo = false) ||
+              OB_FALSE_IT(current_dfo_level = (current_dfo_level == -1) ? -1 : current_dfo_level + 1) ||
+              current_dfo_level >= 2)) {
     /* do nothing */
   } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
     is_fully_partition_wise |= op->is_fully_partition_wise();
@@ -13493,6 +13500,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                             right_tables,
                                                             is_current_dfo,
                                                             is_fully_partition_wise,
+                                                            current_dfo_level,
                                                             left_join_conditions,
                                                             right_join_conditions,
                                                             join_filter_infos)))) {
@@ -13506,6 +13514,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                               right_tables,
                                                               is_current_dfo,
                                                               is_fully_partition_wise,
+                                                              current_dfo_level,
                                                               left_join_conditions,
                                                               right_join_conditions,
                                                               join_filter_infos)))) {
@@ -13522,6 +13531,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                   const JoinFilterPushdownHintInfo &hint_info,
                                                   bool is_current_dfo,
                                                   bool is_fully_partition_wise,
+                                                  int64_t current_dfo_level,
                                                   const ObIArray<ObRawExpr*> &left_join_conditions,
                                                   const ObIArray<ObRawExpr*> &right_join_conditions,
                                                   ObIArray<JoinFilterInfo> &join_filter_infos)
@@ -13566,6 +13576,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                       right_tables,
                                                       is_current_dfo,
                                                       is_fully_partition_wise,
+                                                      current_dfo_level,
                                                       candi_left_filters,
                                                       candi_right_filters,
                                                       join_filter_infos))) {

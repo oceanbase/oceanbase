@@ -1908,6 +1908,7 @@ struct NullAwareAntiJoinInfo {
                                         bool config_disable,
                                         bool is_current_dfo,
                                         bool is_fully_partition_wise,
+                                        int64_t current_dfo_level,
                                         const ObIArray<ObRawExpr*> &left_join_conditions,
                                         const ObIArray<ObRawExpr*> &right_join_conditions,
                                         ObIArray<JoinFilterInfo> &join_filter_infos);

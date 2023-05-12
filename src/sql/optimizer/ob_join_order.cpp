@@ -9238,6 +9238,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
     bool right_need_exchange = ObOptimizerUtil::is_right_need_exchange(*right_path.get_sharding(), join_dist_algo);
     bool left_need_exchange = ObOptimizerUtil::is_left_need_exchange(*left_path.get_sharding(), join_dist_algo);
     bool is_fully_partition_wise = !left_need_exchange && !right_need_exchange && DIST_PARTITION_WISE == join_dist_algo;
+    int64_t current_dfo_level = left_need_exchange ? -1 : (right_need_exchange ? 1 : 0);
     ObSEArray<ObRawExpr*, 4> left_exprs;
     ObSEArray<ObRawExpr*, 4> right_exprs;
     if (OB_FAIL(ObOptimizerUtil::extract_equal_join_conditions(equal_join_conditions,
@@ -9255,6 +9256,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                        !get_plan()->get_optimizer_context().enable_runtime_filter(),
                        !right_need_exchange,
                        is_fully_partition_wise,
+                       current_dfo_level,
                        left_exprs,
                        right_exprs,
                        join_filter_infos))) {
@@ -9289,6 +9291,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                   bool config_disable,
                                                   bool is_current_dfo,
                                                   bool is_fully_partition_wise,
+                                                  int64_t current_dfo_level,
                                                   const ObIArray<ObRawExpr*> &left_join_conditions,
                                                   const ObIArray<ObRawExpr*> &right_join_conditions,
                                                   ObIArray<JoinFilterInfo> &join_filter_infos)
@@ -9382,8 +9385,15 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
     }
   } else if (right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
+    int64_t left_current_dfo_level = (current_dfo_level == -1 ? -1 : current_dfo_level +
+        (int64_t)(join_path.is_left_need_exchange()));
+    int64_t right_current_dfo_level = (current_dfo_level == -1 ? -1 : current_dfo_level +
+        (int64_t)(join_path.is_right_need_exchange()));
     is_fully_partition_wise |= join_path.is_fully_partition_wise();
-    if (OB_ISNULL(join_path.left_path_) ||
+    if (left_current_dfo_level >= 2) {
+      // If the root join path doesn't has the left child dfo,
+      // It should not be generated cuz it cannot actually work by current scheduler.
+    } else if (OB_ISNULL(join_path.left_path_) ||
                OB_ISNULL(join_path.left_path_->parent_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -9395,12 +9405,16 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                           config_disable,
                                                           !join_path.is_left_need_exchange() && is_current_dfo,
                                                           is_fully_partition_wise,
+                                                          left_current_dfo_level,
                                                           left_join_conditions,
                                                           right_join_conditions,
                                                           join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
     if (OB_FAIL(ret)) {
+    } else if (right_current_dfo_level >= 2) {
+      // If the root join path doesn't has the left child dfo,
+      // It should not be generated cuz it cannot actually work by current scheduler.
     } else if (OB_ISNULL(join_path.right_path_) ||
                OB_ISNULL(join_path.right_path_->parent_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -9413,6 +9427,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                         config_disable,
                                                         !join_path.is_right_need_exchange() && is_current_dfo,
                                                         is_fully_partition_wise,
+                                                        right_current_dfo_level,
                                                         left_join_conditions,
                                                         right_join_conditions,
                                                         join_filter_infos)))) {
@@ -9448,6 +9463,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                                       hint_info,
                                                                       is_current_dfo,
                                                                       is_fully_partition_wise,
+                                                                      current_dfo_level,
                                                                       pushdown_left_quals,
                                                                       pushdown_right_quals,
                                                                       join_filter_infos))) {

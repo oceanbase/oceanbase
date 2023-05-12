@@ -650,6 +650,8 @@ public:
   void set_coord_info_ptr(ObPxCoordInfo *ptr) { coord_info_ptr_ = ptr; }
   ObPxCoordInfo *get_coord_info_ptr() { return coord_info_ptr_; }
   ObP2PDhMapInfo &get_p2p_dh_map_info() { return p2p_dh_map_info_;};
+  bool force_bushy() { return force_bushy_; }
+  void set_force_bushy(bool flag) { force_bushy_ = flag; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -754,6 +756,7 @@ private:
   ObP2PDhMapInfo p2p_dh_map_info_;
   // ---------------
   ObPxCoordInfo *coord_info_ptr_;
+  bool force_bushy_;
 };
 
 
