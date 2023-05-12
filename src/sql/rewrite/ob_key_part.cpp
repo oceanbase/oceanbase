@@ -300,6 +300,7 @@ int ObKeyPartPos::set_enum_set_values(
 {
   int ret = OB_SUCCESS;
   ObString value;
+  enum_set_values_.set_block_allocator(ModulePageAllocator(allocator));
   for (int64_t i = 0; OB_SUCC(ret) && i < enum_set_values.count(); ++i) {
     value.reset();
     if (OB_FAIL(ob_write_string(allocator, enum_set_values.at(i), value))) {
