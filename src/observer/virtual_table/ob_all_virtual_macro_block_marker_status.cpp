@@ -157,6 +157,7 @@ int ObAllVirtualMacroBlockMarkerStatus::inner_get_next_row(common::ObNewRow *&ro
       case OB_APP_MIN_COLUMN_ID + 16: {
         // comment
         cur_row_.cells_[i].set_varchar(comment_);
+        cur_row_.cells_[i].set_collation_type(collcation_type);
         break;
       }
       default: {
