@@ -268,14 +268,34 @@ int LSFetchCtx::append_log(const char *buf, const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(mem_storage_.append(buf, buf_len))) {
-    LOG_ERROR("append log into mem_storage_ failed", KR(ret), K_(tls_id), KP(buf), K(buf_len), K_(mem_storage), K_(group_iterator));
-  } else {
-    ATOMIC_AAF(&fetched_log_size_, buf_len);
-    LOG_DEBUG("append_log succ", K(buf_len), KPC(this));
+if (! mem_storage_.is_inited()) {
+    const LSN &start_lsn = progress_.get_next_lsn();
+
+    if (OB_FAIL(mem_storage_.init(start_lsn))) {
+      LOG_ERROR("init mem_storage_ failed", KR(ret), K_(tls_id), K(start_lsn));
+    } else if (OB_FAIL(group_iterator_.reuse(start_lsn))) {
+      LOG_ERROR("MemPalfBufferIterator resuse failed", KR(ret), K_(tls_id), K(start_lsn));
+    } else {
+      LOG_DEBUG("mem_storage_ init and MemPalfBufferIterator resuse succ", K_(tls_id), K(start_lsn));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(mem_storage_.append(buf, buf_len))) {
+      LOG_ERROR("append log into mem_storage_ failed", KR(ret), K_(tls_id), KP(buf), K(buf_len),
+          K_(mem_storage), K_(group_iterator));
+    } else {
+      ATOMIC_AAF(&fetched_log_size_, buf_len);
+      LOG_DEBUG("append_log succ", K(buf_len), KPC(this));
+    }
   }
 
   return ret;
+}
+
+void LSFetchCtx::reset_memory_storage()
+{
+  mem_storage_.destroy();
 }
 
 int LSFetchCtx::get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn)
