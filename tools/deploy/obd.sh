@@ -233,9 +233,10 @@ function get_deploy_name {
     cluster_num=$(echo "$cluster_dirs" | wc -l )
     if (( ${cluster_num} == 1 )) && [[ -f $DEFAULT_DEPLOY_NAME_FILE ]]
     then
-    deploy_name=$(cat "$DEFAULT_DEPLOY_NAME_FILE") && 
-    show_deploy_name && 
-    return
+      deploy_name=$(cat "$DEFAULT_DEPLOY_NAME_FILE") && show_deploy_name && return
+    elif [[ "$OB_DO_DEFAULT_DEPLOY_NAME" ]]
+    then
+      deploy_name=$OB_DO_DEFAULT_DEPLOY_NAME && show_deploy_name && return
     fi
     echo """
 Deploy name is required. Use -n <deploy-name> to set the deploy name.
@@ -537,6 +538,20 @@ function graph {
   obd tool graph $deploy_name $extra_args
 }
 
+function set-config {
+  OB_DO_GLOBAL_CONFIG=${OB_DO_GLOBAL_CONFIG:-~/.ob_do_global}
+  touch $OB_DO_GLOBAL_CONFIG
+  if [[ "$1" != "" ]]; then
+    key="$1"
+    value="$2"
+    if [[ $(grep -E "^$key=" $OB_DO_GLOBAL_CONFIG) ]]; then
+      sed -i "s/^$key=.*/$key=$value/g" $OB_DO_GLOBAL_CONFIG
+    else
+      echo "$key=$value" >> $OB_DO_GLOBAL_CONFIG
+    fi
+  fi
+}
+
 
 function help_info {
   echo """
@@ -654,7 +669,7 @@ function main() {
   if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
-  obd env set OBD_LOCK_MODE 1
+  [[ "$OBD_LOCK_MODE" ]] || obd env set OBD_LOCK_MODE 1
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then
@@ -707,7 +722,7 @@ function main() {
     connect
     ;;
     oracle)
-    extra_args="--user SYS --tenant oracle $extra_args"
+    extra_args="--user SYS -m OB_ORACLE --tenant oracle $extra_args"
     connect
     ;;
     pid)
@@ -759,6 +774,9 @@ function main() {
     ;;
     display-trace)
     obd display-trace ${extra_args}
+    ;;
+    set-config)
+    set-config ${extra_args}
     ;;
     *)
     echo "Unknown command: $command"
