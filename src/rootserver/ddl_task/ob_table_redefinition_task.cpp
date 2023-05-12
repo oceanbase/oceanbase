@@ -63,6 +63,7 @@ int ObTableRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_i
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     consumer_group_id_ = consumer_group_id;
     task_type_ = ddl_type;
     object_id_ = data_table_id;

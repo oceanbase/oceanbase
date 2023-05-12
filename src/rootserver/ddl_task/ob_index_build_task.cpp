@@ -351,6 +351,7 @@ int ObIndexBuildTask::init(
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     is_global_index_ = index_schema->is_global_index_table();
     is_unique_index_ = index_schema->is_unique_index();
     tenant_id_ = tenant_id;

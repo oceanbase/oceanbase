@@ -48,6 +48,7 @@ int ObDropPrimaryKeyTask::init(const uint64_t tenant_id, const int64_t task_id, 
                                             alter_table_arg, task_status, snapshot_version))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     consumer_group_id_ = consumer_group_id;
     task_version_ = OB_DROP_PRIMARY_KEY_TASK_VERSION;
     ddl_tracing_.open();

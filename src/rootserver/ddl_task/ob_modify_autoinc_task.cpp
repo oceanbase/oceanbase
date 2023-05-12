@@ -171,6 +171,7 @@ int ObModifyAutoincTask::init(const uint64_t tenant_id,
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     task_type_ = ObDDLType::DDL_MODIFY_AUTO_INCREMENT;
     object_id_ = table_id;
     target_object_id_ = table_id;

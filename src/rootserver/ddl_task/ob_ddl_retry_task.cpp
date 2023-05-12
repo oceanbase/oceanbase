@@ -179,6 +179,7 @@ int ObDDLRetryTask::init(const uint64_t tenant_id,
   } else if (OB_FAIL(init_compat_mode(ddl_type, ddl_arg))) {
     LOG_WARN("init compat mode failed", K(ret));
   } else {
+    set_gmt_create(ObTimeUtility::current_time());
     object_id_ = object_id;
     target_object_id_ = object_id;
     schema_version_ = schema_version;
