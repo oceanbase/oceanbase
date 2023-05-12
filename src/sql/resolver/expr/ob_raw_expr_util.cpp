@@ -1049,6 +1049,17 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
               }
             }
           }
+#define GET_CONST_EXPR_VALUE(expr, val)                                         \
+do {                                                                            \
+  const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr*>(expr);      \
+  CK (OB_NOT_NULL(c_expr));                                                     \
+  CK (c_expr->get_value().is_uint64()                                           \
+      || c_expr->get_value().is_int()                                           \
+      || c_expr->get_value().is_unknown());                                     \
+  OX (val = c_expr->get_value().is_uint64() ? c_expr->get_value().get_uint64()  \
+        : c_expr->get_value().is_int() ? c_expr->get_value().get_int()          \
+        : c_expr->get_value().get_unknown());                                   \
+} while (0)
           if (OB_FAIL(ret)) {
           } else if(T_NULL == iexpr->get_expr_type() && 0 == i && udf_info.is_udf_udt_cons()) {
             // do nothing, udt constructor first param is mocked with null expr
@@ -1066,11 +1077,21 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                      K(iexpr->get_expr_type()), K(ret));
           } else if (T_OBJ_ACCESS_REF == iexpr->get_expr_type()) {
             ObObjAccessRawExpr* obj = static_cast<ObObjAccessRawExpr*>(iexpr);
+            uint64_t pkg_id = OB_INVALID_ID;
+            uint64_t var_id = OB_INVALID_ID;
             CK (OB_NOT_NULL(obj));
             OX (obj->set_write(true));
             OZ (obj->formalize(params.session_info_));
+            if (obj->get_access_idxs().count() > 0 &&
+                OB_NOT_NULL(obj->get_access_idxs().at(0).get_sysfunc_) &&
+                T_OP_GET_PACKAGE_VAR == obj->get_access_idxs().at(0).get_sysfunc_->get_expr_type()) {
+              const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(obj->get_access_idxs().at(0).get_sysfunc_);
+              CK (OB_NOT_NULL(f_expr) && f_expr->get_param_count() >= 2);
+              GET_CONST_EXPR_VALUE(f_expr->get_param_expr(0), pkg_id);
+              GET_CONST_EXPR_VALUE(f_expr->get_param_expr(1), var_id);
+            }
             OZ (udf_raw_expr->add_param_desc(
-              ObUDFParamDesc(ObUDFParamDesc::OBJ_ACCESS_OUT)));
+                ObUDFParamDesc(ObUDFParamDesc::OBJ_ACCESS_OUT, var_id, OB_INVALID_ID, pkg_id)));
           } else if (T_QUESTIONMARK == iexpr->get_expr_type()) {
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             CK (OB_NOT_NULL(c_expr));
@@ -1078,19 +1099,6 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
             OZ (udf_raw_expr->add_param_desc(
               ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, c_expr->get_value().get_unknown())));
           } else if (T_OP_GET_PACKAGE_VAR == iexpr->get_expr_type()) {
-
-#define GET_CONST_EXPR_VALUE(expr, val)                                         \
-do {                                                                            \
-  const ObConstRawExpr *c_expr = static_cast<const ObConstRawExpr*>(expr);      \
-  CK (OB_NOT_NULL(c_expr));                                                     \
-  CK (c_expr->get_value().is_uint64()                                           \
-      || c_expr->get_value().is_int()                                           \
-      || c_expr->get_value().is_unknown());                                     \
-  OX (val = c_expr->get_value().is_uint64() ? c_expr->get_value().get_uint64()  \
-        : c_expr->get_value().is_int() ? c_expr->get_value().get_int()          \
-        : c_expr->get_value().get_unknown());                                   \
-} while (0)
-
             const ObSysFunRawExpr *f_expr = static_cast<const ObSysFunRawExpr *>(iexpr);
             uint64_t pkg_id = OB_INVALID_ID;
             uint64_t var_id = OB_INVALID_ID;
