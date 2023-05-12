@@ -3384,25 +3384,25 @@ int ObTablet::clear_memtables_on_table_store() // be careful to call this func
   return ret;
 }
 // only check storage_schema & medium_list when ha_status is none
-int ObTablet::check_valid() const
+int ObTablet::check_valid(const bool ignore_ha_status) const
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    ret = inner_check_valid();
+    ret = inner_check_valid(ignore_ha_status);
   }
   return ret;
 }
 
-int ObTablet::inner_check_valid() const
+int ObTablet::inner_check_valid(const bool ignore_ha_status) const
 {
   int ret = OB_SUCCESS;
-  const bool ha_status_none = tablet_meta_.ha_status_.is_none();
-  if (ha_status_none && OB_FAIL(check_max_sync_schema_version())) {
+  const bool need_check_ha = tablet_meta_.ha_status_.is_none() && !ignore_ha_status;
+  if (need_check_ha && OB_FAIL(check_max_sync_schema_version())) {
     LOG_WARN("fialed to check max sync schema version", K(ret), KPC(this));
-  } else if (ha_status_none && OB_FAIL(check_medium_list())) {
+  } else if (need_check_ha && OB_FAIL(check_medium_list())) {
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
