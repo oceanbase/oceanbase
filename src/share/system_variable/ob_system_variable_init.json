@@ -2944,5 +2944,17 @@
     "info_cn": "用于dblink写事务中, TM端通过设置系统变量的方式告知RM端关于建立反向dblink的必要信息",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_show_ddl_in_compat_mode": {
+    "id": 10141,
+    "name": "_show_ddl_in_compat_mode",
+    "value": "0",
+    "data_type": "bool",
+    "info": "When enabled, show create table will show the strict compatible results with the compatibility mode.",
+    "flags": "SESSION",
+    "publish_version": "324",
+    "info_cn": "启用后, show create table 将展示与兼容模式严格兼容的结果",
+    "background_cn": "",
+    "ref_url": "/"
   }
 }

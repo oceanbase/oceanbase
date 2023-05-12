@@ -3385,8 +3385,7 @@ int ObBasicSessionInfo::get_net_buffer_length(int64_t &net_buffer_len) const
 
 int ObBasicSessionInfo::get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const
 {
-  return OB_SUCCESS;
-  // return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
+  return get_bool_sys_var(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE, show_ddl_in_compat_mode);
 }
 
 ////////////////////////////////////////////////////////////////
