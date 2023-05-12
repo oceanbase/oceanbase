@@ -261,7 +261,6 @@ private:
                                   bool &using_same_cols);
 
   int get_use_hint_expand_type(const ObRawExpr &expr,
-                               const bool is_topk,
                                const bool can_set_distinct,
                                OrExpandInfo &trans_info);
 

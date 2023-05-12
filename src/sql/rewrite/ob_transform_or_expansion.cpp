@@ -1760,7 +1760,6 @@ int ObTransformOrExpansion::is_valid_topk_cond(const ObDMLStmt &stmt,
         col_expr = static_cast<ObColumnRefRawExpr*>(expr);
       }
     }
-
     if (OB_SUCC(ret) &&  NULL != col_expr) {
       ObSEArray<ObColumnRefRawExpr*, 4> col_exprs;
       bool is_match = false;
@@ -1898,16 +1897,15 @@ int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
     LOG_WARN("failed to check condition valid basic", K(ret));
   } else if (!is_valid) {
     /*do nothing*/
-  } else if (NULL != ctx.hint_ && ctx.hint_->is_enable_hint()) {
-    // 1. match basic condition, do transform if use hint.
-    if (OB_FAIL(get_use_hint_expand_type(*expr, !common_cols.empty(),
-                                         can_set_distinct, trans_info))) {
-      LOG_WARN("failed to get expand type use hint", K(ret));
-    }
-  } else if (!common_cols.empty() && // 2. topk: can eliminate ordering
+  } else if (!common_cols.empty() && // 1. topk: can eliminate ordering
              OB_FAIL(is_valid_topk_cond(*stmt, expect_ordering, common_cols,
                                         equal_sets, const_exprs, trans_info))) {
     LOG_WARN("failed to check is valid topk cond", K(ret));
+  } else if (NULL != ctx.hint_ && ctx.hint_->is_enable_hint()) {
+    // 2. match basic condition, do transform if use hint.
+    if (OB_FAIL(get_use_hint_expand_type(*expr, can_set_distinct, trans_info))) {
+      LOG_WARN("failed to get expand type use hint", K(ret));
+    }
   } else if (INVALID_OR_EXPAND_TYPE != trans_info.or_expand_type_) {
     /*do nothing*/
     LOG_TRACE("valid topk condition", K(*expr), K(trans_info));
@@ -1977,7 +1975,6 @@ int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
 }
 
 int ObTransformOrExpansion::get_use_hint_expand_type(const ObRawExpr &expr,
-                                                     const bool is_topk,
                                                      const bool can_set_distinct,
                                                      OrExpandInfo &trans_info)
 {
@@ -1986,7 +1983,7 @@ int ObTransformOrExpansion::get_use_hint_expand_type(const ObRawExpr &expr,
   if (!can_set_distinct) {
     trans_info.is_set_distinct_ = false;
   } else {
-    trans_info.is_set_distinct_ = is_topk;
+    trans_info.is_set_distinct_ |= (T_OP_IN == expr.get_expr_type());
     int64_t sub_num = 0;
     int64_t N = expr.get_param_count();
     for (int64_t i = 0; OB_SUCC(ret) && !trans_info.is_set_distinct_ && i < N; i++) {
