@@ -766,6 +766,9 @@ int ObMergeGroupByOp::get_child_next_batch_row(
       } else {
         LOG_WARN("failed to get sorted row", K(ret));
       }
+    } else if (aggr_processor_.get_need_advance_collect() &&
+      OB_FAIL(brs_holder_.save(MY_SPEC.max_batch_size_))) {
+      LOG_WARN("failed to backup child exprs", K(ret));
     } else {
       const_cast<ObBatchRows *>(batch_rows)->size_ = read_rows;
       const_cast<ObBatchRows *>(batch_rows)->end_ = false;
@@ -860,9 +863,6 @@ int ObMergeGroupByOp::batch_process_rollup_distributor(const int64_t max_row_cnt
       } else if (child_brs->end_ && child_brs->size_ == 0) {
         LOG_DEBUG("reach iterating end with empty result, do nothing");
         break;
-      } else if (aggr_processor_.get_need_advance_collect() &&
-        OB_FAIL(brs_holder_.save(MY_SPEC.max_batch_size_))) {
-        LOG_WARN("failed to backup child exprs", K(ret));
       } else if (OB_FAIL(try_check_status())) {
         LOG_WARN("check status failed", K(ret));
       } else if (OB_FAIL(batch_collect_local_ndvs(child_brs))) {
@@ -893,12 +893,12 @@ int ObMergeGroupByOp::batch_process_rollup_distributor(const int64_t max_row_cnt
 int ObMergeGroupByOp::advance_collect_result(int64_t group_id)
 {
   int ret = OB_SUCCESS;
-  clear_evaluated_flag();
   if (OB_FAIL(aggr_processor_.advance_collect_result(group_id))) {
     LOG_WARN("failed to calc and material distinct result", K(ret), K(group_id));
   } else if (OB_FAIL(brs_holder_.restore())) {
     LOG_WARN("failed to restore child exprs", K(ret));
   }
+  clear_evaluated_flag();
   return ret;
 }
 
