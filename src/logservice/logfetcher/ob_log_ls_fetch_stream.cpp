@@ -192,6 +192,17 @@ int FetchStream::handle(volatile bool &stop_flag)
   if (OB_ISNULL(ls_fetch_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls fetch ctx is invalid in fetchstream", KR(ret), KPC(this));
+  } else if (ls_fetch_ctx_->is_discarded()) {
+    // Copy the structure to avoid recycling
+    const logservice::TenantLSID tls_id = ls_fetch_ctx_->get_tls_id();
+    KickOutInfo kick_out_info;
+    kick_out_info.kick_out_reason_ = KickOutReason::DISCARDED;
+
+    if (OB_FAIL(kick_out_task_(kick_out_info))) {
+      LOG_ERROR("kick out task failed", KR(ret), K(kick_out_info));
+    } else {
+      LOG_INFO("LSFetchCtx is discarded, dispatch fetch task success", K(tls_id));
+    }
   } else if (FALSE_IT(fetching_mode = ls_fetch_ctx_->get_fetching_mode())) {
   } else if (is_integrated_fetching_mode(fetching_mode)) {
     if (IDLE == state_) {
@@ -989,7 +1000,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     if (OB_SUCC(ret)) {
       if (kick_out_info.need_kick_out()) {
         if (OB_FAIL(kick_out_task_(kick_out_info))) {
-          LOG_ERROR("kick out task failed", KR(ret), K(kick_out_info), KPC(ls_fetch_ctx_));
+          LOG_ERROR("kick out task failed", KR(ret), K(kick_out_info));
         }
       } else {
         if (OB_FAIL(hibernate_())) {
@@ -1376,7 +1387,7 @@ int FetchStream::kick_out_task_(const KickOutInfo &kick_out_info)
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), K(ls_fetch_ctx_));
   } else if (OB_FAIL(dispatch_fetch_task_(*ls_fetch_ctx_, kick_out_info.kick_out_reason_))) {
-    LOG_ERROR("dispatch fetch task fail", KR(ret), KPC(ls_fetch_ctx_), K(kick_out_info));
+    LOG_ERROR("dispatch fetch task fail", KR(ret), K(kick_out_info));
   } else {}
 
   return ret;
