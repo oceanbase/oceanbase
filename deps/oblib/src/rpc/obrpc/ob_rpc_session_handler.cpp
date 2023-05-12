@@ -193,7 +193,7 @@ int ObRpcSessionHandler::wait_for_next_request(int64_t sessid, ObRequest*& req, 
             K(wait_object.thid_),
             K(ret));
       } else if (NULL == wait_object.req_) {
-        int32_t timeout_ms = static_cast<int32_t>(timeout / 1000);
+        int64_t timeout_ms = timeout / 1000;
         if (timeout_ms < DEFAULT_WAIT_TIMEOUT_MS) {
           timeout_ms = DEFAULT_WAIT_TIMEOUT_MS;
         } else {
