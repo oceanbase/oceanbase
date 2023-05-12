@@ -28,6 +28,7 @@
 #include "pl/ob_pl_stmt.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
+#include "sql/engine/expr/ob_expr_column_conv.h"
 
 namespace oceanbase
 {
@@ -128,7 +129,34 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
             if (expr->get_is_pl_mock_default_expr()) {
               param.set_is_pl_mock_default_param(true);
             }
-            if (OB_FAIL(params.push_back(param))) {
+            if (ob_is_xml_sql_type(param.get_type(), param.get_udt_subschema_id())) {
+              // convert call procedure input sql udt types to pl extend (only xmltype supported currently)
+              bool is_strict = is_strict_mode(ctx.get_my_session()->get_sql_mode());
+              const ObDataTypeCastParams dtc_params =
+                ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
+              ObCastMode cast_mode = CM_NONE;
+              ObExprResType result_type;
+              OZ (ObSQLUtils::get_default_cast_mode(stmt::T_NONE, ctx.get_my_session(), cast_mode));
+              ObCastCtx cast_ctx(&ctx.get_allocator(), &dtc_params, cast_mode, param.get_collation_type());
+              result_type.reset();
+              // if is xml type
+              result_type.set_ext();
+              result_type.set_extend_type(pl::PL_OPAQUE_TYPE);
+              result_type.set_udt_id(T_OBJ_XML);
+              ObObj tmp;
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp, param, result_type,
+                                                                           is_strict, cast_ctx, NULL))) {
+                LOG_WARN("Cast sql udt to pl extend failed",
+                        K(ret), K(param), K(result_type), K(is_strict), K(i));
+              } else {
+                param = tmp;
+                param.set_udt_id(T_OBJ_XML);
+                param.set_param_meta();
+              }
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(params.push_back(param))) {
               LOG_WARN("push back error", K(i), K(*expr), K(ret));
             } else {
               params.at(params.count() - 1).set_param_meta();

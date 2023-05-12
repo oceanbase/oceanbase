@@ -1869,6 +1869,18 @@ int ObRawExprResolverImpl::check_name_type(
   return ret;
 }
 
+void ObRawExprResolverImpl::get_special_func_ident_name(ObString &ident_name, const ObItemType func_type)
+{
+  // get ident name of spacial exprs not using first child as function name
+  if (func_type == T_FUN_SYS_XML_ELEMENT) {
+    ident_name = ObString::make_string("xmlelement");
+  } else if (func_type == T_FUN_SYS_XMLPARSE) {
+    ident_name = ObString::make_string("xmlparse");
+  } else if (func_type == T_FUN_ORA_XMLAGG) {
+    ident_name = ObString::make_string("xmlagg");
+  } else { /* do nothing */}
+}
+
 int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNode &left_node, ObQualifiedName &q_name)
 {
   int ret = OB_SUCCESS;
@@ -1879,6 +1891,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
   } else {
     ObString ident_name(static_cast<int32_t>(
       func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
+    get_special_func_ident_name(ident_name, func_node.type_);
 
     // first bit in value_ of T_FUN_SYS node is used to mark NEW keyword,
     // value_ & 0x1 == 1: not used,
@@ -1889,16 +1902,6 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
     if (ident_name.empty() && T_PL_SCOPE == ctx_.current_scope_ && lib::is_oracle_mode()) {
       ret = OB_ERR_IDENT_EMPTY;
       LOG_WARN("Identifier cannot be an empty string", K(ret), K(ident_name));
-    } else if (ident_name.empty()) {
-      if (func_node.type_ == T_FUN_SYS_MAKEXML) {
-        ident_name = ObString::make_string("sys_makexml");
-      } else if (func_node.type_ == T_FUN_SYS_XML_ELEMENT) {
-        ident_name = ObString::make_string("xmlelement");
-      } else if (func_node.type_ == T_FUN_SYS_XMLPARSE) {
-        ident_name = ObString::make_string("xmlparse");
-      } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
-        ident_name = ObString::make_string("xmlagg");
-      }
     }
     OZ (q_name.access_idents_.push_back(ObObjAccessIdent(ident_name, OB_INVALID_INDEX)), K(ident_name));
 
