@@ -12,37 +12,36 @@
 
 #ifndef OCEANBASE_SQL_RESOLVER_DML_OB_LOCK_TABLE_STMT_
 #define OCEANBASE_SQL_RESOLVER_DML_OB_LOCK_TABLE_STMT_
-#include "sql/resolver/ddl/ob_ddl_stmt.h"
+#include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/ob_cmd.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-class ObLockTableStmt : public ObStmt, public ObICmd
+class ObLockTableStmt : public ObDMLStmt, public ObICmd
 {
 public:
   explicit ObLockTableStmt()
-    : ObStmt(stmt::T_LOCK_TABLE),
+    : ObDMLStmt(stmt::T_LOCK_TABLE),
       lock_mode_(0),
-      table_id_(0)
+      wait_lock_seconds_(-1)
   {}
   virtual ~ObLockTableStmt()
   {}
   virtual int get_cmd_type() const { return get_stmt_type(); }
 
   void set_lock_mode(const int64_t lock_mode) { lock_mode_ = lock_mode; }
-  void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  void set_wait_lock_seconds(const int64_t wait_lock_seconds) { wait_lock_seconds_ = wait_lock_seconds; }
   int64_t get_lock_mode() const { return lock_mode_; }
-  uint64_t get_table_id() const { return table_id_; }
+  int64_t get_wait_lock_seconds() const { return wait_lock_seconds_; }
 private:
   int64_t lock_mode_;
-  uint64_t table_id_;
+  int64_t wait_lock_seconds_;
   DISALLOW_COPY_AND_ASSIGN(ObLockTableStmt);
 };
-
-
 } // namespace sql
 } // namespace oceanbase
 

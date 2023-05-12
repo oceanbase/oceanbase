@@ -103,6 +103,14 @@ public:
   int get_lock_op_iter(const ObLockID &lock_id,
                        ObLockOpIterator &iter);
 
+  // Iterate obj lock in lock map, and check 2 status of it:
+  // 1. Check whether the lock ops in the obj lock can be compacted.
+  // If it can be compacted (i.e. there're paired lock op and unlock
+  // op), remove them from the obj lock and recycle resources.
+  // 2. Check whether the obj lock itself is empty.
+  // If it's empty (i.e. no lock ops in it), remove it from the lock
+  // map and recycle resources.
+  int check_and_clear_obj_lock(const bool force_compact);
   // ================ INHERITED FROM ObIMemtable ===============
   // We need to inherient the memtable method for merge process to iterate the
   // lock for dumping the lock table.

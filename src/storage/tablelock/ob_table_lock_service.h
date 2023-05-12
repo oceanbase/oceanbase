@@ -17,16 +17,14 @@
 
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
+#include "share/ob_occam_timer.h"
 #include "sql/ob_sql_trans_control.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_rpc_proxy.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 
-#include "lib/utility/ob_macro_utils.h"
-
 namespace oceanbase
 {
-
 namespace rpc
 {
 namespace frame
@@ -142,6 +140,36 @@ private:
                  K(current_savepoint_), K(need_rollback_ls_),
                  K(tablet_list_), K(schema_version_), K(tx_is_killed_), K(stmt_savepoint_));
   };
+public:
+  class ObOBJLockGarbageCollector
+  {
+    static const int OBJ_LOCK_GC_THREAD_NUM = 2;
+  public:
+    friend class ObLockTable;
+    ObOBJLockGarbageCollector();
+    ~ObOBJLockGarbageCollector();
+  public:
+    int start();
+    void stop();
+    void wait();
+    int garbage_collect_right_now();
+
+    TO_STRING_KV(KP(this),
+                 K_(last_success_timestamp));
+  private:
+    int garbage_collect_for_all_ls_();
+    void check_and_report_timeout_();
+  public:
+    static int64_t GARBAGE_COLLECT_PRECISION;
+    static int64_t GARBAGE_COLLECT_EXEC_INTERVAL;
+    static int64_t GARBAGE_COLLECT_TIMEOUT;
+  private:
+    common::ObOccamThreadPool obj_lock_gc_thread_pool_;
+    common::ObOccamTimer timer_;
+    common::ObOccamTimerTaskRAIIHandle timer_handle_;
+
+    int64_t last_success_timestamp_;
+  };
 
 public:
   typedef hash::ObHashMap<ObLockID, share::ObLSID> LockMap;
@@ -149,6 +177,7 @@ public:
   ObTableLockService()
     : location_service_(nullptr),
       sql_proxy_(nullptr),
+      obj_lock_garbage_collector_(),
       is_inited_(false) {}
   ~ObTableLockService() {}
   int init();
@@ -225,6 +254,9 @@ public:
   int unlock_tablet(ObTxDesc &tx_desc,
                     const ObTxParam &tx_param,
                     const ObUnLockTabletRequest &arg);
+  int lock_partition_or_subpartition(ObTxDesc &tx_desc,
+                                     const ObTxParam &tx_param,
+                                     const ObLockPartitionRequest &arg);
   int lock_partition(ObTxDesc &tx_desc,
                      const ObTxParam &tx_param,
                      const ObLockPartitionRequest &arg);
@@ -243,6 +275,8 @@ public:
   int unlock_obj(ObTxDesc &tx_desc,
                  const ObTxParam &tx_param,
                  const ObUnLockObjRequest &arg);
+  int garbage_collect_right_now();
+  int get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector);
 private:
   bool need_retry_single_task_(const ObTableLockCtx &ctx,
                                const int64_t ret) const;
@@ -355,6 +389,7 @@ private:
                                   const ObTableLockOwnerID lock_owner);
   // used by deadlock detector.
   int deal_with_deadlock_(ObTableLockCtx &ctx);
+  int get_table_partition_level_(const ObTableID table_id, ObPartitionLevel &part_level);
 
   DISALLOW_COPY_AND_ASSIGN(ObTableLockService);
 private:
@@ -364,6 +399,7 @@ private:
 
   share::ObLocationService *location_service_;
   common::ObMySQLProxy *sql_proxy_;
+  ObOBJLockGarbageCollector obj_lock_garbage_collector_;
   bool is_inited_;
 };
 

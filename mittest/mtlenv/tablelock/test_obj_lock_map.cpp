@@ -160,9 +160,9 @@ TEST_F(TestObjLockMap, lock)
   lock_map_.lock_map_.revert(obj_lock);
   obj_lock = NULL;
   // 1.4 obj lock release check
-  ret = lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                         obj_lock);
-
+  ret = lock_map_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   lock_map_.reset();
@@ -241,9 +241,9 @@ TEST_F(TestObjLockMap, unlock)
   min_commited_scn = lock_map_.get_min_ddl_committed_scn(flushed_scn);
   ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
   // 1.8 obj lock release check
-  ret = lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                         obj_lock);
-
+  ret = lock_map_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   lock_map_.reset();
@@ -274,9 +274,9 @@ TEST_F(TestObjLockMap, recover)
   // 1.3 commit
   lock_map_.remove_lock_record(DEFAULT_IN_TRANS_LOCK_OP);
   // 1.4 check exist
-  ret = lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                         obj_lock);
-
+  ret = lock_map_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   // 2 recover out trans lock
@@ -315,9 +315,9 @@ TEST_F(TestObjLockMap, recover)
   // 2.6 check exist
   min_commited_scn = lock_map_.get_min_ddl_committed_scn(flushed_scn);
   ASSERT_EQ(min_commited_scn, share::SCN::max_scn());
-  ret = lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                         obj_lock);
-
+  ret = lock_map_.unlock(DEFAULT_OUT_TRANS_UNLOCK_OP,
+                         is_try_lock,
+                         expired_time);
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   lock_map_.reset();

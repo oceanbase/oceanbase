@@ -209,7 +209,8 @@ public:
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
       if (OB_ERR_INSUFFICIENT_PX_WORKER == v.err_ ||
-          OB_ERR_EXCLUSIVE_LOCK_CONFLICT == v.err_) {
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT == v.err_ ||
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == v.err_) {
         v.client_ret_ = v.err_;
       } else if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
         // timeout caused by locking, should return OB_ERR_EXCLUSIVE_LOCK_CONFLICT

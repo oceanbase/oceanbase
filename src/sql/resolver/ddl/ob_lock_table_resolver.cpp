@@ -14,6 +14,7 @@
 #include "ob_lock_table_resolver.h"
 #include "ob_lock_table_stmt.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/parser/ob_parser_utils.h"
 
 namespace oceanbase
 {
@@ -55,9 +56,9 @@ int ObLockTableResolver::resolve_mysql_mode(const ParseNode &parse_tree)
 int ObLockTableResolver::resolve_oracle_mode(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
-  ObLockTableStmt *lock_stmt = NULL;
+  ObLockTableStmt *lock_stmt = nullptr;
 
-  if (2 != parse_tree.num_child_) {
+  if (3 != parse_tree.num_child_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wrong node number", K(ret), K(parse_tree.num_child_));
   } else if (OB_ISNULL(parse_tree.children_)
@@ -72,62 +73,66 @@ int ObLockTableResolver::resolve_oracle_mode(const ParseNode &parse_tree)
     stmt_ = lock_stmt;
   }
 
-  // 1. resolve table items
+  // 1. resolve table item
   if (OB_SUCC(ret)) {
-    ParseNode *table_node = parse_tree.children_[TABLE];
+    ParseNode *table_node = parse_tree.children_[TABLE_LIST];
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
-    } else if (OB_FAIL(resolve_table_relation_node(*table_node))) {
+    } else if (OB_FAIL(resolve_table_list(*table_node))) {
       LOG_WARN("resolve table failed", K(ret));
     }
   }
+
   // 2. resolve lock mode
   if (OB_SUCC(ret)) {
     if (OB_FAIL(resolve_lock_mode(*parse_tree.children_[LOCK_MODE]))) {
-      LOG_WARN("resolve where clause failed", K(ret));
+      LOG_WARN("resolve lock mode failed", K(ret));
     }
   }
-
+  // 3. resolve wait
+  if (OB_SUCC(ret)) {
+    // this node maybe null if user didn't input opt about wait
+    if (OB_NOT_NULL(parse_tree.children_[WAIT])) {
+      if (OB_FAIL(resolve_wait_lock(*parse_tree.children_[WAIT]))) {
+        LOG_WARN("resolve wait opt for table lock failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
-// TODO: yanyuan.cxf only deal with one table name.
-int ObLockTableResolver::resolve_table_relation_node(const ParseNode &parse_tree)
+int ObLockTableResolver::resolve_table_list(const ParseNode &table_list)
 {
   int ret = OB_SUCCESS;
-  // TODO: yanyuan.cxf release TableItem
-  ObString table_name;
-  ObString database_name;
-  const ObTableSchema *table_schema = NULL;
-  int64_t tenant_id = session_info_->get_effective_tenant_id();
-  uint64_t database_id = OB_INVALID_ID;
   ObLockTableStmt *lock_stmt = get_lock_table_stmt();
+  TableItem *table_item = nullptr;
 
-  if (OB_ISNULL(lock_stmt)) {
+  if (OB_UNLIKELY(T_TABLE_REFERENCES != table_list.type_ &&
+                  T_RELATION_FACTOR != table_list.type_) ||
+      OB_UNLIKELY(OB_ISNULL(table_list.children_)) ||
+      OB_UNLIKELY(table_list.num_child_ < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(table_list.type_), K(table_list.num_child_));
+  } else if (OB_ISNULL(lock_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("lock stmt should not be null", K(ret));
-  } else if (OB_ISNULL(schema_checker_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_checker should not be null", K(ret));
-  } else if (OB_FAIL(ObDDLResolver::resolve_table_relation_node(&parse_tree,
-                                                                table_name,
-                                                                database_name))) {
-    LOG_WARN("failed to resolve table relation node", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_database_id(tenant_id,
-                                                      database_name,
-                                                      database_id))) {
-    LOG_WARN("failed to get database id", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
-                                                       database_name,
-                                                       table_name,
-                                                       false,
-                                                       table_schema))){
-    LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    LOG_WARN("null table schema", K(ret));
-  } else {
-    lock_stmt->set_table_id(table_schema->get_table_id());
+    LOG_WARN("invalid lock table stmt", K(lock_stmt));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_list.num_child_; ++i) {
+    const ParseNode *table_node = table_list.children_[i];
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_ISNULL(table_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table node is null");
+    } else if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
+      LOG_WARN("failed to resolve table", K(ret));
+    } else if (table_item->is_function_table() || table_item->is_json_table()) {//兼容oracle行为
+      ret = OB_WRONG_TABLE_NAME;
+      LOG_WARN("invalid table name", K(ret));
+    } else {
+      LOG_DEBUG("succ to add lock table item", KPC(table_item));
+    }
   }
   return ret;
 }
@@ -141,6 +146,23 @@ int ObLockTableResolver::resolve_lock_mode(const ParseNode &parse_tree)
     LOG_WARN("lock stmt should not be null");
   } else {
     lock_stmt->set_lock_mode(parse_tree.value_);
+  }
+  return ret;
+}
+
+int ObLockTableResolver::resolve_wait_lock(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObLockTableStmt *lock_stmt = get_lock_table_stmt();
+  int64_t wait_lock_seconds = parse_tree.value_;
+  if (OB_ISNULL(lock_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lock stmt should not be null");
+  } else if (wait_lock_seconds < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("lock wait time should not be negative", K(wait_lock_seconds));
+  } else {
+    lock_stmt->set_wait_lock_seconds(parse_tree.value_);
   }
   return ret;
 }

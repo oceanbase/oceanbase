@@ -486,6 +486,12 @@ public:
   // int get_lock_op_iter(const ObLockID &lock_id,
   //                      ObLockOpIterator &iter);
   DELEGATE_WITH_RET(lock_table_, get_lock_op_iter, int);
+  // check and clear lock ops and obj locks in this ls (or lock_table)
+  // @param[in] force_compact, if it's set to true, the gc thread will
+  // force compact unlock op which is committed, even though there's
+  // no paired lock op.
+  // int check_and_clear_obj_lock(const bool force_compact)
+  DELEGATE_WITH_RET(lock_table_, check_and_clear_obj_lock, int);
 
   // set the member_list of log_service
   // @param [in] member_list, the member list to be set.

@@ -72,6 +72,7 @@
 #include "mock_gts_source.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
+#include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"
 
 namespace oceanbase
@@ -669,6 +670,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, storage::ObTenantFreezeInfoMgr::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init,  mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(server_obj_pool_mtl_new<transaction::ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<transaction::ObPartTransCtx>);
     }
     if (OB_FAIL(ret)) {
