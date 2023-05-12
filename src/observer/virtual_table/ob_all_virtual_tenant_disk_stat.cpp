@@ -130,6 +130,7 @@ int ObAllVirtualTenantDiskStat::inner_get_next_row(ObNewRow*& row)
             } else {
               cells[i].set_varchar(attr_name);
             }
+            cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
           case BLOCK_SIZE: {
