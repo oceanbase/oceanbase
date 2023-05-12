@@ -149,7 +149,7 @@ extern const int64_t USECS_PER_MIN;
 #define MYSQL_TIMESTAMP_MIN_VAL -62167046400000000
 #define ORACLE_DATETIME_MIN_VAL -62135596800000000  // start from '0001-1-1 00:00:00'
 #define TIME_MAX_HOUR 838
-#define TIME_MAX_VAL (3020399 * 1000000LL)  // 838:59:59 .
+#define TIME_MAX_VAL (3020399 * 1000000LL)  // 838:59:59.
 
 struct ObIntervalLimit {
   static const ObOracleTimeLimiter YEAR;
@@ -354,10 +354,9 @@ public:
   static int ob_time_to_utc(const ObObjType obj_type, const ObTimeConvertCtx& cvrt_ctx, ObTime& ob_time);
   static int str_is_date_format(const ObString& str, bool& date_flag);
   static int str_to_date(const ObString& str, int32_t& value);
-  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL, const ObScale &time_scale = 0);
+  static int str_to_time(const ObString &str, int64_t &value, int16_t *scale = NULL);
   static int str_to_year(const ObString& str, uint8_t& value);
   static int str_to_interval(const ObString& str, ObDateUnitType unit_type, int64_t& value);
-
   // int / double / string <- datetime(timestamp) / date / time / year.
   static int datetime_to_int(int64_t value, const ObTimeZoneInfo* tz_info, int64_t& int64);
   static int datetime_to_double(int64_t value, const ObTimeZoneInfo* tz_info, double& dbl);
@@ -508,7 +507,7 @@ public:
   static int set_ob_time_part_may_conflict(
       ObTime& ob_time, int64_t& conflict_bitset, const int64_t part_offset, const int32_t part_value);
   static int32_t calc_max_name_length(const ObTimeConstStr names[], const int64_t size);
-  static int time_overflow_trunc(int64_t &value, const ObScale &time_scale = 0);
+  static int time_overflow_trunc(int64_t &value);
   static void round_datetime(int16_t scale, int64_t& value);
   static ObOTimestampData round_otimestamp(const int16_t scale, const ObOTimestampData& in_ot_data);
   static int round_interval_ds(const ObScale scale, ObIntervalDSValue& value);

@@ -809,8 +809,7 @@ static OB_INLINE int common_string_time(const ObExpr& expr, const ObString& in_s
   int warning = OB_SUCCESS;
   int64_t out_val = 0;
   ObScale res_scale;  // useless
-  ObScale time_scale = expr.datum_meta_.scale_;
-  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale, time_scale))) {
+  if (CAST_FAIL(ObTimeConverter::str_to_time(in_str, out_val, &res_scale))) {
     LOG_WARN("str_to_time failed", K(ret), K(in_str));
   } else {
     SET_RES_TIME(out_val);
@@ -8697,8 +8696,8 @@ int ob_datum_to_ob_time_without_date(
       if (OB_FAIL(ObTimeConverter::int_to_ob_time_without_date(datum.get_int(), ob_time))) {
         LOG_WARN("int to ob time without date failed", K(ret));
       } else {
-        // The maximum value of time is 8385959, so any time greater than this value should be set to this maximum value
-        const int64_t time_max_val = TIME_MAX_VAL;  // 838:59:59 .
+        // When converting intTC to time in MySQL, if the hour exceeds 838, then time should be null instead of the maximum value.
+        const int64_t time_max_val = TIME_MAX_VAL;  // 838:59:59.
         int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
         if (value > time_max_val) {
           ret = OB_INVALID_DATE_VALUE;
@@ -8752,8 +8751,8 @@ int ob_datum_to_ob_time_without_date(
           LOG_WARN("int to ob time without date failed", K(ret));
         } else {
           if ((!ob_time.parts_[DT_YEAR]) && (!ob_time.parts_[DT_MON]) && (!ob_time.parts_[DT_MDAY])) {
-            // The maximum value of time(6) is 8385959.9999999, so any time(6) greater than this value should be set to this maximum value
-            const int64_t time_max_val = TIME_MAX_VAL + 999999;  // 838:59:59.999999 .
+            // When converting intTC to time in MySQL, if the hour exceeds 838, then time should be null instead of the maximum value.
+            const int64_t time_max_val = TIME_MAX_VAL;  // 838:59:59.
             int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
             if (value > time_max_val) {
               ret = OB_INVALID_DATE_VALUE;

@@ -9574,7 +9574,8 @@ int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_in
       if (OB_FAIL(ObTimeConverter::int_to_ob_time_without_date(obj.get_int(), ob_time))) {
         LOG_WARN("int to ob time without date failed", K(ret));
       } else {
-        const int64_t time_max_val = 3020399 * 1000000LL;  // 838:59:59 .
+        // When converting intTC to time in MySQL, if the hour exceeds 838, then time should be null instead of the maximum value.
+        const int64_t time_max_val = TIME_MAX_VAL;  // 838:59:59 .
         int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
         if (value > time_max_val) {
           ret = OB_INVALID_DATE_VALUE;
@@ -9602,6 +9603,14 @@ int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_in
     case ObTextTC:  // TODO texttc share with the stringtc temporarily
     case ObStringTC: {
       ret = ObTimeConverter::str_to_ob_time_without_date(obj.get_string(), ob_time);
+      if (OB_SUCC(ret)) {
+        int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
+        int64_t tmp_value = value;
+        ObTimeConverter::time_overflow_trunc(value);
+        if (value != tmp_value) {
+          ObTimeConverter::time_to_ob_time(value, ob_time);
+        }
+      }
       break;
     }
     case ObLobTC: {
@@ -9614,13 +9623,25 @@ int ob_obj_to_ob_time_without_date(const ObObj& obj, const ObTimeZoneInfo* tz_in
       break;
     }
     case ObNumberTC: {
-      const char *num_format = obj.get_number().format();
-      if (OB_ISNULL(num_format)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("number format value is null", K(ret));
+      int64_t int_part = 0;
+      int64_t dec_part = 0;
+      const number::ObNumber num(obj.get_number());
+      if (!num.is_int_parts_valid_int64(int_part, dec_part)) {
+        ret = OB_INVALID_DATE_FORMAT;
+        LOG_WARN("invalid date format", K(ret), K(num));
       } else {
-        ObString num_str(num_format);
-        ret = ObTimeConverter::str_to_ob_time_without_date(num_str, ob_time);
+        if (OB_FAIL(ObTimeConverter::int_to_ob_time_without_date(int_part, ob_time, dec_part))) {
+          LOG_WARN("int to ob time without date failed", K(ret));
+        } else {
+          if ((!ob_time.parts_[DT_YEAR]) && (!ob_time.parts_[DT_MON]) && (!ob_time.parts_[DT_MDAY])) {
+            // When converting intTC to time in MySQL, if the hour exceeds 838, then time should be null instead of the maximum value.
+            const int64_t time_max_val = TIME_MAX_VAL;  // 838:59:59 .
+            int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
+            if (value > time_max_val) {
+              ret = OB_INVALID_DATE_VALUE;
+            }
+          }
+        }
       }
       break;
     }

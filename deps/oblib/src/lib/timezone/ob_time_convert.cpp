@@ -827,7 +827,7 @@ int ObTimeConverter::str_to_date(const ObString &str, int32_t &value)
   return ret;
 }
 
-int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale, const ObScale &time_scale)
+int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *scale)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time(DT_TYPE_TIME);
@@ -835,14 +835,14 @@ int ObTimeConverter::str_to_time(const ObString &str, int64_t &value, int16_t *s
     LOG_WARN("failed to convert string to time", K(ret), K(str));
     if (OB_ERR_TRUNCATED_WRONG_VALUE == ret) {
       value = ob_time_to_time(ob_time);
-      time_overflow_trunc(value, time_scale);
+      time_overflow_trunc(value);
       if (DT_MODE_NEG & ob_time.mode_) {
         value = -value;
       }
     }
   } else {
     value = ob_time_to_time(ob_time);
-    ret = time_overflow_trunc(value, time_scale);
+    ret = time_overflow_trunc(value);
     if (DT_MODE_NEG & ob_time.mode_) {
       value = -value;
     }
@@ -5241,11 +5241,10 @@ int ObTimeConverter::set_ob_time_year_may_conflict(
   return ret;
 }
 
-int ObTimeConverter::time_overflow_trunc(int64_t &value, const ObScale &time_scale)
+int ObTimeConverter::time_overflow_trunc(int64_t &value)
 {
   int ret = OB_SUCCESS;
-  int64_t increment = (6 == time_scale) ? 999999 : 0;
-  if (value > (TIME_MAX_VAL + increment)) {
+  if (value > TIME_MAX_VAL) {
     // we need some ob error codes that map to ER_TRUNCATED_WRONG_VALUE,
     // so we get OB_INVALID_DATE_FORMAT / OB_INVALID_DATE_VALUE / OB_ERR_TRUNCATED_WRONG_VALUE.
     // another requirement comes from cast function in ob_obj_cast.cpp is this time object will be
@@ -5253,7 +5252,7 @@ int ObTimeConverter::time_overflow_trunc(int64_t &value, const ObScale &time_sca
     // so we get the ONLY one: OB_ERR_TRUNCATED_WRONG_VALUE, because the other two will direct to
     // ZERO_VAL of the temporal types, like cast 'abc' or '1998-76-54' to date.
     ret = OB_ERR_TRUNCATED_WRONG_VALUE;
-    value = TIME_MAX_VAL + increment;
+    value = TIME_MAX_VAL;
   }
   return ret;
 }
