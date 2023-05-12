@@ -108,7 +108,7 @@ int ObHBRequest::init(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!server.is_valid()
-      || OB_INVALID_ID == server_id
+      || !is_valid_server_id(server_id)
       || !rs_addr.is_valid()
       || palf::INVALID_PROPOSAL_ID == epoch_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -135,7 +135,7 @@ int ObHBRequest::assign(const ObHBRequest &other)
 bool ObHBRequest::is_valid() const
 {
   return server_.is_valid()
-      && OB_INVALID_ID != server_id_
+      && is_valid_server_id(server_id_)
       && rs_addr_.is_valid()
       && rs_server_status_ > RSS_INVALID
       && rs_server_status_ < RSS_MAX

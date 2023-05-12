@@ -2232,6 +2232,7 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
     int temp_ret = OB_SUCCESS;
     int64_t lease_info_version = 0;
     bool is_stopped = false;
+    lease_response.rs_server_status_ = RSS_INVALID;
     if (is_full_service()) {
       if (OB_FAIL(zone_manager_.get_lease_info_version(lease_info_version))) {
         LOG_WARN("get_lease_info_version failed", K(ret));
@@ -2243,6 +2244,8 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
       if (!ObHeartbeatService::is_service_enabled()) {
         if (FAILEDx(server_manager_.is_server_stopped(lease_request.server_, is_stopped))) {
           LOG_WARN("check_server_stopped failed", KR(ret), "server", lease_request.server_);
+        } else {
+          lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
         }
       }
     }
@@ -2253,12 +2256,6 @@ int ObRootService::renew_lease(const ObLeaseRequest &lease_request, ObLeaseRespo
       lease_response.server_id_ = server_id;
       lease_response.force_frozen_status_ = to_alive;
       lease_response.baseline_schema_version_ = baseline_schema_version_;
-      // set observer stopped after has no leader
-      if (is_full_service()) {
-        lease_response.rs_server_status_ = is_stopped ? RSS_IS_STOPPED : RSS_IS_WORKING;
-      } else {
-        lease_response.rs_server_status_ = RSS_INVALID;
-      }
       (void)OTC_MGR.get_lease_response(lease_response);
 
       // after split schema, the schema_version is not used, but for the legality detection, set schema_version to sys's schema_version

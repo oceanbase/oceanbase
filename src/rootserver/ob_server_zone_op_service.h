@@ -166,6 +166,7 @@ private:
       ObZone &picked_zone);
   int add_server_(
       const common::ObAddr &server,
+      const uint64_t server_id,
       const common::ObZone &zone,
       const int64_t sql_port,
       const share::ObServerInfoInTable::ObBuildVersion &build_version);

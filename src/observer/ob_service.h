@@ -255,7 +255,7 @@ private:
       const bool need_checksum);
 
   int register_self();
-  int check_server_empty(const obrpc::ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &server_empty);
+  int check_server_empty(bool &server_empty);
 
   int handle_server_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);

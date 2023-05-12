@@ -7548,10 +7548,12 @@ public:
     ADD_SERVER
   };
 
-  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0) {}
-  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version));
-  int init(const Mode &mode, const uint64_t sys_tenant_data_version);
+  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0), server_id_(OB_INVALID_ID) {}
+  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version), K_(server_id));
+  int init(const Mode &mode, const uint64_t sys_tenant_data_version, const uint64_t server_id);
   int assign(const ObCheckServerForAddingServerArg &other);
+  bool is_valid() const;
+  void reset();
   Mode get_mode() const
   {
     return mode_;
@@ -7560,9 +7562,14 @@ public:
   {
     return sys_tenant_data_version_;
   }
+  uint64_t get_server_id() const
+  {
+    return server_id_;
+  }
 private:
   Mode mode_;
   uint64_t sys_tenant_data_version_;
+  uint64_t server_id_;
 };
 struct ObCheckServerForAddingServerResult
 {
@@ -7782,18 +7789,6 @@ public:
   void reset();
   TO_STRING_KV(K_(switchover_timestamp), K_(epoch), K_(tenant_id),
                K_(ml_pk_index), K_(pkey_info_start_index));
-};
-
-struct ObPreBootstrapCreateServerWorkingDirArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  uint64_t server_id_;
-  ObPreBootstrapCreateServerWorkingDirArg() : server_id_(OB_INVALID_ID) {}
-  ~ObPreBootstrapCreateServerWorkingDirArg() { reset(); };
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(server_id));
 };
 
 struct ObBatchCheckRes

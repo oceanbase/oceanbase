@@ -83,17 +83,36 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
     LOG_WARN("rpc_proxy_ is null", KR(ret), KP(rpc_proxy_));
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-  } else if (OB_FAIL(rpc_arg.init(
-      ObCheckServerForAddingServerArg::ADD_SERVER,
-      sys_tenant_data_version))) {
-    LOG_WARN("fail to init rpc arg", KR(ret), K(sys_tenant_data_version));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &addr = servers.at(i);
       int64_t timeout = ctx.get_timeout();
+      uint64_t server_id = OB_INVALID_ID;
+      const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 100;
+      char non_empty_server_err_msg[ERR_MSG_BUF_LEN] = "";
+      int64_t pos = 0;
+      rpc_arg.reset();
       if (OB_UNLIKELY(timeout <= 0)) {
         ret = OB_TIMEOUT;
         LOG_WARN("ctx time out", KR(ret), K(timeout));
+      } else if (OB_FAIL(databuff_printf(
+          non_empty_server_err_msg,
+          ERR_MSG_BUF_LEN,
+          pos,
+          "add non-empty server %s",
+          to_cstring(addr)))) {
+        LOG_WARN("fail to execute databuff_printf", KR(ret), K(addr));
+      } else if (OB_FAIL(fetch_new_server_id_(server_id))) {
+        // fetch a new server id and insert the server into __all_server table
+        LOG_WARN("fail to fetch new server id", KR(ret));
+      } else if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("server id is invalid", KR(ret), K(server_id));
+      } else if (OB_FAIL(rpc_arg.init(
+          ObCheckServerForAddingServerArg::ADD_SERVER,
+          sys_tenant_data_version,
+          server_id))) {
+        LOG_WARN("fail to init rpc arg", KR(ret), K(sys_tenant_data_version), K(server_id));
       } else if (OB_FAIL(rpc_proxy_->to(addr)
           .timeout(timeout)
           .check_server_for_adding_server(rpc_arg, rpc_result))) {
@@ -101,16 +120,17 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
       } else if (!rpc_result.get_is_server_empty()) {
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("adding non-empty server is not allowed", KR(ret));
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add non-empty server");
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, non_empty_server_err_msg);
       } else if (OB_FAIL(zone_checking_for_adding_server_(zone, rpc_result.get_zone(), picked_zone))) {
         LOG_WARN("zone checking for adding server is failed", KR(ret), K(zone), K(rpc_result.get_zone()));
       } else if (OB_FAIL(add_server_(
           addr,
+          server_id,
           picked_zone,
           rpc_result.get_sql_port(),
           rpc_result.get_build_version()))) {
-        LOG_WARN("add_server failed", "server", addr,  "zone", picked_zone, "sql_port",
-            rpc_result.get_sql_port(), "build_version", rpc_result.get_build_version(), KR(ret));
+        LOG_WARN("add_server failed", KR(ret), K(addr),  K(server_id), K(picked_zone), "sql_port",
+            rpc_result.get_sql_port(), "build_version", rpc_result.get_build_version());
       } else {}
     }
   }
@@ -363,13 +383,13 @@ int ObServerZoneOpService::zone_checking_for_adding_server_(
 }
 int ObServerZoneOpService::add_server_(
     const ObAddr &server,
+    const uint64_t server_id,
     const ObZone &zone,
     const int64_t sql_port,
     const ObServerInfoInTable::ObBuildVersion &build_version)
 {
   int ret = OB_SUCCESS;
   bool is_active = false;
-  uint64_t server_id = OB_INVALID_ID;
   const int64_t now = ObTimeUtility::current_time();
   ObServerInfoInTable server_info_in_table;
   ObMySQLTransaction trans;
@@ -377,12 +397,12 @@ int ObServerZoneOpService::add_server_(
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
   } else if (OB_UNLIKELY(!server.is_valid()
+      || !is_valid_server_id(server_id)
       || zone.is_empty()
       || sql_port <= 0
       || build_version.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(server), K(zone),
-        K(sql_port), K(build_version));
+    LOG_WARN("invalid argument", KR(ret), K(server), K(server_id), K(zone), K(sql_port), K(build_version));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(server_change_callback_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ or server_change_callback_ is null", KR(ret),
@@ -408,13 +428,7 @@ int ObServerZoneOpService::add_server_(
     ret = OB_ENTRY_EXIST;
     LOG_WARN("server exists", KR(ret), K(server_info_in_table));
   }
-  if (FAILEDx(fetch_new_server_id_(server_id))) {
-    // fetch a new server id and insert the server into __all_server table
-    LOG_WARN("fail to fetch new server id", KR(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == server_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("server id is invalid", KR(ret), K(server_id));
-  } else if (OB_FAIL(server_info_in_table.init(
+  if (FAILEDx(server_info_in_table.init(
       server,
       server_id,
       zone,

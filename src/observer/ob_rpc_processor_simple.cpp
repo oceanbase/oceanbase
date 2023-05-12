@@ -1982,18 +1982,6 @@ int ObPreProcessServerP::process()
   return ret;
 }
 
-int ObPreBootstrapCreateServerWorkingDirP::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(gctx_.ob_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("observer is null", K(ret));
-  } else {
-    ret = OB_NOT_SUPPORTED;
-  }
-
-  return ret;
-}
 
 int ObHandlePartTransCtxP::process()
 {

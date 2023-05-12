@@ -1399,13 +1399,11 @@ int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
     bool server_empty = false;
     ObCheckServerEmptyArg new_arg;
     new_arg.mode_ = ObCheckServerEmptyArg::BOOTSTRAP;
-    // when OFS mode, this server dir hasn't been created, skip log scan
-    const bool wait_log_scan = true;
-    if (OB_FAIL(check_server_empty(new_arg, wait_log_scan, server_empty))) {
+    if (OB_FAIL(check_server_empty(server_empty))) {
       BOOTSTRAP_LOG(WARN, "check_server_empty failed", K(ret), K(new_arg));
     } else if (!server_empty) {
       ret = OB_ERR_SYS;
-      BOOTSTRAP_LOG(WARN, "observer is not empty", K(ret));
+      BOOTSTRAP_LOG(WARN, "this observer is not empty", KR(ret), K(GCTX.self_addr()));
     } else if (OB_FAIL(pre_bootstrap.prepare_bootstrap(master_rs))) {
       BOOTSTRAP_LOG(ERROR, "failed to prepare boot strap", K(rs_list), K(ret));
     } else {
@@ -1478,10 +1476,8 @@ int ObService::is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::B
              KR(ret), K(arg), K(sys_data_version));
   } else {
     bool server_empty = false;
-    // server dir must be created when 1) local mode, 2) OFS bootstrap this server
-    const bool wait_log_scan = ObCheckServerEmptyArg::BOOTSTRAP == arg.mode_;
-    if (OB_FAIL(check_server_empty(arg, wait_log_scan, server_empty))) {
-      LOG_WARN("check_server_empty failed", K(ret), K(arg));
+    if (OB_FAIL(check_server_empty(server_empty))) {
+      LOG_WARN("check_server_empty failed", K(ret));
     } else {
       is_empty = server_empty;
     }
@@ -1497,6 +1493,9 @@ int ObService::check_server_for_adding_server(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant data version", KR(ret));
   } else if (arg.get_sys_tenant_data_version() > 0
@@ -1506,19 +1505,28 @@ int ObService::check_server_for_adding_server(
         KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
   } else {
     bool server_empty = false;
-    ObCheckServerEmptyArg check_server_empty_arg;
-    check_server_empty_arg.mode_ = ObCheckServerEmptyArg::ADD_SERVER;
-    const bool wait_log_scan = ObCheckServerEmptyArg::BOOTSTRAP == check_server_empty_arg.mode_;
-
-    if (OB_FAIL(check_server_empty(check_server_empty_arg, wait_log_scan, server_empty))) {
-      LOG_WARN("check_server_empty failed", KR(ret), K(check_server_empty_arg), K(wait_log_scan));
+    if (OB_FAIL(check_server_empty(server_empty))) {
+      LOG_WARN("check_server_empty failed", KR(ret));
     } else {
       char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
       ObServerInfoInTable::ObBuildVersion build_version_string;
       ObZone zone;
       int64_t sql_port = GCONF.mysql_port;
       get_package_and_svn(build_version, sizeof(build_version));
-      if (OB_FAIL(zone.assign(GCONF.zone.str()))) {
+
+      if (OB_SUCC(ret) && server_empty) {
+        uint64_t server_id = arg.get_server_id();
+        GCTX.server_id_ = server_id;
+        GCONF.server_id = server_id;
+        if (OB_ISNULL(GCTX.config_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("GCTX.config_mgr_ is null", KR(ret));
+        } else if (OB_FAIL(GCTX.config_mgr_->dump2file())) {
+          LOG_ERROR("fail to execute dump2file, this server cannot be added, "
+              "please clear it and try again", KR(ret));
+        }
+      }
+      if (FAILEDx(zone.assign(GCONF.zone.str()))) {
         LOG_WARN("fail to assign zone", KR(ret), K(GCONF.zone.str()));
       } else if (OB_FAIL(build_version_string.assign(build_version))) {
         LOG_WARN("fail to assign build version", KR(ret), K(build_version));
@@ -1532,7 +1540,7 @@ int ObService::check_server_for_adding_server(
       } else {}
     }
   }
-  LOG_INFO("generate result", KR(ret), K(arg), K(result));
+  FLOG_INFO("[CHECK_SERVER_EMPTY] generate result", KR(ret), K(arg), K(result));
   return ret;
 }
 
@@ -1624,59 +1632,24 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
 }
 
 
-int ObService::check_server_empty(const ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &is_empty)
+int ObService::check_server_empty(bool &is_empty)
 {
-  // **TODO (linqiucen.lqc): if rs_epoch has been already valid, this server is not empty
   int ret = OB_SUCCESS;
   is_empty = true;
-  UNUSED(wait_log_scan);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    if (ObCheckServerEmptyArg::BOOTSTRAP == arg.mode_) {
-      // "is_valid_heartbeat" is valid:
-      // 1. RS is between "start_service" and "full_service", the server has not added to RS;
-      // 2. RS is in "full_service" and the server has added to RS;
-      // 3. To avoid misjudgment in scenario 1 while add server, this check is skipped here
-      if (lease_state_mgr_.is_valid_heartbeat()) {
-        LOG_WARN("server already in rootservice lease");
-        is_empty = false;
-      }
-    }
-
-    // wait log scan finish
-    //
-    // For 4.0, it is not necessary to wait log scan finished.
-    //
-    // if (is_empty && wait_log_scan) {
-    //   const int64_t WAIT_LOG_SCAN_TIME_US = 2 * 1000 * 1000; // only wait 2s for empty server
-    //   const int64_t SLEEP_INTERVAL_US = 500;
-    //   const int64_t start_time_us = ObTimeUtility::current_time();
-    //   int64_t end_time_us = start_time_us;
-    //   int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
-    //   if (INT64_MAX == THIS_WORKER.get_timeout_ts()) {
-    //     timeout_ts = start_time_us + WAIT_LOG_SCAN_TIME_US;
-    //   }
-    //   while (!stopped_ && !gctx_.par_ser_->is_scan_disk_finished()) {
-    //     end_time_us = ObTimeUtility::current_time();
-    //     if (end_time_us > timeout_ts) {
-    //       LOG_WARN("wait log scan finish timeout", K(timeout_ts), LITERAL_K(WAIT_LOG_SCAN_TIME_US));
-    //       is_empty = false;
-    //       break;
-    //     }
-    //     ob_usleep(static_cast<int32_t>(std::min(timeout_ts - end_time_us, SLEEP_INTERVAL_US)));
-    //   }
-    // }
+    uint64_t server_id_in_GCONF = GCONF.server_id;
     if (is_empty) {
-      // if (!gctx_.par_ser_->is_empty()) {
-      //   LOG_WARN("partition service is not empty");
-      //   is_empty = false;
-      // }
+      if (is_valid_server_id(GCTX.server_id_) || is_valid_server_id(server_id_in_GCONF)) {
+        is_empty = false;
+        FLOG_WARN("[CHECK_SERVER_EMPTY] server_id exists", K(GCTX.server_id_), K(server_id_in_GCONF));
+      }
     }
     if (is_empty) {
       if (!OBSERVER.is_log_dir_empty()) {
-        LOG_WARN("log dir is not empty");
+        FLOG_WARN("[CHECK_SERVER_EMPTY] log dir is not empty");
         is_empty = false;
       }
     }

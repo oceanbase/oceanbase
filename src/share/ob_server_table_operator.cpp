@@ -54,7 +54,7 @@ int ObServerInfoInTable::init(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!server.is_valid()
-      || OB_INVALID_ID == server_id
+      || !is_valid_server_id(server_id)
       || zone.is_empty()
       || sql_port <= 0
       || status >= ObServerStatus::OB_DISPLAY_MAX
@@ -109,7 +109,7 @@ int ObServerInfoInTable::assign(const ObServerInfoInTable &other)
 bool ObServerInfoInTable::is_valid() const
 {
   return server_.is_valid()
-      && OB_INVALID_ID != server_id_
+      && is_valid_server_id(server_id_)
       && !zone_.is_empty()
       && sql_port_ > 0
       && status_ < ObServerStatus::OB_DISPLAY_MAX

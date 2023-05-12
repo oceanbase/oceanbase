@@ -1770,7 +1770,7 @@ int ObServerManager::get_server_id(const ObZone &zone, const ObAddr &server, uin
       } else {} // zone not match
     }
 
-    if (OB_SUCC(ret) && OB_INVALID_ID == server_id) {
+    if (OB_SUCC(ret) && !is_valid_server_id(server_id)) {
       ret = OB_ENTRY_NOT_EXIST;
       LOG_WARN("get invalid server_id", K(ret), K(server_id), K(server_id));
     }

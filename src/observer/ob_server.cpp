@@ -2215,6 +2215,9 @@ int ObServer::init_global_context()
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
   gctx_.server_id_ = config_.server_id;
+  if (is_valid_server_id(gctx_.server_id_)) {
+    LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
+  }
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
     ret = OB_INVALID_ARGUMENT;

@@ -41,7 +41,7 @@ int ObDetectableIdGen::generate_detectable_id(ObDetectableId &detectable_id, uin
   int ret = OB_SUCCESS;
   // use server id to ensure that the detectable_id is unique in cluster
   uint64_t server_id = GCTX.server_id_;
-  if (0 == server_id) {
+  if (!is_valid_server_id(server_id)) {
     ret = OB_SERVER_IS_INIT;
     LIB_LOG(WARN, "[DM] server id is invalid");
   } else {

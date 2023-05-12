@@ -275,7 +275,7 @@ int ObP2PDatahubManager::generate_p2p_dh_id(int64_t &p2p_dh_id)
   // generate p2p dh id
   // |    <16>     |      <28>     |     20
   //    server_id       timestamp     sequence
-  if (0 >= GCTX.server_id_) {
+  if (!is_valid_server_id(GCTX.server_id_)) {
     ret = OB_SERVER_IS_INIT;
     LOG_WARN("server id is unexpected", K(ret));
   } else {

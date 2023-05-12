@@ -1827,6 +1827,12 @@ OB_INLINE bool is_valid_idx(const int64_t idx)
   return (0 <= idx);
 }
 
+// check whether a server_id is valid
+OB_INLINE bool is_valid_server_id(const uint64_t server_id)
+{
+  return (0 < server_id) && (OB_INVALID_ID != server_id);
+}
+
 //check whether an tenant_id is valid
 OB_INLINE bool is_valid_tenant_id(const uint64_t tenant_id)
 {

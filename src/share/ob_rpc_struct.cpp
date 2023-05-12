@@ -5882,19 +5882,38 @@ OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, po
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
 OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
-OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_);
-int ObCheckServerForAddingServerArg::init(const Mode &mode, const uint64_t sys_tenant_data_version)
+OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_, server_id_);
+int ObCheckServerForAddingServerArg::init(
+    const Mode &mode,
+    const uint64_t sys_tenant_data_version,
+    const uint64_t server_id)
 {
   int ret = OB_SUCCESS;
-  mode_ = mode;
-  sys_tenant_data_version_ = sys_tenant_data_version;
+  if (0 == sys_tenant_data_version || !is_valid_server_id(server_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version), K(server_id));
+  } else {
+    mode_ = mode;
+    sys_tenant_data_version_ = sys_tenant_data_version;
+    server_id_ = server_id;
+  }
   return ret;
 }
 int ObCheckServerForAddingServerArg::assign(const ObCheckServerForAddingServerArg &other) {
   int ret = OB_SUCCESS;
   mode_ = other.mode_;
   sys_tenant_data_version_ = other.sys_tenant_data_version_;
+  server_id_ = other.server_id_;
   return ret;
+}
+bool ObCheckServerForAddingServerArg::is_valid() const
+{
+  return 0 != sys_tenant_data_version_ && is_valid_server_id(server_id_);
+}
+void ObCheckServerForAddingServerArg::reset()
+{
+  sys_tenant_data_version_ = 0;
+  server_id_ = OB_INVALID_ID;
 }
 OB_SERIALIZE_MEMBER(
     ObCheckServerForAddingServerResult,
@@ -6375,18 +6394,6 @@ void CheckLeaderRpcIndex::reset()
   pkey_info_start_index_ = -1;
   tenant_id_ = OB_INVALID_TENANT_ID;
 }
-
-bool ObPreBootstrapCreateServerWorkingDirArg::is_valid() const
-{
-  return server_id_ > 0;
-}
-
-void ObPreBootstrapCreateServerWorkingDirArg::reset()
-{
-  server_id_ = 0;
-}
-
-OB_SERIALIZE_MEMBER(ObPreBootstrapCreateServerWorkingDirArg, server_id_);
 
 bool ObBatchCheckRes::is_valid() const
 {

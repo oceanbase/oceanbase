@@ -92,7 +92,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRenewInZoneHbP, gctx_);
     RPC_PROCESSOR(ObPreProcessServerP, gctx_);
     RPC_PROCESSOR(ObRpcBroadcastRsListP, gctx_);
-    RPC_PROCESSOR(ObPreBootstrapCreateServerWorkingDirP, gctx_);
     RPC_PROCESSOR(ObRpcBuildDDLSingleReplicaRequestP, gctx_);
     RPC_PROCESSOR(ObRpcFetchTabletAutoincSeqCacheP, gctx_);
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
