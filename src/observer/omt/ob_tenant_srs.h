@@ -47,10 +47,11 @@ class ObSrsCacheSnapShot
 {
 public:
   static const uint32_t SRS_ITEM_BUCKET_NUM = 6144;
-  explicit ObSrsCacheSnapShot(ObSrsCacheType srs_type)
-    : allocator_("SrsSnapShot"), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
+  explicit ObSrsCacheSnapShot(ObSrsCacheType srs_type, uint64_t tenant_id)
+    : allocator_("SrsSnapShot", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+      tenant_id_(tenant_id), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
   virtual ~ObSrsCacheSnapShot() { srs_item_map_.destroy(); }
-  int init() { return srs_item_map_.create(SRS_ITEM_BUCKET_NUM, "TenantSrs", "TenantSrsItem"); }
+  int init() { return srs_item_map_.create(SRS_ITEM_BUCKET_NUM, "SrsSnapShot", "SrsSnapShot", tenant_id_); }
   int add_srs_item(uint64_t srid, const common::ObSrsItem* srs_item) { return srs_item_map_.set_refactored(srid, srs_item); }
   int get_srs_item(uint64_t srid, const common::ObSrsItem *&srs_item);
   void set_srs_version(uint64_t version) { srs_version_ = version; }
@@ -65,6 +66,7 @@ public:
 
 private:
   common::ObArenaAllocator allocator_;
+  uint64_t tenant_id_;
   ObSrsCacheType srs_type_;
   uint64_t srs_version_;
   volatile int64_t ref_count_;

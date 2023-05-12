@@ -35,5 +35,5 @@ TG_DEF(IO_BENCHMARK, IO_BENCHMARK, "", TG_DYNAMIC, THREAD_POOL, ThreadCountPair(
 TG_DEF(replica_control, replica_control, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))
 TG_DEF(TIMEZONE_MGR, TimezoneMgr, "", TG_STATIC, TIMER)
 TG_DEF(MASTER_KEY_MGR, MasterKeyMgr, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(1 ,1), 100)
-TG_DEF(SRS_MGR, SrsMgr, "", TG_STATIC, TIMER)
+TG_DEF(SRS_MGR, SrsMgr, "", TG_STATIC, TIMER, 128)
 #endif

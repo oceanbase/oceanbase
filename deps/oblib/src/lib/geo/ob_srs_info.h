@@ -276,7 +276,7 @@ private:
 class ObGeographicSrs : public ObSpatialReferenceSystemBase
 {
 public:
-  ObGeographicSrs();
+  ObGeographicSrs(common::ObArenaAllocator* alloc);
   virtual ~ObGeographicSrs() {}
   ObSrsType srs_type() const override { return ObSrsType::GEOGRAPHIC_SRS; }
   virtual int init(uint32_t srid, const ObGeographicRs *rs);
@@ -320,7 +320,9 @@ struct ObSimpleProjPram
 class ObProjectedSrs : public ObSpatialReferenceSystemBase
 {
 public:
-  ObProjectedSrs() : geographic_srs_(), linear_unit_(NAN)
+  ObProjectedSrs(common::ObArenaAllocator *allocator) : geographic_srs_(allocator),
+                                                        linear_unit_(NAN),
+                                                        simple_proj_prams_(allocator)
   {
     for (int i = 0; i < AXIS_DIRECTION_NUM; i++) {
       axis_dir_[i] = ObAxisDirection::INIT;
@@ -355,7 +357,7 @@ private:
   ObAxisDirection axis_dir_[AXIS_DIRECTION_NUM]; // direction of x and y axis;
 
 protected:
-  ObVector<ObSimpleProjPram> simple_proj_prams_; // should be filled by subclass
+  ObVector<ObSimpleProjPram, common::ObArenaAllocator> simple_proj_prams_; // should be filled by subclass
 };
 
 #define OB_GEO_REG_PROJ_PARAMS(...) \
@@ -372,7 +374,7 @@ for (int32_t i = 0; i < ARRAYSIZEOF(arr); ++i) { \
 class ObUnknownProjectedSrs : public ObProjectedSrs
 {
 public:
-  ObUnknownProjectedSrs() {}
+  ObUnknownProjectedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObUnknownProjectedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::UNKNOWN; };
@@ -385,7 +387,7 @@ public:
 class ObPopularVisualPseudoMercatorSrs : public ObProjectedSrs
 {
 public:
-  ObPopularVisualPseudoMercatorSrs() {}
+  ObPopularVisualPseudoMercatorSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObPopularVisualPseudoMercatorSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::POPULAR_VISUAL_PSEUDO_MERCATOR; };
@@ -398,7 +400,7 @@ public:
 class ObLambertAzimuthalEqualAreaSphericalSrs: public ObProjectedSrs
 {
 public:
-  ObLambertAzimuthalEqualAreaSphericalSrs() {}
+  ObLambertAzimuthalEqualAreaSphericalSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertAzimuthalEqualAreaSphericalSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_AZIMUTHAL_EQUAL_AREA_SPHERICAL; };
@@ -411,7 +413,7 @@ public:
 class ObEquidistantCylindricalSrs : public ObProjectedSrs
 {
 public:
-  ObEquidistantCylindricalSrs() {}
+  ObEquidistantCylindricalSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObEquidistantCylindricalSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::EQUIDISTANT_CYLINDRICAL; };
@@ -424,7 +426,7 @@ public:
 class ObEquidistantCylindricalSphericalSrs : public ObProjectedSrs
 {
 public:
-  ObEquidistantCylindricalSphericalSrs() {}
+  ObEquidistantCylindricalSphericalSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObEquidistantCylindricalSphericalSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::EQUIDISTANT_CYLINDRICAL_SPHERICAL; };
@@ -437,7 +439,7 @@ public:
 class ObKrovakNorthOrientatedSrs : public ObProjectedSrs
 {
 public:
-  ObKrovakNorthOrientatedSrs() {}
+  ObKrovakNorthOrientatedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObKrovakNorthOrientatedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::KROVAK_NORTH_ORIENTATED; };
@@ -450,7 +452,7 @@ public:
 class ObKrovakModifiedSrs : public ObProjectedSrs
 {
 public:
-  ObKrovakModifiedSrs() {}
+  ObKrovakModifiedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObKrovakModifiedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::KROVAK_MODIFIED; };
@@ -463,7 +465,7 @@ public:
 class ObKrovakModifiedNorthOrientatedSrs : public ObProjectedSrs
 {
 public:
-  ObKrovakModifiedNorthOrientatedSrs() {}
+  ObKrovakModifiedNorthOrientatedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObKrovakModifiedNorthOrientatedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::KROVAK_MODIFIED_NORTH_ORIENTATED; };
@@ -476,7 +478,7 @@ public:
 class ObLambertConicConformal2SPMichiganSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicConformal2SPMichiganSrs() {}
+  ObLambertConicConformal2SPMichiganSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicConformal2SPMichiganSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_CONFORMAL_2SP_MICHIGAN; };
@@ -489,7 +491,7 @@ public:
 class ObColombiaUrbanSrs : public ObProjectedSrs
 {
 public:
-  ObColombiaUrbanSrs() {}
+  ObColombiaUrbanSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObColombiaUrbanSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::COLOMBIA_URBAN; };
@@ -502,7 +504,7 @@ public:
 class ObLambertConicConformal1SPSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicConformal1SPSrs() {}
+  ObLambertConicConformal1SPSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicConformal1SPSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_CONFORMAL_1SP; };
@@ -515,7 +517,7 @@ public:
 class ObLambertConicConformal2SPSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicConformal2SPSrs() {}
+  ObLambertConicConformal2SPSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicConformal2SPSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_CONFORMAL_2SP; };
@@ -528,7 +530,7 @@ public:
 class ObLambertConicConformal2SPBelgiumSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicConformal2SPBelgiumSrs() {}
+  ObLambertConicConformal2SPBelgiumSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicConformal2SPBelgiumSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_CONFORMAL_2SP_BELGIUM; };
@@ -541,7 +543,7 @@ public:
 class ObMercatorvariantASrs : public ObProjectedSrs
 {
 public:
-  ObMercatorvariantASrs() {}
+  ObMercatorvariantASrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObMercatorvariantASrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::MERCATOR_VARIANT_A; };
@@ -554,7 +556,7 @@ public:
 class ObMercatorvariantBSrs : public ObProjectedSrs
 {
 public:
-  ObMercatorvariantBSrs() {}
+  ObMercatorvariantBSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObMercatorvariantBSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::MERCATOR_VARIANT_B; };
@@ -567,7 +569,7 @@ public:
 class ObCassiniSoldnerSrs : public ObProjectedSrs
 {
 public:
-  ObCassiniSoldnerSrs() {}
+  ObCassiniSoldnerSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObCassiniSoldnerSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::MERCATOR_VARIANT_B; };
@@ -580,7 +582,7 @@ public:
 class ObTransverseMercatorSrs : public ObProjectedSrs
 {
 public:
-  ObTransverseMercatorSrs() {}
+  ObTransverseMercatorSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObTransverseMercatorSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::TRANSVERSE_MERCATOR; };
@@ -593,7 +595,7 @@ public:
 class ObTransverseMercatorSouthOrientatedSrs : public ObProjectedSrs
 {
 public:
-  ObTransverseMercatorSouthOrientatedSrs() {}
+  ObTransverseMercatorSouthOrientatedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObTransverseMercatorSouthOrientatedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::TRANSVERSE_MERCATOR_SOUTH_ORIENTATED; };
@@ -606,7 +608,7 @@ public:
 class ObObliqueStereographicSrs : public ObProjectedSrs
 {
 public:
-  ObObliqueStereographicSrs() {}
+  ObObliqueStereographicSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObObliqueStereographicSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::OBLIQUE_STEREOGRAPHIC; };
@@ -619,7 +621,7 @@ public:
 class ObPolarStereographicVariantASrs : public ObProjectedSrs
 {
 public:
-  ObPolarStereographicVariantASrs() {}
+  ObPolarStereographicVariantASrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObPolarStereographicVariantASrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::POLAR_STEREOGRAPHIC_VARIANT_A; };
@@ -632,7 +634,7 @@ public:
 class ObNewZealandMapGridSrs : public ObProjectedSrs
 {
 public:
-  ObNewZealandMapGridSrs() {}
+  ObNewZealandMapGridSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObNewZealandMapGridSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::NEW_ZEALAND_MAP_GRID; };
@@ -645,7 +647,7 @@ public:
 class ObHotineObliqueMercatorvariantASrs : public ObProjectedSrs
 {
 public:
-  ObHotineObliqueMercatorvariantASrs() {}
+  ObHotineObliqueMercatorvariantASrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObHotineObliqueMercatorvariantASrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::HOTINE_OBLIQUE_MERCATOR_VARIANT_A; };
@@ -658,7 +660,7 @@ public:
 class ObLabordeObliqueMercatorSrs : public ObProjectedSrs
 {
 public:
-  ObLabordeObliqueMercatorSrs() {}
+  ObLabordeObliqueMercatorSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLabordeObliqueMercatorSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LABORDE_OBLIQUE_MERCATOR; };
@@ -671,7 +673,7 @@ public:
 class ObHotineObliqueMercatorVariantBSrs : public ObProjectedSrs
 {
 public:
-  ObHotineObliqueMercatorVariantBSrs() {}
+  ObHotineObliqueMercatorVariantBSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObHotineObliqueMercatorVariantBSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::HOTINE_OBLIQUE_MERCATOR_VARIANT_B; };
@@ -684,7 +686,7 @@ public:
 class ObTunisiaMiningGridSrs : public ObProjectedSrs
 {
 public:
-  ObTunisiaMiningGridSrs() {}
+  ObTunisiaMiningGridSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObTunisiaMiningGridSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::TUNISIA_MINING_GRID; };
@@ -697,7 +699,7 @@ public:
 class ObLambertConicNearConformalSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicNearConformalSrs() {}
+  ObLambertConicNearConformalSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicNearConformalSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_NEAR_CONFORMAL; };
@@ -710,7 +712,7 @@ public:
 class ObAmericanPolyconicSrs : public ObProjectedSrs
 {
 public:
-  ObAmericanPolyconicSrs() {}
+  ObAmericanPolyconicSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObAmericanPolyconicSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::AMERICAN_POLYCONIC; };
@@ -723,7 +725,7 @@ public:
 class ObKrovakSrs : public ObProjectedSrs
 {
 public:
-  ObKrovakSrs() {}
+  ObKrovakSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObKrovakSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::KROVAK; };
@@ -736,7 +738,7 @@ public:
 class ObLambertAzimuthalEqualAreaSrs : public ObProjectedSrs
 {
 public:
-  ObLambertAzimuthalEqualAreaSrs() {}
+  ObLambertAzimuthalEqualAreaSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertAzimuthalEqualAreaSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_AZIMUTHAL_EQUAL_AREA; };
@@ -749,7 +751,7 @@ public:
 class ObAlbersEqualAreaSrs : public ObProjectedSrs
 {
 public:
-  ObAlbersEqualAreaSrs() {}
+  ObAlbersEqualAreaSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObAlbersEqualAreaSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::ALBERS_EQUAL_AREA; };
@@ -762,7 +764,7 @@ public:
 class ObTransverseMercatorZonedGridSystemSrs : public ObProjectedSrs
 {
 public:
-  ObTransverseMercatorZonedGridSystemSrs() {}
+  ObTransverseMercatorZonedGridSystemSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObTransverseMercatorZonedGridSystemSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::TRANSVERSE_MERCATOR_ZONED_GRID_SYSTEM; };
@@ -775,7 +777,7 @@ public:
 class ObLambertConicConformalWestOrientatedSrs : public ObProjectedSrs
 {
 public:
-  ObLambertConicConformalWestOrientatedSrs() {}
+  ObLambertConicConformalWestOrientatedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertConicConformalWestOrientatedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CONIC_CONFORMAL_WEST_ORIENTATED; };
@@ -788,7 +790,7 @@ public:
 class ObBonneSouthOrientatedSrs : public ObProjectedSrs
 {
 public:
-  ObBonneSouthOrientatedSrs() {}
+  ObBonneSouthOrientatedSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObBonneSouthOrientatedSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::BONNE_SOUTH_ORIENTATED; };
@@ -801,7 +803,7 @@ public:
 class ObPolarStereographicVariantBSrs : public ObProjectedSrs
 {
 public:
-  ObPolarStereographicVariantBSrs() {}
+  ObPolarStereographicVariantBSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObPolarStereographicVariantBSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::POLAR_STEREOGRAPHIC_VARIANT_B; };
@@ -814,7 +816,7 @@ public:
 class ObPolarStereographicVariantCSrs : public ObProjectedSrs
 {
 public:
-  ObPolarStereographicVariantCSrs() {}
+  ObPolarStereographicVariantCSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObPolarStereographicVariantCSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::POLAR_STEREOGRAPHIC_VARIANT_C; };
@@ -827,7 +829,7 @@ public:
 class ObGuamProjectionSrs : public ObProjectedSrs
 {
 public:
-  ObGuamProjectionSrs() {}
+  ObGuamProjectionSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObGuamProjectionSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::GUAM_PROJECTION; };
@@ -840,7 +842,7 @@ public:
 class ObModifiedAzimuthalEquidistantSrs : public ObProjectedSrs
 {
 public:
-  ObModifiedAzimuthalEquidistantSrs() {}
+  ObModifiedAzimuthalEquidistantSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObModifiedAzimuthalEquidistantSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::MODIFIED_AZIMUTHAL_EQUIDISTANT; };
@@ -853,7 +855,7 @@ public:
 class ObHyperbolicCassiniSoldnerSrs : public ObProjectedSrs
 {
 public:
-  ObHyperbolicCassiniSoldnerSrs() {}
+  ObHyperbolicCassiniSoldnerSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObHyperbolicCassiniSoldnerSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::HYPERBOLIC_CASSINI_SOLDNER; };
@@ -866,7 +868,7 @@ public:
 class ObLambertCylindricalEqualAreaSphericalSrs : public ObProjectedSrs
 {
 public:
-  ObLambertCylindricalEqualAreaSphericalSrs() {}
+  ObLambertCylindricalEqualAreaSphericalSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertCylindricalEqualAreaSphericalSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CYLINDRICAL_EQUAL_AREA_SPHERICAL; };
@@ -879,7 +881,7 @@ public:
 class ObLambertCylindricalEqualAreaSrs : public ObProjectedSrs
 {
 public:
-  ObLambertCylindricalEqualAreaSrs() {}
+  ObLambertCylindricalEqualAreaSrs(common::ObArenaAllocator *allocator) : ObProjectedSrs(allocator) {}
   virtual ~ObLambertCylindricalEqualAreaSrs() {}
 
   ObProjectionType get_projection_type() const override { return ObProjectionType::LAMBERT_CYLINDRICAL_EQUAL_AREA; };
@@ -929,7 +931,8 @@ public:
   ~ObSrsUtils() {}
 
   static int check_is_wgs84(const ObGeographicRs *rs, bool &is_wgs84);
-  static int get_simple_proj_params(const ObProjectionPrams &parsed_params, ObVector<ObSimpleProjPram> &params);
+  static int get_simple_proj_params(const ObProjectionPrams &parsed_params,
+                                    ObVector<ObSimpleProjPram, common::ObArenaAllocator> &params);
   static int check_authority(const ObRsAuthority& auth, const char *target_auth_name, int target_auth_code, bool allow_invalid, bool &res);
 
   constexpr static double WGS_SEMI_MAJOR_AXIS = 6378137.0;

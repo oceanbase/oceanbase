@@ -83,7 +83,8 @@ int ObSrsUtils::check_is_wgs84(const ObGeographicRs *rs, bool &is_wgs84)
 }
 
 // todo@dazhi: compare the param_name and param_alias when epsg isnot comparable ?
-int ObSrsUtils::get_simple_proj_params(const ObProjectionPrams &parsed_params, ObVector<ObSimpleProjPram> &params)
+int ObSrsUtils::get_simple_proj_params(const ObProjectionPrams &parsed_params,
+                                       ObVector<ObSimpleProjPram, common::ObArenaAllocator> &params)
 {
   int ret = OB_SUCCESS;
   FOREACH_X(parsed_param, parsed_params.vals, OB_SUCC(ret)) {
@@ -297,7 +298,7 @@ int ObSpatialReferenceSystemBase::create_project_srs(ObIAllocator* allocator, ui
 
 template <typename SRS_T, typename RS_T>
 int ObSpatialReferenceSystemBase::create_srs_internal(ObIAllocator* allocator, uint64_t srs_id,
-                                                              const RS_T *rs, ObSpatialReferenceSystemBase *&srs_info)
+                                                      const RS_T *rs, ObSpatialReferenceSystemBase *&srs_info)
 {
   int ret = OB_SUCCESS;
   SRS_T *tmp_srs_info = NULL;
@@ -306,7 +307,7 @@ int ObSpatialReferenceSystemBase::create_srs_internal(ObIAllocator* allocator, u
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc projected srs failed", K(ret), K(srs_id));
   } else {
-    tmp_srs_info = new(buf)SRS_T();
+    tmp_srs_info = new(buf)SRS_T(static_cast<common::ObArenaAllocator*>(allocator));
     if (OB_FAIL(tmp_srs_info->init(srs_id, rs))) {
       LOG_WARN("srs info init failed", K(ret), KP(rs), K(srs_id));
     } else {
@@ -326,9 +327,10 @@ int ObSpatialReferenceSystemBase::create_geographic_srs(ObIAllocator* allocator,
   return create_srs_internal<ObGeographicSrs, ObGeographicRs>(allocator, srs_id, rs, srs_info);
 }
 
-ObGeographicSrs::ObGeographicSrs() : semi_major_axis_(NAN), inverse_flattening_(NAN),
-  is_wgs84_(false), prime_meridian_(NAN), angular_factor_(NAN), bounds_info_(),
-  proj4text_()
+ObGeographicSrs::ObGeographicSrs(common::ObArenaAllocator* alloc)
+  : semi_major_axis_(NAN), inverse_flattening_(NAN),
+    is_wgs84_(false), prime_meridian_(NAN), angular_factor_(NAN), bounds_info_(),
+    proj4text_()
 {
   for (uint8_t i = 0; i < WGS84_PARA_NUM; i++) {
     wgs84_[i] = NAN;

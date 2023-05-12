@@ -245,8 +245,14 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomLineString *geo)
 int ObWkbToS2Visitor::visit(ObIWkbGeogPolygon *geo)
 {
   INIT_SUCC(ret);
-  s2v_.emplace_back(MakeS2Polygon<ObIWkbGeogPolygon, ObWkbGeogPolygon,
-                                  ObWkbGeogLinearRing, ObWkbGeogPolygonInnerRings>(geo));
+  if (geo->length() < WKB_COMMON_WKB_HEADER_LEN) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid swkb length", K(ret), K(geo->length()));
+  } else {
+    s2v_.emplace_back(MakeS2Polygon<ObIWkbGeogPolygon, ObWkbGeogPolygon,
+                                    ObWkbGeogLinearRing, ObWkbGeogPolygonInnerRings>(geo));
+  }
+
   return ret;
 }
 
@@ -254,8 +260,13 @@ int ObWkbToS2Visitor::visit(ObIWkbGeomPolygon *geo)
 {
   INIT_SUCC(ret);
   if (!invalid_) {
-    s2v_.emplace_back(MakeProjS2Polygon<ObIWkbGeomPolygon, ObWkbGeomPolygon,
-                                        ObWkbGeomLinearRing, ObWkbGeomPolygonInnerRings>(geo));
+    if (geo->length() < WKB_COMMON_WKB_HEADER_LEN) {
+      ret = OB_ERR_GIS_INVALID_DATA;
+      LOG_WARN("invalid swkb length", K(ret), K(geo->length()));
+    } else {
+      s2v_.emplace_back(MakeProjS2Polygon<ObIWkbGeomPolygon, ObWkbGeomPolygon,
+                                          ObWkbGeomLinearRing, ObWkbGeomPolygonInnerRings>(geo));
+    }
   }
   return ret;
 }
