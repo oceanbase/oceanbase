@@ -151,6 +151,7 @@ int ObPxMSCoordOp::inner_rescan()
   finish_ch_cnt_ = 0;
   all_rows_finish_ = false;
   destroy_readers();
+  row_heap_.reset_heap();
   int ret = ObPxCoordOp::inner_rescan();
   return ret;
 }
