@@ -40,9 +40,11 @@ int calc_digest_text(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObArenaAllocator temp_allocator(ObModIds::OB_SQL_EXPR_CALC);
   HEAP_VAR(ObExecContext, exec_ctx, temp_allocator) {
+    uint64_t tenant_id = session->get_effective_tenant_id();
     ObPhysicalPlanCtx phy_plan_ctx(allocator);
     exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
     exec_ctx.set_my_session(session);
+    exec_ctx.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
     ObSqlCtx sql_ctx;
     sql_ctx.session_info_ = session;
     sql_ctx.schema_guard_ = schema_guard;

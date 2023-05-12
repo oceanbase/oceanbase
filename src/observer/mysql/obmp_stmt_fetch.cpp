@@ -392,6 +392,9 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               }
             } else {
               tmp_exec_ctx.set_my_session(&session);
+              tmp_exec_ctx.set_mem_attr(ObMemAttr(session.get_effective_tenant_id(),
+                                                  ObModIds::OB_SQL_EXEC_CONTEXT,
+                                                  ObCtxIds::EXECUTE_CTX_ID));
               exec_ctx = &tmp_exec_ctx;
               if (OB_ISNULL(cursor.get_spi_cursor())) {
                 ret = OB_ERR_UNEXPECTED;

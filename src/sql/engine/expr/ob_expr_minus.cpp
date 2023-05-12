@@ -267,6 +267,9 @@ int ObExprMinus::calc(ObDatum &res, const ObDatum &left, const ObDatum &right,
         OZ (plan_ctx.init_datum_param_store());
         OX (exec_ctx.set_physical_plan_ctx(&plan_ctx));
         OX (exec_ctx.set_my_session(&default_session));
+        OX (exec_ctx.set_mem_attr(ObMemAttr(tenant_id,
+                                            ObModIds::OB_SQL_EXEC_CONTEXT,
+                                            ObCtxIds::EXECUTE_CTX_ID)));
         OX (arith = OB_NEWx(ObRTDatumArith, allocator, exec_ctx, default_session));
         if (OB_FAIL(ret)) {
           if (NULL != arith) {
