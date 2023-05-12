@@ -2445,6 +2445,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
     //timezone的更新频率非常低，放到后台驱动
     (void)session_->update_timezone_info();
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
+    session_->update_tenant_config_version(
+        (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(effective_tenant_id));
   }
   UNUSED(tmp_ret);
 }

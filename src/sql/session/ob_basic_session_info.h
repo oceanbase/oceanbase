@@ -1274,6 +1274,7 @@ public:
   int get_session_temp_table_used(bool &is_used) const;
   int get_enable_optimizer_null_aware_antijoin(bool &is_enabled) const;
   common::ActiveSessionStat &get_ash_stat() {  return ash_stat_; }
+  void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -1990,6 +1991,7 @@ protected:
   share::SCN unused_read_snapshot_version_;//serialize compatibility preserved
   transaction::ObXATransID xid_;
   bool associated_xa_; // session joined distr-xa-trans by xa-start
+  int64_t cached_tenant_config_version_;
 public:
   const transaction::ObXATransID &get_xid() const { return xid_; }
   transaction::ObTransID get_tx_id() const { return tx_desc_ != NULL ? tx_desc_->get_tx_id() : transaction::ObTransID(); }
