@@ -663,7 +663,7 @@ bool ObSQLSessionMgr::KillTenant::operator()(sql::ObSQLSessionMgr::Key, ObSQLSes
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sess info is NULL", K(sess_info));
   } else {
-    if (sess_info->get_priv_tenant_id() == tenant_id_) {
+    if (sess_info->get_priv_tenant_id() == tenant_id_ || sess_info->get_effective_tenant_id() == tenant_id_) {
       ret = mgr_->kill_session(*sess_info);
     }
   }
