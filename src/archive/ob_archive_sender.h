@@ -140,6 +140,7 @@ private:
   int64_t log_archive_round_;
   int64_t incarnation_;
 
+  int64_t consecutive_send_error_count_;
   ObArchivePGMgr* pg_mgr_;
   ObArchiveRoundMgr* archive_round_mgr_;
   ObArchiveMgr* archive_mgr_;

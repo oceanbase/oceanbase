@@ -30,6 +30,7 @@ namespace archive {
 ObArchiveSender::ObArchiveSender()
     : log_archive_round_(-1),
       incarnation_(-1),
+      consecutive_send_error_count_(0),
       pg_mgr_(NULL),
       archive_round_mgr_(NULL),
       archive_mgr_(NULL),
@@ -69,6 +70,7 @@ void ObArchiveSender::destroy()
   log_archive_round_ = -1;
   incarnation_ = -1;
 
+  consecutive_send_error_count_ = 0;
   pg_mgr_ = NULL;
   archive_round_mgr_ = NULL;
   ;
@@ -316,9 +318,10 @@ int ObArchiveSender::handle_task_list(void* data)
     }
   }
 
-  // if memory or IO failed, sleep 100ms
   if (is_io_error(ret) || OB_ALLOCATE_MEMORY_FAILED == ret || OB_IO_LIMIT == ret || OB_BACKUP_IO_PROHIBITED == ret) {
-    usleep(100 * 1000L);
+    int64_t error_count = ATOMIC_LOAD(&consecutive_send_error_count_);
+    int64_t sleep_us = std::min(error_count, 300L) * 1000 * 1000L;  // sleep 300s at most
+    usleep(sleep_us);
   } else if (0 == task_num) {
     usleep(1000);
   }
@@ -591,6 +594,7 @@ int ObArchiveSender::handle(ObArchiveSendTaskStatus& task_status, SendTaskArray&
     if (OB_FAIL(ret)) {
       handle_archive_error_(pg_key, epoch, incarnation, archive_round, ret, task_status);
     } else {
+      ATOMIC_SET(&consecutive_send_error_count_, 0);
       task_status.clear_error_info();
     }
   }
@@ -1510,6 +1514,7 @@ int ObArchiveSender::handle_archive_error_(const ObPGKey& pg_key, const int64_t 
 {
   int ret = OB_SUCCESS;
   bool io_error_trigger = false;
+  ATOMIC_INC(&consecutive_send_error_count_);
 
   // mark IO failed
   if (is_io_error(ret_code)) {
