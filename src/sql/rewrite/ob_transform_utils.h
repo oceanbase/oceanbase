@@ -459,9 +459,6 @@ public:
   static int get_equal_set_conditions(ObRawExprFactory& expr_factory, ObSQLSessionInfo* session_info,
       ObSelectStmt* stmt, ObIArray<ObRawExpr*>& set_exprs, ObIArray<ObRawExpr*>& equal_conds);
 
-  static int get_expr_in_cast(ObIArray<ObRawExpr*>& input_exprs, ObIArray<ObRawExpr*>& output_exprs);
-  static ObRawExpr* get_expr_in_cast(ObRawExpr* expr);
-
   static int extract_table_exprs(const ObDMLStmt& stmt, const ObIArray<ObRawExpr*>& source_exprs,
       const TableItem& target, ObIArray<ObRawExpr*>& exprs);
 

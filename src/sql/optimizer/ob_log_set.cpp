@@ -201,7 +201,6 @@ int ObLogSet::get_equal_set_conditions(ObIArray<ObRawExpr*>& equal_conds)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo* session_info = NULL;
-  ObSEArray<ObRawExpr*, 8> select_exprs;
   ObSEArray<ObRawExpr*, 8> set_exprs;
   ObSEArray<ObSelectStmt*, 2> child_stmts;
   ObSelectStmt* stmt = NULL;
@@ -214,10 +213,8 @@ int ObLogSet::get_equal_set_conditions(ObIArray<ObRawExpr*>& equal_conds)
   } else if (OB_FALSE_IT(stmt = static_cast<ObSelectStmt*>(get_stmt()))) {
   } else if (!domain_index_exprs_.empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(get_set_exprs(select_exprs))) {
-    LOG_WARN("failed to get set exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(select_exprs, set_exprs))) {
-    LOG_WARN("failed to expr in cast", K(ret));
+  } else if (OB_FAIL(stmt->get_pure_set_exprs(set_exprs))) {
+    LOG_WARN("failed to get pure set exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::get_equal_set_conditions(
                  *expr_factory, session_info, stmt, set_exprs, equal_conds))) {
     LOG_WARN("failed to get equal set conditions", K(ret));
@@ -655,7 +652,7 @@ int ObLogSet::update_sharding_conds(ObIArray<ObRawExpr*>& sharding_conds)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
       int64_t idx = -1;
-      if (OB_ISNULL(set_expr = ObTransformUtils::get_expr_in_cast(select_exprs.at(i))) ||
+      if (OB_ISNULL(set_expr = ObSelectStmt::get_pure_set_expr(select_exprs.at(i))) ||
           OB_UNLIKELY(!set_expr->is_set_op_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected set expr", K(ret), K(set_expr));
@@ -747,7 +744,7 @@ int ObLogSet::get_calc_types(ObIArray<ObExprCalcType>& calc_types)
     LOG_WARN("failed to get select exprs", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < select_exprs.count(); ++i) {
-    if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(select_exprs.at(i)))) {
+    if (OB_ISNULL(expr = ObSelectStmt::get_pure_set_expr(select_exprs.at(i)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret));
     } else if (OB_FAIL(calc_types.push_back(expr->get_result_type().get_obj_meta()))) {
@@ -797,7 +794,7 @@ int ObLogSet::is_my_set_expr(const ObRawExpr* expr, bool& bret)
     bret = false;
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !bret && i < stmt->get_select_item_size(); ++i) {
-      bret = expr == ObTransformUtils::get_expr_in_cast(stmt->get_select_item(i).expr_);
+      bret = ObOptimizerUtil::is_point_based_sub_expr(expr, stmt->get_select_item(i).expr_);
     }
   }
   return ret;
@@ -1284,14 +1281,18 @@ int ObLogSet::get_set_exprs(ObIArray<ObRawExpr*>& set_exprs)
   return ret;
 }
 
-int ObLogSet::extra_set_exprs(ObIArray<ObRawExpr*>& set_exprs)
+int ObLogSet::get_pure_set_exprs(ObIArray<ObRawExpr*>& set_exprs)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr*, 4> out_raw_exprs;
-  if (OB_FAIL(get_set_exprs(out_raw_exprs))) {
-    LOG_WARN("failed to get set exprs", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_expr_in_cast(out_raw_exprs, set_exprs))) {
-    LOG_WARN("failed to get expr in cast", K(ret));
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(get_stmt()), K(ret));
+  } else {
+    const ObSelectStmt* sel_stmt = static_cast<const ObSelectStmt*>(get_stmt());
+    if (OB_FAIL(sel_stmt->get_pure_set_exprs(set_exprs))) {
+      LOG_WARN("failed to get set op exprs", K(ret));
+    } else { /*do nothing*/
+    }
   }
   return ret;
 }

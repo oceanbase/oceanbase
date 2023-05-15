@@ -1007,6 +1007,8 @@ public:
   {
     return const_cast<ObSelectStmt*>(static_cast<const ObSelectStmt&>(*this).get_real_stmt());
   }
+  int get_pure_set_exprs(ObIArray<ObRawExpr *> &pure_set_exprs) const;
+  static ObRawExpr *get_pure_set_expr(ObRawExpr *expr);
 
 private:
   int replace_multi_rollup_items_expr(const ObIArray<ObRawExpr*>& other_exprs, const ObIArray<ObRawExpr*>& new_exprs,

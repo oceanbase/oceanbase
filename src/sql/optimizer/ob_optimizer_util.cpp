@@ -5663,7 +5663,7 @@ int ObOptimizerUtil::rename_set_op_pushdown_filter(const ObSelectStmt& parent_st
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < parent_select_list.count(); ++i) {
     ObRawExpr* expr = NULL;
-    if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(parent_select_list.at(i)))) {
+    if (OB_ISNULL(expr = ObSelectStmt::get_pure_set_expr(parent_select_list.at(i)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select expr is null", K(i), K(ret));
     } else {

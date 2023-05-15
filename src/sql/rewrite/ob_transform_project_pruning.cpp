@@ -153,7 +153,7 @@ int ObTransformProjectPruning::check_need_remove(ObSelectStmt* stmt, const int64
     LOG_WARN("unexpected stmt", K(ret));
   } else if (!stmt->is_set_stmt()) {
     /*do nothing*/
-  } else if (OB_ISNULL(expr = ObTransformUtils::get_expr_in_cast(expr)) || OB_UNLIKELY(!expr->is_set_op_expr())) {
+  } else if (OB_ISNULL(expr = ObSelectStmt::get_pure_set_expr(expr)) || OB_UNLIKELY(!expr->is_set_op_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected set expr", K(ret), K(expr));
   } else {

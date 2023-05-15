@@ -108,7 +108,7 @@ public:
     return domain_index_exprs_.push_back(expr);
   }
   int get_set_exprs(ObIArray<ObRawExpr*>& set_exprs);
-  int extra_set_exprs(ObIArray<ObRawExpr*>& set_exprs);
+  int get_pure_set_exprs(ObIArray<ObRawExpr*>& set_exprs);
   virtual int est_cost() override;
   virtual int re_est_cost(const ObLogicalOperator* parent, double need_row_count, bool& re_est) override;
   int get_children_cost_info(ObIArray<ObBasicCostInfo>& children_cost_info);

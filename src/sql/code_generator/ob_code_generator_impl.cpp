@@ -3503,7 +3503,7 @@ int ObCodeGeneratorImpl::convert_set(ObLogSet& op, const PhyOpsDesc& child_ops, 
     }
     ARRAY_FOREACH(out_exprs, i)
     {
-      if (OB_ISNULL(set_expr = ObTransformUtils::get_expr_in_cast(out_exprs.at(i)))) {
+      if (OB_ISNULL(set_expr = ObSelectStmt::get_pure_set_expr(out_exprs.at(i)))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected set expr", K(ret), K(set_expr));
       } else if (OB_UNLIKELY(!set_expr->has_flag(IS_SET_OP) && !set_expr->is_pseudo_column_expr())) {
