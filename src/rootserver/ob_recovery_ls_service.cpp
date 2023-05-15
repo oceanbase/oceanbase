@@ -732,6 +732,7 @@ int ObRecoveryLSService::create_new_ls_(const share::ObLSAttr &ls_attr,
     LOG_WARN("ls not create pre operation", KR(ret), K(ls_attr));
   } else {
     //create new ls;
+    DEBUG_SYNC(BEFORE_RECOVER_USER_LS);
     share::schema::ObSchemaGetterGuard schema_guard;
     const share::schema::ObTenantSchema *tenant_schema = NULL;
     if (OB_ISNULL(GCTX.schema_service_)) {

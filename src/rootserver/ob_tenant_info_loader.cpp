@@ -486,6 +486,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
       // update last_sql_update_time_ after sql refresh
       last_sql_update_time_ = new_refresh_time_us;
     } else {
+      ret = OB_EAGAIN;
       LOG_WARN("refresh tenant info conflict", K(new_tenant_info), K(new_refresh_time_us),
                                       K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_), K(ora_rowscn));
     }

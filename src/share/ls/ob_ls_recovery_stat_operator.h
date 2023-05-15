@@ -206,6 +206,18 @@ public:
                                SCN &sync_scn,
                                SCN &min_wrs);
 
+  /**
+   * @description:
+   *    get tenant min user ls create scn
+   * @param[in] tenant_id
+   * @param[in] client
+   * @param[out] min_user_ls_create_scn
+   * @return return code
+   */
+  int get_tenant_min_user_ls_create_scn(const uint64_t tenant_id,
+                                        ObISQLClient &client,
+                                        SCN &min_user_ls_create_scn);
+
     /*
    * description: get tenant max sync_scn across all ls
    * @param[in] tenant_id
@@ -226,6 +238,12 @@ public:
       ObISQLClient &client,
       SCN &sync_scn);
 private:
+
+  int get_min_create_scn_(const uint64_t tenant_id,
+                          const common::ObSqlString &sql,
+                          ObISQLClient &client,
+                          SCN &min_create_scn);
+
  bool need_update_ls_recovery_(const ObLSRecoveryStat &old_recovery,
                                const ObLSRecoveryStat &new_recovery);
  int get_all_ls_recovery_stat_(const uint64_t tenant_id,
