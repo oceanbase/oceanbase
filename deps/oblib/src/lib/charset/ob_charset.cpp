@@ -1391,6 +1391,19 @@ const char *ObCharset::collation_name(ObCollationType collation_type)
   return (NULL == cs) ? "invalid_type" : cs->name;
 }
 
+int ObCharset::check_valid_implicit_convert(ObCollationType src_type, ObCollationType dst_type)
+{
+  int ret = OB_SUCCESS;
+  ObCharsetType src_cs = ObCharset::charset_type_by_coll(src_type);
+  ObCharsetType dst_cs = ObCharset::charset_type_by_coll(dst_type);
+  if ((src_cs == CHARSET_GB18030 && dst_cs == CHARSET_GB18030_2022) ||
+      (src_cs == CHARSET_GB18030_2022 && dst_cs == CHARSET_GB18030)) {
+    ret = OB_CANT_AGGREGATE_2COLLATIONS;
+    LOG_WARN("implict cast between GB18030 and GB18030_2022 not allowed", K(ret));
+  }
+  return ret;
+}
+
 int ObCharset::collation_name(ObCollationType collation_type, ObString &coll_name)
 {
   int ret = OB_SUCCESS;

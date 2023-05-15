@@ -510,6 +510,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           dst_expr->locate_datum_for_write(eval_ctx_) = *datum;
           dst_expr->set_evaluated_projected(eval_ctx_);
         }
+      } else if (OB_FAIL(ObCharset::check_valid_implicit_convert(src_meta.cs_type_, dst_expr->datum_meta_.cs_type_))) {
+        LOG_WARN("failed to check valid implicit convert", K(ret));
       } else {
         // 需要动态cast原因:
         // 对于以下场景:
