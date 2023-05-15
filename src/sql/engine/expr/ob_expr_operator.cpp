@@ -1017,8 +1017,8 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType &type1, const
       match = (type1.get_accuracy() == type2.get_accuracy());
     } else if (ob_is_json(type1.get_type())) {
       match = ob_is_json(type2.get_type());
-    } else if (type1.is_xml_sql_type()) {
-      match = type2.is_xml_sql_type();
+    } else if (type1.is_xml_sql_type() || (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML)) {
+      match = type2.is_xml_sql_type() || (type2.is_ext() && type2.get_udt_id() == T_OBJ_XML);
     }
   }
   return ret;
@@ -1453,6 +1453,7 @@ int ObExprOperator::aggregate_extend_accuracy_for_merge(ObExprResType &type,
     for (int64_t i = 0; !find_extend && i < param_num && OB_SUCC(ret); ++i) {
       if (ob_is_extend(types[i].get_type())) {
         find_extend = true;
+        type.set_extend_type(types[i].get_extend_type());
         type.set_accuracy(types[i].get_accuracy().get_accuracy());
       }
     }
@@ -1984,9 +1985,15 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_WARN("incorrect cmp type with json arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
-             && (type1.is_user_defined_sql_type() || type2.is_user_defined_sql_type())
-             && (type_ >= T_OP_EQ && type_ <= T_OP_NE)) {
-    ret = OB_ERR_INVALID_XML_DATATYPE;
+             && (ob_is_user_defined_type(type1.get_type())
+                 || ob_is_user_defined_type(type2.get_type()))
+             && ((type_ >= T_OP_EQ && type_ <= T_OP_NE) || type_ == T_FUN_SYS_NULLIF)) {
+    if ((ob_is_user_defined_type(type1.get_type()) && ob_is_user_defined_type(type2.get_type()))
+        || (type1.is_null() || type2.is_null())) {
+      ret = OB_ERR_NO_ORDER_MAP_SQL; // oracle error code compability
+    } else {
+      ret = OB_ERR_INVALID_XML_DATATYPE;
+    }
     LOG_WARN("incorrect cmp type with xml arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (OB_FAIL(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
                                                             type1.get_type(),
