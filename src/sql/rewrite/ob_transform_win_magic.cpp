@@ -230,6 +230,7 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
                                       stmt,
                                       trans_stmt,
                                       NULL != myhint && myhint->is_enable_hint(),
+                                      false,
                                       accepted))) {
     LOG_WARN("accept transform failed", K(ret));
   } else if (!accepted) {

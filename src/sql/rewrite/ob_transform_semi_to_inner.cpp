@@ -94,6 +94,7 @@ int ObTransformSemiToInner::transform_one_stmt(
         LOG_TRACE("semi join can not transform to inner join", K(*semi_info));
       } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt,
                                           !need_check_cost || ctx.hint_force_,
+                                          false,
                                           accepted, &ctx))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (!accepted) {
@@ -1455,7 +1456,7 @@ int ObTransformSemiToInner::is_ignore_semi_info(const uint64_t semi_id, bool &ig
   return ret;
 }
 
-int ObTransformSemiToInner::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid)
+int ObTransformSemiToInner::is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObCostBasedRewriteCtx *ctx = static_cast<ObCostBasedRewriteCtx *>(check_ctx);
@@ -1465,6 +1466,8 @@ int ObTransformSemiToInner::is_expected_plan(ObLogPlan *plan, void *check_ctx, b
   if (OB_ISNULL(ctx) || OB_ISNULL(plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ret));
+  } else if (!is_trans_plan) {
+    //do nothing
   } else if (ctx->is_multi_join_cond_) {
     is_valid = true;
   } else if (OB_FAIL(find_operator(plan->get_plan_root(), 

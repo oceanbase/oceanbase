@@ -90,7 +90,7 @@ int ObTransformSubqueryCoalesce::transform_one_stmt(common::ObIArray<ObParentDML
         LOG_WARN("failed to append equal infos", K(ret));
       } else if (OB_ISNULL(trans_stmt)) {
         // do nothing
-      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, false, is_happened))) {
+      } else if (OB_FAIL(accept_transform(parent_stmts, stmt, trans_stmt, false, false, is_happened))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (!is_happened) {
         // do nothing
