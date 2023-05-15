@@ -1375,6 +1375,8 @@ int ObTransService::check_replica_readable_(const SCN &snapshot,
       ret = OB_REPLICA_NOT_READABLE;
     } else if (OB_FAIL(ls.get_max_decided_scn(max_replayed_scn))) {
       TRANS_LOG(WARN, "get max decided scn failed", K(ret));
+      // rewrite ret code when get max decided scn failed
+      ret = OB_NOT_MASTER;
     } else if (OB_FAIL(ls.get_tx_svr()->get_tx_ls_log_adapter()->check_dup_tablet_readable(
                    tablet_id,
                    snapshot,

@@ -881,6 +881,8 @@ int ObDupTableLSHandler::check_dup_tablet_readable(const ObTabletID &tablet_id,
                  || OB_FAIL(log_handler_->get_max_decided_scn(tmp_max_replayed_scn)))) {
     DUP_TABLE_LOG(WARN, "get max replayed scn for dup table read failed", K(ret), K(ls_id_),
                   K(tablet_id), K(read_snapshot), KP(log_handler_), K(tmp_max_replayed_scn));
+    // rewrite ret code when get max replayed scn failed to drive retry
+    ret = OB_NOT_MASTER;
   } else if (OB_FAIL(check_and_update_max_replayed_scn(max_replayed_scn))) {
     DUP_TABLE_LOG(WARN, "invalid max_replayed_scn", K(ret), K(tablet_id), K(read_snapshot),
                   K(read_from_leader));
