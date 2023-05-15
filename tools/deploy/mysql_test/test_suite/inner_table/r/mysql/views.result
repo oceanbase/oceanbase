@@ -1,5 +1,5 @@
 use information_schema;
-select * from views order by table_name desc;
+select * from views where table_schema = 'mysql' order by table_name desc ;
 TABLE_CATALOG	TABLE_SCHEMA	TABLE_NAME	VIEW_DEFINITION	CHECK_OPTION	IS_UPDATABLE	DEFINER	SECURITY_TYPE	CHARACTER_SET_CLIENT	COLLATION_CONNECTION
 def	mysql	time_zone_transition_type	     SELECT time_zone_id as Time_zone_id,            transition_type_id as Transition_type_id,            offset as Offset,            is_dst as Is_DST,            abbreviation as Abbreviation     FROM oceanbase.__all_tenant_time_zone_transition_type 	NONE	NO	NONE	NONE	utf8mb4	utf8mb4_general_ci
 def	mysql	time_zone_transition	     SELECT time_zone_id as Time_zone_id,            transition_time as Transition_time,            transition_type_id as Transition_type_id     FROM oceanbase.__all_tenant_time_zone_transition 	NONE	NO	NONE	NONE	utf8mb4	utf8mb4_general_ci

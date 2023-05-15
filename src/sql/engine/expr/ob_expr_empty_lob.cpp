@@ -38,6 +38,7 @@ int ObExprEmptyClob::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_
   UNUSED(type_ctx);
   ObSessionNLSParams nls_param = type_ctx.get_session()->get_session_nls_params();
   type.set_clob();
+  type.set_length(0);
   type.set_collation_level(CS_LEVEL_IMPLICIT);
   type.set_collation_type(nls_param.nls_collation_);
   return OB_SUCCESS;
@@ -87,6 +88,7 @@ int ObExprEmptyBlob::calc_result_type0(ObExprResType &type, ObExprTypeCtx &type_
 {
   UNUSED(type_ctx);
   type.set_blob();
+  type.set_length(0);
   type.set_collation_type(CS_TYPE_BINARY);
   return OB_SUCCESS;
 }
