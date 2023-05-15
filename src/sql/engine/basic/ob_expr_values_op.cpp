@@ -207,7 +207,7 @@ int ObExprValuesOp::inner_open()
     // see ObSQLUtils::wrap_column_convert_ctx(), add CM_WARN_ON_FAIL for INSERT IGNORE.
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     cm_ = cm_ | CM_COLUMN_CONVERT;
-    if (plan_ctx->is_ignore_stmt()) {
+    if (plan_ctx->is_ignore_stmt() || !is_strict_mode(ctx_.get_my_session()->get_sql_mode())) {
       // CM_CHARSET_CONVERT_IGNORE_ERR is will give '?' when do string_string convert.
       // eg: insert into t(gbk_col) values('𐐀');
       cm_ = cm_ | CM_WARN_ON_FAIL | CM_CHARSET_CONVERT_IGNORE_ERR;
