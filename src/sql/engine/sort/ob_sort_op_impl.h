@@ -528,11 +528,16 @@ protected:
                        const ObChunkDatumStore::StoredRow *&store_row);
   int adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &exprs,
                                  const ObChunkDatumStore::StoredRow *&store_row);
-  int generate_new_row(const common::ObIArray<ObExpr*> &exprs,
+  //
+  int copy_to_topn_row(const common::ObIArray<ObExpr*> &exprs,
                        ObIAllocator &alloc,
-                       SortStoredRow *dt_row,
-                       SortStoredRow *&new_row,
-                       bool &is_alloced);
+                       SortStoredRow *&top_row);
+  // row is in parameter and out parameter.
+  // if row is null will alloc new memory, otherwise reuse in place if memory is enough.
+  // ensure row pointer not change when an error occurs.
+  int copy_to_row(const common::ObIArray<ObExpr*> &exprs,
+                  ObIAllocator &alloc,
+                  SortStoredRow *&row);
   int generate_new_row(SortStoredRow *orign_row,
                        ObIAllocator &alloc,
                        SortStoredRow *&new_row);
