@@ -95,6 +95,7 @@ int ObCDCLobDataMerger::start()
 void ObCDCLobDataMerger::stop()
 {
   if (is_inited_) {
+    LobDataMergerThread::mark_stop_flag();
     LobDataMergerThread::stop();
     LOG_INFO("ObCDCLobDataMerger stop threads succ", "thread_num", get_thread_num());
   }
@@ -116,7 +117,9 @@ int ObCDCLobDataMerger::push(
     ATOMIC_INC(&lob_data_list_task_count_);
 
     if (OB_FAIL(push_task_(task, stop_flag))) {
-      LOG_ERROR("push_task_", KR(ret));
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push_task_", KR(ret));
+      }
     }
   }
 
@@ -141,7 +144,7 @@ int ObCDCLobDataMerger::handle(void *data, const int64_t thread_index, volatile 
   } else {
   }
 
-  if (stop_flag) {
+  if (is_in_stop_status(stop_flag)) {
     ret = OB_IN_STOP_STATE;
   }
 
@@ -171,12 +174,16 @@ int ObCDCLobDataMerger::push_task_(
     ObLobDataGetCtxList &lob_data_get_ctx_list = task.get_lob_data_get_ctx_list();
     ObLobDataGetCtx *cur_lob_data_get_ctx = lob_data_get_ctx_list.head_;
 
-    while (OB_SUCC(ret) && cur_lob_data_get_ctx) {
+    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && cur_lob_data_get_ctx) {
       if (OB_FAIL(push_lob_column_(allocator, task, *cur_lob_data_get_ctx, stop_flag))) {
         LOG_ERROR("push_lob_column_ failed", KR(ret));
       } else {
         cur_lob_data_get_ctx = cur_lob_data_get_ctx->get_next();
       }
+    }
+
+    if (is_in_stop_status(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
     }
   }
 
@@ -330,12 +337,12 @@ int ObCDCLobDataMerger::push_lob_col_fra_ctx_list_(
   if (lob_col_fra_ctx_list.num_ <= 0) {
     // do nothing
   } else {
-    while (cur_lob_col_fragment_ctx) {
+    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && cur_lob_col_fragment_ctx) {
       uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
       void *push_task = static_cast<void *>(cur_lob_col_fragment_ctx);
       ret = OB_TIMEOUT;
 
-      while (OB_TIMEOUT == ret && ! stop_flag) {
+      while (OB_TIMEOUT == ret && ! is_in_stop_status(stop_flag)) {
         if (OB_FAIL(LobDataMergerThread::push(push_task, hash_value, PUSH_LOB_DATA_MERGER_TIMEOUT))) {
           if (OB_TIMEOUT != ret && OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push task into LobDataMergerThread fail", K(ret), K(push_task), K(hash_value));
@@ -406,7 +413,7 @@ int ObCDCLobDataMerger::handle_task_(
     }
   }
 
-  if (stop_flag) {
+  if (is_in_stop_status(stop_flag)) {
     ret = OB_IN_STOP_STATE;
   }
 

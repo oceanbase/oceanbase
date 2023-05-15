@@ -263,7 +263,7 @@ void ObLogSequencer::run1()
     } else {
       ObByteLockGuard guard(trans_queue_lock_);
 
-      while (OB_SUCC(ret) && ! trans_queue_.empty()) {
+      while (OB_SUCC(ret) && ! trans_queue_.empty() && ! lib::ThreadPool::has_set_stop()) {
         TrxSortElem top_trx_sort_elem = trans_queue_.top();
         const int64_t trans_commit_version = top_trx_sort_elem.get_trans_commit_version();
         monitor.mark_and_get_cost("begin", true);

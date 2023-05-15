@@ -100,7 +100,7 @@ private:
   void feedback_br_output_info_(PartTransTask &part_trans_task);
 
 private:
-  bool                      inited_;
+  bool                      is_inited_;
   int64_t                   thread_num_;
   int64_t                   task_limit_;
   int64_t                   total_task_count_;
