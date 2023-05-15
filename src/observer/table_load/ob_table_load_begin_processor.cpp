@@ -104,6 +104,7 @@ int ObTableLoadBeginP::process()
       param.tenant_id_ = credential_.tenant_id_;
       param.table_id_ = table_id;
       param.batch_size_ = arg_.config_.batch_size_;
+      param.parallel_ = arg_.config_.session_count_;
       param.session_count_ = MIN(arg_.config_.session_count_, (int32_t)tenant->unit_max_cpu());
       param.max_error_row_count_ = arg_.config_.max_error_row_count_;
       param.column_count_ = column_names.count();
@@ -200,7 +201,7 @@ int ObTableLoadBeginP::create_table_ctx(const ObTableLoadParam &param,
   uint64_t data_version = 0;
   start_arg.tenant_id_ = param.tenant_id_;
   start_arg.table_id_ = param.table_id_;
-  start_arg.parallelism_ = param.session_count_;
+  start_arg.parallelism_ = param.parallel_;
   if (OB_FAIL(GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret));
   } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, session_info))) {
@@ -271,6 +272,7 @@ int ObTableLoadPreBeginPeerP::process()
     param.tenant_id_ = credential_.tenant_id_;
     param.table_id_ = arg_.table_id_;
     param.batch_size_ = arg_.config_.batch_size_;
+    param.parallel_ = arg_.config_.session_count_;
     param.session_count_ = arg_.config_.session_count_;
     param.max_error_row_count_ = arg_.config_.max_error_row_count_;
     param.column_count_ = arg_.column_count_;
