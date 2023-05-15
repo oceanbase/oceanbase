@@ -776,7 +776,10 @@ int ObServerLogBlockMgr::get_and_inc_max_block_id_guarded_by_lock_(
     if (remove_block) {
       block_cnt_in_use_--;
     }
-    OB_ASSERT(block_cnt_in_use_ >= 0);
+    if (block_cnt_in_use_ < 0) {
+      CLOG_LOG(ERROR, "block_cnt_in_use_ is smaller than zero, unexpected error, may be in process of restart?",
+        K(ret), KPC(this), K(block_cnt_in_use_));
+    }
   }
   return ret;
 }

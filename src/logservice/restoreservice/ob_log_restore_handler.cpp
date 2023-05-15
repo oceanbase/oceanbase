@@ -717,7 +717,7 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
   return ret;
 }
 
-int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info)
+int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info) const
 {
   int ret = OB_SUCCESS;
   diagnose_info.restore_context_info_.reset();

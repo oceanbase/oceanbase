@@ -1797,6 +1797,8 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     STORAGE_LOG(WARN, "diagnose log handler failed", K(ret), K(ls_id));
   } else if (OB_FAIL(log_handler_.diagnose_palf(info.palf_diagnose_info_))) {
     STORAGE_LOG(WARN, "diagnose palf failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(restore_handler_.diagnose(info.restore_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose restore_handler failed", K(ret), K(ls_id), K(info));
   } else if (info.is_role_sync()) {
     // 角色同步时不需要诊断role change service
     info.rc_diagnose_info_.state_ = logservice::TakeOverState::TAKE_OVER_FINISH;

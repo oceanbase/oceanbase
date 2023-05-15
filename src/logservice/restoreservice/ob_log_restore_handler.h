@@ -231,7 +231,7 @@ public:
   //            other code      unexpected ret_code
   int get_next_sorted_task(ObFetchLogTask *&task);
   bool restore_to_end() const;
-  int diagnose(RestoreDiagnoseInfo &diagnose_info);
+  int diagnose(RestoreDiagnoseInfo &diagnose_info) const;
   int get_ls_restore_status_info(RestoreStatusInfo &restore_status_info);
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 
