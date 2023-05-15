@@ -11231,7 +11231,7 @@ bool cast_supported(const ObObjType orig_type, const ObCollationType orig_cs_typ
                                   || ob_is_datetime_tc(orig_type)) && blob_out) {
     bret = false;
   } else if (is_oracle_mode() &&
-             (ObTinyIntType == orig_type || ObDateTimeType == orig_type) &&
+             (ObTinyIntType == orig_type) &&
              ob_is_text_tc(expect_type)) {
     bret = false;
   } else {
