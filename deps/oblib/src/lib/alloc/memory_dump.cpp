@@ -375,13 +375,9 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     } else {
       hold = align_up2(chunk->alloc_bytes_ + ACHUNK_HEADER_SIZE, get_page_size());
     }
-    char label[AOBJECT_LABEL_SIZE + 1];
-    STRNCPY(label, object->label_, sizeof(label));
-    label[sizeof(label) - 1] = '\0';
-    int len = strlen(label);
-    ObString str(len, label);
     LabelItem *litem = nullptr;
-    LabelInfoItem *linfoitem = lmap.get(str);
+    auto key = std::make_pair(*(uint64_t*)object->label_, *((uint64_t*)object->label_ + 1));
+    LabelInfoItem *linfoitem = lmap.get(key);
     int64_t bt_size = object->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0;
     if (NULL != linfoitem) {
       // exist
@@ -403,15 +399,15 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         LOG_WARN("label cnt too large", K(ret), K(item_cap), K(item_used));
       } else {
         litem = &items[item_used++];
-        MEMCPY(litem->str_, label, len);
-        litem->str_[len] = '\0';
-        litem->str_len_ = len;
+        STRNCPY(litem->str_, object->label_, sizeof(litem->str_));
+        litem->str_[sizeof(litem->str_) - 1] = '\0';
+        litem->str_len_ = strlen(litem->str_);
         litem->hold_ = hold;
         litem->used_ = (object->alloc_bytes_ - bt_size);
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
-        ret = lmap.set_refactored(ObString(litem->str_len_, litem->str_), LabelInfoItem(litem, chunk, block));
+        ret = lmap.set_refactored(key, LabelInfoItem(litem, chunk, block));
       }
     }
   }

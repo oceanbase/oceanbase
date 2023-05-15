@@ -91,7 +91,7 @@ AObject *ObjectSet::alloc_object(
       STRNCPY(&obj->label_[0], attr.label_.str_, sizeof(obj->label_));
       obj->label_[sizeof(obj->label_) - 1] = '\0';
     } else {
-      obj->label_[0] = '\0';
+      MEMSET(obj->label_, '\0', sizeof(obj->label_));
     }
     allocs_++;
     alloc_bytes_ += size;
