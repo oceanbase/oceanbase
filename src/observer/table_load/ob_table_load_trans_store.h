@@ -106,6 +106,8 @@ private:
     ObDataTypeCastParams cast_params_;
     storage::ObDirectLoadTableStore table_store_;
     uint64_t last_receive_sequence_no_;
+    char *extra_buf_;
+    int64_t extra_buf_size_;
   };
   SessionContext *session_ctx_array_;
   int64_t ref_count_ CACHE_ALIGNED;

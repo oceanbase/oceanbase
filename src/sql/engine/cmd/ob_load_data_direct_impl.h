@@ -67,7 +67,7 @@ private:
   public:
     LoadExecuteParam();
     bool is_valid() const;
-    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel),
+    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel), K_(thread_count),
                  K_(batch_row_count), K_(data_mem_usage_limit), K_(need_sort), K_(online_opt_stat_gather),
                  K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(store_column_idxs));
   public:
@@ -78,7 +78,8 @@ private:
     common::ObString database_name_;
     common::ObString table_name_;
     common::ObString combined_name_; // database name + table name
-    int64_t parallel_; // number of concurrent threads
+    int64_t parallel_;
+    int64_t thread_count_; // number of concurrent threads
     int64_t batch_row_count_;
     int64_t data_mem_usage_limit_; // limit = data_mem_usage_limit * MAX_BUFFER_SIZE
     bool need_sort_;

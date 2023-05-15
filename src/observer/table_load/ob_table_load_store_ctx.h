@@ -143,6 +143,7 @@ public:
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
   ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;
+  uint64_t next_session_id_ CACHE_ALIGNED;
   struct SessionContext
   {
     SessionContext() : extra_buf_(nullptr), extra_buf_size_(0) {}

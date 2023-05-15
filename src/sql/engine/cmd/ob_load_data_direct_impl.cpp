@@ -1018,7 +1018,7 @@ ObLoadDataDirectImpl::FileLoadExecutor::~FileLoadExecutor()
     task_scheduler_ = nullptr;
   }
   if (nullptr != worker_ctx_array_) {
-    for (int64_t i = 0; i < execute_param_->parallel_; ++i) {
+    for (int64_t i = 0; i < execute_param_->thread_count_; ++i) {
       WorkerContext *worker_ctx = worker_ctx_array_ + i;
       worker_ctx->~WorkerContext();
     }
@@ -1047,7 +1047,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::inner_init(const LoadExecuteParam &e
   // init task_scheduler_
   else if (OB_ISNULL(task_scheduler_ =
                          OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (execute_ctx_->allocator_),
-                                 execute_param_->parallel_, *execute_ctx_->allocator_))) {
+                                 execute_param_->thread_count_, *execute_ctx_->allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObTableLoadTaskThreadPoolScheduler", KR(ret));
   } else if (OB_FAIL(task_scheduler_->init())) {
@@ -1092,12 +1092,12 @@ int ObLoadDataDirectImpl::FileLoadExecutor::init_worker_ctx_array()
   int ret = OB_SUCCESS;
   void *buf = nullptr;
   if (OB_ISNULL(
-        buf = execute_ctx_->allocator_->alloc(sizeof(WorkerContext) * execute_param_->parallel_))) {
+        buf = execute_ctx_->allocator_->alloc(sizeof(WorkerContext) * execute_param_->thread_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    worker_ctx_array_ = new (buf) WorkerContext[execute_param_->parallel_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < execute_param_->parallel_; ++i) {
+    worker_ctx_array_ = new (buf) WorkerContext[execute_param_->thread_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < execute_param_->thread_count_; ++i) {
       WorkerContext *worker_ctx = worker_ctx_array_ + i;
       if (OB_FAIL(worker_ctx->data_parser_.init(execute_param_->data_access_param_,
                                                 *execute_ctx_->logger_))) {
@@ -1292,7 +1292,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::process_task_handle(int64_t worker_i
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLoadDataDirectImpl::FileLoadExecutor not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(worker_idx < 0 || worker_idx >= execute_param_->parallel_ ||
+  } else if (OB_UNLIKELY(worker_idx < 0 || worker_idx >= execute_param_->thread_count_ ||
                          nullptr == handle)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(execute_param_), K(worker_idx), KP(handle));
@@ -1527,7 +1527,7 @@ int ObLoadDataDirectImpl::LargeFileLoadExecutor::fill_task(TaskHandle *handle,
 
 int32_t ObLoadDataDirectImpl::LargeFileLoadExecutor::get_session_id()
 {
-  if (next_session_id_ > execute_param_->parallel_) {
+  if (next_session_id_ > execute_param_->thread_count_) {
     next_session_id_ = 1;
   }
   return next_session_id_++;
@@ -1827,7 +1827,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
       DataDesc data_desc;
       data_desc.filename_ = load_args.file_name_;
       if (OB_FAIL(SimpleDataSplitUtils::split(execute_param_.data_access_param_, data_desc,
-                                              execute_param_.parallel_, data_desc_iter))) {
+                                              execute_param_.thread_count_, data_desc_iter))) {
         LOG_WARN("fail to split data", KR(ret));
       }
     } else {
@@ -1914,9 +1914,10 @@ int ObLoadDataDirectImpl::init_execute_param()
       hint_parallel = load_args.file_iter_.count() > 1
                         ? MIN(hint_parallel, load_args.file_iter_.count())
                         : hint_parallel;
-      execute_param_.parallel_ = MIN(hint_parallel, (int64_t)tenant->unit_max_cpu());
+      execute_param_.parallel_ = hint_parallel;
+      execute_param_.thread_count_ = MIN(hint_parallel, (int64_t)tenant->unit_max_cpu());
       execute_param_.data_mem_usage_limit_ =
-        MIN(execute_param_.parallel_ * 2, MAX_DATA_MEM_USAGE_LIMIT);
+        MIN(execute_param_.thread_count_ * 2, MAX_DATA_MEM_USAGE_LIMIT);
     }
   }
   // batch_row_count_
@@ -2077,7 +2078,8 @@ int ObLoadDataDirectImpl::init_execute_context()
   ObTableLoadParam load_param;
   load_param.tenant_id_ = execute_param_.tenant_id_;
   load_param.table_id_ = execute_param_.table_id_;
-  load_param.session_count_ = execute_param_.parallel_;
+  load_param.parallel_ = execute_param_.parallel_;
+  load_param.session_count_ = execute_param_.thread_count_;
   load_param.batch_size_ = execute_param_.batch_row_count_;
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.store_column_idxs_.count();
@@ -2129,7 +2131,7 @@ int ObLoadDataDirectImpl::init_logger()
                        session->get_tenant_name().length(), session->get_tenant_name().ptr(),
                        load_args.file_name_.length(), load_args.file_name_.ptr(),
                        load_args.combined_name_.length(), load_args.combined_name_.ptr(),
-                       execute_param_.parallel_, execute_param_.batch_row_count_,
+                       execute_param_.thread_count_, execute_param_.batch_row_count_,
                        ObCurTraceId::get_trace_id_str()));
     OZ(databuff_printf(buf, buf_len, pos, "Start time:\t"));
     OZ(ObTimeConverter::datetime_to_str(current_time, TZ_INFO(session), ObString(),

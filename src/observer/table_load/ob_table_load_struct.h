@@ -19,8 +19,6 @@ class ObObj;
 namespace observer
 {
 
-static const int32_t MAX_TABLE_LOAD_SESSION_COUNT = 128;
-
 enum class ObTableLoadDataType : int32_t
 {
   OBJ_ARRAY = 0,  //obobj[]
@@ -98,6 +96,7 @@ struct ObTableLoadParam
   ObTableLoadParam()
     : tenant_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID),
+      parallel_(0),
       session_count_(0),
       batch_size_(0),
       max_error_row_count_(0),
@@ -126,17 +125,19 @@ struct ObTableLoadParam
   {
     return common::OB_INVALID_ID != tenant_id_ &&
            common::OB_INVALID_ID != table_id_ &&
-           session_count_ > 0 && session_count_ <= MAX_TABLE_LOAD_SESSION_COUNT &&
+           parallel_ > 0 &&
+           session_count_ > 0 &&
            batch_size_ > 0 &&
            column_count_ > 0;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(session_count), K_(batch_size),
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
                K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
                K_(online_opt_stat_gather), K_(data_type), K_(dup_action));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
+  int64_t parallel_;
   int32_t session_count_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;

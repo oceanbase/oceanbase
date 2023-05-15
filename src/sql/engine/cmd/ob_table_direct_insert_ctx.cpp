@@ -10,6 +10,7 @@
 #include "observer/table_load/ob_table_load_struct.h"
 #include "observer/table_load/ob_table_load_instance.h"
 #include "share/schema/ob_schema_getter_guard.h"
+#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {
@@ -48,7 +49,10 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       load_exec_ctx_->allocator_ = &(exec_ctx->get_allocator());
       uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
-      if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
+      omt::ObTenant *tenant = nullptr;
+      if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
+        LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
+      } else if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_SQL_MODE, sql_mode))) {
         LOG_WARN("fail to get sys variable", KR(ret));
@@ -58,7 +62,8 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.tenant_id_ = MTL_ID();
         param.table_id_ = table_id;
         param.batch_size_ = 100;
-        param.session_count_ = parallel;
+        param.parallel_ = parallel;
+        param.session_count_ = MIN(parallel, (int64_t)tenant->unit_max_cpu());
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = false;
         param.need_sort_ = true;
