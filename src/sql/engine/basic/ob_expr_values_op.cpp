@@ -393,6 +393,8 @@ int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
     ObDatum *src_datum;
     if (OB_FAIL(real_src_expr.eval(eval_ctx_, src_datum))) {
       LOG_WARN("fail to eval src", K(real_src_expr), K(cm_), K(ret));
+    } else if (src_datum->is_null()) {
+      dst_datum.set_null();
     } else if (src_datum->get_string().empty()
                 && lib::is_oracle_mode()
                 && dst_expr->datum_meta_.type_ == common::ObLongTextType) {
