@@ -505,6 +505,10 @@ int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
     LOG_WARN("fail to update_tablet_meta_addr", K(ret));
   } else if (OB_FAIL(ckpt_writer.get_ls_block_list(meta_block_list))) {
     LOG_WARN("fail to get_ls_block_list", K(ret));
+  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, false /*switch handle*/))) {
+    LOG_WARN("fail to add_macro_blocks", K(ret));
+  } else if (OB_FAIL(ckpt_writer.get_dup_ls_block_list(meta_block_list))) {
+    LOG_WARN("fail to get_ls_block_list", K(ret));
   } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
   } else if (OB_FAIL(ckpt_writer.get_tablet_block_list(meta_block_list))) {

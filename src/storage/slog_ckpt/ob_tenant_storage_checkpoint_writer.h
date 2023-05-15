@@ -34,6 +34,7 @@ public:
   void reset();
   int write_checkpoint(ObTenantSuperBlock &super_block);
   int get_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
+  int get_dup_ls_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
   int get_tablet_block_list(common::ObIArray<blocksstable::MacroBlockId> *&block_list);
 
   int update_tablet_meta_addr();
@@ -67,6 +68,7 @@ private:
   // this ensures that the ls of the tablet is replayed before than the tablet
   common::hash::ObHashSet<share::ObLSID> ls_id_set_;
   ObLinkedMacroBlockItemWriter ls_item_writer_;
+  ObLinkedMacroBlockItemWriter dup_ls_item_writer_;
   ObLinkedMacroBlockItemWriter tablet_item_writer_;
 
 };

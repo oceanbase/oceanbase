@@ -39,6 +39,7 @@ ObTenantStorageCheckpointWriter::ObTenantStorageCheckpointWriter()
     tablet_item_addr_info_arr_(),
     ls_id_set_(),
     ls_item_writer_(),
+    dup_ls_item_writer_(),
     tablet_item_writer_()
 {
 }
@@ -70,6 +71,7 @@ void ObTenantStorageCheckpointWriter::reset()
   tablet_item_addr_info_arr_.reset();
   ls_id_set_.clear();
   ls_item_writer_.reset();
+  dup_ls_item_writer_.reset();
   tablet_item_writer_.reset();
 }
 
@@ -180,10 +182,10 @@ int ObTenantStorageCheckpointWriter::write_ls_dup_table_checkpoint(blocksstable:
 
   transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta;
 
-  ls_item_writer_.reset();
+  dup_ls_item_writer_.reset();
   if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream iter", K(ret));
-  } else if (OB_FAIL(ls_item_writer_.init(false /*no need addr*/))) {
+  } else if (OB_FAIL(dup_ls_item_writer_.init(false /*no need addr*/))) {
     LOG_WARN("failed to init logs tream item writer", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -213,7 +215,7 @@ int ObTenantStorageCheckpointWriter::write_ls_dup_table_checkpoint(blocksstable:
           LOG_WARN("fail to allocate memory", K(ret));
         } else if (OB_FAIL(dup_ls_meta.serialize(buf, buf_len, pos))) {
           LOG_WARN("fail to serialize", K(ret));
-        } else if (OB_FAIL(ls_item_writer_.write_item(buf, buf_len, nullptr))) {
+        } else if (OB_FAIL(dup_ls_item_writer_.write_item(buf, buf_len, nullptr))) {
           LOG_WARN("fail to write log stream item", K(ret));
         }
 
@@ -224,9 +226,9 @@ int ObTenantStorageCheckpointWriter::write_ls_dup_table_checkpoint(blocksstable:
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ls_item_writer_.close())) {
+      if (OB_FAIL(dup_ls_item_writer_.close())) {
         LOG_WARN("fail to close log stream item writer", K(ret));
-      } else if (OB_FAIL(ls_item_writer_.get_entry_block(entry_block))) {
+      } else if (OB_FAIL(dup_ls_item_writer_.get_entry_block(entry_block))) {
         LOG_WARN("fail to get entry block", K(ret));
       }
     }
@@ -396,6 +398,19 @@ int ObTenantStorageCheckpointWriter::get_ls_block_list(common::ObIArray<MacroBlo
     LOG_WARN("ObTenantStorageCheckpointWriter not inited", K(ret));
   } else {
     ObIArray<MacroBlockId> &ls_block_list = ls_item_writer_.get_meta_block_list();
+    block_list = &ls_block_list;
+  }
+  return ret;
+}
+
+int ObTenantStorageCheckpointWriter::get_dup_ls_block_list(common::ObIArray<MacroBlockId> *&block_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantStorageCheckpointWriter not inited", K(ret));
+  } else {
+    ObIArray<MacroBlockId> &ls_block_list = dup_ls_item_writer_.get_meta_block_list();
     block_list = &ls_block_list;
   }
   return ret;
