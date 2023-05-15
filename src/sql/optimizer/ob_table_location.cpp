@@ -4506,8 +4506,7 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
                                const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ValueItemExpr vie;
-  OB_UNIS_DECODE(vie.type_);
+  OB_UNIS_DECODE(type_);
   if (CONST_OBJ_TYPE == type_) {
     OB_UNIS_DECODE(obj_);
   } else if (CONST_EXPR_TYPE == type_) {
