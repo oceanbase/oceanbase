@@ -100,45 +100,60 @@ int ObDDLSingleReplicaExecutor::schedule_task()
     const int64_t expire_renew_time = force_renew ? INT64_MAX : 0;
     ObLSID ls_id;
     common::ObArray<int> ret_array;
+    ObArray<common::ObTabletID> request_source_tablet_ids;
+    ObArray<common::ObTabletID> request_dest_tablet_ids;
+    ObArray<int64_t> request_tablet_task_ids;
     int tmp_ret = OB_SUCCESS;
     {
-      ObSpinLockGuard guard(lock_);
-      for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); ++i) {
-        ObPartitionBuildInfo &build_info = build_infos.at(i);
-        if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_||
-            build_info.need_schedule()) {
-          // get leader of partition
-          ObAddr leader_addr;
-          obrpc::ObDDLBuildSingleReplicaRequestArg arg;
-          arg.ls_id_ = share::ObLSID::INVALID_LS_ID;
-          arg.tenant_id_ = tenant_id_;
-          arg.source_tablet_id_ = source_tablet_ids_.at(i);
-          arg.dest_tablet_id_ = dest_tablet_ids_.at(i);
-          arg.source_table_id_ = source_table_id_;
-          arg.dest_schema_id_ = dest_table_id_;
-          arg.schema_version_ = schema_version_;
-          arg.snapshot_version_ = snapshot_version_;
-          arg.ddl_type_ = type_;
-          arg.task_id_ = task_id_;
-          arg.parallelism_ = parallelism_;
-          arg.execution_id_ = execution_id_;
-          arg.data_format_version_ = data_format_version_;
-          arg.tablet_task_id_ = tablet_task_ids_.at(i);
-          arg.consumer_group_id_ = consumer_group_id_;
-          if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
-                  expire_renew_time, is_cache_hit, ls_id))) {
-            LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));
-          } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, ls_id, force_renew, leader_addr))) {
-            LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
-          } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
-          } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
-            LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
-          } else if (OB_FAIL(idxs.push_back(i))) {
-            LOG_WARN("fail to push back idx", K(ret));
-          } else {
-            LOG_INFO("send build single replica request", K(arg));
-            build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
+      {
+        ObSpinLockGuard guard(lock_);
+        // send rpc request may cost too much time, thus set some status before rpc request under lock.
+        for (int64_t i = 0; OB_SUCC(ret) && i < build_infos.count(); i++) {
+          ObPartitionBuildInfo &build_info = build_infos.at(i);
+          if (ObPartitionBuildStat::BUILD_INIT == build_info.stat_ || build_info.need_schedule()) {
+            if (OB_FAIL(request_source_tablet_ids.push_back(source_tablet_ids_.at(i)))) {
+              LOG_WARN("push backed failed", K(ret));
+            } else if (OB_FAIL(request_dest_tablet_ids.push_back(dest_tablet_ids_.at(i)))) {
+              LOG_WARN("push back failed", K(ret));
+            } else if (OB_FAIL(request_tablet_task_ids.push_back(tablet_task_ids_.at(i)))) {
+              LOG_WARN("push back failed", K(ret));
+            } else {
+              build_info.stat_ = ObPartitionBuildStat::BUILD_INIT;
+            }
           }
+        }
+      }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < request_source_tablet_ids.count(); ++i) {
+        ObAddr leader_addr;
+        obrpc::ObDDLBuildSingleReplicaRequestArg arg;
+        arg.ls_id_ = share::ObLSID::INVALID_LS_ID;
+        arg.tenant_id_ = tenant_id_;
+        arg.source_tablet_id_ = request_source_tablet_ids.at(i);
+        arg.dest_tablet_id_ = request_dest_tablet_ids.at(i);
+        arg.source_table_id_ = source_table_id_;
+        arg.dest_schema_id_ = dest_table_id_;
+        arg.schema_version_ = schema_version_;
+        arg.snapshot_version_ = snapshot_version_;
+        arg.ddl_type_ = type_;
+        arg.task_id_ = task_id_;
+        arg.parallelism_ = parallelism_;
+        arg.execution_id_ = execution_id_;
+        arg.data_format_version_ = data_format_version_;
+        arg.tablet_task_id_ = request_tablet_task_ids.at(i);
+        arg.consumer_group_id_ = consumer_group_id_;
+        if (OB_FAIL(location_service->get(tenant_id_, arg.source_tablet_id_,
+                expire_renew_time, is_cache_hit, ls_id))) {
+          LOG_WARN("get ls failed", K(ret), K(arg.source_tablet_id_));
+        } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, ls_id, force_renew, leader_addr))) {
+          LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
+        } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
+        } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
+          LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
+        } else if (OB_FAIL(idxs.push_back(i))) {
+          LOG_WARN("fail to push back idx", K(ret));
+        } else {
+          LOG_INFO("send build single replica request", K(arg));
         }
       }
     }
