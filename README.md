@@ -36,6 +36,7 @@
 **OceanBase Database** is a distributed relational database. It is developed entirely by Ant Group. OceanBase Database is built on a common server cluster. Based on the [Paxos](https://lamport.azurewebsites.net/pubs/lamport-paxos.pdf) protocol and its distributed structure, OceanBase Database provides high availability and linear scalability. OceanBase Database is not dependent on specific hardware architectures.
 
 # Key features
+
 * **Transparent Scalability** : An OceanBase cluster can be scaled out to 1,500 nodes transparently, handling petabytes of data and a trillion rows of records.
 * **Ultra-fast Performance** : The only distributed database that has refreshed both TPC-C record, at 707 million tmpC, and TPC-H record, at 15.26 million QphH @30000GB.
 * **Real-time Operational Analytics** : A unified system for both transactional and real-time operational analytics workloads.
@@ -46,9 +47,11 @@
 See also [key features](https://en.oceanbase.com/product/opensource) for more details.
 
 # System architecture
+
 ![image.png](https://cdn.nlark.com/yuque/0/2022/png/25820454/1667369873624-c1707034-471a-4f79-980f-6d1760dac8eb.png)
 
 [Learn More](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
+
 # Quick start
 
 ## How to deploy
@@ -67,25 +70,31 @@ source ~/.oceanbase-all-in-one/bin/env.sh
 # quickly deploy OceanBase database
 obd demo
 ```
+
 ### 🐳 Deploy by docker
 
-1. Pull OceanBase image (optional)
-```shell
-docker pull oceanbase/oceanbase-ce
-```
-2. Start an OceanBase Database instance
-```shell
-# Deploy an instance with the maximum specifications supported by the container.
-docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
-# Or deploy a mini standalone instance.
-docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
-```
-3. Connect to the OceanBase Database instance
-```shell
-docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
-docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
-docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
-```
+1. Pull OceanBase image (optional):
+
+    ```shell
+    docker pull oceanbase/oceanbase-ce
+    ```
+
+2. Start an OceanBase Database instance:
+
+    ```shell
+    # Deploy an instance with the maximum specifications supported by the container.
+    docker run -p 2881:2881 --name obstandalone -e MINI_MODE=0 -d oceanbase/oceanbase-ce
+    # Or deploy a mini standalone instance.
+    docker run -p 2881:2881 --name obstandalone -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+    ```
+
+3. Connect to the OceanBase Database instance:
+
+    ```shell
+    docker exec -it obstandalone ob-mysql sys # Connect to the root user of the sys tenant.
+    docker exec -it obstandalone ob-mysql root # Connect to the root user of the test tenant.
+    docker exec -it obstandalone ob-mysql test # Connect to the test user of the test tenant.
+    ```
 
 See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://www.oceanbase.com/docs/common-oceanbase-database-cn-10000000001692850) for more details.
 
@@ -95,8 +104,7 @@ See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/C
 
 # Roadmap
 
-For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364).  
-See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects) for more details.
+For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364). See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects) for more details.
 
 # Case study
 
@@ -106,7 +114,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # Contributing
 
-Contributions are highly appreciated. Read the [Contribute to OceanBase](https://github.com/oceanbase/oceanbase/wiki/Contribute-to-OceanBase) guide to getting started.
+Contributions are highly appreciated. Read the [development guide](docs/README.md) to getting started.
 
 # License
 
