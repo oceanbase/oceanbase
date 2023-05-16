@@ -393,10 +393,9 @@ void ObIngressBWAllocService::follower_task()
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "not init", K(ret), K(is_inited_));
   } else if (server_standby_bw > 0) {
-    // do nothing, reload _server_standby_fetch_log_bandwidth_limit in ObSrvNetworkFrame::reload_config()
-    // if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(server_standby_bw))) {
-    //   COMMON_LOG(WARN, "Failed to set server-level standby fetchlog bandwidth limit");
-    // }
+    if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(server_standby_bw))) {
+      COMMON_LOG(WARN, "Failed to set server-level standby fetchlog bandwidth limit");
+    }
   } else if (GCONF.standby_fetch_log_bandwidth_limit == 0) {
     // unlimited
     if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(RATE_UNLIMITED))) {

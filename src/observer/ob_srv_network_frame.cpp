@@ -250,7 +250,6 @@ int ObSrvNetworkFrame::reload_config()
   int32_t tcp_keepintvl     = static_cast<int>(GCONF.tcp_keepintvl);
   int32_t tcp_keepcnt       = static_cast<int>(GCONF.tcp_keepcnt);
   int32_t user_timeout      = static_cast<int>(GCONF.dead_socket_detection_timeout);
-  int64_t server_standby_bw = static_cast<int64_t>(GCONF._server_standby_fetch_log_bandwidth_limit);
 
   if (GCONF._enable_easy_keepalive) {
     enable_easy_keepalive = 1;
@@ -280,8 +279,6 @@ int ObSrvNetworkFrame::reload_config()
                                                                         tcp_keepidle, tcp_keepintvl,
                                                                         tcp_keepcnt))) {
     LOG_WARN("Failed to set sql tcp keepalive parameters for sql nio server", K(ret));
-  } else if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(server_standby_bw))) {
-    LOG_WARN("Failed to set server-level standby fetchlog bandwidth limit");
   }
   return ret;
 }
@@ -644,6 +641,13 @@ int ObSrvNetworkFrame::net_endpoint_predict_ingress(const ObNetEndpointKey &endp
 int ObSrvNetworkFrame::net_endpoint_set_ingress(const ObNetEndpointKey &endpoint_key, int64_t assigned_bw)
 {
   int ret = OB_SUCCESS;
+  if ((int64_t)GCONF._server_standby_fetch_log_bandwidth_limit > 0) {
+  } else if (GCONF.standby_fetch_log_bandwidth_limit == 0) {
+    // unlimited
+    if (OB_FAIL(obrpc::global_poc_server.update_server_standby_fetch_log_bandwidth_limit(RATE_UNLIMITED))) {
+      COMMON_LOG(WARN, "Failed to set server-level standby fetchlog bandwidth limit");
+    }
+  }
   if (OB_UNLIKELY(assigned_bw == -1)) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("assigned bandwidtth is invalid", K(ret), K(endpoint_key), K(assigned_bw));
