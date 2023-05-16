@@ -24,10 +24,12 @@ if [ -f $OBD_INSTALL_PRE/etc/profile.d/obd.sh ]
 then
   source $OBD_INSTALL_PRE/etc/profile.d/obd.sh 
 fi
-obd_dev=${OBD_HOME_GLOBAL:-~/.obd_dev}
-mkdir -p $obd_dev/cluster
-mkdir -p $OBD_HOME/.obd
-[ ! -d $OBD_HOME/.obd/cluster ] && ln -fs $obd_dev/cluster $OBD_HOME/.obd
+if [[ "${OB_DO_NO_GLOBAL_CLUSTER:-0}" == "0" ]]; then
+    obd_dev=${OBD_HOME_GLOBAL:-~/.obd_dev}
+    mkdir -p $obd_dev/cluster
+    mkdir -p $OBD_HOME/.obd
+    [ ! -d $OBD_HOME/.obd/cluster ] && ln -fs $obd_dev/cluster $OBD_HOME/.obd
+fi
 
 if [ -n "$BASH_VERSION" ]; then
     complete -F _obd_sh_complete_func ./obd.sh
