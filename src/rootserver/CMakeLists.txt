@@ -38,7 +38,6 @@ ob_set_subtarget(ob_rootserver common
   ob_ddl_help.cpp
   ob_ddl_operator.cpp
   ob_ddl_sql_generator.cpp
-  ob_inner_table_monitor.cpp
   ob_index_builder.cpp
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp

@@ -132,13 +132,20 @@ int ObTenantChecker::check_create_tenant_end_()
     // skip
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", K(ret));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
   } else {
     const ObSimpleTenantSchema *tenant_schema = NULL;
     int64_t schema_version = OB_INVALID_VERSION;
     int64_t baseline_schema_version = OB_INVALID_VERSION;
     FOREACH_CNT(tenant_id, tenant_ids) {
       // overwrite ret
-      if (OB_FAIL(schema_service_->get_tenant_schema_guard(*tenant_id, schema_guard))) {
+      if (!GCTX.root_service_->is_full_service()) {
+        ret = OB_CANCELED;
+        LOG_WARN("rs is not in full service", KR(ret));
+        break;
+      } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(*tenant_id, schema_guard))) {
         LOG_WARN("get_schema_guard failed", KR(ret), K(*tenant_id));
       } else if (OB_FAIL(schema_guard.get_schema_version(*tenant_id, schema_version))) {
         LOG_WARN("fail to get tenant schema version", KR(ret), K(*tenant_id));
@@ -295,13 +302,22 @@ int ObTableGroupChecker::inspect_(
     LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, table_ids))) {
     LOG_WARN("fail to get table_ids", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (!GCTX.root_service_->is_full_service()) {
+    ret = OB_CANCELED;
+    LOG_WARN("rs is not in full service", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
       const uint64_t table_id = table_ids.at(i);
       const ObTableSchema *table = NULL;
       // schema guard cannot be used repeatedly in iterative logic,
       // otherwise it will cause a memory hike in schema cache
-      if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+      if (!GCTX.root_service_->is_full_service()) {
+        ret = OB_CANCELED;
+        LOG_WARN("rs is not in full service", KR(ret));
+      } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table))) {
         LOG_WARN("get table schema failed", K(ret), KT(table_id));
@@ -766,7 +782,11 @@ int ObRootInspection::check_all()
       tmp = OB_SUCCESS;
       ObRsJobType job_type = upgrade_job_type_array[i];
       if (job_type > JOB_TYPE_INVALID && job_type < JOB_TYPE_MAX) {
-        if (OB_SUCCESS != (tmp = ObUpgradeUtils::check_upgrade_job_passed(job_type))) {
+        if (OB_SUCCESS != (tmp = check_cancel())) {
+          LOG_WARN("check_cancel failed", KR(ret), K(tmp));
+          ret = (OB_SUCCESS == ret) ? tmp : ret;
+          break;
+        } else if (OB_SUCCESS != (tmp = ObUpgradeUtils::check_upgrade_job_passed(job_type))) {
           LOG_WARN("fail to check upgrade job passed", K(tmp), K(job_type));
           if (OB_RUN_JOB_NOT_SUCCESS != tmp) {
             ret = (OB_SUCCESS == ret) ? tmp : ret;
@@ -1922,6 +1942,11 @@ int ObRootInspection::check_cancel()
 {
   int ret = OB_SUCCESS;
   if (stopped_) {
+    ret = OB_CANCELED;
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (!GCTX.root_service_->is_full_service()) {
     ret = OB_CANCELED;
   }
   return ret;

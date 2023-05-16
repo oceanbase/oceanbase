@@ -379,31 +379,6 @@ ObAsyncTask *ObRootService::ObMinorFreezeTask::deep_copy(char *buf, const int64_
   return task;
 }
 
-ObRootService::ObInnerTableMonitorTask::ObInnerTableMonitorTask(ObRootService &rs)
-:ObAsyncTimerTask(rs.task_queue_),
-    rs_(rs)
-{}
-
-int ObRootService::ObInnerTableMonitorTask::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(rs_.inner_table_monitor_.purge_inner_table_history())) {
-    LOG_WARN("failed to purge inner table history", K(ret));
-  }
-  return ret;
-}
-
-ObAsyncTask *ObRootService::ObInnerTableMonitorTask::deep_copy(char *buf, const int64_t buf_size) const
-{
-  ObInnerTableMonitorTask *task = NULL;
-  if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
-  } else {
-    task = new(buf) ObInnerTableMonitorTask(rs_);
-  }
-  return task;
-}
-
 ////////////////////////////////////////////////////////////////
 
 bool ObRsStatus::can_start_service() const
@@ -652,7 +627,6 @@ ObRootService::ObRootService()
     upgrade_executor_(),
     upgrade_storage_format_executor_(), create_inner_schema_executor_(),
     bootstrap_lock_(), broadcast_rs_list_lock_(ObLatchIds::RS_BROADCAST_LOCK),
-    inner_table_monitor_(),
     task_queue_(),
     inspect_task_queue_(),
     restart_task_(*this),
@@ -665,7 +639,6 @@ ObRootService::ObRootService()
                             SERVER_EVENT_INSTANCE,
                             DEALOCK_EVENT_INSTANCE,
                             task_queue_),
-    inner_table_monitor_task_(*this),
     inspector_task_(*this),
     purge_recyclebin_task_(*this),
     ddl_scheduler_(),
@@ -903,8 +876,6 @@ int ObRootService::init(ObServerConfig &config,
                                            server_manager_, zone_manager_, rpc_proxy_,
                                            self_addr_, sql_proxy, disaster_recovery_task_mgr_))) {
     FLOG_WARN("init root balancer failed", KR(ret));
-  } else if (OB_FAIL(inner_table_monitor_.init(sql_proxy, common_proxy_, *this))) {
-    FLOG_WARN("init inner table monitor failed", KR(ret));
   } else if (OB_FAIL(ROOTSERVICE_EVENT_INSTANCE.init(sql_proxy, self_addr_))) {
     FLOG_WARN("init rootservice event history failed", KR(ret));
   } else if (OB_FAIL(THE_RS_JOB_TABLE.init(&sql_proxy, self_addr_))) {
@@ -1335,6 +1306,10 @@ void ObRootService::wait()
   int64_t cost = ObTimeUtility::current_time() - start_time;
   ROOTSERVICE_EVENT_ADD("root_service", "finish_wait_stop", K(cost));
   FLOG_INFO("[ROOTSERVICE_NOTICE] rootservice wait finished", K(start_time), K(cost));
+  if (cost > 10 * 60 * 1000 * 1000L) { // 10min
+    int ret = OB_ERROR;
+    LOG_ERROR("cost too much time to wait rs stop", KR(ret), K(start_time), K(cost));
+  }
 }
 
 int ObRootService::reload_config()
@@ -1533,21 +1508,6 @@ int ObRootService::schedule_check_server_timer_task()
                                                 config_->server_check_interval, true))) {
     LOG_WARN("failed to add check_server task", K(ret));
   } else {}
-  return ret;
-}
-
-int ObRootService::schedule_inner_table_monitor_task()
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(task_queue_.add_timer_task(inner_table_monitor_task_,
-                                                ObInnerTableMonitorTask::PURGE_INTERVAL, true))) {
-    LOG_WARN("failed to add task", K(ret));
-  } else {
-    LOG_INFO("schedule inner_table_monitor task");
-  }
   return ret;
 }
 
@@ -5246,15 +5206,6 @@ int ObRootService::start_timer_tasks()
     }
   }
 
-  if (OB_SUCC(ret) && !task_queue_.exist_timer_task(inner_table_monitor_task_)) {
-    // remove purge inner table task, we may fail to get history schema after purge.
-    // if (OB_FAIL(schedule_inner_table_monitor_task())) {
-    //   LOG_WARN("start inner table monitor service fail", K(ret));
-    // } else {
-    //  LOG_INFO("start inner table monitor success");
-    // }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_FAIL(schedule_inspector_task())) {
       LOG_WARN("start inspector fail", K(ret));
@@ -5297,7 +5248,6 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(restart_task_);
     task_queue_.cancel_timer_task(check_server_task_);
     task_queue_.cancel_timer_task(event_table_clear_task_);
-    task_queue_.cancel_timer_task(inner_table_monitor_task_);
     task_queue_.cancel_timer_task(self_check_task_);
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
     inspect_task_queue_.cancel_timer_task(inspector_task_);
