@@ -13852,7 +13852,7 @@ int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
        LOG_WARN("failed to push back global partition id", K(ret));
     } else {
       can_use = true;
-      scale_ratio = 1.0 * all_used_parts.count() / table_schema.get_all_part_num();
+      scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
     }
   } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
     int64_t total_subpart_cnt = 0;
@@ -13891,11 +13891,11 @@ int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
           LOG_WARN("failed to push back global partition id", K(ret));
         } else {
           can_use = true;
-          scale_ratio = 1.0 * all_used_parts.count() / table_schema.get_all_part_num();
+          scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
         }
       } else {
         can_use = true;
-        scale_ratio = 1.0 * all_used_parts.count() / total_subpart_cnt;
+        scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / total_subpart_cnt);
       }
     }
   }
