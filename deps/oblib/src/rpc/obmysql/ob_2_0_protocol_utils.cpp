@@ -454,6 +454,8 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
         // This packet will be re-encoded, and pkt_count will be added to hdr_.seq_ after success, resulting in discontinuous seq returned to the client
         // So if it fails here, you need to roll back the seq of mysql packet
         param.pkt_->set_seq(origin_seq);
+        param.encode_ret_ = OB_SIZE_OVERFLOW;
+        ret = OB_SUCCESS;
       }
     }
 
@@ -487,9 +489,6 @@ inline int ObProto20Utils::fill_proto20_payload(ObProtoEncodeParam &param, bool 
       }
     } else {
       if (easy_buffer.read_avail_size() == proto20_context.header_len_) {
-        ret = OB_SIZE_OVERFLOW;
-        param.encode_ret_ = ret;
-        ret = OB_SUCCESS;
         easy_buffer.fall_back(proto20_context.header_len_); // reset buffer to alloc more mem
         proto20_context.next_step_ = START_TO_FILL_STEP;
         param.need_flush_ = true; // break, alloc more memory
