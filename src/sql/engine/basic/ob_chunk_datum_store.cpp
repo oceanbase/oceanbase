@@ -2177,9 +2177,19 @@ OB_DEF_SERIALIZE(ObChunkDatumStore)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("chunk datum store not support serialize if enable dump", K(ret));
   }
+  int64_t ser_ctx_id = ctx_id_;
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
+    if (ObCtxIds::DEFAULT_CTX_ID == ser_ctx_id) {
+      // do nothing
+    } else if (ObCtxIds::WORK_AREA == ser_ctx_id) {
+      ser_ctx_id = OLD_WORK_AREA_ID;
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ser_ctx_id), K(lbt()));
+    }
+  }
   LST_DO_CODE(OB_UNIS_ENCODE,
               tenant_id_,
-              ctx_id_,
+              ser_ctx_id,
               mem_limit_,
               default_block_size_,
               col_count_,
@@ -2220,6 +2230,16 @@ OB_DEF_DESERIALIZE(ObChunkDatumStore)
               tenant_id_,
               ctx_id_,
               mem_limit_);
+  if (ObCtxIds::MAX_CTX_ID <= OLD_WORK_AREA_ID) {
+    if (ObCtxIds::DEFAULT_CTX_ID == ctx_id_
+        || ObCtxIds::WORK_AREA == ctx_id_) {
+      // do nothing
+    } else if (OLD_WORK_AREA_ID == ctx_id_) {
+      ctx_id_ = ObCtxIds::WORK_AREA;
+    } else {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected ctx id", K(ctx_id_), K(lbt()));
+    }
+  }
   if (!is_inited()) {
     if (OB_FAIL(init(mem_limit_, tenant_id_,
                      ctx_id_, "ObChunkRowDE", false/*enable_dump*/))) {
