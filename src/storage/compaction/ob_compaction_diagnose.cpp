@@ -379,6 +379,30 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   return ret;
 }
 
+int ObCompactionDiagnoseMgr::diagnose_ls_merge(
+    const ObMergeType merge_type,
+    const ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObScheduleSuspectInfo ret_info;
+  if (OB_FAIL(get_suspect_info(merge_type, ls_id, ObTabletID(INT64_MAX), ret_info))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed get ls merge suspect info", K(ret), K(ls_id));
+    }
+  } else if (can_add_diagnose_info()) {
+    SET_DIAGNOSE_INFO(
+        info_array_[idx_++],
+        merge_type,
+        ret_info.tenant_id_,
+        ls_id,
+        ObTabletID(INT64_MAX),
+        ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
+        ret_info.add_time_,
+        "schedule_suspect_info", ret_info.suspect_info_);
+  }
+  return ret;
+}
+
 int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
 {
   int ret = OB_SUCCESS;
@@ -476,21 +500,13 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
                 compaction_scn);
           }
           // check ls suspect info for memtable freezing
-          ObScheduleSuspectInfo ret_info;
-          if (OB_TMP_FAIL(get_suspect_info(MINI_MERGE, ls_id, ObTabletID(INT64_MAX), ret_info))) {
-            if (OB_HASH_NOT_EXIST != tmp_ret) {
-              LOG_WARN("failed get ls merge suspect info", K(tmp_ret), K(ls_id));
-            }
-          } else if (can_add_diagnose_info()) {
-            SET_DIAGNOSE_INFO(
-                info_array_[idx_++],
-                MINI_MERGE,
-                ret_info.tenant_id_,
-                ls_id,
-                ObTabletID(INT64_MAX),
-                ObCompactionDiagnoseInfo::DIA_STATUS_FAILED,
-                ret_info.add_time_,
-                "schedule_suspect_info", ret_info.suspect_info_);
+          if (OB_TMP_FAIL(diagnose_ls_merge(MINI_MERGE, ls_id))) {
+            LOG_WARN("failed to diagnose about memtable freezing", K(tmp_ret));
+          }
+
+          // check ls locality change and leader change
+          if (OB_TMP_FAIL(diagnose_ls_merge(MEDIUM_MERGE, ls_id))) {
+            LOG_WARN("failed to diagnose about ls locality change", K(tmp_ret));
           }
           ObLSTabletIterator tablet_iter(ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US);
           ObLSVTInfo ls_info;
@@ -553,7 +569,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant_tablet()
           ObTabletID(INT64_MAX),
           ObCompactionDiagnoseInfo::DIA_STATUS_FINISH,
           ObTimeUtility::fast_current_time(),
-          "test: compaction has finished in storage, please check RS. compaction_scn", compaction_scn);
+          "compaction has finished in storage, please check RS. compaction_scn", compaction_scn);
         if (!abnormal_ls_id.empty()) {
           char * buf = info.diagnose_info_;
           const int64_t buf_len = common::OB_DIAGNOSE_INFO_LENGTH;
