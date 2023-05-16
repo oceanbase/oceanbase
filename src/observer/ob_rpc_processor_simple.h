@@ -216,6 +216,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_ESTIMATE_TABLET_BLOCK_COUNT, ObEstimateTabletBlock
 OB_DEFINE_PROCESSOR_S(Srv, OB_DDL_CHECK_TABLET_MERGE_STATUS, ObRpcDDLCheckTabletMergeStatusP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_TENANT_INFO, ObRefreshTenantInfoP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SYNC_REWRITE_RULES, ObSyncRewriteRulesP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_CONSENSUS_VERSION, ObBroadcastConsensusVersionP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

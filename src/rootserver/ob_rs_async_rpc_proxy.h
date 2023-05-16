@@ -69,6 +69,7 @@ RPC_F(obrpc::OB_GET_LEADER_LOCATIONS, obrpc::ObGetLeaderLocationsArg,
 RPC_F(obrpc::OB_DDL_CHECK_TABLET_MERGE_STATUS, obrpc::ObDDLCheckTabletMergeStatusArg,
     obrpc::ObDDLCheckTabletMergeStatusResult, ObCheckTabletMergeStatusProxy);
 RPC_F(obrpc::OB_REFRESH_TENANT_INFO, obrpc::ObRefreshTenantInfoArg, obrpc::ObRefreshTenantInfoRes, ObRefreshTenantInfoProxy);
+RPC_F(obrpc::OB_BROADCAST_CONSENSUS_VERSION, obrpc::ObBroadcastConsensusVersionArg, obrpc::ObBroadcastConsensusVersionRes, ObBroadcstConsensusVersionProxy);
 }//end namespace rootserver
 }//end namespace oceanbase
 

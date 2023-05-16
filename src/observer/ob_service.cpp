@@ -1372,6 +1372,35 @@ int ObService::switch_schema(
   return ret;
 }
 
+int ObService::broadcast_consensus_version(
+    const obrpc::ObBroadcastConsensusVersionArg &arg,
+    obrpc::ObBroadcastConsensusVersionRes &result)
+{
+  int ret = OB_SUCCESS;
+  int64_t local_consensus_version = OB_INVALID_VERSION;
+  const uint64_t tenant_id = arg.get_tenant_id();
+  const int64_t consensus_version = arg.get_consensus_version();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(consensus_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument",  KR(ret), K(consensus_version));
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_broadcast_consensus_version(tenant_id, local_consensus_version))) {
+    LOG_WARN("fail to get local tenant consensus_version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(consensus_version < local_consensus_version)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("consensus version is less than local consensus version", KR(ret), K(consensus_version), K(local_consensus_version));
+  } else if (OB_FAIL(gctx_.schema_service_->set_tenant_broadcast_consensus_version(tenant_id, consensus_version))) {
+    LOG_WARN("failt to update received schema version", KR(ret), K(tenant_id), K(consensus_version));
+  }
+  result.set_ret(ret);
+  return OB_SUCCESS;
+}
+
 int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
 {
   int ret = OB_SUCCESS;
