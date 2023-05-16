@@ -207,7 +207,7 @@ int ObTenantWeakReadService::get_cluster_version_internal_(SCN &version,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(cluster_service_.get_version(version))) {
+  } else if (OB_FAIL(cluster_service_.get_cluster_version(version))) {
     LOG_WARN("get weak read cluster version fail", KR(ret), K(version), K(tenant_id_));
     if (OB_NEED_RETRY == ret) {
       // self may be WRS Leader while not ready, need retry
@@ -306,11 +306,19 @@ int ObTenantWeakReadService::update_server_version_with_part_info(const int64_t 
 }
 
 int ObTenantWeakReadService::generate_server_version(const int64_t epoch_tstamp,
-    const bool need_print_status)
+                                                     const bool need_print_status)
 {
-  SCN base_version_when_no_valid_partition = ObWeakReadUtil::generate_min_weak_read_version(tenant_id_);
-    return  svr_version_mgr_.generate_new_version(tenant_id_, epoch_tstamp,
-        base_version_when_no_valid_partition, need_print_status);
+  int ret = OB_SUCCESS;
+  SCN base_version_when_no_valid_partition;
+  if (OB_FAIL(ObWeakReadUtil::generate_min_weak_read_version(tenant_id_, base_version_when_no_valid_partition))) {
+    TRANS_LOG(WARN, "generate min weak read version error", K(ret), K_(tenant_id));
+  } else {
+    ret = svr_version_mgr_.generate_new_version(tenant_id_,
+                                                epoch_tstamp,
+                                                base_version_when_no_valid_partition,
+                                                need_print_status);
+  }
+  return ret;
 }
 
 void ObTenantWeakReadService::get_weak_read_stat(ObTenantWeakReadStat &wrs_stat) const
@@ -352,7 +360,7 @@ void ObTenantWeakReadService::get_weak_read_stat(ObTenantWeakReadStat &wrs_stat)
   wrs_stat.self_ = self_;
 
   // cluster info
-  cluster_service_.get_version(current_cluster_version, min_cluster_version, max_cluster_version);
+  cluster_service_.get_cluster_version(current_cluster_version, min_cluster_version, max_cluster_version);
   wrs_stat.cluster_version_ = current_cluster_version;
   wrs_stat.cluster_version_delta_ = in_service? (cur_tstamp - wrs_stat.cluster_version_.convert_to_ts(ignore_invalid)):0;
   wrs_stat.min_cluster_version_ = min_cluster_version;
@@ -504,7 +512,7 @@ void ObTenantWeakReadService::print_stat_()
 
   svr_version_mgr_.get_version(sv);
   if (in_cluster_service) {
-    get_cluster_version_err = cluster_service_.get_version(cluster_version, min_cluster_version,
+    get_cluster_version_err = cluster_service_.get_cluster_version(cluster_version, min_cluster_version,
         max_cluster_version);
   }
 
@@ -871,7 +879,7 @@ void ObTenantWeakReadService::generate_cluster_version_()
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
-  if (OB_FAIL(cluster_service_.update_version(affected_rows))) {
+  if (OB_FAIL(cluster_service_.update_cluster_version(affected_rows))) {
     bool need_stop_service = false;
     bool need_self_check = need_force_self_check_(ret, affected_rows, need_stop_service);
     if (need_self_check) {

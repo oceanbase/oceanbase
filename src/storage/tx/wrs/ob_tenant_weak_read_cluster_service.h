@@ -80,8 +80,8 @@ public:
   /// @retval OB_NOT_MASTER         self is in service, but not wrs leader, should stop service
   /// @retval OB_NEED_RETRY         wrs not ready，need retry
   /// @retval OTHER CODE            fail
-  int get_version(share::SCN &version) const;
-  int get_version(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
+  int get_cluster_version(share::SCN &version) const;
+  int get_cluster_version(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
 
   /// update wrs version
   ///
@@ -90,7 +90,7 @@ public:
   /// @retval OB_NOT_MASTER         self is in service, but not wrs leader, should stop service
   /// @retval OB_NEED_RETRY         need retry
   /// @retval OTHER CODE            fail
-  int update_version(int64_t &affected_rows);
+  int update_cluster_version(int64_t &affected_rows);
 
   bool need_print_skipped_server();
 
@@ -142,8 +142,8 @@ private:
     return share::SCN::plus(min_version, WRS_VERSION_GAP_FOR_PERSISTENCE * 1000);
   }
   void stop_service_impl_();
-  share::SCN compute_version_(int64_t &skipped_servers, bool need_print) const;
-  int get_version_(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
+  int compute_cluster_version_(int64_t &skipped_servers, bool need_print, share::SCN &new_version) const;
+  int get_cluster_version_(share::SCN &version, share::SCN &min_version, share::SCN &max_version) const;
   bool need_force_change_leader_();
   int force_change_leader_() const;
   int verify_candidate_server_(const common::ObAddr &server) const;

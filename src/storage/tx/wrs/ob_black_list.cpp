@@ -15,6 +15,7 @@
 #include "observer/ob_server_struct.h"                          // for GCTX
 #include "deps/oblib/src/common/ob_role.h"                      // role
 #include "src/storage/tx/wrs/ob_weak_read_util.h"               // ObWeakReadUtil
+#include "src/storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -235,26 +236,28 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
 {
   int ret = OB_SUCCESS;
   int64_t max_stale_time = 0;
-  int64_t curr_time_ns = ObTimeUtility::current_time_ns();
 
   while (OB_SUCC(result->next())) {
     ObBLKey bl_key;
     ObLsInfo ls_info;
+    SCN gts_scn;
     if (OB_FAIL(get_info_from_result_(*result, bl_key, ls_info))) {
       TRANS_LOG(WARN, "get_info_from_result_ fail ", KR(ret), K(result));
     } else if (LEADER == ls_info.ls_state_) {
       // cannot add leader into blacklist
     } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATE_STATUS_NONE) {
       // log stream is initializing, should't be put into blacklist
+    } else if (OB_FAIL(OB_TS_MGR.get_gts(bl_key.get_tenant_id(), NULL, gts_scn))) {
+      TRANS_LOG(WARN, "get gts scn error", K(ret), K(bl_key));
     } else {
       max_stale_time = get_tenant_max_stale_time_(bl_key.get_tenant_id());
       int64_t max_stale_time_ns = max_stale_time * 1000;
-      if (curr_time_ns > ls_info.weak_read_scn_ + max_stale_time_ns) {
+      if (gts_scn.get_val_for_gts() > ls_info.weak_read_scn_ + max_stale_time_ns) {
         // scn is out-of-time，add this log stream into blacklist
         if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
           TRANS_LOG(WARN, "ls_bl_mgr_ add fail ", K(bl_key), K(ls_info));
         }
-      } else if (curr_time_ns + BLACK_LIST_WHITEWASH_INTERVAL_NS < ls_info.weak_read_scn_ + max_stale_time_ns) {
+      } else if (gts_scn.get_val_for_gts() + BLACK_LIST_WHITEWASH_INTERVAL_NS < ls_info.weak_read_scn_ + max_stale_time_ns) {
         // scn is new enough，remove this log stream in the blacklist
         ls_bl_mgr_.remove(bl_key);
       } else {

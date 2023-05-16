@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "storage/tx/ob_ts_mgr.h"
 #include "logservice/ob_log_service.h"
 
 #include "ob_tenant_weak_read_cluster_service.h"
@@ -340,8 +341,7 @@ int ObTenantWeakReadClusterService::start_service()
   int64_t leader_epoch = 0;
   int64_t begin_ts = ObTimeUtility::current_time();
   int64_t after_lock_time = 0, begin_query_ts = 0, begin_persist_ts = 0, end_ts = 0;
-  const int64_t max_stale_time =
-      ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID()) * 1000;
+  const int64_t max_stale_time = ObWeakReadUtil::max_stale_time_for_weak_consistency(MTL_ID());
   const int64_t tenant_id = MTL_ID();
 
   ISTAT("begin start service", K(tenant_id), K(is_in_service()), K_(can_update_version));
@@ -368,7 +368,7 @@ int ObTenantWeakReadClusterService::start_service()
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("WRS leader epoch is invalid", KR(ret), K(leader_epoch));
   } else {
-    SCN cur_min_version, cur_max_version;
+    SCN cur_min_version, cur_max_version, gts_scn;
     bool record_exist = false;
 
     begin_query_ts = ObTimeUtility::current_time();
@@ -376,13 +376,15 @@ int ObTenantWeakReadClusterService::start_service()
     // query cluster weak read version range in WRS table
     if (OB_FAIL(query_cluster_version_range_(cur_min_version, cur_max_version, record_exist))) {
       LOG_WARN("query cluster version range from WRS table fail", KR(ret));
+    } else if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id, NULL, gts_scn))) {
+      LOG_WARN("get gts error", K(ret), K(cur_min_version), K(cur_max_version));
     } else {
       begin_persist_ts = ObTimeUtility::current_time();
 
       // new weak read version delay should smaller than max_stale_time
-      int64_t new_version = MAX(cur_max_version.get_val_for_gts(), ObTimeUtility::current_time_ns() - max_stale_time);
+      int64_t new_version = MAX(cur_max_version.convert_to_ts(), gts_scn.convert_to_ts() - max_stale_time);
       SCN new_version_scn;
-      if (OB_FAIL(new_version_scn.convert_for_gts(new_version))) {
+      if (OB_FAIL(new_version_scn.convert_from_ts(new_version))) {
         LOG_ERROR("convert for gts fail", KR(ret));
       } else {
         SCN new_min_version = new_version_scn;
@@ -468,13 +470,13 @@ void ObTenantWeakReadClusterService::get_serve_info(bool &in_service, int64_t &l
   leader_epoch = leader_epoch_;
 }
 
-int ObTenantWeakReadClusterService::get_version(SCN &version) const
+int ObTenantWeakReadClusterService::get_cluster_version(SCN &version) const
 {
   SCN min_version, max_version;
-  return get_version(version, min_version, max_version);
+  return get_cluster_version(version, min_version, max_version);
 }
 
-int ObTenantWeakReadClusterService::get_version(SCN &version, SCN &min_version,
+int ObTenantWeakReadClusterService::get_cluster_version(SCN &version, SCN &min_version,
     SCN &max_version) const
 {
   int ret = OB_SUCCESS;
@@ -612,7 +614,7 @@ bool ObTenantWeakReadClusterService::check_can_update_version_()
   return can_update_version_;
 }
 
-int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
+int ObTenantWeakReadClusterService::update_cluster_version(int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
   SCN new_version;
@@ -640,8 +642,8 @@ int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
         "tenant_id", MTL_ID(), K(cur_leader_epoch), K(leader_epoch_));
   } else if (! check_can_update_version_()) {
     TRANS_LOG(TRACE, "can not update version");
-  } else if (FALSE_IT(new_version = compute_version_(skipped_server_count, need_print))) {
-    // nothing to do
+  } else if (OB_FAIL(compute_cluster_version_(skipped_server_count, need_print, new_version))) {
+    TRANS_LOG(WARN, "compute version error", K(ret), K(skipped_server_count), K(need_print));
   } else if (OB_UNLIKELY(!new_version.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid CLUSTER weak read version", K(new_version), KR(ret));
@@ -682,13 +684,19 @@ int ObTenantWeakReadClusterService::update_version(int64_t &affected_rows)
   return ret;
 }
 
-SCN ObTenantWeakReadClusterService::compute_version_(int64_t &skipped_servers, bool need_print) const
+int ObTenantWeakReadClusterService::compute_cluster_version_(int64_t &skipped_servers, bool need_print, SCN &version) const
 {
+  int ret = OB_SUCCESS;
   /// min weak read version delay should not smaller than max_stale_time
-  SCN base_version = ObWeakReadUtil::generate_min_weak_read_version(MTL_ID());
-  // weak read version should increase monotonically
-  base_version = SCN::max(current_version_, base_version);
-  return cluster_version_mgr_.get_version(base_version, skipped_servers, need_print);
+  SCN base_version;
+  if (OB_FAIL(ObWeakReadUtil::generate_min_weak_read_version(MTL_ID(), base_version))) {
+    TRANS_LOG(WARN, "generate min weak read version error", K(ret), K(skipped_servers), K(need_print));
+  } else {
+    // weak read version should increase monotonically
+    base_version = SCN::max(current_version_, base_version);
+    version = cluster_version_mgr_.get_cluster_version(base_version, skipped_servers, need_print);
+  }
+  return ret;
 }
 
 bool ObTenantWeakReadClusterService::is_service_master() const
