@@ -724,6 +724,7 @@ int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info) const
   diagnose_info.restore_context_info_.reset();
   const int64_t MAX_TRACE_ID_LENGTH = 64;
   char trace_id[MAX_TRACE_ID_LENGTH];
+  const bool need_ignore_invliad = true;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -738,7 +739,7 @@ int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info) const
                                                                     context_.last_fetch_ts_,
                                                                     context_.max_submit_lsn_.val_,
                                                                     context_.max_fetch_lsn_.val_,
-                                                                    context_.max_fetch_scn_.convert_to_ts()))) {
+                                                                    context_.max_fetch_scn_.convert_to_ts(need_ignore_invliad)))) {
     CLOG_LOG(WARN, "append restore_context_info failed", K(ret), K(context_));
   } else if (FALSE_IT(context_.error_context_.trace_id_.to_string(trace_id, sizeof(trace_id)))) {
   } else if (OB_FAIL(diagnose_info.restore_err_context_info_.append_fmt("ret_code:%d; "
