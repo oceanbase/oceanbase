@@ -933,7 +933,7 @@ int ObTableColumns::resolve_view_definition(
                        K(select_stmt_node->type_));
             } else if (OB_FAIL(select_resolver.resolve(*select_stmt_node))) {
               LOG_WARN("resolve view definition failed", K(ret));
-              if (OB_ALLOCATE_MEMORY_FAILED != ret) {
+              if (can_rewrite_error_code(ret)) {
                 ret = OB_ERR_VIEW_INVALID;
               } else {
                 LOG_WARN("failed to resolve view", K(ret));
@@ -1123,6 +1123,16 @@ int64_t ObTableColumns::ColumnAttributes::get_data_length() const
 {
   return ob_is_accuracy_length_valid_tc(result_type_.get_type()) ?
       result_type_.get_accuracy().get_length() : ob_obj_type_size(result_type_.get_type());
+}
+
+bool ObTableColumns::can_rewrite_error_code(const int ret)
+{
+  bool res = true;
+  if (OB_ALLOCATE_MEMORY_FAILED == ret
+      || OB_SQL_RESOLVER_NO_MEMORY == ret) {
+    res = false;
+  }
+  return res;
 }
 
 }/* ns observer*/

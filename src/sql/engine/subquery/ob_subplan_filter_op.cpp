@@ -223,7 +223,7 @@ int ObSubQueryIterator::init_mem_entity()
   lib::ContextParam param;
   param.set_mem_attr(ObMemAttr(op_.get_exec_ctx().get_my_session()->get_effective_tenant_id(),
         "SqlSQIterator",
-        ObCtxIds::WORK_AREA));
+        ObCtxIds::DEFAULT_CTX_ID));
   param.set_properties(lib::USE_TL_PAGE_OPTIONAL);
   if (OB_FAIL(CURRENT_CONTEXT->CREATE_CONTEXT(mem_entity_, param))) {
     LOG_WARN("fail to create entity", K(ret));
