@@ -248,6 +248,9 @@ const int64_t OB_MAX_NODEGROUP_LENGTH = 12;
 //change from 128 to 64, according to production definition document
 const int64_t OB_MAX_RESERVED_POINT_TYPE_LENGTH = 32;
 const int64_t OB_MAX_RESERVED_POINT_NAME_LENGTH = 128;
+const int64_t OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER = 2; //storage extra rowkey column number, it contains trans version column and sql sequence column
+const int64_t OB_INNER_MAX_ROWKEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+
 
 //for recybin
 const int64_t OB_MAX_OBJECT_NAME_LENGTH = 128; //should include index_name

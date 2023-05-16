@@ -164,7 +164,6 @@ public:
     MVRC_VERSION_AFTER_3_0 = 2, // TransVersion | SqlSequence[A]:Use After Version3.0
     MVRC_VERSION_MAX = 3,
   };
-  static const int64_t MAX_EXTRA_ROWKEY_CNT = 2;
   static int64_t get_trans_version_col_store_index(
       const int64_t schema_rowkey_col_cnt,
       const bool is_multi_version)
