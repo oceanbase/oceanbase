@@ -2440,7 +2440,7 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
   int ret = OB_SUCCESS;
   if (set_var.set_scope_ == ObSetVar::SET_SCOPE_NEXT_TRANS) {
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
-    bool read_only = val.get_bool();
+    const bool read_only = val.get_bool();
     if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get session info", K(ret));
@@ -2450,9 +2450,11 @@ int ObSysVarOnUpdateFuncs::update_tx_read_only_no_scope(ObExecContext &ctx,
       // READ ONLY will use SERIALIZABLE implicitly,
       // READ WRITE need use default value in session, so set UNKNOWN.
       //
-      ObTxIsolationLevel isolation = read_only ?
-        ObTxIsolationLevel::SERIAL : ObTxIsolationLevel::INVALID;
-      session->set_tx_isolation(isolation);
+      // if read only, set tx isolation level to serializable
+      // otherwise, use the value in session
+      if (read_only) {
+        session->set_tx_isolation(ObTxIsolationLevel::SERIAL);
+      }
       if (OB_FAIL(start_trans_by_set_trans_char_(ctx))) {
         // TODO: fatal bug, need disconnect
         LOG_WARN("auto start trans fail when set txn charactor", K(ret),
