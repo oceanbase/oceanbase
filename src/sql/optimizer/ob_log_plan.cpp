@@ -13707,8 +13707,7 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(group_by_expr), K(stat_partition_id_expr_), K(stat_table_scan_));
         } else if (T_FUN_SYS_CALC_PARTITION_ID != group_by_expr->get_expr_type()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected group by expr", KPC(group_by_expr));
+          // do nothing
         } else if (OB_FAIL(stat_gather_replaced_exprs_.push_back(
             std::pair<ObRawExpr *, ObRawExpr *>(group_by_expr, stat_partition_id_expr_)))) {
           LOG_WARN("failed to push back replaced expr", K(ret));
