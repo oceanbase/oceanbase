@@ -1362,7 +1362,7 @@ bit_expr '|' bit_expr %prec '|'
 {
   ParseNode *params = NULL;
   malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $1, $4, $5);
-  make_name_node($$, result->malloc_pool_, "date_add");
+  make_name_node($$, result->malloc_pool_, "date_add_date_interval");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
             &@1, result);
@@ -1370,8 +1370,8 @@ bit_expr '|' bit_expr %prec '|'
 | INTERVAL expr date_unit '+' bit_expr
 {
   ParseNode *params = NULL;
-  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $5, $2, $3);
-  make_name_node($$, result->malloc_pool_, "date_add");
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 3, $2, $3, $5);
+  make_name_node($$, result->malloc_pool_, "date_add_interval_date");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params);
   check_ret(setup_token_pos_info_and_dup_string($$, result, @1.first_column, @4.last_column),
             &@1, result);
