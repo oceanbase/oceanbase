@@ -398,13 +398,16 @@ int ObServerSchemaService::destroy_schema_struct(uint64_t tenant_id)
       LOG_INFO("reset tenant refresh_full mark", K(ret), K(tenant_id));
     }
 
-    ObSchemaMgr** schema_mgr = NULL;
+    ObSchemaMgr* schema_mgr = NULL;
     ObSchemaMemMgr* mem_mgr = NULL;
     if (OB_SYS_TENANT_ID == tenant_id) {
-      schema_mgr = &schema_mgr_for_cache_;
+      schema_mgr = schema_mgr_for_cache_;
       mem_mgr = &mem_mgr_;
     } else {
       ObSchemaMgr* const* tmp_mgr = schema_mgr_for_cache_map_.get(tenant_id);
+      if (OB_NOT_NULL(tmp_mgr)) {
+        schema_mgr = *tmp_mgr;
+      }
       if (OB_FAIL(mem_mgr_map_.get_refactored(tenant_id, mem_mgr))) {
         LOG_WARN("fail to get mem mgr", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_mgr_for_cache_map_.erase_refactored(tenant_id))) {
@@ -414,13 +417,12 @@ int ObServerSchemaService::destroy_schema_struct(uint64_t tenant_id)
           LOG_WARN("fail to get schema mgr for cache", K(ret));
         }
       } else {
-        schema_mgr = const_cast<ObSchemaMgr**>(tmp_mgr);
         LOG_INFO("[SCHEMA_RELEASE] erase tenant from schema_mgr_for_cache_map", K(ret), K(tenant_id));
       }
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(schema_mgr) || OB_ISNULL(*schema_mgr)) {
+    } else if (OB_ISNULL(schema_mgr)) {
       LOG_INFO("schema_mgr_for_cache has been released, just skip", K(ret), K(tenant_id));
     } else if (OB_ISNULL(mem_mgr)) {
       ret = OB_ERR_UNEXPECTED;
@@ -430,14 +432,17 @@ int ObServerSchemaService::destroy_schema_struct(uint64_t tenant_id)
           K(ret),
           K(tenant_id),
           "schema_mgr_tenant_id",
-          (*schema_mgr)->get_tenant_id(),
+          schema_mgr->get_tenant_id(),
           "schema_version",
-          (*schema_mgr)->get_schema_version());
-      (*schema_mgr)->~ObSchemaMgr();
-      if (OB_FAIL(mem_mgr->free(static_cast<void*>(*schema_mgr)))) {
+          schema_mgr->get_schema_version());
+      schema_mgr->~ObSchemaMgr();
+      if (OB_FAIL(mem_mgr->free(static_cast<void*>(schema_mgr)))) {
         LOG_ERROR("free schema mgr for cache failed", K(ret), K(tenant_id));
       } else {
-        *schema_mgr = NULL;
+        schema_mgr = NULL;
+        if (OB_SYS_TENANT_ID == tenant_id) {
+          schema_mgr_for_cache_ = NULL;
+        }
       }
     }
   }
