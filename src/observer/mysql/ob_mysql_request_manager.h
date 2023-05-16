@@ -82,7 +82,8 @@ public:
   static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9; // 90%
   static constexpr float LOW_LEVEL_EVICT_PERCENTAGE = 0.8; // 80%
   //每进行一次release_old操作删除的sql_audit百分比
-  static constexpr float BATCH_RELEASE_PERCENTAGE = 0.005; //0.005
+  static const int64_t BATCH_RELEASE_SIZE = 50000; //5w
+  static const int64_t MINI_MODE_BATCH_RELEASE_SIZE = 5000; //5k
   //启动淘汰检查的时间间隔
   static const int64_t EVICT_INTERVAL = 1000000; //1s
   typedef common::ObRaQueue::Ref Ref;
