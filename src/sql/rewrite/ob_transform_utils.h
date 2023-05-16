@@ -1434,6 +1434,13 @@ public:
                                         bool in_add_expr);
   static int add_constraint_for_groupby_expr(ObTransformerCtx *trans_ctx, ObSelectStmt *select_stmt, ObRawExpr* groupby_expr, ObRawExpr* old_expr);
 
+  static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
+                                           ObIArray<ObRawExpr *> &not_null_exprs);
+
+  static int add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
+                                           ObRawExpr *not_null_expr,
+                                           bool is_true = true);
+
   static int add_param_not_null_constraint(ObTransformerCtx &ctx, 
                                            ObIArray<ObRawExpr *> &not_null_exprs);
   

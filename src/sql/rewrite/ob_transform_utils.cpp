@@ -9518,20 +9518,19 @@ int ObTransformUtils::extract_shared_expr(ObDMLStmt *upper_stmt,
   return ret;
 }
 
-int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx, 
+int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                                     ObIArray<ObRawExpr *> &not_null_exprs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < not_null_exprs.count(); ++i) {
-    if (OB_FAIL(add_param_not_null_constraint(ctx, not_null_exprs.at(i)))) {
+    if (OB_FAIL(add_param_not_null_constraint(constraints, not_null_exprs.at(i)))) {
       LOG_WARN("failed to add param not null constraint", K(ret));
     }
   }
   return ret;
 }
 
-
-int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+int ObTransformUtils::add_param_not_null_constraint(ObIArray<ObExprConstraint> &constraints,
                                                     ObRawExpr *not_null_expr,
                                                     bool is_true)
 {
@@ -9544,20 +9543,37 @@ int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pre calculable expr is expected here", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.expr_constraints_.count(); ++i) {
-      if (ctx.expr_constraints_.at(i).expect_result_ == PRE_CALC_RESULT_NOT_NULL &&
-          ctx.expr_constraints_.at(i).pre_calc_expr_ == not_null_expr) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < constraints.count(); ++i) {
+      if (constraints.at(i).expect_result_ == PRE_CALC_RESULT_NOT_NULL &&
+          constraints.at(i).pre_calc_expr_ == not_null_expr) {
         existed = true;
         break;
       }
     }
     if (OB_SUCC(ret) && !existed) {
       ObExprConstraint cons(not_null_expr, PRE_CALC_RESULT_NOT_NULL);
-      if (OB_FAIL(ctx.expr_constraints_.push_back(cons))) {
+      if (OB_FAIL(constraints.push_back(cons))) {
         LOG_WARN("failed to push back pre calc constraints", K(ret));
       }
     }
   }
+  return ret;
+}
+
+int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+                                                    ObIArray<ObRawExpr *> &not_null_exprs)
+{
+  int ret = OB_SUCCESS;
+  ret = add_param_not_null_constraint(ctx.expr_constraints_, not_null_exprs);
+  return ret;
+}
+
+int ObTransformUtils::add_param_not_null_constraint(ObTransformerCtx &ctx,
+                                                    ObRawExpr *not_null_expr,
+                                                    bool is_true)
+{
+  int ret = OB_SUCCESS;
+  ret = add_param_not_null_constraint(ctx.expr_constraints_, not_null_expr, is_true);
   return ret;
 }
 
