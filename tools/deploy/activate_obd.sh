@@ -3,6 +3,7 @@ DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
 OB_DO_GLOBAL_CONFIG=~/.ob_do_global
 [[ -f $OB_DO_GLOBAL_CONFIG ]] && source $OB_DO_GLOBAL_CONFIG
 export DEPLOY_PATH=$DIR/tools/deploy
+export OBD_FORCE_UPDATE_PLUGINS=1
 if grep 'dep_create.sh' $DIR/build.sh 2>&1 >/dev/null
 then
     export DEP_PATH=$DIR/deps/3rd
