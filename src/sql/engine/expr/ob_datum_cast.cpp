@@ -7724,6 +7724,15 @@ CAST_FUNC_NAME(udt, string)
   return ret;
 }
 
+CAST_FUNC_NAME(pl_extend, string)
+{
+  EVAL_STRING_ARG()
+  {
+  ret = OB_NOT_SUPPORTED;
+  }
+  return ret;
+}
+
 CAST_FUNC_NAME(sql_udt, pl_extend)
 {
   // Convert sql udt type to pl udt type, currently only xmltype is supported
@@ -9784,7 +9793,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*date*/
     cast_not_expected,/*time*/
     cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
+    pl_extend_string,/*string*/
     cast_eval_arg,/*extend*/
     cast_not_expected,/*unknown*/
     cast_inconsistent_types,/*text*/

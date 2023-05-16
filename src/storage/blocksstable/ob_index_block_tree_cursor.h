@@ -209,7 +209,7 @@ private:
 
 private:
   static const int64_t OB_INDEX_BLOCK_MAX_COL_CNT =
-      common::OB_MAX_ROWKEY_COLUMN_NUMBER+ ObMultiVersionRowkeyHelpper::MAX_EXTRA_ROWKEY_CNT + 1;
+      common::OB_MAX_ROWKEY_COLUMN_NUMBER + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER + 1;
   ObIndexBlockTreePath cursor_path_;
   ObIndexMicroBlockCache *index_block_cache_;
   ObIMicroBlockReader *reader_;

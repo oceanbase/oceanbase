@@ -93,6 +93,7 @@ public:
   void detect_failure();
   bool is_clog_disk_has_fatal_error();
   bool is_data_disk_has_fatal_error(bool &slog_hang, bool &data_hang);
+  bool is_schema_not_refreshed();
 private:
   bool check_is_running_() const { return is_running_; }
   int insert_event_to_table_(const FailureEvent &event, const ObFunction<bool()> &recover_operation, ObString info);
@@ -100,6 +101,7 @@ private:
   void detect_slog_writer_hang_failure_();
   void detect_sstable_io_failure_();
   void detect_palf_disk_full_();
+  void detect_schema_not_refreshed_();
 private:
   struct FailureEventWithRecoverOp {
     int init(const FailureEvent &event, const ObFunction<bool()> &recover_detect_operation);
@@ -118,6 +120,7 @@ private:
   bool has_add_slog_hang_event_;
   bool has_add_sstable_hang_event_;
   bool has_add_clog_full_event_;
+  bool has_schema_error_;
   ObSpinLock lock_;
 };
 

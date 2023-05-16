@@ -28,6 +28,7 @@
 #include "observer/ob_safe_destroy_thread.h"
 #include "storage/init_basic_struct.h"
 #include "share/scn.h"
+#include "storage/memtable/ob_memtable.h"
 
 using namespace oceanbase::obrpc;
 using namespace oceanbase::common;
@@ -3029,6 +3030,73 @@ TEST_F(TestTabletCreateDeleteHelper, force_kill_remove_tablet_tx)
     ret = ls_tablet_service.on_abort_remove_tablets(arg, trans_flags);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
+}
+
+TEST_F(TestTabletCreateDeleteHelper, empty_memtable_replay_commit)
+{
+  int ret = OB_SUCCESS;
+
+  ObMulSourceDataNotifyArg trans_flags;
+  trans_flags.for_replay_ = false;
+  trans_flags.redo_submitted_ = false;
+  trans_flags.redo_synced_ = false;
+  trans_flags.is_force_kill_ = false;
+  trans_flags.tx_id_ = 1;
+  trans_flags.scn_ = share::SCN::invalid_scn();
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLS *ls = ls_handle.get_ls();
+  ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
+
+  ObSArray<ObTabletID> tablet_id_array;
+  tablet_id_array.push_back(ObTabletID(12306));
+  ObBatchCreateTabletArg arg;
+  ret = TestTabletCreateDeleteHelper::build_create_pure_data_tablet_arg(
+      ls_id_, tablet_id_array, arg);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = ls_tablet_service.on_prepare_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  trans_flags.redo_submitted_ = true;
+  trans_flags.redo_synced_ = true;
+  trans_flags.scn_.convert_for_gts(100);
+  ret = ls_tablet_service.on_redo_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTabletHandle tablet_handle;
+  const ObTabletMapKey key(ls_id_, ObTabletID(12306));
+  ret = ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTableHandleV2 handle;
+  memtable::ObIMemtable *memtable;
+  ret = tablet_handle.get_obj()->get_active_memtable(handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = handle.get_memtable(memtable);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ((memtable::ObMemtable*)memtable)->set_is_tablet_freeze();
+
+  trans_flags.scn_ = share::SCN::max_scn();
+  ret = ls_tablet_service.on_tx_end_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  trans_flags.for_replay_ = true;
+  trans_flags.scn_.convert_for_gts(102);
+  ret = ls_tablet_service.on_commit_create_tablets(arg, trans_flags);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTableHandleV2 new_handle;
+  memtable::ObIMemtable *new_memtable;
+  ret = tablet_handle.get_obj()->get_active_memtable(new_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = new_handle.get_memtable(new_memtable);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  share::SCN left_scn;
+  left_scn.convert_for_gts(101);
+  share::SCN right_scn = ((memtable::ObMemtable*)new_memtable)->get_end_scn();
+  ASSERT_EQ(left_scn, right_scn);
 }
 } // namespace storage
 } // namespace oceanbase

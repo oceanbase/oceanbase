@@ -96,6 +96,20 @@ static int cast_inconsistent_types(const ObObjType expect_type,
   return OB_ERR_INVALID_TYPE_FOR_OP;
 }
 
+static int cast_extend_types_not_support(const ObObjType expect_type,
+                                         ObObjCastParams &params,
+                                         const ObObj &in,
+                                         ObObj &out,
+                                         const ObCastMode cast_mode)
+{
+  UNUSED(params);
+  UNUSED(out);
+  UNUSED(cast_mode);
+  int ret = OB_SUCCESS;
+  ret = OB_ERR_UNEXPECTED;
+  return ret;
+}
+
 static int cast_inconsistent_types_json(const ObObjType expect_type,
                                             ObObjCastParams &params,
                                             const ObObj &in,
@@ -9068,6 +9082,14 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
   return ret;
 }
 
+static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params,
+                            const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_NOT_SUPPORTED;
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // UDT -> XXX
 static int cast_udt_to_other_not_support(const ObObjType expect_type, ObObjCastParams &params,
@@ -10835,10 +10857,10 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*date*/
     cast_not_expected,/*time*/
     cast_not_expected,/*year*/
-    cast_not_expected,/*string*/
+    pl_extend_string,/*string*/
     cast_identity,/*extend*/
     cast_not_expected,/*unknown*/
-    cast_not_expected,/*text*/
+    cast_extend_types_not_support,/*text*/
     cast_not_expected,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
@@ -10846,7 +10868,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*raw*/
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
-    cast_not_expected,/*lob*/
+    cast_extend_types_not_support,/*lob*/
     cast_inconsistent_type_json_explicit,/*json*/
     cast_not_support,/*geometry*/
     pl_extend_sql_udt,/*udt*/

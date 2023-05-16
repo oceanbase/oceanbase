@@ -37,7 +37,8 @@ OB_SERIALIZE_MEMBER(ObLockRequest,
                     owner_id_,
                     lock_mode_,
                     op_type_,
-                    timeout_us_);
+                    timeout_us_,
+                    is_from_sql_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_type_,

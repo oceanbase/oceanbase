@@ -20,10 +20,10 @@
 #include "share/stat/ob_opt_stat_service.h"
 #include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_stat_item.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_basic_stats_estimator.h"
+#include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase
 {
@@ -537,12 +537,8 @@ int ObOptStatManager::check_opt_stat_validity(sql::ObExecContext &ctx,
 int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      const uint64_t table_ref_id,
                                      const int64_t part_id,
-                                     int64_t *row_count,
-                                     int64_t *avg_len,
-                                     int64_t *avg_part_size,
-                                     int64_t *macro_block_count,
-                                     int64_t *micro_block_count,
-                                     int64_t *last_analyzed)
+                                     const double scale_ratio,
+                                     ObGlobalTableStat &stat)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat::Key key(tenant_id, table_ref_id, part_id);
@@ -550,13 +546,12 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
   if (OB_FAIL(get_table_stat(tenant_id, key, opt_stat))) {
     LOG_WARN("failed to get table stat", K(ret));
   } else if (opt_stat.get_last_analyzed() > 0) {
-    assign_value(opt_stat.get_row_count(), row_count);
-    assign_value(opt_stat.get_avg_row_size(), avg_len);
-    assign_value(opt_stat.get_row_count() * opt_stat.get_avg_row_size(),
-                  avg_part_size);
-    assign_value(opt_stat.get_macro_block_num(), macro_block_count);
-    assign_value(opt_stat.get_micro_block_num(), micro_block_count);
-    assign_value(opt_stat.get_last_analyzed(), last_analyzed);
+    stat.add(opt_stat.get_row_count() * scale_ratio,
+             opt_stat.get_avg_row_size(),
+             opt_stat.get_row_count() * opt_stat.get_avg_row_size() * scale_ratio,
+             opt_stat.get_macro_block_num() * scale_ratio,
+             opt_stat.get_micro_block_num() * scale_ratio);
+    stat.set_last_analyzed(opt_stat.get_last_analyzed());
   }
   return ret;
 }
@@ -564,74 +559,20 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
 int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
                                      const uint64_t tab_ref_id,
                                      const ObIArray<int64_t> &part_ids,
-                                     int64_t *row_count,
-                                     int64_t *avg_len,
-                                     int64_t *avg_part_size,
-                                     int64_t *micro_block_count,
-                                     int64_t *last_analyzed)
+                                     const ObIArray<int64_t> &global_part_ids,
+                                     const double scale_ratio,
+                                     ObGlobalTableStat &stat)
 {
   int ret = OB_SUCCESS;
-  ObGlobalTableStat global_tstat;
-  int64_t tmp_last_analyzed = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); ++i) {
-    int64_t tmp_row_count = 0;
-    int64_t tmp_row_len = 0;
-    int64_t tmp_data_size = 0;
-    int64_t tmp_macro_block_count = 0;
-    int64_t tmp_micro_block_count = 0;
-    if (OB_FAIL(get_table_stat(tenant_id, tab_ref_id, part_ids.at(i),
-                               &tmp_row_count, &tmp_row_len, &tmp_data_size, &tmp_macro_block_count,
-                               &tmp_micro_block_count, &tmp_last_analyzed))) {
+  bool use_global_stat_instead = !global_part_ids.empty();
+  const ObIArray<int64_t> &opt_part_ids = use_global_stat_instead ? global_part_ids : part_ids;
+  for (int64_t i = 0; OB_SUCC(ret) && i < opt_part_ids.count(); ++i) {
+    if (OB_FAIL(get_table_stat(tenant_id, tab_ref_id, opt_part_ids.at(i), scale_ratio, stat))) {
       LOG_WARN("failed to get table stat", K(ret));
-    } else {
-      global_tstat.add(tmp_row_count, tmp_row_len,
-                       tmp_data_size, tmp_macro_block_count, tmp_micro_block_count);
     }
   }
-  if (OB_SUCC(ret) && part_ids.count() >= 1) {
-    assign_value(global_tstat.get_row_count(), row_count);
-    assign_value(global_tstat.get_avg_row_size(), avg_len);
-    assign_value(global_tstat.get_avg_data_size(), avg_part_size);
-    assign_value(global_tstat.get_micro_block_count(), micro_block_count);
-    assign_value(tmp_last_analyzed, last_analyzed);
-  }
-  return ret;
-}
-
-int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
-                                      const uint64_t tab_ref_id,
-                                      const int64_t part_id,
-                                      const uint64_t column_id,
-                                      int64_t *num_distinct,
-                                      int64_t *num_null,
-                                      int64_t *avg_length,
-                                      ObObj *min_obj,
-                                      ObObj *max_obj,
-                                      ObIAllocator *alloc)
-{
-  int ret = OB_SUCCESS;
-  ObOptColumnStatHandle opt_stat;
-  bool is_valid_col_stat = false;
-  if (OB_FAIL(get_column_stat(tenant_id, tab_ref_id, part_id, column_id, opt_stat))) {
-    LOG_WARN("failed to get column stat", K(ret));
-  } else if (OB_ISNULL(opt_stat.stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stat cache value is invalid", K(ret));
-  } else if (opt_stat.stat_->get_last_analyzed() > 0) {
-    assign_value(opt_stat.stat_->get_num_distinct(), num_distinct);
-    assign_value(opt_stat.stat_->get_num_null(), num_null);
-    assign_value(opt_stat.stat_->get_avg_len(), avg_length);
-    assign_value(opt_stat.stat_->get_min_value(), min_obj);
-    assign_value(opt_stat.stat_->get_max_value(), max_obj);
-    is_valid_col_stat = true;
-  } else {/*do nothing*/}
-  if (OB_SUCC(ret) && NULL != alloc && is_valid_col_stat) {
-    if (NULL != min_obj && OB_FAIL(ob_write_obj(*alloc, *min_obj, *min_obj))) {
-      LOG_WARN("failed to deep copy min obj", K(ret));
-    } else if (NULL != max_obj && OB_FAIL(ob_write_obj(*alloc, *max_obj, *max_obj))) {
-      LOG_WARN("failed to deep copy max obj", K(ret));
-    }
-  }
+  LOG_TRACE("succeed to get table stat", K(tab_ref_id), K(part_ids), K(global_part_ids),
+                                         K(scale_ratio), K(scale_ratio), K(stat));
   return ret;
 }
 
@@ -639,27 +580,29 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
                                       const uint64_t tab_ref_id,
                                       const ObIArray<int64_t> &part_ids,
                                       const uint64_t column_id,
-                                      int64_t *num_distinct,
-                                      int64_t *num_null,
-                                      int64_t *avg_length,
-                                      ObObj *min_obj,
-                                      ObObj *max_obj,
+                                      const ObIArray<int64_t> &global_part_ids,
+                                      const int64_t row_cnt,
+                                      const double scale_ratio,
+                                      ObGlobalColumnStat &stat,
                                       ObIAllocator *alloc)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 1> cids;
-  ObSEArray<uint64_t, 1> pids;
   ObGlobalMinEval min_eval;
   ObGlobalMaxEval max_eval;
   ObGlobalNullEval null_eval;
   ObGlobalAvglenEval avglen_eval;
   ObGlobalNdvEval ndv_eval;
   ObArray<ObOptColumnStatHandle> new_handles;
-  if (OB_FAIL(cids.push_back(column_id)) ||
-      OB_FAIL(append(pids, part_ids))) {
-    LOG_WARN("failed to push back column id", K(ret));
-  } else if (OB_FAIL(get_column_stat(tenant_id, tab_ref_id, part_ids, cids, new_handles))) {
-    LOG_WARN("failed to get opt column stats", K(ret), K(part_ids), K(cids));
+  bool use_global_stat_instead = !global_part_ids.empty();
+  if (OB_UNLIKELY(scale_ratio < 0.0 || scale_ratio > 1.0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(scale_ratio), K(ret));
+  } else if (OB_FAIL(cids.push_back(column_id))) {
+    LOG_WARN("failed to push back", K(ret));
+  } else if (OB_FAIL(get_column_stat(tenant_id, tab_ref_id, use_global_stat_instead ? global_part_ids : part_ids,
+                                     cids, new_handles))) {
+    LOG_WARN("failed to get opt column stats", K(ret), K(global_part_ids), K(part_ids), K(cids));
   } else if (!new_handles.empty()) {
     bool all_column_stat_valid = true;
     for (int64_t i = 0; OB_SUCC(ret) && all_column_stat_valid && i < new_handles.count(); ++i) {
@@ -668,22 +611,12 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cache value is null", K(ret));
       } else if (opt_col_stat->get_last_analyzed() > 0) {
-        //tmp_use_old_stat = false;
-        if (NULL != num_distinct) {
-          ndv_eval.add(opt_col_stat->get_num_distinct(), opt_col_stat->get_llc_bitmap());
-        }
-        if (NULL != num_null) {
-          null_eval.add(opt_col_stat->get_num_null());
-        }
-        if (NULL != avg_length) {
-          avglen_eval.add(opt_col_stat->get_avg_len());
-        }
-        // a partition has min/max values only when it contains a valid value
-        // in the other word, ndv is not zero
-        if (NULL != min_obj && opt_col_stat->get_num_distinct() != 0) {
+        ndv_eval.add(opt_col_stat->get_num_distinct(), opt_col_stat->get_llc_bitmap());
+        null_eval.add(opt_col_stat->get_num_null());
+        avglen_eval.add(opt_col_stat->get_avg_len());
+        // a partition has min/max values only when it contains a valid value in the other word, ndv is not zero
+        if (alloc != NULL && opt_col_stat->get_num_distinct() != 0) {
           min_eval.add(opt_col_stat->get_min_value());
-        }
-        if (NULL != max_obj && opt_col_stat->get_num_distinct() != 0) {
           max_eval.add(opt_col_stat->get_max_value());
         }
       } else {
@@ -693,24 +626,21 @@ int ObOptStatManager::get_column_stat(const uint64_t tenant_id,
       }
     }
     if (OB_SUCC(ret) && all_column_stat_valid) {
-      assign_value(ndv_eval.get(), num_distinct);
-      assign_value(null_eval.get(), num_null);
-      assign_value(avglen_eval.get(), avg_length);
-      if (min_eval.is_valid()) {
-        assign_value(min_eval.get(), min_obj);
-      }
-      if (max_eval.is_valid()) {
-        assign_value(max_eval.get(), max_obj);
-      }
+      stat.null_val_ = null_eval.get() * scale_ratio;
+      stat.avglen_val_ = avglen_eval.get();
+      stat.ndv_val_ = !use_global_stat_instead ? ndv_eval.get() :
+                        ObOptSelectivity::scale_distinct(row_cnt, row_cnt / scale_ratio, ndv_eval.get());
       if (NULL != alloc) {
-        if (NULL != min_obj && OB_FAIL(ob_write_obj(*alloc, *min_obj, *min_obj))) {
+        if (min_eval.is_valid() && OB_FAIL(ob_write_obj(*alloc, min_eval.get(), stat.min_val_))) {
           LOG_WARN("failed to deep copy min obj", K(ret));
-        } else if (NULL != max_obj && OB_FAIL(ob_write_obj(*alloc, *max_obj, *max_obj))) {
+        } else if (max_eval.is_valid() && OB_FAIL(ob_write_obj(*alloc, max_eval.get(), stat.max_val_))) {
           LOG_WARN("failed to deep copy max obj", K(ret));
         }
       }
     }
   }
+  LOG_TRACE("succeed to get column stat", K(tab_ref_id), K(part_ids), K(column_id), K(scale_ratio),
+                                          K(use_global_stat_instead), K(row_cnt), K(stat));
   return ret;
 }
 

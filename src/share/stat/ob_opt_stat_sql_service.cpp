@@ -1661,37 +1661,31 @@ int ObOptStatSqlService::get_valid_obj_str(const ObObj &src_obj,
   int ret = OB_SUCCESS;
   if (src_obj.is_string_type()) {
     ObObj dst_obj;
-    char *buf = NULL;
-    int32_t buf_len = src_obj.get_string_len() * ObCharset::CharConvertFactorNum;
-    uint32_t result_len = 0;
-    if (0 == buf_len) {
-      dst_obj = src_obj;
-    } else if (OB_UNLIKELY(NULL == (buf = static_cast<char *>(allocator.alloc(buf_len))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory failed", K(ret), K(buf_len));
-    } else if (OB_FAIL(ObCharset::charset_convert(src_obj.get_collation_type(), src_obj.get_string_ptr(),
-      src_obj.get_string_len(), dst_column_meta.get_collation_type(), buf, buf_len, result_len))) {
+    ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, dst_column_meta.get_collation_type());
+    const char *incorrect_string = "-4258: Incorrect string value, can't show.";
+    int64_t well_formed_len = 0;
+    if (OB_FAIL(ObObjCaster::to_type(dst_column_meta.get_type(), cast_ctx, src_obj, dst_obj)) ||
+        OB_FAIL(ObCharset::well_formed_len(dst_column_meta.get_collation_type(), dst_obj.get_string().ptr(),
+                                           dst_obj.get_string().length(), well_formed_len))) {
       //for column which have invalid char ==> save obj binary to use, and obj value to
       //  save "-4258: Incorrect string value" to show this obj have invalid.
       if (OB_ERR_INCORRECT_STRING_VALUE == ret) {
-        LOG_WARN("invalid string for charset", K(ret), K(dst_column_meta), K(dst_obj));
         ret = OB_SUCCESS;
-        const char *incorrect_string = "-4258: Incorrect string value, can't show.";
         dst_obj.set_string(dst_column_meta.get_type(), incorrect_string, static_cast<int32_t>(strlen(incorrect_string)));
+        dst_obj.set_meta_type(dst_column_meta);
+        LOG_TRACE("invalid string for charset", K(ret), K(src_obj), K(dst_column_meta));
       } else {
-        LOG_WARN("failed to judge the string formed", K(ret));
+        LOG_WARN("failed to type", K(ret));
       }
-    } else {
-      dst_obj.set_string(dst_column_meta.get_type(), buf, static_cast<int32_t>(result_len));
-      dst_obj.set_collation_type(dst_column_meta.get_collation_type());
     }
     if (OB_SUCC(ret) && OB_FAIL(get_obj_str(dst_obj, allocator, dest_str, print_params))) {
       LOG_WARN("fail to get obj str", K(ret));
+    } else {
+      LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_obj), K(dest_str));
     }
-    LOG_TRACE("succeed to get valid obj str", K(src_obj), K(dst_obj));
   } else if (OB_FAIL(get_obj_str(src_obj, allocator, dest_str, print_params))) {
     LOG_WARN("failed to get obj str", K(ret), K(src_obj));
-  } else {/*do nothing*/}
+  }
   return ret;
 }
 

@@ -5814,6 +5814,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
   ObString func_name;
+  ObString actual_name;
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
@@ -5827,6 +5828,10 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     LOG_WARN("func_expr is null");
   } else {
     ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+    if (0 == name.case_compare("date_add_interval_date") || 0 == name.case_compare("date_add_date_interval")){
+      actual_name = name;
+      name = ObString::make_string("date_add");
+    }
     if (OB_FAIL(check_internal_function(name))) {
       LOG_WARN("unexpected internal function", K(ret));
     }
@@ -5928,7 +5933,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
         }
 
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count))) {
+          if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count, actual_name))) {
             LOG_WARN("fail process sys func params", K(ret));
           }
         }
@@ -5978,7 +5983,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   return ret;
 }
 
-int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count)
+int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count, ObString &node_name)
 {
   int ret = OB_SUCCESS;
   const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_expr.get_func_name());
@@ -6014,6 +6019,27 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("the func expr param is invalid", K(*func_expr.get_param_expr(0)), K(ret));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "generator function. The argument should be a constant integer");
+        }
+      }
+      break;
+    case T_FUN_SYS_DATE_ADD:
+      if (0 == node_name.case_compare("date_add_interval_date")) {
+        if (3 == func_expr.get_param_count()) {
+          ObRawExpr *expr0 = func_expr.get_param_expr(0);
+          ObRawExpr *expr1 = func_expr.get_param_expr(1);
+          if (OB_FAIL(func_expr.remove_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.remove_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.add_param_expr(expr0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.add_param_expr(expr1))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          }
         }
       }
       break;

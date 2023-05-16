@@ -320,7 +320,9 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  const bool keep_old = param_.need_keep_old_tablet_;
+  //TODO(muwei.ym) set keep old true when rebuild reuse minor sstable.
+  //const bool keep_old = param_.need_keep_old_tablet_;
+  const bool keep_old = false;
   ObTablesHandleArray major_tables;
   ObTablesHandleArray remote_logical_table;
   ObBatchUpdateTableStoreParam param;

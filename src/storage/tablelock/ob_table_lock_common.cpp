@@ -28,9 +28,9 @@ namespace tablelock
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK[];
 constexpr const char ObSimpleIteratorModIds::OB_OBJ_LOCK_MAP[];
 
-bool is_deadlock_avoid_enabled(const int64_t timeout_us)
+bool is_deadlock_avoid_enabled(const bool is_from_sql, const int64_t timeout_us)
 {
-  return (timeout_us >= MIN_DEADLOCK_AVOID_TIMEOUT_US);
+  return (!is_from_sql && timeout_us >= MIN_DEADLOCK_AVOID_TIMEOUT_US);
 }
 
 OB_SERIALIZE_MEMBER(ObTableLockOp, lock_id_,

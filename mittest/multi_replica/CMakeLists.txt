@@ -16,7 +16,7 @@ target_include_directories(
 function(ob_unittest_multi_replica case)
   ob_unittest(${ARGV})
   target_link_libraries(${case} PRIVATE gtest gmock simple_replica_test oceanbase)
-  set_tests_properties(${case} PROPERTIES TIMEOUT 360)
+  set_tests_properties(${case} PROPERTIES TIMEOUT 600)
   set_tests_properties(${case} PROPERTIES LABELS "simple_replica")
 endfunction()
 

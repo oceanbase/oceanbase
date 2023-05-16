@@ -15,6 +15,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 
 --disable_warnings
 drop table if exists t1, t2, t3, t4, t5;
+drop sequence if exists s1;
 --enable_warnings
 
 ## create tables
@@ -258,3 +259,36 @@ select 1 from t1, t2 group by c1;
 
 drop table t1, t2;
 drop table `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;
+
+CREATE TABLE `t1` (
+  `c1` decimal(64,1) DEFAULT NULL,
+  `c4` decimal(64,11) DEFAULT NULL,
+  `c8` int(127) NOT NULL
+);
+
+create sequence s1 cache 10000000;
+insert into t1 select s1.nextval c1, s1.nextval c2, s1.nextval c3 from table(generator(20000));
+explain SELECT t29_25.c1, t29_25.c8
+FROM   (SELECT (SELECT t29_25.c1
+                FROM   t1 AS t29_25
+                ORDER  BY 1 DESC
+                LIMIT  1)             AS c1,
+               t29_25.c4,
+               t29_25.c8
+        FROM   t1 AS t29_25) AS t29_25
+GROUP  BY t29_25.c1, t29_25.c8
+HAVING Count(t29_25.c4) <> 990;
+
+create table t2 as SELECT t29_25.c1, t29_25.c8
+FROM   (SELECT (SELECT t29_25.c1
+                FROM   t1 AS t29_25
+                ORDER  BY 1 DESC
+                LIMIT  1)             AS c1,
+               t29_25.c4,
+               t29_25.c8
+        FROM   t1 AS t29_25) AS t29_25
+GROUP  BY t29_25.c1, t29_25.c8
+HAVING Count(t29_25.c4) <> 990;
+
+select * from t2 limit 10;
+drop table t1, t2;

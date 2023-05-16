@@ -13,6 +13,7 @@
 #ifndef OCEABASE_STORAGE_HA_STRUCT_
 #define OCEABASE_STORAGE_HA_STRUCT_
 
+#include "lib/ob_define.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_member.h"
 #include "common/ob_tablet_id.h"
@@ -21,6 +22,7 @@
 #include "storage/blocksstable/ob_macro_block_meta_mgr.h"
 #include "storage/blocksstable/ob_datum_rowkey.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+
 
 namespace oceanbase
 {
@@ -258,14 +260,15 @@ public:
 
   TO_STRING_KV(K_(start_macro_block_id), K_(end_macro_block_id),
       K_(macro_block_count), K_(start_macro_block_end_key), K_(is_leader_restore));
-
+public:
   blocksstable::ObLogicMacroBlockId start_macro_block_id_;
   blocksstable::ObLogicMacroBlockId end_macro_block_id_;
   int64_t macro_block_count_;
   bool is_leader_restore_;
-  blocksstable::ObStorageDatum datums_[OB_MAX_ROWKEY_COLUMN_NUMBER];
+  blocksstable::ObStorageDatum datums_[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
   blocksstable::ObDatumRowkey start_macro_block_end_key_;
   ObArenaAllocator allocator_;
+
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroRangeInfo);
 };
 
