@@ -140,6 +140,7 @@ private:
       const int64_t buf_len,
       int64_t &pos);
 private:
+  static bool can_rewrite_error_code(const int ret);
   char type_str_[common::OB_MAX_SYS_PARAM_NAME_LENGTH];
   char *column_type_str_;
   int64_t column_type_str_len_;
