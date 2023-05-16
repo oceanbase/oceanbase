@@ -122,7 +122,7 @@ int FetchLogEngine::init(IPalfEnvImpl *palf_env_impl,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LSFetchLogEngine, tg_id_))) {
     PALF_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
-  } else if (OB_FAIL(MTL_REGISTER_THREAD_DYNAMIC(1, tg_id_))) {
+  } else if (OB_FAIL(MTL_REGISTER_THREAD_DYNAMIC(0.5, tg_id_))) {
     PALF_LOG(WARN, "MTL_REGISTER_THREAD_DYNAMIC failed", K(ret), K(tg_id_));
   } else {
     palf_env_impl_ = palf_env_impl;

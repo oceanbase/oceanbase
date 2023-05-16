@@ -359,7 +359,10 @@ private:
   int append_disk_log_to_sw_(const LSN &lsn, const LogGroupEntry &group_entry);
   int try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header);
   int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const share::SCN &last_scn);
-  bool is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
+  bool is_all_committed_log_slided_out_(LSN &prev_lsn,
+                                        int64_t &prev_log_id,
+                                        LSN &start_lsn,
+                                        LSN &committed_end_lsn) const;
   void get_last_fetch_info_(LSN &last_fetch_end_lsn,
                             LSN &last_committed_end_lsn,
                             int64_t &last_fetch_max_log_id) const;
