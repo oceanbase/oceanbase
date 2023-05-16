@@ -290,7 +290,15 @@ template <ObObjTypeStoreClass StoreClass>
 OB_INLINE void ObBitMapMetaWriter<StoreClass>::fill_param()
 {
   if (0 > exc_fix_size_) {
-    index_byte_ = exc_total_size_ <= UINT8_MAX ? 1 : 2;
+    if (exc_total_size_ <= UINT8_MAX) {
+      index_byte_ = 1;
+    } else if (exc_total_size_ <= UINT16_MAX) {
+      index_byte_ = 2;
+    } else if (exc_total_size_ <= UINT32_MAX) {
+      index_byte_ = 4;
+    } else {
+      index_byte_ = 8;
+    }
   } else {
     exc_total_size_ = exc_fix_size_ * exc_row_ids_->count();
   }

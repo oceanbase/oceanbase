@@ -219,10 +219,106 @@ TEST_F(TestDictLargeVarchar, test_dict_large_varchar)
   ASSERT_EQ(OB_SUCCESS, read_row.init(full_column_cnt_));
   ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, read_info_));
   ASSERT_EQ(OB_SUCCESS, decoder.get_row(0, read_row));
-  STORAGE_LOG(INFO, "[Salton]", K(read_row));
+  STORAGE_LOG(DEBUG, "read row", K(read_row));
 
   ASSERT_EQ(row.storage_datums_[3].len_, read_row.storage_datums_[3].len_);
   ASSERT_TRUE(ObDatum::binary_equal(row.storage_datums_[3], read_row.storage_datums_[3]));
+}
+
+
+static ObObjType test_column_equal_exception_list[3] = {ObIntType, ObVarcharType, ObVarcharType};
+class TestColumnEqualExceptionList : public TestIColumnEncoder
+{
+public:
+  TestColumnEqualExceptionList()
+  {
+    rowkey_cnt_ = 1;
+    column_cnt_ = 3;
+    col_types_ = reinterpret_cast<ObObjType *>(allocator_.alloc(sizeof(ObObjType) * column_cnt_));
+    for (int64_t i = 0; i < column_cnt_; ++i) {
+      col_types_[i] = test_column_equal_exception_list[i];
+    }
+  }
+  virtual ~TestColumnEqualExceptionList()
+  {
+    allocator_.free(col_types_);
+  }
+};
+
+TEST_F(TestColumnEqualExceptionList, test_column_equal_ext_offset_overflow)
+{
+  const int64_t fixed_varchar_len = 1024;
+  char *fixed_varchar = static_cast<char *>(allocator_.alloc(fixed_varchar_len));
+  const int64_t diff_varchar_len = 16384; // 16kB
+  char *diff_varchar1 = static_cast<char *>(allocator_.alloc(diff_varchar_len));
+  char *diff_varchar2 = static_cast<char *>(allocator_.alloc(diff_varchar_len));
+  ASSERT_NE(diff_varchar1, nullptr);
+  ASSERT_NE(diff_varchar2, nullptr);
+  MEMSET(diff_varchar1, 0, diff_varchar_len);
+  MEMSET(diff_varchar2, 1, diff_varchar_len);
+
+  ObMicroBlockEncoder encoder;
+  ctx_.micro_block_size_ = 1 << 20; // 1MB
+  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
+  encoder.estimate_size_limit_ = ctx_.macro_block_size_;
+  encoder.set_micro_block_merge_verify_level(MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, column_cnt_));
+
+  int64_t row_cnt = 0;
+  for (int64_t i = 0; i < 200; ++i) {
+    MEMSET(fixed_varchar, i, fixed_varchar_len);
+    row.storage_datums_[0].set_int(1);
+    row.storage_datums_[1].set_string(fixed_varchar, fixed_varchar_len);
+    row.storage_datums_[2].set_string(fixed_varchar, fixed_varchar_len);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    ++row_cnt;
+  }
+
+  for (int64_t i = 0; i < 8; ++i) {
+    MEMSET(diff_varchar1, i, diff_varchar_len);
+    MEMSET(diff_varchar2, 16 + i, diff_varchar_len);
+    row.storage_datums_[0].set_int(2);
+    row.storage_datums_[1].set_string(diff_varchar1, diff_varchar_len - i);
+    row.storage_datums_[2].set_string(diff_varchar2, diff_varchar_len - i);
+    ASSERT_EQ(OB_SUCCESS, encoder.append_row(row));
+    ++row_cnt;
+  }
+
+  ASSERT_EQ(row_cnt, encoder.get_row_count());
+  const int64_t encoder_checksum = encoder.get_micro_block_checksum();
+
+  STORAGE_LOG(INFO, "before build block", K(encoder_checksum), K(row_cnt), K(encoder.get_row_count()));
+
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, encoder.build_block(buf, size));
+  STORAGE_LOG(INFO, "after build block", KPC(encoder.encoders_[0]), KPC(encoder.encoders_[1]), KPC(encoder.encoders_[2]));
+  ASSERT_EQ(encoder.encoders_[1]->get_type(), ObColumnHeader::COLUMN_EQUAL);
+  ObColumnEqualEncoder *ce_encoder = static_cast<ObColumnEqualEncoder *>(encoder.encoders_[1]);
+  ASSERT_EQ(true, ce_encoder->base_meta_writer_.meta_.is_var_exc());
+
+  // decode and checksum
+  ObMicroBlockData micro_data(buf, size);
+  ObMicroBlockDecoder decoder;
+  ObDatumRow read_row;
+  ASSERT_EQ(OB_SUCCESS, read_row.init(column_cnt_));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(micro_data, read_info_));
+
+  int64_t new_checksum = 0;
+  for (int64_t i = 0; i < row_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, decoder.get_row(i, read_row));
+    STORAGE_LOG(DEBUG, "read row", K(read_row));
+    for (int64_t j = 0; j < column_cnt_; ++j) {
+      const bool is_invalid_datum = (read_row.storage_datums_[j].is_null() && read_row.storage_datums_[j].len_ != 0);
+      ASSERT_EQ(false, is_invalid_datum);
+    }
+    new_checksum = ObIMicroBlockWriter::cal_row_checksum(read_row, new_checksum);
+  }
+  ASSERT_EQ(new_checksum, encoder_checksum);
+
+
 }
 
 class TestEncodingRowBufHolder : public ::testing::Test
