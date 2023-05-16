@@ -770,7 +770,8 @@ int LogEngine::get_min_block_info(block_id_t &min_block_id, SCN &min_block_scn) 
   return ret;
 }
 
-int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte) const
+int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
+                                         int64_t &unrecyclable_disk_space) const
 {
   int ret = OB_SUCCESS;
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
@@ -795,8 +796,11 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte) const
   } else if (OB_FAIL(log_meta_storage_.get_block_id_range(min_block_id, max_block_id))) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
   } else {
-    meta_storage_used = (max_block_id - min_block_id + 1) * (PALF_META_BLOCK_SIZE + MAX_INFO_BLOCK_SIZE);
+    meta_storage_used = PALF_META_BLOCK_SIZE + MAX_INFO_BLOCK_SIZE;
     total_used_size_byte = log_storage_used + meta_storage_used;
+
+    const int64_t unrecyclable_meta_size = meta_storage_used;
+    unrecyclable_disk_space = log_storage_.get_end_lsn() - get_base_lsn_used_for_block_gc() + unrecyclable_meta_size;
     PALF_LOG(TRACE, "get_total_used_disk_space", K(meta_storage_used), K(log_storage_used), K(total_used_size_byte));
   }
   return ret;

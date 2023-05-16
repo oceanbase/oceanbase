@@ -3355,15 +3355,15 @@ int PalfHandleImpl::ack_config_log(const common::ObAddr &server,
   return ret;
 }
 
-int64_t PalfHandleImpl::get_total_used_disk_space() const
+int PalfHandleImpl::get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const
 {
-  int64_t total_used_disk_space = 0;
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_engine_.get_total_used_disk_space(total_used_disk_space))) {
+  total_used_disk_space = 0;
+  unrecyclable_disk_space = 0;
+  if (OB_FAIL(log_engine_.get_total_used_disk_space(total_used_disk_space, unrecyclable_disk_space))) {
     PALF_LOG(WARN, "get_total_used_disk_space failed", K(ret), KPC(this));
-  } else {
   }
-  return total_used_disk_space;
+  return ret;
 }
 
 int PalfHandleImpl::advance_reuse_lsn(const LSN &flush_log_end_lsn)

@@ -132,8 +132,9 @@ public:
     ObSpinLockGuard guard(disk_opts_lock_);
     return Status::SHRINKING_STATUS == status_;
   }
+  static constexpr int64_t MB = 1024*1024ll;
   TO_STRING_KV(K_(disk_opts_for_stopping_writing), K_(disk_opts_for_recycling_blocks), K_(status),
-               K_(cur_unrecyclable_log_disk_size));
+               "cur_unrecyclable_log_disk_size(MB)", cur_unrecyclable_log_disk_size_/MB);
 
 private:
   int update_disk_options_not_guarded_by_lock_(const PalfDiskOptions &new_opts);

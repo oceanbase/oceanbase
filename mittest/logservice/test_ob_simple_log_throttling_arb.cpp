@@ -181,7 +181,7 @@ TEST_F(TestObSimpleLogThrottleArb, test_2f1a_throttling_major)
   ret = leader.palf_handle_impl_->replace_member(ObMember(get_cluster()[follower_D_idx]->get_addr(), 1),
                                                  ObMember(get_cluster()[another_f_idx]->get_addr(), 1),
                                                  CONFIG_CHANGE_TIMEOUT);
-  //TODO(yaoying.yyy):
+  //timeout because added member can flush new meta when prev log is throttling
   ASSERT_TRUE(OB_TIMEOUT == ret || OB_SUCCESS == ret);
   int64_t new_leader_idx = OB_TIMEOUT == ret ? another_f_idx : follower_D_idx;
   ASSERT_EQ(OB_SUCCESS, submit_log(leader, 5, id, 128));

@@ -419,7 +419,8 @@ public:
   // ===================== NetService end ========================
   LogStorage *get_log_storage() { return &log_storage_; }
   LogStorage *get_log_meta_storage() { return &log_meta_storage_; }
-  int get_total_used_disk_space(int64_t &total_used_size_byte) const;
+  int get_total_used_disk_space(int64_t &total_used_size_byte,
+                                int64_t &unrecyclable_disk_space) const;
   virtual int64_t get_palf_epoch() const { return palf_epoch_; }
   TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
       K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), K_(last_purge_throttling_ts), KP(this));

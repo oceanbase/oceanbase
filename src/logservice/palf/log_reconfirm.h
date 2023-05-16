@@ -63,12 +63,12 @@ public:
   TO_STRING_KV(K_(palf_id), K_(self), "state", state_to_string(state_), K_(new_proposal_id), K_(prepare_log_ack_list), \
   K_(curr_paxos_follower_list), K_(majority_cnt), K_(majority_max_log_server),       \
   K_(majority_max_accept_pid), K_(majority_max_lsn), K_(saved_end_lsn), K_(last_submit_prepare_req_time_us),         \
-  K_(last_fetch_log_time_us), K_(last_record_sw_start_id), K_(last_notify_fetch_time_us), KP(this));
+  K_(last_fetch_log_time_us), K_(last_record_sw_start_id), K_(last_notify_fetch_time_us), K_(last_purge_throttling_time_us), KP(this));
 private:
   int init_reconfirm_();
   int submit_prepare_log_();
   int wait_all_log_flushed_();
-  bool is_fetch_log_finished_() const;
+  bool is_fetch_log_finished_();
   bool is_confirm_log_finished_() const;
   int try_fetch_log_();
   int update_follower_end_lsn_(const common::ObAddr &server, const LSN &committed_end_lsn);
@@ -187,6 +187,7 @@ private:
   int64_t wait_slide_print_time_us_;
   int64_t wait_majority_time_us_;
   int64_t last_notify_fetch_time_us_;
+  int64_t last_purge_throttling_time_us_;
   bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(LogReconfirm);

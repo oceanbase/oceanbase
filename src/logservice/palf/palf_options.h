@@ -185,8 +185,9 @@ struct PalfThrottleOptions
   // size of available log disk when writing throttling triggered
   inline int64_t get_available_size_after_limit() const;
   inline bool need_throttling() const;
-  TO_STRING_KV(K_(total_disk_space), K_(stopping_writing_percentage),
-               K_(trigger_percentage), K_(unrecyclable_disk_space));
+  static constexpr int64_t MB = 1024*1024ll;
+  TO_STRING_KV("total_disk_space", total_disk_space_ / MB, K_(stopping_writing_percentage),
+               K_(trigger_percentage), "unrecyclable_disk_space(MB)", unrecyclable_disk_space_ / MB);
 public:
   int64_t total_disk_space_;
   int64_t stopping_writing_percentage_;

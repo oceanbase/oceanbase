@@ -96,7 +96,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_sys)
   int64_t break_ts = common::ObClockGenerator::getClock();
   ASSERT_EQ(true, (break_ts - cur_ts) < 1 * 1000 * 1000);
 
-  PALF_LOG(INFO, "end test throttling_basic", K(id));
+  PALF_LOG(INFO, "end test throttling_sys_log_stream", K(id));
   leader.reset();
 
   palf_env->palf_env_impl_.disk_options_wrapper_.disk_opts_for_recycling_blocks_ = disk_options;
@@ -258,6 +258,7 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   ASSERT_EQ(5, throttle.handled_seq_);
   io_task_cond_1.cond_.signal();
   wait_lsn_until_flushed(max_lsn_1, leader);
+  usleep(10 * 1000);
   ASSERT_EQ(7, throttle.submitted_seq_);
   ASSERT_EQ(6, throttle.handled_seq_);
   io_task_cond_2.cond_.signal();

@@ -2251,7 +2251,7 @@ bool LogSlidingWindow::is_all_log_flushed_()
   if (OB_SUCCESS != (tmp_ret = lsn_allocator_.get_curr_end_lsn(curr_end_lsn))) {
     PALF_LOG_RET(WARN, tmp_ret, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self));
   } else if (max_flushed_end_lsn < curr_end_lsn) {
-    PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "there is some log has not been flushed", K_(palf_id), K_(self), K(curr_end_lsn),
+    PALF_LOG_RET(WARN, OB_EAGAIN, "there is some log has not been flushed", K_(palf_id), K_(self), K(curr_end_lsn),
         K(max_flushed_end_lsn), K_(max_flushed_lsn));
   } else {
     bool_ret = true;

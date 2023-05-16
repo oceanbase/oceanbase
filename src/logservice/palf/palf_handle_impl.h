@@ -502,7 +502,7 @@ public:
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
-  virtual int64_t get_total_used_disk_space() const = 0;
+  virtual int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
   // @desc: get ack_info_array and degraded_list for judging to degrade/upgrade
   // @params [in] member_ts_array: ack info array of all paxos members
@@ -850,7 +850,7 @@ public:
     return sw_.get_last_slide_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
-  int64_t get_total_used_disk_space() const;
+  int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const;
   // return the smallest recycable lsn
   const LSN &get_base_lsn_used_for_block_gc() const override final
   {
