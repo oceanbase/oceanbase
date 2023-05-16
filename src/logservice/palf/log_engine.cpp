@@ -50,6 +50,7 @@ LogEngine::LogEngine() :
     log_net_service_(),
     alloc_mgr_(NULL),
     log_io_worker_(NULL),
+    plugins_(NULL),
     palf_id_(INVALID_PALF_ID),
     palf_epoch_(-1),
     last_purge_throttling_ts_(OB_INVALID_TIMESTAMP),
@@ -88,6 +89,7 @@ int LogEngine::init(const int64_t palf_id,
                     LogHotCache *hot_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
+                    LogPlugins *plugins,
                     const int64_t palf_epoch,
                     const int64_t log_storage_block_size,
                     const int64_t log_meta_storage_block_ize)
@@ -104,7 +106,7 @@ int LogEngine::init(const int64_t palf_id,
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogEngine has inited!!!", K(ret), K(palf_id));
   } else if (false == is_valid_palf_id(palf_id) || OB_ISNULL(base_dir) || OB_ISNULL(alloc_mgr)
-             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker)) {
+             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker) || OB_ISNULL(plugins)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR,
              "Invalid argument!!!",
@@ -114,7 +116,8 @@ int LogEngine::init(const int64_t palf_id,
              K(log_meta),
              K(hot_cache),
              K(alloc_mgr),
-             K(log_io_worker));
+             K(log_io_worker),
+             K(plugins));
     // NB: Nowday, LSN is strongly dependent on physical block,
   } else if (OB_FAIL(log_meta_storage_.init(base_dir,
                                             "meta",
@@ -125,6 +128,7 @@ int LogEngine::init(const int64_t palf_id,
                                             LOG_DIO_ALIGNED_BUF_SIZE_META,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
+                                            plugins,
                                             NULL /*set hot_cache to NULL for meta storage*/))) {
     PALF_LOG(ERROR, "LogMetaStorage init failed", K(ret), K(palf_id), K(base_dir));
   } else if(0 != log_storage_block_size
@@ -137,6 +141,7 @@ int LogEngine::init(const int64_t palf_id,
                                    LOG_DIO_ALIGNED_BUF_SIZE_REDO,
                                    log_storage_update_manifest_cb,
                                    log_block_pool,
+                                   plugins,
                                    hot_cache))) {
     PALF_LOG(ERROR, "LogStorage init failed!!!", K(ret), K(palf_id), K(base_dir), K(log_meta));
   } else if (OB_FAIL(log_net_service_.init(palf_id, log_rpc))) {
@@ -148,6 +153,7 @@ int LogEngine::init(const int64_t palf_id,
     log_meta_ = log_meta;
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
+    plugins_ = plugins;
     palf_epoch_ = palf_epoch;
     base_lsn_for_block_gc_ = log_meta.get_log_snapshot_meta().base_lsn_;
     is_inited_ = true;
@@ -185,6 +191,7 @@ int LogEngine::load(const int64_t palf_id,
                     LogHotCache *hot_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
+                    LogPlugins *plugins,
                     LogGroupEntryHeader &entry_header,
                     const int64_t palf_epoch,
                     bool &is_integrity,
@@ -232,6 +239,7 @@ int LogEngine::load(const int64_t palf_id,
                                             LOG_DIO_ALIGNED_BUF_SIZE_META,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
+                                            plugins,
                                             NULL, /*set hot_cache to NULL for meta storage*/
                                             unused_meta_entry_header,
                                             last_meta_entry_start_lsn))) {
@@ -244,7 +252,7 @@ int LogEngine::load(const int64_t palf_id,
                                           log_meta_.get_log_snapshot_meta().base_lsn_, palf_id,
                                           log_storage_block_size, LOG_DIO_ALIGN_SIZE,
                                           LOG_DIO_ALIGNED_BUF_SIZE_REDO,
-                                          log_storage_update_manifest_cb, log_block_pool,
+                                          log_storage_update_manifest_cb, log_block_pool, plugins,
                                           hot_cache, entry_header, last_group_entry_header_lsn)))) {
     PALF_LOG(ERROR, "LogStorage load failed", K(ret), K(palf_id), K(base_dir));
   } else if (FALSE_IT(guard.click("load log_storage"))

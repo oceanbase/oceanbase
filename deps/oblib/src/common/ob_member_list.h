@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_unify_serialize.h"
 #include "common/ob_member.h"
+
 namespace oceanbase
 {
 namespace common
@@ -65,6 +66,34 @@ inline bool is_valid_replica_num(const int64_t replica_num)
 
 typedef ObMemberListBase<OB_MAX_MEMBER_NUMBER> ObMemberList;
 typedef ObSEArray<ObReplicaMember, OB_MAX_CHILD_MEMBER_NUMBER> ObChildReplicaList;
+
+inline int member_list_to_string(const common::ObMemberList &member_list, ObSqlString &member_list_buf)
+{
+  int ret = OB_SUCCESS;
+  member_list_buf.reset();
+  if (0 > member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), "member count", member_list.get_member_number());
+  } else {
+    bool need_comma = false;
+    char ip_port[MAX_IP_PORT_LENGTH];
+    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); i++) {
+      ObMember member;
+      member_list.get_member_by_index(i, member);
+      if (OB_FAIL(member.get_server().ip_port_to_string(ip_port, sizeof(ip_port)))) {
+        COMMON_LOG(WARN, "convert server to string failed", K(ret), K(member));
+      } else if (need_comma && OB_FAIL(member_list_buf.append(","))) {
+        COMMON_LOG(WARN, "failed to append comma to string", K(ret));
+      } else if (OB_FAIL(member_list_buf.append_fmt("%.*s:%ld", static_cast<int>(sizeof(ip_port)), ip_port, member.get_timestamp()))) {
+        COMMON_LOG(WARN, "failed to append ip_port to string", K(ret), K(member));
+      } else {
+        need_comma = true;
+      }
+    }
+    COMMON_LOG(INFO, "member_list_to_string success", K(member_list), K(member_list_buf));
+  }
+  return ret;
+}
 
 } // namespace common
 } // namespace oceanbase

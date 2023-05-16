@@ -17,6 +17,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/list/ob_dlink_node.h"
 #include "lib/utility/ob_print_utils.h"
+#include "log_meta_info.h"
 #include "lsn.h"
 namespace oceanbase
 {
@@ -59,12 +60,54 @@ class PalfMonitorCb
 {
 public:
   // record events
+  virtual int record_set_initial_member_list_event(const int64_t palf_id,
+                                                   const int64_t replica_num,
+                                                   const char *member_list = NULL,
+                                                   const char *extra_info = NULL) = 0;
+  virtual int record_election_leader_change_event(const int64_t palf_id, const common::ObAddr &dest_addr) = 0;
+  virtual int record_reconfiguration_event(const char *sub_event,
+                                           const int64_t palf_id,
+                                           const LogConfigVersion& config_version,
+                                           const int64_t prev_replica_num,
+                                           const int64_t curr_replica_num,
+                                           const char *extra_info = NULL) = 0;
+  virtual int record_replica_type_change_event(const int64_t palf_id,
+                                               const LogConfigVersion& config_version,
+                                               const char *prev_replica_type,
+                                               const char *curr_replica_type,
+                                               const char *extra_info = NULL) = 0;
+  virtual int record_access_mode_change_event(const int64_t palf_id,
+                                              const int64_t prev_mode_version,
+                                              const int64_t curr_mode_verion,
+                                              const AccessMode& prev_access_mode,
+                                              const AccessMode& curr_access_mode,
+                                              const char *extra_info = NULL) = 0;
+  virtual int record_set_base_lsn_event(const int64_t palf_id, const LSN &new_base_lsn) = 0;
+  virtual int record_enable_sync_event(const int64_t palf_id) = 0;
+  virtual int record_disable_sync_event(const int64_t palf_id) = 0;
+  virtual int record_enable_vote_event(const int64_t palf_id) = 0;
+  virtual int record_disable_vote_event(const int64_t palf_id) = 0;
+  virtual int record_advance_base_info_event(const int64_t palf_id, const PalfBaseInfo &palf_base_info) = 0;
+  virtual int record_rebuild_event(const int64_t palf_id,
+                                   const common::ObAddr &server,
+                                   const LSN &base_lsn) = 0;
+  virtual int record_flashback_event(const int64_t palf_id,
+                                     const int64_t mode_version,
+                                     const share::SCN &flashback_scn,
+                                     const share::SCN &curr_end_scn,
+                                     const share::SCN &curr_max_scn) = 0;
+  virtual int record_truncate_event(const int64_t palf_id,
+                                    const LSN &lsn,
+                                    const int64_t min_block_id,
+                                    const int64_t max_block_id,
+                                    const int64_t truncate_end_block_id) = 0;
   virtual int record_role_change_event(const int64_t palf_id,
                                        const common::ObRole &prev_role,
                                        const palf::ObReplicaState &prev_state,
                                        const common::ObRole &curr_role,
                                        const palf::ObReplicaState &curr_state,
-                                       const char *extra_info = "") = 0;
+                                       const char *extra_info = NULL) = 0;
+
   // performance statistic
   virtual int add_log_write_stat(const int64_t palf_id, const int64_t log_write_size) = 0;
 };

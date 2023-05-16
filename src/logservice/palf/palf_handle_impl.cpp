@@ -141,7 +141,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &hot_cache_, \
-          log_rpc, log_io_worker, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+          log_rpc, log_io_worker, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
@@ -194,7 +194,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
         K(log_rpc), K(log_io_worker));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &hot_cache_, log_rpc,
-        log_io_worker, entry_header, palf_epoch, is_integrity, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+        log_io_worker, &plugins_, entry_header, palf_epoch, is_integrity, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
     //     to 'base_lsn_', we will generate default PalfBaseInfo or get it from LogSnapshotMeta(rebuild).
@@ -281,6 +281,7 @@ int PalfHandleImpl::set_initial_member_list(
     } else {
       PALF_EVENT("set_initial_member_list success", palf_id_, K(ret), K(member_list),
           K(learner_list), K(paxos_replica_num));
+      report_set_initial_member_list_(paxos_replica_num, member_list);
     }
   }
   return ret;
@@ -488,6 +489,7 @@ int PalfHandleImpl::change_leader_to(const common::ObAddr &dest_addr)
     PALF_LOG(WARN, "election can not change leader", K(ret), KPC(this), K(dest_addr));
   } else {
     PALF_EVENT("election leader will be changed", palf_id_, K(ret), KPC(this), K(dest_addr));
+    plugins_.record_election_leader_change_event(palf_id_, dest_addr);
   }
   return ret;
 }
@@ -614,10 +616,13 @@ int PalfHandleImpl::force_set_as_single_replica()
     const int64_t new_replica_num = 1;
     LogConfigChangeArgs args(member, new_replica_num, FORCE_SINGLE_MEMBER);
     const int64_t timeout_us = 10 * 1000 * 1000L;
+    int64_t prev_replica_num;
+    (void) config_mgr_.get_replica_num(prev_replica_num);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "one_stage_config_change_ failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_EVENT("force_set_as_single_replica success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
+      report_force_set_as_single_replica_(prev_replica_num, new_replica_num, member);
     }
   }
   return ret;
@@ -648,6 +653,7 @@ int PalfHandleImpl::change_replica_num(
     } else {
       PALF_EVENT("change_replica_num success", palf_id_, KR(ret), KPC(this), K(member_list),
           K(curr_replica_num), K(new_replica_num));
+      report_change_replica_num_(curr_replica_num, new_replica_num, member_list);
     }
   }
   return ret;
@@ -659,6 +665,7 @@ int PalfHandleImpl::add_member(
     const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  int64_t prev_replica_num;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
@@ -667,12 +674,15 @@ int PalfHandleImpl::add_member(
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
+  } else if (OB_FAIL(config_mgr_.get_replica_num(prev_replica_num))) {
+    PALF_LOG(WARN, "get prev_replica_num failed", KR(ret), KPC(this));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, ADD_MEMBER);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "add_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_EVENT("add_member success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
+      report_add_member_(prev_replica_num, new_replica_num, member);
     }
   }
   return ret;
@@ -684,6 +694,7 @@ int PalfHandleImpl::remove_member(
     const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
+  int64_t prev_replica_num;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
@@ -692,12 +703,15 @@ int PalfHandleImpl::remove_member(
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(member), K(new_replica_num), K(timeout_us));
+  } else if (OB_FAIL(config_mgr_.get_replica_num(prev_replica_num))) {
+    PALF_LOG(WARN, "get prev_replica_num failed", KR(ret), KPC(this));
   } else {
     LogConfigChangeArgs args(member, new_replica_num, REMOVE_MEMBER);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "remove_member failed", KR(ret), KPC(this), K(member), K(new_replica_num));
     } else {
       PALF_EVENT("remove_member success", palf_id_, KR(ret), KPC(this), K(member), K(new_replica_num));
+      report_remove_member_(prev_replica_num, new_replica_num, member);
     }
   }
   return ret;
@@ -739,6 +753,7 @@ int PalfHandleImpl::replace_member(
           K(removed_member), K(timeout_us), K(old_member_list), K(old_replica_num),
           K(curr_member_list), K(curr_replica_num),
           "leader replace_member cost time(us)", common::ObTimeUtility::current_time() - begin_time_us);
+      report_replace_member_(added_member, removed_member, curr_member_list);
     }
   }
   return ret;
@@ -757,6 +772,7 @@ int PalfHandleImpl::add_learner(const common::ObMember &added_learner, const int
       PALF_LOG(WARN, "add_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
       PALF_EVENT("add_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
+      report_add_learner_(added_learner);
     }
   }
   return ret;
@@ -775,6 +791,7 @@ int PalfHandleImpl::remove_learner(const common::ObMember &removed_learner, cons
       PALF_LOG(WARN, "remove_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
       PALF_EVENT("remove_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
+      report_remove_learner_(removed_learner);
     }
   }
   return ret;
@@ -795,6 +812,7 @@ int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner,
       PALF_LOG(WARN, "switch_learner_to_acceptor failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
       PALF_EVENT("switch_learner_to_acceptor success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
+      report_switch_learner_to_acceptor_(learner);
     }
   }
   return ret;
@@ -815,6 +833,7 @@ int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member,
       PALF_LOG(WARN, "switch_acceptor_to_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
       PALF_EVENT("switch_acceptor_to_learner success", palf_id_, K(ret), KPC(this), K(args), K(timeout_us));
+      report_switch_acceptor_to_learner_(member);
     }
   }
   return ret;
@@ -828,6 +847,7 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
 {
   int ret = OB_SUCCESS;
   const int64_t curr_time_us = common::ObTimeUtility::current_time();
+  AccessMode prev_access_mode;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (INVALID_PROPOSAL_ID == proposal_id ||
@@ -850,6 +870,9 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "reconfiguration is running, try again", K(ret), K_(palf_id),
         K_(self), K(proposal_id), K(access_mode), K(ref_scn));
+  } else if (OB_FAIL(mode_mgr_.get_access_mode(prev_access_mode))) {
+    PALF_LOG(WARN, "get old change_access mode failed", K(ret), K_(palf_id),
+        K_(self), K(proposal_id),K(access_mode), K(ref_scn));
   } else {
     PALF_EVENT("start change_access_mode", palf_id_, K(ret), KPC(this),
         K(proposal_id), K(access_mode), K(ref_scn), K_(sw));
@@ -885,6 +908,12 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
         if (OB_SUCCESS != (tmp_ret = role_change_cb_wrpper_.on_role_change(palf_id_))) {
           PALF_LOG(WARN, "on_role_change failed", K(tmp_ret), K_(palf_id), K_(self));
         }
+        PALF_EVENT("change_access_mode success", palf_id_, K(ret), KPC(this),
+            K(proposal_id), K(access_mode), K(ref_scn), K(time_guard), K_(sw));
+        int64_t curr_mode_version;
+        mode_mgr_.get_mode_version(curr_mode_version);
+        PALF_REPORT_INFO_KV(K(proposal_id), K(ref_scn));
+        plugins_.record_access_mode_change_event(palf_id_, mode_version, curr_mode_version, prev_access_mode, access_mode, EXTRA_INFOS);
       }
       if (OB_EAGAIN == ret) {
         ob_usleep(1000);
@@ -1212,6 +1241,7 @@ int PalfHandleImpl::set_base_lsn(
     } else {
       PALF_EVENT("set_base_lsn success", palf_id_, K(ret), K_(palf_id), K(self_), K(lsn),
           K(log_snapshot_meta), K(new_base_lsn), K(flush_meta_cb_ctx));
+      plugins_.record_set_base_lsn_event(palf_id_, new_base_lsn);
     }
   }
   return ret;
@@ -1220,7 +1250,6 @@ int PalfHandleImpl::set_base_lsn(
 bool PalfHandleImpl::is_sync_enabled() const
 {
   bool bool_ret = false;
-  RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
   } else {
     bool_ret = state_mgr_.is_sync_enabled();
@@ -1232,12 +1261,16 @@ int PalfHandleImpl::enable_sync()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
+  bool is_sync_enabled = state_mgr_.is_sync_enabled();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (is_sync_enabled) {
+    PALF_LOG(INFO, "sync has been enabled", KPC(this));
   } else if (OB_FAIL(state_mgr_.enable_sync())) {
     PALF_LOG(WARN, "enable_sync failed", K(ret), KPC(this));
   } else {
     PALF_EVENT("enable_sync success", palf_id_, K(ret), KPC(this));
+    plugins_.record_enable_sync_event(palf_id_);
   }
   return ret;
 }
@@ -1246,12 +1279,16 @@ int PalfHandleImpl::disable_sync()
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
+  bool is_sync_enabled = state_mgr_.is_sync_enabled();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (!is_sync_enabled) {
+    PALF_LOG(INFO, "sync has been disabled", KPC(this));
   } else if (OB_FAIL(state_mgr_.disable_sync())) {
     PALF_LOG(WARN, "disable_sync failed", K(ret), KPC(this));
   } else {
     PALF_EVENT("disable_sync success", palf_id_, K(ret), KPC(this));
+    plugins_.record_disable_sync_event(palf_id_);
   }
   return ret;
 }
@@ -1302,6 +1339,8 @@ int PalfHandleImpl::disable_vote(const bool need_check_log_missing)
         }
       } else {
         PALF_EVENT("disable_vote success", palf_id_, KPC(this), K(need_check_log_missing));
+        PALF_REPORT_INFO_KV(K(need_check_log_missing));
+        plugins_.record_disable_vote_event(palf_id_);
       }
     }
   }
@@ -1327,6 +1366,7 @@ int PalfHandleImpl::enable_vote()
     }
   } else {
     PALF_EVENT("enable_vote success", palf_id_, KPC(this));
+    plugins_.record_enable_vote_event(palf_id_);
   }
   return ret;
 }
@@ -1444,8 +1484,8 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
       PALF_LOG(INFO, "sw_ truncate_for_rebuild success", K(ret), KPC(this), K(palf_base_info));
     }
   }
-
   PALF_EVENT("advance_base_info finished", palf_id_, KPC(this), K(palf_base_info), K(time_guard));
+  plugins_.record_advance_base_info_event(palf_id_, palf_base_info);
   return ret;
 }
 
@@ -2939,6 +2979,7 @@ int PalfHandleImpl::handle_notify_rebuild_req(const common::ObAddr &server,
         PALF_LOG(WARN, "on_rebuild failed", K(ret), K(server), K(base_lsn));
       } else {
         PALF_EVENT("on_rebuild success", palf_id_, K(ret), K_(self), K(server), K(base_lsn));
+        plugins_.record_rebuild_event(palf_id_, server, base_lsn);
       }
       // Whether on_rebuild returns OB_SUCCESS or not, set value for rebuild_base_lsn_
       SpinLockGuard rebuild_guard(last_rebuild_meta_info_lock_);
@@ -3888,6 +3929,7 @@ int PalfHandleImpl::flashback(const int64_t mode_version,
         FLOG_INFO("[END FLASHBACK PALF_DUMP]", K(ret), K_(palf_id), K_(self), "[SlidingWindow]", sw_,
             "[StateMgr]", state_mgr_, "[ConfigMgr]", config_mgr_, "[ModeMgr]", mode_mgr_,
             "[LogEngine]", log_engine_, "[Reconfirm]", reconfirm_);
+        plugins_.record_flashback_event(palf_id_, mode_version, flashback_scn, curr_end_scn, curr_max_scn);
         break;
       } else {
         usleep(100*1000);
@@ -4347,6 +4389,205 @@ int PalfHandleImpl::get_leader_max_scn_(SCN &max_scn, LSN &end_lsn)
   return ret;
 }
 
+void PalfHandleImpl::report_set_initial_member_list_(const int64_t paxos_replica_num, const common::ObMemberList &member_list)
+{
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(member_list, member_list_buf);
+  plugins_.record_set_initial_member_list_event(palf_id_, paxos_replica_num, member_list_buf.ptr());
+}
+void PalfHandleImpl::report_set_initial_member_list_with_arb_(const int64_t paxos_replica_num, const common::ObMemberList &member_list, const common::ObMember &arb_member)
+{
+  PALF_REPORT_INFO_KV(K(arb_member));
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(member_list, member_list_buf);
+  plugins_.record_set_initial_member_list_event(palf_id_, paxos_replica_num, member_list_buf.ptr(), EXTRA_INFOS);
+}
+void PalfHandleImpl::report_force_set_as_single_replica_(const int64_t prev_replica_num, const int64_t curr_replica_num, const ObMember &member)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObSqlString member_buf;
+  member_to_string(member, member_buf);
+  PALF_REPORT_INFO_KV("member", member_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::FORCE_SINGLE_MEMBER),
+      palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+
+void PalfHandleImpl::report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(member_list, member_list_buf);
+  PALF_REPORT_INFO_KV("member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::CHANGE_REPLICA_NUM),
+      palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObMemberList curr_member_list;
+  int64_t replica_num;
+  config_mgr_.get_curr_member_list(curr_member_list, replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(added_member, member_buf);
+  PALF_REPORT_INFO_KV(
+      "added_member", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::ADD_MEMBER),
+      palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObMemberList curr_member_list;
+  int64_t replica_num;
+  config_mgr_.get_curr_member_list(curr_member_list, replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(removed_member, member_buf);
+  PALF_REPORT_INFO_KV(
+      "removed_member", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::REMOVE_MEMBER),
+      palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_replace_member_(const common::ObMember &added_member, const common::ObMember &removed_member, const common::ObMemberList &member_list)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(member_list, member_list_buf);
+  ObSqlString added_member_buf;
+  ObSqlString removed_member_buf;
+  member_to_string(added_member, added_member_buf);
+  member_to_string(removed_member, removed_member_buf);
+  PALF_REPORT_INFO_KV(
+      "added_member", added_member_buf,
+      "removed_member", removed_member_buf,
+      "member_list", member_list_buf);
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_replica_num(curr_replica_num);
+  plugins_.record_reconfiguration_event("REPLACE_MEMBER", palf_id_, config_version, curr_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_add_learner_(const common::ObMember &added_learner)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  common::ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(added_learner, member_buf);
+  PALF_REPORT_INFO_KV(
+      "added_learner", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::ADD_LEARNER),
+      palf_id_, config_version, curr_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_remove_learner_(const common::ObMember &removed_learner)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  common::ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(removed_learner, member_buf);
+  PALF_REPORT_INFO_KV(
+      "removed_learner", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::REMOVE_LEARNER),
+      palf_id_, config_version, curr_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_add_arb_member_(const common::ObMember &added_arb_member)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  common::ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  char member_buf_[MAX_SINGLE_MEMBER_LENGTH] = {'\0'};
+  ObSqlString member_buf;
+  member_to_string(added_arb_member, member_buf);
+  PALF_REPORT_INFO_KV(
+      "added_arb_member", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::ADD_ARB_MEMBER),
+      palf_id_, config_version, curr_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+void PalfHandleImpl::report_remove_arb_member_(const common::ObMember &removed_arb_member)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  common::ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(removed_arb_member, member_buf);
+  PALF_REPORT_INFO_KV(
+      "removed_arb_member", member_buf,
+      "member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::REMOVE_ARB_MEMBER),
+      palf_id_, config_version, curr_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+
+void PalfHandleImpl::report_switch_learner_to_acceptor_(const common::ObMember &learner)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(learner, member_buf);
+  PALF_REPORT_INFO_KV(
+      "member", member_buf,
+      "curr_member_list", member_list_buf,
+      "curr_replica_num", curr_replica_num);
+  char replica_readonly_name_[common::MAX_REPLICA_TYPE_LENGTH];
+  char replica_full_name_[common::MAX_REPLICA_TYPE_LENGTH];
+  replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY, replica_readonly_name_, sizeof(replica_readonly_name_));
+  replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL, replica_full_name_, sizeof(replica_full_name_));
+  plugins_.record_replica_type_change_event(palf_id_, config_version, replica_readonly_name_, replica_full_name_, EXTRA_INFOS);
+}
+
+void PalfHandleImpl::report_switch_acceptor_to_learner_(const common::ObMember &acceptor)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObMemberList curr_member_list;
+  int64_t curr_replica_num;
+  (void) config_mgr_.get_curr_member_list(curr_member_list, curr_replica_num);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(curr_member_list, member_list_buf);
+  ObSqlString member_buf;
+  member_to_string(acceptor, member_buf);
+  PALF_REPORT_INFO_KV(
+      "member", member_buf,
+      "curr_member_list", member_list_buf,
+      "curr_replica_num", curr_replica_num);
+  char replica_readonly_name_[common::MAX_REPLICA_TYPE_LENGTH];
+  char replica_full_name_[common::MAX_REPLICA_TYPE_LENGTH];
+  replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY, replica_readonly_name_, sizeof(replica_readonly_name_));
+  replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL, replica_full_name_, sizeof(replica_full_name_));
+  plugins_.record_replica_type_change_event(palf_id_, config_version, replica_full_name_, replica_readonly_name_, EXTRA_INFOS);
+}
 PalfStat::PalfStat()
     : self_(),
       palf_id_(INVALID_PALF_ID),

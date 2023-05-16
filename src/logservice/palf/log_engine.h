@@ -103,6 +103,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogPlugins *plugins,
            const int64_t palf_epoch,
            const int64_t log_storage_block_size,
            const int64_t log_meta_storage_block_size);
@@ -115,6 +116,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
            const int64_t palf_epoch,
            bool &is_integrity,
@@ -481,6 +483,7 @@ private:
   LogNetService log_net_service_;
   common::ObILogAllocator *alloc_mgr_;
   LogIOWorker *log_io_worker_;
+  LogPlugins *plugins_;
   // Except for LogNetService, this field is just only used for debug
   int64_t palf_id_;
   // palf_epoch_ is used for identifying an uniq palf instance.

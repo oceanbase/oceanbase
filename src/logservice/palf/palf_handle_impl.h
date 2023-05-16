@@ -1072,6 +1072,21 @@ private:
   int get_leader_max_scn_(SCN &max_scn, LSN &end_lsn);
   void gen_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta) const;
   void get_last_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta_info) const;
+  // ======================= report event begin =======================================
+  void report_set_initial_member_list_(const int64_t paxos_replica_num, const common::ObMemberList &member_list);
+  void report_set_initial_member_list_with_arb_(const int64_t paxos_replica_num, const common::ObMemberList &member_list, const common::ObMember &arb_member);
+  void report_force_set_as_single_replica_(const int64_t prev_replica_num, const int64_t curr_replica_num, const ObMember &member);
+  void report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
+  void report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member);
+  void report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member);
+  void report_replace_member_(const common::ObMember &added_member, const common::ObMember &removed_member, const common::ObMemberList &member_list);
+  void report_add_learner_(const common::ObMember &added_learner);
+  void report_remove_learner_(const common::ObMember &removed_learner);
+  void report_add_arb_member_(const common::ObMember &added_arb_member);
+  void report_remove_arb_member_(const common::ObMember &removed_arb_member);
+  void report_switch_learner_to_acceptor_(const common::ObMember &learner);
+  void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
+  // ======================= report event end =======================================
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {

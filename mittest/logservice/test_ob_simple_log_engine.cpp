@@ -71,6 +71,7 @@ public:
     ObILogAllocator *alloc_mgr = log_engine_->alloc_mgr_;
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
     LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
+    LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
     if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
@@ -80,6 +81,7 @@ public:
                                 &(leader_.palf_handle_impl_->hot_cache_),
                                 log_rpc,
                                 log_io_worker,
+                                plugins,
                                 entry_header,
                                 palf_epoch_,
                                 is_integrity,

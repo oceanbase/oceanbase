@@ -70,6 +70,31 @@ enum LogConfigChangeType
   FORCE_SINGLE_MEMBER,
 };
 
+inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
+{
+  #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
+  switch(state)
+  {
+    CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
+    CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
+    CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
+    default:
+      return "Invalid";
+  }
+  #undef CHECK_LOG_CONFIG_TYPE_STR
+}
+
 typedef common::ObArrayHashMap<common::ObAddr, common::ObRegion> LogMemberRegionMap;
 
 inline bool is_add_log_sync_member_list(const LogConfigChangeType type)
@@ -167,32 +192,8 @@ public:
   }
   bool is_valid() const;
   void reset();
-  const char *Type2Str(const LogConfigChangeType state) const
-  {
-    #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
-    switch(state)
-    {
-      CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
-      default:
-        return "Invalid";
-    }
-    #undef CHECK_LOG_CONFIG_TYPE_STR
-  }
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
-      K_(config_version), K_(ref_scn), "type", Type2Str(type_));
+      K_(config_version), K_(ref_scn), "type", LogConfigChangeType2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;

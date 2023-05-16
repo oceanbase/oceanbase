@@ -36,6 +36,7 @@ LogStorage::LogStorage() :
     tail_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     update_manifest_cb_(),
+    plugins_(NULL),
     hot_cache_(NULL),
     is_inited_(false)
 {}
@@ -49,7 +50,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t palf_id, const int64_t logical_block_size,
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
-                     ILogBlockPool *log_block_pool,
+                     ILogBlockPool *log_block_pool, LogPlugins *plugins,
                      LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
@@ -64,6 +65,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               align_buf_size,
                               update_manifest_cb,
                               log_block_pool,
+                              plugins,
                               hot_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
@@ -390,9 +392,10 @@ int LogStorage::truncate_prefix_blocks(const LSN &lsn)
 		reset_log_tail_for_last_block_(lsn, false);
     block_mgr_.reset(lsn_2_block(lsn, logical_block_size_));
   }
-  PALF_EVENT("LogStorage truncate_prefix_blocks finihsed", palf_id_, K(ret), KPC(this),
+  PALF_EVENT("truncate_prefix_blocks success", palf_id_, K(ret), KPC(this),
              K(lsn), K(block_id), K(min_block_id), K(max_block_id),
              K(truncate_end_block_id));
+  plugins_->record_truncate_event(palf_id_, lsn, min_block_id, max_block_id, truncate_end_block_id);
   return ret;
 }
 
@@ -593,6 +596,7 @@ int LogStorage::do_init_(const char *base_dir,
                          const int64_t align_buf_size,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
+                         LogPlugins *plugins,
                          LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
@@ -620,6 +624,7 @@ int LogStorage::do_init_(const char *base_dir,
     palf_id_ = palf_id;
     logical_block_size_ = logical_block_size;
     update_manifest_cb_ = update_manifest_cb;
+    plugins_ = plugins;
     hot_cache_ = hot_cache;
     is_inited_ = true;
   }
