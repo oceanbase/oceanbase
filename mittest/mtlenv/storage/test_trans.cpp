@@ -138,8 +138,10 @@ void TestTrans::create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls)
   ObMemberList member_list;
   int64_t paxos_replica_num = 1;
   (void) member_list.add_server(MockTenantModuleEnv::get_instance().self_addr_);
+  GlobalLearnerList learner_list;
   ASSERT_EQ(OB_SUCCESS, ls->set_initial_member_list(member_list,
-                                                            paxos_replica_num));
+                                                    paxos_replica_num,
+                                                    learner_list));
 
   // check leader
   LOG_INFO("check leader");

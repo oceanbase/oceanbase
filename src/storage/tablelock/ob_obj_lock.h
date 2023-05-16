@@ -121,7 +121,9 @@ public:
   int get_table_lock_store_info(
       ObIArray<ObTableLockOp> &store_arr,
       const share::SCN &freeze_scn);
-
+  int compact_tablelock(ObMalloc &allocator,
+                        bool &is_compacted,
+                        const bool is_force = false);
   void reset(ObMalloc &allocator);
   void reset_without_lock(ObMalloc &allocator);
   int size_without_lock() const;
@@ -139,12 +141,6 @@ public:
 private:
   void print_() const;
   void reset_(ObMalloc &allocator);
-  int check_allow_lock_(
-      const ObTableLockOp &lock_op,
-      const ObTableLockMode &lock_mode_in_same_trans,
-      ObTxIDSet &conflict_tx_set,
-      bool &conflict_with_dml_lock,
-      ObMalloc &allocator);
   int check_allow_lock_(
       const ObTableLockOp &lock_op,
       const ObTableLockMode &lock_mode_in_same_trans,
@@ -203,7 +199,7 @@ private:
       ObTableLockOpList *&op_list);
   void drop_op_list_if_empty_(
       const ObTableLockMode mode,
-      const ObTableLockOpList *op_list,
+      ObTableLockOpList *&op_list,
       ObMalloc &allocator);
   void delete_lock_op_from_list_(
       const ObTableLockOp &lock_op,
@@ -357,6 +353,8 @@ public:
   // @param[out] iter, the iterator returned.
   int get_lock_op_iter(const ObLockID &lock_id,
                        ObLockOpIterator &iter);
+  // check all obj locks in the lock map, and clear it if it's empty.
+  int check_and_clear_obj_lock(const bool force_compact);
 private:
   class LockIDIterFunctor
   {

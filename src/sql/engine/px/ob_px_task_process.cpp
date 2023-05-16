@@ -451,7 +451,9 @@ int ObPxTaskProcess::do_process()
       }
     }
   }
-
+  if (OB_NOT_NULL(arg_.exec_ctx_)) {
+    DAS_CTX(*arg_.exec_ctx_).get_location_router().refresh_location_cache(true, ret);
+  }
   // for transaction
   (void)record_tx_desc();
   // for exec feedback info

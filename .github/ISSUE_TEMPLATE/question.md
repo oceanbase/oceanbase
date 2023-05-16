@@ -1,7 +1,7 @@
 ---
 name: 🙋 Question
 about: I have a question.
-title: "[Question]: "
+title: "[Question]: <title>"
 labels: ["type: question"]
 ---
 

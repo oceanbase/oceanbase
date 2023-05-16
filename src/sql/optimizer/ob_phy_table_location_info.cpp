@@ -15,8 +15,10 @@
 #include "ob_phy_table_location_info.h"
 #include "observer/ob_server_struct.h"
 #include "sql/das/ob_das_location_router.h"
+#include "storage/tx/wrs/ob_black_list.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
+using namespace oceanbase::transaction;
 namespace oceanbase
 {
 namespace sql
@@ -61,8 +63,7 @@ int ObOptTabletLoc::assign(const ObOptTabletLoc &other)
 int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partition_id,
                                                       const ObObjectID &first_level_part_id,
                                                       const common::ObTabletID &tablet_id,
-                                                      const ObLSLocation &ls_location,
-                                                      const ObIArray<ObAddr> &invalid_servers)
+                                                      const ObLSLocation &ls_location)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -74,27 +75,26 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_location.get_replica_locations().count(); ++i) {
     const ObLSReplicaLocation &replica_loc = ls_location.get_replica_locations().at(i);
     if (ObReplicaTypeCheck::is_readable_replica(replica_loc.get_replica_type())) {
-      bool is_in_invalid_servers = false;
-      for (int64_t j = 0; OB_SUCC(ret)
-           && !is_in_invalid_servers && j < invalid_servers.count(); ++j) {
-        if (replica_loc.get_server() == invalid_servers.at(j)) {
-          is_in_invalid_servers = true;
-        }
-      }
-      if (OB_SUCC(ret) && !is_in_invalid_servers) {
-        //此处依赖了构造函数隐藏转换
+      transaction::ObBLKey bl_key;
+      bool in_black_list = false;
+      if (OB_FAIL(bl_key.init(replica_loc.get_server(), ls_location.get_tenant_id(), ls_location.get_ls_id()))) {
+        LOG_WARN("init black list key failed", K(ret));
+      } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
+        LOG_WARN("check in black list failed", K(ret));
+      } else if (!in_black_list || replica_loc.is_strong_leader()) {
         if (OB_FAIL(replica_locations_.push_back(replica_loc))) {
           LOG_WARN("Failed to push back replica locations",
                    K(ret), K(i), K(replica_loc), K(replica_locations_));
         }
+      } else {
+        LOG_INFO("the replica location is invalid", K(bl_key), K(replica_loc));
       }
     }
   }
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(0 == replica_locations_.count())) {
       ret = OB_NO_READABLE_REPLICA;
-      LOG_WARN("there has no readable replica", K(ret),
-               K(invalid_servers), K(ls_location.get_replica_locations()));
+      LOG_WARN("there has no readable replica", K(ret), K(ls_location.get_replica_locations()));
     }
   }
   return ret;
@@ -332,23 +332,22 @@ int ObCandiTabletLoc::get_selected_replica(ObRoutePolicy::CandidateReplica &repl
   return ret;
 }
 
-int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(
-    const ObObjectID &partition_id,
-    const ObObjectID &first_level_part_id,
-    const common::ObTabletID &tablet_id,
-    const ObLSLocation &partition_location,
-    const ObIArray<ObAddr> &invalid_servers)
+int ObCandiTabletLoc::set_part_loc_with_only_readable_replica(const ObObjectID &partition_id,
+							      const ObObjectID &first_level_part_id,
+                                                              const common::ObTabletID &tablet_id,
+                                                              const ObLSLocation &partition_location)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(has_selected_replica())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("partition location has not been set yet, but replica idx has been selected",
               K(ret), K(*this), K(partition_location));
-  } else if (OB_FAIL(opt_tablet_loc_.assign_with_only_readable_replica(
-                                   partition_id, first_level_part_id, tablet_id,
-                                   partition_location, invalid_servers))) {
+  } else if (OB_FAIL(opt_tablet_loc_.assign_with_only_readable_replica(partition_id,
+								       first_level_part_id,
+                                                                       tablet_id,
+                                                                       partition_location))) {
     LOG_WARN("fail to assign partition location with only readable replica",
-             K(ret), K(partition_location), K(invalid_servers));
+             K(ret), K(partition_location));
   }
   return ret;
 }

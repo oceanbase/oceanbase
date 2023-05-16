@@ -377,12 +377,20 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
           ctx, sqc.get_task_count(),
           filter_spec->is_shuffle_? sqc.get_sqc_count() : 1))) {
         LOG_WARN("fail to init share info", K(ret));
-      } else if (filter_spec->is_shuffle_) {
-        ObArray<ObP2PDatahubMsgBase *> *array_ptr =
+      } else {
+        if (OB_FAIL(all_shared_rf_msgs_.push_back(filter_input->share_info_.shared_msgs_))) {
+          LOG_WARN("fail to push back rf msgs", K(ret));
+        }
+        if (OB_FAIL(ret) && filter_input->share_info_.shared_msgs_ != 0) {
+          ObArray<ObP2PDatahubMsgBase *> *array_ptr =
           reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(filter_input->share_info_.shared_msgs_);
-        for (int i = 0; OB_SUCC(ret) && i < array_ptr->count(); ++i) {
-          if (OB_FAIL(rf_msgs_.push_back(array_ptr->at(i)))) {
-            LOG_WARN("fail to push back rf msgs", K(ret));
+          for (int j = 0; j < array_ptr->count(); ++j) {
+            if (OB_NOT_NULL(array_ptr->at(j))) {
+              array_ptr->at(j)->destroy();
+            }
+          }
+          if (!array_ptr->empty()) {
+            array_ptr->reset();
           }
         }
       }
@@ -719,12 +727,15 @@ int ObPxSubCoord::end_process()
       LOG_WARN("fail check task finish status", K(ret));
     }
   }
-  for (int i = 0; i < rf_msgs_.count(); ++i) {
-    rf_msgs_.at(i)->destroy();
-    rf_msgs_.at(i) = nullptr;
-  }
-  if (!rf_msgs_.empty()) {
-    rf_msgs_.reset();
+  for (int i = 0; i < all_shared_rf_msgs_.count(); ++i) {
+    ObArray<ObP2PDatahubMsgBase *> *array_ptr =
+          reinterpret_cast<ObArray<ObP2PDatahubMsgBase *> *>(all_shared_rf_msgs_.at(i));
+    for (int j = 0; OB_NOT_NULL(array_ptr) && j < array_ptr->count(); ++j) {
+      array_ptr->at(j)->destroy();
+    }
+    if (OB_NOT_NULL(array_ptr) && !array_ptr->empty()) {
+      array_ptr->reset();
+    }
   }
 
   NG_TRACE(tag3);

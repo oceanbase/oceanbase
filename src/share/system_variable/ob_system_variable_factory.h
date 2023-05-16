@@ -1605,18 +1605,18 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__SET_REVERSE_DBLINK_INFOS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(221); }
 };
-class ObSysVarShowDdlInCompatMode : public ObBoolSysVar
-{
-public:
-  ObSysVarShowDdlInCompatMode() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
-  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__SHOW_DDL_IN_COMPAT_MODE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(222); }
-};
 class ObSysVarForceOrderPreserveSet : public ObBoolSysVar
 {
 public:
   ObSysVarForceOrderPreserveSet() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__FORCE_ORDER_PRESERVE_SET; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(222); }
+};
+class ObSysVarShowDdlInCompatMode : public ObBoolSysVar
+{
+public:
+  ObSysVarShowDdlInCompatMode() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__SHOW_DDL_IN_COMPAT_MODE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(223); }
 };
 class ObSysVarParallelDegreePolicy : public ObEnumSysVar

@@ -100,6 +100,7 @@ public:
   static int create_tmp_sys_var(sql::ObSQLSessionInfo &sess,
         share::ObSysVarClassType sys_var_id, share::ObBasicSysVar *&sys_var,
         common::ObIAllocator &allocator);
+  static int sess_veri_control(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo *&session);
 };
 
 class GetAnotherSessID

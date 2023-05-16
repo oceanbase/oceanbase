@@ -999,9 +999,6 @@ int ObLogPlan::pre_process_quals(SemiInfo* semi_info)
     } else if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected NULL", K(ret), K(expr));
-    } else if (expr->has_flag(CNT_ROWNUM) || expr->has_flag(CNT_RAND_FUNC)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected expr in semi condition", K(ret), K(*expr));
     } else if (!expr->has_flag(CNT_ONETIME) || expr->has_flag(CNT_SUB_QUERY)) {
       // do nothing
     } else if (OB_FAIL(add_subquery_filter(expr))) {
@@ -2086,33 +2083,6 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
           LOG_WARN("fail to set_follower_first_feedback", K(follower_first_feedback), K(ret));
         }
       }
-      if (OB_SUCC(ret)) {
-        // weak读如果不命中，要刷新location cache
-        task_exec_ctx.set_need_renew_location_cache(!is_hit_partition);
-        // 目前暂时没想到如何处理分布式的情况，分布式的情况一定是命中，
-        // 暂时没想到办法判断是否要刷location cache。
-        // 这里有可能会被多次递归到，但是按目前的选择策略，
-        // 要么每次递归到这里都是命中，要么每次递归到这里都是不命中或者分布式的情况，
-        // 所以只需要在不命中的时候add_need_renew_tablet_keys_distinctly就可以了。
-        if (task_exec_ctx.is_need_renew_location_cache()) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < phy_tbl_loc_info_list.count(); ++i) {
-            const ObCandiTableLoc *phy_tbl_loc_info = phy_tbl_loc_info_list.at(i);
-            if (OB_ISNULL(phy_tbl_loc_info)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("phy tbl loc info is NULL", K(ret), K(i));
-            } else {
-              const ObCandiTabletLocIArray &phy_part_loc_info_list = phy_tbl_loc_info->get_phy_part_loc_info_list();
-              for (int64_t j = 0; OB_SUCC(ret) && j < phy_part_loc_info_list.count(); ++j) {
-                const ObCandiTabletLoc &phy_part_loc_info = phy_part_loc_info_list.at(j);
-                if (OB_FAIL(task_exec_ctx.add_need_renew_tablet_keys_distinctly(
-                    phy_part_loc_info.get_partition_location().get_tablet_id()))) {
-                  LOG_WARN("fail to add need renew partition key", K(ret));
-                }
-              }
-            }
-          }
-        }
-      }
     }
   } else {
     const bool sess_in_retry = session->get_is_in_retry_for_dup_tbl(); //重试状态下不优化复制表的副本选择
@@ -2120,7 +2090,6 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
       LOG_WARN("fail to strong select replicas", K(ret), K(local_server), K(phy_tbl_loc_info_list.count()));
     } else {
       session->partition_hit().try_set_bool(is_hit_partition);
-      task_exec_ctx.set_need_renew_location_cache(false); // 含有strong的无论如何都不renew了
     }
   }
   return ret;
@@ -10574,6 +10543,8 @@ int ObLogPlan::remove_duplicate_constraint(ObLocationConstraintContext &location
     LOG_WARN("failed to remove duplicate strict pwj constraint", K(ret));
   } else if (OB_FAIL(sort_pwj_constraint(location_constraint))) {
     LOG_WARN("failed to sort pwj constraint", K(ret));
+  } else if (OB_FAIL(resolve_dup_tab_constraint(location_constraint))) {
+    LOG_WARN("failed to resolve duplicatet table constraint");
   // 将约束设置给sql_ctx
   } else if (OB_FAIL(sql_ctx.set_location_constraints(location_constraint, get_allocator()))) {
     LOG_WARN("failed to set location constraints", K(ret));
@@ -11406,6 +11377,8 @@ int ObLogPlan::do_post_plan_processing()
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(set_duplicated_table_location(root, OB_INVALID_INDEX))) {
     LOG_WARN("failed to set duplicated table location", K(ret));
+  } else if (OB_FAIL(set_advisor_table_id(root))) {
+    LOG_WARN("failed to set advise table id from duplicate table", K(ret));
   } else if (OB_FAIL(collect_table_location(root))) {
     LOG_WARN("failed to collect table location", K(ret));
   } else if (OB_FAIL(build_location_related_tablet_ids())) {
@@ -13258,11 +13231,76 @@ int ObLogPlan::allocate_material_for_recursive_cte_plan(ObIArray<ObLogicalOperat
   return ret;
 }
 
+int ObLogPlan::set_advisor_table_id(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || OB_ISNULL(op->get_sharding())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is null", K(ret), K(op));
+  } else if (op->get_sharding()->is_local() || op->get_sharding()->is_remote()) {
+    if (OB_FAIL(negotiate_advisor_table_id(op))) {
+      LOG_WARN("failed to negotiate advise table id", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
+      if (OB_FAIL(SMART_CALL(set_advisor_table_id(op->get_child(i))))) {
+        LOG_WARN("failed to update advise table id", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+int ObLogPlan::negotiate_advisor_table_id(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  uint64_t base_table_id = OB_INVALID_ID;
+  uint64_t dup_table_id = OB_INVALID_ID;
+  ObArray<ObLogicalOperator *> all_ops;
+  ObArray<ObLogTableScan *> all_dup_tables;
+  for (int64_t i = -1; OB_SUCC(ret) && i < all_ops.count(); ++i) {
+    ObLogicalOperator *cur_op = (i == -1 ? op : all_ops.at(i));
+    if (OB_ISNULL(cur_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("current operator is null", K(ret));
+    } else if (cur_op->is_table_scan()) {
+      ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(cur_op);
+      if (table_scan->is_duplicate_table()) {
+        if (OB_FAIL(all_dup_tables.push_back(table_scan))) {
+          LOG_WARN("failed to push back duplicate table scan", K(ret));
+        } else if (OB_INVALID_ID == dup_table_id) {
+          dup_table_id = table_scan->get_table_id();
+        }
+      } else {
+        if (OB_INVALID_ID == base_table_id) {
+          base_table_id = table_scan->get_table_id();
+        }
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < cur_op->get_num_of_child(); ++j) {
+      if (OB_FAIL(all_ops.push_back(cur_op->get_child(j)))) {
+        LOG_WARN("failed to push back child operator", K(ret));
+      }
+    }
+  }
+
+  if (base_table_id != OB_INVALID_ID || dup_table_id != OB_INVALID_ID) {
+    uint64_t final_table_id =  (base_table_id == OB_INVALID_ID ? dup_table_id : base_table_id);
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_dup_tables.count(); ++i) {
+      if (final_table_id != all_dup_tables.at(i)->get_table_id()) {
+        all_dup_tables.at(i)->set_advisor_table_id(final_table_id);
+      }
+      // LOG_INFO("link debug", K(all_dup_tables.at(i)->get_table_id()), K(final_table_id));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                 const JoinFilterPushdownHintInfo &hint_info,
                                                 ObRelIds &right_tables,
                                                 bool is_current_dfo,
                                                 bool is_fully_partition_wise,
+                                                int64_t current_dfo_level,
                                                 const ObIArray<ObRawExpr*> &left_join_conditions,
                                                 const ObIArray<ObRawExpr*> &right_join_conditions,
                                                 ObIArray<JoinFilterInfo> &join_filter_infos)
@@ -13291,6 +13329,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         hint_info,
                                                                         is_current_dfo,
                                                                         is_fully_partition_wise,
+                                                                        current_dfo_level,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
                                                                         join_filter_infos))) {
@@ -13407,6 +13446,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                    hint_info,
                                    is_current_dfo,
                                    is_fully_partition_wise,
+                                   current_dfo_level,
                                    pushdown_left_quals,
                                    pushdown_right_quals,
                                    join_filter_infos))) {
@@ -13427,6 +13467,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     right_tables,
                                                                     is_current_dfo,
                                                                     is_fully_partition_wise,
+                                                                    current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13436,6 +13477,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     right_tables,
                                                                     is_current_dfo,
                                                                     is_fully_partition_wise,
+                                                                    current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
                                                                     join_filter_infos)))) {
@@ -13443,11 +13485,13 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     }
   } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
              static_cast<ObLogExchange*>(op)->is_consumer() &&
-             OB_FALSE_IT(is_current_dfo = false)) {
+             static_cast<ObLogExchange*>(op)->is_local()) {
     /* do nothing */
   } else if (log_op_def::LOG_EXCHANGE == op->get_type() &&
              static_cast<ObLogExchange*>(op)->is_consumer() &&
-             static_cast<ObLogExchange*>(op)->is_local()) {
+             (OB_FALSE_IT(is_current_dfo = false) ||
+              OB_FALSE_IT(current_dfo_level = (current_dfo_level == -1) ? -1 : current_dfo_level + 1) ||
+              current_dfo_level >= 2)) {
     /* do nothing */
   } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
     is_fully_partition_wise |= op->is_fully_partition_wise();
@@ -13456,6 +13500,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                             right_tables,
                                                             is_current_dfo,
                                                             is_fully_partition_wise,
+                                                            current_dfo_level,
                                                             left_join_conditions,
                                                             right_join_conditions,
                                                             join_filter_infos)))) {
@@ -13469,6 +13514,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                               right_tables,
                                                               is_current_dfo,
                                                               is_fully_partition_wise,
+                                                              current_dfo_level,
                                                               left_join_conditions,
                                                               right_join_conditions,
                                                               join_filter_infos)))) {
@@ -13485,6 +13531,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                   const JoinFilterPushdownHintInfo &hint_info,
                                                   bool is_current_dfo,
                                                   bool is_fully_partition_wise,
+                                                  int64_t current_dfo_level,
                                                   const ObIArray<ObRawExpr*> &left_join_conditions,
                                                   const ObIArray<ObRawExpr*> &right_join_conditions,
                                                   ObIArray<JoinFilterInfo> &join_filter_infos)
@@ -13529,6 +13576,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                       right_tables,
                                                       is_current_dfo,
                                                       is_fully_partition_wise,
+                                                      current_dfo_level,
                                                       candi_left_filters,
                                                       candi_right_filters,
                                                       join_filter_infos))) {
@@ -13600,6 +13648,40 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
       join_filter_info.pushdown_filter_table_.db_name_ = table_item->database_name_;
     }
   }
+  return ret;
+}
+
+int ObLogPlan::resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObDupTabConstraint> &dup_cons = location_constraint.dup_table_replica_cons_;
+  ObIArray<LocationConstraint> &base_cons = location_constraint.base_table_constraints_;
+
+  for (int64_t i=0; i<dup_cons.count(); ++i) {
+    uint64_t dup_tab_id = dup_cons.at(i).first_;
+    uint64_t advisor_table_id = dup_cons.at(i).second_;
+    bool found_dup = false;
+    bool found_advisor = false;
+    for (int64_t j=0; j<base_cons.count(); ++j) {
+      if (dup_tab_id == base_cons.at(j).key_.table_id_) {
+        found_dup = true;
+        dup_cons.at(i).first_ = j;
+      } else if (advisor_table_id == base_cons.at(j).key_.table_id_) {
+        found_advisor = true;
+        dup_cons.at(i).second_ = j;
+      } else {
+        // do nothing
+      }
+    }
+
+    if (found_dup && found_advisor) {
+      // do nothing
+    } else {
+      dup_cons.at(i).first_ = OB_INVALID_ID;
+      dup_cons.at(i).second_ = OB_INVALID_ID;
+    }
+  }
+
   return ret;
 }
 

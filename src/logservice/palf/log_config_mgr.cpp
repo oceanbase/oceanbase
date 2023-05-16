@@ -194,6 +194,7 @@ void LogConfigMgr::destroy()
 
 int LogConfigMgr::set_initial_member_list(const ObMemberList &member_list,
                                           const int64_t replica_num,
+                                          const common::GlobalLearnerList &learner_list,
                                           const int64_t proposal_id,
                                           LogConfigVersion &init_config_version)
 {
@@ -213,6 +214,7 @@ int LogConfigMgr::set_initial_member_list(const ObMemberList &member_list,
     LogConfigInfo config_info = log_ms_meta_.curr_;
     config_info.log_sync_memberlist_ = member_list;
     config_info.log_sync_replica_num_ = replica_num;
+    config_info.learnerlist_ = learner_list;
     if (OB_FAIL(set_initial_config_info_(config_info, proposal_id, init_config_version))) {
       PALF_LOG(WARN, "set_initial_config_info failed", K(ret), K_(palf_id), K_(self), K(config_info), K(proposal_id));
     } else {
@@ -225,6 +227,7 @@ int LogConfigMgr::set_initial_member_list(const ObMemberList &member_list,
 int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_list,
                                           const common::ObMember &arb_member,
                                           const int64_t replica_num,
+                                          const common::GlobalLearnerList &learner_list,
                                           const int64_t proposal_id,
                                           LogConfigVersion &init_config_version)
 {
@@ -247,6 +250,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     config_info.log_sync_memberlist_ = member_list;
     config_info.log_sync_replica_num_ = replica_num;
     config_info.arbitration_member_ = arb_member;
+    config_info.learnerlist_ = learner_list;
     if (OB_FAIL(set_initial_config_info_(config_info, proposal_id, init_config_version))) {
       PALF_LOG(WARN, "set_initial_config_info failed", K(ret), K_(palf_id), K_(self), K(config_info), K(proposal_id));
     } else {
@@ -263,11 +267,8 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
   int ret = OB_SUCCESS;
   const int64_t initial_config_seq = 1;
   LogReplicaType replica_type = state_mgr_->get_replica_type();
-  //  TODO by haofan: Mittest case creates arb member by same interface with F member,
-  //  so its replica_type maybe NORMAL_REPLICA too. We just skip type check here temporarily.
-//  const bool valid_replica_type = (config_info.arbitration_member_.get_server() == self_) ? \
-//      (replica_type == ARBITRATION_REPLICA) : (replica_type == NORMAL_REPLICA);
-  const bool valid_replica_type = true;
+  const bool valid_replica_type = (config_info.arbitration_member_.get_server() == self_) ? \
+      (replica_type == ARBITRATION_REPLICA) : true;
   if (false == valid_replica_type) {
     ret = OB_NOT_SUPPORTED;
     PALF_LOG(WARN, "set_initial_member_list don't match with replica_type", KR(ret), K_(palf_id), K_(self), K(replica_type), K(config_info));
@@ -276,7 +277,10 @@ int LogConfigMgr::set_initial_config_info_(const LogConfigInfo &config_info,
   } else {
     LogConfigInfo init_config_info = config_info;
     init_config_info.config_version_ = init_config_version;
-    if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
+    if (false == init_config_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "initial config info is invalid", K_(palf_id), K(config_info), K(proposal_id));
+    } else if (false == check_need_update_memberlist_without_lock_(init_config_version)) {
       PALF_LOG(INFO, "persistent_config_version_ has been greater than or equal to config_version, \
           no need set_initial_config_info_", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K_(persistent_config_version), K(init_config_version));
     } else if (OB_FAIL(log_ms_meta_.generate(proposal_id, init_config_info, init_config_info,
@@ -1112,8 +1116,14 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
             PALF_LOG(WARN, "can not upgrade a normal learner", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(args));
           }
         } else if (!is_in_learnerlist && !is_in_degraded_learnerlist && is_in_log_sync_memberlist) {
-          is_already_finished = true;
-          PALF_LOG(INFO, "learner_to_acceptor is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
+          if (args.type_ == UPGRADE_LEARNER_TO_ACCEPTOR || new_replica_num == curr_replica_num) {
+            is_already_finished = true;
+            PALF_LOG(INFO, "learner_to_acceptor is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            PALF_LOG(INFO, "member already exists, but new_replica_num not equal to curr val", KR(ret), K_(palf_id), K_(self),
+                K_(log_ms_meta), K(member), K(new_replica_num), K_(alive_paxos_replica_num));
+          }
         } else {
           ret = OB_INVALID_ARGUMENT;
           PALF_LOG(WARN, "server is neither in memberlist nor in learnerlist", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
@@ -1137,8 +1147,14 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
             ret = OB_INVALID_ARGUMENT;
             PALF_LOG(WARN, "server has been degraded, can't switch to learner", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
           } else {
-            is_already_finished = true;
-            PALF_LOG(INFO, "acceptor_to_learner is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
+            if (args.type_ == DEGRADE_ACCEPTOR_TO_LEARNER || new_replica_num == curr_replica_num) {
+              is_already_finished = true;
+              PALF_LOG(INFO, "acceptor_to_learner is already finished", KR(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member));
+            } else {
+              ret = OB_INVALID_ARGUMENT;
+              PALF_LOG(INFO, "member is already removed, but new_replica_num not equal to curr val", KR(ret), K_(palf_id), K_(self),
+                  K_(log_ms_meta), K(member), K(new_replica_num), K_(alive_paxos_replica_num));
+            }
           }
         } else if (!is_in_degraded_learnerlist && is_in_log_sync_memberlist) {
           // degrade operation can only be done when there is arbitration replica in paxos group
@@ -2228,7 +2244,8 @@ bool LogConfigMgr::is_registering_() const
 int LogConfigMgr::get_register_leader_(common::ObAddr &leader) const
 {
   int ret = OB_SUCCESS;
-  leader = state_mgr_->get_leader();
+  // TODO by yunlong, get leader from location cache temporarily, need remove
+  sw_->get_leader_from_cache(leader);
   if (!leader.is_valid()) {
     ret = OB_EAGAIN;
   }

@@ -156,6 +156,7 @@ DEFINE_LOG_SUB_MOD(TRANS)  // transaction
 DEFINE_LOG_SUB_MOD(RU)  // transaction
 DEFINE_LOG_SUB_MOD(REPLAY)  // replay engine
 DEFINE_LOG_SUB_MOD(IMC)
+DEFINE_LOG_SUB_MOD(DUP_TABLE)
 DEFINE_LOG_SUB_MOD(TABLELOCK)  // tablelock
 DEFINE_LOG_SUB_MOD(BLKMGR)  // block manager
 LOG_MOD_END(STORAGE)
@@ -424,6 +425,8 @@ LOG_MOD_END(PL)
 #define TX_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, TX, level, info_string, ##args)
 #define TRANS_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, TRANS, level, info_string, ##args)
 #define _TRANS_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(STORAGE, TRANS, level, _fmt_, ##args)
+#define DUP_TABLE_LOG(level, info_string,args...) OB_SUB_MOD_LOG(STORAGE, DUP_TABLE, level, info_string, ##args)
+#define _DUP_TABLE_LOG(level, _fmt_ , args...) _OB_SUB_MOD_LOG(STORAGE, DUP_TABLE, level, _fmt_, ##args)
 #define TABLELOCK_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, TABLELOCK, level, info_string, ##args)
 #define _TABLELOCK_LOG(level, _fmt_, args...) OB_SUB_MOD_LOG(STORAGE, TABLELOCK, level, _fmt_, ##args)
 #define RU_LOG(level, info_string, args...) OB_SUB_MOD_LOG(STORAGE, RU, level, info_string, ##args)
@@ -902,6 +905,8 @@ LOG_MOD_END(PL)
 #define TX_LOG_RET(level, errcode, args...) { int ret = errcode; TX_LOG(level, ##args); }
 #define TRANS_LOG_RET(level, errcode, args...) { int ret = errcode; TRANS_LOG(level, ##args); }
 #define _TRANS_LOG_RET(level, errcode, args...) { int ret = errcode; _TRANS_LOG(level, ##args); }
+#define DUP_TABLE_LOG_RET(level, errcode, args...) { int ret = errcode; DUP_TABLE_LOG(level, ##args); }
+#define _DUP_TABLE_LOG_RET(level, errcode, args...) { int ret = errcode; _DUP_TABLE_LOG(level, ##args); }
 #define TABLELOCK_LOG_RET(level, errcode, args...) { int ret = errcode; TABLELOCK_LOG(level, ##args); }
 #define _TABLELOCK_LOG_RET(level, errcode, args...) { int ret = errcode; _TABLELOCK_LOG(level, ##args); }
 #define RU_LOG_RET(level, errcode, args...) { int ret = errcode; RU_LOG(level, ##args); }

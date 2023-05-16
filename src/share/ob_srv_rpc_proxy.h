@@ -137,6 +137,7 @@ public:
   RPC_S(PR5 force_disable_blacklist, OB_FORCE_DISABLE_BLACKLIST);
   RPC_S(PR5 force_enable_blacklist, OB_FORCE_ENABLE_BLACKLIST);
   RPC_S(PR5 force_clear_srv_blacklist, OB_FORCE_CLEAR_BLACKLIST);
+  RPC_S(PR5 notify_create_duplicate_ls, OB_NOTIFY_CREATE_DUPLICATE_LS, (obrpc::ObCreateDupLSArg), obrpc::ObCreateDupLSResult);
 
   RPC_S(PR5 update_local_stat_cache, obrpc::OB_SERVER_UPDATE_STAT_CACHE, (ObUpdateStatCacheArg));
   // The optimizer estimates the number of rows
@@ -155,7 +156,6 @@ public:
   RPC_S(PR5 update_tenant_memory, OB_UPDATE_TENANT_MEMORY, (obrpc::ObTenantMemoryArg));
   RPC_S(PR5 renew_in_zone_hb, OB_RENEW_IN_ZONE_HB, (share::ObInZoneHbRequest), share::ObInZoneHbResponse);
   RPC_S(PR5 pre_process_server_status, OB_PRE_PROCESS_SERVER, (obrpc::ObPreProcessServerArg));
-  RPC_S(PR5 pre_bootstrap_create_server_working_dir, OB_PRE_BOOTSTRAP_CREATE_SERVER_WORKING_DIR, (ObPreBootstrapCreateServerWorkingDirArg));
   RPC_S(PR5 handle_part_trans_ctx, OB_HANDLE_PART_TRANS_CTX, (obrpc::ObTrxToolArg), ObTrxToolRes);
   RPC_S(PR5 flush_local_opt_stat_monitoring_info, obrpc::OB_SERVER_FLUSH_OPT_STAT_MONITORING_INFO, (obrpc::ObFlushOptStatArg));
   RPC_AP(PR5 set_member_list, OB_SET_MEMBER_LIST, (obrpc::ObSetMemberListArgV2), obrpc::ObSetMemberListResult);

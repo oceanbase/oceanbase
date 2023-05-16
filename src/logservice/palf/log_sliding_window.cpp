@@ -1887,7 +1887,8 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     }
   } else if (false == need_execute_fetch_(fetch_log_type)) {
     if (palf_reach_time_interval(5 * 1000 * 1000, fetch_failure_print_time_)) {
-      PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type));
+      PALF_LOG(INFO, "no need execute fetch", K(ret), K_(palf_id), K_(self), K(fetch_log_type),
+          K_(last_fetch_trigger_type), K_(last_fetch_req_time));
     }
   } else if (FetchTriggerType::MODE_META_BARRIER == fetch_log_type) {
     int64_t last_slide_log_id = OB_INVALID_LOG_ID;
@@ -2037,23 +2038,36 @@ int LogSlidingWindow::do_fetch_log_(const FetchTriggerType &trigger_type,
   return ret;
 }
 
-int LogSlidingWindow::get_fetch_log_dst_(common::ObAddr &fetch_dst) const
+int LogSlidingWindow::get_leader_from_cache(common::ObAddr &leader) const
+{
+  return get_leader_from_cache_(leader);
+}
+
+int LogSlidingWindow::get_leader_from_cache_(common::ObAddr &leader) const
 {
   int ret = OB_SUCCESS;
   const common::ObAddr state_mgr_leader = state_mgr_->get_leader();
-  const common::ObAddr parent = mm_->get_parent();
-  if (parent.is_valid()) {
-    fetch_dst = parent;
-  } else if (state_mgr_leader.is_valid()) {
-    fetch_dst = state_mgr_leader;
+  if (state_mgr_leader.is_valid()) {
+    leader = state_mgr_leader;
   } else if (palf_reach_time_interval(PALF_FETCH_LOG_RENEW_LEADER_INTERVAL_US, last_fetch_log_renew_leader_ts_us_) &&
              OB_FAIL(plugins_->nonblock_renew_leader(palf_id_))) {
     PALF_LOG(WARN, "nonblock_renew_leader failed", KR(ret), K_(palf_id), K_(self));
-  } else if (OB_FAIL(plugins_->nonblock_get_leader(palf_id_, fetch_dst))) {
+  } else if (OB_FAIL(plugins_->nonblock_get_leader(palf_id_, leader))) {
     if (palf_reach_time_interval(5 * 1000 * 1000, lc_cb_get_warn_time_)) {
       PALF_LOG(WARN, "nonblock_get_leader failed", KR(ret), K_(palf_id), K_(self));
     }
   } else {}
+  return ret;
+}
+
+int LogSlidingWindow::get_fetch_log_dst_(common::ObAddr &fetch_dst) const
+{
+  int ret = OB_SUCCESS;
+  const common::ObAddr parent = mm_->get_parent();
+  if (parent.is_valid()) {
+    fetch_dst = parent;
+  } else if (OB_FAIL(get_leader_from_cache_(fetch_dst))) {
+  }
   return ret;
 }
 

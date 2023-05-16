@@ -42,7 +42,7 @@ private:
   char role_str_[VARCHAR_32] = {'\0'};
   char access_mode_str_[VARCHAR_32] = {'\0'};
   char ip_[common::OB_IP_PORT_STR_BUFF] = {'\0'};
-  char member_list_buf_[MAX_MEMBER_LIST_LENGTH] = {'\0'};
+  ObSqlString member_list_buf_;
   char arbitration_member_buf_[MAX_SINGLE_MEMBER_LENGTH] = {'\0'};
   char degraded_list_buf_[MAX_LEARNER_LIST_LENGTH] = {'\0'};
   char config_version_buf_[VARCHAR_128] = {'\0'};

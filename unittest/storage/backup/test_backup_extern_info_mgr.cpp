@@ -93,7 +93,6 @@ void TestBackupExternInfoMgr::make_ls_meta_package_(ObBackupLSMetaInfo &ls_meta_
 {
   ls_meta_info.ls_meta_package_.ls_meta_.tenant_id_ = tenant_id_;
   ls_meta_info.ls_meta_package_.ls_meta_.ls_id_ = ls_id_;
-  ls_meta_info.ls_meta_package_.ls_meta_.replica_type_ = ObReplicaType::REPLICA_TYPE_FULL;
   ls_meta_info.ls_meta_package_.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   ls_meta_info.ls_meta_package_.ls_meta_.gc_state_ = LSGCState::NORMAL;
   ls_meta_info.ls_meta_package_.ls_meta_.restore_status_ = ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_NONE);
@@ -105,7 +104,6 @@ static bool cmp_backup_ls_meta(const ObBackupLSMetaInfo &lhs, const ObBackupLSMe
 {
   return lhs.ls_meta_package_.ls_meta_.tenant_id_ == rhs.ls_meta_package_.ls_meta_.tenant_id_ &&
          lhs.ls_meta_package_.ls_meta_.ls_id_ == rhs.ls_meta_package_.ls_meta_.ls_id_ &&
-         lhs.ls_meta_package_.ls_meta_.replica_type_ == rhs.ls_meta_package_.ls_meta_.replica_type_ &&
          lhs.ls_meta_package_.ls_meta_.migration_status_ == rhs.ls_meta_package_.ls_meta_.migration_status_ &&
          lhs.ls_meta_package_.ls_meta_.gc_state_ == rhs.ls_meta_package_.ls_meta_.gc_state_ &&
          lhs.ls_meta_package_.ls_meta_.restore_status_ == rhs.ls_meta_package_.ls_meta_.restore_status_ &&

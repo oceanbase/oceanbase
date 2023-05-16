@@ -355,8 +355,20 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
                                          result));
       OX (result.copy_value_or_obj(*obj, true));
       OX (result.set_param_meta());
-    } else {
-      // do nothing ...
+    } else if (params_desc.at(i).is_obj_access_out() &&
+               OB_INVALID_ID != params_desc.at(i).get_package_id() &&
+               OB_INVALID_ID != params_desc.at(i).get_index()) {
+      ObIAllocator *pkg_allocator = NULL;
+      pl::ObPLExecCtx plctx(nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
+      ObObj &obj = iparams.at(i);
+      OZ (ObSPIService::spi_get_package_allocator(&plctx, params_desc.at(i).get_package_id(), pkg_allocator));
+      if (OB_SUCC(ret) && nullptr != pkg_allocator) {
+        if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*pkg_allocator, obj, obj, true));
+        } else {
+          OZ (deep_copy_obj(*pkg_allocator, obj, obj));
+        }
+      }
     }
   }
   return ret;
@@ -560,12 +572,19 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
           && ObLobType == expr.datum_meta_.type_) {
         ObLobLocator *value = nullptr;
         char *total_buf = NULL;
-        const int64_t total_buf_len = sizeof(ObLobLocator) + result.get_string_len();
-        if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
+        ObString result_data = result.get_string();
+        if (is_lob_storage(result.get_type())) {
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator, result, result_data))) {
+            LOG_WARN("failed to get real data for lob", K(ret), K(result));
+          }
+        }
+        const int64_t total_buf_len = sizeof(ObLobLocator) + result_data.length();
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(total_buf = expr.get_str_res_mem(ctx, total_buf_len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("Failed to allocate memory for lob locator", K(ret), K(total_buf_len));
         } else if (FALSE_IT(value = reinterpret_cast<ObLobLocator *> (total_buf))) {
-        } else if (OB_FAIL(value->init(result.get_string()))) {
+        } else if (OB_FAIL(value->init(result_data))) {
           LOG_WARN("Failed to init lob locator", K(ret), K(value));
         } else {
           result.set_lob_locator(*value);

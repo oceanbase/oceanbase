@@ -87,6 +87,15 @@ TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, curr_access_mode));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_role(unused_role, curr_proposal_id, state));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->change_access_mode(curr_proposal_id, mode_version, AccessMode::APPEND, ref_scn));
+  // check all member's applied access_mode
+  sleep(1);
+  std::vector<PalfHandleImplGuard*> palf_list;
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  EXPECT_EQ(palf::AccessMode::APPEND, palf_list[0]->palf_handle_impl_->mode_mgr_.applied_mode_meta_.access_mode_);
+  EXPECT_EQ(palf::AccessMode::APPEND, palf_list[1]->palf_handle_impl_->mode_mgr_.applied_mode_meta_.access_mode_);
+  EXPECT_EQ(palf::AccessMode::APPEND, palf_list[2]->palf_handle_impl_->mode_mgr_.applied_mode_meta_.access_mode_);
+  revert_cluster_palf_handle_guard(palf_list);
+
   std::vector<LSN> lsn_array;
   std::vector<SCN> scn_arrary;
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 50, id, lsn_array, scn_arrary));
@@ -223,7 +232,7 @@ TEST_F(TestObSimpleLogClusterAccessMode, add_member)
 
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT));
     sleep(2);
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(get_cluster()[3]->get_addr(), 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(ObMember(get_cluster()[3]->get_addr(), 1), 4, CONFIG_CHANGE_TIMEOUT));
     unblock_net(leader_idx, follower2_idx);
     revert_cluster_palf_handle_guard(palf_list);
   }

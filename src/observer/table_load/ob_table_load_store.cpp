@@ -844,9 +844,6 @@ int ObTableLoadStore::px_start_trans(const ObTableLoadTransId &trans_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(trans_id.segment_id_.id_ > param_.session_count_)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support trans id", KR(ret), K(trans_id), K(param_.session_count_));
   } else {
     LOG_INFO("store px start trans", K(trans_id));
     ObTableLoadStoreTrans *trans = nullptr;
@@ -914,7 +911,8 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
     } else {
       if (OB_SUCC(trans->check_trans_status(ObTableLoadTransStatusType::RUNNING)) ||
           OB_SUCC(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-        if (OB_FAIL(store_writer->write(trans_id.segment_id_.id_, tablet_id, row_array))) {
+        int32_t session_id = 1; // in px mode, each trans contains only 1 session
+        if (OB_FAIL(store_writer->write(session_id, tablet_id, row_array))) {
           LOG_WARN("fail to write store", KR(ret));
         } else {
           LOG_DEBUG("succeed to write store", K(trans_id), K(tablet_id));
@@ -936,6 +934,7 @@ int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
 int ObTableLoadStore::px_flush(ObTableLoadStoreTrans *trans)
 {
   int ret = OB_SUCCESS;
+  int32_t session_id = 1;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
@@ -947,7 +946,7 @@ int ObTableLoadStore::px_flush(ObTableLoadStoreTrans *trans)
     // after get store writer, avoid early commit
     else if (OB_FAIL(trans->set_trans_status_frozen())) {
       LOG_WARN("fail to freeze trans", KR(ret));
-    } else if (OB_FAIL(store_writer->flush(trans->get_trans_id().segment_id_.id_))) {
+    } else if (OB_FAIL(store_writer->flush(session_id))) {
       LOG_WARN("fail to flush store", KR(ret));
     } else {
       LOG_DEBUG("succeed to flush store");
@@ -999,6 +998,7 @@ int ObTableLoadStore::px_abandon_trans(ObTableLoadTableCtx *ctx, const ObTableLo
 int ObTableLoadStore::px_clean_up_trans(ObTableLoadStoreTrans *trans)
 {
   int ret = OB_SUCCESS;
+  int32_t session_id = 1;
   if (OB_ISNULL(trans)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(trans));
@@ -1006,7 +1006,7 @@ int ObTableLoadStore::px_clean_up_trans(ObTableLoadStoreTrans *trans)
     ObTableLoadTransStoreWriter *store_writer = nullptr;
     if (OB_FAIL(trans->get_store_writer(store_writer))) {
       LOG_WARN("fail to get store writer", KR(ret));
-    } else if (OB_FAIL(store_writer->clean_up(trans->get_trans_id().segment_id_.id_))) {
+    } else if (OB_FAIL(store_writer->clean_up(session_id))) {
       LOG_WARN("fail to clean up store writer", KR(ret));
     }
     if (OB_NOT_NULL(store_writer)) {

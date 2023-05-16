@@ -26,7 +26,7 @@ namespace oceanbase
 {
 namespace sql
 {
-OB_SERIALIZE_MEMBER((ObDirectReceiveSpec, ObOpSpec));
+OB_SERIALIZE_MEMBER((ObDirectReceiveSpec, ObOpSpec), dynamic_const_exprs_);
 
 ObDirectReceiveOp::ObDirectReceiveOp(ObExecContext &exec_ctx,
                                      const ObOpSpec &spec,
@@ -203,17 +203,6 @@ int ObDirectReceiveOp::setup_next_scanner()
           LOG_WARN("while fetching first scanner, the remote rcode is not OB_SUCCESS",
                    K(ret), K(err_msg),
                    "dst_addr", to_cstring(resp_handler->get_dst_addr()));
-          if (is_data_not_readable_err(ret)) {
-            // 读到落后太多的备机或者正在回放日志的副本了，
-            // 将远端的这个observer加进retry info的invalid servers中
-            ObQueryRetryInfo &retry_info = my_session->get_retry_info_for_update();
-            if (OB_UNLIKELY(OB_SUCCESS != (
-                        add_ret = retry_info.add_invalid_server_distinctly(
-                            resp_handler->get_dst_addr(), true)))) {
-              LOG_WARN("fail to add remote addr to invalid servers distinctly", K(ret), K(add_ret),
-                       K(resp_handler->get_dst_addr()), K(retry_info));
-            }
-          }
         } else {
           scanner_ = scanner;
           first_request_received_ = true;
@@ -257,17 +246,6 @@ int ObDirectReceiveOp::setup_next_scanner()
           LOG_WARN("while getting more scanner, the remote rcode is not OB_SUCCESS",
                    K(ret), K(err_msg),
                    "dst_addr", to_cstring(resp_handler->get_dst_addr()));
-          if (is_data_not_readable_err(ret)) {
-            // 读到落后太多的备机或者正在回放日志的副本了，
-            // 将远端的这个observer加进retry info的invalid servers中
-            ObQueryRetryInfo &retry_info = my_session->get_retry_info_for_update();
-            if (OB_UNLIKELY(OB_SUCCESS != (
-                        add_ret = retry_info.add_invalid_server_distinctly(
-                            resp_handler->get_dst_addr(), true)))) {
-              LOG_WARN("fail to add remote addr to invalid servers distinctly", K(ret), K(add_ret),
-                       K(resp_handler->get_dst_addr()), K(retry_info));
-            }
-          }
         } else {
           scanner_ = result_scanner;
           found_rows_ += scanner_->get_found_rows();
@@ -318,8 +296,24 @@ int ObDirectReceiveOp::get_next_row_from_cur_scanner()
     ret = OB_ERR_UNEXPECTED;
   } else {
     for (uint32_t i = 0; i < tmp_sr->cnt_; ++i) {
-      MY_SPEC.output_.at(i)->locate_expr_datum(eval_ctx_) = tmp_sr->cells()[i];
-      MY_SPEC.output_.at(i)->set_evaluated_projected(eval_ctx_);
+      if (MY_SPEC.output_.at(i)->is_static_const_) {
+        continue;
+      } else {
+        MY_SPEC.output_.at(i)->locate_expr_datum(eval_ctx_) = tmp_sr->cells()[i];
+        MY_SPEC.output_.at(i)->set_evaluated_projected(eval_ctx_);
+      }
+    }
+    // deep copy dynamic const expr datum
+    clear_dynamic_const_parent_flag();
+    if (MY_SPEC.dynamic_const_exprs_.count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.dynamic_const_exprs_.count(); i++) {
+        ObExpr *expr = MY_SPEC.dynamic_const_exprs_.at(i);
+        if (0 == expr->res_buf_off_) {
+          // for compat 4.0, do nothing
+        } else if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx_))) {
+          LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx_), K(*expr));
+        }
+      }
     }
     LOG_DEBUG("direct receive next row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.output_));
   }

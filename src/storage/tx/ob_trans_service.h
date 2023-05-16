@@ -29,6 +29,7 @@
 #include "ob_trans_rpc.h"
 #include "ob_trans_ctx_mgr.h"
 #include "ob_dup_table_rpc.h"
+#include "ob_dup_table_base.h"
 #include "ob_trans_memory_stat.h"
 #include "ob_trans_event.h"
 #include "ob_dup_table.h"
@@ -40,6 +41,7 @@
 #include "observer/ob_server_struct.h"
 #include "common/storage/ob_sequence.h"
 #include "ob_tx_elr_util.h"
+#include "storage/tx/ob_dup_table_util.h"
 #include "ob_tx_free_route.h"
 #include "ob_tx_free_route_msg.h"
 
@@ -180,6 +182,8 @@ public:
   ObTransTimer &get_trans_timer() { return timer_; }
   ObITransRpc *get_trans_rpc() { return rpc_; }
   ObIDupTableRpc *get_dup_table_rpc() { return dup_table_rpc_; }
+  ObDupTableRpc &get_dup_table_rpc_impl() { return dup_table_rpc_impl_; }
+  ObDupTableLoopWorker &get_dup_table_loop_worker() { return dup_table_loop_worker_; }
   ObILocationAdapter *get_location_adapter() { return location_adapter_; }
   common::ObMySQLProxy *get_mysql_proxy() { return GCTX.sql_proxy_; }
   bool is_running() const { return is_running_; }
@@ -254,14 +258,13 @@ protected:
   ObLocationAdapter location_adapter_def_;
   // transaction timer
   ObTransTimer timer_;
-  // dup table lease timer
-  ObDupTableLeaseTimer dup_table_lease_timer_;
+  ObDupTableLeaseTimer dup_table_scan_timer_;
   ObTxVersionMgr tx_version_mgr_;
 protected:
   bool use_def_;
   ObITransRpc *rpc_;
   ObIDupTableRpc *dup_table_rpc_;
-  ObDupTableRpc dup_table_rpc_def_;
+  ObDupTableRpc_old dup_table_rpc_def_;
   // the adapter between transaction and location cache
   ObILocationAdapter *location_adapter_;
   // the adapter between transaction and clog
@@ -278,6 +281,11 @@ private:
 #endif
   // txDesc's manager
   ObTxDescMgr tx_desc_mgr_;
+
+  //4.0 dup_table
+  ObDupTabletScanTask dup_tablet_scan_task_;
+  ObDupTableLoopWorker dup_table_loop_worker_;
+  ObDupTableRpc dup_table_rpc_impl_;
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObTxELRUtil elr_util_;

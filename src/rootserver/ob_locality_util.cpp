@@ -657,17 +657,16 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_arrangements(
     while (OB_SUCC(ret)
            && OB_SUCC(get_next_replica_arrangement(
                cursor, end, replica_type, replica_num, memstore_percent))) {
-      if (OB_UNLIKELY(replica_type != FULL_REPLICA)) {
-        // TODO: in 4.0 we only support f-replica in locality, other types will be supported later
+      if (OB_UNLIKELY(FULL_REPLICA != replica_type
+                      && READONLY_REPLICA != replica_type)) {
+        // TODO: F-replica is supported since 4.0,
+        //       R-replica is supported since 4.2,
+        //       other types will be supported later
         INVALID_LOCALITY();
         switch (replica_type) {
           case LOGONLY_REPLICA:
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "logonly-replica");
-            break;
-          case READONLY_REPLICA:
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "readonly-replica");
             break;
           case ENCRYPTION_LOGONLY_REPLICA:
             ret = OB_NOT_SUPPORTED;
@@ -833,6 +832,10 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_attribute_recursively(
       // failed,
     } else if (OB_FAIL(check_right_brace_and_afterwards_syntax(cursor, end))) {
       LOG_WARN("fail to check right brace and afterwards syntax", K(ret));
+    } else if (replica_num > 1) {
+      // each zone should has only one replica
+      INVALID_LOCALITY();
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality, each zone should has only one replica");
     }
   } else {
     int64_t remain = end - cursor;
@@ -925,15 +928,9 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_attribute(
     replica_num = 1;
     memstore_percent = MAX_MEMSTORE_PERCENT;
   } else if (COMMA_TOKEN == locality_str_[cursor]) {
-    // the keywords 'replica_num' and 'memstore_percent' are not specified
-    replica_num = 1;
-    memstore_percent = MAX_MEMSTORE_PERCENT;
-    inc_cursor(cursor); // pass comma
-    jump_over_blanks(cursor, end);
-    if (cursor >= end) {
-      INVALID_LOCALITY(); // a ',' token before the '@' token is not allowed
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality, illegal , before @ token");
-    }
+    // in 4.x, we support only one replica in each zone as locality described
+    INVALID_LOCALITY(); // a ',' token before the '@' token is not allowed
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality, each zone should have only one replica type");
   } else if (LEFT_BRACE_TOKEN == locality_str_[cursor]) {
     inc_cursor(cursor); // pass left brace token
     jump_over_blanks(cursor, end);

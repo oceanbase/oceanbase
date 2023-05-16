@@ -19,6 +19,7 @@
 #include "observer/omt/ob_tenant_meta.h"
 #include "share/ob_unit_getter.h"
 #include "storage/ls/ob_ls_meta.h"
+#include "storage/tx/ob_dup_table_base.h"
 
 namespace oceanbase
 {
@@ -138,6 +139,28 @@ public:
 
 private:
   ObLSMeta ls_meta_;
+};
+
+struct ObDupTableCkptLog : public ObIBaseStorageLogEntry
+{
+public:
+  ObDupTableCkptLog() {}
+  int init(const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &dup_ls_meta)
+  {
+    return dup_ls_meta_.copy(dup_ls_meta);
+  }
+
+  const transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta &get_dup_ls_meta()
+  {
+    return dup_ls_meta_;
+  }
+  bool is_valid() const { return dup_ls_meta_.is_valid(); }
+
+  TO_STRING_KV(K(dup_ls_meta_));
+  OB_UNIS_VERSION(1);
+
+private:
+  transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta_;
 };
 
 struct ObLSIDLog : public ObIBaseStorageLogEntry

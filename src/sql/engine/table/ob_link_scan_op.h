@@ -46,6 +46,7 @@ private:
   int init_conn_snapshot(bool &new_snapshot);
   int free_snapshot();
   bool need_tx(const ObSQLSessionInfo *my_session) const;
+  int fetch_row();
 private:
   common::ObMySQLProxy::MySQLResult res_;
   common::sqlclient::ObMySQLResult *result_;

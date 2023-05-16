@@ -236,8 +236,8 @@ int ObLSRemoveMemberTask::process()
     LOG_WARN("ls remove member task do not init", K(ret));
   } else {
 
-    if (OB_FAIL(remove_member_())) {
-      LOG_WARN("failed to remove member", K(ret), KPC(ctx_));
+    if (OB_FAIL(do_change_member_())) {
+      LOG_WARN("failed to change member", K(ret), KPC(ctx_));
     }
 
     if (OB_SUCCESS != (tmp_ret = report_to_rs_())) {
@@ -252,14 +252,13 @@ int ObLSRemoveMemberTask::process()
   return ret;
 }
 
-int ObLSRemoveMemberTask::remove_member_()
+int ObLSRemoveMemberTask::do_change_member_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   ObLSService *ls_service = nullptr;
-  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -273,18 +272,30 @@ int ObLSRemoveMemberTask::remove_member_()
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K(*ctx_), KP(ls));
-    } else if (ctx_->arg_.member_list_.is_valid()) {
-      if (OB_FAIL(ls->change_replica_num(ctx_->arg_.member_list_, ctx_->arg_.orig_paxos_replica_number_,
-                                                  ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
-        LOG_WARN("failed to modify paxos replica number", KR(ret), KPC(ctx_));
-      }
-    } else if (ctx_->arg_.is_paxos_member_) {
-      if (OB_FAIL(ls->remove_member(ctx_->arg_.remove_member_, ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
-        LOG_WARN("failed to remove paxos member", K(ret), KPC(ctx_));
-      }
     } else {
-      if (OB_FAIL(ls->remove_learner(ctx_->arg_.remove_member_, change_member_list_timeout_us))) {
-        LOG_WARN("failed to remove learner member", K(ret), KPC(ctx_));
+      switch (ctx_->arg_.type_) {
+      case ObLSChangeMemberType::LS_REMOVE_MEMBER: {
+        if (OB_FAIL(remove_member_(ls))) {
+          LOG_WARN("failed to do remove member", K(ret), KPC(ctx_));
+        }
+        break;
+      }
+      case ObLSChangeMemberType::LS_MODIFY_REPLICA_NUMBER : {
+        if (OB_FAIL(modify_member_number_(ls))) {
+          LOG_WARN("failed to modify member number", K(ret), KPC(ctx_));
+        }
+        break;
+      }
+      case ObLSChangeMemberType::LS_TRANSFORM_MEMBER : {
+        if (OB_FAIL(transform_member_(ls))) {
+          LOG_WARN("failed to transform member", K(ret), KPC(ctx_));
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid type", K(ret), KPC(ctx_));
+      }
       }
     }
 
@@ -296,6 +307,71 @@ int ObLSRemoveMemberTask::remove_member_()
 
     if (OB_FAIL(ret)) {
       ctx_->result_ = ret;
+    }
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberTask::remove_member_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  if (!ctx_->arg_.type_.is_remove_member()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("remove member get invalid argument", K(ret), KPC(ctx_));
+  } else {
+    if (ctx_->arg_.is_paxos_member_) {
+      if (OB_FAIL(ls->remove_member(ctx_->arg_.remove_member_, ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
+        LOG_WARN("failed to remove paxos member", K(ret), KPC(ctx_));
+      }
+    } else {
+      if (OB_FAIL(ls->remove_learner(ctx_->arg_.remove_member_, change_member_list_timeout_us))) {
+        LOG_WARN("failed to remove learner member", K(ret), KPC(ctx_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberTask::modify_member_number_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  if (!ctx_->arg_.type_.is_modify_replica_number()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("modify member number get invalid argument", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ls->change_replica_num(ctx_->arg_.member_list_, ctx_->arg_.orig_paxos_replica_number_,
+      ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
+    LOG_WARN("failed to modify paxos replica number", KR(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObLSRemoveMemberTask::transform_member_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
+  const ObReplicaType &src_type = ctx_->arg_.src_.get_replica_type();
+  const ObReplicaType &dest_type = ctx_->arg_.dest_.get_replica_type();
+
+  if (!ctx_->arg_.type_.is_transform_member()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transform member get invalid argument", K(ret), KPC(ctx_));
+  } else {
+    if (ObReplicaTypeCheck::is_full_replica(src_type) && ObReplicaTypeCheck::is_readonly_replica(dest_type)) {
+      //F -> R
+      if (OB_FAIL(ls->switch_acceptor_to_learner(ctx_->arg_.src_, ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
+        LOG_WARN("failed to switch acceptor to learner", KR(ret), KPC(ctx_));
+      }
+    } else if (ObReplicaTypeCheck::is_readonly_replica(src_type) && ObReplicaTypeCheck::is_full_replica(dest_type)) {
+      //R -> F
+      //TODO(muwei.ym) need consider add F to member list with TRANSFER
+      if (OB_FAIL(ls->switch_learner_to_acceptor(ctx_->arg_.src_, ctx_->arg_.new_paxos_replica_number_, change_member_list_timeout_us))) {
+        LOG_WARN("failed to switch learner to acceptor", KR(ret), KPC(ctx_));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("replica type is unexpected", K(ret), KPC(ctx_));
     }
   }
   return ret;

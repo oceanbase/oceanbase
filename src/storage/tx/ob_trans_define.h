@@ -1077,7 +1077,7 @@ public:
   static const int64_t UNKNOWN = -1;
   static const int64_t END_TRANS_CB_TASK = 0;
   static const int64_t ADVANCE_LS_CKPT_TASK = 1;
-  static const int64_t MAX = 14;
+  static const int64_t MAX = 3;
 public:
   static bool is_valid(const int64_t task_type)
   { return task_type > UNKNOWN && task_type < MAX; }
@@ -1601,7 +1601,7 @@ private:
   int64_t count_;
 };
 
-
+static const int64_t MAX_TABLET_MODIFY_RECORD_COUNT = 16;
 // exec info need to be persisted by "trans context table"
 struct ObTxExecInfo
 {
@@ -1670,6 +1670,7 @@ public:
   // for xa
   ObXATransID xid_;
   bool need_checksum_;
+  common::ObSEArray<common::ObTabletID, MAX_TABLET_MODIFY_RECORD_COUNT> tablet_modify_record_;
   bool is_sub2pc_;
 };
 

@@ -1379,8 +1379,7 @@ int ObTableLocation::calculate_candi_tablet_locations(
     ObExecContext &exec_ctx,
     const ParamStore &params,
     ObCandiTabletLocIArray &candi_tablet_locs,
-    const ObDataTypeCastParams &dtc_params,
-    bool nonblock/*false*/) const
+    const ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObObjectID, 8> partition_ids;
@@ -1397,14 +1396,11 @@ int ObTableLocation::calculate_candi_tablet_locations(
                                           dtc_params))) {
     LOG_WARN("Failed to calculate partition ids", K(ret));
   } else if (OB_FAIL(get_tablet_locations(exec_ctx.get_das_ctx(),
-                                          exec_ctx.get_my_session(),
-                                          loc_meta_.ref_table_id_,
                                           tablet_ids,
                                           partition_ids,
                                           first_level_part_ids,
-                                          candi_tablet_locs,
-                                          nonblock))) {
-    LOG_WARN("Failed to set partition locations", K(ret), K(partition_ids));
+                                          candi_tablet_locs))) {
+    LOG_WARN("Failed to set partition locations", K(ret), K(partition_ids), K(tablet_ids));
   } else {}//do nothing
 
   return ret;
@@ -1720,65 +1716,16 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
 }
 
 int ObTableLocation::get_tablet_locations(ObDASCtx &das_ctx,
-                                          ObSQLSessionInfo *session,
-                                          const uint64_t ref_table_id,
                                           const ObIArray<ObTabletID> &tablet_ids,
                                           const ObIArray<ObObjectID> &partition_ids,
                                           const ObIArray<ObObjectID> &first_level_part_ids,
-                                          ObCandiTabletLocIArray &candi_tablet_locs,
-                                          bool nonblock /*false*/) const
+                                          ObCandiTabletLocIArray &candi_tablet_locs) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_INVALID_ID == ref_table_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ref_table_id), K(tablet_ids.empty()));
-  } else if (PARTITION_LEVEL_TWO == part_level_ && partition_ids.count() != first_level_part_ids.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected log part id count", K(partition_ids.count()), K(first_level_part_ids.count()));
-  } else {
-    NG_TRACE(get_location_cache_begin);
-    candi_tablet_locs.reset();
-    int64_t N = tablet_ids.count();
-    if (OB_FAIL(candi_tablet_locs.prepare_allocate(N))) {
-      LOG_WARN("Partitoin location list prepare error", K(ret));
-    } else {
-      ObDASLocationRouter &loc_router = das_ctx.get_location_router();
-      ObLSLocation location;
-      for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
-        location.reset();
-        ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
-        if (nonblock) {
-          //TODO shengle use nonblock after location service support nonblock interface
-          ret = loc_router.get(loc_meta_, tablet_ids.at(i), location);
-        } else {
-          ret = loc_router.get(loc_meta_, tablet_ids.at(i), location);
-        }
-        if (OB_FAIL(ret)) {
-          //TODO shengle set partition key for location cache renew
-          LOG_WARN("Get partition error, then set partition key for location cache renew later",
-                   K(ret), K(ref_table_id), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc), K(table_type_));
-        } else {
-          if (OB_ISNULL(session)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid argument", K(session), K(ret));
-          } else if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(
-                                      partition_ids.at(i),
-                                      PARTITION_LEVEL_TWO == part_level_ ? first_level_part_ids.at(i) : OB_INVALID_ID,
-                                      tablet_ids.at(i), location,
-                                      session->get_retry_info().get_invalid_servers()))) {
-            LOG_WARN("fail to set partition location with only readable replica",
-                     K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids),
-                     K(session->get_retry_info().get_invalid_servers()));
-          }
-          LOG_TRACE("set partition location with only readable replica",
-                   K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids),
-                   K(session->get_retry_info().get_invalid_servers()));
-        }
-      } // for end
-    }
-  }
-
-  return ret;
+  return das_ctx.get_location_router().nonblock_get_candi_tablet_locations(loc_meta_,
+                                                                           tablet_ids,
+                                                                           partition_ids,
+                                                                           first_level_part_ids,
+                                                                           candi_tablet_locs);
 }
 
 int ObTableLocation::get_part_col_type(const ObRawExpr *expr,
@@ -4559,8 +4506,7 @@ int ValueItemExpr::deserialize(common::ObIAllocator &allocator, const char *buf,
                                const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  ValueItemExpr vie;
-  OB_UNIS_DECODE(vie.type_);
+  OB_UNIS_DECODE(type_);
   if (CONST_OBJ_TYPE == type_) {
     OB_UNIS_DECODE(obj_);
   } else if (CONST_EXPR_TYPE == type_) {
@@ -5352,7 +5298,6 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
-  const int64_t expire_renew_time = 2 * 1000000; // 2s
   ObSEArray<ObTabletID, 4> tablet_ids;
   ObSEArray<ObObjectID, 4> partition_ids;
   ObSEArray<ObObjectID, 4> first_level_part_ids;
@@ -5388,7 +5333,7 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
       OX(tablet_loc->loc_meta_ = loc_meta);
       OX(tablet_loc->partition_id_ = partition_ids.at(i));
       OX(tablet_loc->first_level_part_id_ = first_level_part_ids.at(i));
-      OZ(ObDASLocationRouter::get_leader(tenant_id, tablet_ids.at(i), *tablet_loc, expire_renew_time));
+      OZ(ObDASLocationRouter::nonblock_get_leader(tenant_id, tablet_ids.at(i), *tablet_loc));
       OZ(table_loc->add_tablet_loc(tablet_loc));
     }
   }

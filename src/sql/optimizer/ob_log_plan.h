@@ -287,6 +287,7 @@ public:
                               const int64_t from,
                               const int64_t to) const;
   int sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const;
+  int resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const;
 
   int get_from_table_items(const ObIArray<FromItem> &from_items,
                           ObIArray<TableItem *> &table_items);
@@ -705,6 +706,8 @@ public:
   int perform_simplify_win_expr(ObLogicalOperator *op);
   int perform_adjust_onetime_expr(ObLogicalOperator *op);
   int init_onetime_replaced_exprs_if_needed();
+  int set_advisor_table_id(ObLogicalOperator *op);
+  int negotiate_advisor_table_id(ObLogicalOperator *op);
   int simplify_win_expr(ObLogicalOperator* child_op, ObWinFunRawExpr &win_expr);
   int simplify_win_partition_exprs(ObLogicalOperator* child_op,
                                    ObWinFunRawExpr &win_expr);
@@ -1307,6 +1310,7 @@ public:
                                       ObRelIds &right_tables,
                                       bool is_current_dfo,
                                       bool is_fully_partition_wise,
+                                      int64_t current_dfo_level,
                                       const ObIArray<ObRawExpr*> &left_join_conditions,
                                       const ObIArray<ObRawExpr*> &right_join_conditions,
                                       ObIArray<JoinFilterInfo> &join_filter_infos);
@@ -1317,6 +1321,7 @@ public:
                                          const JoinFilterPushdownHintInfo &hint_info,
                                          bool is_current_dfo,
                                          bool is_fully_partition_wise,
+                                         int64_t current_dfo_level,
                                          const ObIArray<ObRawExpr*> &left_join_conditions,
                                          const ObIArray<ObRawExpr*> &right_join_conditions,
                                          ObIArray<JoinFilterInfo> &join_filter_infos);

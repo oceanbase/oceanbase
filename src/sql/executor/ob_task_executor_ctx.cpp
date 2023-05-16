@@ -59,9 +59,6 @@ ObTaskExecutorCtx::ObTaskExecutorCtx(ObExecContext &exec_context)
     : task_resp_handler_(NULL),
       virtual_part_servers_(exec_context.get_allocator()),
       exec_ctx_(&exec_context),
-      partition_infos_(exec_context.get_allocator()),
-      need_renew_location_cache_(false),
-      need_renew_tablet_keys_(exec_context.get_allocator()),
       expected_worker_cnt_(0),
       minimal_worker_cnt_(0),
       admited_worker_cnt_(0),
@@ -141,34 +138,6 @@ int ObTaskExecutorCtx::append_table_location(const ObCandiTableLoc &phy_location
     LOG_WARN("store table location failed", K(ret));
   }
   return ret;
-}
-
-int ObTaskExecutorCtx::add_need_renew_tablet_keys_distinctly(const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  bool has_found = false;
-  if (OB_UNLIKELY(!tablet_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("partition key is invalid", K(ret), K(tablet_id));
-  }
-  FOREACH_X(it, need_renew_tablet_keys_, OB_SUCC(ret) && !has_found) {
-    if (tablet_id == *it) {
-      has_found = true;
-    }
-  }
-  if (OB_SUCC(ret) && !has_found) {
-    if (OB_FAIL(need_renew_tablet_keys_.push_back(tablet_id))) {
-      LOG_WARN("fail to push back partition key", K(ret), K(tablet_id));
-    } else {
-      LOG_DEBUG("add dated partition location key", K(tablet_id));
-    }
-  }
-  return ret;
-}
-
-const ObTablePartitionInfoArray &ObTaskExecutorCtx::get_partition_infos() const
-{
-  return partition_infos_;
 }
 
 //
@@ -289,7 +258,7 @@ int ObTaskExecutorCtxUtil::nonblock_renew(
   if (NULL == GCTX.location_service_) {
     ret = OB_NOT_INIT;
     LOG_WARN("loc_cache is NULL", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_renew(GET_MY_SESSION(*exec_ctx)->get_effective_tenant_id(), 
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_renew(GET_MY_SESSION(*exec_ctx)->get_effective_tenant_id(),
         tablet_id))) {
     LOG_WARN("nonblock_renew failed", K(tablet_id), K(ret));
   }
@@ -307,68 +276,10 @@ int ObTaskExecutorCtx::nonblock_renew_with_limiter(
   if (NULL == GCTX.location_service_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tmp_loc_cache is NULL", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->nonblock_renew(GET_MY_SESSION(*exec_ctx_)->get_effective_tenant_id(), 
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_renew(GET_MY_SESSION(*exec_ctx_)->get_effective_tenant_id(),
         tablet_id))) {
     LOG_WARN("nonblock_renew failed", K(tablet_id), K(ret));
   }
-  return ret;
-}
-
-//TODO: @wangzhennan.wzn Provide new interface to refresh location according to different error codes.
-//      Refresh_location_cache should refresh location of ls/tablet/vtable.
-
-// obmp_query中重试整个SQL之前，可能需要调用本接口来刷新Location，以避免总是发给了错误的服务器
-int ObTaskExecutorCtxUtil::refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx,
-                                                  bool is_nonblock)
-{
-  int ret = OB_SUCCESS;
-  NG_TRACE_TIMES(1, get_location_cache_begin);
-  bool is_cache_hit = false;
-  ObLSLocation dummy_loc;
-  DASTableLocList &table_locs = DAS_CTX(*task_exec_ctx.get_exec_context()).get_table_loc_list();
-  FOREACH_X(tmp_node, table_locs, OB_SUCC(ret)) {
-    ObDASTableLoc *table_loc = *tmp_node;
-    for (DASTabletLocListIter tablet_node = table_loc->tablet_locs_begin();
-         OB_SUCC(ret) && tablet_node != table_loc->tablet_locs_end(); ++tablet_node) {
-      const ObDASTabletLoc *tablet_loc = *tablet_node;
-      if (is_nonblock) {
-        const int64_t expire_renew_time = 0; //表示在刷location cache之前不清空现有的location cache
-        if (OB_FAIL(nonblock_renew(task_exec_ctx.get_exec_context(),
-                                   tablet_loc->tablet_id_,
-                                   expire_renew_time))) {
-          LOG_WARN("LOCATION: fail to nonblock renew location cache", K(ret), K(tablet_loc->tablet_id_), K(expire_renew_time));
-        } else {
-#if !defined(NDEBUG)
-          LOG_INFO("LOCATION: nonblock renew success", K(tablet_loc->tablet_id_), K(expire_renew_time));
-#endif
-        }
-      } else {
-        const int64_t expire_renew_time = INT64_MAX; // means must renew location
-        bool is_cache_hit = false;
-        dummy_loc.reset();
-        ObLSID ls_id = tablet_loc->ls_id_;
-        if (OB_FAIL(GCTX.location_service_->get(GET_MY_SESSION(*task_exec_ctx.get_exec_context())->get_effective_tenant_id(),
-                                                tablet_loc->tablet_id_,
-                                                expire_renew_time,
-                                                is_cache_hit,
-                                                ls_id))) {
-          LOG_WARN("fail to get ls id", K(ret));
-        } else if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
-                                                       GET_MY_SESSION(*task_exec_ctx.get_exec_context())->get_effective_tenant_id(),
-                                                       tablet_loc->ls_id_,
-                                                       0, /*not force to renew*/
-                                                       is_cache_hit,
-                                                       dummy_loc))) {
-          LOG_WARN("failed to get location", K(tablet_loc->ls_id_), K(ret));
-        } else {
-#if !defined(NDEBUG)
-          LOG_INFO("LOCATION: refresh table cache succ", K(tablet_loc->tablet_id_), K(dummy_loc));
-#endif
-        }
-      }
-    }
-  }
-  NG_TRACE_TIMES(1, get_location_cache_end);
   return ret;
 }
 

@@ -38,8 +38,7 @@ public:
   int assign_with_only_readable_replica(const ObObjectID &partition_id,
                                         const ObObjectID &first_level_part_id,
                                         const common::ObTabletID &tablet_id,
-                                        const share::ObLSLocation &partition_location,
-                                        const common::ObIArray<common::ObAddr> &invalid_servers);
+                                        const share::ObLSLocation &partition_location);
 
   bool is_valid() const;
   bool operator==(const ObOptTabletLoc &other) const;
@@ -103,12 +102,10 @@ public:
   int get_priority_replica(int64_t idx, ObRoutePolicy::CandidateReplica &replica_loc) const;
   template<class T>
   int get_priority_replica_base(int64_t selected_replica_idx, T &replica_loc) const;
-  int set_part_loc_with_only_readable_replica(
-      const ObObjectID &partition_id,
-      const ObObjectID &first_level_part_id,
-      const common::ObTabletID &tablet_id,
-      const share::ObLSLocation &partition_location,
-      const common::ObIArray<common::ObAddr> &invalid_servers);
+  int set_part_loc_with_only_readable_replica(const ObObjectID &partition_id,
+                                              const ObObjectID &first_level_part_id,
+                                              const common::ObTabletID &tablet_id,
+                                              const share::ObLSLocation &partition_location);
   const ObOptTabletLoc &get_partition_location() const { return opt_tablet_loc_; }
   ObOptTabletLoc &get_partition_location() { return opt_tablet_loc_; }
   const common::ObIArray<int64_t> &get_priority_replica_idxs() const { return priority_replica_idxs_; }

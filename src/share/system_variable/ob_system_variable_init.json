@@ -2945,20 +2945,8 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "_show_ddl_in_compat_mode": {
-    "id": 10140,
-    "name": "_show_ddl_in_compat_mode",
-    "value": "0",
-    "data_type": "bool",
-    "info": "When enabled, show create table will show the strict compatible results with the compatibility mode.",
-    "flags": "SESSION",
-    "publish_version": "324",
-    "info_cn": "启用后, show create table 将展示与兼容模式严格兼容的结果",
-    "background_cn": "",
-    "ref_url": "/"
-  },
   "_force_order_preserve_set": {
-    "id": 10141,
+    "id": 10140,
     "name": "_force_order_preserve_set",
     "value": "0",
     "data_type": "bool",
@@ -2968,6 +2956,18 @@
     "info_cn": "用于控制set query的改写行为和计划生成逻辑，保证分支串行执行和结果集顺序",
     "background_cn": "",
     "ref_url": ""
+  },
+  "_show_ddl_in_compat_mode": {
+    "id": 10141,
+    "name": "_show_ddl_in_compat_mode",
+    "value": "0",
+    "data_type": "bool",
+    "info": "When enabled, show create table will show the strict compatible results with the compatibility mode.",
+    "flags": "SESSION",
+    "publish_version": "324",
+    "info_cn": "启用后, show create table 将展示与兼容模式严格兼容的结果",
+    "background_cn": "",
+    "ref_url": "/"
   },
   "parallel_degree_policy": {
     "id": 10142,

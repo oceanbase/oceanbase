@@ -14,7 +14,7 @@
 #define OCEANBASE_SQL_RESOLVER_DML_OB_LOCK_TABLE_RESOLVER_
 
 #include "sql/resolver/ddl/ob_lock_table_stmt.h"
-#include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "sql/resolver/dml/ob_dml_resolver.h"
 
 namespace oceanbase
 {
@@ -25,15 +25,15 @@ class ObLockTableStmt;
 
 // NOTE: yanyuan.cxf LOCK TABLE is dml at oracle, but it does not have
 // SQL plan, so we treat it as ddl operator.
-class ObLockTableResolver : public ObDDLResolver
+class ObLockTableResolver : public ObDMLResolver
 {
 public:
-  static const int64_t TABLE = 0;         /* 0. table node */
-  static const int64_t LOCK_MODE = 1;     /* 1. lock mode node */
-  static const int64_t WAIT_NODE = 2;     /* 2. wait node?  */
+  static const int64_t TABLE_LIST = 0;
+  static const int64_t LOCK_MODE = 1;
+  static const int64_t WAIT = 2;
 public:
   explicit ObLockTableResolver(ObResolverParams &params)
-    : ObDDLResolver(params)
+    : ObDMLResolver(params)
     {}
   virtual ~ObLockTableResolver()
     {}
@@ -42,8 +42,9 @@ public:
 private:
   int resolve_mysql_mode(const ParseNode &parse_tree);
   int resolve_oracle_mode(const ParseNode &parse_tree);
-  int resolve_table_relation_node(const ParseNode &parse_tree);
+  int resolve_table_list(const ParseNode &table_list);
   int resolve_lock_mode(const ParseNode &parse_tree);
+  int resolve_wait_lock(const ParseNode &parse_tree);
 
   DISALLOW_COPY_AND_ASSIGN(ObLockTableResolver);
 };

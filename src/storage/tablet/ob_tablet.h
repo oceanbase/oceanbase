@@ -395,11 +395,11 @@ public:
   int set_frozen_for_all_memtables();
   // different from the is_valid() function
   // typically used for check valid for migration or restore
-  int check_valid() const;
+  int check_valid(const bool ignore_ha_status = false) const;
   TO_STRING_KV(KP(this), K_(wash_score), K_(ref_cnt), K_(tablet_meta), K_(table_store), K_(storage_schema),
       K_(medium_info_list));
 private:
-  int inner_check_valid() const;
+  int inner_check_valid(const bool ignore_ha_status = false) const;
   int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
   int64_t get_self_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;

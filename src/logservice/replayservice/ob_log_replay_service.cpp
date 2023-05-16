@@ -363,8 +363,7 @@ void ObLogReplayService::handle(void *task)
   }
 }
 
-int ObLogReplayService::add_ls(const share::ObLSID &id,
-                               const common::ObReplicaType &replica_type)
+int ObLogReplayService::add_ls(const share::ObLSID &id)
 {
   int ret = OB_SUCCESS;
   ObReplayStatus *replay_status = NULL;
@@ -377,7 +376,7 @@ int ObLogReplayService::add_ls(const share::ObLSID &id,
     CLOG_LOG(WARN, "failed to alloc replay status", K(ret), K(id));
   } else {
     new (replay_status) ObReplayStatus();
-    if (OB_FAIL(replay_status->init(id, replica_type, palf_env_, this))) {
+    if (OB_FAIL(replay_status->init(id, palf_env_, this))) {
       mtl_free(replay_status);
       replay_status = NULL;
       CLOG_LOG(WARN, "failed to init replay status", K(ret), K(id), K(palf_env_), K(this));

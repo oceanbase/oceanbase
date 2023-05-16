@@ -137,7 +137,6 @@ int ObCreateStandbyFromNetActor::check_has_user_ls(const uint64_t tenant_id, com
 int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
 {
   int ret = OB_SUCCESS;
-  ObLSRecoveryStat recovery_stat;
   ObLSRecoveryStatOperator ls_recovery_operator;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   obrpc::ObCreateTenantEndArg arg;
@@ -145,29 +144,30 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
   arg.tenant_id_ = tenant_id_;
   obrpc::ObCommonRpcProxy *rs_rpc_proxy = GCTX.rs_rpc_proxy_;
   ObAllTenantInfo tenant_info;
+  SCN min_user_ls_create_scn = SCN::base_scn();
 
   if (OB_ISNULL(rs_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     WSTAT("rs_rpc_proxy is null", KP(rs_rpc_proxy));
   } else if (OB_FAIL(check_inner_stat_())) {
     WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));
-  } else if (OB_FAIL(ls_recovery_operator.get_ls_recovery_stat(tenant_id_, SYS_LS,
-          false/*for_update*/, recovery_stat, *sql_proxy_))) {
-    WSTAT("failed to get ls recovery stat", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_recovery_operator.get_tenant_min_user_ls_create_scn(tenant_id_, *sql_proxy_,
+                                                                        min_user_ls_create_scn))) {
+    WSTAT("failed to get tenant min_user_ls_create_scn", KR(ret), K_(tenant_id));
   } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     WSTAT("tenant info loader should not be NULL", KR(ret), KP(tenant_info_loader));
   } else {
-    ISTAT("start to wait whether can finish restore", K_(tenant_id), K(recovery_stat));
+    ISTAT("start to wait whether can finish restore", K_(tenant_id), K(min_user_ls_create_scn));
     // wait 1 minute, sleep 1s and retry 60 times
     for (int64_t retry_cnt = 60; OB_SUCC(ret) && retry_cnt > 0 && !has_set_stop(); --retry_cnt) {
       if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
         WSTAT("failed to get tenant info", KR(ret));
-      } else if (tenant_info.get_standby_scn() >= recovery_stat.get_sync_scn()) {
-        ISTAT("tenant readable scn can read inner table", K(tenant_info), K(recovery_stat));
+      } else if (tenant_info.get_standby_scn() >= min_user_ls_create_scn) {
+        ISTAT("tenant readable scn can read inner table", K(tenant_info), K(min_user_ls_create_scn));
 
         if (OB_FAIL(ObRestoreService::reset_schema_status(tenant_id_, sql_proxy_))) {
-          WSTAT("failed to reset schema status", KR(ret), K_(tenant_id), K(tenant_info), K(recovery_stat));
+          WSTAT("failed to reset schema status", KR(ret), K_(tenant_id), K(tenant_info), K(min_user_ls_create_scn));
         } else if (OB_FAIL(rs_rpc_proxy->create_tenant_end(arg))) {
           WSTAT("fail to execute create tenant end", KR(ret), K_(tenant_id), K(arg));
         } else {
@@ -179,7 +179,7 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
     }
   }
 
-  ISTAT("finish_restore_if_possible", K(ret), K_(tenant_id), K(recovery_stat), K(arg), K(tenant_info));
+  ISTAT("finish_restore_if_possible", K(ret), K_(tenant_id), K(min_user_ls_create_scn), K(arg), K(tenant_info));
 
   return ret;
 }

@@ -1945,6 +1945,15 @@ int ObLogTableScan::get_phy_location_type(ObTableLocationType &location_type)
   return ret;
 }
 
+bool ObLogTableScan::is_duplicate_table()
+{
+  bool bret = false;
+  if (NULL != table_partition_info_) {
+    bret = table_partition_info_->get_phy_tbl_location_info().is_duplicate_table_not_in_dml();
+  }
+  return bret;
+}
+
 int ObLogTableScan::extract_bnlj_param_idxs(ObIArray<int64_t> &bnlj_params)
 {
   int ret = OB_SUCCESS;

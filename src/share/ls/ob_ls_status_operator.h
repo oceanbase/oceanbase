@@ -24,6 +24,7 @@
 #include "share/ls/ob_ls_info.h" //ObLSReplica::MemberList
 #include "share/ls/ob_ls_log_stat_info.h" //ObLSLogStatInfo
 #include "share/ls/ob_ls_recovery_stat_operator.h"  //ObLSRecoveryStat
+#include "share/ls/ob_ls_operator.h"
 
 namespace oceanbase
 {
@@ -55,6 +56,8 @@ namespace schema
 class ObMultiVersionSchemaService;
 }
 
+ObLSStatus str_to_ls_status(const ObString &status_str);
+const char* ls_status_to_str(const ObLSStatus &status);
 bool ls_is_empty_status(const ObLSStatus &status);
 bool ls_is_creating_status(const ObLSStatus &status);
 bool ls_is_created_status(const ObLSStatus &status);
@@ -98,13 +101,13 @@ struct ObLSStatusInfo
   ObLSStatusInfo() : tenant_id_(OB_INVALID_TENANT_ID),
                           ls_id_(), ls_group_id_(OB_INVALID_ID),
                           status_(OB_LS_EMPTY), unit_group_id_(OB_INVALID_ID),
-                          primary_zone_() {}
+                          primary_zone_(), flag_(ObLSFlag::NORMAL_FLAG) {}
   virtual ~ObLSStatusInfo() {}
   bool is_valid() const;
   int init(const uint64_t tenant_id,
            const ObLSID &id, const uint64_t ls_group_id,
            const ObLSStatus status, const uint64_t unit_group_id,
-           const ObZone &primary_zone);
+           const ObZone &primary_zone, const ObLSFlag &flag);
   bool ls_is_creating() const
   {
     return ls_is_creating_status(status_);
@@ -141,12 +144,22 @@ struct ObLSStatusInfo
   {
     return ls_is_pre_tenant_dropping_status(status_);
   }
-
+  bool is_duplicate_ls() const
+  {
+    return flag_.is_duplicate_ls();
+  }
+  bool ls_is_block_tablet_in() const
+  {
+    return flag_.is_block_tablet_in();
+  }
   ObLSStatus get_status() const
   {
     return status_;
   }
-
+  ObLSFlag get_flag() const
+  {
+    return flag_;
+  }
   int assign(const ObLSStatusInfo &other);
   void reset();
   bool is_normal() const
@@ -162,9 +175,10 @@ struct ObLSStatusInfo
   ObLSStatus status_;
   uint64_t unit_group_id_;
   ObZone primary_zone_;
+  share::ObLSFlag flag_;
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_group_id), K_(status),
-               K_(unit_group_id), K_(primary_zone));
+               K_(unit_group_id), K_(primary_zone), K_(flag));
 };
 
 typedef ObArray<ObLSStatusInfo> ObLSStatusInfoArray;
@@ -315,10 +329,24 @@ public:
   int update_init_member_list(const uint64_t tenant_id, const ObLSID &id,
                               const ObMemberList &member_list,
                               ObISQLClient &client,
-                              const ObMember &arb_member);
+                              const ObMember &arb_member,
+                              const common::GlobalLearnerList &learner_list);
+
   int get_all_ls_status_by_order(const uint64_t tenant_id,
                                  ObLSStatusInfoIArray &ls_array,
                                  ObISQLClient &client);
+
+  // get duplicate ls status info
+  // @params[in]  tenant_id, which tenant to get
+  // @params[in]  client, client to execute sql
+  // @params[out] status_info, duplicate ls status info
+  //
+  // ATTENTION!!!
+  // status_info not include visible_member_list and b_init_member_list
+  // @return OB_ENTRY_NOT_EXIST if duplicate log stream not exist
+  int get_duplicate_ls_status_info(const uint64_t tenant_id,
+                                   ObISQLClient &client,
+                                   share::ObLSStatusInfo &status_info);
   /**
    * @description:
    *    get ls list from all_ls_status order by tenant_id, ls_id for switchover tenant
@@ -348,7 +376,8 @@ public:
                               ObMemberList &member_list,
                               ObLSStatusInfo &status_info,
                               ObISQLClient &client,
-                              ObMember &arb_member);
+                              ObMember &arb_member,
+                              common::GlobalLearnerList &learner_list);
   int get_ls_status_info(const uint64_t tenant_id, const ObLSID &id,
                          ObLSStatusInfo &status_info, ObISQLClient &client);
   int fill_cell(common::sqlclient::ObMySQLResult *result,
@@ -448,19 +477,32 @@ public:
   static int check_ls_exist(const uint64_t tenant_id, const ObLSID &ls_id, ObLSExistState &state);
 
 private:
+  template<typename T> int get_list_hex_(
+      const T &list,
+      common::ObIAllocator &allocator,
+      common::ObString &hex_str,
+      const ObMember &arb_member);
+
+  template<typename T> int set_list_with_hex_str_(
+      const common::ObString &str,
+      T &learner_list,
+      ObMember &arb_member);
+
   int get_visible_member_list_str_(const ObMemberList &member_list,
                                   common::ObIAllocator &allocator,
                                   common::ObSqlString &visible_member_list_str,
                                   const ObMember &arb_member);
-  int get_member_list_hex_(const ObMemberList &member_list,
-                          common::ObIAllocator &allocator,
-                          common::ObString &hex_str,
-                          const ObMember &arb_member);
-  int set_member_list_with_hex_str_(const common::ObString &str,
-                                       ObMemberList &member_list, ObMember &arb_member);
+
+  int inner_get_ls_status_(const ObSqlString &sql, const uint64_t exec_tenant_id,
+                           const bool need_member_list, ObISQLClient &client,
+                           ObMemberList &member_list, share::ObLSStatusInfo &status_info,
+                           ObMember &arb_member, common::GlobalLearnerList &learner_list);
+
   int get_ls_status_(const uint64_t tenant_id, const ObLSID &id, const bool need_member_list,
                      ObMemberList &member_list,
-                     ObLSStatusInfo &status_info, ObISQLClient &client, ObMember &arb_member);
+                     ObLSStatusInfo &status_info, ObISQLClient &client,
+                     ObMember &arb_member, common::GlobalLearnerList &learner_list);
+
   int construct_ls_primary_info_sql_(common::ObSqlString &sql);
 
   //////////for checking all ls log_stat_info/////////

@@ -199,7 +199,12 @@ private:
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_normal_table_tablet(
       const share::schema::ObTableSchema &table_schema);
+  int alloc_ls_for_duplicate_table_(
+      const share::schema::ObTableSchema &table_schema);
 private:
+  int wait_ls_elect_leader_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id);
   int get_tablet_id_array(
       const share::schema::ObTableSchema &table_schema,
       common::ObIArray<common::ObTabletID> &ls_id_array);
@@ -234,6 +239,7 @@ private:
       const int64_t partition_num);
 private:
   static const int64_t MAX_TENANT_LS_CNT = 1024;
+  static const int64_t WAIT_INTERVAL_US = 1000 * 1000; // 1s
   enum class MyStatus : int64_t {
     WAIT_TO_PREPARE = 0,
     WAIT_TO_OUTPUT,

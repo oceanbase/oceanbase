@@ -483,6 +483,9 @@ int ObSharedMacroBlockMgr::update_tablet(
   ObTableHandleV2 sstable_handle;
   ObSArray<ObITable *> sstables;
   uint64_t data_version = 0;
+  const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
+  const share::ObLSID &ls_id = tablet_meta.ls_id_;
+  ObTabletHandle updated_tablet_handle;
 
   if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(sstables))) {
     LOG_WARN("fail to get sstables of this tablet", K(ret));
@@ -504,8 +507,15 @@ int ObSharedMacroBlockMgr::update_tablet(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("this sstable is not small", K(ret), K(data_block_ids.count()), K(sstable->is_small_sstable()));
       } else if (is_contain(macro_ids, data_block_ids.at(0))) {
-        if (OB_FAIL(rebuild_sstable(
-            *(tablet_handle.get_obj()),
+        const ObTabletMapKey key(ls_id, tablet_meta.tablet_id_);
+        if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, updated_tablet_handle))) {
+          if (OB_TABLET_NOT_EXIST == ret) {
+            ret = OB_EAGAIN;
+          } else {
+            LOG_WARN("fail to get tablet", K(ret), K(key));
+          }
+        } else if (OB_FAIL(rebuild_sstable(
+            *(updated_tablet_handle.get_obj()),
             *sstable,
             data_version,
             sstable_index_builder,
@@ -520,8 +530,6 @@ int ObSharedMacroBlockMgr::update_tablet(
   }
 
   if (OB_SUCC(ret) && !table_handles.empty()) {
-    const ObTabletMeta &tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-    const share::ObLSID &ls_id = tablet_meta.ls_id_;
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
 
@@ -532,8 +540,9 @@ int ObSharedMacroBlockMgr::update_tablet(
       if (OB_UNLIKELY(!ls_handle.is_valid())) {
         LOG_WARN("la handle is invalid", K(ret), K(ls_handle));
       } else if (OB_FAIL(ls_handle.get_ls()->update_tablet_table_store(
-          rebuild_seq, tablet_handle, table_handles))) {
-        LOG_WARN("fail to replace small sstables in the tablet", K(ret), K(rebuild_seq), K(tablet_handle), K(table_handles));
+          rebuild_seq, updated_tablet_handle, table_handles))) {
+        LOG_WARN("fail to replace small sstables in the tablet",
+            K(ret), K(rebuild_seq), K(updated_tablet_handle), K(table_handles));
       } else {
         rewrite_cnt += table_handles.count();
       }

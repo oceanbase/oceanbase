@@ -73,6 +73,16 @@ class PurgeThrottlingCbCtx;
     return submit_prepare_meta_req_(member_list, log_proposal_id);            \
   }
 
+#define OVERLOAD_SUBMIT_CHANGE_MODE_META_REQ(type)                                  \
+  virtual int submit_change_mode_meta_req(const type &member_list,                  \
+                                          const int64_t &msg_proposal_id,           \
+                                          const bool is_applied_mode_meta,          \
+                                          const LogModeMeta &mode_meta)             \
+  {                                                                                 \
+    return submit_change_mode_meta_req_(member_list, msg_proposal_id,               \
+        is_applied_mode_meta, mode_meta);                                           \
+  }
+
 class LogEngine
 {
   friend class PalfHandleImpl; // need get net_service to init election
@@ -281,20 +291,34 @@ public:
     return ret;
   }
 
+  template <class List>
+  int submit_change_mode_meta_req_(
+        const List &member_list,
+        const int64_t &msg_proposal_id,
+        const bool is_applied_mode_meta,
+        const LogModeMeta &mode_meta)
+  {
+    int ret = OB_SUCCESS;
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else {
+      ret = log_net_service_.submit_change_mode_meta_req(member_list, msg_proposal_id,
+          is_applied_mode_meta, mode_meta);
+    }
+    return ret;
+  }
+
   OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(common::ObMemberList);
   OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(common::GlobalLearnerList);
-  OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(ResendConfigLogList);
+  OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(common::ResendConfigLogList);
   OVERLOAD_SUBMIT_PREPARE_META_REQ(common::ObMemberList);
   OVERLOAD_SUBMIT_PREPARE_META_REQ(common::GlobalLearnerList);
+  OVERLOAD_SUBMIT_CHANGE_MODE_META_REQ(common::ObMemberList);
+  OVERLOAD_SUBMIT_CHANGE_MODE_META_REQ(common::ResendConfigLogList);
 
   virtual int submit_change_config_meta_resp(const common::ObAddr &server,
                                              const int64_t msg_proposal_id,
                                              const LogConfigVersion &config_version);
-
-  virtual int submit_change_mode_meta_req(const common::ObMemberList &member_list,
-                                          const int64_t &msg_proposal_id,
-                                          const bool is_applied_mode_meta,
-                                          const LogModeMeta &mode_meta);
 
   virtual int submit_change_mode_meta_resp(const common::ObAddr &server,
                                            const int64_t &msg_proposal_id);

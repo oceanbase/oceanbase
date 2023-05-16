@@ -315,6 +315,25 @@ struct ObPCParamEqualInfo
   }
 };
 
+struct ObDupTabConstraint
+{
+  uint64_t first_;
+  uint64_t second_;
+  TO_STRING_KV(K_(first), K_(second));
+  ObDupTabConstraint()
+    : first_(common::OB_INVALID_ID),
+      second_(common::OB_INVALID_ID)
+  {}
+  ObDupTabConstraint(int64_t first, int64_t second)
+    : first_(first),
+      second_(second)
+  {}
+  inline bool operator==(const ObDupTabConstraint &other) const
+  {
+    return first_ == other.first_ && second_ == other.second_;
+  }
+};
+
 struct ObPCPrivInfo
 {
   share::ObRawPriv sys_priv_;

@@ -69,7 +69,6 @@ public:
 
   int assign(const ObLSReplicaTaskDisplayInfo &other);
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  
   inline const uint64_t &get_tenant_id() const { return tenant_id_; }
   inline const share::ObLSID &get_ls_id() const { return ls_id_; }
   inline const ObDRTaskType &get_task_type() const { return task_type_; }
@@ -222,10 +221,10 @@ private:
     int ret_;
   };
 
-  struct RemovePaxosLATask : public LATask
+  struct RemoveReplicaLATask : public LATask
   {
   public:
-    RemovePaxosLATask()
+    RemoveReplicaLATask()
       : LATask(),
         remove_server_(),
         replica_type_(REPLICA_TYPE_MAX),
@@ -233,22 +232,24 @@ private:
         member_time_us_(-1),
         orig_paxos_replica_number_(0),
         paxos_replica_number_(0) {}
-    virtual ~RemovePaxosLATask() {}
+    virtual ~RemoveReplicaLATask() {}
   public:
-    virtual LATaskType get_task_type() const override { return RemovePaxos; }
-    
+    virtual LATaskType get_task_type() const override { return ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+                                                               ? RemovePaxos
+                                                               : RemoveNonPaxos; }
     virtual LATaskPrio get_task_priority() const override {
-      LATaskPrio priority = LATaskPrio::LA_P_REMOVE_PAXOS;
+      LATaskPrio priority = ObReplicaTypeCheck::is_paxos_replica_V2(replica_type_)
+                          ? LATaskPrio::LA_P_REMOVE_PAXOS
+                          : LATaskPrio::LA_P_REMOVE_NON_PAXOS;
       return priority;
     }
-  
     VIRTUAL_TO_STRING_KV("task_type", get_task_type(),
-                         K(remove_server_),
-                         K(replica_type_),
-                         K(memstore_percent_),
-                         K(member_time_us_),
-                         K(orig_paxos_replica_number_),
-                         K(paxos_replica_number_));
+                         K_(remove_server),
+                         K_(replica_type),
+                         K_(memstore_percent),
+                         K_(member_time_us),
+                         K_(orig_paxos_replica_number),
+                         K_(paxos_replica_number));
   public:
     common::ObAddr remove_server_;
     ObReplicaType replica_type_;
@@ -256,36 +257,6 @@ private:
     int64_t member_time_us_;
     int64_t orig_paxos_replica_number_;
     int64_t paxos_replica_number_;
-  };
-
-  struct RemoveNonPaxosLATask : public LATask
-  {
-  public:
-    RemoveNonPaxosLATask()
-      : LATask(),
-        remove_server_(),
-        replica_type_(REPLICA_TYPE_MAX),
-        memstore_percent_(100),
-        member_time_us_(-1) {}
-    virtual ~RemoveNonPaxosLATask() {}
-  public:
-    virtual LATaskType get_task_type() const override { return RemoveNonPaxos; }
-    
-    virtual LATaskPrio get_task_priority() const override {
-      LATaskPrio priority = LATaskPrio::LA_P_REMOVE_NON_PAXOS;
-      return priority;
-    }
-
-    VIRTUAL_TO_STRING_KV("task_type", get_task_type(),
-                         K(remove_server_),
-                         K(replica_type_),
-                         K(memstore_percent_),
-                         K(member_time_us_));
-  public:
-    common::ObAddr remove_server_;
-    ObReplicaType replica_type_;
-    int64_t memstore_percent_;
-    int64_t member_time_us_;
   };
 
   struct AddReplicaLATask : public LATask
@@ -305,7 +276,6 @@ private:
     virtual ~AddReplicaLATask() {}
   public:
     virtual LATaskType get_task_type() const override{ return AddReplica; }
-    
     virtual LATaskPrio get_task_priority() const override {
       LATaskPrio priority = LATaskPrio::LA_P_MAX;
       if (common::REPLICA_TYPE_FULL == replica_type_) {
@@ -362,7 +332,6 @@ private:
     virtual ~TypeTransformLATask() {}
   public:
     virtual LATaskType get_task_type() const override { return TypeTransform; }
-    
     virtual LATaskPrio get_task_priority() const override {
       LATaskPrio priority = LATaskPrio::LA_P_MAX;
       if (common::REPLICA_TYPE_FULL == dst_replica_type_
@@ -377,7 +346,6 @@ private:
       } else {} // default priority value
       return priority;
     }
-    
     VIRTUAL_TO_STRING_KV("task_type", get_task_type(),
                          K(zone_),
                          K(dst_server_),
@@ -415,7 +383,6 @@ private:
     virtual ~ModifyPaxosReplicaNumberLATask() {}
   public:
     virtual LATaskType get_task_type() const override { return ModifyPaxosReplicaNumber; }
-    
     virtual LATaskPrio get_task_priority() const override {
       LATaskPrio priority = LATaskPrio::LA_P_MODIFY_PAXOS_REPLICA_NUMBER;
       return priority;
@@ -558,6 +525,12 @@ private:
         const uint64_t unit_group_id,
         share::ObUnitInfo &unit_info);
   private:
+    int inner_get_valid_unit_(
+        const common::ObZone &zone,
+        const common::ObArray<share::ObUnitInfo> &unit_array,
+        share::ObUnitInfo &output_unit_info,
+        bool &found);
+  private:
     bool inited_;
     uint64_t tenant_id_;
     ObUnitManager *unit_mgr_;
@@ -569,7 +542,7 @@ private:
           ReplicaDescArray *,
           common::hash::NoPthreadDefendMode> LocalityMap;
   typedef common::ObArray<ReplicaStatDesc> ReplicaStatMap;
-            
+
   class LocalityAlignment
   {
   public:
@@ -612,9 +585,7 @@ private:
         ReplicaStatDesc &replica_stat_desc,
         const int64_t index);
     // generate specific task
-    int generate_remove_paxos_task(
-        ReplicaStatDesc &replica_stat_desc);
-    int generate_remove_nonpaxos_task(
+    int generate_remove_replica_task(
         ReplicaStatDesc &replica_stat_desc);
     int generate_type_transform_task(
         ReplicaStatDesc &replica_stat_desc,
@@ -633,12 +604,7 @@ private:
     int try_get_normal_locality_alignment_task(
         UnitProvider &unit_provider,
         const LATask *&task);
-    int try_review_remove_paxos_task(
-        UnitProvider &unit_provider,
-        LATask *my_task,
-        const LATask *&output_task,
-        bool &found);
-    int try_review_remove_nonpaxos_task(
+    int try_review_remove_replica_task(
         UnitProvider &unit_provider,
         LATask *my_task,
         const LATask *&output_task,
@@ -738,12 +704,13 @@ private:
       ObDRTaskKey &task_key,
       bool &can_generate);
 
-  int construct_extra_infos_to_build_remove_paxos_replica_task(
+  int construct_extra_infos_to_build_remove_replica_task(
       const DRLSInfo &dr_ls_info,
       share::ObTaskId &task_id,
       int64_t &new_paxos_replica_number,
       int64_t &old_paxos_replica_number,
-      common::ObAddr &leader_addr);
+      common::ObAddr &leader_addr,
+      const ObReplicaType &replica_type);
 
   int generate_remove_permanent_offline_replicas_and_push_into_task_manager(
       const ObDRTaskKey task_key,
@@ -754,7 +721,8 @@ private:
       const ObReplicaMember &remove_member,
       const int64_t &old_paxos_replica_number,
       const int64_t &new_paxos_replica_number,
-      int64_t &acc_dr_task);
+      int64_t &acc_dr_task,
+      const ObReplicaType &replica_type);
 
   int try_replicate_to_unit(
       const bool only_for_display,
@@ -803,7 +771,7 @@ private:
       const bool only_for_display,
       DRLSInfo &dr_ls_info,
       int64_t &acc_dr_task);
-  
+
   int try_shrink_resource_pools(
       const bool &only_for_display,
       DRLSInfo &dr_ls_info,
@@ -896,7 +864,7 @@ private:
   int generate_task_key(
       const DRLSInfo &dr_ls_info,
       ObDRTaskKey &task_key) const;
-  
+
   int add_display_info(const ObLSReplicaTaskDisplayInfo &display_info);
 
   int record_task_plan_for_locality_alignment(
@@ -908,24 +876,18 @@ private:
       const LATask *task,
       int64_t &acc_dr_task);
 
-  int try_generate_remove_paxos_locality_alignment_task(
+  int try_generate_remove_replica_locality_alignment_task(
       DRLSInfo &dr_ls_info,
       const ObDRTaskKey &task_key,
       const LATask *task,
       int64_t &acc_dr_task);
-  
-  int try_generate_remove_non_paxos_locality_alignment_task(
-      DRLSInfo &dr_ls_info,
-      const ObDRTaskKey &task_key,
-      const LATask *task,
-      int64_t &acc_dr_task); 
-  
+
   int try_generate_add_replica_locality_alignment_task(
       DRLSInfo &dr_ls_info,
       const ObDRTaskKey &task_key,
       const LATask *task,
-      int64_t &acc_dr_task); 
-  
+      int64_t &acc_dr_task);
+
   int try_generate_type_transform_locality_alignment_task(
       DRLSInfo &dr_ls_info,
       const ObDRTaskKey &task_key,

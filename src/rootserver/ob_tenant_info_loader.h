@@ -43,7 +43,7 @@ public:
   ~ObAllTenantInfoCache() {}
   int get_tenant_info(share::ObAllTenantInfo &tenant_info);
   int get_tenant_info(share::ObAllTenantInfo &tenant_info, int64_t &last_sql_update_time, int64_t &ora_rowscn);
-  int refresh_tenant_info(const uint64_t tenant_id, common::ObMySQLProxy *sql_proxy, bool &refreshed);
+  int refresh_tenant_info(const uint64_t tenant_id, common::ObMySQLProxy *sql_proxy, bool &content_changed);
   void reset();
   void set_refresh_interval_for_sts();
   int update_tenant_info_cache(const int64_t new_ora_rowscn, const ObAllTenantInfo &new_tenant_info, bool &refreshed);

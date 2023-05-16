@@ -108,7 +108,7 @@ int ObPXServerAddrUtil::sort_and_collect_local_file_distribution(
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
     ObAddr &cur_addr = files.at(i).file_addr_;
-    if (!cur_addr.is_equal_except_port(pre_addr)) {
+    if (cur_addr != pre_addr) {
       pre_addr = cur_addr;
       OZ (dst_addrs.push_back(files.at(i).file_addr_));
     }
@@ -220,6 +220,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
     for (int i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
       if (pre_addr != files.at(i).file_addr_) {
         // TODO [External Table] OPT this
+        target_sqc = NULL;
         for (int j = 0; j < sqcs.count(); j++) {
           if (sqcs.at(j)->get_exec_addr() == files.at(i).file_addr_) {
             target_sqc = sqcs.at(j);
@@ -718,7 +719,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
   } else if (OB_FAIL(get_location_addrs<DASTabletLocArray>(locations, addrs))) {
     LOG_WARN("fail get location addrs", K(ret));
   } else {
-    int64_t parallel = child.get_assigned_worker_count();
+    int64_t parallel = parent.get_assigned_worker_count();
     if (0 >= parallel) {
       parallel = 1;
     }

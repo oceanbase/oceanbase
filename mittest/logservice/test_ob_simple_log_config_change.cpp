@@ -333,7 +333,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_basic_config_change)
                                                CONFIG_CHANGE_TIMEOUT));
 
     // switch acceptor to learner
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
     // add learner
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
@@ -391,7 +391,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
                                                CONFIG_CHANGE_TIMEOUT));
 
     // switch acceptor to learner
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(palf_list[5]->palf_handle_impl_->self_, 1), 3, CONFIG_CHANGE_TIMEOUT));
     // add learner
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[3]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(ObMember(palf_list[4]->palf_handle_impl_->self_, 1), CONFIG_CHANGE_TIMEOUT));
@@ -404,8 +404,6 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_replace_member)
   PALF_LOG(INFO, "end test replace_member", K(id));
 }
 
-// TODO: config_mgr need support location_cb to get leader for learner
-/*
 TEST_F(TestObSimpleLogClusterConfigChange, learner)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "learner");
@@ -424,15 +422,13 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   region_list.push_back(ObRegion("SHANGHAI"));
   region_list.push_back(ObRegion("TIANJIN"));
   region_list.push_back(ObRegion("SHENZHEN"));
+  region_list.push_back(ObRegion("GUANGZHOU"));
   const ObMemberList &node_list = get_node_list();
   const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
 	EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
-  PalfHandleGuard new_leader;
-  int64_t new_leader_idx;
-  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
-  loc_cb.leader_ = get_cluster()[new_leader_idx]->get_addr();
-  PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[new_leader_idx]->get_addr());
+  loc_cb.leader_ = get_cluster()[leader_idx]->get_addr();
+  PALF_LOG(INFO, "set leader for loc_cb", "leader", get_cluster()[leader_idx]->get_addr());
 
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   // case 1: set region and switch_acceptor_to_learner
@@ -449,9 +445,11 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   while (false == check_children_valid(palf_list, all_learner))
   {
     sleep(1);
+    PALF_LOG(INFO, "check_children_valid 1");
   }
   // change region of one follower
   bool has_change_region = false;
+  int64_t diff_region_follower_idx = -1;
   int64_t another_follower_idx = -1;
   for (int i = 0; i < ObSimpleLogClusterTestBase::member_cnt_; i++) {
     const bool not_leader = palf_list[i]->palf_handle_impl_->self_ != leader.palf_handle_impl_->self_;
@@ -459,6 +457,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
       EXPECT_EQ(OB_SUCCESS, palf_list[i]->palf_handle_impl_->set_region(region_list[0]));
       region_map.insert(palf_list[i]->palf_handle_impl_->self_, region_list[0]);
       has_change_region = true;
+      diff_region_follower_idx = i;
     } else {
       if (not_leader) {
         another_follower_idx = i;
@@ -472,6 +471,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   while (false == check_children_valid(palf_list, all_learner))
   {
     sleep(1);
+    PALF_LOG(INFO, "check_children_valid 2");
   }
   // after setting region of a follower, parents of all learners should be another follower
   EXPECT_GE(another_follower_idx, 0);
@@ -480,6 +480,7 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   while (false == check_parent(palf_list, all_learner, curr_parent))
   {
     sleep(1);
+    PALF_LOG(INFO, "check_parent 1");
   }
   // continue submitting log
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
@@ -488,12 +489,13 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
 
   // switch current unique parent to learner
   EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(LogLearner(curr_parent, 1)));
-  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(curr_parent, 1), CONFIG_CHANGE_TIMEOUT));
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_acceptor_to_learner(ObMember(curr_parent, 1), 2, CONFIG_CHANGE_TIMEOUT));
   // after switch follower 1 to learner, a learner will be registered to leader, and other learners will
   // be registerd to this learner
   while (false == check_children_valid(palf_list, all_learner))
   {
     sleep(1);
+    PALF_LOG(INFO, "check_children_valid 3");
   }
   // check learner topology
   ObAddr leaderschild;
@@ -507,35 +509,47 @@ TEST_F(TestObSimpleLogClusterConfigChange, learner)
   EXPECT_TRUE(expect_children.learner_addr_equal(leaderschild_handle.palf_handle_impl_->config_mgr_.children_));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id));
   // EXPECT_EQ(OB_SUCCESS, check_log_sync(palf_list, get_member_list(), all_learner, leader));
+  // learners' regions are different from paxos member, so parent of all learners is leader
+  // set regions
+  for (int64_t i = 3; i < ObSimpleLogClusterTestBase::node_cnt_; ++i) {
+    PalfHandleImplGuard tmp_handle;
+    common::ObMember learner;
+    EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(i, learner));
+    EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(palf_list, learner.get_server(), tmp_handle));
+    EXPECT_EQ(OB_SUCCESS, tmp_handle.palf_handle_impl_->set_region(region_list[i-2]));
+  }
+  sleep(1);
+  // check children_cnt
+  while (false == check_children_valid(palf_list, all_learner))
+  {
+    sleep(1);
+    PALF_LOG(INFO, "check_children_valid 4");
+  }
+  while (false == check_parent(palf_list, all_learner, leader.palf_handle_impl_->self_))
+  {
+    sleep(1);
+    PALF_LOG(INFO, "check_parent 2");
+  }
+
+  // switch leader, after switching leader, the parent of all learners is the new leader
+  const int64_t new_leader_idx = diff_region_follower_idx;
+  PalfHandleImplGuard new_leader;
+  EXPECT_EQ(OB_SUCCESS, switch_leader(id, 0, new_leader));
+
+  while (false == check_children_valid(palf_list, all_learner))
+  {
+    sleep(1);
+    PALF_LOG(INFO, "check_children_valid 5");
+  }
+  while (false == check_parent(palf_list, all_learner, new_leader.palf_handle_impl_->self_))
+  {
+    sleep(1);
+    PALF_LOG(INFO, "check_parent 3");
+  }
+
   revert_cluster_palf_handle_guard(palf_list);
   PALF_LOG(INFO, "end test learner", K(id));
-  // TODO by yunlong:: after mit test supports sync RPC and switch_leader func become stable,
-  // add switch_acceptor_to_learner case and switch_leader case
-  // // case 2: switch leader
-  // // learners' regions are different from paxos member, so parent of all learners is leader
-  // // set regions
-  // for (int64_t i = 3; i < 7; ++i) {
-  //   PalfHandleImplGuard tmp_handle;
-  //   common::ObMember added_learner;
-  //   EXPECT_EQ(OB_SUCCESS, node_list.get_member_by_index(i, added_learner));
-  //   EXPECT_EQ(OB_SUCCESS, all_learner.add_learner(LogLearner(added_learner.get_server(), region_list[i - 3])));
-  //   EXPECT_EQ(OB_SUCCESS, get_palf_handle_guard(id, added_learner.get_server(), tmp_handle));
-  //   EXPECT_EQ(OB_SUCCESS, tmp_handle.set_region(region_list[i-3]));
-  //   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_learner, CONFIG_CHANGE_TIMEOUT));
-  // }
-  // sleep(1);
-  // // check children_cnt
-  // check_children_valid(palf_list, all_learner);
-  // check_parent(palf_list, leader.palf_handle_impl_->self_);
-  // // switch leader
-  // const int64_t new_leader_idx = 1;
-  // PalfHandleImplGuard new_leader;
-  // switch_leader(id, new_leader_idx, new_leader);
-  // sleep(5);
-  // check_children_valid(palf_list, all_learner);
-  // check_parent(palf_list, new_leader.palf_handle_impl_->self_);
 }
-*/
 
 } // end unittest
 } // end oceanbase

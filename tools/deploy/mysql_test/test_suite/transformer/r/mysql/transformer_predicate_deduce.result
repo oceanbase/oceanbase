@@ -2478,9 +2478,9 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |DELETE                  |     |0       |11          |
-|1 |└─NESTED-LOOP ANTI JOIN |     |0       |4           |
-|2 |  ├─TABLE FULL SCAN     |a    |1       |2           |
+|0 |DELETE                  |     |1       |16          |
+|1 |└─NESTED-LOOP ANTI JOIN |     |1       |4           |
+|2 |  ├─TABLE FULL SCAN     |a    |2       |2           |
 |3 |  └─MATERIAL            |     |1       |2           |
 |4 |    └─SUBPLAN SCAN      |VIEW1|1       |2           |
 |5 |      └─TABLE FULL SCAN |b    |1       |2           |
@@ -2508,10 +2508,10 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                  |NAME           |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |INSERT                    |               |0       |11          |
-|1 |└─SUBPLAN SCAN            |ANONYMOUS_VIEW1|0       |4           |
-|2 |  └─NESTED-LOOP ANTI JOIN |               |0       |4           |
-|3 |    ├─TABLE FULL SCAN     |a              |1       |2           |
+|0 |INSERT                    |               |1       |17          |
+|1 |└─SUBPLAN SCAN            |ANONYMOUS_VIEW1|1       |4           |
+|2 |  └─NESTED-LOOP ANTI JOIN |               |1       |4           |
+|3 |    ├─TABLE FULL SCAN     |a              |2       |2           |
 |4 |    └─MATERIAL            |               |1       |2           |
 |5 |      └─SUBPLAN SCAN      |VIEW1          |1       |2           |
 |6 |        └─TABLE FULL SCAN |b              |1       |2           |
@@ -3720,9 +3720,9 @@ Outline Data:
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
       USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      FULL(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
-      FULL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      USE_DAS(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
+      FULL(@"SEL$0208448F" "A"@"SEL$1")
+      FULL(@"SEL$0208448F" "B"@"SEL$1")
+      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
@@ -3801,9 +3801,9 @@ Outline Data:
       BEGIN_OUTLINE_DATA
       LEADING(@"SEL$0208448F" ("db_predicate_deduce"."A"@"SEL$1" "db_predicate_deduce"."B"@"SEL$1"))
       USE_NL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      INDEX(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1" "c1")
-      INDEX(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1" "c2")
-      USE_DAS(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
+      INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
+      INDEX(@"SEL$0208448F" "B"@"SEL$1" "c2")
+      USE_DAS(@"SEL$0208448F" "B"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
@@ -3895,8 +3895,8 @@ Outline Data:
       LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
       USE_HASH(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
       PQ_DISTRIBUTE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1" NONE NONE)
-      FULL(@"SEL$0208448F" "db_predicate_deduce"."B"@"SEL$1")
-      FULL(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
+      FULL(@"SEL$0208448F" "B"@"SEL$1")
+      FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
       OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA

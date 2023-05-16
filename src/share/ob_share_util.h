@@ -44,6 +44,13 @@ public:
       const ObLSID &ls_id,
       int64_t &arb_replica_num);
 
+  // data version must up to 4.2 with read only replica
+  // @params[in]  tenant_id, which tenant to check
+  // @params[out] is_compatible, whether it is up to 4.2
+  static int check_compat_version_for_readonly_replica(
+      const uint64_t tenant_id,
+      bool &is_compatible);
+
   static int fetch_current_cluster_version(
              common::ObISQLClient &client,
              uint64_t &cluster_version);

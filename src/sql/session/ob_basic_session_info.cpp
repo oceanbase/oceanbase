@@ -73,6 +73,7 @@ ObBasicSessionInfo::ObBasicSessionInfo()
       unused_read_snapshot_version_(),
       xid_(),
       associated_xa_(false),
+      cached_tenant_config_version_(0),
       sess_bt_buff_pos_(0),
       sess_ref_cnt_(0),
       sess_ref_seq_(0),
@@ -264,6 +265,7 @@ void ObBasicSessionInfo::destroy()
   tx_result_.reset();
   xid_.reset();
   associated_xa_ = false;
+  cached_tenant_config_version_ = 0;
   magic_num_ = 0x86427531;
   if (thread_data_.cur_query_ != nullptr) {
     ob_free(thread_data_.cur_query_);
@@ -289,6 +291,7 @@ void ObBasicSessionInfo::clean_status()
   }
   xid_.reset();
   associated_xa_ = false;
+  cached_tenant_config_version_ = 0;
   set_valid(true);
   thread_data_.cur_query_start_time_ = 0;
   thread_data_.cur_query_len_ = 0;
@@ -310,6 +313,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   }
   xid_.reset();
   associated_xa_ = false;
+  cached_tenant_config_version_ = 0;
   is_deserialized_ = false;
   CHAR_CARRAY_INIT(tenant_);
   tenant_id_ = OB_INVALID_ID;
@@ -1665,19 +1669,16 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
 int ObBasicSessionInfo::gen_configs_in_pc_str()
 {
   int ret = OB_SUCCESS;
-  const int64_t MAX_CONFIG_STR_SIZE = 512;
-  char *buf = NULL;
-  int64_t pos = 0;
-  if (!GCONF.is_valid()) {
-    // do nothing
-  } else {
-    int64_t cluster_config_version = GCONF.get_current_version();
-    int64_t tenant_config_version = (::oceanbase::omt::ObTenantConfigMgr::get_instance()).get_tenant_config_version(tenant_id_);
 
+  if (GCONF.is_valid()) {
+    int64_t cluster_config_version = GCONF.get_current_version();
     if (!config_in_pc_str_.empty() &&
-          !inf_pc_configs_.is_out_of_date(cluster_config_version, tenant_config_version)) {
+          !inf_pc_configs_.is_out_of_date(cluster_config_version, cached_tenant_config_version_)) {
       // unupdated configs do nothing
     } else {
+      const int64_t MAX_CONFIG_STR_SIZE = 512;
+      char *buf = NULL;
+      int64_t pos = 0;
       // update out-dated cached configs
       // first time to generate configuaration strings, init allocator
       if (is_first_gen_config_) {
@@ -1702,7 +1703,7 @@ int ObBasicSessionInfo::gen_configs_in_pc_str()
         LOG_WARN("failed to serialize configs", K(ret));
       } else {
         (void)config_in_pc_str_.assign(buf, int32_t(pos));
-        inf_pc_configs_.update_version(cluster_config_version, tenant_config_version);
+        inf_pc_configs_.update_version(cluster_config_version, cached_tenant_config_version_);
       }
     }
   }

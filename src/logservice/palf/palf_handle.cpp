@@ -78,10 +78,12 @@ bool  PalfHandle::operator==(const PalfHandle &rhs) const
   return palf_handle_impl_ == rhs.palf_handle_impl_;
 }
 
-int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list, const int64_t paxos_replica_num)
+int PalfHandle::set_initial_member_list(const common::ObMemberList &member_list,
+                                        const int64_t paxos_replica_num,
+                                        const common::GlobalLearnerList &learner_list)
 {
   CHECK_VALID;
-  return palf_handle_impl_->set_initial_member_list(member_list, paxos_replica_num);
+  return palf_handle_impl_->set_initial_member_list(member_list, paxos_replica_num, learner_list);
 }
 
 
@@ -294,6 +296,14 @@ int PalfHandle::get_paxos_member_list(common::ObMemberList &member_list, int64_t
   return palf_handle_impl_->get_paxos_member_list(member_list, paxos_replica_num);
 }
 
+int PalfHandle::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                                       int64_t &paxos_replica_num,
+                                                       GlobalLearnerList &learner_list) const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
+}
+
 int PalfHandle::get_election_leader(common::ObAddr &addr) const
 {
   CHECK_VALID;
@@ -356,16 +366,20 @@ int PalfHandle::remove_learner(const common::ObMember &removed_learner, const in
   return palf_handle_impl_->remove_learner(removed_learner, timeout_us);
 }
 
-int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us)
+int PalfHandle::switch_learner_to_acceptor(const common::ObMember &learner,
+                                           const int64_t new_replica_num,
+                                           const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_learner_to_acceptor(learner, timeout_us);
+  return palf_handle_impl_->switch_learner_to_acceptor(learner, new_replica_num, timeout_us);
 }
 
-int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us)
+int PalfHandle::switch_acceptor_to_learner(const common::ObMember &member,
+                                           const int64_t new_replica_num,
+                                           const int64_t timeout_us)
 {
   CHECK_VALID;
-  return palf_handle_impl_->switch_acceptor_to_learner(member, timeout_us);
+  return palf_handle_impl_->switch_acceptor_to_learner(member, new_replica_num, timeout_us);
 }
 
 

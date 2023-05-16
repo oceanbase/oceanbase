@@ -149,7 +149,7 @@ int ObPartitionMergeProgress::estimate(ObTabletMergeCtx *ctx)
                              false,  /*full row scan flag, obsoleted*/
                              false,  /*index back*/
                              false); /*query_stat*/
-      ObTableEstimateBaseInput base_input(query_flag, tables.at(0)->get_key().tablet_id_.id(), tables, ctx->tablet_handle_);
+      ObTableEstimateBaseInput base_input(query_flag, tables.at(0)->get_key().tablet_id_.id(), transaction::ObTransID(), tables, ctx->tablet_handle_);
 
       ObDatumRange whole_range;
       whole_range.set_whole_range();

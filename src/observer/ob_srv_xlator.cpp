@@ -193,9 +193,6 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
   if (ObRequest::OB_MYSQL != req.get_type()) {
     LOG_ERROR("can't translate non-mysql request");
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_ISNULL(SQL_REQ_OP.get_sql_session(&req))) {
-    LOG_ERROR("req member is null");
-    ret = OB_ERR_UNEXPECTED;
   } else {
     if (req.is_in_connected_phase()) {
       ret = get_mp_connect_processor(processor);

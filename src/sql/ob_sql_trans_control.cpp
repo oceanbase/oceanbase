@@ -16,6 +16,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "share/ob_schema_status_proxy.h"   // ObSchemaStatusProxy
+#include "share/schema/ob_tenant_schema_service.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
@@ -1090,7 +1091,9 @@ int ObSqlTransControl::acquire_tx_if_need_(transaction::ObTransService *txs, ObS
 
 int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
                                   const uint64_t table_id,
-                                  const ObTableLockMode lock_mode)
+                                  const ObIArray<ObObjectID> &part_ids,
+                                  const ObTableLockMode lock_mode,
+                                  const int64_t wait_lock_seconds)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
@@ -1106,26 +1109,58 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     OZ (txs->acquire_tx(session->get_tx_desc(), session->get_sessid()), *session);
   }
   ObTxParam tx_param;
-  ObLockTableRequest arg;
   OZ (build_tx_param_(session, tx_param));
   // calculate lock table timeout
   int64_t lock_timeout_us = 0;
   {
     int64_t stmt_expire_ts = 0;
     int64_t tx_expire_ts = 0;
+    int64_t lock_wait_expire_ts = 0;
     OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
     OZ (get_trans_expire_ts(*session, tx_expire_ts));
-    OX (lock_timeout_us = MAX(200L, MIN(stmt_expire_ts, tx_expire_ts) - ObTimeUtility::current_time()));
+
+    if (wait_lock_seconds < 0) {
+      // It means that there's no opt about wait or no wait,
+      // so we just use the deafult timeout config here.
+      OX (lock_timeout_us = MAX(200L, MIN(stmt_expire_ts, tx_expire_ts) -
+                                         ObTimeUtility::current_time()));
+    } else {
+      // The priority of stmt_expire_ts and tx_expire_ts is higher than
+      // wait N. So if the statement or transaction is timeout, it should
+      // return error code, rather than wait until N seconds.
+      lock_wait_expire_ts =
+        MIN3(session->get_query_start_time() + wait_lock_seconds * 1000 * 1000, stmt_expire_ts, tx_expire_ts);
+      OX (lock_timeout_us = lock_wait_expire_ts - ObTimeUtility::current_time());
+      lock_timeout_us = lock_timeout_us < 0 ? 0 : lock_timeout_us;
+    }
   }
-  arg.table_id_ = table_id;
-  arg.owner_id_ = 0;
-  arg.lock_mode_ = lock_mode;
-  arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-  arg.timeout_us_ = lock_timeout_us;
-  OZ (lock_service->lock_table(*session->get_tx_desc(),
-                               tx_param,
-                               arg),
-      tx_param, table_id, lock_mode, lock_timeout_us);
+  if (part_ids.empty()) {
+    ObLockTableRequest arg;
+    arg.table_id_ = table_id;
+    arg.owner_id_ = 0;
+    arg.lock_mode_ = lock_mode;
+    arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+    arg.timeout_us_ = lock_timeout_us;
+
+    OZ (lock_service->lock_table(*session->get_tx_desc(),
+                                tx_param,
+                                arg),
+        tx_param, table_id, lock_mode, lock_timeout_us);
+  } else {
+    ObLockPartitionRequest arg;
+    arg.table_id_ = table_id;
+    arg.owner_id_ = 0;
+    arg.lock_mode_ = lock_mode;
+    arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+    arg.timeout_us_ = lock_timeout_us;
+    for (int64_t i = 0; i < part_ids.count() && OB_SUCC(ret); ++i) {
+      arg.part_object_id_ = part_ids.at(i);
+      OZ(lock_service->lock_partition_or_subpartition(*session->get_tx_desc(),
+                                                      tx_param, arg),
+         tx_param, table_id, lock_mode, lock_timeout_us);
+    }
+  }
+
   return ret;
 }
 
@@ -1148,6 +1183,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
       || !addr.is_valid()
       || max_stale_time_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
+
     LOG_WARN("invalid argument", K(ls_id), K(addr), K(max_stale_time_us));
   } else if (observer::ObServer::get_instance().get_self() == addr) {
     storage::ObLSService *ls_svr =  MTL(storage::ObLSService *);

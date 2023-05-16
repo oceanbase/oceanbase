@@ -232,7 +232,10 @@ int ObGeoToWktVisitor::appendPolygon(T_IBIN *geo)
   reserve_len += in_multi_visit_ ? 0 : strlen(type_name);
   reserve_len += (in_multi_visit_ || in_colloction_visit()) ? 1 : 0;
   // [type_name][(][(][x1][ ][y1][,][x2][ ][y2][,][x3][ ][y3][)][)]
-  if (OB_FAIL(buffer_.reserve(reserve_len))) {
+  if (geo->length() < WKB_COMMON_WKB_HEADER_LEN) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("invalid wkb length", K(ret), K(geo->length()));
+  } else if (OB_FAIL(buffer_.reserve(reserve_len))) {
     LOG_WARN("fail to reserve memory for buffer_", K(ret), K(reserve_len));
   } else if (!in_multi_visit_ && OB_FAIL(buffer_.append(type_name))) {
     LOG_WARN("fail to append buffer_", K(ret), K(in_multi_visit_), K(type_name));

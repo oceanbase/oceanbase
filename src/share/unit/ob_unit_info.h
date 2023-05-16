@@ -44,8 +44,9 @@ public:
   void reset();
   bool is_valid() const;
   bool is_manual_migrate() const { return is_manual_migrate_; }
+  bool is_active_status() const { return UNIT_STATUS_ACTIVE == status_; }
   int get_unit_status_str(const char *&status) const;
-  Status get_unit_status() { return status_; }
+  Status get_unit_status() const { return status_; }
 
   DECLARE_TO_STRING;
 

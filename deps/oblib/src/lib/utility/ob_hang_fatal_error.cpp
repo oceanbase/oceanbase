@@ -27,11 +27,22 @@ namespace oceanbase
 namespace common
 {
 _RLOCAL(bool, in_try_stmt);
+int64_t g_fatal_error_thread_id = -1;
+
+int64_t get_fatal_error_thread_id()
+{
+  return g_fatal_error_thread_id;
+}
+void set_fatal_error_thread_id(int64_t thread_id)
+{
+  g_fatal_error_thread_id = thread_id;
+}
 
 // To die or to live, it's a problem.
 void right_to_die_or_duty_to_live()
 {
   const ObFatalErrExtraInfoGuard *extra_info = ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
+  set_fatal_error_thread_id(GETTID());
   while (true) {
     const char *info = (NULL == extra_info) ? NULL : to_cstring(*extra_info);
     LOG_DBA_ERROR(OB_ERR_THREAD_PANIC, "msg", "Trying so hard to die", KCSTRING(info), KCSTRING(lbt()));

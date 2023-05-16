@@ -83,6 +83,7 @@ private:
   int replay_checkpoint(const ObTenantSuperBlock &super_block);
   int replay_ls_meta(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int replay_tablet(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
+  int replay_dup_table_ls_meta(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len);
   int update_tablet_meta_addr_and_block_list(ObTenantStorageCheckpointWriter &ckpt_writer);
   int replay_tenant_slog(const common::ObLogCursor &start_point);
   int replay_load_tablets();
@@ -91,6 +92,7 @@ private:
   int inner_replay_create_ls_slog(const ObRedoModuleReplayParam &param);
   int inner_replay_create_ls_commit_slog(const ObRedoModuleReplayParam &param);
   int inner_replay_delete_ls(const ObRedoModuleReplayParam &param);
+  int inner_replay_dup_table_ls_slog(const ObRedoModuleReplayParam &param);
   int inner_replay_put_tablet(const ObRedoModuleReplayParam &param);
   int inner_replay_delete_tablet(const ObRedoModuleReplayParam &param);
   int inner_replay_gts_record(const ObRedoModuleReplayParam &param);

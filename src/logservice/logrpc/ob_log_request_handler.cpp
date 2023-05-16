@@ -279,10 +279,10 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
         ret = palf_handle_->remove_learner(req.removed_member_, req.timeout_us_);
         break;
       case SWITCH_TO_ACCEPTOR_CMD:
-        ret = palf_handle_->switch_learner_to_acceptor(req.removed_member_, req.timeout_us_);
+        ret = palf_handle_->switch_learner_to_acceptor(req.removed_member_, req.new_replica_num_, req.timeout_us_);
         break;
       case SWITCH_TO_LEARNER_CMD:
-        ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.timeout_us_);
+        ret = palf_handle_->switch_acceptor_to_learner(req.removed_member_, req.new_replica_num_, req.timeout_us_);
         break;
       default:
         break;

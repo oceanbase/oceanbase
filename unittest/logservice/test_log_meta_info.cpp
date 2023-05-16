@@ -138,6 +138,15 @@ TEST(TestLogMetaInfos, test_log_config_meta)
   EXPECT_EQ(OB_SUCCESS, curr_config_version.generate(curr_log_proposal_id, curr_config_seq));
   EXPECT_EQ(OB_SUCCESS, prev_config_info.generate(prev_member_list, prev_replica_num, prev_learner_list, prev_config_version));
   EXPECT_EQ(OB_SUCCESS, curr_config_info.generate(curr_member_list, curr_replica_num, curr_learner_list, curr_config_version));
+  EXPECT_TRUE(curr_config_info.is_valid());
+  EXPECT_TRUE(prev_config_info.is_valid());
+
+  // test lists overlap
+  {
+    LogConfigInfo invalid_info = curr_config_info;
+    invalid_info.learnerlist_.add_learner(member2);
+    EXPECT_FALSE(invalid_info.is_valid());
+  }
 
   // test basic serialization
   {

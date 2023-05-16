@@ -1060,4 +1060,5 @@
 #define N_XMLSERIALIZE                      "xmlserialize"
 #define N_XMLCAST                           "xmlcast"
 #define N_UPDATEXML                         "updatexml"
+#define N_NLS_INITCAP                       "nls_initcap"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

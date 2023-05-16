@@ -645,7 +645,7 @@ int ObTenant::init(const ObTenantMeta &meta)
     set_unit_max_cpu(meta.unit_.config_.max_cpu());
     const int64_t memory_size = static_cast<double>(tenant_meta_.unit_.config_.memory_size());
     update_memory_size(memory_size);
-    constexpr static int64_t MINI_MEM_UPPER = 512L<<20; // 512M
+    constexpr static int64_t MINI_MEM_UPPER = 1L<<30; // 1G
     update_mini_mode(memory_size <= MINI_MEM_UPPER);
 
     if (!is_virtual_tenant_id(id_)) {

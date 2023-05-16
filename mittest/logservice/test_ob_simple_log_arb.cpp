@@ -358,8 +358,13 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_config_change)
       CONFIG_CHANGE_TIMEOUT));
 
   // switch learner
+  EXPECT_EQ(OB_INVALID_ARGUMENT, leader.palf_handle_impl_->switch_learner_to_acceptor(
+      ObMember(palf_list[4]->palf_handle_impl_->self_, 1),
+      2,
+      CONFIG_CHANGE_TIMEOUT));
   EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->switch_learner_to_acceptor(
       ObMember(palf_list[4]->palf_handle_impl_->self_, 1),
+      3,
       CONFIG_CHANGE_TIMEOUT));
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();

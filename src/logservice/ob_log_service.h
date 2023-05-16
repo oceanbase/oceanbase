@@ -124,11 +124,9 @@ public:
   int check_palf_exist(const share::ObLSID &id, bool &exist) const;
   //宕机重启恢复日志流接口，包括生成并初始化对应的ObReplayStatus结构
   // @param [in] id，日志流标识符
-  // @param [in] replica_type，日志流的副本类型
   // @param [out] log_handler，新建日志流以ObLogHandler形式返回，保证上层使用日志流时的生命周期
   // @param [out] restore_handler，新建日志流以ObLogRestoreHandler形式返回，用于备库同步日志
   int add_ls(const share::ObLSID &id,
-             const common::ObReplicaType &replica_type,
              ObLogHandler &log_handler,
              ObLogRestoreHandler &restore_handler);
 

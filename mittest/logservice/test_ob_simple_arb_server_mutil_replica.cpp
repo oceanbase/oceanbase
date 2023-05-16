@@ -103,6 +103,7 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
   obrpc::ObSetMemberListArgV2 memberlist_result;
   const ObMemberList member_list = get_arb_member_list();
   const ObMember arb_member = get_arb_member();
+  const GlobalLearnerList learner_list;
   EXPECT_EQ(true, arb_member.is_valid());
   rootserver::ObSetMemberListProxy proxy(rpc_proxy,
                                          &obrpc::ObSrvRpcProxy::set_member_list);
@@ -112,7 +113,8 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
         ObLSID(1),
         2,
         member_list,
-        arb_member));
+        arb_member,
+        learner_list));
   proxy.call(dst_addr, 1000*1000, cluster_id, 1001, memberlist_arg);
   proxy.wait();
 

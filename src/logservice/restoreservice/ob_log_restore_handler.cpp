@@ -47,6 +47,17 @@ using namespace palf;
 namespace logservice
 {
 using namespace oceanbase::share;
+
+const char *type_str[static_cast<int>(RestoreSyncStatus::MAX_RESTORE_SYNC_STATUS)] = {
+  "Invalid restore status",
+  " ",
+  "There is a gap between the log source and standby",
+  "Log conflicts, the standby with the same LSN is different from the log source",
+  "Log source cannot be accessed, the user name or password of the replication account may be incorrect",
+  "Log source is unreachable, the log source access point may be unavailable",
+  "Unexpected exceptions",
+};
+
 ObLogRestoreHandler::ObLogRestoreHandler() :
   parent_(NULL),
   context_(),
@@ -706,7 +717,7 @@ int ObLogRestoreHandler::get_next_sorted_task(ObFetchLogTask *&task)
   return ret;
 }
 
-int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info)
+int ObLogRestoreHandler::diagnose(RestoreDiagnoseInfo &diagnose_info) const
 {
   int ret = OB_SUCCESS;
   diagnose_info.restore_context_info_.reset();
@@ -770,12 +781,12 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
     } else if (OB_FAIL(proxy_util.get_tenant_info(tenant_role, tenant_status))) {
       CLOG_LOG(WARN, "get tenant info failed", K(id_), K(service_attr));
     } else if (! tenant_role.is_standby() || share::schema::ObTenantStatus::TENANT_STATUS_NORMAL != tenant_status) {
-      ret = OB_EAGAIN;  // TODO 错误码
+      ret = OB_SOURCE_TENANT_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "tenant role or status not match", K(id_), K(tenant_role), K(tenant_status), K(service_attr));
     } else if (OB_FAIL(proxy_util.get_max_log_info(share::ObLSID(id_), access_mode, archive_scn))) {
       CLOG_LOG(WARN, "get max_log info failed", K(id_));
     } else if (!palf::is_valid_access_mode(access_mode) || palf::AccessMode::RAW_WRITE != access_mode) {
-      ret = OB_EAGAIN;   // TODO 错误码
+      ret = OB_SOURCE_LS_STATE_NOT_MATCH;
       CLOG_LOG(WARN, "access_mode not match", K(id_), K(access_mode));
     } else if (end_scn < archive_scn) {
       CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_scn), K(end_scn));
@@ -825,6 +836,101 @@ bool ObLogRestoreHandler::restore_to_end_unlock_() const
     bret = scn >= recovery_end_scn;
   }
   return bret;
+}
+
+int ObLogRestoreHandler::get_ls_restore_status_info(RestoreStatusInfo &restore_status_info)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  LSN lsn;
+  share::SCN scn;
+  share::ObTaskId trace_id;
+  int ret_code = OB_SUCCESS;
+  bool error_exist = false;
+  bool is_leader = true;
+  RestoreSyncStatus sync_status;
+
+  if (!is_strong_leader(role_)) {
+    is_leader = false;
+    CLOG_LOG(TRACE, "restore not leader", K(role_));
+  } else if (OB_FAIL(palf_handle_.get_end_lsn(lsn))) {
+    CLOG_LOG(WARN, "fail to get end lsn when get ls restore status info");
+  } else if (OB_FAIL(palf_handle_.get_end_scn(scn))) {
+    CLOG_LOG(WARN, "fail to get end scn");
+  } else if (OB_FAIL(get_restore_error(trace_id, ret_code, error_exist))) {
+    CLOG_LOG(WARN, "fail to get restore error");
+  } else if (error_exist) {
+    CLOG_LOG(TRACE, "start to mark restore sync error", K(trace_id), K(ret_code), K(context_.error_context_.error_type_));
+    if (OB_FAIL(get_err_code_and_message_(ret_code, context_.error_context_.error_type_, sync_status, restore_status_info.comment_))) {
+      CLOG_LOG(WARN, "fail to get err code and message", K(ret_code), K(context_.error_context_.error_type_), K(sync_status));
+    } else {
+      restore_status_info.sync_status_ = sync_status;
+    }
+  } else if (!error_exist) {
+    restore_status_info.sync_status_ = RestoreSyncStatus::RESTORE_SYNC_NORMAL;
+    CLOG_LOG(TRACE, "error is not exist, restore sync is normal", K(error_exist), K(restore_status_info.sync_status_));
+  }
+  if (is_leader && OB_SUCC(ret)) {
+    restore_status_info.ls_id_ = id_;
+    restore_status_info.err_code_ = ret_code;
+    restore_status_info.sync_lsn_ = lsn.val_;
+    restore_status_info.sync_scn_ = scn;
+    if (OB_FAIL(restore_status_info.comment_.assign_fmt("%s", type_str[int(restore_status_info.sync_status_)]))) {
+      CLOG_LOG(WARN, "fail to assign comment", K(sync_status));
+    } else {
+      CLOG_LOG(TRACE, "success to get error code and message", K(restore_status_info));
+    }
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::get_err_code_and_message_(int ret_code,
+    ObLogRestoreErrorContext::ErrorType error_type,
+    RestoreSyncStatus &sync_status,
+    ObSqlString &comment)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ERR_OUT_OF_LOWER_BOUND == ret_code) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_STANDBY_LOG_NOT_MATCH;
+  } else if (OB_ERR_UNEXPECTED == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_SOURCE_HAS_A_GAP;
+  } else if (-ER_CONNECT_FAILED == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::FETCH_LOG) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_CHECK_NETWORK;
+  } else if (-ER_ACCESS_DENIED_ERROR == ret_code && error_type == ObLogRestoreErrorContext::ErrorType::FETCH_LOG) {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_CHECK_USER_OR_PASSWORD;
+  } else {
+    sync_status = RestoreSyncStatus::RESTORE_SYNC_NOT_AVAILABLE;
+  }
+  CLOG_LOG(TRACE, "get err code and message succ", K(sync_status), K(comment));
+  return ret;
+}
+
+RestoreStatusInfo::RestoreStatusInfo()
+  : ls_id_(share::ObLSID::INVALID_LS_ID),
+    sync_lsn_(LOG_INVALID_LSN_VAL),
+    sync_status_(RestoreSyncStatus::INVALID_RESTORE_SYNC_STATUS),
+    err_code_(OB_SUCCESS)
+{
+  sync_scn_.reset();
+  comment_.reset();
+}
+
+void RestoreStatusInfo::reset()
+{
+  ls_id_ = share::ObLSID::INVALID_LS_ID;
+  sync_lsn_ = LOG_INVALID_LSN_VAL;
+  sync_scn_.reset();
+  sync_status_ = RestoreSyncStatus::INVALID_RESTORE_SYNC_STATUS;
+  err_code_ = OB_SUCCESS;
+  comment_.reset();
+}
+
+bool RestoreStatusInfo::is_valid() const
+{
+  return ls_id_ != share::ObLSID::INVALID_LS_ID
+      && sync_lsn_ != LOG_INVALID_LSN_VAL
+      && sync_scn_.is_valid()
+      && sync_status_ != RestoreSyncStatus::INVALID_RESTORE_SYNC_STATUS;
 }
 } // namespace logservice
 } // namespace oceanbase

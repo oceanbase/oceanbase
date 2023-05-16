@@ -2470,6 +2470,8 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
       if (log_op_def::LOG_TABLE_SCAN == get_type()) {
         // base table constraints for TABLE SCAN
         LocationConstraint loc_cons;
+        ObDupTabConstraint dup_rep_cons;
+        bool found_dup_con = false;
         ObLogTableScan *log_scan_op = dynamic_cast<ObLogTableScan *>(this);
         if (log_scan_op->get_contains_fake_cte()) {
           // do nothing
@@ -2479,6 +2481,11 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           // dblink table, execute at other cluster
         } else if (OB_FAIL(get_tbl_loc_cons_for_scan(loc_cons))) {
           LOG_WARN("failed to get location constraint for table scan op", K(ret));
+        } else if (OB_FAIL(get_dup_replica_cons_for_scan(dup_rep_cons, found_dup_con))) {
+          LOG_WARN("failed to get duplicate table replica constraint for table scan op", K(ret));
+        } else if (found_dup_con &&
+                   OB_FAIL(loc_cons_ctx->dup_table_replica_cons_.push_back(dup_rep_cons))) {
+          LOG_WARN("failed to push back location constraint", K(ret));
         } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
           LOG_WARN("failed to push back location constraint", K(ret));
         } else if (OB_FAIL(strict_pwj_constraint_.push_back(
@@ -2704,6 +2711,10 @@ int ObLogicalOperator::get_tbl_loc_cons_for_scan(LocationConstraint &loc_cons)
     loc_cons.key_.table_id_ = log_scan_op->get_table_id();
     loc_cons.table_partition_info_ = log_scan_op->get_table_partition_info();
     loc_cons.key_.ref_table_id_ = log_scan_op->get_real_index_table_id();
+    if (NULL != sharding->get_phy_table_location_info() &&
+        sharding->get_phy_table_location_info()->is_duplicate_table_not_in_dml()) {
+      loc_cons.add_constraint_flag(LocationConstraint::DupTabNotInDML);
+    }
     if (sharding->get_part_cnt() > 1 && sharding->is_distributed()) {
       if (sharding->is_partition_single()) {
         loc_cons.add_constraint_flag(LocationConstraint::SinglePartition);
@@ -2713,6 +2724,30 @@ int ObLogicalOperator::get_tbl_loc_cons_for_scan(LocationConstraint &loc_cons)
     }
 
     LOG_TRACE("initialized table's location constraint for table scan op", K(loc_cons));
+  }
+  return ret;
+}
+
+int ObLogicalOperator::get_dup_replica_cons_for_scan(ObDupTabConstraint &dup_rep_cons,
+                                                     bool &found_dup_con)
+{
+  int ret = OB_SUCCESS;
+  ObLogTableScan *log_scan_op = dynamic_cast<ObLogTableScan *>(this);
+  ObShardingInfo *sharding = NULL;
+  if (OB_ISNULL(log_scan_op) ||
+      OB_ISNULL(sharding = log_scan_op->get_sharding())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(log_scan_op));
+  } else if (NULL != sharding->get_phy_table_location_info()) {
+    // is duplicate table
+    if (log_scan_op->get_advisor_table_id() != OB_INVALID_ID &&
+        sharding->get_phy_table_location_info()->is_duplicate_table_not_in_dml()) {
+      dup_rep_cons.first_  = log_scan_op->get_table_id();
+      dup_rep_cons.second_ = log_scan_op->get_advisor_table_id();
+      found_dup_con = true;
+    } else {
+      // do nothing
+    }
   }
   return ret;
 }

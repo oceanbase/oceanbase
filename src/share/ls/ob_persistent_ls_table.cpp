@@ -199,6 +199,8 @@ int ObPersistentLSTable::construct_ls_replica(
   int64_t paxos_replica_number = OB_INVALID_COUNT;
   int64_t data_size = 0;
   int64_t required_size = 0;
+  ObString learner_list;
+  GlobalLearnerList learner_list_to_set;
   // TODO: try to fetch coulmn_value by column_name
   // column select order defined in LSTableColNames::LSTableColNames
   // location related
@@ -228,11 +230,17 @@ int ObPersistentLSTable::construct_ls_replica(
   (void)GET_COL_IGNORE_NULL_WITH_DEFAULT_VALUE(res.get_int, "paxos_replica_number", paxos_replica_number, OB_INVALID_COUNT);
   (void)GET_COL_IGNORE_NULL(res.get_int, "data_size", data_size);
   (void)GET_COL_IGNORE_NULL_WITH_DEFAULT_VALUE(res.get_int, "required_size", required_size, 0);
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(res, "learner_list", learner_list);
 
-  if (OB_FAIL(ObLSReplica::text2member_list(
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObLSReplica::text2member_list(
                 to_cstring(member_list),
                 member_list_to_set))) {
     LOG_WARN("text2member_list failed", KR(ret));
+  } else if (OB_FAIL(ObLSReplica::text2learner_list(
+                to_cstring(learner_list),
+                learner_list_to_set))) {
+    LOG_WARN("text2member_list for learner_list failed", KR(ret));
   } else if (false == server.set_ip_addr(ip, static_cast<uint32_t>(port))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(ip), K(port));
@@ -265,17 +273,13 @@ int ObPersistentLSTable::construct_ls_replica(
       zone,
       paxos_replica_number,
       data_size,
-      required_size))) {
+      required_size,
+      member_list_to_set,
+      learner_list_to_set))) {
     LOG_WARN("fail to init a ls replica", KR(ret), K(create_time_us), K(modify_time_us),
               K(tenant_id), K(ls_id), K(server), K(sql_port), K(role),
               K(replica_type), K(proposal_id), K(unit_id), K(zone),
-              K(paxos_replica_number));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_list_to_set.count(); i++) {
-      if (OB_FAIL(replica.add_member(member_list_to_set.at(i)))) {
-        LOG_WARN("push_back failed", KR(ret));
-      }
-    }
+              K(paxos_replica_number), K(member_list_to_set), K(learner_list_to_set));
   }
 
   LOG_DEBUG("construct log stream replica", KR(ret), K(replica));
@@ -553,7 +557,8 @@ int ObPersistentLSTable::fill_dml_splicer_(
 {
   int ret = OB_SUCCESS;
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
-  char member_list[MAX_MEMBER_LIST_LENGTH] = "";
+  ObSqlString member_list;
+  ObSqlString learner_list;
   if (!replica.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid replica", KR(ret), K(replica));
@@ -561,15 +566,17 @@ int ObPersistentLSTable::fill_dml_splicer_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("convert server ip to string failed", KR(ret), "server", replica.get_server());
   } else if (OB_FAIL(ObLSReplica::member_list2text(
-              replica.get_member_list(), member_list, MAX_MEMBER_LIST_LENGTH))) {
-    LOG_WARN("member_list2text failed", K(replica), KR(ret));
+              replica.get_member_list(), member_list))) {
+    LOG_WARN("member_list2text failed", KR(ret), K(replica));
+  } else if (OB_FAIL(replica.get_learner_list().transform_to_string(learner_list))) {
+    LOG_WARN("failed to transform GlobalLearnerList to ObSqlString", KR(ret), K(replica));
   } else if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", replica.get_tenant_id()))  //location related
         || OB_FAIL(dml_splicer.add_pk_column("ls_id", replica.get_ls_id().id()))
         || OB_FAIL(dml_splicer.add_pk_column("svr_ip", ip))
         || OB_FAIL(dml_splicer.add_pk_column("svr_port", replica.get_server().get_port()))
         || OB_FAIL(dml_splicer.add_column("sql_port", replica.get_sql_port()))
         || OB_FAIL(dml_splicer.add_column("role", replica.get_role()))
-        || OB_FAIL(dml_splicer.add_column("member_list", member_list))
+        || OB_FAIL(dml_splicer.add_column("member_list", member_list.empty() ? "" : member_list.ptr()))
         || OB_FAIL(dml_splicer.add_column("proposal_id", replica.get_proposal_id()))
         || OB_FAIL(dml_splicer.add_column("replica_type", replica.get_replica_type()))
         || OB_FAIL(dml_splicer.add_column("replica_status", ob_replica_status_str(replica.get_replica_status())))
@@ -579,9 +586,23 @@ int ObPersistentLSTable::fill_dml_splicer_(
         || OB_FAIL(dml_splicer.add_column("zone", replica.get_zone().ptr()))
         || OB_FAIL(dml_splicer.add_column("paxos_replica_number", replica.get_paxos_replica_number()))
         || OB_FAIL(dml_splicer.add_column("data_size", replica.get_data_size()))
-        || OB_FAIL(dml_splicer.add_column("required_size", replica.get_required_size()))) {
+        || OB_FAIL(dml_splicer.add_column("required_size", replica.get_required_size()))){
     LOG_WARN("add column failed", KR(ret), K(replica));
   }
+
+  uint64_t tenant_to_check_data_version = replica.get_tenant_id();
+  bool is_compatible_with_readonly_replica = false;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+  } else if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
+                                      tenant_to_check_data_version, is_compatible_with_readonly_replica))) {
+    LOG_WARN("fail to check compat version with readonly replica", KR(tmp_ret), K(tenant_to_check_data_version));
+  } else if (is_compatible_with_readonly_replica) {
+    if (OB_FAIL(dml_splicer.add_column("learner_list", learner_list.empty() ? "" : learner_list.ptr()))) {
+      LOG_WARN("fail to add learner list column", KR(ret));
+    }
+  }
+
   return ret;
 }
 

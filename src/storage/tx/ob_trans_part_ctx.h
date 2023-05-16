@@ -95,6 +95,7 @@ class ObPartTransCtx : public ObTransCtx,
   friend class MockObTxCtx;
   friend class ObTxELRHandler;
   friend class ObIRetainCtxCheckFunctor;
+  friend class memtable::ObRedoLogGenerator;
 public:
   ObPartTransCtx()
       : ObTransCtx("participant", ObTransCtxType::PARTICIPANT), ObTsCbTask(),
@@ -249,8 +250,13 @@ public:
 private:
   void default_init_();
   int init_memtable_ctx_(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  bool is_in_2pc_() const;
+  // Please use it carefully, because it only refer to the downstream_state_
+  bool is_in_durable_2pc_() const;
   bool is_logging_() const;
+
+  // It is decided based on both durable 2pc state and on the fly logging.
+  // So it can be used safely at any time.
+  bool is_in_2pc_() const;
 
   // force abort but not submit abort log
   bool need_force_abort_() const;
@@ -284,11 +290,8 @@ public:
   // ========================================================
   // newly added for 4.0
 
-  void set_dup_table_tx()
-  {
-    exec_info_.is_dup_tx_ = true;
-    exec_info_.trans_type_ = TransType::DIST_TRANS;
-  }
+  int retry_dup_trx_before_prepare(const share::SCN &before_prepare_version);
+  int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
   int set_scheduler(const common::ObAddr &scheduler);
   const common::ObAddr &get_scheduler() const;
   int on_success(ObTxLogCb *log_cb);
@@ -430,6 +433,8 @@ private:
                                    bool &has_redo,
                                    memtable::ObRedoLogSubmitHelper &helper);
 
+  int submit_pending_log_block_(ObTxLogBlock &log_block, memtable::ObRedoLogSubmitHelper &helper);
+
   int submit_big_segment_log_();
   int prepare_big_segment_submit_(ObTxLogCb *segment_cb,
                                   const share::SCN &base_scn,
@@ -462,9 +467,21 @@ private:
   // and is callbacked via on_failure, redo lsns should be fixed
   int fix_redo_lsns_(const ObTxLogCb *log_cb);
 
-  int search_unsubmitted_dup_table_redo_();
+  int search_unsubmitted_dup_table_redo_() __attribute__((__noinline__));
   int dup_table_tx_redo_sync_();
+  int check_dup_trx_with_submitting_all_redo(ObTxLogBlock &log_block,
+                                             memtable::ObRedoLogSubmitHelper &helper);
+  bool is_dup_table_redo_sync_completed_();
   int dup_table_tx_pre_commit_();
+  int merge_tablet_modify_record_(const common::ObTabletID &tablet_id);
+  int check_tablet_modify_record_();
+  void set_dup_table_tx_()
+  {
+    exec_info_.is_dup_tx_ = true;
+    exec_info_.trans_type_ = TransType::DIST_TRANS;
+  }
+  int dup_table_before_preapre_(const share::SCN &before_prepare_version, const bool before_replay  = false);
+  int clear_dup_table_redo_sync_result_();
 
   int do_local_tx_end_(TxEndAction tx_end_action);
   // int on_local_tx_end_(TxEndAction tx_end_action);
@@ -528,6 +545,8 @@ private:
 
   int prepare_mul_data_source_tx_end_(bool is_commit);
 
+  int errism_dup_table_redo_sync_();
+  int errism_submit_prepare_log_();
 protected:
   virtual int get_gts_(share::SCN &gts);
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);
@@ -812,6 +831,8 @@ private:
   share::SCN start_replay_ts_; // replay debug
 
   share::SCN start_working_log_ts_;
+
+  share::SCN dup_table_follower_max_read_version_;
 
   int16_t retain_cause_;
 

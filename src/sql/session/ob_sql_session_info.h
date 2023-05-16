@@ -212,6 +212,7 @@ enum SessionSyncInfoType {
   SESSION_SYNC_TXN_DYNAMIC_INFO = 6,      // 6: txn dynamic info
   SESSION_SYNC_TXN_PARTICIPANTS_INFO = 7, // 7: txn dynamic info
   SESSION_SYNC_TXN_EXTRA_INFO = 8,        // 8: txn dynamic info
+  SESSION_SYNC_SEQUENCE_CURRVAL = 9, // for sequence currval
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -307,6 +308,21 @@ public:
                                 const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
+};
+
+class ObSequenceCurrvalEncoder : public ObSessInfoEncoder {
+public:
+  ObSequenceCurrvalEncoder() : ObSessInfoEncoder() {}
+  virtual ~ObSequenceCurrvalEncoder() {}
+  virtual int serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf, const int64_t length, int64_t &pos) override;
+  virtual int64_t get_serialize_size(ObSQLSessionInfo &sess) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
+  virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
+  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
+                                const char* last_sess_buf, int64_t last_sess_length) override;
+  virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
+                                int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
 };
 
 class ObControlInfoEncoder : public ObSessInfoEncoder {
@@ -637,7 +653,9 @@ public:
   bool is_has_query_executed() {return has_query_executed_; }
   void set_has_query_executed(bool has_query_executed) {
                             has_query_executed_ = has_query_executed; }
-
+  bool is_latest_sess_info() {return is_latest_sess_info_; }
+  void set_latest_sess_info(bool is_latest_sess_info) {
+                            is_latest_sess_info_ = is_latest_sess_info; }
 
   void reset_warnings_buf()
   {
@@ -921,6 +939,11 @@ public:
                          uint64_t seq_id,
                          const share::ObSequenceValue &value);
 
+  int drop_sequence_value_if_exists(uint64_t tenant_id, uint64_t seq_id);
+  void reuse_all_sequence_value()
+  {
+    sequence_currval_map_.reuse();
+  }
   int get_context_values(const common::ObString &context_name,
                         const common::ObString &attribute,
                         common::ObString &value,
@@ -975,7 +998,9 @@ public:
   ObAppCtxInfoEncoder &get_app_ctx_encoder() { return app_ctx_info_encoder_; }
   ObClientIdInfoEncoder &get_client_info_encoder() { return client_id_info_encoder_;}
   ObControlInfoEncoder &get_control_info_encoder() { return control_info_encoder_;}
+  ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
+  ObSequenceCurrvalMap &get_sequence_currval_map() { return sequence_currval_map_; }
   int get_mem_ctx_alloc(common::ObIAllocator *&alloc);
   int update_sess_sync_info(const SessionSyncInfoType sess_sync_info_type,
                                 const char *buf, const int64_t length, int64_t &pos);
@@ -992,6 +1017,10 @@ public:
   void set_expect_group_id(int64_t group_id) { expect_group_id_ = group_id; }
 	bool get_group_id_not_expected() const { return group_id_not_expected_; }
   void set_group_id_not_expected(bool value) { group_id_not_expected_ = value; }
+  int is_force_temp_table_inline(bool &force_inline) const;
+  int is_force_temp_table_materialize(bool &force_materialize) const;
+  int is_temp_table_transformation_enabled(bool &transformation_enabled) const;
+  int is_groupby_placement_transformation_enabled(bool &transformation_enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1248,6 +1277,7 @@ private:
   // There is a scenario, when the connection is established for the first time,
   // the route is immediately switched and no request is initiated, and no verification is required at this time
   bool has_query_executed_;  //add for routing without synchronizing session information
+  bool is_latest_sess_info_; //add for the current session information is latest flag
   char module_buf_[common::OB_MAX_MOD_NAME_LENGTH];
   char action_buf_[common::OB_MAX_ACT_NAME_LENGTH];
   char client_info_buf_[common::OB_MAX_CLIENT_INFO_LENGTH];
@@ -1267,7 +1297,8 @@ private:
                             &txn_static_info_encoder_,
                             &txn_dynamic_info_encoder_,
                             &txn_participants_info_encoder_,
-                            &txn_extra_info_encoder_
+                            &txn_extra_info_encoder_,
+                            &sequence_currval_encoder_
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -1279,6 +1310,7 @@ private:
   ObTxnDynamicInfoEncoder txn_dynamic_info_encoder_;
   ObTxnParticipantsInfoEncoder txn_participants_info_encoder_;
   ObTxnExtraInfoEncoder txn_extra_info_encoder_;
+  ObSequenceCurrvalEncoder sequence_currval_encoder_;
 public:
   void post_sync_session_info();
   void prep_txn_free_route_baseline(bool reset_audit = true);

@@ -553,13 +553,6 @@ void ObDealWithRpcTimeoutCall::deal_with_rpc_timeout_err()
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
                 "change error code to OB_CONNECT_ERROR", K(ret_),
                 K(timeout_ts_), K(cur_timestamp));
-      if (NULL != retry_info_) {
-        int a_ret = OB_SUCCESS;
-        if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info_->add_invalid_server_distinctly(
-                        addr_)))) {
-          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K_(trace_id), K(a_ret), K_(addr));
-        }
-      }
       ret_ = OB_RPC_CONNECT_ERROR;
     } else {
       LOG_DEBUG("rpc return OB_TIMEOUT, and it is actually timeout, "

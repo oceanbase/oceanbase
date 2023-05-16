@@ -72,6 +72,7 @@ public:
   int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
   void unlock(const uint32_t lock_tid);
   int update_tablet(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
+  int64_t get_count();
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
@@ -85,12 +86,12 @@ public:
 
 private:
   int64_t get_idx(const int64_t pos) const;
-  int64_t get_count() const;
   int alloc_ddl_kv(ObTableHandleV2 &kv_handle);
   void free_ddl_kv(const int64_t idx);
   int get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle);
   void try_get_ddl_kv_unlock(const share::SCN &scn, ObTableHandleV2 &kv_handle);
   int get_ddl_kvs_unlock(const bool frozen_only, ObTablesHandleArray &kv_handle_array);
+  int64_t get_count_nolock() const;
   int update_ddl_major_sstable();
   int create_empty_ddl_sstable(ObTableHandleV2 &table_handle);
   void cleanup_unlock();

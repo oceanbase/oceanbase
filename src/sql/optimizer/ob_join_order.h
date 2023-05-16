@@ -417,6 +417,17 @@ struct EstimateCostInfo {
       }
       return ret_sharding;
     }
+    inline ObShardingInfo* try_get_sharding_with_table_location() const
+    {
+      ObShardingInfo *ret_sharding = NULL;
+      if (NULL != strong_sharding_ && NULL != strong_sharding_->get_phy_table_location_info()) {
+        ret_sharding = strong_sharding_;
+      } else if (!weak_sharding_.empty() && NULL != weak_sharding_.at(0)
+                 && NULL != weak_sharding_.at(0)->get_phy_table_location_info()) {
+        ret_sharding = weak_sharding_.at(0);
+      }
+      return ret_sharding;
+    }
     inline bool is_local() const
     {
       return (NULL != strong_sharding_ && strong_sharding_->is_local());
@@ -472,7 +483,8 @@ struct EstimateCostInfo {
     }
     inline bool parallel_more_than_part_cnt() const
     {
-      return NULL != get_sharding() && parallel_ > get_sharding()->get_part_cnt();
+      const ObShardingInfo *sharding = try_get_sharding_with_table_location();
+      return NULL != sharding && parallel_ > sharding->get_part_cnt();
     }
     int compute_path_property_from_log_op();
     int set_parallel_and_server_info_for_match_all();
@@ -1896,6 +1908,7 @@ struct NullAwareAntiJoinInfo {
                                         bool config_disable,
                                         bool is_current_dfo,
                                         bool is_fully_partition_wise,
+                                        int64_t current_dfo_level,
                                         const ObIArray<ObRawExpr*> &left_join_conditions,
                                         const ObIArray<ObRawExpr*> &right_join_conditions,
                                         ObIArray<JoinFilterInfo> &join_filter_infos);

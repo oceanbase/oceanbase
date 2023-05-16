@@ -20,6 +20,7 @@
 #include "common/ob_role.h"      // for ObRole
 #include "common/ob_member_list.h" // for ObMemberList
 #include "share/restore/ob_ls_restore_status.h"
+#include "common/ob_learner_list.h" // for GlobalLearnerList
 
 namespace oceanbase
 {
@@ -104,7 +105,9 @@ public:
       const ObString &zone,
       const int64_t paxos_replica_number,
       const int64_t data_size,
-      const int64_t required_size);
+      const int64_t required_size,
+      const MemberList &member_list,
+      const GlobalLearnerList &learner_list);
   // check-related functions
   inline bool is_valid() const;
   inline bool is_strong_leader() const { return common::is_strong_leader(role_); }
@@ -114,7 +117,8 @@ public:
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
   inline bool is_in_restore() const { return !restore_status_.is_restore_none(); }
   // format-related functions
-  static int member_list2text(const MemberList &member_list, char *text, const int64_t length);
+  static int member_list2text(const MemberList &member_list, ObSqlString &text);
+  static int text2learner_list(const char *text, GlobalLearnerList &learner_list);
   static int text2member_list(const char *text, MemberList &member_list);
   // transform ObMemberList into MemberList
   static int transform_ob_member_list(
@@ -145,9 +149,11 @@ public:
   inline common::ObZone get_zone() const { return zone_; }
   inline int64_t get_paxos_replica_number() const { return paxos_replica_number_; }
   inline bool get_in_member_list() const { return in_member_list_; }
+  inline bool get_in_learner_list() const { return in_learner_list_; }
   inline int64_t get_member_time_us() const { return member_time_us_; }
   inline int64_t get_data_size() const { return data_size_; }
   inline int64_t get_required_size() const { return required_size_; }
+  inline const common::GlobalLearnerList &get_learner_list() const { return learner_list_; }
 
   // functions to set values
   // ATTENTION:we use set_x() in cases for special needs below
@@ -161,12 +167,13 @@ public:
   inline void set_replica_type(const common::ObReplicaType &replica_type) { replica_type_ = replica_type; }
 
   inline int add_member(SimpleMember m);
+  inline int add_learner(const ObMember &m);
   inline void update_in_member_list_status(const bool in_member_list, const int64_t member_time_us);
+  inline void update_in_learner_list_status(const bool in_learner_list, const int64_t learner_time_us) { in_learner_list_ = in_learner_list; member_time_us_ = learner_time_us; }
   //set replica role(FOLLOWER), proposal_id(0), modify_time(now)
   inline void update_to_follower_role();
+  bool learner_list_is_equal(const common::GlobalLearnerList &a, const common::GlobalLearnerList &b) const;
   bool member_list_is_equal(const MemberList &a, const MemberList &b) const;
-  int set_member_list(const MemberList &member_list);
-
 private:
   int64_t create_time_us_;               // store utc time
   int64_t modify_time_us_;               // store utc time
@@ -192,6 +199,8 @@ private:
   // no need to SERIALIZE, can be constructd by ObLSInfo::update_replica_status()
   bool in_member_list_;                  // whether in member_list
   int64_t member_time_us_;               // member_time_us
+  common::GlobalLearnerList learner_list_;              // list to record R-replicas
+  bool in_learner_list_;                 // whether in learner_list
 };
 
 // [class_full_name] class ObLSInfo
@@ -262,6 +271,11 @@ private:
 inline int ObLSReplica::add_member(SimpleMember m)
 {
   return member_list_.push_back(m);
+}
+
+inline int ObLSReplica::add_learner(const ObMember &m)
+{
+  return learner_list_.add_learner(m);
 }
 
 inline void ObLSReplica::update_in_member_list_status(

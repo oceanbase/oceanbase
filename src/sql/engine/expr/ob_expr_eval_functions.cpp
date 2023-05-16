@@ -331,6 +331,7 @@
 #include "ob_expr_normal.h"
 #include "ob_expr_uniform.h"
 #include "ob_expr_prefix_pattern.h"
+#include "ob_expr_initcap.h"
 
 namespace oceanbase
 {
@@ -1018,7 +1019,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprRandom::calc_random_expr_const_seed,                          /* 589 */
   ObExprRandom::calc_random_expr_nonconst_seed,                       /* 590 */
   ObExprRandstr::calc_random_str,                                     /* 591 */
-  NULL, //ObExprNlsInitCap::calc_nls_initcap_expr                     /* 592 */
+  ObExprNlsInitCap::calc_nls_initcap_expr,                            /* 592 */
   ObExprPrefixPattern::eval_prefix_pattern,                           /* 593 */
   ObExprSysMakeXML::eval_sys_makexml,                                 /* 594 */
   ObExprPrivXmlBinary::eval_priv_xml_binary,                          /* 595 */
@@ -1147,7 +1148,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprDecode::eval_decode_batch,                                    /* 108 */
   ObExprCoalesce::calc_batch_coalesce_expr,                           /* 109 */
   ObExprIsNot::calc_batch_is_not_null,                                /* 110 */
-  NULL, //ObExprNlsInitCap::calc_nls_initcap_batch                    /* 111 */
+  ObExprNlsInitCap::calc_nls_initcap_batch,                           /* 111 */
   ObExprJoinFilter::eval_range_filter_batch,                          /* 112 */
   ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */

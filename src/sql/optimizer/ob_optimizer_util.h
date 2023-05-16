@@ -1307,6 +1307,7 @@ public:
                                               ObIAllocator &allocator,
                                               const ObShardingInfo &src_sharding,
                                               const int64_t reselected_pos,
+                                              bool can_reselect_replica,
                                               ObShardingInfo *&target_sharding);
 
   static int64_t get_join_style_parallel(const int64_t left_parallel,

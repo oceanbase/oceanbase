@@ -2916,27 +2916,27 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[222].info_ = "When enabled, show create table will show the strict compatible results with the compatibility mode." ;
-      ObSysVars[222].name_ = "_show_ddl_in_compat_mode" ;
+      ObSysVars[222].info_ = "can control the behavior of set query, when true, set query will generate a serial plan, which ensure the output order of result set is ordered " ;
+      ObSysVars[222].name_ = "_force_order_preserve_set" ;
       ObSysVars[222].data_type_ = ObIntType ;
       ObSysVars[222].value_ = "0" ;
-      ObSysVars[222].flags_ = ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[222].id_ = SYS_VAR__SHOW_DDL_IN_COMPAT_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__SHOW_DDL_IN_COMPAT_MODE] = 222 ;
-    ObSysVars[222].alias_ = "OB_SV__SHOW_DDL_IN_COMPAT_MODE" ;
+      ObSysVars[222].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[222].id_ = SYS_VAR__FORCE_ORDER_PRESERVE_SET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_ORDER_PRESERVE_SET] = 222 ;
+    ObSysVars[222].alias_ = "OB_SV__FORCE_ORDER_PRESERVE_SET" ;
     }();
 
     [&] (){
-      ObSysVars[223].info_ = "can control the behavior of set query, when true, set query will generate a serial plan, which ensure the output order of result set is ordered " ;
-      ObSysVars[223].name_ = "_force_order_preserve_set" ;
+      ObSysVars[223].info_ = "When enabled, show create table will show the strict compatible results with the compatibility mode." ;
+      ObSysVars[223].name_ = "_show_ddl_in_compat_mode" ;
       ObSysVars[223].data_type_ = ObIntType ;
       ObSysVars[223].value_ = "0" ;
-      ObSysVars[223].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::ORACLE_ONLY | ObSysVarFlag::INVISIBLE ;
-      ObSysVars[223].id_ = SYS_VAR__FORCE_ORDER_PRESERVE_SET ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__FORCE_ORDER_PRESERVE_SET)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR__FORCE_ORDER_PRESERVE_SET] = 223 ;
-    ObSysVars[223].alias_ = "OB_SV__FORCE_ORDER_PRESERVE_SET" ;
+      ObSysVars[223].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[223].id_ = SYS_VAR__SHOW_DDL_IN_COMPAT_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__SHOW_DDL_IN_COMPAT_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__SHOW_DDL_IN_COMPAT_MODE] = 223 ;
+    ObSysVars[223].alias_ = "OB_SV__SHOW_DDL_IN_COMPAT_MODE" ;
     }();
 
     [&] (){

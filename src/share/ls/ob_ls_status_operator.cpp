@@ -28,6 +28,7 @@
 #include "logservice/palf/log_define.h" // INVALID_PROPOSAL_ID
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
 #include "share/scn.h" // SCN
+#include "share/ls/ob_ls_operator.h" //ObLSFlag
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -56,7 +57,8 @@ bool ObLSStatusInfo::is_valid() const
          && (ls_id_.is_sys_ls()
              || (OB_INVALID_ID != ls_group_id_
                  && OB_INVALID_ID != unit_group_id_))
-         && share::OB_LS_EMPTY != status_;
+         && share::OB_LS_EMPTY != status_
+         && flag_.is_valid();
 }
 
 void ObLSStatusInfo::reset()
@@ -66,6 +68,7 @@ void ObLSStatusInfo::reset()
   ls_group_id_ = OB_INVALID_ID;
   unit_group_id_ = OB_INVALID_ID;
   status_ = OB_LS_EMPTY;
+  flag_.reset();
 }
 
 int ObLSStatusInfo::init(const uint64_t tenant_id,
@@ -73,17 +76,21 @@ int ObLSStatusInfo::init(const uint64_t tenant_id,
                          const uint64_t ls_group_id,
                          const ObLSStatus status,
                          const uint64_t unit_group_id,
-                         const ObZone &primary_zone)
+                         const ObZone &primary_zone,
+                         const ObLSFlag &flag)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!id.is_valid()
-                  || OB_INVALID_TENANT_ID == tenant_id
-                  || OB_LS_EMPTY == status)) {
+        || !flag.is_valid()
+        || OB_INVALID_TENANT_ID == tenant_id
+        || OB_LS_EMPTY == status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(id), K(ls_group_id),
-              K(status), K(unit_group_id));
+              K(status), K(unit_group_id), K(flag));
   } else if (OB_FAIL(primary_zone_.assign(primary_zone))) {
     LOG_WARN("failed to assign primary zone", KR(ret), K(primary_zone));
+  } else if (OB_FAIL(flag_.assign(flag))) {
+    LOG_WARN("failed to assign ls flag", KR(ret), K(flag));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = id;
@@ -100,6 +107,8 @@ int ObLSStatusInfo::assign(const ObLSStatusInfo &other)
   if (this != &other) {
     if (OB_FAIL(primary_zone_.assign(other.primary_zone_))) {
       LOG_WARN("failed to assign other primary zone", KR(ret), K(other));
+    } else if (OB_FAIL(flag_.assign(other.flag_))) {
+      LOG_WARN("failed to assign ls flag", KR(ret), K(other));
     } else {
       tenant_id_ = other.tenant_id_;
       ls_id_ = other.ls_id_;
@@ -160,7 +169,6 @@ bool ls_is_pre_tenant_dropping_status(const ObLSStatus &status)
 {
   return OB_LS_PRE_TENANT_DROPPING == status;
 }
-
 
 bool is_valid_status_in_ls(const ObLSStatus &status)
 {
@@ -264,6 +272,7 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   UNUSEDx(current_tenant_scn, zone_priority);
   int ret = OB_SUCCESS;
   ObAllTenantInfo tenant_info;
+  ObLSFlagStr flag_str;
   if (OB_UNLIKELY(!ls_info.is_valid()
                   || !working_sw_status.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -274,16 +283,35 @@ int ObLSStatusOperator::create_new_ls(const ObLSStatusInfo &ls_info,
   } else if (working_sw_status != tenant_info.get_switchover_status()) {
     ret = OB_NEED_RETRY;
     LOG_WARN("tenant not in specified switchover status", K(ls_info), K(working_sw_status), K(tenant_info));
+  } else if (OB_FAIL(ls_info.get_flag().flag_to_str(flag_str))) {
+    LOG_WARN("fail to convert ls flag into string", KR(ret), K(ls_info));
+  } else if (ls_info.get_flag().is_duplicate_ls()) {
+    bool is_compatible = false;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
+                     ls_info.tenant_id_, is_compatible))) {
+      LOG_WARN("fail to check data version for duplicate table", KR(ret), K(ls_info));
+    } else if (!is_compatible) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("ls flag is not empty", KR(ret), K(ls_info), K(is_compatible));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
+    ObDMLSqlSplicer dml_splicer;
     common::ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("INSERT into %s (tenant_id, ls_id, status, "
-                           "ls_group_id, unit_group_id, primary_zone) "
-                           "values (%lu, %ld, '%s', %ld, %ld, '%s')",
-                           OB_ALL_LS_STATUS_TNAME, ls_info.tenant_id_, ls_info.ls_id_.id(),
-                           ls_status_to_str(ls_info.status_),
-                           ls_info.ls_group_id_, ls_info.unit_group_id_,
-                           ls_info.primary_zone_.ptr()))) {
-      LOG_WARN("failed to assing sql", KR(ret), K(ls_info));
+    const char *table_name = OB_ALL_LS_STATUS_TNAME;
+    if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", ls_info.tenant_id_))
+      || OB_FAIL(dml_splicer.add_pk_column("ls_id", ls_info.ls_id_.id()))
+      || OB_FAIL(dml_splicer.add_column("status", ls_status_to_str(ls_info.status_)))
+      || OB_FAIL(dml_splicer.add_column("ls_group_id", ls_info.ls_group_id_))
+      || OB_FAIL(dml_splicer.add_column("unit_group_id", ls_info.unit_group_id_))
+      || OB_FAIL(dml_splicer.add_column("primary_zone", ls_info.primary_zone_.ptr()))) {
+      LOG_WARN("add columns failed", KR(ret), K(ls_info));
+    } else if (!ls_info.get_flag().is_normal_flag() && OB_FAIL(dml_splicer.add_column("flag", flag_str.ptr()))) {
+      LOG_WARN("add flag column failed", KR(ret), K(ls_info), K(flag_str));
+    } else if (OB_FAIL(dml_splicer.splice_insert_sql(table_name, sql))) {
+      LOG_WARN("fail to splice insert sql", KR(ret), K(sql), K(ls_info), K(flag_str));
     } else if (OB_FAIL(exec_write(ls_info.tenant_id_, sql, this, trans))) {
       LOG_WARN("failed to exec write", KR(ret), K(ls_info), K(sql));
     }
@@ -431,13 +459,27 @@ int ObLSStatusOperator::update_ls_status_in_trans_(
     common::ObSqlString sql;
     const uint64_t exec_tenant_id =
       ObLSLifeIAgent::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''"
+    common::ObSqlString sub_string;
+    bool is_compatible_with_readonly_replica = false;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
+                                 exec_tenant_id, is_compatible_with_readonly_replica))) {
+      LOG_WARN("fail to check tenant compat version with readonly replica", KR(tmp_ret), K(exec_tenant_id));
+    } else if (is_compatible_with_readonly_replica
+               && OB_SUCCESS != (tmp_ret = sub_string.assign(", init_learner_list = '', b_init_learner_list = ''"))) {
+      LOG_WARN("fail to construct substring for learner list", KR(tmp_ret));
+      sub_string.reset();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''%.*s"
                                " where ls_id = %ld and tenant_id = %lu and status = '%s'",
                                OB_ALL_LS_STATUS_TNAME,
-                               ls_status_to_str(new_status), id.id(),
-                               tenant_id, ls_status_to_str(old_status)))) {
+                               ls_status_to_str(new_status),
+                               static_cast<int>(sub_string.length()), sub_string.ptr(),
+                               id.id(), tenant_id, ls_status_to_str(old_status)))) {
       LOG_WARN("failed to assign sql", KR(ret), K(id), K(new_status),
-               K(old_status), K(tenant_id), K(sql));
+               K(old_status), K(tenant_id), K(sub_string), K(sql));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(id), K(sql));
     }
@@ -448,30 +490,58 @@ int ObLSStatusOperator::update_ls_status_in_trans_(
 int ObLSStatusOperator::update_init_member_list(
     const uint64_t tenant_id,
     const ObLSID &id, const ObMemberList &member_list, ObISQLClient &client,
-    const ObMember &arb_member)
+    const ObMember &arb_member, const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
+  bool is_compatible_with_readonly_replica = false;
+  ObSqlString learner_list_sub_sql;
   if (OB_UNLIKELY(!id.is_valid()
                   || !member_list.is_valid()
                   || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(id), K(member_list), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
+                         ObLSLifeIAgent::get_exec_tenant_id(tenant_id),
+                         is_compatible_with_readonly_replica))) {
+    LOG_WARN("failed to check data version for read-only replica", KR(ret),
+             "exec_tenant_id", ObLSLifeIAgent::get_exec_tenant_id(tenant_id));
   } else {
     common::ObSqlString sql;
-    ObSqlString visist_member_list;
+    ObSqlString visible_member_list;
     ObString hex_member_list;
+    ObSqlString visible_learner_list;
+    ObString hex_learner_list;
     ObArenaAllocator allocator("MemberList");
-    if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visist_member_list, arb_member))) {
+    if (OB_FAIL(get_visible_member_list_str_(member_list, allocator, visible_member_list, arb_member))) {
       LOG_WARN("failed to get visible member list", KR(ret), K(member_list));
-    } else if (OB_FAIL(get_member_list_hex_(member_list, allocator, hex_member_list, arb_member))) {
+    } else if (OB_FAIL(get_list_hex_(member_list, allocator, hex_member_list, arb_member))) {
       LOG_WARN("faield to get member list hex", KR(ret), K(member_list));
+    } else if (learner_list.is_valid()) {
+      if (!is_compatible_with_readonly_replica) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("data version is below 4.2 and learner list is not null", KR(ret),
+                 "exec_tenant_id", ObLSLifeIAgent::get_exec_tenant_id(tenant_id), K(learner_list));
+      } else if (OB_FAIL(learner_list.transform_to_string(visible_learner_list))) {
+        LOG_WARN("failed to get visible learner list", KR(ret), K(learner_list));
+      } else if (OB_FAIL(get_list_hex_(learner_list, allocator, hex_learner_list, arb_member))) {
+        LOG_WARN("failed to get learner list hex", KR(ret), K(learner_list));
+      } else if (OB_FAIL(learner_list_sub_sql.assign_fmt(", init_learner_list = '%.*s', b_init_learner_list = '%.*s' ",
+                          static_cast<int>(visible_learner_list.length()), visible_learner_list.ptr(),
+                          static_cast<int>(hex_learner_list.length()), hex_learner_list.ptr()))) {
+        LOG_WARN("fail to construct learner list sub sql", KR(ret), K(visible_learner_list));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql.assign_fmt(
-            "UPDATE %s set init_member_list = '%.*s', b_init_member_list = '%.*s' "
-            "where ls_id = %ld and tenant_id = %lu and b_init_member_list is null",
-            OB_ALL_LS_STATUS_TNAME,
-            static_cast<int>(visist_member_list.length()), visist_member_list.ptr(),
-            hex_member_list.length(), hex_member_list.ptr(), id.id(), tenant_id))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(id), K(member_list), K(sql));
+                 "UPDATE %s set init_member_list = '%.*s', b_init_member_list = '%.*s'%.*s "
+                 "where ls_id = %ld and tenant_id = %lu and b_init_member_list is null",
+                 OB_ALL_LS_STATUS_TNAME,
+                 static_cast<int>(visible_member_list.length()), visible_member_list.ptr(),
+                 hex_member_list.length(), hex_member_list.ptr(),
+                 static_cast<int>(learner_list_sub_sql.length()), learner_list_sub_sql.ptr(),
+                 id.id(), tenant_id))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(id), K(member_list), K(learner_list_sub_sql), K(sql));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, client))) {
       LOG_WARN("failed to exec write", KR(ret), K(id), K(sql));
     }
@@ -542,17 +612,19 @@ int ObLSStatusOperator::get_ls_init_member_list(
     const uint64_t tenant_id,
     const ObLSID &id, ObMemberList &member_list,
     share::ObLSStatusInfo &status_info, ObISQLClient &client,
-    ObMember &arb_member)
+    ObMember &arb_member,
+    common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
+  learner_list.reset();
   status_info.reset();
   arb_member.reset();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, true /*need_member_list*/,
-                                    member_list, status_info, client, arb_member))) {
+                                    member_list, status_info, client, arb_member, learner_list))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
   }
   return ret;
@@ -564,14 +636,43 @@ int ObLSStatusOperator::get_ls_status_info(
 {
   int ret = OB_SUCCESS;
   ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
   ObMember arb_member;
   status_info.reset();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id is invalid", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_ls_status_(tenant_id, id, false /*need_member_list*/,
-                                    member_list, status_info, client, arb_member))) {
+                                    member_list, status_info, client, arb_member, learner_list))) {
     LOG_WARN("failed to get ls status", KR(ret), K(id), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::get_duplicate_ls_status_info(
+    const uint64_t tenant_id,
+    ObISQLClient &client,
+    share::ObLSStatusInfo &status_info)
+{
+  int ret = OB_SUCCESS;
+  status_info.reset();
+  ObSqlString sql;
+  bool need_member_list = false;
+  ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
+  ObMember arb_member;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "SELECT * FROM %s where tenant_id = %lu and flag like \"%%%s%%\"",
+                 OB_ALL_LS_STATUS_TNAME, tenant_id,
+                 LS_FLAG_ARRAY[ObLSFlag::DUPLICATE_FLAG]))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
+                                          client, member_list, status_info, arb_member, learner_list))) {
+    LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
+             get_exec_tenant_id(tenant_id), K(need_member_list));
   }
   return ret;
 }
@@ -632,32 +733,85 @@ int ObLSStatusOperator::get_visible_member_list_str_(const ObMemberList &member_
   return ret;
 }
 
-int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
-                                                    common::ObIAllocator &allocator,
-                                                    common::ObString &hex_str,
-                                                    const ObMember &arb_member)
+template<typename T>
+int ObLSStatusOperator::set_list_with_hex_str_(
+    const common::ObString &str,
+    T &list,
+    ObMember &arb_member)
+{
+  int ret = OB_SUCCESS;
+  list.reset();
+  arb_member.reset();
+  char *deserialize_buf = NULL;
+  const int64_t str_size = str.length();
+  const int64_t deserialize_size = str.length() / 2 + 1;
+  int64_t deserialize_pos = 0;
+  ObArenaAllocator allocator("MemberList");
+  if (OB_UNLIKELY(str.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("str is empty", KR(ret));
+  } else if (OB_ISNULL(deserialize_buf = static_cast<char*>(allocator.alloc(deserialize_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", KR(ret), K(deserialize_size));
+  } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
+    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
+  } else if (OB_FAIL(list.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
+    LOG_WARN("fail to deserialize set member list arg", KR(ret), K(deserialize_pos), K(deserialize_size),
+             K(str));
+  } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+  } else if (deserialize_pos < deserialize_size - 1) {
+    //When deserialize_buf applies for memory, it applies for one more storage '\0',
+    //so after member_list is deserialized,
+    //pos can only go to the position of deserialize_size - 1, and will not point to '\0'
+    // have to parse flag
+    ObMemberListFlag flag;
+    if (OB_FAIL(flag.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
+      LOG_WARN("fail to deserialize flag", KR(ret), K(deserialize_pos), K(deserialize_size));
+    } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+    } else if (flag.is_arb_member()) {
+      if (OB_FAIL(arb_member.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
+        LOG_WARN("fail to deserialize arb member", KR(ret), K(deserialize_pos), K(deserialize_size));
+      } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
+      }
+    }
+  }
+  return ret;
+}
+
+template<typename T>
+int ObLSStatusOperator::get_list_hex_(
+    const T &list,
+    common::ObIAllocator &allocator,
+    common::ObString &hex_str,
+    const ObMember &arb_member)
 {
   int ret = OB_SUCCESS;
   char *serialize_buf = NULL;
   ObMemberListFlag arb_flag(ObMemberListFlag::HAS_ARB_MEMBER);
   const int64_t flag_size = arb_member.is_valid() ? arb_flag.get_serialize_size() : 0;
   const int64_t arb_member_serialize_size = arb_member.is_valid() ? arb_member.get_serialize_size() : 0;
-  const int64_t serialize_size = member_list.get_serialize_size() + flag_size + arb_member_serialize_size;
+  const int64_t serialize_size = list.get_serialize_size() + flag_size + arb_member_serialize_size;
   int64_t serialize_pos = 0;
   char *hex_buf = NULL;
   const int64_t hex_size = 2 * serialize_size;
   int64_t hex_pos = 0;
-  if (OB_UNLIKELY(!member_list.is_valid())) {
+  if (OB_UNLIKELY(!list.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("member_list is invlaid", KR(ret), K(member_list));
+    LOG_WARN("list is invalid", KR(ret), K(list));
   } else if (OB_UNLIKELY(hex_size > OB_MAX_LONGTEXT_LENGTH + 1)) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("format str is too long", KR(ret), K(hex_size), K(member_list), K(arb_member));
+    LOG_WARN("format str is too long", KR(ret), K(hex_size), K(list), K(arb_member));
   } else if (OB_ISNULL(serialize_buf = static_cast<char *>(allocator.alloc(serialize_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc buf", KR(ret), K(serialize_size));
-  } else if (OB_FAIL(member_list.serialize(serialize_buf, serialize_size, serialize_pos))) {
-    LOG_WARN("failed to serialize set member list arg", KR(ret), K(member_list), K(serialize_size), K(serialize_pos));
+  } else if (OB_FAIL(list.serialize(serialize_buf, serialize_size, serialize_pos))) {
+    LOG_WARN("failed to serialize set list arg", KR(ret), K(list), K(serialize_size), K(serialize_pos));
   } else if (0 != flag_size && OB_FAIL(arb_flag.serialize(serialize_buf, serialize_size, serialize_pos))) {
     LOG_WARN("failed to serialize flag", KR(ret), K(arb_flag), K(serialize_size), K(serialize_pos));
   } else if (0 != arb_member_serialize_size && OB_FAIL(arb_member.serialize(serialize_buf, serialize_size, serialize_pos))) {
@@ -679,54 +833,6 @@ int ObLSStatusOperator::get_member_list_hex_(const ObMemberList &member_list,
   return ret;
 }
 
-int ObLSStatusOperator::set_member_list_with_hex_str_(const common::ObString &str,
-                                                      ObMemberList &member_list,
-                                                      ObMember &arb_member)
-{
-  int ret = OB_SUCCESS;
-  member_list.reset();
-  arb_member.reset();
-  char *deserialize_buf = NULL;
-  const int64_t str_size = str.length();
-  const int64_t deserialize_size = str.length() / 2 + 1;
-  int64_t deserialize_pos = 0;
-  bool has_arb_member = false;
-  ObArenaAllocator allocator("MemberList");
-  if (OB_UNLIKELY(str.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("str is empty", KR(ret));
-  } else if (OB_ISNULL(deserialize_buf = static_cast<char*>(allocator.alloc(deserialize_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc memory", KR(ret), K(deserialize_size));
-  } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
-    LOG_WARN("fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
-  } else if (OB_FAIL(member_list.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-    LOG_WARN("fail to deserialize set member list arg", KR(ret), K(deserialize_pos), K(deserialize_size),
-             K(str));
-  } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
-  } else if (deserialize_pos < deserialize_size) {
-    // have to parse flag
-    ObMemberListFlag flag;
-    if (OB_FAIL(flag.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-      LOG_WARN("fail to deserialize flag", KR(ret), K(deserialize_pos), K(deserialize_size));
-    } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
-    } else if (flag.is_arb_member()) {
-      if (OB_FAIL(arb_member.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-        LOG_WARN("fail to deserialize arb member", KR(ret), K(deserialize_pos), K(deserialize_size));
-      } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
-      }
-    }
-  }
-  return ret;
-
-}
-
 int ObLSStatusOperator::fill_cell(
     common::sqlclient::ObMySQLResult *result,
     share::ObLSStatusInfo &status_info)
@@ -743,23 +849,31 @@ int ObLSStatusOperator::fill_cell(
     uint64_t ls_group_id = OB_INVALID_ID;
     uint64_t unit_group_id = OB_INVALID_ID;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    ObString flag_str;
+    ObString flag_str_default_value("");
+    ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", tenant_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", id_value, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "unit_group_id", unit_group_id, uint64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "status", status_str);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "primary_zone", primary_zone_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "flag", flag_str,
+                true /* skip_null_error */, true /* skip_column_error */, flag_str_default_value);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret), K(id_value), K(ls_group_id),
                K(unit_group_id), K(status_str), K(primary_zone_str));
     } else {
       ObLSID ls_id(id_value);
       ObZone zone(primary_zone_str);
-      if (OB_FAIL(status_info.init(tenant_id, ls_id, ls_group_id,
+      if (OB_FAIL(flag.str_to_flag(flag_str))) {
+        // if flag_str is empty then flag is setted to normal
+        LOG_WARN("fail to convert string to flag", KR(ret), K(flag_str));
+      } else if (OB_FAIL(status_info.init(tenant_id, ls_id, ls_group_id,
                                str_to_ls_status(status_str), unit_group_id,
-                               zone))) {
+                               zone, flag))) {
         LOG_WARN("failed to init ls operation", KR(ret), K(tenant_id), K(zone),
-                 K(ls_group_id), K(ls_id), K(status_str), K(unit_group_id));
+                 K(ls_group_id), K(ls_id), K(status_str), K(unit_group_id), K(flag));
       }
     }
   }
@@ -801,37 +915,29 @@ int ObLSStatusOperator::fill_cell(
   return ret;
 }
 
-
-int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
-                                       const ObLSID &id,
-                                       const bool need_member_list,
-                                       ObMemberList &member_list,
-                                       share::ObLSStatusInfo &status_info,
-                                       ObISQLClient &client,
-                                       ObMember &arb_member)
+int ObLSStatusOperator::inner_get_ls_status_(
+    const ObSqlString &sql,
+    const uint64_t exec_tenant_id,
+    const bool need_member_list,
+    ObISQLClient &client,
+    ObMemberList &member_list,
+    share::ObLSStatusInfo &status_info,
+    ObMember &arb_member,
+    common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   member_list.reset();
   status_info.reset();
+  learner_list.reset();
   arb_member.reset();
-  if (OB_UNLIKELY(!id.is_valid()
-                  || OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(sql.empty() || OB_INVALID_TENANT_ID == exec_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(id), K(tenant_id));
+    LOG_WARN("invalid argument", KR(ret), K(sql), K(exec_tenant_id));
   } else {
-    ObSqlString sql;
     ObTimeoutCtx ctx;
     const int64_t default_timeout = GCONF.internal_sql_execute_timeout;
-    uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
-    if (OB_UNLIKELY(OB_INVALID_TENANT_ID == exec_tenant_id)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get exec tenant id", KR(ret), K(exec_tenant_id));
-    } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, default_timeout))) {
       LOG_WARN("failed to set default timeout ctx", KR(ret), K(default_timeout));
-    } else if (OB_FAIL(sql.assign_fmt(
-                   "SELECT * FROM %s where ls_id = %ld and tenant_id = %lu",
-                   OB_ALL_LS_STATUS_TNAME, id.id(), tenant_id))) {
-      LOG_WARN("failed to assign sql", KR(ret), K(sql));
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
@@ -842,9 +948,11 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
           LOG_WARN("failed to get sql result", KR(ret));
         } else {
           ObString init_member_list_str;
+          ObString init_learner_list_str;
           ret = result->next();
           if (OB_ITER_END == ret) {
             ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("ls not exist in __all_ls_status table", KR(ret));
           } else if (OB_FAIL(ret)) {
             LOG_WARN("failed to get ls", KR(ret), K(sql));
           } else {
@@ -858,10 +966,21 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
                          K(init_member_list_str));
               } else if (init_member_list_str.empty()) {
                 // maybe
-              } else if (OB_FAIL(set_member_list_with_hex_str_(
+              } else if (OB_FAIL(set_list_with_hex_str_(
                              init_member_list_str, member_list, arb_member))) {
                 LOG_WARN("failed to set member list", KR(ret),
                          K(init_member_list_str));
+              } else {
+              // deal with learner list
+                EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(
+                    *result, "b_init_learner_list", init_learner_list_str);
+                if (OB_FAIL(ret)) {
+                  LOG_WARN("failed to get result", KR(ret), K(init_learner_list_str));
+                } else if (init_learner_list_str.empty()) {
+                  // maybe
+                } else if (OB_FAIL(set_list_with_hex_str_(init_learner_list_str, learner_list, arb_member))) {
+                  LOG_WARN("failed to set learner list", KR(ret), K(init_learner_list_str));
+                }
               }
             }
           }
@@ -874,6 +993,35 @@ int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLSStatusOperator::get_ls_status_(const uint64_t tenant_id,
+                                       const ObLSID &id,
+                                       const bool need_member_list,
+                                       ObMemberList &member_list,
+                                       share::ObLSStatusInfo &status_info,
+                                       ObISQLClient &client,
+                                       ObMember &arb_member,
+                                       common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  member_list.reset();
+  learner_list.reset();
+  status_info.reset();
+  ObSqlString sql;
+  if (OB_UNLIKELY(!id.is_valid()
+                  || OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(id), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s where ls_id = %ld and tenant_id = %lu",
+                                    OB_ALL_LS_STATUS_TNAME, id.id(), tenant_id))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
+                                          client, member_list, status_info, arb_member, learner_list))) {
+    LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
+             get_exec_tenant_id(tenant_id), K(need_member_list));
   }
   return ret;
 }
@@ -1393,10 +1541,11 @@ int ObLSStatusOperator::create_abort_ls_in_switch_tenant(
       ret = OB_NEED_RETRY;
       LOG_WARN("switchover may concurrency, need retry", KR(ret), K(switchover_epoch), K(status), K(tenant_info));
     } else if (OB_FAIL(sql.assign_fmt("UPDATE %s set status = '%s',init_member_list = '', b_init_member_list = ''"
-                               " where tenant_id = %lu and status in ('%s', '%s')",
-                               OB_ALL_LS_STATUS_TNAME,
-                               ls_status_to_str(share::OB_LS_CREATE_ABORT),
-                               tenant_id, ls_status_to_str(OB_LS_CREATED), ls_status_to_str(OB_LS_CREATING)))) {
+                                      ", init_learner_list = '', b_init_learner_list = ''"
+                                      " where tenant_id = %lu and status in ('%s', '%s')",
+                                      OB_ALL_LS_STATUS_TNAME,
+                                      ls_status_to_str(share::OB_LS_CREATE_ABORT),
+                                      tenant_id, ls_status_to_str(OB_LS_CREATED), ls_status_to_str(OB_LS_CREATING)))) {
       LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql));
     } else if (OB_FAIL(exec_write(tenant_id, sql, this, trans, true))) {
       LOG_WARN("failed to exec write", KR(ret), K(tenant_id), K(sql));

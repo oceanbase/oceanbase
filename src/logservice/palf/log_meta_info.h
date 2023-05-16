@@ -132,6 +132,7 @@ public:
   int convert_to_complete_config(common::ObMemberList &alive_paxos_memberlist,
                                  int64_t &alive_paxos_replica_num,
                                  GlobalLearnerList &all_learners) const;
+  bool is_all_list_unique() const;
   // For unittest
   bool operator==(const LogConfigInfo &config_info) const;
   TO_STRING_KV(K_(config_version),

@@ -48,7 +48,7 @@ ObLSMeta::ObLSMeta()
   : lock_(common::ObLatchIds::LS_META_LOCK),
     tenant_id_(OB_INVALID_TENANT_ID),
     ls_id_(),
-    replica_type_(REPLICA_TYPE_MAX),
+    unused_replica_type_(REPLICA_TYPE_FULL),
     ls_create_status_(ObInnerLSStatus::CREATING),
     clog_checkpoint_scn_(ObScnRange::MIN_SCN),
     clog_base_lsn_(PALF_INITIAL_LSN_VAL),
@@ -68,7 +68,7 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
   : lock_(),
     tenant_id_(ls_meta.tenant_id_),
     ls_id_(ls_meta.ls_id_),
-    replica_type_(ls_meta.replica_type_),
+    unused_replica_type_(ls_meta.unused_replica_type_),
     ls_create_status_(ls_meta.ls_create_status_),
     clog_checkpoint_scn_(ls_meta.clog_checkpoint_scn_),
     clog_base_lsn_(ls_meta.clog_base_lsn_),
@@ -102,7 +102,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
-    replica_type_ = other.replica_type_;
+    unused_replica_type_ = other.unused_replica_type_;
     ls_create_status_ = other.ls_create_status_;
     rebuild_seq_ = other.rebuild_seq_;
     migration_status_ = other.migration_status_;
@@ -124,7 +124,7 @@ void ObLSMeta::reset()
   ObSpinLockTimeGuard guard(lock_);
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
-  replica_type_ = REPLICA_TYPE_MAX;
+  unused_replica_type_ = REPLICA_TYPE_FULL;
   clog_base_lsn_.reset();
   clog_checkpoint_scn_ = ObScnRange::MIN_SCN;
   rebuild_seq_ = -1;
@@ -209,7 +209,6 @@ bool ObLSMeta::is_valid() const
 {
   return is_valid_id(tenant_id_)
       && ls_id_.is_valid()
-      && REPLICA_TYPE_MAX != replica_type_
       && OB_MIGRATION_STATUS_MAX != migration_status_
       && ObGCHandler::is_valid_ls_gc_state(gc_state_)
       && restore_status_.is_valid()
@@ -587,23 +586,20 @@ int ObLSMeta::clear_saved_info()
 int ObLSMeta::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const ObReplicaType &replica_type,
     const ObMigrationStatus &migration_status,
     const share::ObLSRestoreStatus &restore_status,
     const SCN &create_scn)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
-      || !ObReplicaTypeCheck::is_replica_type_valid(replica_type)
       || !ObMigrationStatusHelper::is_valid(migration_status)
       || !restore_status.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init ls meta get invalid argument", K(ret), K(tenant_id), K(ls_id),
-             K(replica_type), K(migration_status), K(restore_status));
+             K(migration_status), K(restore_status));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
-    replica_type_ = replica_type;
     ls_create_status_ = ObInnerLSStatus::CREATING;
     clog_checkpoint_scn_ = create_scn;
     clog_base_lsn_.val_ = PALF_INITIAL_LSN_VAL;
@@ -699,7 +695,7 @@ ObLSMeta::ObSpinLockTimeGuard::ObSpinLockTimeGuard(common::ObSpinLock &lock,
 OB_SERIALIZE_MEMBER(ObLSMeta,
                     tenant_id_,
                     ls_id_,
-                    replica_type_,
+                    unused_replica_type_,
                     ls_create_status_,
                     clog_checkpoint_scn_,
                     clog_base_lsn_,

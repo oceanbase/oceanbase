@@ -86,7 +86,8 @@ public:
   virtual int seek(const palf::LSN &lsn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int seek(const share::SCN &scn, palf::PalfGroupBufferIterator &iter) = 0;
   virtual int set_initial_member_list(const common::ObMemberList &member_list,
-                                      const int64_t paxos_replica_num) = 0;
+                                      const int64_t paxos_replica_num,
+                                      const common::GlobalLearnerList &learner_list) = 0;
   virtual int set_region(const common::ObRegion &region) = 0;
   virtual int set_election_priority(palf::election::ElectionPriority *priority) = 0;
   virtual int reset_election_priority() = 0;
@@ -101,6 +102,9 @@ public:
   virtual int get_max_scn(share::SCN &scn) const = 0;
   virtual int get_end_scn(share::SCN &scn) const = 0;
   virtual int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const = 0;
+  virtual int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                                     int64_t &paxos_replica_num,
+                                                     common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_global_learner_list(common::GlobalLearnerList &learner_list) const = 0;
   virtual int get_election_leader(common::ObAddr &addr) const = 0;
   virtual int change_replica_num(const common::ObMemberList &member_list,
@@ -119,8 +123,15 @@ public:
                              const int64_t timeout_us) = 0;
   virtual int add_learner(const common::ObMember &added_learner, const int64_t timeout_us) = 0;
   virtual int remove_learner(const common::ObMember &removed_learner, const int64_t timeout_us) = 0;
-  virtual int switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us) = 0;
-  virtual int switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us) = 0;
+  virtual int replace_learner(const common::ObMember &added_learner,
+                             const common::ObMember &removed_learner,
+                             const int64_t timeout_us) = 0;
+  virtual int switch_learner_to_acceptor(const common::ObMember &learner,
+                                         const int64_t paxos_replica_num,
+                                         const int64_t timeout_us) = 0;
+  virtual int switch_acceptor_to_learner(const common::ObMember &member,
+                                         const int64_t paxos_replica_num,
+                                         const int64_t timeout_us) = 0;
   virtual int get_palf_base_info(const palf::LSN &base_lsn, palf::PalfBaseInfo &palf_base_info) = 0;
   virtual int is_in_sync(bool &is_log_sync, bool &is_need_rebuild) const = 0;
   virtual int enable_sync() = 0;
@@ -245,11 +256,13 @@ public:
   // @brief set the initial member list of paxos group
   // @param[in] ObMemberList, the initial member list
   // @param[in] int64_t, the paxos relica num
+  // @param[in] GlobalLearnerList, the initial learner list
   // @retval
   //    return OB_SUCCESS if success
   //    else return other errno
   int set_initial_member_list(const common::ObMemberList &member_list,
-                              const int64_t paxos_replica_num) override final;
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list) override final;
   int set_region(const common::ObRegion &region) override final;
   int set_election_priority(palf::election::ElectionPriority *priority) override final;
   int reset_election_priority() override final;
@@ -297,6 +310,13 @@ public:
   // @param[out] common::ObMemberList&
   // @param[out] int64_t&
   int get_paxos_member_list(common::ObMemberList &member_list, int64_t &paxos_replica_num) const override final;
+  // @brief, get paxos member list and global list of this paxos group atomically
+  // @param[out] common::ObMemberList&
+  // @param[out] int64_t&
+  // @param[out] common::GlobalLearnerList&
+  int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                             int64_t &paxos_replica_num,
+                                             common::GlobalLearnerList &learner_list) const override final;
   // @brief, get global learner list of this paxos group
   // @param[out] common::GlobalLearnerList&
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
@@ -403,6 +423,19 @@ public:
   int add_learner(const common::ObMember &added_learner,
                   const int64_t timeout_us) override final;
 
+  // @brief, replace removed_learner with added_learner, can be called in any member
+  // @param[in] const common::ObMember &added_learner: learner wil be added
+  // @param[in] const common::ObMember &removed_learner: learner will be removed
+  // @param[in] const int64_t timeout_us
+  // @return
+  // - OB_SUCCESS: replace learner successfully
+  // - OB_INVALID_ARGUMENT: invalid argumemt or not supported config change
+  // - OB_TIMEOUT: replace learner timeout
+  // - other: bug
+  int replace_learner(const common::ObMember &added_learner,
+                      const common::ObMember &removed_learner,
+                      const int64_t timeout_us) override final;
+
   // @brief: remove a learner(read only replica) in this cluster
   // @param[in] const common::ObMember &removed_learner: learner will be removed
   // @param[in] const int64_t timeout_us
@@ -415,22 +448,28 @@ public:
 
   // @brief: switch a learner(read only replica) to acceptor(full replica) in this cluster
   // @param[in] const common::ObMember &learner: learner will be switched to acceptor
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
+  //            learner to acceptor (similar to add_member)
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_learner_to_acceptor timeout
   int switch_learner_to_acceptor(const common::ObMember &learner,
+                                 const int64_t new_replica_num,
                                  const int64_t timeout_us) override final;
 
   // @brief: switch an acceptor(full replica) to learner(read only replica) in this cluster
   // @param[in] const common::ObMember &member: acceptor will be switched to learner
+  // @param[in] const int64_t new_replica_num: replica number of paxos group after switching
+  //            acceptor to learner (similar to remove_member)
   // @param[in] const int64_t timeout_us
   // @return
   // - OB_SUCCESS
   // - OB_INVALID_ARGUMENT: invalid argument
   // - OB_TIMEOUT: switch_acceptor_to_learner timeout
   int switch_acceptor_to_learner(const common::ObMember &member,
+                                 const int64_t new_replica_num,
                                  const int64_t timeout_us) override final;
 
 

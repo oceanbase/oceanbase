@@ -531,6 +531,10 @@ void ObServer::destroy()
     ob_service_.destroy();
     FLOG_INFO("ob service destroyed");
 
+    FLOG_INFO("begin to destroy session manager");
+    session_mgr_.destroy();
+    FLOG_INFO("session manager destroyed");
+
     FLOG_INFO("begin to destroy locality manager");
     locality_manager_.destroy();
     FLOG_INFO("locality manager destroyed");
@@ -2211,6 +2215,9 @@ int ObServer::init_global_context()
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
   gctx_.server_id_ = config_.server_id;
+  if (is_valid_server_id(gctx_.server_id_)) {
+    LOG_INFO("this observer has had a valid server_id", K(gctx_.server_id_));
+  }
   if ((PHY_FLASHBACK_MODE == gctx_.startup_mode_ || PHY_FLASHBACK_VERIFY_MODE == gctx_.startup_mode_)
       && 0 >= gctx_.flashback_scn_) {
     ret = OB_INVALID_ARGUMENT;

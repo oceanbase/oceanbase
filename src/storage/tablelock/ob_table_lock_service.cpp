@@ -23,6 +23,7 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -89,6 +90,134 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType tas
 {
   obj_type_ = obj_type;
   obj_id_ = obj_id;
+}
+
+int64_t ObTableLockService::ObOBJLockGarbageCollector::GARBAGE_COLLECT_PRECISION = 100_ms;
+int64_t ObTableLockService::ObOBJLockGarbageCollector::GARBAGE_COLLECT_EXEC_INTERVAL = 10_s;
+int64_t ObTableLockService::ObOBJLockGarbageCollector::GARBAGE_COLLECT_TIMEOUT = 10_min;
+
+ObTableLockService::ObOBJLockGarbageCollector::ObOBJLockGarbageCollector()
+  : timer_(),
+    timer_handle_(),
+    last_success_timestamp_(0) {}
+ObTableLockService::ObOBJLockGarbageCollector::~ObOBJLockGarbageCollector() {}
+
+int ObTableLockService::ObOBJLockGarbageCollector::start()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(obj_lock_gc_thread_pool_.init_and_start(
+                 OBJ_LOCK_GC_THREAD_NUM))) {
+    LOG_WARN(
+        "fail to init and start gc thread pool for ObTableLockService::ObOBJLockGarbageCollector",
+        KR(ret));
+  } else if (OB_FAIL(timer_.init_and_start(obj_lock_gc_thread_pool_,
+                                           GARBAGE_COLLECT_PRECISION,
+                                           "OBJLockGC"))) {
+    LOG_WARN("fail to init and start timer for ObTableLockService::ObOBJLockGarbageCollector",
+              K(ret), KPC(this));
+  } else if (OB_FAIL(timer_.schedule_task_repeat(
+                 timer_handle_, GARBAGE_COLLECT_EXEC_INTERVAL,
+                 [this]() mutable {
+                   int ret = OB_SUCCESS;
+                   if (OB_FAIL(garbage_collect_for_all_ls_())) {
+                     check_and_report_timeout_();
+                     LOG_WARN(
+                         "check and clear obj lock failed, will retry later",
+                         K(ret), K(last_success_timestamp_), KPC(this));
+                   } else {
+                     last_success_timestamp_ = ObClockGenerator::getClock();
+                     LOG_DEBUG("check and clear obj lock successfully", K(ret),
+                               K(last_success_timestamp_), KPC(this));
+                   }
+                   return false;
+                 }))) {
+    LOG_ERROR("ObTableLockService::ObOBJLockGarbageCollector schedules repeat task failed",
+              K(ret), KPC(this));
+  } else {
+    LOG_INFO("ObTableLockService::ObOBJLockGarbageCollector starts successfully", K(ret),
+             KPC(this));
+  }
+  return ret;
+}
+
+void ObTableLockService::ObOBJLockGarbageCollector::stop()
+{
+  timer_handle_.stop();
+  LOG_INFO("ObTableLockService::ObOBJLockGarbageCollector stops successfully", KPC(this));
+}
+
+void ObTableLockService::ObOBJLockGarbageCollector::wait()
+{
+  timer_handle_.wait();
+  LOG_INFO("ObTableLockService::ObOBJLockGarbageCollector waits successfully", KPC(this));
+}
+
+int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_right_now()
+{
+  int ret = OB_SUCCESS;
+  if (!timer_.is_running()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("timer of ObTableLockService::ObOBJLockGarbageCollector is not running", K(ret));
+  } else if (!timer_handle_.is_running()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("timer_handle of ObTableLockService::ObOBJLockGarbageCollector is not running", K(ret));
+  } else if (OB_FAIL(timer_handle_.reschedule_after(10))) {
+    LOG_WARN("reschedule task for ObTableLockService::ObOBJLockGarbageCollector failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTableLockService::ObOBJLockGarbageCollector::garbage_collect_for_all_ls_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSharedGuard<ObLSIterator> ls_iter_guard;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+
+  if (!timer_.is_running()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("timer of ObTableLockService::ObOBJLockGarbageCollector is not running", K(ret));
+  } else if (!timer_handle_.is_running()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("timer_handle of ObTableLockService::ObOBJLockGarbageCollector is not running", K(ret));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mtl ObLSService should not be null", K(ret));
+  } else if (ls_service->get_ls_iter(ls_iter_guard,
+                                     ObLSGetMod::TABLELOCK_MOD)) {
+    LOG_WARN("fail to get ls iterator", K(ret));
+  } else {
+    do {
+      if (OB_FAIL(ls_iter_guard->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next iter failed", K(ret));
+        }
+      } else if (OB_TMP_FAIL(ls->check_and_clear_obj_lock(false))) {
+        LOG_WARN("check and clear obj lock failed", K(ret), K(tmp_ret),
+                 K(ls->get_ls_id()));
+      } else {
+        LOG_INFO("start to check and clear obj lock", K(ls->get_ls_id()));
+      }
+    } while (OB_SUCC(ret));
+  }
+  ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  return ret;
+}
+
+void ObTableLockService::ObOBJLockGarbageCollector::check_and_report_timeout_()
+{
+  int ret = OB_SUCCESS;
+  int current_timestamp = ObClockGenerator::getClock();
+  if (last_success_timestamp_ > current_timestamp) {
+    LOG_ERROR("last success timestamp is not correct", K(current_timestamp),
+              K(last_success_timestamp_), KPC(this));
+  } else if (current_timestamp - last_success_timestamp_ >
+                 GARBAGE_COLLECT_TIMEOUT &&
+             last_success_timestamp_ != 0) {
+    LOG_ERROR("task failed too many times", K(current_timestamp),
+              K(last_success_timestamp_), KPC(this));
+  }
 }
 
 bool ObTableLockService::ObTableLockCtx::is_timeout() const
@@ -182,15 +311,18 @@ int ObTableLockService::init()
 
 int ObTableLockService::start()
 {
+  obj_lock_garbage_collector_.start();
   return OB_SUCCESS;
 }
 
 void ObTableLockService::stop()
 {
+  obj_lock_garbage_collector_.stop();
 }
 
 void ObTableLockService::wait()
 {
+  obj_lock_garbage_collector_.wait();
 }
 
 void ObTableLockService::destroy()
@@ -366,6 +498,10 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     LOG_WARN("invalid argument", K(ret), K(tx_desc), K(arg), K(tx_desc.is_valid()),
              K(tx_param.is_valid()), K(arg.is_valid()));
   } else {
+    // origin_timeout_us_ and timeout_us_ are both set as timeout_us_, which
+    // is set by user in the 'WAIT n' option.
+    // Furthermore, if timeout_us_ is 0, this lock will be judged as a try
+    // lock semantics. It meets the actual semantics of 'NOWAIT' option.
     ObTableLockCtx ctx(LOCK_TABLE, arg.table_id_, arg.timeout_us_, arg.timeout_us_);
     ctx.is_in_trans_ = true;
     ctx.tx_desc_ = &tx_desc;
@@ -456,6 +592,41 @@ int ObTableLockService::unlock_tablet(ObTxDesc &tx_desc,
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
+  }
+  return ret;
+}
+
+int ObTableLockService::lock_partition_or_subpartition(ObTxDesc &tx_desc,
+                                                       const ObTxParam &tx_param,
+                                                       const ObLockPartitionRequest &arg)
+{
+  int ret = OB_SUCCESS;
+  ObPartitionLevel part_level = PARTITION_LEVEL_MAX;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("lock service is not inited", K(ret));
+  } else if (OB_FAIL(get_table_partition_level_(arg.table_id_, part_level))) {
+    LOG_WARN("can not get table partition level", K(ret), K(arg));
+  } else {
+    switch (part_level) {
+    case PARTITION_LEVEL_ONE: {
+      if (OB_FAIL(lock_partition(tx_desc, tx_param, arg))) {
+          LOG_WARN("lock partition failed", K(ret), K(arg));
+      }
+      break;
+    }
+    case PARTITION_LEVEL_TWO: {
+      if (OB_FAIL(lock_subpartition(tx_desc, tx_param, arg))) {
+          LOG_WARN("lock subpartition failed", K(ret), K(arg));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected partition level", K(ret), K(arg), K(part_level));
+    }
+    }
   }
   return ret;
 }
@@ -623,6 +794,31 @@ int ObTableLockService::unlock_obj(ObTxDesc &tx_desc,
   return ret;
 }
 
+int ObTableLockService::garbage_collect_right_now()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLockService is not be inited", K(ret));
+  } else if (OB_FAIL(obj_lock_garbage_collector_.garbage_collect_right_now())) {
+    LOG_WARN("garbage collect right now failed", K(ret));
+  } else {
+    LOG_DEBUG("garbage collect right now");
+  }
+  return ret;
+}
+
+int ObTableLockService::get_obj_lock_garbage_collector(ObOBJLockGarbageCollector *&obj_lock_garbage_collector)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLockService is not be inited", K(ret));
+  } else {
+    obj_lock_garbage_collector = &obj_lock_garbage_collector_;
+  }
+  return ret;
+}
 int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
                                            const ObTableLockMode lock_mode,
                                            const ObTableLockOwnerID lock_owner)
@@ -1072,6 +1268,33 @@ int ObTableLockService::deal_with_deadlock_(ObTableLockCtx &ctx)
   return ret;
 }
 
+int ObTableLockService::get_table_partition_level_(const ObTableID table_id,
+                                                  ObPartitionLevel &part_level)
+{
+  int ret = OB_SUCCESS;
+  ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
+  ObRefreshSchemaStatus schema_status;
+  ObTableSchema *table_schema = nullptr;
+  ObArenaAllocator allocator("TableSchema");
+  schema_status.tenant_id_ = MTL_ID();
+
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can not get schema service", K(ret));
+  } else if (OB_FAIL(schema_service->get_schema_service()
+                     ->get_table_schema(schema_status,
+                                        table_id,
+                                        INT64_MAX - 1 /* refresh the newest schema */,
+                                        *sql_proxy_,
+                                        allocator,
+                                        table_schema))) {
+    LOG_WARN("can not get table schema", K(ret), K(table_id));
+  } else {
+    part_level = table_schema->get_part_level();
+  }
+  return ret;
+}
+
 int ObTableLockService::pack_batch_request_(ObTableLockCtx &ctx,
                                             const ObTableLockTaskType task_type,
                                             const ObTableLockMode &lock_mode,
@@ -1155,7 +1378,6 @@ int ObTableLockService::batch_rpc_handle_(RpcProxy &proxy_batch,
     const ObLockIDArray &lock_ids = data->second;
     ObLockTaskBatchRequest request;
     ObAddr addr;
-    ObTableLockTaskResult result;
 
     if (OB_FAIL(ls_array.push_back(ls_id))) {
       LOG_WARN("push_back lsid failed", K(ret), K(ls_id));
@@ -1176,7 +1398,7 @@ int ObTableLockService::batch_rpc_handle_(RpcProxy &proxy_batch,
                                         timeout_us,
                                         ctx.tx_desc_->get_tenant_id(),
                                         request))) {
-      LOG_WARN("failed to all async rpc", KR(ret), K(addr),
+      LOG_WARN("failed to call async rpc", KR(ret), K(addr),
                                           K(ctx.abs_timeout_ts_), K(request));
     } else {
       rpc_count++;

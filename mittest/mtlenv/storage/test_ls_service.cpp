@@ -189,8 +189,10 @@ TEST_F(TestLSService, tablet_test)
   EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
   ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
+  GlobalLearnerList learner_list;
   ASSERT_EQ(OB_SUCCESS, ls->set_initial_member_list(member_list,
-                                                            paxos_replica_num));
+                                                    paxos_replica_num,
+                                                    learner_list));
 
   for (int i=0;i<15;i++) {
     ObRole role;

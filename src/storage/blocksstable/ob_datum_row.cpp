@@ -370,6 +370,7 @@ int ObDatumRow::prepare_new_row(const ObIArray<share::schema::ObColDesc> &out_co
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_UNLIKELY(out_cols.count() < count_)) {
     ret = OB_INVALID_ARGUMENT;

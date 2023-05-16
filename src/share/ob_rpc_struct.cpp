@@ -5293,6 +5293,7 @@ int64_t ObEstPartArgElement::get_serialize_size(void) const
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(ls_id_);
   OB_UNIS_ADD_LEN(tenant_id_);
+  OB_UNIS_ADD_LEN(tx_id_);
 
   return len;
 }
@@ -5309,6 +5310,7 @@ int ObEstPartArgElement::serialize(char *buf,
   OB_UNIS_ENCODE(tablet_id_);
   OB_UNIS_ENCODE(ls_id_);
   OB_UNIS_ENCODE(tenant_id_);
+  OB_UNIS_ENCODE(tx_id_);
 
   return ret;
 }
@@ -5330,6 +5332,7 @@ int ObEstPartArgElement::deserialize(common::ObIAllocator &allocator,
   OB_UNIS_DECODE(tablet_id_);
   OB_UNIS_DECODE(ls_id_);
   OB_UNIS_DECODE(tenant_id_);
+  OB_UNIS_DECODE(tx_id_);
   return ret;
 }
 
@@ -5879,19 +5882,38 @@ OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, po
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
 OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
-OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_);
-int ObCheckServerForAddingServerArg::init(const Mode &mode, const uint64_t sys_tenant_data_version)
+OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_, server_id_);
+int ObCheckServerForAddingServerArg::init(
+    const Mode &mode,
+    const uint64_t sys_tenant_data_version,
+    const uint64_t server_id)
 {
   int ret = OB_SUCCESS;
-  mode_ = mode;
-  sys_tenant_data_version_ = sys_tenant_data_version;
+  if (0 == sys_tenant_data_version || !is_valid_server_id(server_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(mode), K(sys_tenant_data_version), K(server_id));
+  } else {
+    mode_ = mode;
+    sys_tenant_data_version_ = sys_tenant_data_version;
+    server_id_ = server_id;
+  }
   return ret;
 }
 int ObCheckServerForAddingServerArg::assign(const ObCheckServerForAddingServerArg &other) {
   int ret = OB_SUCCESS;
   mode_ = other.mode_;
   sys_tenant_data_version_ = other.sys_tenant_data_version_;
+  server_id_ = other.server_id_;
   return ret;
+}
+bool ObCheckServerForAddingServerArg::is_valid() const
+{
+  return 0 != sys_tenant_data_version_ && is_valid_server_id(server_id_);
+}
+void ObCheckServerForAddingServerArg::reset()
+{
+  sys_tenant_data_version_ = 0;
+  server_id_ = OB_INVALID_ID;
 }
 OB_SERIALIZE_MEMBER(
     ObCheckServerForAddingServerResult,
@@ -6373,18 +6395,6 @@ void CheckLeaderRpcIndex::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
-bool ObPreBootstrapCreateServerWorkingDirArg::is_valid() const
-{
-  return server_id_ > 0;
-}
-
-void ObPreBootstrapCreateServerWorkingDirArg::reset()
-{
-  server_id_ = 0;
-}
-
-OB_SERIALIZE_MEMBER(ObPreBootstrapCreateServerWorkingDirArg, server_id_);
-
 bool ObBatchCheckRes::is_valid() const
 {
   return results_.count() > 0 && index_.is_valid();
@@ -6620,6 +6630,34 @@ OB_SERIALIZE_MEMBER((ObDropDirectoryArg, ObDDLArg), tenant_id_, directory_name_)
 
 
 
+int ObCreateDupLSArg::assign(const ObCreateDupLSArg &arg)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = arg.tenant_id_;
+  return ret;
+}
+
+int ObCreateDupLSArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObCreateDupLSArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(tenant_id));
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObCreateDupLSArg, tenant_id_);
+
 bool ObCreateLSArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
@@ -6725,6 +6763,7 @@ void ObSetMemberListArgV2::reset()
   member_list_.reset();
   paxos_replica_num_ = 0;
   arbitration_service_.reset();
+  learner_list_.reset();
 }
 
 int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
@@ -6735,6 +6774,8 @@ int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
     LOG_WARN("arg is invalid", KR(ret), K(arg));
   } else if (OB_FAIL(member_list_.deep_copy(arg.member_list_))) {
     LOG_WARN("failed to assign member list", KR(ret), K(arg));
+  } else if (OB_FAIL(learner_list_.deep_copy(arg.learner_list_))) {
+    LOG_WARN("failed to assign learner list", KR(ret), K(arg));
   } else if (OB_FAIL(arbitration_service_.assign(arg.arbitration_service_))) {
     LOG_WARN("failed to assign arbitration_service", KR(ret), K(arg));
   } else {
@@ -6747,7 +6788,8 @@ int ObSetMemberListArgV2::assign(const ObSetMemberListArgV2 &arg)
 
 int ObSetMemberListArgV2::init(const int64_t tenant_id,
     const share::ObLSID &id, const int64_t paxos_replica_num,
-    const ObMemberList &member_list, const ObMember &arbitration_service)
+    const ObMemberList &member_list, const ObMember &arbitration_service,
+    const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -6758,6 +6800,8 @@ int ObSetMemberListArgV2::init(const int64_t tenant_id,
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(id), K(member_list), K(paxos_replica_num));
   } else if (OB_FAIL(member_list_.deep_copy(member_list))) {
     LOG_WARN("failed to assign member list", KR(ret), K(member_list));
+  } else if (OB_FAIL(learner_list_.deep_copy(learner_list))) {
+    LOG_WARN("fail ed to assign learner list", KR(ret), K(learner_list));
   } else if (OB_FAIL(arbitration_service_.assign(arbitration_service))) {
     LOG_WARN("failed to assign arbitration service", KR(ret), K(arbitration_service));
   } else {
@@ -6771,11 +6815,11 @@ int ObSetMemberListArgV2::init(const int64_t tenant_id,
 DEF_TO_STRING(ObSetMemberListArgV2)
 {
   int64_t pos = 0;
-  J_KV(K_(tenant_id), K_(id), K_(paxos_replica_num), K_(member_list), K_(arbitration_service));
+  J_KV(K_(tenant_id), K_(id), K_(paxos_replica_num), K_(member_list), K_(arbitration_service), K_(learner_list));
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObSetMemberListArgV2, tenant_id_, id_, member_list_, paxos_replica_num_, arbitration_service_);
+OB_SERIALIZE_MEMBER(ObSetMemberListArgV2, tenant_id_, id_, member_list_, paxos_replica_num_, arbitration_service_, learner_list_);
 
 bool ObGetLSAccessModeInfoArg::is_valid() const
 {
@@ -7175,7 +7219,22 @@ DEF_TO_STRING(ObBatchCreateTabletArg)
 OB_SERIALIZE_MEMBER(ObBatchCreateTabletArg, id_, major_frozen_scn_,
     tablets_, table_schemas_, need_check_tablet_cnt_);
 
-OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_, addr_);
+OB_SERIALIZE_MEMBER(ObCreateDupLSResult, ret_);
+bool ObCreateDupLSResult::is_valid() const
+{
+  return true;
+}
+int ObCreateDupLSResult::assign(const ObCreateDupLSResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCreateLSResult, ret_, addr_, replica_type_);
 bool ObCreateLSResult::is_valid() const
 {
   return true;
@@ -7187,6 +7246,7 @@ int ObCreateLSResult::assign(const ObCreateLSResult &other)
   } else {
     ret_ = other.ret_;
     addr_ = other.addr_;
+    replica_type_ = other.replica_type_;
   }
   return ret;
 }

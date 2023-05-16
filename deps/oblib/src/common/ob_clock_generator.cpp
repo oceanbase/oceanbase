@@ -17,6 +17,7 @@
 #include "lib/lock/mutex.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/thread/ob_thread_name.h"
+#include "lib/utility/utility.h"
 
 using namespace oceanbase::lib;
 
@@ -73,12 +74,13 @@ void ObClockGenerator::run1()
 
   lib::set_thread_name("ClockGenerator");
   while (!ready_) {
-    ::usleep(SLEEP_US);
+    ob_usleep(SLEEP_US);
   }
   while (inited_) {
     int64_t retry = 0;
     int64_t cur_ts = 0;
     int64_t delta = 0;
+    IGNORE_RETURN lib::Thread::update_loop_ts();
     while (retry++ < MAX_RETRY) {
       cur_ts = get_us();
       delta = cur_ts - ATOMIC_LOAD(&cur_ts_);
@@ -88,7 +90,7 @@ void ObClockGenerator::run1()
         if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL_US)) {
           TRANS_LOG_RET(WARN, OB_ERR_SYS, "clock out of order", K(cur_ts), K(cur_ts_), K(delta));
         }
-        ::usleep(SLEEP_US);
+        ob_usleep(SLEEP_US);
       }
     }
     if (delta < 0) {
@@ -97,7 +99,7 @@ void ObClockGenerator::run1()
     } else {
       ATOMIC_STORE(&cur_ts_, cur_ts);
     }
-    ::usleep(SLEEP_US);
+    ob_usleep(SLEEP_US);
   }
 }
 

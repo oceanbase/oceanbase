@@ -92,7 +92,11 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObLSRemoveMemberTask"), KP(this), KPC(ctx_));
 private:
-  int remove_member_();
+  int do_change_member_();
+  int remove_member_(ObLS *ls);
+  int modify_member_number_(ObLS *ls);
+  int transform_member_(ObLS *ls);
+
   int report_to_rs_();
 private:
   bool is_inited_;

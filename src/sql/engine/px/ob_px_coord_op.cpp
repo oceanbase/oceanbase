@@ -352,7 +352,7 @@ int ObPxCoordOp::inner_open()
   int ret = OB_SUCCESS;
   ObDfo *root_dfo = NULL;
   if (OB_FAIL(ObPxReceiveOp::inner_open())) {
-  } else if (GCTX.server_id_ <= 0) {
+  } else if (!is_valid_server_id(GCTX.server_id_)) {
     ret = OB_SERVER_IS_INIT;
     LOG_WARN("Server is initializing", K(ret), K(GCTX.server_id_));
   } else if (OB_FAIL(post_init_op_ctx())) {

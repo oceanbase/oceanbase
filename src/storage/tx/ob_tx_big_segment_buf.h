@@ -56,6 +56,16 @@ public:
   int serialize_object(const T &obj);
   template <typename T>
   int deserialize_object(T &obj);
+
+  char *get_serialize_buf();
+  int64_t get_serialize_buf_len();
+  int64_t get_serialize_buf_pos();
+  int set_serialize_pos(const int64_t ser_pos);
+  const char *get_deserialize_buf();
+  int64_t get_deserialize_buf_len();
+  int64_t get_deserialize_buf_pos();
+  int set_deserialize_pos(const int64_t deser_pos);
+
   /**
    * OB_ITER_END : no part can be split or collect
    * */

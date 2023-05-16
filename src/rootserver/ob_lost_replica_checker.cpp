@@ -227,37 +227,22 @@ int ObLostReplicaChecker::check_lost_replica_(const ObLSInfo &ls_info,
     LOG_WARN("check lost server failed", "server", replica.get_server(), K(ret));
   } else if (is_lost_server) {
     /*
-     * 下面的逻辑处理了两种宕机情况：
-     * 1. paxos replica 不在 member list 中，永久下线
-     * 2. nonpaxos replica 永久下线
-     *
-     * 发生永久下线之前，副本可能都已经迁移，对应内部表记录也被清理。但可能存在异常：
-     *  - 内部表记录清理失败
-     *  - 发生永久下线之前，副本没有被迁移
-     *
-     * 为了应对这两种异常，需要在这里做内部表记录回收清理。
-     *
-     * Knonw Issue: 迁移失败、又在这里做了副本回收，会出现少副本的情况。
-     *  稍后走补副本逻辑补充副本。R@region 时补副本可能补充到其它 zone。
+     * make sure whether a replica is lost, a lost replica could be cleaned from meta table
+     * a replica is lost if satisfied consitions below:
+     * 1. server is lost.
+     * 2. replica is not in service.
+     *    (F-replica is in-service when exists in member_list;
+     *     R-replica is in-service when exists in learner_list)
+     * 3. replica is in service but not exists in __all_ls_status
+     *    (if exists, let remove_member handle this replica;
+     *     if not exist, this replica is lost, maybe GC module didn't clean it)
      *
      */
-    /* 
-     * 该逻辑功能是判断一个副本是否需要删除。前提都是该server已经处于永久下线
-     * 1.首先根据是否在leader的member_list中，如果不在member_list中，那么该replica是需要被删除的。
-     * 非paxos副本或者非in_service中的副本需要直接删除
-     * 2.如果在member_list中则需要判断在日志流状态表存在，
-     *   当日志流状态表中存在，这里不处理，交给remove_member处理。
-     *   当日志流状态表中不存在，则可以直接处理了，这种属于GC的残留。
-     *
-     */
-    if (!replica.is_in_service()
-        || !ObReplicaTypeCheck::is_paxos_replica_V2(replica.get_replica_type())) {
+    if (!replica.is_in_service()) {
       is_lost_replica = true;
-      LOG_INFO("replica not in service or not paxos replica", K(replica));
+      LOG_INFO("replica not in service", K(replica));
     } else {
       // go on check ls_status
-    }
-    if (OB_SUCC(ret) && !is_lost_replica) {
       ObLSStatusOperator status_op;
       share::ObLSStatusInfo status_info;
       if (OB_ISNULL(GCTX.sql_proxy_)) {

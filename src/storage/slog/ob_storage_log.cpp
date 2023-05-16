@@ -126,6 +126,8 @@ DEF_TO_STRING(ObLSMetaLog)
 
 OB_SERIALIZE_MEMBER(ObLSMetaLog, ls_meta_);
 
+OB_SERIALIZE_MEMBER(ObDupTableCkptLog, dup_ls_meta_);
+
 ObLSIDLog::ObLSIDLog(ObLSID &ls_id)
   : ls_id_(ls_id)
 {

@@ -593,6 +593,18 @@ int ObLockMemtable::get_lock_op_iter(const ObLockID &lock_id,
   return ret;
 }
 
+int ObLockMemtable::check_and_clear_obj_lock(const bool force_compact)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TABLELOCK_LOG(WARN, "ObLockMemtable not inited.", K(ret));
+  } else if (OB_FAIL(obj_lock_map_.check_and_clear_obj_lock(force_compact))) {
+    TABLELOCK_LOG(WARN, "check and clear obj lock failed", K(ret));
+  }
+  return ret;
+}
+
 int ObLockMemtable::scan(
     const ObTableIterParam &param,
     ObTableAccessContext &context,

@@ -190,9 +190,7 @@ public:
   const common::ObString& get_stmt_ps_sql() const { return ps_sql_; }
   common::ObString& get_stmt_ps_sql() { return ps_sql_; }
   int64_t get_query_string_id() const;
-  static void refresh_location_cache(ObTaskExecutorCtx &task_exec_ctx, bool is_nonblock, int err);
-  int refresh_location_cache(bool is_nonblock);
-  int check_and_nonblock_refresh_location_cache();
+  void refresh_location_cache(bool is_nonblock, int err);
   bool need_execute_remote_sql_async() const
   { return get_exec_context().use_remote_sql() && !is_inner_result_set_; }
 

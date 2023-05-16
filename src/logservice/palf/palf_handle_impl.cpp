@@ -54,7 +54,6 @@ PalfHandleImpl::PalfHandleImpl()
     rebuild_cb_wrapper_(),
     plugins_(),
     last_locate_scn_(),
-    last_send_mode_meta_time_us_(OB_INVALID_TIMESTAMP),
     last_locate_block_(LOG_INVALID_BLOCK_ID),
     cannot_recv_log_warn_time_(OB_INVALID_TIMESTAMP),
     cannot_handle_committed_info_time_(OB_INVALID_TIMESTAMP),
@@ -259,7 +258,8 @@ int PalfHandleImpl::start()
 
 int PalfHandleImpl::set_initial_member_list(
     const common::ObMemberList &member_list,
-    const int64_t paxos_replica_num)
+    const int64_t paxos_replica_num,
+    const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
   LogConfigVersion config_version;
@@ -270,7 +270,8 @@ int PalfHandleImpl::set_initial_member_list(
     {
       WLockGuard guard(lock_);
       const int64_t proposal_id = state_mgr_.get_proposal_id();
-      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, proposal_id, config_version))) {
+      if (OB_FAIL(config_mgr_.set_initial_member_list(member_list, paxos_replica_num, learner_list,
+          proposal_id, config_version))) {
         PALF_LOG(WARN, "LogConfigMgr set_initial_member_list failed", K(ret), KPC(this));
       }
     }
@@ -278,7 +279,8 @@ int PalfHandleImpl::set_initial_member_list(
     } else if (OB_FAIL(config_mgr_.wait_config_log_persistence(config_version))) {
       PALF_LOG(WARN, "want_config_log_persistence failed", K(ret), KPC(this));
     } else {
-      PALF_EVENT("set_initial_member_list success", palf_id_, K(ret), K(member_list), K(paxos_replica_num));
+      PALF_EVENT("set_initial_member_list success", palf_id_, K(ret), K(member_list),
+          K(learner_list), K(paxos_replica_num));
     }
   }
   return ret;
@@ -507,6 +509,24 @@ int PalfHandleImpl::get_paxos_member_list(
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
   } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num))) {
     PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this));
+  } else {}
+  return ret;
+}
+
+int PalfHandleImpl::get_paxos_member_list_and_learner_list(
+    common::ObMemberList &member_list,
+    int64_t &paxos_replica_num,
+    GlobalLearnerList &learner_list) const
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
+  } else if (OB_FAIL(config_mgr_.get_curr_member_list(member_list, paxos_replica_num))) {
+    PALF_LOG(WARN, "get_curr_member_list failed", K(ret), KPC(this));
+  } else if (OB_FAIL(config_mgr_.get_global_learner_list(learner_list))) {
+    PALF_LOG(WARN, "get_global_learner_list failed", K(ret), KPC(this));
   } else {}
   return ret;
 }
@@ -760,7 +780,9 @@ int PalfHandleImpl::remove_learner(const common::ObMember &removed_learner, cons
   return ret;
 }
 
-int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner, const int64_t timeout_us)
+int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner,
+                                               const int64_t new_replica_num,
+                                               const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -768,7 +790,7 @@ int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner, 
   } else if (!learner.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    LogConfigChangeArgs args(learner, 0, SWITCH_LEARNER_TO_ACCEPTOR);
+    LogConfigChangeArgs args(learner, new_replica_num, SWITCH_LEARNER_TO_ACCEPTOR);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "switch_learner_to_acceptor failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
@@ -778,7 +800,9 @@ int PalfHandleImpl::switch_learner_to_acceptor(const common::ObMember &learner, 
   return ret;
 }
 
-int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member, const int64_t timeout_us)
+int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member,
+                                               const int64_t new_replica_num,
+                                               const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -786,7 +810,7 @@ int PalfHandleImpl::switch_acceptor_to_learner(const common::ObMember &member, c
   } else if (!member.is_valid() || timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    LogConfigChangeArgs args(member, 0, SWITCH_ACCEPTOR_TO_LEARNER);
+    LogConfigChangeArgs args(member, new_replica_num, SWITCH_ACCEPTOR_TO_LEARNER);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
       PALF_LOG(WARN, "switch_acceptor_to_learner failed", KR(ret), KPC(this), K(args), K(timeout_us));
     } else {
@@ -861,13 +885,13 @@ int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
         if (OB_SUCCESS != (tmp_ret = role_change_cb_wrpper_.on_role_change(palf_id_))) {
           PALF_LOG(WARN, "on_role_change failed", K(tmp_ret), K_(palf_id), K_(self));
         }
-        PALF_EVENT("change_access_mode success", palf_id_, K(ret), KPC(this),
-            K(proposal_id), K(access_mode), K(ref_scn), K(time_guard), K_(sw));
       }
       if (OB_EAGAIN == ret) {
         ob_usleep(1000);
       }
     }
+    PALF_EVENT("change_access_mode finish", palf_id_, K(ret), KPC(this),
+        K(proposal_id), K(access_mode), K(ref_scn), K(time_guard), K_(sw));
     config_change_lock_.unlock();
     mode_change_lock_.unlock();
   }
@@ -2140,32 +2164,6 @@ bool PalfHandleImpl::is_in_period_freeze_mode() const
   return sw_.is_in_period_freeze_mode();
 }
 
-int PalfHandleImpl::leader_sync_mode_meta_to_arb_member_()
-{
-  // caller need hold rdlock
-  int ret = OB_SUCCESS;
-  ObMember arb_member;
-  (void) config_mgr_.get_arbitration_member(arb_member);
-  const int64_t curr_time_us = common::ObTimeUtility::current_time();
-  if (arb_member.is_valid()
-      && self_ == state_mgr_.get_leader()
-      && curr_time_us - last_send_mode_meta_time_us_ >= 3 * 1000 * 1000ll) {
-    // send mode meta to arb member periodically by 3s
-    int64_t curr_proposal_id = state_mgr_.get_proposal_id();
-    int64_t mock_accepted_mode_pid = -1;
-    if (OB_FAIL(mode_mgr_.submit_fetch_mode_meta_resp(arb_member.get_server(), \
-            curr_proposal_id, mock_accepted_mode_pid))) {
-      PALF_LOG(WARN, "submit_fetch_mode_meta_resp failed", K(ret), K_(palf_id), K_(self),
-          K(curr_proposal_id), K(mock_accepted_mode_pid));
-    } else {
-      last_send_mode_meta_time_us_ = curr_time_us;
-      PALF_LOG(INFO, "submit_fetch_mode_meta_resp to arb_member", K(arb_member), K_(palf_id), K_(self),
-          K(curr_proposal_id), K(mock_accepted_mode_pid));
-    }
-  }
-  return ret;
-}
-
 int PalfHandleImpl::period_freeze_last_log()
 {
   int ret = OB_SUCCESS;
@@ -2175,8 +2173,6 @@ int PalfHandleImpl::period_freeze_last_log()
   } else {
     RLockGuard guard(lock_);
     sw_.period_freeze_last_log();
-    // TODO by yunlong: replaced by mode_meta resend logic.
-    (void) leader_sync_mode_meta_to_arb_member_();
   }
   return ret;
 }
@@ -2203,7 +2199,9 @@ int PalfHandleImpl::check_and_switch_state()
     do {
       RLockGuard guard(lock_);
       if (OB_FAIL(config_mgr_.leader_do_loop_work(config_state_changed))) {
-        PALF_LOG(WARN, "leader_do_loop_work", KR(ret), K_(self), K_(palf_id));
+        PALF_LOG(WARN, "LogConfigMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
+      } else if (OB_FAIL(mode_mgr_.leader_do_loop_work())) {
+        PALF_LOG(WARN, "LogModeMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
       }
     } while (0);
     if (OB_UNLIKELY(config_state_changed)) {
@@ -4246,6 +4244,7 @@ int PalfHandleImpl::stat(PalfStat &palf_stat)
     (void)config_mgr_.get_curr_member_list(palf_stat.paxos_member_list_, palf_stat.paxos_replica_num_);
     (void)config_mgr_.get_arbitration_member(palf_stat.arbitration_member_);
     (void)config_mgr_.get_degraded_learner_list(palf_stat.degraded_list_);
+    (void)config_mgr_.get_global_learner_list(palf_stat.learner_list_);
     palf_stat.allow_vote_ = state_mgr_.is_allow_vote();
     palf_stat.replica_type_ = state_mgr_.get_replica_type();
     palf_stat.base_lsn_ = log_engine_.get_log_meta().get_log_snapshot_meta().base_lsn_;
@@ -4390,6 +4389,7 @@ void PalfStat::reset()
   access_mode_ = AccessMode::INVALID_ACCESS_MODE;
   paxos_member_list_.reset();
   paxos_replica_num_ = -1;
+  learner_list_.reset();
   arbitration_member_.reset();
   degraded_list_.reset();
   allow_vote_ = true;
@@ -4430,7 +4430,7 @@ int PalfHandleImpl::read_data_from_buffer(const LSN &read_begin_lsn,
 OB_SERIALIZE_MEMBER(PalfStat, self_, palf_id_, role_, log_proposal_id_, config_version_,
   mode_version_, access_mode_, paxos_member_list_, paxos_replica_num_, allow_vote_,
   replica_type_, begin_lsn_, begin_scn_, base_lsn_, end_lsn_, end_scn_, max_lsn_, max_scn_,
-  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_);
+  arbitration_member_, degraded_list_, is_in_sync_, is_need_rebuild_, learner_list_);
 
 } // end namespace palf
 } // end namespace oceanbase

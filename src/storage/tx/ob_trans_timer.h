@@ -143,6 +143,7 @@ public:
   virtual ~ObDupTableLeaseTimer() {}
   int init();
 private:
+  static const int64_t DUP_TABLE_TIMEOUT_TASK_PRECISION_US = 3 * 1000 * 1000L;
   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseTimer);
 };
 

@@ -486,7 +486,8 @@ int ObTableScanIterator::can_retire_to_row_sample(bool &retire)
     } else if (memtables.count() > 0) {
       ObPartitionEst batch_est;
       ObSEArray<ObEstRowCountRecord, MAX_SSTABLE_CNT_IN_STORAGE> est_records;
-      ObTableEstimateBaseInput base_input(scan_param_->scan_flag_, memtables.at(0)->get_key().tablet_id_.id(), memtables, get_table_param_.tablet_iter_.tablet_handle_);
+      ObTableEstimateBaseInput base_input(scan_param_->scan_flag_, memtables.at(0)->get_key().tablet_id_.id(),
+                                          transaction::ObTransID(), memtables, get_table_param_.tablet_iter_.tablet_handle_);
       if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(base_input, table_scan_range_.get_ranges(), batch_est, est_records))) {
         STORAGE_LOG(WARN, "Failed to estimate row count for scan", K(ret), KPC(scan_param_), K(table_scan_range_));
       } else {

@@ -27,7 +27,6 @@
 #include "observer/ob_server_schema_updater.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
-#include "observer/ob_heartbeat_handler.h"
 #include "common/ob_timeout_ctx.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 
@@ -136,11 +135,61 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
   return ret;
 }
 
+void ObHeartBeatProcess::check_and_update_server_id_(const uint64_t server_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!is_valid_server_id(server_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server_id", KR(ret), K(server_id));
+  } else {
+    // once server_id is confirmed, it cannnot be changed
+    // in 4.1, server_id persistance is not supported, observer can only get its server_id via heartbeat
+    // in 4.2, server_id is persisted when the server is added into the cluster
+    // in upgrade period 4.1 -> 4.2, we need to persist the server_id via heartbeat
+    const int64_t delay = 0;
+    const bool repeat = false;
+    if (0 == GCTX.server_id_) {
+      GCTX.server_id_ = server_id;
+      LOG_INFO("receive new server id in GCTX", K(server_id));
+    } else if (server_id != GCTX.server_id_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("GCTX.server_id_ is not the same as server_id in RS", KR(ret),
+          K(GCTX.server_id_), K(server_id));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (0 == GCONF.server_id) {
+      GCONF.server_id = server_id;
+      LOG_INFO("receive new server id in GCONF", K(server_id));
+      if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
+        server_id_persist_task_.enable_need_retry_flag();
+        LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
+      } else {
+        server_id_persist_task_.disable_need_retry_flag();
+      }
+    } else if (server_id != GCONF.server_id) {
+      ret = OB_ERR_UNEXPECTED;
+      uint64_t server_id_in_GCONF = GCONF.server_id;
+      LOG_ERROR("GCONF.server_id is not the same as server_id in RS", KR(ret),
+          K(server_id_in_GCONF), K(server_id));
+    }
+    if (server_id_persist_task_.is_need_retry()) {
+      if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
+        LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
+      } else {
+        server_id_persist_task_.disable_need_retry_flag();
+      }
+    }
+  }
+}
+
 //pay attention to concurrency control
 int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -153,28 +202,9 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
         LITERAL_K(ObLeaseResponse::LEASE_VERSION), KR(ret));
   } else {
     LOG_DEBUG("get lease_response", K(lease_response));
-
-    if (OB_INVALID_ID != lease_response.server_id_) {
-      if (GCTX.server_id_ != lease_response.server_id_) {
-        LOG_INFO("receive new server id",
-            "old_id", GCTX.server_id_,
-            "new_id", lease_response.server_id_);
-        GCTX.server_id_ = lease_response.server_id_;
-        GCONF.server_id = lease_response.server_id_;
-        const int64_t delay = 0;
-        const bool repeat = false;
-        if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
-          server_id_persist_task_.enable_need_retry_flag();
-          LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
-        } else {
-          server_id_persist_task_.disable_need_retry_flag();
-        }
-      }
-    }
-
+    int tmp_ret = OB_SUCCESS;
+    (void) check_and_update_server_id_(lease_response.server_id_);
     if (!ObHeartbeatHandler::is_rs_epoch_id_valid()) {
-      ///// if the new heartbeat service has not started, this heartbeat is responsible for
-      //// update server_id_ and rs_server_status_
       if (RSS_INVALID != lease_response.rs_server_status_) {
         if (GCTX.rs_server_status_ != lease_response.rs_server_status_) {
           LOG_INFO("receive new server status recorded in rs",
@@ -195,13 +225,13 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
               "refresh_schema_info", lease_response.refresh_schema_info_, K(schema_ret));
     }
 
-    const int64_t delay = 0;
-    const bool repeat = false;
     // while rootservice startup, lease_info_version may be set to 0.
     if (lease_response.lease_info_version_ > 0) {
       newest_lease_info_version_ = lease_response.lease_info_version_;
     }
     bool is_exist = false;
+    const int64_t delay = 0;
+    const bool repeat = false;
     if (OB_FAIL(TG_TASK_EXIST(lib::TGDefIDs::ObHeartbeat, update_task_, is_exist))) {
       LOG_WARN("check exist failed", KR(ret));
     } else if (is_exist) {
@@ -212,14 +242,6 @@ int ObHeartBeatProcess::do_heartbeat_event(const ObLeaseResponse &lease_response
     // generate the task for refreshing the Tenant-level configuration
     if (OB_SUCCESS != (tmp_ret = OTC_MGR.got_versions(lease_response.tenant_config_version_))) {
       LOG_WARN("tenant got versions failed", K(tmp_ret));
-    }
-
-    if (server_id_persist_task_.is_need_retry()) {
-      if (OB_SUCCESS != (tmp_ret = TG_SCHEDULE(lib::TGDefIDs::CONFIG_MGR, server_id_persist_task_, delay, repeat))) {
-        LOG_WARN("schedule server_id persist task failed", K(tmp_ret));
-      } else {
-        server_id_persist_task_.disable_need_retry_flag();
-      }
     }
   }
   return ret;

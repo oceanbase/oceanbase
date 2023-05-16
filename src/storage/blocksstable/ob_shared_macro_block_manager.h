@@ -75,8 +75,11 @@ private:
   class ObBlockDefragmentationTask : public common::ObTimerTask
   {
   public:
-    ObBlockDefragmentationTask(ObSharedMacroBlockMgr &shared_mgr)
-        : shared_mgr_(shared_mgr) {}
+    explicit ObBlockDefragmentationTask(ObSharedMacroBlockMgr &shared_mgr)
+        : shared_mgr_(shared_mgr)
+    {
+      disable_timeout_check();
+    }
     virtual ~ObBlockDefragmentationTask() = default;
     virtual void runTimerTask() override;
 

@@ -161,6 +161,7 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
     LOG_WARN("unexpected null", K(ret), K(ctx_), K(query_hint));
   } else if (stmt.get_table_size() == 1) {
     const TableItem *table = NULL;
+    const ObViewMergeHint *myhint = NULL;
     if (OB_ISNULL(table = stmt.get_table_item(0))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null", K(ret));
@@ -175,8 +176,12 @@ int ObTransformQueryPushDown::need_transform(const common::ObIArray<ObParentDMLS
       } else if (!need_trans) {
         OPT_TRACE("hint reject transform");
       }
-    } else if (query_hint->is_valid_outline_transform(ctx_->trans_list_loc_,
-                                                get_hint(table->ref_query_->get_stmt_hint()))) {
+    } else if (OB_FALSE_IT(myhint =
+                           static_cast<const ObViewMergeHint*>(get_hint(table->ref_query_->get_stmt_hint())))) {
+      // do nothing
+    } else if (myhint != NULL &&
+               query_hint->is_valid_outline_transform(ctx_->trans_list_loc_, myhint) &&
+               myhint->enable_query_push_down(ctx_->src_qb_name_)) {
       need_trans = true;
     } else {
       OPT_TRACE("outline reject transform");

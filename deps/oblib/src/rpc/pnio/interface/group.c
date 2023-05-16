@@ -494,6 +494,27 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
   return pkts_resp(pkts, r);
 }
 
+PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
+  int err = 0;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx || NULL == addr)) {
+    err = -EINVAL;
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkts_t* pkts = &ctx->pn->pkts;
+    pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
+    socklen_t sa_len = sizeof(struct sockaddr_storage);
+    if (unlikely(NULL == sock)) {
+      err = -EINVAL;
+      rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
+    } else if (0 != getpeername(sock->fd, (struct sockaddr*)addr, &sa_len)) {
+      err = -EIO;
+      rk_warn("getpeername failed, fd=%d, errno=%d", sock->fd, errno);
+    }
+  }
+  return err;
+}
+
 PN_API int pn_ratelimit(int grp_id, int64_t value) {
   int err = 0;
   pn_grp_t* pn_grp = locate_grp(grp_id);

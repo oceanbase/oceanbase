@@ -710,16 +710,18 @@ int ObTenantLSInfo::create_new_ls_for_recovery(
     const share::ObLSID &ls_id,
     const uint64_t ls_group_id,
     const SCN &create_scn,
-    ObMySQLTransaction &trans)
+    ObMySQLTransaction &trans,
+    const share::ObLSFlag &ls_flag)
 {
   int ret = OB_SUCCESS;
   const bool is_recovery = true;
   int64_t info_index = OB_INVALID_INDEX_INT64;
   if (OB_UNLIKELY(!ls_id.is_valid()
                   || OB_INVALID_ID == ls_group_id
-                  || !create_scn.is_valid())) {
+                  || !create_scn.is_valid()
+                  || !ls_flag.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_scn));
+    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(create_scn), K(ls_flag));
   } else if (OB_UNLIKELY(!is_valid())
              || OB_ISNULL(tenant_schema_)
              || OB_ISNULL(sql_proxy_)) {
@@ -760,7 +762,8 @@ int ObTenantLSInfo::create_new_ls_for_recovery(
     } else if (OB_FAIL(new_info.init(tenant_id, ls_id,
                               ls_group_id,
                               share::OB_LS_CREATING,
-                              group_info.unit_group_id_, primary_zone))) {
+                              ls_flag.is_duplicate_ls() ? 0 : group_info.unit_group_id_,
+                              primary_zone, ls_flag))) {
       LOG_WARN("failed to init new info", KR(ret), K(tenant_id),
                K(ls_id), K(ls_group_id), K(group_info), K(primary_zone));
     } else if (OB_FAIL(get_zone_priority(primary_zone, *tenant_schema_, zone_priority))) {
@@ -826,8 +829,8 @@ int ObTenantLSInfo::add_ls_status_info_(
     LOG_WARN("failed to remove status", KR(ret), K(ls_info));
   } else if (OB_FAIL(status_map_.set_refactored(ls_info.ls_id_, index))) {
     LOG_WARN("failed to remove ls from map", KR(ret), K(ls_info), K(index));
-  } else if (ls_info.ls_id_.is_sys_ls()) {
-    //sys ls no ls group
+  } else if (ls_info.ls_id_.is_sys_ls() || ls_info.is_duplicate_ls()) {
+    //sys ls and duplicate ls have no ls group
   } else if (OB_FAIL(add_ls_to_ls_group_(ls_info))) {
     LOG_WARN("failed to add ls info", KR(ret), K(ls_info));
   }
@@ -1034,6 +1037,7 @@ int ObTenantLSInfo::create_new_ls_for_empty_unit_group_(const uint64_t unit_grou
     share::ObLSID new_id;
     share::ObLSStatusInfo new_info;
     uint64_t new_ls_group_id = OB_INVALID_INDEX_INT64;
+    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     if (OB_FAIL(fetch_new_ls_group_id(tenant_id, new_ls_group_id))) {
       LOG_WARN("failed to fetch new id", KR(ret), K(tenant_id));
     }
@@ -1044,9 +1048,9 @@ int ObTenantLSInfo::create_new_ls_for_empty_unit_group_(const uint64_t unit_grou
         LOG_WARN("failed to get new id", KR(ret), K(tenant_id));
       } else if (OB_FAIL(new_info.init(tenant_id, new_id, new_ls_group_id,
                                        share::OB_LS_CREATING, unit_group_id,
-                                       zone))) {
+                                       zone, flag))) {
         LOG_WARN("failed to init new info", KR(ret), K(new_id),
-                 K(new_ls_group_id), K(unit_group_id), K(zone), K(tenant_id));
+                 K(new_ls_group_id), K(unit_group_id), K(zone), K(tenant_id), K(flag));
       } else if (OB_FAIL(create_new_ls_(new_info, share::NORMAL_SWITCHOVER_STATUS))) {
         LOG_WARN("failed to add ls info", KR(ret), K(new_info));
       }
@@ -1142,6 +1146,7 @@ int ObTenantLSInfo::check_ls_match_primary_zone()
     ObZone zone;
     share::ObLSID new_id;
     share::ObLSStatusInfo new_info;
+    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_group_array_.count(); ++i) {
       ObLSGroupInfo &group_info = ls_group_array_.at(i);
       //check the unit group is active
@@ -1160,9 +1165,9 @@ int ObTenantLSInfo::check_ls_match_primary_zone()
           LOG_WARN("failed to get new id", KR(ret), K(tenant_id));
         } else if (OB_FAIL(new_info.init(tenant_id, new_id, group_info.ls_group_id_,
                                          share::OB_LS_CREATING,
-                                         group_info.unit_group_id_, zone))) {
+                                         group_info.unit_group_id_, zone, flag))) {
           LOG_WARN("failed to init new info", KR(ret), K(new_id),
-                   K(group_info), K(zone), K(tenant_id));
+                   K(group_info), K(zone), K(tenant_id), K(flag));
         } else if (OB_FAIL(create_new_ls_(new_info, share::NORMAL_SWITCHOVER_STATUS))) {
           LOG_WARN("failed to create new ls", KR(ret), K(new_info));
         }
@@ -1208,7 +1213,7 @@ int ObTenantLSInfo::create_new_ls_(const share::ObLSStatusInfo &status_info,
   } else {
     share::ObLSLifeAgentManager ls_life_agent(*sql_proxy_);
     share::ObLSAttr ls_info;
-    share::ObLSFlag flag = share::OB_LS_FLAG_NORMAL;//TODO
+    share::ObLSFlag flag = status_info.get_flag();
     SCN create_scn;
     ObSqlString zone_priority;
     if (OB_FAIL(ObLSAttrOperator::get_tenant_gts(status_info.tenant_id_, create_scn))) {
@@ -1926,7 +1931,33 @@ int ObTenantLSInfo::balance_ls_primary_zone(
   return ret;
 }
 
-
+int ObTenantLSInfo::create_duplicate_ls()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid()) || OB_ISNULL(tenant_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant ls info not valid", KR(ret), KP(tenant_schema_));
+  } else if (OB_UNLIKELY(0 == primary_zone_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("primary zone is invalid", KR(ret));
+  } else {
+    const uint64_t tenant_id = tenant_schema_->get_tenant_id();
+    const ObZone &zone = primary_zone_.at(0);
+    share::ObLSID new_id;
+    share::ObLSStatusInfo new_info;
+    ObLSFlag flag(ObLSFlag::DUPLICATE_FLAG);
+    if (OB_FAIL(fetch_new_ls_id(tenant_id, new_id))) {
+      LOG_WARN("failed to get new id", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(new_info.init(tenant_id, new_id, 0/*ls_group_id*/, share::OB_LS_CREATING,
+                                     0/*unit_group_id*/, zone, flag))) {
+      LOG_WARN("failed to init new info", KR(ret), K(new_id), K(zone), K(tenant_id), K(flag));
+    } else if (OB_FAIL(create_new_ls_(new_info, share::NORMAL_SWITCHOVER_STATUS))) {
+      LOG_WARN("failed to create duplicate ls", KR(ret), K(new_info));
+    }
+    LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_info));
+  }
+  return ret;
+}
 //////////////ObTenantThreadHelper
 int ObTenantThreadHelper::create(
     const char* thread_name, int tg_def_id, ObTenantThreadHelper &tenant_thread)
@@ -2393,6 +2424,34 @@ int ObPrimaryLSService::gather_tenant_recovery_stat_()
   }
   return ret;
 }
-}
-}
 
+int ObPrimaryLSService::create_duplicate_ls()
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTenantSchema *tenant_schema = NULL;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
+          OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+    LOG_WARN("failed to get tenant ids", KR(ret), K(tenant_id_));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant not exist", KR(ret), K(tenant_id_));
+  } else {
+    const uint64_t tenant_id = tenant_schema->get_tenant_id();
+    ObTenantLSInfo tenant_stat(GCTX.sql_proxy_, tenant_schema, tenant_id,
+        GCTX.srv_rpc_proxy_, GCTX.lst_operator_);
+    if (OB_FAIL(tenant_stat.gather_stat(false))) {
+      LOG_WARN("failed to gather stat", KR(ret));
+    } else if (OB_FAIL(tenant_stat.create_duplicate_ls())) {
+      LOG_WARN("failed to create ls for unit group", KR(ret));
+    }
+  }
+  return ret;
+}
+}//end of rootserver
+}

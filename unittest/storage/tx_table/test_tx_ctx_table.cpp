@@ -110,7 +110,8 @@ public:
 protected:
   virtual void SetUp() override
   {
-    ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
+    ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
+                             (transaction::ObDupTableLSHandler *)(0x02));
     freezer_.init(&ls_);
     EXPECT_EQ(OB_SUCCESS, t3m_.init());
     EXPECT_EQ(OB_SUCCESS,
@@ -275,7 +276,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   attr.tenant_id_ = MTL_ID();
   tx_data_table.slice_allocator_.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
 
-  ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01));
+  ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
+                           (transaction::ObDupTableLSHandler *)(0x02));
 
   ObTxCtxTableRecoverHelperUT recover_helper;
   ObLSTxCtxMgr* ls_tx_ctx_mgr_recover = &unittest::TestTxCtxTable::ls_tx_ctx_mgr2_;

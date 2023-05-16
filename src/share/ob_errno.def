@@ -1890,6 +1890,7 @@ DEFINE_ORACLE_ERROR(OB_INVALID_ALTERATIONG_DATATYPE, -7414, -1, "42000", "invali
 DEFINE_ORACLE_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS, -7415, -1, "42000", "invalid modification of columns", 22859, "invalid modification of columns");
 DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expected XML tag , got no content", 19032, "Expected XML tag , got no content");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_INDEX, -7417, -1, "42000", "cannot create index on expression with datatype ADT '%.*s'", 2327 ,"cannot create index on expression with datatype ADT '%.*s'");
+DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_XML_WITH_INVALID_NODE, -7418, -1, "42000", "XML nodes must be updated with valid nodes and of the same type'", 31067 ,"XML nodes must be updated with valid nodes and of the same type");
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999
 ////////////////////////////////////////////////////////////////

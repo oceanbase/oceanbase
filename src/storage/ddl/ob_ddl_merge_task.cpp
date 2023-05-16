@@ -732,6 +732,7 @@ int ObTabletDDLUtil::update_ddl_table_store(const ObTabletDDLParam &ddl_param,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ddl_param.is_valid() || !table_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(table_handle));
   } else {
     ObLSService *ls_service = MTL(ObLSService *);

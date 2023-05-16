@@ -746,6 +746,9 @@ public:
     while (cur != head) {
       ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
       cur = cur->next_;
+      s->on_disconnect();
+      ObSqlSockSession *sess = (ObSqlSockSession *)s->sess_;
+      sess->destroy();
       s->do_close();
     }
   }

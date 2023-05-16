@@ -385,5 +385,25 @@ int ObDASUtils::generate_spatial_index_rows(
   return ret;
 }
 
+int ObDASUtils::wait_das_retry(int64_t retry_cnt)
+{
+  int ret = OB_SUCCESS;
+  uint32_t timeout_factor = static_cast<uint32_t>((retry_cnt > 100) ? 100 : retry_cnt);
+  int64_t sleep_us = 1000L * timeout_factor > THIS_WORKER.get_timeout_remain()
+                                            ? THIS_WORKER.get_timeout_remain()
+                                                : 1000L * timeout_factor;
+  if (sleep_us > 0) {
+    LOG_INFO("will sleep", K(sleep_us), K(THIS_WORKER.get_timeout_remain()));
+    THIS_WORKER.sched_wait();
+    ob_usleep(static_cast<uint32_t>(sleep_us));
+    THIS_WORKER.sched_run();
+    if (THIS_WORKER.is_timeout()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("this worker is timeout after retry sleep. no more retry", K(ret));
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

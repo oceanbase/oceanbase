@@ -3411,6 +3411,7 @@ def_table_schema(
         ('paxos_replica_number', 'int', 'false', '-1'),
         ('data_size', 'int'),
         ('required_size', 'int', 'false', '0'),
+        ('learner_list', 'longtext', 'true'),
     ],
 )
 
@@ -3480,6 +3481,9 @@ def_table_schema(
     ('ls_group_id', 'int'),
     ('unit_group_id', 'int'),
     ('primary_zone', 'varchar:MAX_ZONE_LENGTH', 'true'),
+    ('init_learner_list', 'longtext', 'true'),
+    ('b_init_learner_list', 'longtext', 'true'),
+    ('flag', 'varchar:OB_MAX_LS_FLAG_LENGTH', 'false', ''),
     ],
 )
 
@@ -3649,7 +3653,7 @@ def_table_schema(
   normal_columns = [
     ('ls_group_id', 'int'),
     ('status', 'varchar:100'),
-    ('flag', 'varchar:100'),
+    ('flag', 'varchar:OB_MAX_LS_FLAG_LENGTH'),
     ('create_scn', 'uint'),
   ],
 )
@@ -5539,6 +5543,10 @@ def_table_schema(
 # 457 : __wr_statname
 # 458 : __wr_sysstat
 # 459 : __all_balance_task_helper
+
+# 460 : __all_tenant_snapshots
+# 461 : __all_tenant_snapshot_ls
+# 462 : __all_tenant_snapshot_ls_meta_table
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -5630,6 +5638,7 @@ def_table_schema(
   ('comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'true'),
   ('index_comment', 'varchar:MAX_TABLE_COMMENT_LENGTH', 'false', ''),
   ('is_visible', 'varchar:MAX_COLUMN_YES_NO_LENGTH', 'false', ''),
+  ('expression', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true')
   ],
 )
 
@@ -5953,6 +5962,7 @@ def_table_schema(
       ('paxos_replica_number', 'int', 'false', '-1'),
       ('data_size', 'int'),
       ('required_size', 'int', 'false', '0'),
+      ('learner_list', 'longtext', 'true'),
     ],
 )
 
@@ -10238,6 +10248,7 @@ def_table_schema(
   ('max_scn', 'uint'),
   ('arbitration_member', 'varchar:128'),
   ('degraded_list', 'varchar:1024'),
+  ('learner_list', 'longtext')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -11239,7 +11250,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'ws306254',
+  owner = 'handora.qc',
   table_name     = '__all_virtual_minor_freeze_info',
   table_id       = '12338',
   table_type = 'VIRTUAL_TABLE',
@@ -11570,10 +11581,92 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12373: __all_virtual_mds_node_stat
 # 12374: __all_virtual_mds_event_history
 # 12375: __all_virtual_time_guard_slow_history
-# 12376: __all_virtual_dup_ls_lease_mgr
+def_table_schema(
+  owner = 'wyh329796',
+  table_name = '__all_virtual_dup_ls_lease_mgr',
+  table_id = '12376',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('follower_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('follower_port', 'int'),
+  ],
+
+  normal_columns = [
+    ('grant_timestamp', 'timestamp'),
+    ('expired_timestamp', 'timestamp'),
+    ('remain_us', 'int'),
+    ('lease_interval_us', 'int'),
+    ('grant_req_ts', 'int'),
+    ('cached_req_ts', 'int'),
+    ('max_replayed_scn', 'int'),
+    ('max_read_version', 'int'),
+    ('max_commit_version', 'int'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 # 12377: __all_virtual_dup_ls_follower_lease_info
-# 12378: __all_virtual_dup_ls_tablet_set
-# 12379: __all_virtual_dup_ls_tablets
+def_table_schema(
+  owner = 'wyh329796',
+  table_name = '__all_virtual_dup_ls_tablet_set',
+  table_id = '12378',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_state', 'varchar:MAX_LS_STATE_LENGTH'),
+    ('unique_id', 'int'),
+  ],
+
+  normal_columns = [
+    ('attribute', 'varchar:OB_MAX_DUP_TABLE_TABLET_SET_ATTR_LENGTH'), # length:16
+    ('count', 'int'),
+    ('readbale_scn', 'int'),
+    ('change_scn', 'int'),
+    ('need_confirm_scn', 'int'),
+    ('state', 'varchar:OB_MAX_DUP_TABLE_TABLET_SET_STATE_LENGTH'), # length:16
+    ('trx_ref', 'int'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+def_table_schema(
+  owner = 'wyh329796',
+  table_name = '__all_virtual_dup_ls_tablets',
+  table_id = '12379',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_state', 'varchar:MAX_LS_STATE_LENGTH'),
+    ('tablet_id', 'uint'),
+  ],
+
+  normal_columns = [
+    ('unique_id', 'int'),
+    ('attribute', 'varchar:OB_MAX_DUP_TABLE_TABLET_SET_ATTR_LENGTH'),
+    ('refresh_schema_timestamp', 'timestamp'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(
   owner = 'gengli.wzy',
@@ -11776,9 +11869,35 @@ def_table_schema(
 
 # 12398: __all_virtual_column_group
 # 12399: __all_virtual_storage_leak_info
-# 12400 __all_virtual_ls_log_restore_status
-# 12401: __all_virtual_tenant_parameter
 
+def_table_schema(
+  owner = 'zhaoyongheng.zyh',
+  table_name = '__all_virtual_ls_log_restore_status',
+  table_id = '12400',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('ls_id', 'int'),
+    ('sync_lsn', 'uint'),
+    ('sync_scn', 'uint'),
+    ('sync_status', 'varchar:128'),
+    ('err_code', 'int'),
+    ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+# 12401: __all_virtual_tenant_parameter
+# 12402: __all_virtual_tenant_snapshots
+# 12403: __all_virtual_tenant_snapshot_ls
+# 12404: __all_virtual_tenant_snapshot_ls_meta_table
 #
 # 余留位置
 #
@@ -12136,7 +12255,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15376', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
 # 15386: __all_virtual_column_group
-# 15387: __all_virtual_ls_log_restore_status
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15387', all_def_keywords['__all_virtual_ls_log_restore_status'])))
 # 15388: __all_virtual_tenant_parameter
 
 
@@ -16268,7 +16387,8 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
-          ELSE NULL END) AS REPLICA_TYPE
+          ELSE NULL END) AS REPLICA_TYPE,
+         (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST
   FROM OCEANBASE.__ALL_VIRTUAL_CORE_META_TABLE
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -16290,7 +16410,8 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
-          ELSE NULL END) AS REPLICA_TYPE
+          ELSE NULL END) AS REPLICA_TYPE,
+         (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID() AND TENANT_ID != 1
@@ -16325,7 +16446,8 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
-          ELSE NULL END) AS REPLICA_TYPE
+          ELSE NULL END) AS REPLICA_TYPE,
+         (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST
   FROM OCEANBASE.__ALL_VIRTUAL_CORE_META_TABLE
   )
   UNION ALL
@@ -16346,7 +16468,8 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
-          ELSE NULL END) AS REPLICA_TYPE
+          ELSE NULL END) AS REPLICA_TYPE,
+         (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST
   FROM OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE
   WHERE TENANT_ID != 1
   )
@@ -23701,7 +23824,8 @@ def_table_schema(
     MAX_LSN,
     MAX_SCN,
     ARBITRATION_MEMBER,
-    DEGRADED_LIST
+    DEGRADED_LIST,
+    LEARNER_LIST
   FROM oceanbase.__all_virtual_log_stat
 """.replace("\n", " "),
 )
@@ -24061,7 +24185,8 @@ def_table_schema(
                 WHEN A.TENANT_ID = 1 THEN NULL
                 WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
                 ELSE B.READABLE_SCN
-            END) AS READABLE_SCN
+            END) AS READABLE_SCN,
+            FLAG
     FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_RECOVERY_STAT AS B
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO AS C
@@ -24111,7 +24236,8 @@ def_table_schema(
                 WHEN A.TENANT_ID = 1 THEN NULL
                 WHEN (A.TENANT_ID & 0x1) = 1 THEN NULL
                 ELSE B.READABLE_SCN
-            END) AS READABLE_SCN
+            END) AS READABLE_SCN,
+            FLAG
     FROM OCEANBASE.__ALL_VIRTUAL_LS_STATUS AS A
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_RECOVERY_STAT AS B
          JOIN OCEANBASE.__ALL_VIRTUAL_LS_ELECTION_REFERENCE_INFO AS C
@@ -24163,7 +24289,10 @@ SELECT
     C.SVR_IP AS SVR_IP,
     C.SVR_PORT AS SVR_PORT,
     C.ROLE,
-    C.REPLICA_TYPE
+    C.REPLICA_TYPE,
+    CASE WHEN A.DUPLICATE_SCOPE = 1 THEN 'CLUSTER'
+         ELSE 'NONE'
+    END AS DUPLICATE_SCOPE
 FROM (
       SELECT DATABASE_ID,
              TABLE_NAME,
@@ -24172,7 +24301,8 @@ FROM (
              'NULL' AS SUBPARTITION_NAME,
              TABLET_ID AS TABLET_ID,
              TABLE_TYPE,
-             DATA_TABLE_ID
+             DATA_TABLE_ID,
+             DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
       WHERE TABLET_ID != 0 AND TENANT_ID = EFFECTIVE_TENANT_ID()
 
@@ -24186,7 +24316,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_TABLE
       WHERE TABLET_ID != 0 AND PART_LEVEL = 0 AND TENANT_ID = 0
 
@@ -24200,7 +24331,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       P.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_TABLE T JOIN OCEANBASE.__ALL_PART P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = 0
@@ -24215,7 +24347,8 @@ FROM (
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
       Q.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_TABLE T, OCEANBASE.__ALL_PART P,OCEANBASE.__ALL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID = Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
@@ -24272,7 +24405,10 @@ SELECT
     C.SVR_IP AS SVR_IP,
     C.SVR_PORT AS SVR_PORT,
     C.ROLE,
-    C.REPLICA_TYPE
+    C.REPLICA_TYPE,
+    CASE WHEN A.DUPLICATE_SCOPE = 1 THEN 'CLUSTER'
+         ELSE 'NONE'
+    END AS DUPLICATE_SCOPE
 FROM (
       SELECT TENANT_ID,
              DATABASE_ID,
@@ -24282,7 +24418,8 @@ FROM (
              'NULL' AS SUBPARTITION_NAME,
              TABLET_ID AS TABLET_ID,
              TABLE_TYPE,
-             DATA_TABLE_ID
+             DATA_TABLE_ID,
+             DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
       WHERE TABLET_ID != 0
 
@@ -24297,7 +24434,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE
       WHERE TABLET_ID != 0 AND PART_LEVEL = 0
 
@@ -24312,7 +24450,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       P.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T JOIN OCEANBASE.__ALL_VIRTUAL_PART P ON T.TABLE_ID = P.TABLE_ID
       WHERE T.TENANT_ID = P.TENANT_ID AND T.PART_LEVEL = 1
 
@@ -24327,7 +24466,8 @@ FROM (
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
       Q.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM OCEANBASE.__ALL_VIRTUAL_TABLE T, OCEANBASE.__ALL_VIRTUAL_PART P,OCEANBASE.__ALL_VIRTUAL_SUB_PART Q
       WHERE T.TABLE_ID =P.TABLE_ID AND P.TABLE_ID=Q.TABLE_ID AND P.PART_ID =Q.PART_ID
       AND T.TENANT_ID = P.TENANT_ID AND P.TENANT_ID = Q.TENANT_ID AND T.PART_LEVEL = 2
@@ -26989,7 +27129,28 @@ JOIN OCEANBASE.__ALL_OPTSTAT_GLOBAL_PREFS GP
 """.replace("\n", " ")
 )
 
-# 21424: V$OB_LS_LOG_RESTORE_STATUS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_LS_LOG_RESTORE_STATUS',
+  table_id        = '21424',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+    SELECT TENANT_ID,
+           LS_ID,
+           SYNC_LSN,
+           SYNC_SCN,
+           SYNC_STATUS,
+           ERR_CODE,
+           COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_LOG_RESTORE_STATUS;
+  """.replace("\n", " ")
+)
+
 def_table_schema(
   owner           = 'jim.wjh',
   table_name      = 'CDB_OB_EXTERNAL_TABLE_FILES',
@@ -41528,7 +41689,8 @@ def_table_schema(
           WHEN 5   THEN 'LOGONLY'
           WHEN 16  THEN 'READONLY'
           WHEN 261 THEN 'ENCRYPTION LOGONLY'
-          ELSE NULL END) AS REPLICA_TYPE
+          ELSE NULL END) AS REPLICA_TYPE,
+         (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE NULL END) AS LEARNER_LIST
   FROM SYS.ALL_VIRTUAL_LS_META_TABLE
   WHERE
     TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -49811,7 +49973,8 @@ def_table_schema(
     MAX_LSN,
     MAX_SCN,
     ARBITRATION_MEMBER,
-    DEGRADED_LIST
+    DEGRADED_LIST,
+    LEARNER_LIST
   FROM SYS.ALL_VIRTUAL_LOG_STAT
 """.replace("\n", " "),
 )
@@ -49990,7 +50153,10 @@ SELECT
     C.SVR_IP AS SVR_IP,
     C.SVR_PORT AS SVR_PORT,
     C.ROLE,
-    C.REPLICA_TYPE
+    C.REPLICA_TYPE,
+    CASE WHEN A.DUPLICATE_SCOPE = 1 THEN 'CLUSTER'
+         ELSE 'NONE'
+    END AS DUPLICATE_SCOPE
 FROM (
     SELECT TENANT_ID,
              DATABASE_ID,
@@ -50000,7 +50166,8 @@ FROM (
              'NULL' AS SUBPARTITION_NAME,
              TABLET_ID AS TABLET_ID,
              TABLE_TYPE,
-             DATA_TABLE_ID
+             DATA_TABLE_ID,
+             DUPLICATE_SCOPE
       FROM SYS.ALL_VIRTUAL_CORE_ALL_TABLE
       WHERE TABLET_ID != 0 AND TENANT_ID = EFFECTIVE_TENANT_ID()
 
@@ -50015,7 +50182,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
       WHERE T.TABLET_ID != 0 AND T.PART_LEVEL = 0 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
 
@@ -50030,7 +50198,8 @@ FROM (
       'NULL' AS SUBPARTITION_NAME,
       P.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P
            ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
       WHERE T.PART_LEVEL = 1 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -50046,7 +50215,8 @@ FROM (
       Q.SUB_PART_NAME AS SUBPARTITION_NAME,
       Q.TABLET_ID AS TABLET_ID,
       TABLE_TYPE,
-      DATA_TABLE_ID
+      DATA_TABLE_ID,
+      DUPLICATE_SCOPE
       FROM SYS.ALL_VIRTUAL_SUB_PART_REAL_AGENT Q
            JOIN SYS.ALL_VIRTUAL_PART_REAL_AGENT P ON P.PART_ID =Q.PART_ID AND Q.TENANT_ID = P.TENANT_ID
            JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON T.TABLE_ID =P.TABLE_ID AND T.TENANT_ID = Q.TENANT_ID
@@ -50524,7 +50694,7 @@ SELECT
   0 AS BLOCK
 FROM
   SYS.ALL_VIRTUAL_TRANS_LOCK_STAT
-WHERE ROWKEY IS NOT NULL AND ROWKEY <> ''
+WHERE ROWKEY IS NOT NULL
 
 UNION ALL
 
@@ -50874,7 +51044,29 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 28194: V$OB_LS_LOG_RESTORE_STATUS
+def_table_schema(
+  owner           = 'zhaoyongheng.zyh',
+  table_name      = 'V$OB_LS_LOG_RESTORE_STATUS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28194',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT TENANT_ID,
+         LS_ID,
+         SYNC_LSN,
+         SYNC_SCN,
+         SYNC_STATUS,
+         ERR_CODE,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_LS_LOG_RESTORE_STATUS;
+  """.replace("\n", " ")
+)
 
 ################################################################################
 # Lob Table (50000, 70000)
@@ -51641,6 +51833,7 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
 
+# 101089 : placeholder for unique index of __all_tenant_snapshots
 
 ################################################################################
 # Oracle Agent table Index [15306, 15375]

@@ -133,17 +133,21 @@ public:
     return OB_SUCCESS;
   }
   int set_initial_member_list(const common::ObMemberList &member_list,
-                              const int64_t paxos_replica_num)
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list)
   {
     UNUSED(member_list);
     UNUSED(paxos_replica_num);
+    UNUSED(learner_list);
     return OB_SUCCESS;
   }
   int set_initial_member_list(const common::ObMemberList &member_list,
                               const common::ObMember &arb_replica,
-                              const int64_t paxos_replica_num)
+                              const int64_t paxos_replica_num,
+                              const common::GlobalLearnerList &learner_list)
   {
     UNUSEDx(member_list, arb_replica, paxos_replica_num);
+    UNUSED(learner_list);
     return OB_SUCCESS;
   }
   int get_end_scn(share::SCN &scn) const
@@ -165,6 +169,13 @@ public:
   {
     UNUSED(member_list);
     UNUSED(paxos_replica_num);
+    return OB_SUCCESS;
+  }
+  int get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                             int64_t &paxos_replica_num,
+                                             common::GlobalLearnerList &learner_list) const
+  {
+    UNUSEDx(member_list, paxos_replica_num, learner_list);
     return OB_SUCCESS;
   }
   int get_max_lsn(palf::LSN &lsn) const
@@ -316,20 +327,29 @@ public:
     return ret;
   }
 
-  int switch_learner_to_acceptor(const common::ObMember &learner,
-                                              const int64_t timeout_us)
+  int replace_learner(const common::ObMember &added_learner,
+                      const common::ObMember &removed_learner,
+                      const int64_t timeout_us)
   {
     int ret = OB_SUCCESS;
-    UNUSED(learner);
-    UNUSED(timeout_us);
+    UNUSEDx(added_learner, removed_learner, timeout_us);
+    return ret;
+  }
+
+  int switch_learner_to_acceptor(const common::ObMember &learner,
+                                 const int64_t new_replica_num,
+                                 const int64_t timeout_us)
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(learner, new_replica_num, timeout_us);
     return ret;
   }
   int switch_acceptor_to_learner(const common::ObMember &member,
-                                              const int64_t timeout_us)
+                                 const int64_t new_replica_num,
+                                 const int64_t timeout_us)
   {
     int ret = OB_SUCCESS;
-    UNUSED(member);
-    UNUSED(timeout_us);
+    UNUSEDx(member, new_replica_num, timeout_us);
     return ret;
   }
   int add_arbitration_member(const common::ObMember &added_member, const int64_t timeout_us)

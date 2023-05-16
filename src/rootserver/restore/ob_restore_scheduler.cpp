@@ -1017,6 +1017,7 @@ int ObRestoreService::create_all_ls_(
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < ls_attr_array.count(); ++i) {
         const ObLSAttr &ls_info = ls_attr_array.at(i);
+        ObLSFlag ls_flag = ls_info.get_ls_flag();
         if (ls_info.get_ls_id().is_sys_ls()) {
         } else if (OB_SUCC(status_op.get_ls_status_info(tenant_id_, ls_info.get_ls_id(),
                 status_info, trans))) {
@@ -1025,7 +1026,7 @@ int ObRestoreService::create_all_ls_(
           LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id_), K(ls_info));
         } else if (OB_FAIL(tenant_stat.create_new_ls_for_recovery(
                    ls_info.get_ls_id(), ls_info.get_ls_group_id(), ls_info.get_create_scn(),
-                   trans))) {
+                   trans, ls_flag))) {
           LOG_WARN("failed to add new ls status info", KR(ret), K(ls_info));
         }
         LOG_INFO("create init ls", KR(ret), K(ls_info));

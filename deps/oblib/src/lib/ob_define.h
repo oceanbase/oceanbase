@@ -166,6 +166,7 @@ const uint64_t OB_DEFAULT_COLUMN_SRS_ID = 0xffffffffffffffe0;
 const int64_t OB_MAX_SPAN_LENGTH = 1024;
 const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
 const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
+const int64_t OB_MAX_LS_FLAG_LENGTH = 2048;
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;
@@ -281,6 +282,8 @@ const int64_t OB_MAX_COMMAND_LENGTH = 4096;
 const int64_t OB_MAX_SESSION_STATE_LENGTH = 128;
 const int64_t OB_MAX_SESSION_INFO_LENGTH = 128;
 const int64_t OB_MAX_TRANS_STATE_LENGTH = 32;
+const int64_t OB_MAX_DUP_TABLE_TABLET_SET_ATTR_LENGTH = 16;
+const int64_t OB_MAX_DUP_TABLE_TABLET_SET_STATE_LENGTH = 16;
 const int64_t OB_MAX_VERSION_LENGTH = 256;
 const int64_t COLUMN_CHECKSUM_LENGTH = 8 * 1024;
 const int64_t OB_MAX_SYS_PARAM_INFO_LENGTH = 1024;
@@ -1824,6 +1827,12 @@ OB_INLINE bool is_valid_idx(const int64_t idx)
   return (0 <= idx);
 }
 
+// check whether a server_id is valid
+OB_INLINE bool is_valid_server_id(const uint64_t server_id)
+{
+  return (0 < server_id) && (OB_INVALID_ID != server_id);
+}
+
 //check whether an tenant_id is valid
 OB_INLINE bool is_valid_tenant_id(const uint64_t tenant_id)
 {
@@ -1962,9 +1971,7 @@ public:
   static bool is_replica_type_valid(const int32_t replica_type)
   {
     return REPLICA_TYPE_FULL == replica_type
-           || REPLICA_TYPE_LOGONLY == replica_type
-           || REPLICA_TYPE_READONLY == replica_type
-           || REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type;
+           || REPLICA_TYPE_READONLY == replica_type;
   }
   static bool is_can_elected_replica(const int32_t replica_type)
   {
@@ -2027,14 +2034,13 @@ public:
   {
     bool bool_ret = false;
 
-    if (REPLICA_TYPE_FULL == source) {
+    if (REPLICA_TYPE_LOGONLY == source || REPLICA_TYPE_LOGONLY == target) {
+      bool_ret = false;
+    } else if (REPLICA_TYPE_FULL == source) {
       bool_ret = true;
     } else if (REPLICA_TYPE_READONLY == source && REPLICA_TYPE_FULL == target) {
       bool_ret = true;
-    } else if (REPLICA_TYPE_LOGONLY == source && REPLICA_TYPE_FULL == target) {
-      bool_ret=false;
     }
-
     return bool_ret;
   }
 };

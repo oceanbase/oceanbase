@@ -9,6 +9,7 @@ extern void do_log(int level, const char* file, int line, const char* func, cons
 extern void ob_set_thread_name(const char* type);
 extern int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                              void *(*start_routine) (void *), void *arg);
+extern int64_t ob_update_loop_ts();
 extern log_func_t g_log_func;
 extern int g_log_level;
 enum { LOG_LEVEL_ERROR = 0, LOG_LEVEL_USER_LEVEL = 1, LOG_LEVEL_WARN = 2, LOG_LEVEL_INFO = 3, LOG_LEVEL_TRACE = 4, LOG_LEVEL_DEBUG = 5 };
@@ -25,6 +26,10 @@ int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                       void *(*start_routine) (void *), void *arg)
 {
   return pthread_create(thread, attr, start_routine, arg);
+}
+int64_t ob_update_loop_ts()
+{
+  return 0;
 }
 #endif
 #define do_rk_log_macro(...) { format_reset(&g_log_fbuf); rk_log_macro(__VA_ARGS__); }

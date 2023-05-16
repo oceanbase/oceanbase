@@ -72,7 +72,7 @@ TEST_F(TestLSStatusOperator, SQLProxy)
     ret = inner_proxy.read(res, sql.ptr());
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = inner_proxy.read(res, cluster_id, OB_SYS_TENANT_ID, sql.ptr());
-    ASSERT_EQ(OB_LS_LOCATION_NOT_EXIST, ret);
+    ASSERT_EQ(OB_TIMEOUT, ret);
     ret = inner_proxy.read(res, local_cluster_id, OB_SYS_TENANT_ID, sql.ptr());
     ASSERT_EQ(OB_SUCCESS, ret);
     ret = inner_proxy.read(res, OB_INVALID_CLUSTER_ID, OB_SYS_TENANT_ID, sql.ptr());
@@ -140,7 +140,8 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   ObZone primary_zone("z1");
-  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone);
+  ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
+  ret = info.init(tenant_id_, SYS_LS, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = status_operator.get_all_ls_status_by_order(OB_SYS_TENANT_ID, ls_array,
       get_curr_simple_server().get_observer().get_mysql_proxy());
@@ -152,9 +153,48 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
 
   //创建新日志流
   ObLSID ls_id(1001);
-  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone);
+  ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  //设置初始成员列表
+  ObMemberList member_list;
+  ObMember arb_member;
+  common::GlobalLearnerList learner_list;
+  ObAddr server1(common::ObAddr::IPV4, "127.1.1.1", 2882);
+  ObAddr server2(common::ObAddr::IPV4, "127.1.1.1", 3882);
+  ASSERT_EQ(OB_SUCCESS, member_list.add_server(server1));
+  ASSERT_EQ(OB_SUCCESS, member_list.add_server(server2));
+  ret = status_operator.update_init_member_list(tenant_id_, ls_id, member_list,
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLSStatusInfo new_status_info;
+  ObMemberList new_list;
+  ret = status_operator.get_ls_init_member_list(tenant_id_, ls_id, new_list, new_status_info,
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member, learner_list);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  //创建新日志流
+  ObLSStatusInfo new_status_info2;
+  ObLSID ls_id3(1003);
+  ret = new_status_info2.init(tenant_id_, ls_id3, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ls_life.create_new_ls(new_status_info2, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObAddr server4(common::ObAddr::IPV4, "127.1.1.1", 4882);
+  ObMember arb_member2(server4, 0);
+  common::GlobalLearnerList learner_list2;
+
+  ret = status_operator.update_init_member_list(tenant_id_, ls_id3, member_list,
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member2, learner_list2);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObLSStatusInfo new_status_info3;
+  ObMemberList new_list2;
+  ObMember arb_member3;
+  common::GlobalLearnerList learner_list3;
+  ret = status_operator.get_ls_init_member_list(tenant_id_, ls_id3, new_list2, new_status_info3,
+      get_curr_simple_server().get_observer().get_mysql_proxy(), arb_member3, learner_list3);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   //设置日志流offline的参数检查

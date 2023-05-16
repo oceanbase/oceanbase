@@ -1452,10 +1452,11 @@ int ObPLComposite::copy_element(const ObObj &src,
       ObPLComposite *dest_composite
         = (dest.get_ext() == src.get_ext()) ? NULL : reinterpret_cast<ObPLComposite*>(dest.get_ext());
       ObPLComposite *src_composite = reinterpret_cast<ObPLComposite*>(src.get_ext());
+      ObArenaAllocator tmp_allocator;
       CK (OB_NOT_NULL(src_composite));
       OZ (ObPLComposite::deep_copy(*src_composite,
                                    dest_composite,
-                                   allocator,
+                                   dest.get_ext() == src.get_ext() ? tmp_allocator : allocator,
                                    ns,
                                    session,
                                    need_new_allocator));

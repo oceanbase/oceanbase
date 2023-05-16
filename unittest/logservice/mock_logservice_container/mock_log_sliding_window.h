@@ -16,6 +16,7 @@
 #define private public
 #include "logservice/palf/log_sliding_window.h"
 #include "share/scn.h"
+#include "mock_log_state_mgr.h"
 #undef private
 
 namespace oceanbase
@@ -344,7 +345,13 @@ public:
     ack_info.lsn_ = LSN(PALF_INITIAL_LSN_VAL);
     return OB_SUCCESS;
   }
+  int get_leader_from_cache(common::ObAddr &leader) const
+  {
+    leader = state_mgr_->get_leader();
+    return OB_SUCCESS;
+  }
 public:
+  palf::MockLogStateMgr *state_mgr_;
   LSN pending_end_lsn_;
   int64_t mock_start_id_;
   int64_t mock_last_submit_log_id_;

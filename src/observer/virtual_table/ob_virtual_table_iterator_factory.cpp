@@ -199,9 +199,13 @@
 #include "observer/virtual_table/ob_all_virtual_archive_dest_status.h"
 #include "observer/virtual_table/ob_virtual_show_trace.h"
 #include "observer/virtual_table/ob_all_virtual_sql_plan.h"
+#include "observer/virtual_table/ob_all_virtual_dup_ls_lease_mgr.h"
+#include "observer/virtual_table/ob_all_virtual_dup_ls_tablets.h"
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
+#include "observer/virtual_table/ob_all_virtual_dup_ls_tablet_set.h"
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
+#include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 
 namespace oceanbase
 {
@@ -290,7 +294,7 @@ int ObVirtualTableIteratorFactory::create_virtual_table_iterator(ObVTableScanPar
 
 int ObVirtualTableIteratorFactory::revert_virtual_table_iterator(ObVirtualTableIterator *vt_iter)
 {
-  int ret = OB_SUCCESS;
+int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == vt_iter)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "vt_iter is NULL, can not free it");
@@ -861,6 +865,42 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
         END_CREATE_VT_ITER_SWITCH_LAMBDA
 
         BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
+          case OB_ALL_VIRTUAL_DUP_LS_LEASE_MGR_TID: {
+            ObAllVirtualDupLSLeaseMgr *dup_ls_lease_mgr = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDupLSLeaseMgr,
+                                          dup_ls_lease_mgr))) {
+              SERVER_LOG(ERROR, "ObAllVirtualDupLSLeaseMgr construct failed", K(ret));
+            } else if (OB_FAIL(dup_ls_lease_mgr->init(addr_))) {
+              SERVER_LOG(WARN, "all_virtual_dup_ls_lease_mgr init failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(dup_ls_lease_mgr);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DUP_LS_TABLETS_TID: {
+            ObAllVirtualDupLSTablets *dup_ls_tablets = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDupLSTablets,
+                                          dup_ls_tablets))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualDupLSTabletsr", K(ret));
+            } else if (OB_FAIL(dup_ls_tablets->init(addr_))) {
+              SERVER_LOG(WARN, "fail to init all_virtual_dup_ls_tablets", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(dup_ls_tablets);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DUP_LS_TABLET_SET_TID: {
+            ObAllVirtualDupLSTabletSet *dup_ls_tablet_set = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualDupLSTabletSet,
+                                          dup_ls_tablet_set))) {
+              SERVER_LOG(ERROR, "failed to init ObAllVirtualDMmlStats", K(ret));
+            } else if (OB_FAIL(dup_ls_tablet_set->init(addr_))) {
+              SERVER_LOG(WARN, "fail to init all_virtual_dup_ls_tablet_set", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(dup_ls_tablet_set);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_TRANS_STAT_TID: {
             ObGVTxStat *gv_tx_stat = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObGVTxStat, gv_tx_stat))) {
@@ -2376,6 +2416,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               opt_stats_gather_stat->set_allocator(&allocator);
               opt_stats_gather_stat->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(opt_stats_gather_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_TID: {
+            ObVirtualLSLogRestoreStatus *ls_log_restore_status = NULL;
+            omt::ObMultiTenant *omt = GCTX.omt_;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualLSLogRestoreStatus, ls_log_restore_status))) {
+              SERVER_LOG(ERROR, "failed to init ObVirtualLSLogRestoreStatus", K(ret));
+            } else if (ls_log_restore_status->init(omt)) {
+              SERVER_LOG(WARN, "fail to init ObVirtualLSLogRestoreStatus with omt", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ls_log_restore_status);
             }
             break;
           }

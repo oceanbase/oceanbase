@@ -265,6 +265,12 @@ int ObExprColumnConv::calc_result_typeN(ObExprResType &type,
       type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_CHARSET_CONVERT_IGNORE_ERR);
     }
 
+    if (OB_SUCC(ret) &&
+        OB_FAIL(ObCharset::check_valid_implicit_convert(types[4].get_collation_type(),
+                                                        types[1].get_collation_type()))) {
+      LOG_WARN("failed to check valid implicit convert", K(ret));
+    }
+
     if (OB_SUCC(ret) && !enumset_to_varchar) {
       //cast type when type not same.
       const ObObjTypeClass value_tc = ob_obj_type_class(types[4].get_type());

@@ -255,11 +255,14 @@ public:
                                       const LSN &log_lsn,
                                       const LSN &log_end_lsn,
                                       const int64_t &log_proposal_id);
+
+  virtual int get_leader_from_cache(common::ObAddr &leader) const;
   virtual int read_data_from_buffer(const LSN &read_begin_lsn,
                                     const int64_t in_read_size,
                                     char *buf,
                                     int64_t &out_read_size) const;
   int64_t get_last_slide_log_id() const;
+
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
@@ -271,6 +274,7 @@ private:
                    const PalfBaseInfo &palf_base_info,
                    common::ObILogAllocator *alloc_mgr);
   int get_fetch_log_dst_(common::ObAddr &leader) const;
+  int get_leader_from_cache_(common::ObAddr &leader) const;
   int clean_log_();
   int reset_match_lsn_map_();
   bool is_all_log_flushed_();

@@ -690,9 +690,6 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = false;
         stop_checking = true;
       }
-      if (log_op_def::LOG_LINK_SCAN == op->get_type()) {
-        stop_checking = true;
-      }
       LOG_DEBUG("check_vectorie_supported", K(disable_vectorize), K(support), K(stop_checking),
                 K(op->get_num_of_child()));
       // continue searching until found an operator with vectorization explicitly disabled
@@ -2951,7 +2948,15 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObDirectReceiveSpec &spec
   UNUSED(op);
   UNUSED(spec);
   UNUSED(in_root_job);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExpr *, 2> dynamic_consts;
+  for (int64_t i = 0; OB_SUCC(ret) && i < spec.output_.count(); i++) {
+    if (spec.output_.at(i)->is_dynamic_const_ && !spec.output_.at(i)->is_static_const_) {
+      OZ(dynamic_consts.push_back(spec.output_.at(i)));
+    }
+  }
+  OZ(spec.dynamic_const_exprs_.assign(dynamic_consts));
+  return ret;
 }
 
 int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxMSReceiveSpec &spec, const bool in_root_job)
@@ -6581,6 +6586,22 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       LOG_WARN("failed to check enable plan expiration", K(ret));
     } else if (enable) {
       phy_plan.set_enable_plan_expiration(true);
+    }
+  }
+
+  // set location cons
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(sql_ctx)) {
+      // do nothing
+    } else if (OB_FAIL(phy_plan.set_location_constraints(sql_ctx->base_constraints_,
+                                                  sql_ctx->strict_constraints_,
+                                                  sql_ctx->non_strict_constraints_,
+                                                  sql_ctx->dup_table_replica_cons_))) {
+        LOG_WARN("failed to set location constraints", K(ret), K(phy_plan),
+                 K(sql_ctx->base_constraints_),
+                 K(sql_ctx->strict_constraints_),
+                 K(sql_ctx->non_strict_constraints_),
+                 K(sql_ctx->dup_table_replica_cons_));
     }
   }
 

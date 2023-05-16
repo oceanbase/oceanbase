@@ -385,6 +385,69 @@ int ObLSRecoveryStatOperator::get_tenant_recovery_stat(const uint64_t tenant_id,
   return ret;
 }
 
+int ObLSRecoveryStatOperator::get_tenant_min_user_ls_create_scn(const uint64_t tenant_id,
+                                                                ObISQLClient &client,
+                                                                SCN &min_user_ls_create_scn)
+{
+  int ret = OB_SUCCESS;
+  min_user_ls_create_scn = SCN::base_scn();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id));
+  } else {
+    common::ObSqlString sql;
+    const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    ObSEArray<ObLSRecoveryStat, 1> ls_recovery_array;
+    if (OB_FAIL(sql.assign_fmt(
+            "select min(create_scn) as min_create_scn from %s where tenant_id = %lu and ls_id != %ld",
+            OB_ALL_LS_RECOVERY_STAT_TNAME, tenant_id, SYS_LS.id()))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql), K(tenant_id));
+    } else if (OB_FAIL(get_min_create_scn_(tenant_id, sql, client, min_user_ls_create_scn))) {
+      LOG_WARN("failed to get min_create_scn", KR(ret), K(tenant_id), K(sql));
+    }
+  }
+  return ret;
+}
+
+int ObLSRecoveryStatOperator::get_min_create_scn_(
+    const uint64_t tenant_id,
+    const common::ObSqlString &sql,
+    ObISQLClient &client,
+    SCN &min_create_scn)
+{
+  int ret = OB_SUCCESS;
+  min_create_scn = SCN::base_scn();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid_argument", KR(ret), K(tenant_id));
+  } else {
+    const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+    HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(client.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get sql result", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("failed to get next", KR(ret), K(sql));
+      } else if (OB_ISNULL(result)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+      } else {
+        uint64_t min_create_scn_val = OB_INVALID_SCN_VAL;
+        EXTRACT_UINT_FIELD_MYSQL(*result, "min_create_scn", min_create_scn_val, uint64_t);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("failed to get min_create_scn", KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+        } else if (OB_FAIL(min_create_scn.convert_for_inner_table_field(min_create_scn_val))) {
+          LOG_WARN("failed to convert_for_inner_table_field", KR(ret), K(min_create_scn_val), K(tenant_id), K(exec_tenant_id), K(sql));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSRecoveryStatOperator::get_tenant_max_sync_scn(const uint64_t tenant_id,
                                                        ObISQLClient &client,
                                                        SCN &max_sync_scn)

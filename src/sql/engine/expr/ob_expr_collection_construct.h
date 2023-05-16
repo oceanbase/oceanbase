@@ -50,6 +50,7 @@ public:
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
   static int eval_collection_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static bool is_match_type(const ObObj &element_obj, pl::ObPLType type);
 
   struct ExtraInfo : public ObIExprExtraInfo
   {

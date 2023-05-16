@@ -38,6 +38,7 @@
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
+#include "storage/tx/ob_dup_table_util.h"
 #include "storage/restore/ob_ls_restore_handler.h"
 #include "logservice/applyservice/ob_log_apply_service.h"
 #include "logservice/replayservice/ob_replay_handler.h"
@@ -160,7 +161,6 @@ public:
   virtual ~ObLS();
   int init(const share::ObLSID &ls_id,
            const uint64_t tenant_id,
-           const ObReplicaType replica_type,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
            const share::SCN &create_scn,
@@ -185,7 +185,6 @@ public:
   ObLSTabletService *get_tablet_svr() { return &ls_tablet_svr_; }
   share::ObLSID get_ls_id() const { return ls_meta_.ls_id_; }
   bool is_sys_ls() const { return ls_meta_.ls_id_.is_sys_ls(); }
-  ObReplicaType get_replica_type() const { return ls_meta_.replica_type_; }
   int get_replica_status(ObReplicaStatus &replica_status);
   uint64_t get_tenant_id() const { return ls_meta_.tenant_id_; }
   ObFreezer *get_freezer() { return &ls_freezer_; }
@@ -194,8 +193,8 @@ public:
   checkpoint::ObDataCheckpoint *get_data_checkpoint() { return &data_checkpoint_; }
   transaction::ObKeepAliveLSHandler *get_keep_alive_ls_handler() { return &keep_alive_ls_handler_; }
   ObLSRestoreHandler *get_ls_restore_handler() { return &ls_restore_handler_; }
+  transaction::ObDupTableLSHandler *get_dup_table_ls_handler() { return &dup_table_ls_handler_; }
   ObLSDDLLogHandler *get_ddl_log_handler() { return &ls_ddl_log_handler_; }
-
   // ObObLogHandler interface:
   // get the log_service pointer
   logservice::ObLogHandler *get_log_handler() { return &log_handler_; }
@@ -238,6 +237,7 @@ public:
   // after migrating as learner
   int create_ls(const share::ObTenantRole tenant_role,
                 const palf::PalfBaseInfo &palf_base_info,
+                const common::ObReplicaType &replica_type,
                 const bool allow_log_sync);
   // load ls info from disk
   // @param[in] tenant_role, role of tenant, which determains palf access mode
@@ -299,6 +299,8 @@ public:
 
   TO_STRING_KV(K_(ls_meta), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler));
 private:
+  int ls_init_for_dup_table_();
+  int ls_destory_for_dup_table_();
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();
@@ -484,6 +486,12 @@ public:
   // int get_lock_op_iter(const ObLockID &lock_id,
   //                      ObLockOpIterator &iter);
   DELEGATE_WITH_RET(lock_table_, get_lock_op_iter, int);
+  // check and clear lock ops and obj locks in this ls (or lock_table)
+  // @param[in] force_compact, if it's set to true, the gc thread will
+  // force compact unlock op which is committed, even though there's
+  // no paired lock op.
+  // int check_and_clear_obj_lock(const bool force_compact)
+  DELEGATE_WITH_RET(lock_table_, check_and_clear_obj_lock, int);
 
   // set the member_list of log_service
   // @param [in] member_list, the member list to be set.
@@ -496,6 +504,11 @@ public:
   // @param [out] quorum, the quorum of member_list
   // int get_paxos_member_list(common::ObMemberList &member_list, int64_t &quorum) const;
   CONST_DELEGATE_WITH_RET(log_handler_, get_paxos_member_list, int);
+  // get paxos member list and learner list of log_service
+  // @param [out] member_list, the member_list of current log_service
+  // @param [out] quorum, the quorum of member_list
+  // @param [out] learner_list, the learner list of log_service
+  CONST_DELEGATE_WITH_RET(log_handler_, get_paxos_member_list_and_learner_list, int);
   // advance the base_lsn of log_handler.
   // @param[in] palf_base_info, the palf meta used to advance base lsn.
   // int advance_base_info(const palf::PalfBaseInfo &palf_base_info);
@@ -547,14 +560,17 @@ public:
   DELEGATE_WITH_RET(log_handler_, disable_vote, int);
   DELEGATE_WITH_RET(log_handler_, add_member, int);
   DELEGATE_WITH_RET(log_handler_, remove_member, int);
+  DELEGATE_WITH_RET(log_handler_, add_learner, int);
   DELEGATE_WITH_RET(log_handler_, remove_learner, int);
+  DELEGATE_WITH_RET(log_handler_, replace_learner, int);
   DELEGATE_WITH_RET(log_handler_, replace_member, int);
   DELEGATE_WITH_RET(log_handler_, is_in_sync, int);
   DELEGATE_WITH_RET(log_handler_, get_end_scn, int);
   DELEGATE_WITH_RET(log_handler_, disable_sync, int);
   DELEGATE_WITH_RET(log_handler_, change_replica_num, int);
   DELEGATE_WITH_RET(log_handler_, get_end_lsn, int);
-
+  DELEGATE_WITH_RET(log_handler_, switch_acceptor_to_learner, int);
+  DELEGATE_WITH_RET(log_handler_, switch_learner_to_acceptor, int);
 
   // Create a TxCtx whose tx_id is specified
   // @param [in] tx_id: transaction ID
@@ -631,6 +647,10 @@ public:
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);
+
+  //dup table ls meta interface
+  CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
+  DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);
 
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
@@ -743,6 +763,10 @@ private:
   ObLSDDLLogHandler ls_ddl_log_handler_;
   // interface for submit keep alive log
   transaction::ObKeepAliveLSHandler keep_alive_ls_handler_;
+
+  // dup_table ls interface ,alloc memory when discover a dup_table_tablet
+  transaction::ObDupTableLSHandler dup_table_ls_handler_;
+
   ObLSWRSHandler ls_wrs_handler_;
   //for migration
   ObLSMigrationHandler ls_migration_handler_;

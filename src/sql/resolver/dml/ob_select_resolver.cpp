@@ -2052,7 +2052,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           }
         } else if (is_oracle_mode()
                     && T_QUESTIONMARK == sel_expr->get_expr_type()
-                    && T_OBJ_ACCESS_REF == project_node->type_) {
+                    && is_colum_without_alias(project_node)) {
           while (OB_SUCC(ret) && NULL != project_node->children_[1]) {
             project_node = project_node->children_[1];
           }
@@ -2195,6 +2195,21 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     }
   }
   return ret;
+}
+
+inline bool ObSelectResolver::is_colum_without_alias(ParseNode *project_node) {
+  bool bret = OB_NOT_NULL(project_node);
+  ParseNode *cur_node = project_node;
+  while (bret && OB_NOT_NULL(cur_node)) {
+    if (T_OBJ_ACCESS_REF != cur_node->type_
+         || OB_ISNULL(cur_node->children_[0])
+         || T_IDENT != cur_node->children_[0]->type_) {
+      bret = false;
+    } else {
+      cur_node = cur_node->children_[1];
+    }
+  }
+  return bret;
 }
 
 int ObSelectResolver::expand_target_list(

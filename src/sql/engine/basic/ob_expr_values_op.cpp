@@ -207,7 +207,7 @@ int ObExprValuesOp::inner_open()
     // see ObSQLUtils::wrap_column_convert_ctx(), add CM_WARN_ON_FAIL for INSERT IGNORE.
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
     cm_ = cm_ | CM_COLUMN_CONVERT;
-    if (plan_ctx->is_ignore_stmt()) {
+    if (plan_ctx->is_ignore_stmt() || !is_strict_mode(ctx_.get_my_session()->get_sql_mode())) {
       // CM_CHARSET_CONVERT_IGNORE_ERR is will give '?' when do string_string convert.
       // eg: insert into t(gbk_col) values('𐐀');
       cm_ = cm_ | CM_WARN_ON_FAIL | CM_CHARSET_CONVERT_IGNORE_ERR;
@@ -393,6 +393,8 @@ int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
     ObDatum *src_datum;
     if (OB_FAIL(real_src_expr.eval(eval_ctx_, src_datum))) {
       LOG_WARN("fail to eval src", K(real_src_expr), K(cm_), K(ret));
+    } else if (src_datum->is_null()) {
+      dst_datum.set_null();
     } else if (src_datum->get_string().empty()
                 && lib::is_oracle_mode()
                 && dst_expr->datum_meta_.type_ == common::ObLongTextType) {
@@ -508,6 +510,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           dst_expr->locate_datum_for_write(eval_ctx_) = *datum;
           dst_expr->set_evaluated_projected(eval_ctx_);
         }
+      } else if (OB_FAIL(ObCharset::check_valid_implicit_convert(src_meta.cs_type_, dst_expr->datum_meta_.cs_type_))) {
+        LOG_WARN("failed to check valid implicit convert", K(ret));
       } else {
         // 需要动态cast原因:
         // 对于以下场景:

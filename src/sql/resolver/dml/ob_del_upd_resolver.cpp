@@ -1460,10 +1460,11 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
               expr = lob_expr;
               LOG_DEBUG("build returning lob expr", KPC(expr), KPC(ref_expr), KPC(lob_expr));
             }
-          } else if (ObObjType::ObUserDefinedSQLType == ref_expr->get_data_type()) {
-            ret = OB_ERR_RETURNING_CLAUSE;
-            LOG_WARN("RETURNING clause is currently not supported for object type columns", K(ret));
           }
+        }
+        if (OB_SUCC(ret) && ob_is_user_defined_type(expr->get_data_type())) {
+          ret = OB_ERR_RETURNING_CLAUSE;
+          LOG_WARN("RETURNING clause is currently not supported for object type", K(ret));
         }
 
         if (OB_SUCC(ret)) {

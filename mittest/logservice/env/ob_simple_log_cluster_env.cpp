@@ -269,7 +269,8 @@ int ObSimpleLogClusterTestEnv::create_paxos_group(const int64_t id, const PalfBa
     } else {
       handle->set_location_cache_cb(loc_cb);
       const ObMemberList &member_list = get_member_list();
-      handle->set_initial_member_list(member_list, member_list.get_member_number());
+      GlobalLearnerList learner_list;
+      handle->set_initial_member_list(member_list, member_list.get_member_number(), learner_list);
       handle->set_paxos_member_region_map(get_member_region_map());
       CLOG_LOG(INFO, "set_initial_member_list success", K(id), "addr", svr->get_addr(), K(member_list));
     }
@@ -306,6 +307,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   // if member_cnt_ is 3, arb_replica_idx should be 0,1,2
   ObMemberList member_list = get_member_list();
   ObMember arb_replica;
+  GlobalLearnerList learner_list;
   arb_replica_idx = 2;
   for (int i = 0; i < get_cluster().size(); i++) {
     auto svr = get_cluster()[i];
@@ -331,7 +333,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
           break;
         } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
           CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
-        } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1))) {
+        } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1, learner_list))) {
           CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
         } else {
           handle->set_location_cache_cb(loc_cb);

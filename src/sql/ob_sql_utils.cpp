@@ -2118,6 +2118,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                   print_params,
                                   param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       printer.enable_print_temp_table_as_cte();
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print select stmt", K(ret));
@@ -2135,6 +2136,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                     print_params,
                                     param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print insert stmt", K(ret));
       } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2152,6 +2154,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                   print_params,
                                   param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print insert stmt", K(ret));
       } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2168,6 +2171,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                   print_params,
                                   param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print delete stmt", K(ret));
       } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2184,6 +2188,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                   print_params,
                                   param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("fail to print update stmt", K(ret));
       } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {
@@ -2200,6 +2205,7 @@ int ObSQLUtils::print_sql(ObIAllocator &allocator,
                                   print_params,
                                   param_store);
       printer.set_is_root(true);
+      printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
         LOG_WARN("failed to print merge stmt", K(ret));
       } else if (OB_FAIL(ob_write_string(allocator, ObString(pos, buf), sql))) {

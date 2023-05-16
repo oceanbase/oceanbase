@@ -37,6 +37,7 @@ public:
   static int create(int64_t resp_id, const char* buf, int64_t sz, rpc::ObRequest*& req);
   void destroy() { pool_.destroy(); }
   void resp(ObRpcPacket* pkt);
+  ObAddr get_peer();
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
 private:
   ObRpcMemPool& pool_;

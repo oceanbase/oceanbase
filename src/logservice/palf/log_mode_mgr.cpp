@@ -45,6 +45,7 @@ LogModeMgr::LogModeMgr()
       local_max_log_pid_(INVALID_PROPOSAL_ID),
       max_majority_accepted_pid_(INVALID_PROPOSAL_ID),
       max_majority_lsn_(),
+      resend_mode_meta_list_(),
       state_mgr_(NULL),
       log_engine_(NULL),
       config_mgr_(NULL),
@@ -100,6 +101,7 @@ void LogModeMgr::destroy()
     accepted_mode_meta_.reset();
     last_submit_mode_meta_.reset();
     reset_status_();
+    resend_mode_meta_list_.reset();
     state_mgr_ = NULL;
     log_engine_ = NULL;
     config_mgr_ = NULL;
@@ -328,6 +330,7 @@ void LogModeMgr::reset_status()
 {
   common::ObSpinLockGuard guard(lock_);
   reset_status_();
+  resend_mode_meta_list_.reset();
 }
 
 void LogModeMgr::reset_status_()
@@ -465,9 +468,11 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
           change_done = (true == is_reconfirm)? true: can_finish_change_mode_();
           if (change_done) {
             applied_mode_meta_ = accepted_mode_meta_;
-            const bool is_applied_mode_meta = true;
-            (void) submit_accept_req_(new_proposal_id_, is_applied_mode_meta, applied_mode_meta_);
-            if (applied_mode_meta_.ref_scn_.is_valid() && AccessMode::APPEND == applied_mode_meta_.access_mode_ &&
+            if (OB_FAIL(set_resend_mode_meta_list_())) {
+              PALF_LOG(WARN, "set_resend_mode_meta_list_ failed", K(ret), K_(palf_id), K_(self));
+            } else if (OB_FAIL(resend_applied_mode_meta_())) {
+              PALF_LOG(WARN, "resend_applied_mode_meta_ failed", K(ret), K_(palf_id), K_(self));
+            } else if (applied_mode_meta_.ref_scn_.is_valid() && AccessMode::APPEND == applied_mode_meta_.access_mode_ &&
                 OB_FAIL(sw_->inc_update_scn_base(applied_mode_meta_.ref_scn_))) {
               PALF_LOG(ERROR, "inc_update_base_log_ts failed", KR(ret), K_(palf_id), K_(self),
                   K_(applied_mode_meta));
@@ -511,6 +516,64 @@ int LogModeMgr::switch_state_(const AccessMode &access_mode,
       PALF_LOG(INFO, "change_access_mode waiting retry", K(ret), K_(palf_id), "state", state2str_(state_),
           K_(follower_list), K_(majority_cnt), K_(ack_list));
     }
+  }
+  return ret;
+}
+
+int LogModeMgr::set_resend_mode_meta_list_()
+{
+  int ret = OB_SUCCESS;
+  common::ObMemberList member_list;
+  common::GlobalLearnerList learner_list;
+  int64_t replica_num;
+  resend_mode_meta_list_.reset();
+  if (OB_FAIL(config_mgr_->get_alive_member_list_with_arb(member_list, replica_num))) {
+    PALF_LOG(WARN, "get_alive_member_list_with_arb failed", K(ret), K_(palf_id), K_(self));
+  } else if (OB_FAIL(config_mgr_->get_global_learner_list(learner_list))) {
+    PALF_LOG(WARN, "get_global_learner_list failed", K(ret), K_(palf_id), K_(self));
+  } else {
+    member_list.remove_server(self_);
+    (void) learner_list.deep_copy_to(resend_mode_meta_list_);
+    const int64_t member_number = member_list.get_member_number();
+    for (int64_t idx = 0; idx < member_number && OB_SUCC(ret); ++idx) {
+      common::ObAddr server;
+      if (OB_FAIL(member_list.get_server_by_index(idx, server))) {
+        PALF_LOG(WARN, "get_server_by_index failed", K(ret), K(idx));
+      } else if (OB_FAIL(resend_mode_meta_list_.add_learner(ObMember(server, 1)))) {
+        PALF_LOG(WARN, "add_learner failed", K(ret), K(server));
+      }
+    }
+  }
+  return ret;
+}
+
+int LogModeMgr::leader_do_loop_work()
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
+  const bool is_leader = (self_ == state_mgr_->get_leader());
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (true == is_leader &&
+      ModeChangeState::MODE_INIT == state_ &&
+      0 != resend_mode_meta_list_.get_member_number() &&
+      is_need_retry_()) {
+    ret = resend_applied_mode_meta_();
+  }
+  return ret;
+}
+
+int LogModeMgr::resend_applied_mode_meta_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t proposal_id = state_mgr_->get_proposal_id();
+  const bool is_applied_mode_meta = true;
+  if (OB_FAIL(log_engine_->submit_change_mode_meta_req(resend_mode_meta_list_, proposal_id,
+        is_applied_mode_meta, applied_mode_meta_))) {
+    PALF_LOG(WARN, "submit_prepare_meta_req failed", K(ret), K_(palf_id), K_(self),
+        K_(resend_mode_meta_list), K(proposal_id), K(is_applied_mode_meta), K_(applied_mode_meta));
+  } else {
+    last_submit_req_ts_ = common::ObTimeUtility::current_time();
   }
   return ret;
 }
@@ -715,6 +778,7 @@ int LogModeMgr::ack_mode_meta(const common::ObAddr &server, const int64_t propos
     PALF_LOG(INFO, "ack_mode_meta success", K(ret), K_(palf_id), K_(self), K(server),
         K(proposal_id), K_(follower_list), K_(majority_cnt), K_(ack_list));
   }
+  (void) resend_mode_meta_list_.remove_learner(server);
   return ret;
 }
 

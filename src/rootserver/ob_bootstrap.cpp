@@ -1378,9 +1378,10 @@ int ObBootstrap::insert_sys_ls_(const share::schema::ObTenantSchema &tenant_sche
     share::ObLSStatusInfo status_info;
     const uint64_t unit_group_id = 0;
     const uint64_t ls_group_id = 0;
+    share::ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     if (OB_FAIL(status_info.init(OB_SYS_TENANT_ID, SYS_LS, ls_group_id,
-            share::OB_LS_NORMAL, unit_group_id, primary_zone))) {
-      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone));
+            share::OB_LS_NORMAL, unit_group_id, primary_zone, flag))) {
+      LOG_WARN("failed to init ls info", KR(ret), K(primary_zone), K(flag));
     } else if (OB_FAIL(life_agent.create_new_ls(status_info, SCN::base_scn(), primary_zone_str.string(),
                                                 share::NORMAL_SWITCHOVER_STATUS))) {
       LOG_WARN("failed to get init member list", KR(ret), K(status_info), K(primary_zone_str));

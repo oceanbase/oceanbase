@@ -24,6 +24,7 @@
 #include "storage/slog/ob_storage_logger.h"
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
+#include "storage/tx/ob_dup_table_base.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
@@ -187,12 +188,20 @@ int ObTenantCheckpointSlogHandler::replay_checkpoint(const ObTenantSuperBlock &s
   ObTenantStorageCheckpointReader::ObCheckpointMetaOp replay_tablet_op =
       std::bind(&ObTenantCheckpointSlogHandler::replay_tablet,
       this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
+  ObTenantStorageCheckpointReader::ObCheckpointMetaOp replay_dup_table_ls_meta_op =
+      std::bind(&ObTenantCheckpointSlogHandler::replay_dup_table_ls_meta,
+      this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+
   if (!replay_ls_op.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("replay_ls_op invalid", K(ret));
   } else if (!replay_tablet_op.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("replay_tablet_op invalid", K(ret));
+  } else if (!replay_dup_table_ls_meta_op.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("replay_dup_table_ls_meta_op invalid", K(ret));
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       super_block.ls_meta_entry_, replay_ls_op, meta_block_list))) {
     LOG_WARN("fail to replay ls meta checkpoint", K(ret));
@@ -200,6 +209,11 @@ int ObTenantCheckpointSlogHandler::replay_checkpoint(const ObTenantSuperBlock &s
     LOG_WARN("fail to add_macro_blocks", K(ret));
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       super_block.tablet_meta_entry_, replay_tablet_op, meta_block_list))) {
+    LOG_WARN("fail to replay tablet checkpoint", K(ret));
+  } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
+    LOG_WARN("fail to add_macro_blocks", K(ret));
+  } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
+      super_block.ls_dup_table_entry_, replay_dup_table_ls_meta_op, meta_block_list))) {
     LOG_WARN("fail to replay tablet checkpoint", K(ret));
   } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
@@ -246,6 +260,34 @@ int ObTenantCheckpointSlogHandler::replay_tablet(
     LOG_INFO("Successfully load tablet ckpt", K(map_key), K(addr));
   }
 
+  return ret;
+}
+
+
+int ObTenantCheckpointSlogHandler::replay_dup_table_ls_meta(const ObMetaDiskAddr &addr,
+                                                            const char *buf,
+                                                            const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(addr);
+  transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(dup_ls_meta.deserialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to deserialize", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService *)
+                         ->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to replay_put_ls", K(ret));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(dup_ls_meta));
+  } else if (OB_FAIL(ls->set_dup_table_ls_meta(dup_ls_meta))) {
+    LOG_WARN("set dup ls meta failed", K(ret), K(dup_ls_meta));
+  }
   return ret;
 }
 
@@ -463,6 +505,10 @@ int ObTenantCheckpointSlogHandler::update_tablet_meta_addr_and_block_list(
     LOG_WARN("fail to update_tablet_meta_addr", K(ret));
   } else if (OB_FAIL(ckpt_writer.get_ls_block_list(meta_block_list))) {
     LOG_WARN("fail to get_ls_block_list", K(ret));
+  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, false /*switch handle*/))) {
+    LOG_WARN("fail to add_macro_blocks", K(ret));
+  } else if (OB_FAIL(ckpt_writer.get_dup_ls_block_list(meta_block_list))) {
+    LOG_WARN("fail to get_ls_block_list", K(ret));
   } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(*meta_block_list, true /*switch handle*/))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
   } else if (OB_FAIL(ckpt_writer.get_tablet_block_list(meta_block_list))) {
@@ -568,6 +614,12 @@ int ObTenantCheckpointSlogHandler::replay(const ObRedoModuleReplayParam &param)
       }
       break;
     }
+    case ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS: {
+      if (OB_FAIL(inner_replay_dup_table_ls_slog(param))) {
+        LOG_WARN("fail to replay dup_table ls slog", K(param));
+      }
+      break;
+    }
 
     default: {
       ret = OB_ERR_SYS;
@@ -608,6 +660,35 @@ int ObTenantCheckpointSlogHandler::inner_replay_update_ls_slog(const ObRedoModul
     LOG_WARN("fail to replay ls meta slog", K(ret), K(param), K(pos));
   } else {
     LOG_INFO("successfully replay ls meta slog", K(param), K(pos));
+  }
+
+  return ret;
+}
+
+int ObTenantCheckpointSlogHandler::inner_replay_dup_table_ls_slog(
+    const ObRedoModuleReplayParam &param)
+{
+  int ret = OB_SUCCESS;
+
+  ObDupTableCkptLog slog_entry;
+  int64_t pos = 0;
+  ObLSHandle ls_handle;
+  ObLS *ls_ptr = nullptr;
+
+  if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
+    LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
+  } else if (OB_FAIL(MTL(ObLSService *)
+                         ->get_ls(slog_entry.get_dup_ls_meta().ls_id_, ls_handle,
+                                  ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("get ls failed", K(ret), K(param), K(pos));
+  } else if (OB_ISNULL(ls_ptr = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ls_ptr", K(ret), K(param), K(pos));
+  } else if (OB_FAIL(ls_ptr->set_dup_table_ls_meta(
+                 slog_entry.get_dup_ls_meta()))) {
+    LOG_WARN("fail to replay dup table ls meta slog", K(ret), K(param), K(pos));
+  } else {
+    LOG_INFO("successfully replay dup table ls meta slog", K(param), K(pos));
   }
 
   return ret;
@@ -824,6 +905,14 @@ int ObTenantCheckpointSlogHandler::parse(
         ObTabletID tablet_id;
         ObDeleteTabletLog slog_entry(ls_id, tablet_id);
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "delete tablet slog: ");
+        if (OB_FAIL(ObStorageLogReplayer::print_slog(buf, len, slog_name, slog_entry, stream))) {
+          LOG_WARN("fail to print slog", K(ret), KP(buf), K(len), K(slog_name), K(slog_entry));
+        }
+        break;
+      }
+      case ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS: {
+        ObDupTableCkptLog slog_entry;
+        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update dup table ls meta slog: ");
         if (OB_FAIL(ObStorageLogReplayer::print_slog(buf, len, slog_name, slog_entry, stream))) {
           LOG_WARN("fail to print slog", K(ret), KP(buf), K(len), K(slog_name), K(slog_entry));
         }

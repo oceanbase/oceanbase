@@ -320,5 +320,37 @@ int64_t BaseLearnerList<MAX_SIZE, T>::get_serialize_size() const
   size += learner_array_.get_serialize_size();
   return size;
 }
+
+template <int64_t MAX_SIZE, typename T>
+int BaseLearnerList<MAX_SIZE, T>::transform_to_string(
+        common::ObSqlString &output_string) const
+{
+  int ret = OB_SUCCESS;
+  output_string.reset();
+  if (0 > get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), "learner count", get_member_number());
+  } else if (0 == get_member_number()) {
+    output_string.reset();
+  } else {
+    bool need_comma = false;
+    common::ObMember learner;
+    char ip_port[MAX_IP_PORT_LENGTH] = "";
+    for (int i = 0; OB_SUCC(ret) && i < get_member_number(); i++) {
+      if (OB_FAIL(get_member_by_index(i, learner))) {
+        COMMON_LOG(WARN, "failed to get learner from learner list", K(ret), K(i));
+      } else if (OB_FAIL(learner.get_server().ip_port_to_string(ip_port, sizeof(ip_port)))) {
+        COMMON_LOG(WARN, "convert server to string failed", K(ret), K(learner));
+      } else if (need_comma && OB_FAIL(output_string.append(","))) {
+        COMMON_LOG(WARN, "failed to append comma to string", K(ret));
+      } else if (OB_FAIL(output_string.append_fmt("%.*s:%ld", static_cast<int>(sizeof(ip_port)), ip_port, learner.get_timestamp()))) {
+        COMMON_LOG(WARN, "failed to append ip_port to string", K(ret), K(learner));
+      } else {
+        need_comma = true;
+      }
+    }
+  }
+  return ret;
+}
 } // namespace common end
 } // namespace oceanbase end

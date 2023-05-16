@@ -787,6 +787,9 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       if (ctx.exec_ctx_.get_physical_plan_ctx()->is_ignore_stmt()) {
         cast_mode = cast_mode | CM_WARN_ON_FAIL | CM_CHARSET_CONVERT_IGNORE_ERR;
       }
+      if ((v.is_blob() || dst_meta.is_blob()) && lib::is_oracle_mode()) {
+        cast_mode |= CM_ENABLE_BLOB_CAST;
+      }
       ObCastCtx cast_ctx(&allocator, &dtc_params, cast_mode, dst_meta.get_collation_type());
       if (OB_FAIL(ObObjCaster::to_type(dst_meta.get_type(), cast_ctx, v, dst_obj))) {
         LOG_WARN("failed to cast obj to dst type", K(ret), K(v), K(dst_meta));

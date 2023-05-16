@@ -88,7 +88,7 @@ void ObRetryPolicy::sleep_before_local_retry(ObRetryParam &v,
     }
     if (sleep_us > 0) {
       LOG_INFO("will sleep", K(sleep_us), K(remain_us), K(base_sleep_us),
-               K(retry_sleep_type), K(v.stmt_retry_times_), K(timeout_timestamp));
+               K(retry_sleep_type), K(v.stmt_retry_times_), K(v.err_), K(timeout_timestamp));
       THIS_WORKER.sched_wait();
       ob_usleep(static_cast<uint32_t>(sleep_us));
       THIS_WORKER.sched_run();
@@ -113,10 +113,7 @@ public:
   ~ObRefreshLocationCachePolicy() = default;
   virtual void test(ObRetryParam &v) const override
   {
-    int refresh_err = v.result_.refresh_location_cache(is_async);
-    if (OB_SUCCESS != refresh_err) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fail to refresh location cache", K(is_async), K(refresh_err), K(v));
-    }
+    v.result_.refresh_location_cache(is_async, v.err_);
   }
 };
 
@@ -212,7 +209,8 @@ public:
       v.no_more_test_ = true;
       v.retry_type_ = RETRY_TYPE_NONE;
       if (OB_ERR_INSUFFICIENT_PX_WORKER == v.err_ ||
-          OB_ERR_EXCLUSIVE_LOCK_CONFLICT == v.err_) {
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT == v.err_ ||
+          OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT == v.err_) {
         v.client_ret_ = v.err_;
       } else if (is_try_lock_row_err(v.session_.get_retry_info().get_last_query_retry_err())) {
         // timeout caused by locking, should return OB_ERR_EXCLUSIVE_LOCK_CONFLICT
@@ -225,10 +223,7 @@ public:
                K(v.session_.get_retry_info().get_last_query_retry_err()));
       if (v.session_.get_retry_info().is_rpc_timeout() || is_transaction_rpc_timeout_err(v.err_)) {
         // rpc超时了，可能是location cache不对，异步刷新location cache
-        int err1 = v.result_.refresh_location_cache(true); // 非阻塞
-        if (OB_SUCCESS != err1) {
-          LOG_WARN("fail to nonblock refresh location cache", K(v), K(err1));
-        }
+        v.result_.refresh_location_cache(true, v.err_); // 非阻塞
         LOG_WARN("sql rpc timeout, or trans rpc timeout, maybe location is changed, "
                  "refresh location cache non blockly", K(v),
                  K(v.session_.get_retry_info().is_rpc_timeout()));
@@ -655,6 +650,7 @@ void ObQueryRetryCtrl::location_error_proc(ObRetryParam &v)
   ObFastFailRetryPolicy fast_fail;
   ObCommonRetryIndexLongWaitPolicy retry_long_wait;
   retry_obj.test(fast_fail).test(retry_long_wait);
+
   if (RETRY_TYPE_LOCAL == v.retry_type_) {
     ObRefreshLocationCacheBlockPolicy block_refresh; // FIXME: why block?
     retry_obj.test(block_refresh);

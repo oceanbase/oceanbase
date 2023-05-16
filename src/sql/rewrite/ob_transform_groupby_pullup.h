@@ -42,7 +42,7 @@ public:
                                  bool &trans_happened) override;
 protected:
   virtual int adjust_transform_types(uint64_t &transform_types) override;
-  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid) override;
+  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
 private:
   struct PullupHelper {
     PullupHelper():
@@ -77,10 +77,9 @@ private:
                  K_(need_merge));
   };
 
-  struct ObCostBasedPushDownCtx {
-    ObCostBasedPushDownCtx() {};
-    int64_t stmt_id_;
-    ObSqlBitSet<> new_table_relids_;
+  struct ObCostBasedPullupCtx {
+    ObCostBasedPullupCtx() {};
+    uint64_t view_talbe_id_;
   };
 
   int check_groupby_validity(const ObSelectStmt &stmt, bool &is_valid);
@@ -147,10 +146,6 @@ private:
                     ObRawExpr *not_null_column,
                     ObRawExpr *&expr);
 
-  int check_nl_operator(ObLogicalOperator *op, 
-                        ObCostBasedPushDownCtx *push_down_ctx, 
-                        bool &is_valid);
-
   int has_group_by_op(ObLogicalOperator *op,
                       bool &bret);
 
@@ -164,6 +159,37 @@ private:
                              const int64_t current_level,
                              const ObDMLStmt &stmt,
                              bool &need_trans) override;
+
+  int check_original_plan_validity(ObLogicalOperator* root,
+                                   uint64_t view_table_id,
+                                   bool &is_valid);
+
+  int find_operator(ObLogicalOperator* root,
+                    ObIArray<ObLogicalOperator*> &parents,
+                    uint64_t view_table_id,
+                    ObLogicalOperator *&subplan_op);
+
+  int find_base_operator(ObLogicalOperator *&root);
+
+  int extract_columns_in_join_conditions(ObIArray<ObLogicalOperator*> &parent_ops,
+                                         uint64_t table_id,
+                                         ObIArray<ObRawExpr*> &column_exprs);
+
+  int get_group_by_subset(ObRawExpr *expr,
+                          const ObIArray<ObRawExpr *> &group_exprs,
+                          ObIArray<ObRawExpr *> &subset_group_exprs);
+
+  int get_group_by_subset(ObIArray<ObRawExpr *> &exprs,
+                          const ObIArray<ObRawExpr *> &group_exprs,
+                          ObIArray<ObRawExpr *> &subset_group_exprs);
+
+  int calc_group_exprs_ndv(const ObIArray<ObRawExpr*> &group_exprs,
+                            ObLogicalOperator *subplan_root,
+                            double &group_ndv,
+                            double &card);
+
+  int check_all_table_has_statistics(ObLogicalOperator *op, bool &has_stats);
+
 private:
   // help functions
   int64_t get_count_sum_num(const ObIArray<ObRawExpr *> &exprs)

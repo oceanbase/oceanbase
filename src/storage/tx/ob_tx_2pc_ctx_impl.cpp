@@ -75,6 +75,11 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
   int ret = OB_SUCCESS;
   no_need_submit_log = false;
 
+  // common operation
+  if (OB_FAIL(search_unsubmitted_dup_table_redo_())) {
+    TRANS_LOG(WARN, "search unsubmitted dup table redo", K(ret), KPC(this));
+  }
+
   if (OB_SUCC(ret)) {
     if (sub_state_.is_force_abort()) {
       if (OB_FAIL(compensate_abort_log_())) {
@@ -87,7 +92,7 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
   }
 
   if (OB_SUCC(ret)) {
-    if (exec_info_.is_dup_tx_ || OB_SUCC(search_unsubmitted_dup_table_redo_())) {
+    if (exec_info_.is_dup_tx_ && !is_dup_table_redo_sync_completed_()) {
       no_need_submit_log = true;
       if (OB_FAIL(dup_table_tx_redo_sync_())) {
         TRANS_LOG(WARN, "dup table tx  redo sync failed", K(ret));
@@ -95,6 +100,11 @@ int ObPartTransCtx::do_prepare(bool &no_need_submit_log)
     } else if (OB_FAIL(generate_prepare_version_())) {
       TRANS_LOG(WARN, "generate prepare version failed", K(ret), K(*this));
     }
+  }
+
+  if (exec_info_.is_dup_tx_) {
+    TRANS_LOG(INFO, "do prepare for dup table", K(ret), K(dup_table_follower_max_read_version_),
+              K(is_dup_table_redo_sync_completed_()), KPC(this));
   }
 
   if (OB_SUCC(ret)) {

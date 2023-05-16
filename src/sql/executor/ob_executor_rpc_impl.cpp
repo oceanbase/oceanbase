@@ -205,16 +205,6 @@ void ObExecutorRpcImpl::deal_with_rpc_timeout_err(ObExecutorRpcCtx &rpc_ctx,
       LOG_DEBUG("rpc return OB_TIMEOUT, but it is actually not timeout, "
                 "change error code to OB_CONNECT_ERROR", K(err),
                 K(timeout_timestamp), K(cur_timestamp));
-      ObQueryRetryInfo *retry_info = rpc_ctx.get_retry_info_for_update();
-      if (NULL != retry_info) {
-        int a_ret = OB_SUCCESS;
-        if (OB_UNLIKELY(OB_SUCCESS != (a_ret = retry_info->add_invalid_server_distinctly(
-                        dist_server)))) {
-          LOG_WARN_RET(a_ret, "fail to add invalid server distinctly", K(a_ret), K(dist_server));
-        } else {
-          //LOG_INFO("YZFDEBUG add invalid server distinctly", K(a_ret), K(dist_server), "p", &retry_info->get_invalid_servers());
-        }
-      }
       err = OB_RPC_CONNECT_ERROR;
     } else {
       LOG_DEBUG("rpc return OB_TIMEOUT, and it is actually timeout, "

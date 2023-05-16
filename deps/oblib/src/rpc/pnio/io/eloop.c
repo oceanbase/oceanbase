@@ -104,6 +104,7 @@ int eloop_thread_run(eloop_t** udata) {
 int eloop_run(eloop_t* ep) {
   while(true) {
     int64_t epoll_timeout = 1000;
+    ob_update_loop_ts();
     if (ep->ready_link.next != &ep->ready_link) {
       epoll_timeout = 0; // make sure all events handled when progarm is blocked in epoll_ctl
     }

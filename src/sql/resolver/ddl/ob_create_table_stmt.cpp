@@ -74,5 +74,33 @@ const ObColumnSchemaV2 *ObCreateTableStmt::get_column_schema(const ObString &col
   return create_table_arg_.schema_.get_column_schema(column_name);
 }
 
+int ObCreateTableStmt::get_first_stmt(ObString &first_stmt)
+{
+  int ret = OB_SUCCESS;
+
+  if (EXTERNAL_TABLE == get_table_type()) {
+    first_stmt = get_masked_sql();
+  } else {
+    if (OB_FAIL(ObStmt::get_first_stmt(first_stmt))) {
+      LOG_WARN("fail to get first stmt", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(get_query_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query ctx is null", K(ret));
+    } else if (OB_FAIL(ObCharset::charset_convert(allocator_,
+                                                  first_stmt,
+                                                  get_query_ctx()->get_sql_stmt_coll_type(),
+                                                  ObCharset::get_system_collation(),
+                                                  first_stmt))) {
+      LOG_WARN("fail to convert charset", K(ret), K(first_stmt),
+               "stmt collation type", get_query_ctx()->get_sql_stmt_coll_type());
+    }
+  }
+
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

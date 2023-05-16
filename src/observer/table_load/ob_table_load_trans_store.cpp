@@ -38,14 +38,19 @@ using namespace table;
 int ObTableLoadTransStore::init()
 {
   int ret = OB_SUCCESS;
-  const int32_t session_count = trans_ctx_->ctx_->param_.session_count_;
+  const int32_t session_count = trans_ctx_->ctx_->param_.px_mode_?
+                                1 : trans_ctx_->ctx_->param_.session_count_;
   SessionStore *session_store = nullptr;
   for (int32_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     if (OB_ISNULL(session_store = OB_NEWx(SessionStore, (&trans_ctx_->allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new SessionStore", KR(ret));
     } else {
-      session_store->session_id_ = i + 1;
+      if (trans_ctx_->ctx_->param_.px_mode_) {
+        session_store->session_id_ = (ATOMIC_FAA(&(trans_ctx_->ctx_->store_ctx_->next_session_id_), 1) % trans_ctx_->ctx_->param_.session_count_) + 1;
+      } else {
+        session_store->session_id_ = i + 1;
+      }
       session_store->allocator_.set_tenant_id(trans_ctx_->ctx_->param_.tenant_id_);
       session_store->partition_table_array_.set_block_allocator(
         ModulePageAllocator(session_store->allocator_));
@@ -90,7 +95,9 @@ ObTableLoadTransStoreWriter::SessionContext::SessionContext(int32_t session_id, 
   : session_id_(session_id),
     cast_allocator_("TLD_TS_Caster", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
     cast_params_(cast_params),
-    last_receive_sequence_no_(0)
+    last_receive_sequence_no_(0),
+    extra_buf_(nullptr),
+    extra_buf_size_(0)
 {
 }
 
@@ -114,8 +121,13 @@ ObTableLoadTransStoreWriter::ObTableLoadTransStoreWriter(ObTableLoadTransStore *
 ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 {
   if (nullptr != session_ctx_array_) {
-    for (int64_t i = 0; i < param_.session_count_; ++i) {
+    int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
+    for (int64_t i = 0; i < session_count; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
+      if (OB_NOT_NULL(session_ctx->extra_buf_)) {
+        allocator_.free(session_ctx->extra_buf_);
+        session_ctx->extra_buf_ = nullptr;
+      }
       session_ctx->~SessionContext();
     }
     allocator_.free(session_ctx_array_);
@@ -126,10 +138,11 @@ ObTableLoadTransStoreWriter::~ObTableLoadTransStoreWriter()
 int ObTableLoadTransStoreWriter::init()
 {
   int ret = OB_SUCCESS;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadTransStoreWriter init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(trans_store_->session_store_array_.count() != param_.session_count_)) {
+  } else if (OB_UNLIKELY(trans_store_->session_store_array_.count() != session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(trans_store_));
   } else {
@@ -170,15 +183,16 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   ObDataTypeCastParams cast_params(trans_ctx_->ctx_->session_info_->get_timezone_info());
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * session_count))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else if (OB_FAIL(time_cvrt_.init(cast_params.get_nls_format(ObDateTimeType)))) {
     LOG_WARN("fail to init time converter", KR(ret));
   } else {
     session_ctx_array_ = static_cast<SessionContext *>(buf);
-    for (int64_t i = 0; i < param_.session_count_; ++i) {
+    for (int64_t i = 0; i < session_count; ++i) {
       new (session_ctx_array_ + i)
         SessionContext(i + 1, param_.tenant_id_, cast_params);
     }
@@ -195,20 +209,34 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.insert_table_ctx_ = trans_ctx_->ctx_->store_ctx_->insert_table_ctx_;
   param.fast_heap_table_ctx_ = trans_ctx_->ctx_->store_ctx_->fast_heap_table_ctx_;
   param.result_info_ = &(trans_ctx_->ctx_->store_ctx_->result_info_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_count_; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
-    param.extra_buf_ = store_ctx_->session_ctx_array_[i].extra_buf_;
-    param.extra_buf_size_ = store_ctx_->session_ctx_array_[i].extra_buf_size_;
-    // init table_store_
-    if (OB_FAIL(session_ctx->table_store_.init(param))) {
-      LOG_WARN("fail to init table store", KR(ret));
-    }
-    // init datum_row_
-    else if (OB_FAIL(session_ctx->datum_row_.init(table_data_desc_->column_count_))) {
-      LOG_WARN("fail to init datum row", KR(ret));
+    if (param_.px_mode_) {
+      session_ctx->extra_buf_size_ = table_data_desc_->extra_buf_size_;
+      if (OB_ISNULL(session_ctx->extra_buf_ =
+                      static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", KR(ret));
+      } else {
+        param.extra_buf_ = session_ctx->extra_buf_;
+        param.extra_buf_size_ = session_ctx->extra_buf_size_;
+      }
     } else {
-      session_ctx->datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
-      session_ctx->datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
+      param.extra_buf_ = store_ctx_->session_ctx_array_[i].extra_buf_;
+      param.extra_buf_size_ = store_ctx_->session_ctx_array_[i].extra_buf_size_;
+    }
+    if (OB_SUCC(ret)) {
+      // init table_store_
+      if (OB_FAIL(session_ctx->table_store_.init(param))) {
+        LOG_WARN("fail to init table store", KR(ret));
+      }
+      // init datum_row_
+      else if (OB_FAIL(session_ctx->datum_row_.init(table_data_desc_->column_count_))) {
+        LOG_WARN("fail to init datum row", KR(ret));
+      } else {
+        session_ctx->datum_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+        session_ctx->datum_row_.mvcc_row_flag_.set_last_multi_version_row(true);
+      }
     }
   }
   return ret;
@@ -218,10 +246,11 @@ int ObTableLoadTransStoreWriter::advance_sequence_no(int32_t session_id, uint64_
                                                      ObTableLoadMutexGuard &guard)
 {
   int ret = OB_SUCCESS;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_)) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
   } else {
@@ -280,10 +309,11 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
     const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
 {
   int ret = OB_SUCCESS;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_) ||
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count) ||
              row_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(row_array.empty()));
@@ -313,10 +343,11 @@ int ObTableLoadTransStoreWriter::write(int32_t session_id,
 int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 {
   int ret = OB_SUCCESS;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_)) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
   } else {
@@ -338,10 +369,11 @@ int ObTableLoadTransStoreWriter::flush(int32_t session_id)
 int ObTableLoadTransStoreWriter::clean_up(int32_t session_id)
 {
   int ret = OB_SUCCESS;
+  int32_t session_count = param_.px_mode_? 1 : param_.session_count_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransStoreWriter not init", KR(ret));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_)) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > session_count)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
   } else {

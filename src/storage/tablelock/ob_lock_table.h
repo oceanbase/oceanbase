@@ -17,6 +17,7 @@
 #include "lib/worker.h"
 #include "storage/ob_i_table.h"
 #include "storage/tablelock/ob_obj_lock.h"
+#include "logservice/ob_log_base_type.h"
 
 namespace oceanbase
 {
@@ -62,7 +63,9 @@ struct ObLockParam;
 class ObTableLockOp;
 class ObLockMemtable;
 
-class ObLockTable
+class ObLockTable : public logservice::ObIReplaySubHandler,
+                    public logservice::ObIRoleChangeSubHandler,
+                    public logservice::ObICheckpointSubHandler
 {
 public:
   ObLockTable()
@@ -129,6 +132,24 @@ public:
                            const share::SCN &commit_version,
                            const share::SCN &commit_scn,
                            const ObTableLockOpStatus status);
+  // check and clear paired lock ops which can be compacted,
+  // and clear empty obj locks to recycle resources.
+  // See the ObLockMemtable::check_and_clear_obj_lock for deatails.
+  int check_and_clear_obj_lock(const bool force_compact);
+  // for replay
+  int replay(const void *buffer,
+             const int64_t nbytes,
+             const palf::LSN &lsn,
+             const share::SCN &scn) override { return OB_SUCCESS; }
+  // for checkpoint
+  share::SCN get_rec_scn() override { return share::SCN::max_scn(); }
+  int flush(share::SCN &rec_scn) override { return OB_SUCCESS; }
+  // for role change
+  void switch_to_follower_forcedly() override{};
+  int switch_to_leader() override;
+  int switch_to_follower_gracefully() override { return OB_SUCCESS; }
+  int resume_leader() override { return OB_SUCCESS; }
+
 private:
   // We use the method to recover the lock_table for reboot.
   int restore_lock_table_(storage::ObITable &sstable);

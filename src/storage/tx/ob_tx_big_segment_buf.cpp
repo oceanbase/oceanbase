@@ -46,6 +46,102 @@ int ObTxBigSegmentBuf::init_for_serialize(int64_t segment_len)
   return ret;
 }
 
+char *ObTxBigSegmentBuf::get_serialize_buf()
+{
+  char *buf = nullptr;
+  if (!is_inited() || !for_serialize_) {
+    buf = nullptr;
+  } else {
+    buf = segment_buf_;
+  }
+
+  return buf;
+}
+
+int64_t ObTxBigSegmentBuf::get_serialize_buf_len()
+{
+  int64_t buf_len = 0;
+  if (!is_inited() || !for_serialize_) {
+    buf_len = 0;
+  } else {
+    buf_len = segment_buf_len_;
+  }
+  return buf_len;
+}
+
+int64_t ObTxBigSegmentBuf::get_serialize_buf_pos()
+{
+  int64_t buf_pos = 0;
+  if (!is_inited() || !for_serialize_) {
+    buf_pos = INT64_MAX;
+  } else {
+    buf_pos = segment_data_len_;
+  }
+  return buf_pos;
+}
+
+int ObTxBigSegmentBuf::set_serialize_pos(const int64_t ser_pos)
+{
+  int ret = OB_SUCCESS;
+
+  if (ser_pos < 0 || ser_pos > segment_buf_len_ || !is_inited() || !for_serialize_) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), K(ser_pos), KPC(this));
+  } else {
+    segment_data_len_ = ser_pos;
+  }
+
+  return ret;
+}
+
+const char *ObTxBigSegmentBuf::get_deserialize_buf()
+{
+  char *buf = nullptr;
+  if (!is_inited() || for_serialize_) {
+    buf = nullptr;
+  } else {
+    buf = segment_buf_;
+  }
+
+  return buf;
+}
+
+int64_t ObTxBigSegmentBuf::get_deserialize_buf_len()
+{
+  int64_t buf_len = 0;
+  if (!is_inited() || for_serialize_) {
+    buf_len = 0;
+  } else {
+    buf_len = segment_buf_len_;
+  }
+  return buf_len;
+}
+
+int64_t ObTxBigSegmentBuf::get_deserialize_buf_pos()
+{
+  int64_t buf_pos = 0;
+  if (!is_inited() || for_serialize_) {
+    buf_pos = INT64_MAX;
+  } else {
+    buf_pos = segment_pos_;
+  }
+  return buf_pos;
+}
+
+int ObTxBigSegmentBuf::set_deserialize_pos(const int64_t deser_pos)
+{
+  int ret = OB_SUCCESS;
+
+  if (deser_pos < 0 || !is_inited() || for_serialize_) {
+    ret = OB_INVALID_ARGUMENT;
+    DUP_TABLE_LOG(WARN, "invalid arguments", K(ret), K(deser_pos), KPC(this));
+  } else {
+    segment_pos_ = deser_pos;
+  }
+
+  return ret;
+}
+
 int ObTxBigSegmentBuf::split_one_part(char *part_buf,
                                       const int64_t part_buf_len,
                                       int64_t &part_buf_pos,

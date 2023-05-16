@@ -89,6 +89,7 @@ public:
   virtual int submit_fetch_mode_meta_resp(const common::ObAddr &server,
                                           const int64_t msg_proposal_id,
                                           const int64_t accepted_mode_pid);
+  int leader_do_loop_work();
   TO_STRING_KV(K_(palf_id), K_(self), K_(applied_mode_meta), K_(accepted_mode_meta),
       K_(last_submit_mode_meta), "state", state2str_(state_), K_(new_proposal_id), K_(local_max_lsn),
       K_(local_max_log_pid), K_(max_majority_accepted_pid), K_(max_majority_lsn),
@@ -112,6 +113,8 @@ private:
                          const int64_t proposal_id,
                          const bool is_applied_mode_meta,
                          const LogModeMeta &mode_meta);
+  int set_resend_mode_meta_list_();
+  int resend_applied_mode_meta_();
 
 private:
   static const int64_t PREPARE_RETRY_INTERVAL_US = 2 * 1000 * 1000;   // 2s
@@ -160,6 +163,7 @@ private:
   int64_t local_max_log_pid_;
   int64_t max_majority_accepted_pid_;
   LSN max_majority_lsn_;
+  ResendConfigLogList resend_mode_meta_list_;
   mutable int64_t wait_committed_log_slide_warn_ts_;
   // =========access_mode changing state============
   LogStateMgr *state_mgr_;

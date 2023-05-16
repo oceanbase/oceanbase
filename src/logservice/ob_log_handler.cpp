@@ -333,10 +333,11 @@ int ObLogHandler::seek(const SCN &scn, palf::PalfGroupBufferIterator &iter)
 }
 
 int ObLogHandler::set_initial_member_list(const common::ObMemberList &member_list,
-                                          const int64_t paxos_replica_num)
+                                          const int64_t paxos_replica_num,
+                                          const common::GlobalLearnerList &learner_list)
 {
   RLockGuard guard(lock_);
-  return palf_handle_.set_initial_member_list(member_list, paxos_replica_num);
+  return palf_handle_.set_initial_member_list(member_list, paxos_replica_num, learner_list);
 }
 
 
@@ -404,6 +405,14 @@ int ObLogHandler::get_paxos_member_list(common::ObMemberList &member_list, int64
 {
   RLockGuard guard(lock_);
   return palf_handle_.get_paxos_member_list(member_list, paxos_replica_num);
+}
+
+int ObLogHandler::get_paxos_member_list_and_learner_list(common::ObMemberList &member_list,
+                                                         int64_t &paxos_replica_num,
+                                                         common::GlobalLearnerList &learner_list) const
+{
+  RLockGuard guard(lock_);
+  return palf_handle_.get_paxos_member_list_and_learner_list(member_list, paxos_replica_num, learner_list);
 }
 
 int ObLogHandler::get_global_learner_list(common::GlobalLearnerList &learner_list) const
@@ -796,6 +805,36 @@ int ObLogHandler::remove_learner(const common::ObMember &removed_learner,
   return ret;
 }
 
+int ObLogHandler::replace_learner(const common::ObMember &added_learner,
+                                  const common::ObMember &removed_learner,
+                                  const int64_t timeout_us)
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+  } else if (!added_learner.is_valid() ||
+             !removed_learner.is_valid() ||
+             timeout_us <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(added_learner), K(removed_learner), K(timeout_us));
+  } else {
+    common::ObMember dummy_member;
+    LogConfigChangeCmd add_req(self_, id_, added_learner, dummy_member, 0, ADD_LEARNER_CMD, timeout_us);
+    LogConfigChangeCmd remove_req(self_, id_, dummy_member, removed_learner, 0, REMOVE_LEARNER_CMD, timeout_us);
+    if (OB_FAIL(submit_config_change_cmd_(add_req))) {
+      CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(add_req), K(timeout_us));
+    } else if (OB_FAIL(submit_config_change_cmd_(remove_req))) {
+      CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(remove_req), K(timeout_us));
+    } else {
+      CLOG_LOG(INFO, "replace_learner success", KR(ret), K_(id), K(added_learner), K(removed_learner), K(timeout_us));
+    }
+  }
+  return ret;
+}
+
 // @desc: switch_learner_to_acceptor interface
 //        | 1.switch_learner_to_accetpor()
 //        V
@@ -803,6 +842,7 @@ int ObLogHandler::remove_learner(const common::ObMember &removed_learner,
 //                                                              |
 //  [any_member]  <----[4. Sync LogConfigChangeCmdResp]---     | 3. one_stage_config_change_(SWITCH_LEARNER_TO_ACCEPTOR)
 int ObLogHandler::switch_learner_to_acceptor(const common::ObMember &learner,
+                                             const int64_t new_replica_num,
                                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -812,15 +852,16 @@ int ObLogHandler::switch_learner_to_acceptor(const common::ObMember &learner,
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!learner.is_valid() ||
+             !is_valid_replica_num(new_replica_num) ||
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(learner), K(timeout_us));
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(learner), K(new_replica_num), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, learner, learner, 0, SWITCH_TO_ACCEPTOR_CMD, timeout_us);
+    LogConfigChangeCmd req(self_, id_, learner, learner, new_replica_num, SWITCH_TO_ACCEPTOR_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
-      CLOG_LOG(INFO, "add_member success", KR(ret), K_(id), K(learner));
+      CLOG_LOG(INFO, "add_member success", KR(ret), K_(id), K(learner), K(new_replica_num));
     }
   }
   return ret;
@@ -833,6 +874,7 @@ int ObLogHandler::switch_learner_to_acceptor(const common::ObMember &learner,
 //                                                              |
 //  [any_member]  <----[4. Sync LogConfigChangeCmdResp]---     | 3. one_stage_config_change_(SWITCH_ACCEPTOR_TO_LEARNER)
 int ObLogHandler::switch_acceptor_to_learner(const common::ObMember &member,
+                                             const int64_t new_replica_num,
                                              const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
@@ -842,15 +884,16 @@ int ObLogHandler::switch_acceptor_to_learner(const common::ObMember &member,
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
   } else if (!member.is_valid() ||
+             !is_valid_replica_num(new_replica_num) ||
              timeout_us <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(member), K(timeout_us));
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K_(id), K(member), K(new_replica_num), K(timeout_us));
   } else {
-    LogConfigChangeCmd req(self_, id_, member, member, 0, SWITCH_TO_LEARNER_CMD, timeout_us);
+    LogConfigChangeCmd req(self_, id_, member, member, new_replica_num, SWITCH_TO_LEARNER_CMD, timeout_us);
     if (OB_FAIL(submit_config_change_cmd_(req))) {
       CLOG_LOG(WARN, " submit_config_change_cmd failed", KR(ret), K_(id), K(req), K(timeout_us));
     } else {
-      CLOG_LOG(INFO, "add_member success", KR(ret), K_(id), K(member));
+      CLOG_LOG(INFO, "add_member success", KR(ret), K_(id), K(member), K(new_replica_num));
     }
   }
   return ret;
@@ -964,6 +1007,7 @@ int ObLogHandler::is_valid_member(const common::ObAddr &addr,
   int64_t new_proposal_id;
   common::ObMemberList member_list;
   int64_t paxos_replica_num = 0;
+  GlobalLearnerList learner_list;
   bool is_pending_state = false;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
@@ -980,15 +1024,16 @@ int ObLogHandler::is_valid_member(const common::ObAddr &addr,
     CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
   } else if (LEADER != role) {
     ret = OB_NOT_MASTER;
-  } else if (OB_FAIL(palf_handle_.get_paxos_member_list(member_list, paxos_replica_num))) {
+  } else if (OB_FAIL(palf_handle_.get_paxos_member_list_and_learner_list(member_list,
+      paxos_replica_num, learner_list))) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "get_paxos_member_list failed", K(ret), KPC(this));
+    CLOG_LOG(ERROR, "get_paxos_member_list_and_learner_list failed", K(ret), KPC(this));
   } else if (OB_FAIL(palf_handle_.get_role(new_role, new_proposal_id, is_pending_state))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "get_role failed", K(ret), KPC(this));
   } else {
     if (role == new_role && proposal_id == new_proposal_id) {
-      is_valid = member_list.contains(addr);
+      is_valid = member_list.contains(addr) || learner_list.contains(addr);
     } else {
       ret = OB_NOT_MASTER;
       CLOG_LOG(INFO, "role changed during is_valid_member", K(ret), KPC(this), K(role),

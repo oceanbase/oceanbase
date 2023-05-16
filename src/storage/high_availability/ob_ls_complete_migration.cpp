@@ -1131,13 +1131,27 @@ int ObStartCompleteMigrationTask::change_member_list_()
   } else {
     if (ObMigrationOpType::ADD_LS_OP == ctx_->arg_.type_) {
       const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
-      if (OB_FAIL(ls->add_member(ctx_->arg_.dst_, ctx_->arg_.paxos_replica_number_, change_member_list_timeout_us))) {
-        LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+        if (OB_FAIL(ls->add_member(ctx_->arg_.dst_, ctx_->arg_.paxos_replica_number_, change_member_list_timeout_us))) {
+          LOG_WARN("failed to add member", K(ret), KPC(ctx_));
+        }
+      } else {
+        // R-replica
+        if (OB_FAIL(ls->add_learner(ctx_->arg_.dst_, change_member_list_timeout_us))) {
+          LOG_WARN("failed to add learner", K(ret), KPC(ctx_));
+        }
       }
     } else if (ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
       const int64_t change_member_list_timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
-      if (OB_FAIL(ls->replace_member(ctx_->arg_.dst_, ctx_->arg_.src_, change_member_list_timeout_us))) {
-        LOG_WARN("failed to repalce member", K(ret), KPC(ctx_));
+      if (REPLICA_TYPE_FULL == ctx_->arg_.dst_.get_replica_type()) {
+        if (OB_FAIL(ls->replace_member(ctx_->arg_.dst_, ctx_->arg_.src_, change_member_list_timeout_us))) {
+          LOG_WARN("failed to replace member", K(ret), KPC(ctx_));
+        }
+      } else {
+        // R-replica
+        if (OB_FAIL(ls->replace_learner(ctx_->arg_.dst_, ctx_->arg_.src_, change_member_list_timeout_us))) {
+          LOG_WARN("failed to replace_learner", K(ret), KPC(ctx_));
+        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1176,7 +1190,8 @@ int ObStartCompleteMigrationTask::check_need_wait_(
       || ObMigrationOpType::MIGRATE_LS_OP == ctx_->arg_.type_) {
     need_wait = true;
   } else if (ObMigrationOpType::CHANGE_LS_OP == ctx_->arg_.type_) {
-    if (!ObReplicaTypeCheck::is_replica_with_ssstore(ls->get_replica_type())
+    // TODO: make sure this is right
+    if (!ObReplicaTypeCheck::is_replica_with_ssstore(REPLICA_TYPE_FULL)
         && ObReplicaTypeCheck::is_full_replica(ctx_->arg_.dst_.get_replica_type())) {
       need_wait = true;
     }

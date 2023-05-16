@@ -220,6 +220,7 @@ int check_replica_readable_(const share::SCN &snapshot,
                             const ObTxReadSnapshot::SRC src,
                             const share::ObLSID &ls_id,
                             const int64_t expired_ts,
+                            const ObTabletID &tablet_id,
                             ObLS &ls);
 bool check_ls_readable_(ObLS &ls,
                         const share::SCN &snapshot,
@@ -272,7 +273,7 @@ int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
                                 const ObTransID &tx_id,
                                 int &state,
                                 share::SCN &commit_version);
-int gen_trans_id_(ObTransID &trans_id);
+OB_NOINLINE int gen_trans_id_(ObTransID &trans_id);
 bool commit_need_retry_(const int ret);
 // for xa
 int build_tx_sub_prepare_msg_(const ObTxDesc &tx, ObTxSubPrepareMsg &msg);

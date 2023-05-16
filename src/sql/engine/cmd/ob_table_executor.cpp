@@ -122,7 +122,7 @@ int ObCreateTableExecutor::prepare_ins_arg(ObCreateTableStmt &stmt,
                                           obj_print_params,
                                           param_store,
                                           true);
-  select_stmt_printer.set_is_root(true);  // print hint as root stmt
+  select_stmt_printer.set_is_first_stmt_for_hint(true);  // need print global hint
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed");
@@ -472,6 +472,24 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("get first statement failed", K(ret));
+  } else if (table_schema.is_duplicate_table()) {
+    bool is_compatible = false;
+    uint64_t tenant_id = table_schema.get_tenant_id();
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id, is_compatible))) {
+      LOG_WARN("fail to check data version for duplicate table", KR(ret), K(tenant_id));
+    } else if (!is_compatible) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("duplicate table is not supported below 4.2", KR(ret), K(table_schema), K(is_compatible));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create duplicate table below 4.2");
+    } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    // TODO@jingyu_cr: make sure whether sys log stream have to be duplicated
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create duplicate table under sys or meta tenant");
+      LOG_WARN("create dup table not supported", KR(ret), K(table_schema));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
     create_table_arg.is_inner_ = my_session->is_inner();
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();

@@ -165,7 +165,7 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         if (OB_FAIL(member_list_to_string_(palf_stat.paxos_member_list_))) {
           SERVER_LOG(WARN, "memberlist to_string failed", K(ret), K(palf_stat));
         } else {
-          cur_row_.cells_[i].set_varchar(ObString::make_string(member_list_buf_));
+          cur_row_.cells_[i].set_varchar(member_list_buf_.string());
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                                 ObCharset::get_default_charset()));
         }
@@ -225,10 +225,21 @@ int ObAllVirtualPalfStat::insert_log_stat_(const logservice::ObLogStat &log_stat
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 19: {
-        if (OB_FAIL(learner_list_to_string_(palf_stat.degraded_list_))) {
+        if (OB_FAIL(learner_list_to_string_(palf_stat.degraded_list_, degraded_list_buf_))) {
           SERVER_LOG(WARN, "learner list to_string failed", K(ret), K(palf_stat));
         } else {
           cur_row_.cells_[i].set_varchar(ObString::make_string(degraded_list_buf_));
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                                ObCharset::get_default_charset()));
+        }
+        break;
+      }
+      case OB_APP_MIN_COLUMN_ID + 20: {
+        if (OB_FAIL(learner_list_to_string_(palf_stat.learner_list_, learner_list_buf_))) {
+          SERVER_LOG(WARN, "learner list to_string failed", K(ret), K(palf_stat));
+        } else {
+          ObString learner_list_str = ObString::make_string(learner_list_buf_);
+          cur_row_.cells_[i].set_lob_value(ObLongTextType, learner_list_str.ptr(), static_cast<int32_t>(learner_list_str.length()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                                 ObCharset::get_default_charset()));
         }
@@ -284,49 +295,46 @@ int ObAllVirtualPalfStat::member_list_to_string_(
     SERVER_LOG(WARN, "fail to transform member_list", KR(ret), K(member_list));
   } else if (OB_FAIL(share::ObLSReplica::member_list2text(
       tmp_member_list,
-      member_list_buf_,
-      MAX_MEMBER_LIST_LENGTH))) {
+      member_list_buf_))) {
     SERVER_LOG(WARN, "member_list2text failed", KR(ret),
-        K(member_list), K(tmp_member_list), K_(member_list_buf));
+               K(member_list), K(tmp_member_list), K(member_list_buf_));
   }
   return ret;
 }
 
 int ObAllVirtualPalfStat::learner_list_to_string_(
-    const common::GlobalLearnerList &learner_list)
+    const common::GlobalLearnerList &learner_list,
+    char *output_buf)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   char buf[MAX_IP_PORT_LENGTH];
-  if (learner_list.get_member_number() == 0) {
-    memset(degraded_list_buf_, 0, MAX_LEARNER_LIST_LENGTH);
-  } else {
-    const int64_t count = learner_list.get_member_number();
-    ObMember tmp_learner;
-    for (int64_t i = 0; i < count && (OB_SUCCESS == ret); ++i) {
-      if (OB_FAIL(learner_list.get_learner(i, tmp_learner))) {
-        SERVER_LOG(WARN, "get_learner failed", KR(ret), K(i));
-      }
-      if (0 != pos) {
-        if (pos + 1 < MAX_LEARNER_LIST_LENGTH) {
-          degraded_list_buf_[pos++] = ',';
-        } else {
-          ret = OB_BUF_NOT_ENOUGH;
-          SERVER_LOG(WARN, "buffer not enough", KR(ret), K(pos));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(tmp_learner.get_server().ip_port_to_string(buf, sizeof(buf)))) {
-        SERVER_LOG(WARN, "convert server to string failed", KR(ret), K(tmp_learner));
+  memset(output_buf, 0, MAX_LEARNER_LIST_LENGTH);
+  const int64_t count = learner_list.get_member_number();
+  ObMember tmp_learner;
+  for (int64_t i = 0; i < count && (OB_SUCCESS == ret); ++i) {
+    if (OB_FAIL(learner_list.get_learner(i, tmp_learner))) {
+      SERVER_LOG(WARN, "get_learner failed", KR(ret), K(i));
+    }
+    if (0 != pos) {
+      if (pos + 1 < MAX_LEARNER_LIST_LENGTH) {
+        output_buf[pos++] = ',';
       } else {
-        int n = snprintf(degraded_list_buf_ + pos, MAX_LEARNER_LIST_LENGTH - pos, \
-            "%s:%ld", buf, tmp_learner.get_timestamp());
-        if (n < 0 || n >= MAX_LEARNER_LIST_LENGTH - pos) {
-          ret = OB_BUF_NOT_ENOUGH;
-          SERVER_LOG(WARN, "snprintf error or buf not enough", KR(ret), K(n), K(pos));
-        } else {
-          pos += n;
-        }
+        ret = OB_BUF_NOT_ENOUGH;
+        SERVER_LOG(WARN, "buffer not enough", KR(ret), K(pos));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(tmp_learner.get_server().ip_port_to_string(buf, sizeof(buf)))) {
+      SERVER_LOG(WARN, "convert server to string failed", KR(ret), K(tmp_learner));
+    } else {
+      int n = snprintf(output_buf + pos, MAX_LEARNER_LIST_LENGTH - pos, \
+          "%s:%ld", buf, tmp_learner.get_timestamp());
+      if (n < 0 || n >= MAX_LEARNER_LIST_LENGTH - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        SERVER_LOG(WARN, "snprintf error or buf not enough", KR(ret), K(n), K(pos));
+      } else {
+        pos += n;
       }
     }
   }

@@ -396,7 +396,7 @@ int ObTransRpc::post_msg(const ObAddr &server, ObTxMsg &msg)
   return ret;
 }
 
-int ObTransRpc::post_msg(const ObLSID &p, ObTxMsg &msg)
+int ObTransRpc::post_msg(const ObLSID &ls_id, ObTxMsg &msg)
 {
   int ret = OB_SUCCESS;
 #ifdef TRANS_ERROR
@@ -425,8 +425,9 @@ int ObTransRpc::post_msg(const ObLSID &p, ObTxMsg &msg)
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)) || OB_UNLIKELY(!msg.is_valid())) {
     TRANS_LOG(WARN, "invalid argument", K(tenant_id), K(msg));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id, tenant_id, p, server))) {
-    TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(p));
+  } else if (OB_FAIL(trans_service_->get_location_adapter()->nonblock_get_leader(cluster_id, tenant_id, ls_id, server))) {
+    TRANS_LOG(WARN, "get leader failed", KR(ret), K(msg), K(cluster_id), K(ls_id));
+    (void)refresh_location_cache(ls_id);
   } else if (ObTxMsgTypeChecker::is_2pc_msg_type(msg.get_msg_type())) {
     // 2pc msg optimization
     const int64_t dst_cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;

@@ -1857,11 +1857,10 @@ Outputs & filters:
   2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])], [UNION([9])]), filter([UNION([9])
       IN (9727744, 7826688, 1657856, 55039, 50631)]), rowset=256
   3 - output([table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0],
-       [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), f
-      ilter([cast(table2_bigint.col_decimal_20_0_unsigned, DECIMAL(20, 0)) != cast(99999, DECIMAL(5, 0))]), rowset=256
+       [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter([cast(table2_bigint.col_decimal_20_0_unsigned,
+       DECIMAL(20, 0)) != cast(99999, DECIMAL(5, 0))]), rowset=256
       access([table2_bigint.pk], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned],
-       [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), p
-      artitions(p0)
+       [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_timestamp_6]), partitions(p0)
       limit(5), offset(1), is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([table2_bigint.pk]), range(MIN ; MAX)always true
   4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])], [UNION([9])]), filter(nil), rowset=256
@@ -1872,8 +1871,7 @@ Outputs & filters:
   6 - output([table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20], [table2_bigint.col_decimal_20_0],
        [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6], [table2_bigint.pk]), filter(nil), rowset=256
       access([table2_bigint.pk], [table2_bigint.col_bigint], [table2_bigint.col_bigint_signed], [table2_bigint.col_bigint_unsigned], [table2_bigint.col_char_20],
-       [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6]), p
-      artitions(p0)
+       [table2_bigint.col_decimal_20_0], [table2_bigint.col_decimal_20_0_signed], [table2_bigint.col_decimal_20_0_unsigned], [table2_bigint.col_timestamp_6]), partitions(p0)
       is_index_back=false, is_global_index=false,
       range_key([table2_bigint.pk]), range[9727744 ; 9727744], [7826688 ; 7826688], [1657856 ; 1657856], [55039 ; 55039], [50631 ; 50631],
       range_cond([table2_bigint.pk IN (9727744, 7826688, 1657856, 55039, 50631)], [table2_bigint.pk IN (9727744, 7826688, 1657856, 55039, 50631)])
@@ -1885,11 +1883,10 @@ Outputs & filters:
       sort_keys([table100_bigint.col_bigint_signed, ASC], [table100_bigint.col_decimal_20_0_signed, ASC], [table100_bigint.col_decimal_20_0, ASC], [table100_bigint.pk,
        DESC]), topn(7)
   9 - output([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
-       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), f
-      ilter([table100_bigint.col_decimal_20_0_signed = cast(ROUND(SIGN(table100_bigint.col_decimal_20_0)), DECIMAL(-1, 0))]), rowset=256
+       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), filter([table100_bigint.col_decimal_20_0_signed
+      = cast(ROUND(SIGN(table100_bigint.col_decimal_20_0)), DECIMAL(-1, 0))]), rowset=256
       access([table100_bigint.pk], [table100_bigint.col_decimal_20_0_signed], [table100_bigint.col_decimal_20_0], [table100_bigint.col_bigint], [table100_bigint.col_bigint_signed],
-       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), p
-      artitions(p0)
+       [table100_bigint.col_bigint_unsigned], [table100_bigint.col_char_20], [table100_bigint.col_decimal_20_0_unsigned], [table100_bigint.col_timestamp_6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false],
       range_key([table100_bigint.pk]), range(MIN ; MAX)always true
 SELECT col_bigint, col_bigint_signed, col_bigint_unsigned, col_char_20, col_decimal_20_0, col_decimal_20_0_signed, col_decimal_20_0_unsigned, col_timestamp_6, pk

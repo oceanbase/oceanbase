@@ -138,6 +138,7 @@ TEST_F(TestLockMemtable, lock)
 
   MyTxCtx default_ctx;
   ObStoreCtx store_ctx;
+  ObStoreCtx unlock_store_ctx;
   min_commited_scn.set_min();
   flushed_scn.set_min();
   // 1.1 get store ctx
@@ -174,10 +175,6 @@ TEST_F(TestLockMemtable, lock)
   memtable_.remove_lock_record(DEFAULT_IN_TRANS_LOCK_OP);
   // 1.6 check again
   LOG_INFO("TestLockMemtable::lock 1.6");
-  ret = memtable_.obj_lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                                       obj_lock);
-
-  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   ret = mem_ctx->check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -217,7 +214,6 @@ TEST_F(TestLockMemtable, lock)
   // 2.3 unlock not complete lock
   LOG_INFO("TestLockMemtable::lock 2.3");
   MyTxCtx ctx2;
-  ObStoreCtx unlock_store_ctx;
   start_tx(TRANS_ID2, ctx2);
   get_store_ctx(ctx2, unlock_store_ctx);
   ctx2.tx_ctx_.change_to_leader();
@@ -294,6 +290,7 @@ TEST_F(TestLockMemtable, replay)
   share::SCN flushed_scn;
   MyTxCtx default_ctx;
   ObStoreCtx store_ctx;
+  ObStoreCtx unlock_store_ctx;
   ObMemtableCtx *mem_ctx = nullptr;
   bool lock_exist = false;
   ObOBJLock *obj_lock = NULL;
@@ -346,10 +343,6 @@ TEST_F(TestLockMemtable, replay)
   memtable_.remove_lock_record(DEFAULT_IN_TRANS_LOCK_OP);
   // 1.5 check again
   LOG_INFO("TestLockMemtable::replay 1.5");
-  ret = memtable_.obj_lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                                       obj_lock);
-
-  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   ret = mem_ctx->check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -387,7 +380,6 @@ TEST_F(TestLockMemtable, replay)
   // 2.3 unlock not complete lock
   LOG_INFO("TestLockMemtable::replay 2.3");
   MyTxCtx ctx2;
-  ObStoreCtx unlock_store_ctx;
   start_tx(TRANS_ID2, ctx2);
   get_store_ctx(ctx2, unlock_store_ctx);
   ctx2.tx_ctx_.change_to_leader();
@@ -462,6 +454,12 @@ TEST_F(TestLockMemtable, recover)
   ObOBJLock *obj_lock = NULL;
   min_commited_scn.set_min();
   flushed_scn.set_min();
+  share::SCN commit_version;
+  share::SCN commit_scn;
+  commit_version.set_base();
+  commit_scn.set_base();
+  MyTxCtx ctx2;
+  ObStoreCtx unlock_store_ctx;
   // 1. recover in trans lock
   // 1.1 recover
   LOG_INFO("TestLockMemtable::recover 1.1");
@@ -477,10 +475,14 @@ TEST_F(TestLockMemtable, recover)
   LOG_INFO("TestLockMemtable::recover 1.3");
   memtable_.remove_lock_record(DEFAULT_IN_TRANS_LOCK_OP);
   // 1.4 check exist
-  LOG_INFO("TestLockMemtable::recover 1.4");
-  ret = memtable_.obj_lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                                       obj_lock);
-  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  // We move obj lock garbage collect process to gc thread
+  // which is backend, so you can still see obj lock here.
+  // See ObOBJLockGarbageCollector for details.
+  //
+  // LOG_INFO("TestLockMemtable::recover 1.4");
+  // ret = memtable_.obj_lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
+  //                                                      obj_lock);
+  // ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   // 2. recover out trans lock
   // 2.1 recover
@@ -489,10 +491,6 @@ TEST_F(TestLockMemtable, recover)
   ASSERT_EQ(OB_SUCCESS, ret);
   // 2.2 commit
   LOG_INFO("TestLockMemtable::recover 2.2");
-  share::SCN commit_version;
-  share::SCN commit_scn;
-  commit_version.set_base();
-  commit_scn.set_base();
   ret = memtable_.update_lock_status(DEFAULT_OUT_TRANS_LOCK_OP,
                                      commit_version,
                                      commit_scn,
@@ -500,8 +498,6 @@ TEST_F(TestLockMemtable, recover)
   ASSERT_EQ(OB_SUCCESS, ret);
   // 2.3 unlock
   LOG_INFO("TestLockMemtable::recover 2.3");
-  MyTxCtx ctx2;
-  ObStoreCtx unlock_store_ctx;
   start_tx(TRANS_ID2, ctx2);
   get_store_ctx(ctx2, unlock_store_ctx);
   ctx2.tx_ctx_.change_to_leader();
@@ -591,10 +587,6 @@ TEST_F(TestLockMemtable, pre_check_lock)
   memtable_.remove_lock_record(DEFAULT_IN_TRANS_LOCK_OP);
   // 1.7 check again
   LOG_INFO("TestLockMemtable::pre_check_lock 1.7");
-  ret = memtable_.obj_lock_map_.get_obj_lock_with_ref_(DEFAULT_TABLET_LOCK_ID,
-                                                       obj_lock);
-
-  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
   ret = mem_ctx->check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
@@ -932,46 +924,50 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
   ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 
   // 8 COMPACT
+  // This case is invalid after ObOBJLockGarbageCollector
+  // starts using. In short, when switch to leader, gc thread
+  // will try to execute a force compact, to avoid this case.
+  // We don't need to compact residual unlock op anymore.
   // 8.1 create an unlock op and committed it.
-  LOG_INFO("TestLockMemtable::out_trans_multi_source 8.1");
-  scn = share::SCN::plus(share::SCN::min_scn(), 2);
-  is_replay = true;
-  ret = ctx2.tx_ctx_.notify_data_source_(NotifyType::TX_END, scn, is_replay, mds_array_unlock);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  memtable_.obj_lock_map_.print();
+  // LOG_INFO("TestLockMemtable::out_trans_multi_source 8.1");
+  // scn = share::SCN::plus(share::SCN::min_scn(), 2);
+  // is_replay = true;
+  // ret = ctx2.tx_ctx_.notify_data_source_(NotifyType::TX_END, scn, is_replay, mds_array_unlock);
+  // ASSERT_EQ(OB_SUCCESS, ret);
+  // memtable_.obj_lock_map_.print();
   // 8.2 commit the unlock op
-  LOG_INFO("TestLockMemtable::out_trans_multi_source 8.2");
-  is_commit = true;
-  commit_version = share::SCN::plus(share::SCN::min_scn(), 2);
-  commit_scn = share::SCN::plus(share::SCN::min_scn(), 2);
-  mem_ctx = store_ctx2.mvcc_acc_ctx_.mem_ctx_;
-  ret = mem_ctx->clear_table_lock_(is_commit,
-                                   commit_version,
-                                   commit_scn);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  memtable_.obj_lock_map_.print();
+  // LOG_INFO("TestLockMemtable::out_trans_multi_source 8.2");
+  // is_commit = true;
+  // commit_version = share::SCN::plus(share::SCN::min_scn(), 2);
+  // commit_scn = share::SCN::plus(share::SCN::min_scn(), 2);
+  // mem_ctx = store_ctx2.mvcc_acc_ctx_.mem_ctx_;
+  // ret = mem_ctx->clear_table_lock_(is_commit,
+  //                                  commit_version,
+  //                                  commit_scn);
+  // ASSERT_EQ(OB_SUCCESS, ret);
+  // memtable_.obj_lock_map_.print();
   // 8.3 compact unlock op if lock conflict occur.
-  LOG_INFO("TestLockMemtable::out_trans_multi_source 8.3");
-  ObTableLockOp conflict_lock_op = lock_op;
-  conflict_lock_op.lock_mode_ = DEFAULT_COFLICT_LOCK_MODE;
-  ObLockParam param;
-  bool is_try_lock = true;
-  int64_t expired_time = 0;
-  param.is_try_lock_ = is_try_lock;
-  param.expired_time_ = expired_time;
-  ret = memtable_.lock(param,
-                       store_ctx,
-                       conflict_lock_op);
-  ASSERT_EQ(OB_SUCCESS, ret);
+  // LOG_INFO("TestLockMemtable::out_trans_multi_source 8.3");
+  // ObTableLockOp conflict_lock_op = lock_op;
+  // conflict_lock_op.lock_mode_ = DEFAULT_COFLICT_LOCK_MODE;
+  // ObLockParam param;
+  // bool is_try_lock = true;
+  // int64_t expired_time = 0;
+  // param.is_try_lock_ = is_try_lock;
+  // param.expired_time_ = expired_time;
+  // ret = memtable_.lock(param,
+  //                      store_ctx,
+  //                      conflict_lock_op);
+  // ASSERT_EQ(OB_SUCCESS, ret);
   // 8.4 check unlock op exist
-  LOG_INFO("TestLockMemtable::out_trans_multi_source 8.4");
-  commit_version = share::SCN::plus(share::SCN::min_scn(), 2);
-  commit_scn = share::SCN::plus(share::SCN::min_scn(), 2);
-  ret = memtable_.update_lock_status(unlock_op,
-                                     commit_version,
-                                     commit_scn,
-                                     COMMIT_LOCK_OP_STATUS);
-  ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
+  // LOG_INFO("TestLockMemtable::out_trans_multi_source 8.4");
+  // commit_version = share::SCN::plus(share::SCN::min_scn(), 2);
+  // commit_scn = share::SCN::plus(share::SCN::min_scn(), 2);
+  // ret = memtable_.update_lock_status(unlock_op,
+  //                                    commit_version,
+  //                                    commit_scn,
+  //                                    COMMIT_LOCK_OP_STATUS);
+  // ASSERT_EQ(OB_OBJ_LOCK_NOT_EXIST, ret);
 }
 
 } // tablelock

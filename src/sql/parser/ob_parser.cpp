@@ -982,7 +982,8 @@ int ObParser::parse(const ObString &query,
                     ParseResult &parse_result,
                     ParseMode parse_mode,
                     const bool is_batched_multi_stmt_split_on,
-                    const bool no_throw_parser_error)
+                    const bool no_throw_parser_error,
+                    const bool is_pl_inner_parse)
 {
   int ret = OB_SUCCESS;
 
@@ -1101,7 +1102,7 @@ int ObParser::parse(const ObString &query,
       }
     } else {
       ObPLParser pl_parser(*(ObIAllocator*)(parse_result.malloc_pool_), connection_collation_);
-      if (OB_FAIL(pl_parser.parse(stmt, stmt, parse_result))) {
+      if (OB_FAIL(pl_parser.parse(stmt, stmt, parse_result, is_pl_inner_parse))) {
         LOG_WARN("failed to parse stmt as pl", K(stmt), K(ret));
         // may create ddl func, try it.
         if ((OB_ERR_PARSE_SQL == ret

@@ -159,7 +159,6 @@ private:
       CREATE_STATE_FINISH
   };
   int inner_create_ls_(const share::ObLSID &lsid,
-                       const ObReplicaType replica_type,
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
                        const share::SCN &create_scn,

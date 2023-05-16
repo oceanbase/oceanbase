@@ -298,7 +298,7 @@ int ObLockRowChecker::check_lock_row_valid(
   if (OB_UNLIKELY(row.get_column_count() < rowkey_cnt)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "row count is less than rowkey count", K(row), K(rowkey_cnt));
-  } else {
+  } else if (row.is_uncommitted_row() || is_memtable_iter_row_check) {
     bool pure_empty_row = true;
     for (int i = rowkey_cnt; pure_empty_row && i < row.get_column_count(); ++i) {
       if (!row.storage_datums_[i].is_nop()) { // not nop value
@@ -314,6 +314,31 @@ int ObLockRowChecker::check_lock_row_valid(
       // a pure empty lock row from upgrade sstable need to be compatible
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "a committed lock row only have rowkey", K(ret), K(row), K(rowkey_cnt));
+    }
+  }
+  return ret;
+}
+
+int ObLockRowChecker::check_lock_row_valid(
+  const blocksstable::ObDatumRow &row,
+  const ObTableReadInfo &read_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t rowkey_read_cnt = MIN(read_info.get_seq_read_column_count(), read_info.get_rowkey_count());
+  if (OB_UNLIKELY(!read_info.is_valid() || row.get_column_count() < rowkey_read_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(read_info), K(row));
+  } else if (row.is_uncommitted_row()) {
+    const common::ObIArray<int32_t> &col_index = read_info.get_columns_index();
+    for (int i = rowkey_read_cnt; i < row.get_column_count(); ++i) {
+      if (col_index.at(i) < read_info.get_rowkey_count()) {
+        // not checking rowkey col
+      } else if (!row.storage_datums_[i].is_nop()) { // not nop value
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "uncommitted lock row have normal cells", K(ret), K(row),
+          K(rowkey_read_cnt), K(read_info));
+        break;
+      }
     }
   }
   return ret;

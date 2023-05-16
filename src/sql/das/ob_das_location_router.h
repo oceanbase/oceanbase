@@ -33,6 +33,7 @@ namespace sql
 {
 struct ObDASTableLocMeta;
 struct ObDASTabletLoc;
+class ObQueryRetryInfo;
 class ObDASCtx;
 typedef common::ObFixedArray<common::ObAddr, common::ObIAllocator> AddrArray;
 typedef common::hash::ObHashMap<common::ObObjectID, common::ObObjectID, common::hash::NoPthreadDefendMode> ObPartitionIdMap;
@@ -278,17 +279,22 @@ class ObDASLocationRouter
   typedef common::ObList<VirtualSvrPair, common::ObIAllocator> VirtualSvrList;
 public:
   ObDASLocationRouter(common::ObIAllocator &allocator);
-  int get(const ObDASTableLocMeta &loc_meta,
-          const common::ObTabletID &tablet_id,
-          share::ObLSLocation &location);
+  int nonblock_get(const ObDASTableLocMeta &loc_meta,
+                   const common::ObTabletID &tablet_id,
+                   share::ObLSLocation &location);
+
+  int nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
+                                          const common::ObIArray<ObTabletID> &tablet_ids,
+                                          const common::ObIArray<ObObjectID> &partition_ids,
+                                          const ObIArray<ObObjectID> &first_level_part_ids,
+                                          common::ObIArray<ObCandiTabletLoc> &candi_tablet_locs);
 
   int get_tablet_loc(const ObDASTableLocMeta &loc_meta,
                      const common::ObTabletID &tablet_id,
                      ObDASTabletLoc &tablet_loc);
-  static int get_leader(const uint64_t tenant_id,
-                        const ObTabletID &tablet_id,
-                        ObDASTabletLoc &tablet_loc,
-                        int64_t expire_renew_time);
+  static int nonblock_get_leader(const uint64_t tenant_id,
+                                 const ObTabletID &tablet_id,
+                                 ObDASTabletLoc &tablet_loc);
   static int get_leader(const uint64_t tenant_id,
                         const common::ObTabletID &tablet_id,
                         ObAddr &leader_addr,
@@ -296,6 +302,14 @@ public:
   int get_full_ls_replica_loc(const common::ObObjectID &tenant_id,
                               const ObDASTabletLoc &tablet_loc,
                               share::ObLSReplicaLocation &replica_loc);
+  void refresh_location_cache(bool is_nonblock, int err_no);
+  void refresh_location_cache(const common::ObTabletID &tablet_id, bool is_nonblock, int err_no);
+  int save_touched_tablet_id(const common::ObTabletID &tablet_id) { return all_tablet_list_.push_back(tablet_id); }
+  void set_last_errno(int err_no) { last_errno_ = err_no; }
+  void set_retry_cnt(int64_t retry_cnt) { retry_cnt_ = retry_cnt; }
+  void inc_retry_cnt() { ++retry_cnt_; }
+  void set_retry_info(const ObQueryRetryInfo* retry_info);
+  int64_t get_retry_cnt() const { return retry_cnt_; }
   int get_external_table_ls_location(share::ObLSLocation &location);
 private:
   int get_vt_svr_pair(uint64_t vt_id, const VirtualSvrPair *&vt_svr_pair);
@@ -307,9 +321,11 @@ private:
                          share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
-                                    ObDASTabletLoc &tablet_loc,
-                                    int64_t expire_renew_time);
+                                    ObDASTabletLoc &tablet_loc);
 private:
+  int last_errno_;
+  int64_t retry_cnt_;
+  ObList<common::ObTabletID, common::ObIAllocator> all_tablet_list_;
   VirtualSvrList virtual_server_list_;
   common::ObIAllocator &allocator_;
 private:

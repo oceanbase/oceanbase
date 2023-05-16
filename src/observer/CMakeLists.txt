@@ -223,6 +223,9 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_dtl_first_cached_buffer.cpp
   virtual_table/ob_all_virtual_dtl_memory.cpp
   virtual_table/ob_all_virtual_dump_tenant_info.cpp
+  virtual_table/ob_all_virtual_dup_ls_lease_mgr.cpp
+  virtual_table/ob_all_virtual_dup_ls_tablets.cpp
+  virtual_table/ob_all_virtual_dup_ls_tablet_set.cpp
   virtual_table/ob_all_virtual_engine_table.cpp
   virtual_table/ob_all_virtual_files_table.cpp
   virtual_table/ob_all_virtual_id_service.cpp
@@ -370,6 +373,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_virtual_table_iterator_factory.cpp
   virtual_table/ob_all_virtual_dml_stats.cpp
   virtual_table/ob_all_virtual_archive_dest_status.cpp
+  virtual_table/ob_all_virtual_ls_log_restore_status.cpp
   virtual_table/ob_virtual_span_info.cpp
   virtual_table/ob_virtual_show_trace.cpp
   virtual_table/ob_all_virtual_sql_plan.cpp

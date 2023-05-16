@@ -481,7 +481,7 @@ int ObTriggerResolver::resolve_timing_point(int16_t before_or_after, int16_t stm
   parse_result.is_for_trigger_ = 1;
   parse_result.mysql_compatible_comment_ = 0;
   parse_result.is_dynamic_sql_ = 0;
-  OZ (pl_parser.parse(trigger_body, trigger_body, parse_result));
+  OZ (pl_parser.parse(trigger_body, trigger_body, parse_result, true));
   CK (OB_NOT_NULL(parse_tree = parse_result.result_tree_));
   CK (T_STMT_LIST == parse_tree->type_);
   CK (1 == parse_tree->num_child_);

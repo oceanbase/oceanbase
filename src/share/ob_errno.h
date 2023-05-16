@@ -1408,6 +1408,7 @@ constexpr int OB_INVALID_ALTERATIONG_DATATYPE = -7414;
 constexpr int OB_INVALID_MODIFICATION_OF_COLUMNS = -7415;
 constexpr int OB_ERR_NULL_FOR_XML_CONSTRUCTOR = -7416;
 constexpr int OB_ERR_XML_INDEX = -7417;
+constexpr int OB_ERR_UPDATE_XML_WITH_INVALID_NODE = -7418;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -3462,6 +3463,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MODIFICATION_OF_COLUMNS__USER_ERROR_MSG "invalid modification of columns"
 #define OB_ERR_NULL_FOR_XML_CONSTRUCTOR__USER_ERROR_MSG "Expected XML tag , got no content"
 #define OB_ERR_XML_INDEX__USER_ERROR_MSG "cannot create index on expression with datatype ADT '%.*s'"
+#define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__USER_ERROR_MSG "XML nodes must be updated with valid nodes and of the same type'"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -5538,6 +5540,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MODIFICATION_OF_COLUMNS__ORA_USER_ERROR_MSG "ORA-22859: invalid modification of columns"
 #define OB_ERR_NULL_FOR_XML_CONSTRUCTOR__ORA_USER_ERROR_MSG "ORA-19032: Expected XML tag , got no content"
 #define OB_ERR_XML_INDEX__ORA_USER_ERROR_MSG "ORA-02327: cannot create index on expression with datatype ADT '%.*s'"
+#define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__ORA_USER_ERROR_MSG "ORA-31067: XML nodes must be updated with valid nodes and of the same type"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -5894,7 +5897,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2072];
+extern int g_all_ob_errnos[2073];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -85,7 +85,6 @@ ObLS::~ObLS()
 
 int ObLS::init(const share::ObLSID &ls_id,
                const uint64_t tenant_id,
-               const ObReplicaType replica_type,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
                const SCN &create_scn,
@@ -99,11 +98,10 @@ int ObLS::init(const share::ObLSID &ls_id,
 
   if (!ls_id.is_valid() ||
       !is_valid_tenant_id(tenant_id) ||
-      !common::ObReplicaTypeCheck::is_replica_type_valid(replica_type) ||
       !ObMigrationStatusHelper::is_valid(migration_status) ||
       OB_ISNULL(reporter)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tenant_id), K(replica_type), K(migration_status),
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tenant_id), K(migration_status),
              KP(reporter));
   } else if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -114,15 +112,14 @@ int ObLS::init(const share::ObLSID &ls_id,
   } else if (FALSE_IT(tenant_id_ = tenant_id)) {
   } else if (OB_FAIL(ls_meta_.init(tenant_id,
                                    ls_id,
-                                   replica_type,
                                    migration_status,
                                    restore_status,
                                    create_scn))) {
-    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id), K(replica_type));
+    LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id));
   } else {
     rs_reporter_ = reporter;
     ls_freezer_.init(this);
-    transaction::ObTxPalfParam tx_palf_param(get_log_handler());
+    transaction::ObTxPalfParam tx_palf_param(get_log_handler(), &dup_table_ls_handler_);
 
     // tx_table_.init() should after ls_table_svr.init()
     if (OB_FAIL(txs_svr->create_ls(ls_id, *this, &tx_palf_param, nullptr))) {
@@ -176,6 +173,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       REGISTER_TO_LOGSERVICE(logservice::DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
       REGISTER_TO_LOGSERVICE(logservice::KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
       REGISTER_TO_LOGSERVICE(logservice::GC_LS_LOG_BASE_TYPE, &gc_handler_);
+      REGISTER_TO_LOGSERVICE(logservice::OBJ_LOCK_GARBAGE_COLLECT_SERVICE_LOG_BASE_TYPE, &lock_table_);
       REGISTER_TO_LOGSERVICE(logservice::RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
       REGISTER_TO_LOGSERVICE(logservice::MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
 
@@ -216,6 +214,10 @@ int ObLS::init(const share::ObLSID &ls_id,
         REGISTER_TO_RESTORESERVICE(logservice::NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObCreateStandbyFromNetActor *));
       }
 
+      if (OB_SUCC(ret) && OB_FAIL(ls_init_for_dup_table_())) {
+        LOG_WARN("pre init for dup_table_ls_handler_ failed", K(ret), K(get_ls_id()));
+      }
+
       if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
         //sys and meta tenant
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
@@ -247,6 +249,22 @@ int ObLS::init(const share::ObLSID &ls_id,
   return ret;
 }
 
+int ObLS::ls_init_for_dup_table_()
+{
+  int ret = OB_SUCCESS;
+  REGISTER_TO_LOGSERVICE(logservice::DUP_TABLE_LOG_BASE_TYPE, &dup_table_ls_handler_);
+  dup_table_ls_handler_.default_init(get_ls_id(), get_log_handler());
+  return ret;
+}
+
+int ObLS::ls_destory_for_dup_table_()
+{
+  int ret = OB_SUCCESS;
+  UNREGISTER_FROM_LOGSERVICE(logservice::DUP_TABLE_LOG_BASE_TYPE, &dup_table_ls_handler_);
+  dup_table_ls_handler_.destroy();
+  return ret;
+}
+
 int ObLS::create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
                                  const SCN &create_scn)
 {
@@ -275,6 +293,7 @@ int ObLS::load_ls_inner_tablet()
 
 int ObLS::create_ls(const share::ObTenantRole tenant_role,
                     const palf::PalfBaseInfo &palf_base_info,
+                    const ObReplicaType &replica_type,
                     const bool allow_log_sync)
 {
   int ret = OB_SUCCESS;
@@ -293,7 +312,7 @@ int ObLS::create_ls(const share::ObTenantRole tenant_role,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("palf should not exist now", K(ret), K_(ls_meta));
   } else if (OB_FAIL(logservice->create_ls(ls_meta_.ls_id_,
-                                           ls_meta_.replica_type_,
+                                           replica_type,
                                            tenant_role,
                                            palf_base_info,
                                            allow_log_sync,
@@ -340,7 +359,6 @@ int ObLS::load_ls(const share::ObTenantRole &tenant_role,
   } else if (!is_palf_exist) {
     LOG_WARN("there is no ls at disk, skip load", K_(ls_meta));
   } else if (OB_FAIL(logservice->add_ls(ls_meta_.ls_id_,
-                                        ls_meta_.replica_type_,
                                         log_handler_,
                                         restore_handler_))) {
     LOG_WARN("add ls failed", K(ret), K_(ls_meta));
@@ -624,6 +642,7 @@ void ObLS::destroy()
   UNREGISTER_FROM_LOGSERVICE(logservice::DDL_LOG_BASE_TYPE, &ls_ddl_log_handler_);
   UNREGISTER_FROM_LOGSERVICE(logservice::KEEP_ALIVE_LOG_BASE_TYPE, &keep_alive_ls_handler_);
   UNREGISTER_FROM_LOGSERVICE(logservice::GC_LS_LOG_BASE_TYPE, &gc_handler_);
+  UNREGISTER_FROM_LOGSERVICE(logservice::OBJ_LOCK_GARBAGE_COLLECT_SERVICE_LOG_BASE_TYPE, &lock_table_);
   UNREGISTER_FROM_LOGSERVICE(logservice::RESERVED_SNAPSHOT_LOG_BASE_TYPE, &reserved_snapshot_clog_handler_);
   UNREGISTER_FROM_LOGSERVICE(logservice::MEDIUM_COMPACTION_LOG_BASE_TYPE, &medium_compaction_clog_handler_);
   if (ls_meta_.ls_id_ == IDS_LS) {
@@ -661,6 +680,9 @@ void ObLS::destroy()
     rootserver::ObCreateStandbyFromNetActor* net_standby_tnt_service = MTL(rootserver::ObCreateStandbyFromNetActor*);
     UNREGISTER_FROM_RESTORESERVICE(logservice::NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, net_standby_tnt_service);
   }
+
+  (void)ls_destory_for_dup_table_();
+
   if (OB_SUCC(ret) && !is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObRestoreService * restore_service = MTL(rootserver::ObRestoreService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, restore_service);
@@ -932,6 +954,10 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
       LOG_WARN("get palf base info failed", K(ret), K(id), K(curr_lsn),
           K(archive_force), K(archive_ignore), K(archive_lsn), K_(ls_meta));
     }
+
+    if (OB_SUCC(ret) && OB_FAIL(dup_table_ls_handler_.get_dup_table_ls_meta(meta_package.dup_ls_meta_))) {
+      LOG_WARN("get dup table ls meta failed", K(ret), K(id), K(meta_package.dup_ls_meta_));
+    }
   }
   return ret;
 }
@@ -1063,7 +1089,7 @@ int ObLS::get_ls_info(ObLSVTInfo &ls_info)
     LOG_WARN("get ls migrate status failed", K(ret), KPC(this));
   } else {
     ls_info.ls_id_ = ls_meta_.ls_id_;
-    ls_info.replica_type_ = ls_meta_.replica_type_;
+    ls_info.replica_type_ = ls_meta_.get_replica_type();
     ls_info.ls_state_ = role;
     ls_info.migrate_status_ = migrate_status;
     ls_info.tablet_count_ = ls_tablet_svr_.get_tablet_count();
@@ -1771,6 +1797,8 @@ int ObLS::diagnose(DiagnoseInfo &info) const
     STORAGE_LOG(WARN, "diagnose log handler failed", K(ret), K(ls_id));
   } else if (OB_FAIL(log_handler_.diagnose_palf(info.palf_diagnose_info_))) {
     STORAGE_LOG(WARN, "diagnose palf failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(restore_handler_.diagnose(info.restore_diagnose_info_))) {
+    STORAGE_LOG(WARN, "diagnose restore_handler failed", K(ret), K(ls_id), K(info));
   } else if (info.is_role_sync()) {
     // 角色同步时不需要诊断role change service
     info.rc_diagnose_info_.state_ = logservice::TakeOverState::TAKE_OVER_FINISH;

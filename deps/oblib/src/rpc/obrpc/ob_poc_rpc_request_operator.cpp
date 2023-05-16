@@ -18,7 +18,7 @@ namespace oceanbase
 {
 namespace obrpc
 {
-ObPocServerHandleContext* get_poc_handle_context(rpc::ObRequest* req)
+ObPocServerHandleContext* get_poc_handle_context(const rpc::ObRequest* req)
 {
   return (ObPocServerHandleContext*)req->get_server_handle_context();
 }
@@ -37,9 +37,7 @@ void ObPocRpcRequestOperator::response_result(ObRequest* req, obrpc::ObRpcPacket
 
 ObAddr ObPocRpcRequestOperator::get_peer(const ObRequest* req)
 {
-  UNUSED(req);
-  ObAddr addr;
-  return addr;
+  return get_poc_handle_context(req)->get_peer();
 }
 
 }; // end namespace obrpc

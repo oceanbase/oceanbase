@@ -16,6 +16,7 @@
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_lock_table.h"
+#include "storage/tablelock/ob_table_lock_service.h"
 
 #include "common/ob_tablet_id.h"               // ObTabletID
 #include "share/ob_rpc_struct.h"               // ObBatchCreateTabletArg
@@ -724,6 +725,57 @@ int ObLockTable::admin_update_lock_op(const ObTableLockOp &op_info,
     LOG_WARN("update lock status failed", KR(ret), K(op_info), K(status));
   }
   TABLELOCK_LOG(INFO, "ObLockTable::admin_update_lock_op", K(ret), K(op_info));
+  return ret;
+}
+
+int ObLockTable::check_and_clear_obj_lock(const bool force_compact)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTable is not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    LOG_WARN("get lock memtable failed", K(ret));
+  } else if (OB_FAIL(handle.get_lock_memtable(lock_memtable))) {
+    LOG_WARN("get lock memtable from lock handle failed", K(ret));
+  } else if (OB_FAIL(lock_memtable->check_and_clear_obj_lock(force_compact))) {
+    LOG_WARN("check and clear obj lock failed", K(ret));
+  }
+  return ret;
+}
+
+int ObLockTable::switch_to_leader()
+{
+  int ret = OB_SUCCESS;
+  ObTableLockService::ObOBJLockGarbageCollector *obj_lock_gc = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTable is not inited", K(ret));
+  } else if (OB_FAIL(MTL(ObTableLockService *)
+                         ->get_obj_lock_garbage_collector(obj_lock_gc))) {
+    LOG_WARN("can not get ObOBJLockGarbageCollector", K(ret));
+  } else if (OB_ISNULL(obj_lock_gc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObOBJLockGarbageCollector is null", K(ret));
+  } else {
+    if (OB_NOT_NULL(parent_)) {
+      LOG_INFO("start to check and clear obj lock when switch to leader", K(ret),
+              K(parent_->get_ls_id()));
+    }
+    ret = obj_lock_gc->obj_lock_gc_thread_pool_.commit_task_ignore_ret(
+        [this]() { return check_and_clear_obj_lock(true); });
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_ISNULL(parent_)) {
+      LOG_WARN("parent ls of ObLockTable is null", K(ret));
+    } else {
+      LOG_WARN("collect obj lock garbage when switch to leader failed", K(ret),
+               K(parent_->get_ls_id()));
+    }
+  }
   return ret;
 }
 

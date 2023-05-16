@@ -88,7 +88,6 @@ private:
                        const ObLSArray &ls_array);
   int handle_rpc_response_(const ObAddr &leader,
                            const obrpc::ObQueryLSIsValidMemberResponse &response);
-  bool is_normal_readonly_replica_(ObLS *ls) const;
   int try_renew_location_(const ObLSArray &ls_array);
 private:
   obrpc::ObSrvRpcProxy *rpc_proxy_;
@@ -191,9 +190,6 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
       } else if (OB_ISNULL(gc_handler = ls->get_gc_handler())) {
         tmp_ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "gc_handler is NULL", K(tmp_ret), K(id));
-      } else if (is_normal_readonly_replica_(ls)) {
-        // do nothing, remove by RS
-        CLOG_LOG(INFO, "GC skip R replica", K(id));
       } else if (!is_valid_member) {
         if (OB_SUCCESS != (tmp_ret = gc_handler->gc_check_invalid_member_seq(gc_seq_, need_gc))) {
           CLOG_LOG(WARN, "gc_check_invalid_member_seq failed", K(tmp_ret), K(id), K(leader), K(gc_seq_), K(need_gc));
@@ -217,11 +213,6 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
     }
   }
   return ret;
-}
-
-bool ObGarbageCollector::QueryLSIsValidMemberFunctor::is_normal_readonly_replica_(ObLS *ls) const
-{
-  return ObReplicaTypeCheck::is_readonly_replica(ls->get_replica_type());
 }
 
 //---------------ObGCLSLog---------------//

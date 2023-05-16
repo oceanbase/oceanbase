@@ -36,6 +36,8 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_my_session());
   const ObIArray<ObTableLocation> &normal_locations = plan.get_table_locations();
   const ObIArray<ObTableLocation> &das_locations = plan.get_das_table_locations();
+  location_router_.set_last_errno(ctx.get_my_session()->get_retry_info().get_last_query_retry_err());
+  location_router_.set_retry_cnt(ctx.get_my_session()->get_retry_info().get_retry_cnt());
   for (int64_t i = 0; OB_SUCC(ret) && i < das_locations.count(); ++i) {
     const ObTableLocation &das_location = das_locations.at(i);
     ObDASTableLoc *table_loc = nullptr;
@@ -346,7 +348,9 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
       related_tablet_loc->partition_id_ = rv->part_id_;
       related_tablet_loc->first_level_part_id_ = rv->first_level_part_id_;
       tablet_loc.next_ = related_tablet_loc;
-      if (OB_FAIL(related_table_loc->add_tablet_loc(related_tablet_loc))) {
+      if (OB_FAIL(location_router_.save_touched_tablet_id(related_tablet_loc->tablet_id_))) {
+        LOG_WARN("save touched tablet id failed", K(ret), KPC(related_tablet_loc));
+      } else if (OB_FAIL(related_table_loc->add_tablet_loc(related_tablet_loc))) {
         LOG_WARN("add related tablet location failed", K(ret));
       }
     }
@@ -369,12 +373,6 @@ OB_INLINE int ObDASCtx::build_related_table_loc(ObDASTableLoc &table_loc)
     }
   }
   return ret;
-}
-
-int ObDASCtx::refresh_tablet_loc(ObDASTabletLoc &tablet_loc)
-{
-  tablet_loc.need_refresh_ = true;
-  return location_router_.get_tablet_loc(*tablet_loc.loc_meta_, tablet_loc.tablet_id_, tablet_loc);
 }
 
 int ObDASCtx::extended_table_loc(const ObDASTableLocMeta &loc_meta, ObDASTableLoc *&table_loc)

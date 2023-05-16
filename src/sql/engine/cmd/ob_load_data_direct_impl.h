@@ -67,7 +67,7 @@ private:
   public:
     LoadExecuteParam();
     bool is_valid() const;
-    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel),
+    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel), K_(thread_count),
                  K_(batch_row_count), K_(data_mem_usage_limit), K_(need_sort), K_(online_opt_stat_gather),
                  K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(store_column_idxs));
   public:
@@ -78,7 +78,8 @@ private:
     common::ObString database_name_;
     common::ObString table_name_;
     common::ObString combined_name_; // database name + table name
-    int64_t parallel_; // number of concurrent threads
+    int64_t parallel_;
+    int64_t thread_count_; // number of concurrent threads
     int64_t batch_row_count_;
     int64_t data_mem_usage_limit_; // limit = data_mem_usage_limit * MAX_BUFFER_SIZE
     bool need_sort_;
@@ -111,8 +112,9 @@ private:
   public:
     Logger();
     ~Logger();
-    int init(const common::ObString &load_info);
+    int init(const common::ObString &load_info, int64_t max_error_rows);
     int log_error_line(const common::ObString &file_name, int64_t line_no, int err_code);
+    int64_t inc_error_count() { return ATOMIC_AAF(&err_cnt_, 1); }
   private:
     int create_log_file(const common::ObString &load_info);
     static int generate_log_file_name(char *buf, int64_t size, common::ObString &file_name);
@@ -122,6 +124,8 @@ private:
     bool is_oracle_mode_;
     char *buf_;
     bool is_create_log_succ_;
+    int64_t err_cnt_;
+    int64_t max_error_rows_;
     bool is_inited_;
     DISALLOW_COPY_AND_ASSIGN(Logger);
   };
@@ -247,7 +251,6 @@ private:
     int get_next_buffer(ObLoadFileBuffer &file_buffer, int64_t &line_count,
                         int64_t limit = INT64_MAX);
     int get_next_raw_buffer(DataBuffer &data_buffer);
-    int64_t get_lines_count() const { return data_trimer_.get_lines_count(); }
     bool has_incomplate_data() const { return data_trimer_.has_incomplate_data(); }
     bool is_end_file() const { return io_accessor_.get_offset() >= end_offset_; }
     ObCSVGeneralParser &get_csv_parser() { return csv_parser_; }
@@ -272,8 +275,9 @@ private:
     int init(const DataAccessParam &data_access_param, Logger &logger);
     int parse(const common::ObString &file_name, int64_t start_line_no, DataBuffer &data_buffer);
     int get_next_row(common::ObNewRow &row);
+    int64_t get_parsed_row_count() { return pos_; }
   private:
-    void log_error_line(int err_ret, int64_t err_line_no);
+    int log_error_line(int err_ret, int64_t err_line_no);
   private:
     ObCSVGeneralParser csv_parser_;
     DataBuffer escape_buffer_;
@@ -304,6 +308,7 @@ private:
         start_process_ts_(0),
         finished_ts_(0),
         proccessed_row_count_(0),
+        parsed_row_count_(0),
         parsed_bytes_(0)
     {
     }
@@ -314,6 +319,7 @@ private:
       start_process_ts_ = 0;
       finished_ts_ = 0;
       proccessed_row_count_ = 0;
+      parsed_row_count_ = 0;
       parsed_bytes_ = 0;
     }
     int ret_;
@@ -321,9 +327,10 @@ private:
     int64_t start_process_ts_;
     int64_t finished_ts_;
     int64_t proccessed_row_count_;
+    int64_t parsed_row_count_;
     int64_t parsed_bytes_;
     TO_STRING_KV(K_(ret), K_(created_ts), K_(start_process_ts), K_(finished_ts),
-                 K_(proccessed_row_count), K_(parsed_bytes));
+                 K_(proccessed_row_count), K_(parsed_row_count), K_(parsed_bytes));
   };
 
   struct TaskHandle
@@ -353,6 +360,7 @@ private:
     void free_task(observer::ObTableLoadTask *task);
     void task_finished(TaskHandle *handle);
     int process_task_handle(int64_t worker_idx, TaskHandle *handle, int64_t &line_count);
+    int64_t get_total_line_count() const {return total_line_count_; }
   protected:
     virtual int prepare_execute() = 0;
     virtual int get_next_task_handle(TaskHandle *&handle) = 0;
@@ -382,6 +390,7 @@ private:
     ObParallelTaskController task_controller_;
     ObConcurrentFixedCircularArray<TaskHandle *> handle_reserve_queue_;
     common::ObSEArray<TaskHandle *, 64> handle_resource_; // 用于释放资源
+    int64_t total_line_count_;
     bool is_inited_;
   private:
     DISALLOW_COPY_AND_ASSIGN(FileLoadExecutor);
@@ -413,7 +422,6 @@ private:
     DataBuffer expr_buffer_;
     DataReader data_reader_;
     int32_t next_session_id_;
-    int64_t total_line_count_;
     DISALLOW_COPY_AND_ASSIGN(LargeFileLoadExecutor);
   };
 

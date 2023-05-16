@@ -26,6 +26,7 @@
 #include "share/config/ob_server_config.h"
 #include "observer/ob_server_struct.h"
 
+
 namespace oceanbase
 {
 namespace observer
@@ -281,94 +282,94 @@ class ObDupTableRpcProxy : public obrpc::ObRpcProxy
 public:
   DEFINE_TO(ObDupTableRpcProxy);
 
-  RPC_AP(PRZ post_dup_table_lease_request, OB_DUP_TABLE_LEASE_REQUEST,
-         (transaction::ObDupTableLeaseRequestMsg));
-  RPC_AP(PRZ post_dup_table_lease_response, OB_DUP_TABLE_LEASE_RESPONSE,
-         (transaction::ObDupTableLeaseResponseMsg));
-  RPC_AP(PR3 post_redo_log_sync_request, OB_REDO_LOG_SYNC_REQUEST,
-         (transaction::ObRedoLogSyncRequestMsg));
-  RPC_AP(PR3 post_redo_log_sync_response, OB_REDO_LOG_SYNC_RESPONSE,
-         (transaction::ObRedoLogSyncResponseMsg));
-  RPC_AP(PR3 post_pre_commit_request, OB_DUP_TABLE_PRE_COMMIT_REQ,
-         (transaction::ObPreCommitRequestMsg));
-  RPC_AP(PR3 post_pre_commit_response, OB_DUP_TABLE_PRE_COMMIT_RESP,
-         (transaction::ObPreCommitResponseMsg));
+  // RPC_AP(PRZ post_dup_table_lease_request, OB_DUP_TABLE_LEASE_REQUEST,
+  //        (transaction::ObDupTableLeaseRequestMsg));
+  // RPC_AP(PRZ post_dup_table_lease_response, OB_DUP_TABLE_LEASE_RESPONSE,
+  //        (transaction::ObDupTableLeaseResponseMsg));
+  // RPC_AP(PR3 post_redo_log_sync_request, OB_DUP_TABLE_LEASE_RESPONSE,
+  //        (transaction::ObRedoLogSyncRequestMsg));
+  // RPC_AP(PR3 post_redo_log_sync_response, OB_DUP_TABLE_LEASE_RESPONSE,
+  //        (transaction::ObRedoLogSyncResponseMsg));
+  // RPC_AP(PR3 post_pre_commit_request, OB_DUP_TABLE_PRE_COMMIT_REQ,
+  //        (transaction::ObPreCommitRequestMsg));
+  // RPC_AP(PR3 post_pre_commit_response, OB_DUP_TABLE_PRE_COMMIT_RESP,
+  //        (transaction::ObPreCommitResponseMsg));
 };
 
-class ObDupTableLeaseRequestMsgP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_REQUEST>>
-{
-public:
-  explicit ObDupTableLeaseRequestMsgP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
+// class ObDupTableLeaseRequestMsgP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_REQUEST>>
+// {
+// public:
+//   explicit ObDupTableLeaseRequestMsgP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+//
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseRequestMsgP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
+//
+// class ObDupTableLeaseResponseMsgP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_RESPONSE>>
+// {
+// public:
+//   explicit ObDupTableLeaseResponseMsgP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+//
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseResponseMsgP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
 
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseRequestMsgP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
-class ObDupTableLeaseResponseMsgP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_LEASE_RESPONSE>>
-{
-public:
-  explicit ObDupTableLeaseResponseMsgP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObDupTableLeaseResponseMsgP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
-class ObRedoLogSyncRequestP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_REQUEST>>
-{
-public:
-  explicit ObRedoLogSyncRequestP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncRequestP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
-class ObRedoLogSyncResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_RESPONSE>>
-{
-public:
-  explicit ObRedoLogSyncResponseP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncResponseP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
-class ObPreCommitRequestP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_PRE_COMMIT_REQ>>
-{
-public:
-  explicit ObPreCommitRequestP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPreCommitRequestP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
-class ObPreCommitResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_PRE_COMMIT_RESP>>
-{
-public:
-  explicit ObPreCommitResponseP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
-protected:
-  int process();
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObPreCommitResponseP);
-private:
-  const observer::ObGlobalContext &global_ctx_;
-};
-
+// class ObRedoLogSyncRequestP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_REQUEST>>
+// {
+// public:
+//   explicit ObRedoLogSyncRequestP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncRequestP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
+//
+// class ObRedoLogSyncResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_REDO_LOG_SYNC_RESPONSE>>
+// {
+// public:
+//   explicit ObRedoLogSyncResponseP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObRedoLogSyncResponseP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
+//
+// class ObPreCommitRequestP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_PRE_COMMIT_REQ>>
+// {
+// public:
+//   explicit ObPreCommitRequestP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObPreCommitRequestP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
+//
+// class ObPreCommitResponseP : public ObRpcProcessor<obrpc::ObDupTableRpcProxy::ObRpc<OB_DUP_TABLE_PRE_COMMIT_RESP>>
+// {
+// public:
+//   explicit ObPreCommitResponseP(const observer::ObGlobalContext &global_ctx) : global_ctx_(global_ctx) {}
+// protected:
+//   int process();
+// private:
+//   DISALLOW_COPY_AND_ASSIGN(ObPreCommitResponseP);
+// private:
+//   const observer::ObGlobalContext &global_ctx_;
+// };
+//
 }//obrpc
 
 namespace transaction
@@ -403,15 +404,13 @@ public:
                                        const ObPreCommitResponseMsg &msg) = 0;
 };
 
-class ObDupTableRpc : public ObIDupTableRpc
+class ObDupTableRpc_old : public ObIDupTableRpc
 {
 public:
-  ObDupTableRpc() : is_inited_(false), is_running_(false),
-                    trans_service_(NULL), rpc_proxy_() {}
-  ~ObDupTableRpc() { destroy(); }
-  int init(ObTransService *trans_service,
-           rpc::frame::ObReqTransport *transport,
-           const common::ObAddr &addr);
+  ObDupTableRpc_old() : is_inited_(false), is_running_(false),
+                    trans_service_(NULL), rpc_proxy_(NULL) {}
+  ~ObDupTableRpc_old() { destroy(); }
+  int init(ObTransService *trans_service, rpc::frame::ObReqTransport *transport, const ObAddr &addr);
   int start();
   int stop();
   int wait();

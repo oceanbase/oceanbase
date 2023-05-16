@@ -60,10 +60,12 @@ public:
     return update_loop_ts(common::ObTimeUtility::fast_current_time());
   }
 public:
+  // for thread diagnose, maybe replace it with union later.
   static thread_local int64_t loop_ts_;
   static thread_local pthread_t thread_joined_;
   static thread_local int64_t sleep_us_;
   static thread_local bool is_blocking_;
+  static thread_local char* rpc_dest_addr_;
 private:
   static void* __th_start(void *th);
   void destroy_stack();

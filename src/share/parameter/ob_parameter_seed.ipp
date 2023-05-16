@@ -712,7 +712,7 @@ DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",
          "the time during which a RPC request is permitted to execute before it is terminated",
          ObParameterAttr(Section::RPC, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_pkt_nio, OB_CLUSTER_PARAMETER, "False",
+DEF_BOOL(_enable_pkt_nio, OB_CLUSTER_PARAMETER, "True",
          "enable pkt-nio, the new RPC framework"
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1426,9 +1426,9 @@ DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(local_ip, OB_CLUSTER_PARAMETER, "", "the IP address of the machine on which the ObServer will be installed",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
-DEF_INT(server_id, OB_CLUSTER_PARAMETER, "0", "[1, 65536]",
+DEF_INT(server_id, OB_CLUSTER_PARAMETER, "0", "[1, 18446744073709551615]",
         "the unique id that been assigned by rootservice for each observer in cluster, "
-        "default: 0 (invalid id), Range: [1, 65536]",
+        "default: 0 (invalid id), Range: [1, 18446744073709551615]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::READONLY));
 DEF_INT(_pipelined_table_function_memory_limit, OB_TENANT_PARAMETER, "524288000", "[1024,18446744073709551615]",
         "pipeline table function result set memory size limit. default 524288000 (500M), Range: [1024,18446744073709551615]",
@@ -1457,3 +1457,15 @@ DEF_STR_WITH_CHECKER(rpc_server_authentication_method, OB_CLUSTER_PARAMETER, "AL
 DEF_BOOL(_enable_backtrace_function, OB_CLUSTER_PARAMETER, "True",
          "Decide whether to let the backtrace function take effect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_with_subquery, OB_TENANT_PARAMETER, "0", "[0,2]",
+        "WITH subquery transformation，0: optimizer，1: materialize，2: inline",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
+        "OLAP API generates WITH clause",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
+        "enable group by placement transform rule",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

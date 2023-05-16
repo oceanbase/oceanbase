@@ -5927,6 +5927,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_MODE, 1, $3);
 }
+| DUPLICATE_SCOPE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DUPLICATE_SCOPE, 1, $3);
+}
 | EXPIRE_INFO opt_equal_mark '(' expr ')'
 {
   (void)($2) ; /* make bison mute */
@@ -6080,6 +6085,8 @@ TABLE_MODE opt_equal_mark STRING_VALUE
 {
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_LOCATION, 1, $3);
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
 }
 | FORMAT opt_equal_mark '(' external_file_format_list ')'
 {

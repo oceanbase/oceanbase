@@ -111,7 +111,7 @@ public:
                                  bool &trans_happened) override;
 protected:
   virtual int adjust_transform_types(uint64_t &transform_types) override;
-  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid) override;
+  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
   virtual int transform_one_stmt_with_outline(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                               ObDMLStmt *&stmt,
                                               bool &trans_happened) override;
@@ -261,7 +261,6 @@ private:
                                   bool &using_same_cols);
 
   int get_use_hint_expand_type(const ObRawExpr &expr,
-                               const bool is_topk,
                                const bool can_set_distinct,
                                OrExpandInfo &trans_info);
 

@@ -157,6 +157,7 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
   ObPlanMatchHelper helper(plan_set_);
   ObArray<ObCandiTableLoc> phy_tbl_infos;
   ObArray<ObTableLocation> out_tbl_locations;
+
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count(); i++) {
     //检查是否已有其他线程add该plan成功
     phy_tbl_infos.reuse();
@@ -167,7 +168,11 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
       LOG_WARN("invalid argument", K(tmp_plan));
     } else if (OB_FAIL(helper.match_plan(pc_ctx, tmp_plan, is_matched, phy_tbl_infos, out_tbl_locations))) {
       LOG_WARN("fail to match dist plan", K(ret));
-    } else if (false == is_matched) {
+    } else {
+      is_matched = is_matched && tmp_plan->has_same_location_constraints(plan);
+    }
+
+    if (!is_matched) {
       // do nothing
     } else {
       ret = OB_SQL_PC_PLAN_DUPLICATE;
@@ -175,14 +180,7 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
   }
 
   if (OB_SUCC(ret) && !is_matched) {
-    if (OB_FAIL(plan.set_location_constraints(pc_ctx.sql_ctx_.base_constraints_,
-                                              pc_ctx.sql_ctx_.strict_constraints_,
-                                              pc_ctx.sql_ctx_.non_strict_constraints_))) {
-      LOG_WARN("failed to set location constraints", K(ret), K(plan),
-               K(pc_ctx.sql_ctx_.base_constraints_),
-               K(pc_ctx.sql_ctx_.strict_constraints_),
-               K(pc_ctx.sql_ctx_.non_strict_constraints_));
-    } else if (OB_FAIL(dist_plans_.push_back(&plan))) {
+    if (OB_FAIL(dist_plans_.push_back(&plan))) {
       LOG_WARN("fail to add plan", K(ret));
     }
   }
@@ -196,7 +194,6 @@ int ObDistPlans::is_same_plan(const ObPhysicalPlan *l_plan,
                               bool &is_same) const
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(l_plan) || OB_ISNULL(r_plan)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(l_plan), K(r_plan));
@@ -204,7 +201,6 @@ int ObDistPlans::is_same_plan(const ObPhysicalPlan *l_plan,
     is_same = (l_plan->get_signature() == r_plan->get_signature());
     LOG_DEBUG("compare plan", K(l_plan->get_signature()), K(r_plan->get_signature()), K(is_same));
   }
-
   return ret;
 }
 

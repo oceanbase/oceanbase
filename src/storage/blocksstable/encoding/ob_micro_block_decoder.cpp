@@ -70,18 +70,17 @@ class ObDecoderCtxArray
 {
 public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
-  explicit ObDecoderCtxArray(ObIAllocator &allocator): ctxs_(), allocator_(&allocator) {};
+  ObDecoderCtxArray() {};
   virtual ~ObDecoderCtxArray()
   {
     FOREACH(it, ctxs_) {
       ObDecoderCtx *c = *it;
-      c->~ObDecoderCtx();
-      allocator_->free(c);
+      OB_DELETE(ObDecoderCtx, ObModIds::OB_SSTABLE_READER, c);
     }
     ctxs_.reset();
   }
 
-  TO_STRING_KV(K_(ctxs), KP_(allocator));
+  TO_STRING_KV(K_(ctxs));
 
   ObDecoderCtx **get_ctx_array(int64_t size)
   {
@@ -93,14 +92,13 @@ public:
     } else {
       if (ctxs_.size() < size) {
         for (int64_t i = ctxs_.size(); OB_SUCC(ret) && i < size; ++i) {
-          ObDecoderCtx *ctx = nullptr;
-          if (OB_ISNULL(ctx = OB_NEWx(ObDecoderCtx, allocator_))) {
+          ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, ObModIds::OB_SSTABLE_READER);
+          if (NULL == ctx) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
           } else if (OB_FAIL(ctxs_.push_back(ctx))) {
             LOG_WARN("array push back failed", K(ret));
-            ctx->~ObDecoderCtx();
-            allocator_->free(ctx);
+            OB_DELETE(ObDecoderCtx, ObModIds::OB_SSTABLE_READER, ctx);
           }
         }
         if (OB_SUCC(ret)) {
@@ -115,7 +113,6 @@ public:
 
 private:
   ObArray<ObDecoderCtx *> ctxs_;
-  ObIAllocator *allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDecoderCtxArray);
 };
@@ -126,12 +123,14 @@ ObColumnDecoderCtx ObMicroBlockDecoder::none_exist_column_decoder_ctx_;
 class ObTLDecoderCtxArray
 {
 public:
-  ObTLDecoderCtxArray(): ctxs_array_(), allocator_(SET_USE_500("TLDecoderCtx")) {}
+  ObTLDecoderCtxArray() {}
 
   virtual ~ObTLDecoderCtxArray()
   {
-    ctxs_array_.reset();
-    allocator_.reset();
+    FOREACH(it, ctxs_array_) {
+      ObDecoderCtxArray *ctxs = *it;
+      OB_DELETE(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER, ctxs);
+    }
   }
 
   static ObDecoderCtxArray *alloc()
@@ -143,7 +142,8 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("NULL instance", K(ret));
     } else if (tl_array->ctxs_array_.empty()) {
-      if (OB_ISNULL(ctxs = OB_NEWx(ObDecoderCtxArray, (&tl_array->allocator_), tl_array->allocator_))) {
+      ctxs = OB_NEW(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER);
+      if (NULL == ctxs) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
@@ -165,8 +165,7 @@ public:
       // do nothing
     } else if (OB_FAIL(tl_array->ctxs_array_.push_back(ctxs))) {
       LOG_WARN("array push back failed", K(ret));
-      ctxs->~ObDecoderCtxArray();
-      tl_array->allocator_.free(ctxs);
+      OB_DELETE(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER, ctxs);
     }
   }
 
@@ -175,7 +174,6 @@ private:
 
 private:
   ObArray<ObDecoderCtxArray *> ctxs_array_;
-  ObArenaAllocator allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTLDecoderCtxArray);
 };

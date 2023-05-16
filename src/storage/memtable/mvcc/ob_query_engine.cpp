@@ -425,6 +425,7 @@ void ObQueryEngine::revert_iter(ObIQueryEngineIterator *iter)
 
 int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtableKey *start_key,
                                const int start_exclude, const ObMemtableKey *end_key, const int end_exclude,
+                               const transaction::ObTransID &tx_id,
                                int64_t &logical_row_count, int64_t &physical_row_count, double &ratio)
 {
   int ret = OB_SUCCESS;
@@ -470,7 +471,12 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
           }
           gap_size = 0;
         }
-        if (blocksstable::ObDmlFlag::DF_INSERT == value->first_dml_flag_
+        if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
+            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_ &&
+            nullptr != value->list_head_ &&
+            value->list_head_->tx_id_ == tx_id) {
+          ++logical_row_count;
+        } else if (blocksstable::ObDmlFlag::DF_INSERT == value->first_dml_flag_
             && blocksstable::ObDmlFlag::DF_DELETE != value->last_dml_flag_) {
           // insert new row
           ++logical_row_count;
@@ -654,7 +660,8 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
 }
 
 
-int ObQueryEngine::estimate_row_count(const ObMemtableKey *start_key, const int start_exclude,
+int ObQueryEngine::estimate_row_count(const transaction::ObTransID &tx_id,
+                                      const ObMemtableKey *start_key, const int start_exclude,
                                       const ObMemtableKey *end_key, const int end_exclude,
                                       int64_t &logical_row_count, int64_t &physical_row_count)
 {
@@ -681,12 +688,12 @@ int ObQueryEngine::estimate_row_count(const ObMemtableKey *start_key, const int 
   } else if (OB_ISNULL((iter = raw_iter_alloc_.alloc()))) {
     TRANS_LOG(WARN, "alloc raw iter fail");
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FAIL(sample_rows(iter, end_key, end_exclude, start_key, start_exclude,
+  } else if (OB_FAIL(sample_rows(iter, end_key, end_exclude, start_key, start_exclude, tx_id,
       log_row_count1, phy_row_count1, ratio1))) {
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "failed to sample rows reverse", KR(ret), K(*start_key), K(*end_key));
     }
-  } else if (OB_FAIL(sample_rows(iter, start_key, start_exclude, end_key, end_exclude,
+  } else if (OB_FAIL(sample_rows(iter, start_key, start_exclude, end_key, end_exclude, tx_id,
       log_row_count2, phy_row_count2, ratio2))) {
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "failed to sample rows", KR(ret), K(*start_key), K(*end_key));

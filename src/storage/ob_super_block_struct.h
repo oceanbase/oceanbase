@@ -119,6 +119,7 @@ public:
                K_(replay_start_point),
                K_(ls_meta_entry),
                K_(tablet_meta_entry),
+               K_(ls_dup_table_entry),
                K_(is_hidden));
   OB_UNIS_VERSION(TENANT_SUPER_BLOCK_VERSION);
 
@@ -127,6 +128,7 @@ public:
   common::ObLogCursor replay_start_point_;
   blocksstable::MacroBlockId ls_meta_entry_;
   blocksstable::MacroBlockId tablet_meta_entry_;
+  blocksstable::MacroBlockId ls_dup_table_entry_;
   bool is_hidden_;
 };
 

@@ -41,7 +41,7 @@ int ObDetectableIdGen::generate_detectable_id(ObDetectableId &detectable_id, uin
   int ret = OB_SUCCESS;
   // use server id to ensure that the detectable_id is unique in cluster
   uint64_t server_id = GCTX.server_id_;
-  if (0 == server_id) {
+  if (!is_valid_server_id(server_id)) {
     ret = OB_SERVER_IS_INIT;
     LIB_LOG(WARN, "[DM] server id is invalid");
   } else {
@@ -276,8 +276,8 @@ int ObDetectManager::unregister_check_item(const ObDetectableId &detectable_id, 
     if (OB_FAIL(all_check_items_.erase_if(detectable_id, remove_node_call, is_erased))) {
       if (OB_HASH_NOT_EXIST == ret) {
         // if not found, the possible reason is that node is removed by ObDetectCallbackNodeExecuteCall
-        LIB_LOG(WARN, "[DM] unregister cb failed, maybe removed by other thread",
-            K(ret), K(detectable_id), K(node_sequence_id));
+        LIB_LOG(TRACE, "[DM] unregister cb failed, maybe removed by other thread",
+            K(detectable_id), K(node_sequence_id));
       } else {
         LIB_LOG(WARN, "[DM] unregister cb failed", K(ret), K(detectable_id), K(node_sequence_id));
       }

@@ -2514,6 +2514,39 @@ int ObSchemaGetterGuard::get_table_schema(
   return ret;
 }
 
+int ObSchemaGetterGuard::get_index_schemas_with_data_table_id(
+  const uint64_t tenant_id,
+  const uint64_t data_table_id,
+  ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas)
+{
+  int ret = OB_SUCCESS;
+  index_schemas.reset();
+  const ObSchemaMgr *mgr = NULL;
+  const ObSimpleTableSchemaV2 *table_schema = NULL;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id
+            || OB_INVALID_ID == data_table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->get_table_schema(tenant_id, data_table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (table_schema->is_table() || table_schema->is_tmp_table()) {
+    if (OB_FAIL(mgr->get_aux_schemas(tenant_id, data_table_id, index_schemas, USER_INDEX))) {
+      LOG_WARN("fail to get aux schemas", KR(ret), K(tenant_id), K(data_table_id));
+    }
+  }
+  return ret;
+}
+
 int ObSchemaGetterGuard::get_column_schema(
   const uint64_t tenant_id,
   const uint64_t table_id,

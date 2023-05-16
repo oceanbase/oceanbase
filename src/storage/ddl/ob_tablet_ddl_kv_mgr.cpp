@@ -594,6 +594,8 @@ int ObTabletDDLKvMgr::online()
                                                     tablet_handle,
                                                     ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US))) {
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
+  } else if (OB_FAIL(cleanup())) {
+    LOG_WARN("failed to cleanup ddl kv mgr", K(ret), KPC(tablet_handle.get_obj()));
   } else if (!tablet_handle.get_obj()->get_tablet_meta().ddl_start_scn_.is_valid_and_not_min()) {
     LOG_DEBUG("no need to start ddl kv manager", K(ret), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
   } else {
@@ -876,8 +878,17 @@ int ObTabletDDLKvMgr::get_freezed_ddl_kv(const SCN &freeze_scn, ObTableHandleV2 
   }
   return ret;
 }
+int64_t ObTabletDDLKvMgr::get_count()
+{
+  int64_t ddl_kv_count = 0;
+  {
+    ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+    ddl_kv_count = tail_ - head_;
+  }
+  return ddl_kv_count;
+}
 
-int64_t ObTabletDDLKvMgr::get_count() const
+int64_t ObTabletDDLKvMgr::get_count_nolock() const
 {
   return tail_ - head_;
 }
@@ -891,7 +902,7 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObTableHandleV2 &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
-  if (get_count() == 0) {
+  if (get_count_nolock() == 0) {
     ret = OB_ENTRY_NOT_EXIST;
   } else {
     ObTableHandleV2 &tail_kv_handle = ddl_kv_handles_[get_idx(tail_ - 1)];
@@ -959,7 +970,7 @@ void ObTabletDDLKvMgr::try_get_ddl_kv_unlock(const SCN &scn, ObTableHandleV2 &kv
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
-  if (get_count() > 0) {
+  if (get_count_nolock() > 0) {
     for (int64_t i = tail_ - 1; OB_SUCC(ret) && i >= head_ && !kv_handle.is_valid(); --i) {
       ObTableHandleV2 &tmp_kv_handle = ddl_kv_handles_[get_idx(i)];
       ObDDLKV *tmp_kv = static_cast<ObDDLKV *>(tmp_kv_handle.get_table());
@@ -982,7 +993,7 @@ int ObTabletDDLKvMgr::freeze_ddl_kv(const SCN &freeze_scn)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
-  } else if (0 == get_count()) {
+  } else if (0 == get_count_nolock()) {
     // do nothing
   } else if (OB_FAIL(get_active_ddl_kv_impl(kv_handle))) {
     LOG_WARN("fail to get active ddl kv", K(ret));
@@ -1140,7 +1151,7 @@ int ObTabletDDLKvMgr::check_has_effective_ddl_kv(bool &has_ddl_kv)
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
   } else {
-    has_ddl_kv = 0 != get_count();
+    has_ddl_kv = 0 != get_count_nolock();
   }
   return ret;
 }
@@ -1158,7 +1169,7 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(ObTableHandleV2 &kv_handle)
   } else if (OB_UNLIKELY(!is_started())) {
     ret = OB_ERR_SYS;
     LOG_WARN("ddl kv manager not started", K(ret));
-  } else if (get_count() == MAX_DDL_KV_CNT_IN_STORAGE) {
+  } else if (get_count_nolock() == MAX_DDL_KV_CNT_IN_STORAGE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, too much ddl kv count", K(ret));
   } else if (OB_FAIL(t3m->acquire_ddl_kv(tmp_kv_handle))) {
@@ -1179,7 +1190,7 @@ int ObTabletDDLKvMgr::alloc_ddl_kv(ObTableHandleV2 &kv_handle)
     tail_++;
     ddl_kv_handles_[idx] = tmp_kv_handle;
     kv_handle = tmp_kv_handle;
-    FLOG_INFO("succeed to add ddl kv", K(ls_id_), K(tablet_id_), K(head_), K(tail_), "ddl_kv_cnt", get_count(), KP(kv));
+    FLOG_INFO("succeed to add ddl kv", K(ls_id_), K(tablet_id_), K(head_), K(tail_), "ddl_kv_cnt", get_count_nolock(), KP(kv));
   }
   return ret;
 }

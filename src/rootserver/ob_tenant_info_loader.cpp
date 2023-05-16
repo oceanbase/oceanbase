@@ -139,21 +139,21 @@ void ObTenantInfoLoader::run2()
     while (!stop_) {
       const int64_t start_time_us = ObTimeUtility::current_time();
       share::ObAllTenantInfo tenant_info;
-      bool refreshed = false;
+      bool content_changed = false;
       bool is_sys_ls_leader = is_sys_ls_leader_();
       const int64_t refresh_time_interval_us = act_as_standby_() && is_sys_ls_leader ?
                 ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US :
                 ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US;
 
       if (need_refresh(refresh_time_interval_us)
-          && OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, refreshed))) {
+          && OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, content_changed))) {
         LOG_WARN("failed to update tenant info", KR(ret), K_(tenant_id), KP(sql_proxy_));
       }
 
       const int64_t now_us = ObTimeUtility::current_time();
       const int64_t sql_update_cost_time = now_us - start_time_us;
       if (OB_FAIL(ret)) {
-      } else if (refreshed && is_sys_ls_leader) {
+      } else if (content_changed && is_sys_ls_leader) {
         (void)ATOMIC_AAF(&sql_update_times_, 1);
         (void)broadcast_tenant_info_content_();
       }
@@ -161,7 +161,7 @@ void ObTenantInfoLoader::run2()
 
       const int64_t end_time_us = ObTimeUtility::current_time();
       const int64_t cost_time_us = end_time_us - start_time_us;
-      if (refreshed) {
+      if (content_changed) {
         (void)dump_tenant_info_(sql_update_cost_time, is_sys_ls_leader, broadcast_cost_time, end_time_us, last_dump_time_us);
       }
       const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us);
@@ -412,11 +412,11 @@ int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 int ObTenantInfoLoader::refresh_tenant_info()
 {
   int ret = OB_SUCCESS;
-  bool refreshed = false;
+  bool content_changed = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, refreshed))) {
+  } else if (OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, content_changed))) {
     LOG_WARN("failed to refresh_tenant_info", KR(ret), K_(tenant_id), KP(sql_proxy_));
   }
   return ret;
@@ -453,13 +453,13 @@ void ObAllTenantInfoCache::reset()
 
 int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
                                               common::ObMySQLProxy *sql_proxy,
-                                              bool &refreshed)
+                                              bool &content_changed)
 {
   int ret = OB_SUCCESS;
   ObAllTenantInfo new_tenant_info;
   int64_t ora_rowscn = 0;
   const int64_t new_refresh_time_us = ObClockGenerator::getCurrentTime();
-  refreshed = false;
+  content_changed = false;
   if (OB_ISNULL(sql_proxy) || !is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(sql_proxy));
@@ -475,13 +475,18 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     * This also ensures the consistency of tenant_role cache and the tenant role field in all_tenant_info
     */
     SpinWLockGuard guard(lock_);
-    if (ora_rowscn > ora_rowscn_) {
-      MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
-      (void)tenant_info_.assign(new_tenant_info);
+    if (ora_rowscn >= ora_rowscn_) {
+      if (ora_rowscn > ora_rowscn_) {
+        MTL_SET_TENANT_ROLE(new_tenant_info.get_tenant_role().value());
+        (void)tenant_info_.assign(new_tenant_info);
+        ora_rowscn_ = ora_rowscn;
+        content_changed = true;
+      }
+      // In order to provide sts an accurate time of tenant info refresh time, it is necessary to
+      // update last_sql_update_time_ after sql refresh
       last_sql_update_time_ = new_refresh_time_us;
-      ora_rowscn_ = ora_rowscn;
-      refreshed = true;
     } else {
+      ret = OB_EAGAIN;
       LOG_WARN("refresh tenant info conflict", K(new_tenant_info), K(new_refresh_time_us),
                                       K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_), K(ora_rowscn));
     }

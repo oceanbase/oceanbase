@@ -202,6 +202,7 @@ int ObMvccEngine::scan(
 }
 
 int ObMvccEngine::estimate_scan_row_count(
+    const transaction::ObTransID &tx_id,
     const ObMvccScanRange &range,
     ObPartitionEst &part_est) const
 {
@@ -214,6 +215,7 @@ int ObMvccEngine::estimate_scan_row_count(
     TRANS_LOG(WARN, "invalid param");
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(query_engine_->estimate_row_count(
+              tx_id,
               range.start_key_,  !range.border_flag_.inclusive_start(),
               range.end_key_,    !range.border_flag_.inclusive_end(),
               part_est.logical_row_count_, part_est.physical_row_count_))) {

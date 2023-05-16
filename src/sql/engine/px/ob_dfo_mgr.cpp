@@ -520,6 +520,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
   } else if (IS_PX_JOIN_FILTER(phy_op->get_type()) && NULL != parent_dfo) {
     const ObJoinFilterSpec *filter_spec = static_cast<const ObJoinFilterSpec *>(phy_op);
+    if (filter_spec->is_create_mode() && !parent_dfo->force_bushy()) {
+      parent_dfo->set_force_bushy(true);
+    }
     if(filter_spec->is_shared_join_filter() && filter_spec->is_shuffle_) {
       ObP2PDfoMapNode node;
       node.target_dfo_id_ = parent_dfo->get_dfo_id();

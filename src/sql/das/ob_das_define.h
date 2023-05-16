@@ -166,7 +166,7 @@ public:
   TO_STRING_KV(K_(tablet_id),
                K_(ls_id),
                K_(server),
-               K_(need_refresh),
+               K_(in_retry),
                K_(partition_id),
                K_(first_level_part_id));
   /**
@@ -186,7 +186,7 @@ public:
   union {
     uint64_t flags_;
     struct {
-      uint64_t need_refresh_                    : 1; //need to refresh tablet location cache
+      uint64_t in_retry_                        : 1; //need to refresh tablet location cache
       uint64_t reserved_                        : 63;
     };
   };

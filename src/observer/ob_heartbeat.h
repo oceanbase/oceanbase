@@ -68,6 +68,7 @@ private:
   int try_reload_config(const int64_t config_version);
   int try_reload_time_zone_info(const int64_t time_zone_info_version);
 private:
+  void check_and_update_server_id_(const uint64_t server_id);
   bool inited_;
   ObZoneLeaseInfoUpdateTask update_task_;
   share::ObZoneLeaseInfo zone_lease_info_;

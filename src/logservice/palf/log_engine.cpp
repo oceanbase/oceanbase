@@ -964,22 +964,6 @@ int LogEngine::submit_change_config_meta_resp(const common::ObAddr &server,
   return ret;
 }
 
-int LogEngine::submit_change_mode_meta_req(
-      const common::ObMemberList &member_list,
-      const int64_t &msg_proposal_id,
-      const bool is_applied_mode_meta,
-      const LogModeMeta &mode_meta)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    ret = log_net_service_.submit_change_mode_meta_req(member_list, msg_proposal_id,
-        is_applied_mode_meta, mode_meta);
-  }
-  return ret;
-}
-
 int LogEngine::submit_change_mode_meta_resp(const common::ObAddr &server,
                                  const int64_t &msg_proposal_id)
 {

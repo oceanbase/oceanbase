@@ -449,7 +449,6 @@ public:
   ObReplayStatus();
   ~ObReplayStatus();
   int init(const share::ObLSID &id,
-           const common::ObReplicaType &replica_type,
            palf::PalfEnv *palf_env,
            ObLogReplayService *rp_sv);
   void destroy();

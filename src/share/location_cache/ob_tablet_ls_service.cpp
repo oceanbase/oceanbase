@@ -251,6 +251,8 @@ int ObTabletLSService::destroy()
   int ret = OB_SUCCESS;
   stopped_ = true;
   inited_ = false;
+  inner_cache_.destroy();
+  async_queue_.destroy();
   return ret;
 }
 

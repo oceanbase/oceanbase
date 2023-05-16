@@ -32,6 +32,7 @@
 #include "share/ob_global_stat_proxy.h"//get gc
 #include "logservice/palf/log_define.h"//SCN
 #include "share/scn.h"//SCN
+#include "share/ls/ob_ls_status_operator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -41,6 +42,92 @@ using namespace transaction;
 using namespace palf;
 namespace share
 {
+int ObLSFlag::assign(const ObLSFlag &ls_flag)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_flag.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_flag));
+  } else {
+    flag_ = ls_flag.flag_;
+  }
+  return ret;
+}
+
+int ObLSFlag::flag_to_str(ObLSFlagStr &str) const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(LS_FLAG_ARRAY) == (int64_t)MAX_FLAG,
+                "ls flag string array size mismatch enum LSFlag count");
+  int ret = OB_SUCCESS;
+  str.reset();
+  int64_t pos = 0;
+  const int64_t len = str.capacity();
+  if (is_normal_flag()) {
+    if (OB_FAIL(databuff_printf(str.ptr(), len, pos, "%s", LS_FLAG_ARRAY[0]))) {
+      LOG_WARN("failed to databuf printf", KR(ret), K(len), K(pos));
+    }
+  } else {
+    bool need_append_split_char = false;
+    for (int64_t i = 1; i < ARRAYSIZEOF(LS_FLAG_ARRAY) && OB_SUCC(ret); i++) {
+      int64_t flag_bit_to_compare = 1 << (i - 1);
+      if (flag_ & flag_bit_to_compare) {
+        if (need_append_split_char && OB_FAIL(databuff_printf(str.ptr(), len, pos, "|"))) {
+          LOG_WARN("failed to databuff print", KR(ret), K(pos), K(len));
+        } else if (OB_FAIL(databuff_printf(str.ptr(), len, pos, "%s", LS_FLAG_ARRAY[i]))) {
+          LOG_WARN("failed to databuff print", KR(ret), K(pos), K(len));
+        } else {
+          need_append_split_char = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSFlag::str_to_flag(const common::ObString &sql)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  ObLSFlagStr sql_copy;
+  if (OB_UNLIKELY(sql.empty())) {
+    flag_ = NORMAL_FLAG;
+  } else if (sql.length() >= FLAG_STR_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql is larger than expected", KR(ret), K(sql));
+  } else if (OB_FAIL(sql_copy.assign(sql))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else {
+    char *data_str = NULL;
+    char *save_ptr = NULL;
+    while (OB_SUCC(ret)) {
+      data_str = strtok_r((NULL == data_str ? sql_copy.ptr() : NULL), "|", &save_ptr);
+      if (NULL != data_str) {
+        bool found = false;
+        for (int64_t i = 1; i < ARRAYSIZEOF(LS_FLAG_ARRAY); i++) {
+          int64_t flag_bit_to_compare = 1 << (i - 1);
+          if (0 == ObString(data_str).case_compare(LS_FLAG_ARRAY[i])) {
+            if (flag_ & flag_bit_to_compare) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("can not double ls flag", KR(ret), K(data_str), K(save_ptr));
+            } else {
+              flag_ |= flag_bit_to_compare;
+              found = true;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !found) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected flag string", KR(ret), K(sql));
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSFlag, flag_);
 ////////////ObLSAttr
 bool ObLSAttr::is_valid() const
 {
@@ -100,7 +187,7 @@ void ObLSAttr::reset()
   create_scn_.reset();
 }
 
-OB_SERIALIZE_MEMBER(ObLSAttr, id_, ls_group_id_, flag_, status_, operation_type_, create_scn_);
+OB_SERIALIZE_MEMBER(ObLSAttr, id_, ls_group_id_, flag_compatible_, status_, operation_type_, create_scn_, flag_);
 
 //////////////ObLSAttrOperator
 bool ObLSAttrOperator::is_valid() const
@@ -131,6 +218,7 @@ int ObLSAttrOperator::operator_ls_(
     ObMySQLTransaction trans;
     const bool for_update = true;
     ObLSAttr sys_ls_attr;
+    ObLSAttr duplicate_ls_attr;
     bool skip_sub_trans = false;
     ObAllTenantInfo tenant_info;
     if (OB_FAIL(trans.start(proxy_, tenant_id_))) {
@@ -153,10 +241,23 @@ int ObLSAttrOperator::operator_ls_(
     } else if (OB_LS_OP_CREATE_PRE == ls_attr.get_ls_operation_type()) {
       if (OB_LS_NORMAL != sys_ls_attr.get_ls_status()) {
         //for sys ls, need insert_ls, but ls_status is normal
-        //delete ls may in ls is creating, use operation_type 
+        //delete ls may in ls is creating, use operation_type
         ret = OB_OP_NOT_ALLOW;
         LOG_WARN("ls_status not expected while create ls", KR(ret), K(ls_attr),
           K(sys_ls_attr));
+      } else if (ls_attr.get_ls_flag().is_duplicate_ls()
+                 && OB_FAIL(get_duplicate_ls_attr(false/*for_update*/, trans, duplicate_ls_attr))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // good, duplicate ls not exist
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get duplicate ls info", KR(ret), K(ls_attr));
+        }
+      } else if (duplicate_ls_attr.get_ls_flag().is_duplicate_ls()) {
+        ret = OB_LS_EXIST;
+        LOG_WARN("duplicate ls already exist", KR(ret), K(duplicate_ls_attr), K(ls_attr));
+      }
+      if (OB_FAIL(ret)) {
       } else {
         //check ls create not concurrency
         uint64_t max_ls_id = 0;
@@ -200,19 +301,22 @@ int ObLSAttrOperator::insert_ls(
     const ObTenantSwitchoverStatus &working_sw_status)
 {
   int ret = OB_SUCCESS;
+  ObLSFlagStr flag_str;
   if (OB_UNLIKELY(!ls_attr.is_valid() || OB_INVALID_ID == max_ls_group_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("operation is invalid", KR(ret), K(ls_attr), K(max_ls_group_id));
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("operation is not valid", KR(ret), "operation", *this);
+  } else if (OB_FAIL(ls_attr.get_ls_flag().flag_to_str(flag_str))) {
+    LOG_WARN("fail to convert flag to string", KR(ret), K(ls_attr));
   } else {
     ObSqlString sql;
     if (FAILEDx(sql.assign_fmt(
             "insert into %s (ls_id, ls_group_id, status, flag, create_scn) values(%ld, "
             "%ld, '%s', '%s', '%lu')",
             OB_ALL_LS_TNAME, ls_attr.get_ls_id().id(), ls_attr.get_ls_group_id(),
-            ObLSStatusOperator::ls_status_to_str(ls_attr.get_ls_status()), "",
+            ObLSStatusOperator::ls_status_to_str(ls_attr.get_ls_status()), flag_str.ptr(),
             ls_attr.get_create_scn().get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(ls_attr), K(sql));
     } else if (OB_FAIL(operator_ls_(ls_attr, sql, max_ls_group_id, working_sw_status))) {
@@ -400,6 +504,40 @@ int ObLSAttrOperator::get_ls_attr(const ObLSID &id, const bool for_update, commo
   return ret;
 }
 
+int ObLSAttrOperator::get_duplicate_ls_attr(const bool for_update,
+                                            common::ObISQLClient &client, ObLSAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  ls_attr.reset();
+  if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operation is not valid", KR(ret), "operation", *this);
+  } else {
+    common::ObSqlString sql;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(sql.assign_fmt("select * from %s where flag like \"%%%s%%\"",
+               OB_ALL_LS_TNAME, LS_FLAG_ARRAY[ObLSFlag::DUPLICATE_FLAG]))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(sql));
+    } else if (for_update && OB_FAIL(sql.append(" for update"))) {
+      LOG_WARN("failed to append sql", KR(ret), K(sql), K(for_update));
+    } else {
+      ObLSAttrArray ls_array;
+      if (OB_FAIL(exec_read(tenant_id_, sql, client, this, ls_array))) {
+        LOG_WARN("failed to get ls array", KR(ret), K(tenant_id_), K(sql));
+      } else if (0 == ls_array.count()) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("failed to ls array", KR(ret), K_(tenant_id));
+      } else if (OB_UNLIKELY(1 != ls_array.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("more than one ls is unexpected", KR(ret), K(ls_array), K(sql));
+      } else if (OB_FAIL(ls_attr.assign(ls_array.at(0)))) {
+        LOG_WARN("failed to assign ls attr", KR(ret), K(ls_array));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSAttrOperator::get_all_ls_by_order(
     ObLSAttrIArray &ls_operation_array)
 {
@@ -464,18 +602,22 @@ int ObLSAttrOperator::fill_cell(common::sqlclient::ObMySQLResult *result, ObLSAt
     int64_t id_value = OB_INVALID_ID;
     uint64_t ls_group_id = OB_INVALID_ID;
     uint64_t create_scn_val = OB_INVALID_SCN_VAL;
-    ObLSFlag flag;  // TODO no used
+    ObString flag_str;
+    ObLSFlag flag(share::ObLSFlag::NORMAL_FLAG);
     SCN create_scn;
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", id_value, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(*result, "status", status_str);
     EXTRACT_UINT_FIELD_MYSQL(*result, "create_scn", create_scn_val, uint64_t);
+    EXTRACT_VARCHAR_FIELD_MYSQL(*result, "flag", flag_str);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret), K(ls_group_id), K(status_str),
                K(id_value));
     } else if (OB_FAIL(create_scn.convert_for_inner_table_field(create_scn_val))) {
       LOG_WARN("failed to convert create_scn", KR(ret), K(ls_group_id), K(status_str),
                K(id_value), K(create_scn));
+    } else if (OB_FAIL(flag.str_to_flag(flag_str))) {
+      LOG_WARN("failed to convert flag", KR(ret), K(flag_str));
     } else {
       ObLSID ls_id(id_value);
       ObLSStatus status = ObLSStatusOperator::str_to_ls_status(status_str);

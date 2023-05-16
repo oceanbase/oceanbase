@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_LS_META_PACKAGE_
 #include "storage/ls/ob_ls_meta.h"               // ObLSMeta
 #include "logservice/palf/palf_base_info.h"      // PalfBaseInfo
+#include "storage/tx/ob_dup_table_base.h"
 
 namespace oceanbase
 {
@@ -34,10 +35,11 @@ public:
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(ls_meta), K_(palf_meta));
+  TO_STRING_KV(K_(ls_meta), K_(palf_meta), K_(dup_ls_meta));
 public:
   ObLSMeta ls_meta_;                // the meta of ls
   palf::PalfBaseInfo palf_meta_;    // the meta of palf
+  transaction::ObDupTableLSCheckpoint::ObLSDupTableMeta dup_ls_meta_; // the meta of dup_ls_meta_;
 };
 
 } // storage

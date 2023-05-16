@@ -1074,6 +1074,8 @@ int ObService::tenant_freeze_(const uint64_t tenant_id)
       if (OB_ISNULL(freezer = MTL(storage::ObTenantFreezer*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
+      } else if (freezer->exist_ls_freezing()) {
+        LOG_INFO("exist running ls_freeze", K(ret), K(tenant_id));
       } else if (OB_FAIL(freezer->tenant_freeze())) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -1397,13 +1399,11 @@ int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
     bool server_empty = false;
     ObCheckServerEmptyArg new_arg;
     new_arg.mode_ = ObCheckServerEmptyArg::BOOTSTRAP;
-    // when OFS mode, this server dir hasn't been created, skip log scan
-    const bool wait_log_scan = true;
-    if (OB_FAIL(check_server_empty(new_arg, wait_log_scan, server_empty))) {
+    if (OB_FAIL(check_server_empty(server_empty))) {
       BOOTSTRAP_LOG(WARN, "check_server_empty failed", K(ret), K(new_arg));
     } else if (!server_empty) {
       ret = OB_ERR_SYS;
-      BOOTSTRAP_LOG(WARN, "observer is not empty", K(ret));
+      BOOTSTRAP_LOG(WARN, "this observer is not empty", KR(ret), K(GCTX.self_addr()));
     } else if (OB_FAIL(pre_bootstrap.prepare_bootstrap(master_rs))) {
       BOOTSTRAP_LOG(ERROR, "failed to prepare boot strap", K(rs_list), K(ret));
     } else {
@@ -1476,10 +1476,8 @@ int ObService::is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::B
              KR(ret), K(arg), K(sys_data_version));
   } else {
     bool server_empty = false;
-    // server dir must be created when 1) local mode, 2) OFS bootstrap this server
-    const bool wait_log_scan = ObCheckServerEmptyArg::BOOTSTRAP == arg.mode_;
-    if (OB_FAIL(check_server_empty(arg, wait_log_scan, server_empty))) {
-      LOG_WARN("check_server_empty failed", K(ret), K(arg));
+    if (OB_FAIL(check_server_empty(server_empty))) {
+      LOG_WARN("check_server_empty failed", K(ret));
     } else {
       is_empty = server_empty;
     }
@@ -1495,6 +1493,9 @@ int ObService::check_server_for_adding_server(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
     LOG_WARN("fail to get sys tenant data version", KR(ret));
   } else if (arg.get_sys_tenant_data_version() > 0
@@ -1504,19 +1505,28 @@ int ObService::check_server_for_adding_server(
         KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
   } else {
     bool server_empty = false;
-    ObCheckServerEmptyArg check_server_empty_arg;
-    check_server_empty_arg.mode_ = ObCheckServerEmptyArg::ADD_SERVER;
-    const bool wait_log_scan = ObCheckServerEmptyArg::BOOTSTRAP == check_server_empty_arg.mode_;
-
-    if (OB_FAIL(check_server_empty(check_server_empty_arg, wait_log_scan, server_empty))) {
-      LOG_WARN("check_server_empty failed", KR(ret), K(check_server_empty_arg), K(wait_log_scan));
+    if (OB_FAIL(check_server_empty(server_empty))) {
+      LOG_WARN("check_server_empty failed", KR(ret));
     } else {
       char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
       ObServerInfoInTable::ObBuildVersion build_version_string;
       ObZone zone;
       int64_t sql_port = GCONF.mysql_port;
       get_package_and_svn(build_version, sizeof(build_version));
-      if (OB_FAIL(zone.assign(GCONF.zone.str()))) {
+
+      if (OB_SUCC(ret) && server_empty) {
+        uint64_t server_id = arg.get_server_id();
+        GCTX.server_id_ = server_id;
+        GCONF.server_id = server_id;
+        if (OB_ISNULL(GCTX.config_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("GCTX.config_mgr_ is null", KR(ret));
+        } else if (OB_FAIL(GCTX.config_mgr_->dump2file())) {
+          LOG_ERROR("fail to execute dump2file, this server cannot be added, "
+              "please clear it and try again", KR(ret));
+        }
+      }
+      if (FAILEDx(zone.assign(GCONF.zone.str()))) {
         LOG_WARN("fail to assign zone", KR(ret), K(GCONF.zone.str()));
       } else if (OB_FAIL(build_version_string.assign(build_version))) {
         LOG_WARN("fail to assign build version", KR(ret), K(build_version));
@@ -1530,7 +1540,7 @@ int ObService::check_server_for_adding_server(
       } else {}
     }
   }
-  LOG_INFO("generate result", KR(ret), K(arg), K(result));
+  FLOG_INFO("[CHECK_SERVER_EMPTY] generate result", KR(ret), K(arg), K(result));
   return ret;
 }
 
@@ -1622,59 +1632,24 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
 }
 
 
-int ObService::check_server_empty(const ObCheckServerEmptyArg &arg, const bool wait_log_scan, bool &is_empty)
+int ObService::check_server_empty(bool &is_empty)
 {
-  // **TODO (linqiucen.lqc): if rs_epoch has been already valid, this server is not empty
   int ret = OB_SUCCESS;
   is_empty = true;
-  UNUSED(wait_log_scan);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    if (ObCheckServerEmptyArg::BOOTSTRAP == arg.mode_) {
-      // "is_valid_heartbeat" is valid:
-      // 1. RS is between "start_service" and "full_service", the server has not added to RS;
-      // 2. RS is in "full_service" and the server has added to RS;
-      // 3. To avoid misjudgment in scenario 1 while add server, this check is skipped here
-      if (lease_state_mgr_.is_valid_heartbeat()) {
-        LOG_WARN("server already in rootservice lease");
-        is_empty = false;
-      }
-    }
-
-    // wait log scan finish
-    //
-    // For 4.0, it is not necessary to wait log scan finished.
-    //
-    // if (is_empty && wait_log_scan) {
-    //   const int64_t WAIT_LOG_SCAN_TIME_US = 2 * 1000 * 1000; // only wait 2s for empty server
-    //   const int64_t SLEEP_INTERVAL_US = 500;
-    //   const int64_t start_time_us = ObTimeUtility::current_time();
-    //   int64_t end_time_us = start_time_us;
-    //   int64_t timeout_ts = THIS_WORKER.get_timeout_ts();
-    //   if (INT64_MAX == THIS_WORKER.get_timeout_ts()) {
-    //     timeout_ts = start_time_us + WAIT_LOG_SCAN_TIME_US;
-    //   }
-    //   while (!stopped_ && !gctx_.par_ser_->is_scan_disk_finished()) {
-    //     end_time_us = ObTimeUtility::current_time();
-    //     if (end_time_us > timeout_ts) {
-    //       LOG_WARN("wait log scan finish timeout", K(timeout_ts), LITERAL_K(WAIT_LOG_SCAN_TIME_US));
-    //       is_empty = false;
-    //       break;
-    //     }
-    //     ob_usleep(static_cast<int32_t>(std::min(timeout_ts - end_time_us, SLEEP_INTERVAL_US)));
-    //   }
-    // }
+    uint64_t server_id_in_GCONF = GCONF.server_id;
     if (is_empty) {
-      // if (!gctx_.par_ser_->is_empty()) {
-      //   LOG_WARN("partition service is not empty");
-      //   is_empty = false;
-      // }
+      if (is_valid_server_id(GCTX.server_id_) || is_valid_server_id(server_id_in_GCONF)) {
+        is_empty = false;
+        FLOG_WARN("[CHECK_SERVER_EMPTY] server_id exists", K(GCTX.server_id_), K(server_id_in_GCONF));
+      }
     }
     if (is_empty) {
       if (!OBSERVER.is_log_dir_empty()) {
-        LOG_WARN("log dir is not empty");
+        FLOG_WARN("[CHECK_SERVER_EMPTY] log dir is not empty");
         is_empty = false;
       }
     }
@@ -2405,6 +2380,7 @@ int ObService::fill_ls_replica(
     share::ObLSReplica &replica)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t unit_id = common::OB_INVALID_ID;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -2424,10 +2400,13 @@ int ObService::fill_ls_replica(
       common::ObRole role = FOLLOWER;
       ObMemberList ob_member_list;
       ObLSReplica::MemberList member_list;
+      GlobalLearnerList learner_list;
       int64_t proposal_id = 0;
       int64_t paxos_replica_number = 0;
       ObLSRestoreStatus restore_status;
       ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
+      ObReplicaType replica_type = REPLICA_TYPE_FULL;
+      bool is_compatible_with_readonly_replica = false;
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
@@ -2435,8 +2414,8 @@ int ObService::fill_ls_replica(
             ObLSID(ls_id),
             ls_handle, ObLSGetMod::OBSERVER_MOD))) {
         LOG_WARN("get ls handle failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list(ob_member_list, paxos_replica_number))) {
-        LOG_WARN("get paxos_member_list from ObLS failed", KR(ret));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
+        LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
         LOG_WARN("get restore status failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
@@ -2446,6 +2425,23 @@ int ObService::fill_ls_replica(
         LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
         LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
+      } else if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
+                                          tenant_id, is_compatible_with_readonly_replica))) {
+        LOG_WARN("fail to check data version for read-only replica", KR(ret), K(tenant_id));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!is_compatible_with_readonly_replica) {
+        replica_type = REPLICA_TYPE_FULL;
+      } else if (learner_list.contains(gctx_.self_addr())) {
+        // if replica exists in learner_list, report it as R-replica.
+        // Otherwise, report as F-replica
+        replica_type = REPLICA_TYPE_READONLY;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
+        LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
       } else if (OB_FAIL(replica.init(
             0,          /*create_time_us*/
             0,          /*modify_time_us*/
@@ -2454,7 +2450,7 @@ int ObService::fill_ls_replica(
             gctx_.self_addr(),         /*server*/
             gctx_.config_->mysql_port, /*sql_port*/
             role,                      /*role*/
-            REPLICA_TYPE_FULL,         /*replica_type*/
+            replica_type,         /*replica_type*/
             proposal_id,              /*proposal_id*/
             is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
             restore_status,            /*restore_status*/
@@ -2463,13 +2459,11 @@ int ObService::fill_ls_replica(
             gctx_.config_->zone.str(), /*zone*/
             paxos_replica_number,                    /*paxos_replica_number*/
             0,                         /*data_size*/
-            0))) {                     /*required_size*/
+            0,
+            member_list,
+            learner_list))) {                     /*required_size*/
         LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role),
-                 K(proposal_id), K(unit_id), K(paxos_replica_number));
-      } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
-        LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
-      } else if (OB_FAIL(replica.set_member_list(member_list))) {
-        LOG_WARN("fail to set member_list", KR(ret), K(member_list), K(replica));
+                 K(proposal_id), K(unit_id), K(paxos_replica_number), K(member_list), K(learner_list));
       } else {
         LOG_TRACE("finish fill ls replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
       }

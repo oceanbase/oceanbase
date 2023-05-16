@@ -233,7 +233,9 @@ public:
   static int get_trans_result(ObExecContext &exec_ctx, transaction::ObTxExecResult &trans_result);
   static int lock_table(ObExecContext &exec_ctx,
                         const uint64_t table_id,
-                        const transaction::tablelock::ObTableLockMode lock_mode);
+                        const ObIArray<ObObjectID> &part_ids,
+                        const transaction::tablelock::ObTableLockMode lock_mode,
+                        const int64_t wait_lock_seconds);
   static void clear_xa_branch(const transaction::ObXATransID &xid, transaction::ObTxDesc *&tx_desc);
   static int check_ls_readable(const uint64_t tenant_id,
                                const share::ObLSID &ls_id,

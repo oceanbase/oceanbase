@@ -70,7 +70,7 @@ public:
   ObSimpleThreadPool();
   virtual ~ObSimpleThreadPool();
 
-  int init(const int64_t thread_num, const int64_t task_num_limit, const char *name = "unknonw", const uint64_t tenant_id = OB_SERVER_TENANT_ID);
+  int init(const int64_t thread_num, const int64_t task_num_limit, const char *name = "unknown", const uint64_t tenant_id = OB_SERVER_TENANT_ID);
   void destroy();
   int push(void *task);
   int64_t get_queue_num() const { return queue_.size(); }

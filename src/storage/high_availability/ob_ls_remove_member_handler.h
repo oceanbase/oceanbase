@@ -24,6 +24,40 @@ namespace oceanbase
 namespace storage
 {
 
+class ObLSChangeMemberType final
+{
+public:
+  enum TYPE : uint8_t
+  {
+    LS_REMOVE_MEMBER = 0,
+    LS_MODIFY_REPLICA_NUMBER = 1,
+    LS_TRANSFORM_MEMBER = 2,
+    MAX,
+  };
+
+public:
+  ObLSChangeMemberType() : type_(MAX) {}
+  ~ObLSChangeMemberType() = default;
+  explicit ObLSChangeMemberType(const TYPE &type);
+  ObLSChangeMemberType &operator=(const TYPE &type);
+  bool operator ==(const ObLSChangeMemberType &other) const { return type_ == other.type_; }
+  bool operator !=(const ObLSChangeMemberType &other) const { return type_ != other.type_; }
+  operator TYPE() const { return type_; }
+  static const char *get_type_str(const ObLSChangeMemberType &type);
+  bool is_valid() const { return type_ >= TYPE::LS_REMOVE_MEMBER && type_ < TYPE::MAX; }
+  bool is_remove_member() const { return TYPE::LS_REMOVE_MEMBER == type_; }
+  bool is_modify_replica_number() const { return TYPE::LS_MODIFY_REPLICA_NUMBER == type_; }
+  bool is_transform_member() const { return TYPE::LS_TRANSFORM_MEMBER == type_; }
+  TYPE get_type() const { return type_; }
+  int set_type(int32_t type);
+  void reset();
+
+  TO_STRING_KV(K_(type));
+
+private:
+  TYPE type_;
+};
+
 struct ObLSRemoveMemberArg final
 {
   ObLSRemoveMemberArg();
@@ -35,20 +69,26 @@ struct ObLSRemoveMemberArg final
       K_(task_id),
       K_(tenant_id),
       K_(ls_id),
+      K_(type),
       K_(remove_member),
       K_(orig_paxos_replica_number),
       K_(new_paxos_replica_number),
       K_(is_paxos_member),
-      K_(member_list));
+      K_(member_list),
+      K_(src),
+      K_(dest));
 
   share::ObTaskId task_id_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  ObLSChangeMemberType type_;
   common::ObReplicaMember remove_member_;
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool is_paxos_member_;
   common::ObMemberList member_list_;
+  common::ObReplicaMember src_;
+  common::ObReplicaMember dest_;
 };
 
 class ObLSRemoveMemberHandler
@@ -63,6 +103,7 @@ public:
   int remove_paxos_member(const obrpc::ObLSDropPaxosReplicaArg &arg);
   int remove_learner_member(const obrpc::ObLSDropNonPaxosReplicaArg &arg);
   int modify_paxos_replica_number(const obrpc::ObLSModifyPaxosReplicaNumberArg &arg);
+  int transform_member(const obrpc::ObLSChangeReplicaArg &arg);
   int check_task_exist(const share::ObTaskId &task_id, bool &is_exist);
   void destroy();
 private:

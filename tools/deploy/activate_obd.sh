@@ -1,5 +1,7 @@
 #!/bin/bash
 DIR=$(readlink -f "$(dirname ${BASH_SOURCE[0]})/../..")
+OB_DO_GLOBAL_CONFIG=~/.ob_do_global
+[[ -f $OB_DO_GLOBAL_CONFIG ]] && source $OB_DO_GLOBAL_CONFIG
 export DEPLOY_PATH=$DIR/tools/deploy
 if grep 'dep_create.sh' $DIR/build.sh 2>&1 >/dev/null
 then
@@ -61,7 +63,7 @@ function _obd_sh_complete_func
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]}"
-  all_cmds["$*"]="prepare deploy redeploy reinstall start stop restart destroy upgrade mysqltest pid ssh less gdb sql mysql oracle edit list sys display create_tenant drop_tenant sysbench tpch tpcc tpcds graph display-trace"
+  all_cmds["$*"]="prepare deploy redeploy reinstall start stop restart destroy upgrade mysqltest pid ssh less gdb sql mysql oracle edit list sys display create_tenant drop_tenant sysbench tpch tpcc tpcds graph display-trace set-config"
   case $prev in
   list)
     return 0

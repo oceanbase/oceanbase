@@ -119,6 +119,18 @@ int ObExprCollectionConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 
+bool ObExprCollectionConstruct::is_match_type(const ObObj &element_obj, pl::ObPLType type)
+{
+  bool is_same = true;
+  if (pl::PL_NESTED_TABLE_TYPE == element_obj.get_meta().get_extend_type() ||
+      pl::PL_VARRAY_TYPE == element_obj.get_meta().get_extend_type()) {
+    is_same = pl::PL_NESTED_TABLE_TYPE == type || pl::PL_VARRAY_TYPE == type;
+  } else {
+    is_same = element_obj.get_meta().get_extend_type() == type;
+  }
+  return is_same;
+}
+
 int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                                                          ObEvalCtx &ctx,
                                                          ObDatum &expr_datum)

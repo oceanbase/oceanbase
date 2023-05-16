@@ -33,6 +33,7 @@ public:
         ref_table_id_(common::OB_INVALID_ID ),
         index_table_id_(common::OB_INVALID_ID ),
         session_id_(0),
+        advisor_table_id_(OB_INVALID_ID),
         is_index_global_(false),
         is_spatial_index_(false),
         use_das_(false),
@@ -140,6 +141,17 @@ public:
       ObSchemaUtils::get_real_table_mappings_tid(index_table_id_) : index_table_id_;
   }
 
+  inline uint64_t get_advisor_table_id() const
+  {
+    return advisor_table_id_;
+  }
+
+  inline void set_advisor_table_id(uint64_t advise_table_id)
+  {
+    advisor_table_id_ = advise_table_id;
+  }
+
+  bool is_duplicate_table();
 
   /**
    *  Get pre query range
@@ -480,6 +492,7 @@ protected: // memeber variables
   uint64_t ref_table_id_; //base table id
   uint64_t index_table_id_;
   uint64_t session_id_; //for temporary table, record session id
+  uint64_t advisor_table_id_; // used for duplicate table replica selection in the plan cache
   bool is_index_global_;
   bool is_spatial_index_;
   // TODO yuming: tells whether the table scan uses shared data access or not

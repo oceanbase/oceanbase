@@ -1348,7 +1348,8 @@ public:
    * Generate a table's location constraint for table scan op
    */
   int get_tbl_loc_cons_for_scan(LocationConstraint &loc_cons);
-
+  // generate a table location constraint for duplicate table's replica selection
+  int get_dup_replica_cons_for_scan(ObDupTabConstraint &dup_rep_cons, bool &found_dup_con);
   /**
    * @brief Generate a table's location constraint for insert op
    */

@@ -66,12 +66,14 @@ struct LocationConstraint
     RightIsSuperior             // right contains all the elements in left set
   };
   enum ConstraintFlag {
-    NoExtraFlag       = 0,
-    IsMultiPartInsert = 1,
+    NoExtraFlag        = 0,
+    IsMultiPartInsert  = 1,
     // 分区裁剪后基表只涉及到一个一级分区
-    SinglePartition   = 1 << 1,
+    SinglePartition    = 1 << 1,
     // 分区裁剪后基表每个一级分区都只涉及一个二级分区
-    SingleSubPartition= 1 << 2
+    SingleSubPartition = 1 << 2,
+    // is duplicate table not in dml
+    DupTabNotInDML     = 1 << 3
   };
   TableLocationKey key_;
   ObTableLocationType phy_loc_type_;
@@ -90,6 +92,7 @@ struct LocationConstraint
   inline bool is_multi_part_insert() const { return constraint_flags_ & IsMultiPartInsert; }
   inline bool is_partition_single() const { return constraint_flags_ & SinglePartition; }
   inline bool is_subpartition_single() const { return constraint_flags_ & SingleSubPartition; }
+  inline bool is_dup_table_not_in_dml() const {return constraint_flags_ & DupTabNotInDML; }
 
   bool operator==(const LocationConstraint &other) const;
   bool operator!=(const LocationConstraint &other) const;
@@ -111,7 +114,10 @@ struct ObLocationConstraintContext
   };
 
   ObLocationConstraintContext()
-      : base_table_constraints_(), strict_constraints_(), non_strict_constraints_()
+      : base_table_constraints_(),
+        strict_constraints_(),
+        non_strict_constraints_(),
+        dup_table_replica_cons_()
   {
   }
   ~ObLocationConstraintContext()
@@ -121,7 +127,10 @@ struct ObLocationConstraintContext
                                         const ObPwjConstraint *right,
                                         InclusionType &inclusion_result);
 
-  TO_STRING_KV(K_(base_table_constraints), K_(strict_constraints), K_(non_strict_constraints));
+  TO_STRING_KV(K_(base_table_constraints),
+               K_(strict_constraints),
+               K_(non_strict_constraints),
+               K_(dup_table_replica_cons));
   // 基表location约束，包括TABLE_SCAN算子上的基表和INSERT算子上的基表
   ObLocationConstraint base_table_constraints_;
   // 严格partition wise join约束，要求同一个分组内的基表分区逻辑上和物理上都相等。
@@ -130,6 +139,9 @@ struct ObLocationConstraintContext
   // 严格partition wise join约束，要求用一个分组内的基表分区物理上相等。
   // 每个分组是一个array，保存了对应基表在base_table_constraints_中的偏移
   common::ObSEArray<ObPwjConstraint *, 8, common::ModulePageAllocator, true> non_strict_constraints_;
+  // constraints for duplicate table's replica selection
+  // if not found values in this array, just use local server's replica.
+  common::ObSEArray<ObDupTabConstraint, 1, common::ModulePageAllocator, true> dup_table_replica_cons_;
 };
 
 class ObIVtScannerableFactory;
@@ -243,7 +255,6 @@ public:
   ObQueryRetryInfo()
     : inited_(false),
       is_rpc_timeout_(false),
-      invalid_servers_(),
       last_query_retry_err_(common::OB_SUCCESS),
       retry_cnt_(0),
       query_switch_leader_retry_timeout_ts_(0)
@@ -259,16 +270,10 @@ public:
     is_rpc_timeout_ = false;
     // 这里不能清除逐次重试累计的成员，如：invalid_servers_，last_query_retry_err_
   }
-  int merge(const ObQueryRetryInfo &other);
 
   bool is_inited() const { return inited_; }
   void set_is_rpc_timeout(bool is_rpc_timeout);
   bool is_rpc_timeout() const;
-  int add_invalid_server_distinctly(const common::ObAddr &invalid_server, bool print_info_log = false);
-  const common::ObIArray<common::ObAddr> &get_invalid_servers() const
-  {
-    return invalid_servers_;
-  }
   void set_last_query_retry_err(int last_query_retry_err)
   {
     last_query_retry_err_ = last_query_retry_err;
@@ -299,13 +304,12 @@ public:
   int64_t get_retry_cnt() const { return retry_cnt_; }
 
 
-  TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(invalid_servers), K_(last_query_retry_err));
+  TO_STRING_KV(K_(inited), K_(is_rpc_timeout), K_(last_query_retry_err));
 
 private:
   bool inited_; // 这个变量用于写一些防御性代码，基本没用
   // 用于标记是否是rpc返回的timeout错误码（包括本地超时和回包中的超时错误码）
   bool is_rpc_timeout_;
-  common::ObArray<common::ObAddr> invalid_servers_;
   // 重试阶段可以将错误码的处理分为三类:
   // 1.重试到超时，将timeout返回给客户端;
   // 2.不再重试的错误码，直接将其返回给客客户端;
@@ -402,14 +406,14 @@ struct ObBaselineKey
   : db_id_(db_id),
     constructed_sql_(constructed_sql),
     sql_id_(sql_id) {}
-  
+
   inline void reset()
   {
     db_id_ = common::OB_INVALID_ID;
     constructed_sql_.reset();
     sql_id_.reset();
   }
-  
+
   TO_STRING_KV(K_(db_id),
                K_(constructed_sql),
                K_(sql_id));
@@ -497,6 +501,9 @@ public:
   // 严格partition wise join约束，要求用一个分组内的基表分区物理上相等。
   // 每个分组是一个array，保存了对应基表在base_table_constraints_中的偏移
   common::ObFixedArray<ObPwjConstraint *, common::ObIAllocator> non_strict_constraints_;
+  // constraints for duplicate table's replica selection
+  // if not found values in this array, just use local server's replica.
+  common::ObFixedArray<ObDupTabConstraint, common::ObIAllocator> dup_table_replica_cons_;
 
   // wether need late compilation
   bool need_late_compile_;

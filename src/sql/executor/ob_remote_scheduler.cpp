@@ -245,16 +245,7 @@ int ObRemoteScheduler::execute_with_sql(ObExecContext &ctx, ObPhysicalPlan *phy_
                                      *handler,
                                      has_sent_task,
                                      has_transfer_err))) {
-      int add_ret = OB_SUCCESS;
-      if (is_data_not_readable_err(ret) || is_server_down_error(ret)) {
-        // 读到落后太多的备机或者正在回放日志的副本了，
-        // 将远端的这个observer加进retry info的invalid servers中
-        if (OB_UNLIKELY(OB_SUCCESS != (add_ret =
-                retry_info->add_invalid_server_distinctly(task.get_runner_svr(), true)))) {
-          LOG_WARN("fail to add remote addr to invalid servers distinctly",
-                   K(ret), K(add_ret), K(task), K(*retry_info));
-        }
-      }
+      LOG_WARN("task execute failed", K(ret));
     }
 
     // handle tx relative info if plan involved in transaction

@@ -223,23 +223,6 @@ int LogNetService::submit_change_config_meta_resp(
   return ret;
 }
 
-int LogNetService::submit_change_mode_meta_req(
-    const common::ObMemberList &member_list,
-    const int64_t &msg_proposal_id,
-    const bool is_applied_mode_meta,
-    const LogModeMeta &mode_meta)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else {
-    LogChangeModeMetaReq req(msg_proposal_id, mode_meta, is_applied_mode_meta);
-    ret = post_request_to_member_list_(member_list, req);
-  }
-  return ret;
-}
-
 int LogNetService::submit_change_mode_meta_resp(
     const common::ObAddr &server,
     const int64_t &msg_proposal_id)

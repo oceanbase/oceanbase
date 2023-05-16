@@ -42,7 +42,7 @@ public:
                                  bool &trans_happened) override;
 protected:
   virtual int adjust_transform_types(uint64_t &transform_types) override;
-  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool &is_valid) override;
+  virtual int is_expected_plan(ObLogPlan *plan, void *check_ctx, bool is_trans_plan, bool &is_valid) override;
 private:
   struct PushDownParam {
     ObSqlBitSet<> table_bit_index_;
@@ -179,7 +179,10 @@ private:
                              ObIArray<PushDownParam> &params, 
                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables,
                               bool disassemble_join = true);
-  int check_hint_valid(ObDMLStmt &stmt, ObIArray<PushDownParam> &params, bool &is_valid);
+  int check_hint_valid(ObDMLStmt &stmt,
+                       ObIArray<PushDownParam> &params,
+                       bool &hint_force_pushdown,
+                       bool &is_valid);
 
 private:
   // help functions

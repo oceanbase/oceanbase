@@ -319,8 +319,12 @@ int ObReceiveRowReader::to_expr(const ObChunkDatumStore::StoredRow *srow,
     ret = OB_ERR_UNEXPECTED;
   } else {
     for (uint32_t i = 0; i < srow->cnt_; ++i) {
-      exprs.at(i)->locate_expr_datum(eval_ctx) = srow->cells()[i];
-      exprs.at(i)->set_evaluated_projected(eval_ctx);
+      if (exprs.at(i)->is_static_const_) {
+        continue;
+      } else {
+        exprs.at(i)->locate_expr_datum(eval_ctx) = srow->cells()[i];
+        exprs.at(i)->set_evaluated_projected(eval_ctx);
+      }
     }
     // deep copy dynamic const expr datum
     if (dynamic_const_exprs.count() > 0) {
@@ -377,19 +381,23 @@ int ObReceiveRowReader::attach_rows(const common::ObIArray<ObExpr*> &exprs,
     LOG_WARN("invalid argument", K(ret));
   } else {
     for (int64_t col_idx = 0; col_idx < exprs.count(); col_idx++) {
-      ObExpr *e = exprs.at(col_idx);
-      ObDatum *datums = e->locate_batch_datums(eval_ctx);
-      if (!e->is_batch_result()) {
-        datums[0] = srows[0]->cells()[col_idx];
+      if (exprs.at(col_idx)->is_static_const_) {
+        continue;
       } else {
-        for (int64_t i = 0; i < read_rows; i++) {
-          datums[i] = srows[i]->cells()[col_idx];
+        ObExpr *e = exprs.at(col_idx);
+        ObDatum *datums = e->locate_batch_datums(eval_ctx);
+        if (!e->is_batch_result()) {
+          datums[0] = srows[0]->cells()[col_idx];
+        } else {
+          for (int64_t i = 0; i < read_rows; i++) {
+            datums[i] = srows[i]->cells()[col_idx];
+          }
         }
+        e->set_evaluated_projected(eval_ctx);
+        ObEvalInfo &info = e->get_eval_info(eval_ctx);
+        info.notnull_ = false;
+        info.point_to_frame_ = false;
       }
-      e->set_evaluated_projected(eval_ctx);
-      ObEvalInfo &info = e->get_eval_info(eval_ctx);
-      info.notnull_ = false;
-      info.point_to_frame_ = false;
     }
     // deep copy dynamic const expr datum
     if (OB_SUCC(ret) && dynamic_const_exprs.count() > 0 && read_rows > 0) {

@@ -1988,15 +1988,10 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(spi_cursor_)) {
-      OV (OB_NOT_NULL(entity_));
-      if (OB_SUCC(ret)) {
-        ObIAllocator &alloc = entity_->get_arena_allocator();
-        OX (spi_cursor_ = alloc.alloc(sizeof(ObSPIResultSet)));
-        OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
-      }
-    }
+  if (OB_ISNULL(spi_cursor_)) {
+    OV (OB_NOT_NULL(get_allocator()));
+    OX (spi_cursor_ = get_allocator()->alloc(sizeof(ObSPIResultSet)));
+    OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
   OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
@@ -2005,7 +2000,8 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
 
 int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
                                         uint64_t tenant_id,
-                                        uint64_t mem_limit)
+                                        uint64_t mem_limit,
+                                        bool is_local_for_update)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *spi_allocator = get_allocator();
@@ -2013,7 +2009,10 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cursor allocator is null.", K(ret), K(spi_allocator), K(id_));
   } else if (OB_ISNULL(spi_cursor_)) {
-    OX (spi_cursor_ = spi_allocator->alloc(sizeof(ObSPICursor)));
+    int64_t alloc_size = is_local_for_update
+      ? (sizeof(ObSPICursor) > sizeof(ObSPIResultSet) ? sizeof(ObSPICursor) : sizeof(ObSPIResultSet))
+      : sizeof(ObSPICursor);
+    OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
   OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator));

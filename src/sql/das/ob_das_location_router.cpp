@@ -20,6 +20,7 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_utils.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/ob_sql_context.h"
 #include "storage/tx/wrs/ob_black_list.h"
 
 namespace oceanbase
@@ -739,77 +740,67 @@ int ObDASTabletMapper::get_partition_id_map(ObObjectID partition_id,
 
 
 ObDASLocationRouter::ObDASLocationRouter(ObIAllocator &allocator)
-  : virtual_server_list_(allocator),
+  : last_errno_(OB_SUCCESS),
+    retry_cnt_(0),
+    all_tablet_list_(allocator),
+    virtual_server_list_(allocator),
     allocator_(allocator)
 {
 }
 
 int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
                                                        const ObTabletID &tablet_id,
-                                                       ObDASTabletLoc &tablet_loc,
-                                                       int64_t expire_renew_time)
+                                                       ObDASTabletLoc &tablet_loc)
 {
   int ret = OB_SUCCESS;
-  bool is_cache_hit = false;
-  bool is_found = false;
   ObLSLocation ls_loc;
   tablet_loc.tablet_id_ = tablet_id;
-  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
-                                          tablet_id,
-                                          expire_renew_time,
-                                          is_cache_hit,
-                                          tablet_loc.ls_id_))) {
+  if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id, tablet_id, tablet_loc.ls_id_))) {
     LOG_WARN("nonblock get ls id failed", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
-                                                 tenant_id,
-                                                 tablet_loc.ls_id_,
-                                                 expire_renew_time,
-                                                 is_cache_hit,
-                                                 ls_loc))) {
-    LOG_WARN("get ls replica location failed", K(ret));
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_get(GCONF.cluster_id,
+                                                          tenant_id,
+                                                          tablet_loc.ls_id_,
+                                                          ls_loc))) {
+    LOG_WARN("get ls replica location failed", K(ret), K(tablet_loc));
   }
-
-  if (OB_UNLIKELY(tablet_loc.need_refresh_)){
-    ObAddr strong_leader;
-    ObBLKey bl_key;
-    bool in_black_list = true;
-    for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ls_loc.get_replica_locations().count(); ++i) {
-      const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
-      if (tmp_replica_loc.is_strong_leader()) {
-        strong_leader = tmp_replica_loc.get_server();
-      } else if (OB_SUCC(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))
-                 && OB_SUCC(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))
-                 && !in_black_list) {
-        tablet_loc.server_ = tmp_replica_loc.get_server();
-        is_found = true;
+  ObBLKey bl_key;
+  bool in_black_list = true;
+  ObSEArray<const ObLSReplicaLocation *, 3> remote_replicas;
+  const ObLSReplicaLocation *local_replica = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ls_loc.get_replica_locations().count(); ++i) {
+    const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
+    if (OB_FAIL(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))) {
+      LOG_WARN("init black list key failed", K(ret));
+    } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
+      LOG_WARN("check in black list failed", K(ret));
+    } else if (!in_black_list) {
+      if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
+        //prefer choose the local replica
+        local_replica = &tmp_replica_loc;
+      } else if (OB_FAIL(remote_replicas.push_back(&tmp_replica_loc))) {
+        LOG_WARN("store tmp replica failed", K(ret));
       }
     }
-    if (!is_found && strong_leader.is_valid()) {
-      tablet_loc.server_ = strong_leader;
-      is_found = true;
-    }
   }
-
-  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < ls_loc.get_replica_locations().count(); ++i) {
-    const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
-    if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
-      //prefer choose the local replica
-      tablet_loc.server_ = tmp_replica_loc.get_server();
-      is_found = true;
+  if (OB_SUCC(ret)) {
+    if (local_replica != nullptr) {
+      tablet_loc.server_ = local_replica->get_server();
+    } else if (remote_replicas.empty()) {
+      ret = OB_NO_READABLE_REPLICA;
+      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc));
+    } else {
+      //no local copy, randomly select a readable replica
+      int64_t select_idx = rand() % remote_replicas.count();
+      const ObLSReplicaLocation *remote_loc = remote_replicas.at(select_idx);
+      tablet_loc.server_ = remote_loc->get_server();
     }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(!is_found)) {
-    //no local copy, randomly select a readable replica
-    int64_t select_idx = rand() % ls_loc.get_replica_locations().count();
-    const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(select_idx);
-    tablet_loc.server_ = tmp_replica_loc.get_server();
   }
   return ret;
 }
 
-int ObDASLocationRouter::get(const ObDASTableLocMeta &loc_meta,
-                             const common::ObTabletID &tablet_id,
-                             ObLSLocation &location)
+int ObDASLocationRouter::nonblock_get(const ObDASTableLocMeta &loc_meta,
+                                      const common::ObTabletID &tablet_id,
+                                      ObLSLocation &location)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
@@ -827,25 +818,76 @@ int ObDASLocationRouter::get(const ObDASTableLocMeta &loc_meta,
   } else if (loc_meta.is_external_table_) {
     ret = get_external_table_ls_location(location);
   } else {
-    int64_t expire_renew_time = 2 * 1000000; // 2s
-    bool is_cache_hit = false;
     ObLSID ls_id;
-    if (OB_FAIL(GCTX.location_service_->get(tenant_id,
-                                            tablet_id,
-                                            expire_renew_time,
-                                            is_cache_hit,
-                                            ls_id))) {
+    if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
+      LOG_WARN("store all tablet list failed", K(ret));
+    } else if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id, tablet_id, ls_id))) {
       LOG_WARN("nonblock get ls id failed", K(ret));
-    } else if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
-                                            tenant_id,
-                                            ls_id,
-                                            expire_renew_time,
-                                            is_cache_hit,
-                                            location))) {
+    } else if (OB_FAIL(GCTX.location_service_->nonblock_get(GCONF.cluster_id,
+                                                            tenant_id,
+                                                            ls_id,
+                                                            location))) {
       LOG_WARN("fail to get tablet locations", K(ret), K(tenant_id), K(ls_id));
     }
   }
 
+  return ret;
+}
+
+int ObDASLocationRouter::nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
+                                                             const ObIArray<ObTabletID> &tablet_ids,
+                                                             const ObIArray<ObObjectID> &partition_ids,
+                                                             const ObIArray<ObObjectID> &first_level_part_ids,
+                                                             ObIArray<ObCandiTabletLoc> &candi_tablet_locs)
+{
+  int ret = OB_SUCCESS;
+  NG_TRACE(get_location_cache_begin);
+  candi_tablet_locs.reset();
+  int64_t N = tablet_ids.count();
+  if (OB_FAIL(candi_tablet_locs.prepare_allocate(N))) {
+    LOG_WARN("Partitoin location list prepare error", K(ret));
+  } else {
+    ObLSLocation location;
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < N; ++i) {
+      location.reset();
+      ObCandiTabletLoc &candi_tablet_loc = candi_tablet_locs.at(i);
+      //after 4.1, all modules that need to access location will use nonblock_get to fetch location
+      //if the location has expired, DAS location router will refresh all accessed tablets
+      if (OB_FAIL(nonblock_get(loc_meta, tablet_ids.at(i), location))) {
+        LOG_WARN("Get partition error, the location cache will be renewed later",
+                 K(ret), "tablet_id", tablet_ids.at(i), K(candi_tablet_loc));
+      } else {
+        ObObjectID first_level_part_id = first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
+        if (OB_FAIL(candi_tablet_loc.set_part_loc_with_only_readable_replica(partition_ids.at(i),
+                                                                             first_level_part_id,
+                                                                             tablet_ids.at(i),
+                                                                             location))) {
+          LOG_WARN("fail to set partition location with only readable replica",
+                   K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
+        }
+        LOG_TRACE("set partition location with only readable replica",
+                 K(ret),K(i), K(location), K(candi_tablet_locs), K(tablet_ids), K(partition_ids));
+      }
+    } // for end
+    //When the OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST error is encountered,
+    //it means that the tablet mapper have been updated,
+    //and it is necessary to record all the tablet ids that have been touched by this query,
+    //and at the end of this query,
+    //the mapping relationship of these tablet ids need to be refreshed;
+    if (OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret && i < N) {
+      int save_ret = OB_SUCCESS;
+      for (; OB_SUCCESS == save_ret && i < N; i++) {
+        if (OB_SUCCESS != (save_ret = all_tablet_list_.push_back(tablet_ids.at(i)))) {
+          LOG_WARN("save the remaining tablet id failed", K(ret), K(save_ret));
+        }
+      }
+      if (save_ret != OB_SUCCESS) {
+        ret = save_ret;
+      }
+    }
+  }
+  NG_TRACE(get_location_cache_end);
   return ret;
 }
 
@@ -856,39 +898,55 @@ int ObDASLocationRouter::get_tablet_loc(const ObDASTableLocMeta &loc_meta,
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
   bool is_vt = is_virtual_table(loc_meta.ref_table_id_);
-  const int64_t expire_renew_time = tablet_loc.need_refresh_ ? INT64_MAX : 2 * 1000000;
   if (OB_UNLIKELY(is_vt)) {
     if (OB_FAIL(get_vt_tablet_loc(loc_meta.ref_table_id_, tablet_id, tablet_loc))) {
       LOG_WARN("get virtual tablet loc failed", K(ret), K(loc_meta));
     }
-  } else if (OB_LIKELY(loc_meta.select_leader_)) {
-    ret = get_leader(tenant_id, tablet_id, tablet_loc, expire_renew_time);
+  } else if (OB_FAIL(all_tablet_list_.push_back(tablet_id))) {
+    LOG_WARN("store tablet id failed", K(ret));
   } else {
-    ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc, expire_renew_time);
+    int64_t retry_cnt = 0;
+    bool need_retry = false;
+    do {
+      need_retry = false;
+      if (OB_LIKELY(loc_meta.select_leader_) || OB_UNLIKELY(last_errno_ == OB_NOT_MASTER)) {
+        //if this statement is retried because of OB_NOT_MASTER, we will choose the leader directly
+        ret = nonblock_get_leader(tenant_id, tablet_id, tablet_loc);
+      } else {
+        ret = nonblock_get_readable_replica(tenant_id, tablet_id, tablet_loc);
+      }
+      if (is_partition_change_error(ret) && OB_SUCCESS == last_errno_ && retry_cnt <= 0) {
+        /*During the execution phase, if nonblock location interface is used to obtain the location
+         * and an exception occurs, retries are necessary.
+         * However, statement-level retries cannot rollback many execution states,
+         * so it is necessary to avoid retries in this scenario as much as possible.
+         * During the execution phase, when encountering a location exception for the first time,
+         * try to refresh the location once synchronously.
+         * If it fails, then proceed with statement-level retries.*/
+        need_retry = true;
+        ++retry_cnt;
+        refresh_location_cache(tablet_id, false, ret);
+        ret = OB_SUCCESS;
+      }
+    } while (OB_SUCCESS == ret && need_retry);
   }
   return ret;
 }
 
-int ObDASLocationRouter::get_leader(const uint64_t tenant_id,
-                                    const ObTabletID &tablet_id,
-                                    ObDASTabletLoc &tablet_loc,
-                                    int64_t expire_renew_time)
+int ObDASLocationRouter::nonblock_get_leader(const uint64_t tenant_id,
+                                             const ObTabletID &tablet_id,
+                                             ObDASTabletLoc &tablet_loc)
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   tablet_loc.tablet_id_ = tablet_id;
-  if (OB_FAIL(GCTX.location_service_->get(tenant_id,
-                                          tablet_id,
-                                          expire_renew_time,
-                                          is_cache_hit,
-                                          tablet_loc.ls_id_))) {
+  if (OB_FAIL(GCTX.location_service_->nonblock_get(tenant_id, tablet_id, tablet_loc.ls_id_))) {
     LOG_WARN("nonblock get ls id failed", K(ret));
-  } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id,
-                                                        tenant_id,
-                                                        tablet_loc.ls_id_,
-                                                        false,
-                                                        tablet_loc.server_))) {
-    LOG_WARN("nonblock get ls location failed", K(ret));
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(GCONF.cluster_id,
+                                                                 tenant_id,
+                                                                 tablet_loc.ls_id_,
+                                                                 tablet_loc.server_))) {
+    LOG_WARN("nonblock get ls location failed", K(ret), K(tablet_loc));
   }
   return ret;
 }
@@ -925,12 +983,10 @@ int ObDASLocationRouter::get_full_ls_replica_loc(const ObObjectID &tenant_id,
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   ObLSLocation ls_loc;
-  if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
-                                          tenant_id,
-                                          tablet_loc.ls_id_,
-                                          0, /*not force to renew*/
-                                          is_cache_hit,
-                                          ls_loc))) {
+  if (OB_FAIL(GCTX.location_service_->nonblock_get(GCONF.cluster_id,
+                                                   tenant_id,
+                                                   tablet_loc.ls_id_,
+                                                   ls_loc))) {
     LOG_WARN("get ls replica location failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_loc.get_replica_locations().count(); ++i) {
@@ -1047,6 +1103,73 @@ OB_NOINLINE int ObDASLocationRouter::get_vt_ls_location(uint64_t table_id,
     }
   }
   return ret;
+}
+
+void ObDASLocationRouter::refresh_location_cache(bool is_nonblock, int err_no)
+{
+  NG_TRACE_TIMES(1, get_location_cache_begin);
+  if (is_master_changed_error(err_no)
+      || is_partition_change_error(err_no)
+      || is_get_location_timeout_error(err_no)
+      || is_server_down_error(err_no)) {
+    FOREACH(tmp_node, all_tablet_list_) {
+      ObTabletID tablet_id = *tmp_node;
+      refresh_location_cache(tablet_id, is_nonblock, err_no);
+    }
+    all_tablet_list_.clear();
+  }
+  NG_TRACE_TIMES(1, get_location_cache_end);
+}
+
+void ObDASLocationRouter::refresh_location_cache(const ObTabletID &tablet_id,
+                                                 bool is_nonblock,
+                                                 int err_no)
+{
+  int ret = OB_SUCCESS;
+  //try to refresh all tablet id, and ignore the tmp error
+  //all_tablet_list_ may contain duplicate tablet_id
+  if (is_nonblock) {
+    if (OB_FAIL(GCTX.location_service_->nonblock_renew(MTL_ID(), tablet_id))) {
+      LOG_WARN("LOCATION: fail to nonblock renew location cache", K(ret), K(tablet_id));
+    } else {
+      LOG_INFO("LOCATION: nonblock renew success", K(tablet_id), K(err_no));
+    }
+  } else {
+    const int64_t expire_renew_time = INT64_MAX; // means must renew location
+    bool is_cache_hit = false;
+    ObLSLocation dummy_loc;
+    ObLSID ls_id;
+    int64_t query_timeout_ts = THIS_WORKER.get_timeout_ts();
+    int64_t now = ObTimeUtility::current_time();
+    if (query_timeout_ts - now > 1 * 1000L * 1000L) {
+      //the timeout limit for "refresh location" is within 1s
+      THIS_WORKER.set_timeout_ts(now + 1 * 1000L * 1000L);
+    }
+    if (OB_FAIL(GCTX.location_service_->get(MTL_ID(),
+                                            tablet_id,
+                                            expire_renew_time,
+                                            is_cache_hit,
+                                            ls_id))) {
+      LOG_WARN("fail to get ls id", K(ret));
+    } else if (OB_FAIL(GCTX.location_service_->get(GCONF.cluster_id,
+                                                   MTL_ID(),
+                                                   ls_id,
+                                                   expire_renew_time,
+                                                   is_cache_hit,
+                                                   dummy_loc))) {
+      LOG_WARN("failed to get location", K(ls_id), K(ret));
+    } else {
+      LOG_INFO("LOCATION: refresh table cache succ", K(tablet_id), K(err_no), K(dummy_loc));
+    }
+    //recover query timeout ts
+    THIS_WORKER.set_timeout_ts(query_timeout_ts);
+  }
+}
+
+void ObDASLocationRouter::set_retry_info(const ObQueryRetryInfo* retry_info)
+{
+  last_errno_ = retry_info->get_last_query_retry_err();
+  retry_cnt_ = retry_info->get_retry_cnt();
 }
 
 int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)

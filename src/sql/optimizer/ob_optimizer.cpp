@@ -606,7 +606,7 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
   } else if (ObGlobalHint::UNSET_PARALLEL != session_force_parallel_dop) {
     ctx_.set_parallel(session_force_parallel_dop);
     ctx_.set_parallel_rule(PXParallelRule::SESSION_FORCE_PARALLEL);
-  } else if (session_enable_manual_dop) {
+  } else if (session_enable_manual_dop || ctx_.get_global_hint().enable_manual_dop()) {
     ctx_.set_parallel_rule(PXParallelRule::MANUAL_TABLE_DOP);
   } else {
     ctx_.set_parallel_rule(PXParallelRule::USE_PX_DEFAULT);

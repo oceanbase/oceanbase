@@ -817,7 +817,7 @@ int ObNetEasy::start()
   }
 
   if (OB_SUCC(ret) && rpc_port_ > 0) {
-    global_ob_listener = &rpc_listener_;
+    ATOMIC_STORE(&global_ob_listener, &rpc_listener_);
     if (!global_poc_server.has_start()) {
       if (OB_FAIL(rpc_listener_.listen_create(rpc_port_))) {
         LOG_ERROR("create listen failed", K(ret));

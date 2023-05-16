@@ -700,6 +700,12 @@ public:
   {
     return seq_schema_;
   }
+  uint64_t get_sequence_id() const {
+    return seq_schema_.get_sequence_id();
+  }
+  uint64_t get_tenant_id() const {
+    return seq_schema_.get_tenant_id();
+  }
   common::ObBitSet<> &get_option_bitset()
   {
     return option_bitset_;
@@ -2748,6 +2754,41 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(purge_num), K_(expire_time), K_(auto_purge));
 };
 
+struct ObCreateDupLSArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateDupLSArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObCreateDupLSArg() {}
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
+  void reset() { tenant_id_ = OB_INVALID_TENANT_ID; }
+  int assign(const ObCreateDupLSArg &arg);
+  int init(const uint64_t tenant_id);
+  int64_t get_tenant_id() const { return tenant_id_; }
+  DECLARE_TO_STRING;
+private:
+  uint64_t tenant_id_;
+private:
+   DISALLOW_COPY_AND_ASSIGN(ObCreateDupLSArg);
+};
+
+struct ObCreateDupLSResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateDupLSResult(): ret_(common::OB_SUCCESS) {}
+  ~ObCreateDupLSResult() {}
+  bool is_valid() const;
+  int assign(const ObCreateDupLSResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCreateDupLSResult);
+private:
+  int ret_;
+};
+
 struct ObCreateLSArg
 {
   OB_UNIS_VERSION(1);
@@ -2835,16 +2876,17 @@ struct ObCreateLSResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObCreateLSResult(): ret_(common::OB_SUCCESS), addr_() {}
+  ObCreateLSResult(): ret_(common::OB_SUCCESS), addr_(), replica_type_(REPLICA_TYPE_FULL) {}
   ~ObCreateLSResult() {}
   bool is_valid() const;
   int assign(const ObCreateLSResult &other);
-  void init(const int ret, const ObAddr &addr)
+  void init(const int ret, const ObAddr &addr, const ObReplicaType &replica_type)
   {
     ret_ = ret;
     addr_ = addr;
+    replica_type_ = replica_type;
   }
-  TO_STRING_KV(K_(ret), K_(addr));
+  TO_STRING_KV(K_(ret), K_(addr), K_(replica_type));
   int get_result() const
   {
     return ret_;
@@ -2853,11 +2895,16 @@ public:
   {
     return addr_;
   }
+  const common::ObReplicaType &get_replica_type() const
+  {
+    return replica_type_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateLSResult);
 private:
   int ret_;
   ObAddr addr_;//for async rpc, dests and results not one-by-one mapping
+  common::ObReplicaType replica_type_;
 };
 
 
@@ -2867,7 +2914,7 @@ struct ObSetMemberListArgV2
 public:
   ObSetMemberListArgV2() : tenant_id_(OB_INVALID_TENANT_ID), id_(),
                            member_list_(), paxos_replica_num_(0),
-                           arbitration_service_() {}
+                           arbitration_service_(), learner_list_() {}
   ~ObSetMemberListArgV2() {}
   bool is_valid() const;
   void reset();
@@ -2876,7 +2923,8 @@ public:
            const share::ObLSID &id,
            const int64_t paxos_replica_num,
            const ObMemberList &member_list,
-           const ObMember &arbitration_service);
+           const ObMember &arbitration_service,
+           const common::GlobalLearnerList &learner_list);
   DECLARE_TO_STRING;
   const ObMemberList& get_member_list() const
   {
@@ -2898,12 +2946,17 @@ public:
   {
     return paxos_replica_num_;
   }
+  const common::GlobalLearnerList& get_learner_list() const
+  {
+    return learner_list_;
+  }
 private:
   int64_t tenant_id_;
   share::ObLSID id_;
   ObMemberList member_list_;
   int64_t paxos_replica_num_;
   ObMember arbitration_service_;
+  common::GlobalLearnerList learner_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetMemberListArgV2);
 };
@@ -2917,7 +2970,7 @@ public:
   bool is_valid() const;
   int assign(const ObSetMemberListResult &other);
   TO_STRING_KV(K_(ret));
-  void set_result(const int ret)
+  void init(const int ret)
   {
     ret_ = ret;
   }
@@ -6595,7 +6648,7 @@ public:
 struct ObEstPartArgElement
 {
   ObEstPartArgElement() : batch_(), scan_flag_(),
-    index_id_(common::OB_INVALID_ID), range_columns_count_(0), tablet_id_(), ls_id_(), tenant_id_(0)
+    index_id_(common::OB_INVALID_ID), range_columns_count_(0), tablet_id_(), ls_id_(), tenant_id_(0), tx_id_()
   {}
   // Essentially, we can use ObIArray<ObNewRange> here
   // For compatibility reason, we still use ObSimpleBatch
@@ -6606,6 +6659,7 @@ struct ObEstPartArgElement
   ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   uint64_t tenant_id_;
+  transaction::ObTransID tx_id_;
 
   TO_STRING_KV(
       K(scan_flag_),
@@ -6614,7 +6668,8 @@ struct ObEstPartArgElement
       K(range_columns_count_),
       K(tablet_id_),
       K(ls_id_),
-      K(tenant_id_));
+      K(tenant_id_),
+      K(tx_id_));
   int64_t get_serialize_size(void) const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(common::ObIAllocator &allocator,
@@ -7493,10 +7548,12 @@ public:
     ADD_SERVER
   };
 
-  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0) {}
-  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version));
-  int init(const Mode &mode, const uint64_t sys_tenant_data_version);
+  ObCheckServerForAddingServerArg(): mode_(ADD_SERVER), sys_tenant_data_version_(0), server_id_(OB_INVALID_ID) {}
+  TO_STRING_KV(K_(mode), K_(sys_tenant_data_version), K_(server_id));
+  int init(const Mode &mode, const uint64_t sys_tenant_data_version, const uint64_t server_id);
   int assign(const ObCheckServerForAddingServerArg &other);
+  bool is_valid() const;
+  void reset();
   Mode get_mode() const
   {
     return mode_;
@@ -7505,9 +7562,14 @@ public:
   {
     return sys_tenant_data_version_;
   }
+  uint64_t get_server_id() const
+  {
+    return server_id_;
+  }
 private:
   Mode mode_;
   uint64_t sys_tenant_data_version_;
+  uint64_t server_id_;
 };
 struct ObCheckServerForAddingServerResult
 {
@@ -7727,18 +7789,6 @@ public:
   void reset();
   TO_STRING_KV(K_(switchover_timestamp), K_(epoch), K_(tenant_id),
                K_(ml_pk_index), K_(pkey_info_start_index));
-};
-
-struct ObPreBootstrapCreateServerWorkingDirArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  uint64_t server_id_;
-  ObPreBootstrapCreateServerWorkingDirArg() : server_id_(OB_INVALID_ID) {}
-  ~ObPreBootstrapCreateServerWorkingDirArg() { reset(); };
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(server_id));
 };
 
 struct ObBatchCheckRes
