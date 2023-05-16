@@ -1806,17 +1806,19 @@ int ObPartTransCtx::tx_end_(const bool commit)
   // suicide before the tnode can be cleanout by concurrent read using state in
   // ctx_tx_data.
   } else if (!commit && FALSE_IT(mt_ctx_.set_tx_rollbacked())) {
-  // STEP4: We need set state in order to informing others of the final status
-  // of my txn. What you need pay attention to is that after this action, others
-  // can cleanout the unfinished txn state and see all your data. We currently
-  // move set_state before mt_ctx_.trans_end for the commit state in order to
-  // accelerate users to see the data state.
-  } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
-    TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
-  // STEP5: We need invoke mt_ctx_.trans_end before state is filled in here
-  // because we relay on the state in the ctx_tx_data_ to callback all txn ops.
+  // STEP4: We need invoke mt_ctx_.trans_end before state is filled in here
+  // otherwise lock_for_read may read an uncallbacked tx node(the owner txn is
+  // during callbacking the txn ops) and use unbackfilled data(such as row_scn)
+  // which may cause unexpected behaviors
   } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
+  // STEP5: We need set state in order to inform others of the final status of
+  // my txn. What you need pay attention to is that after this action, others
+  // can cleanout the unfinished txn state and see all your data. It should
+  // guarantee that all necesary information(including commit_version and
+  // end_scn) is settled.
+  } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
+    TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
   // STEP6: We need insert into the tx_data after all states are filled
   } else if (has_persisted_log_() && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
     TRANS_LOG(WARN, "insert to tx table failed", KR(ret), KPC(this));
