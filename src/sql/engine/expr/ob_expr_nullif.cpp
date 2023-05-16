@@ -78,23 +78,8 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   if (ob_is_real_type(type.get_type()) && SCALE_UNKNOWN_YET != type1.get_scale()) {
     type.set_precision(static_cast<ObPrecision>(ObMySQLUtil::float_length(type1.get_scale())));
   } else if (ob_is_string_type(type.get_type()) || ob_is_enumset_tc(type.get_type())) {
-    ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
-    ObCollationType res_cs_type = CS_TYPE_INVALID;
-    OZ(ObCharset::aggregate_collation(type1.get_collation_level(), type1.get_collation_type(),
-                                      type2.get_collation_level(), type2.get_collation_type(),
-                                      res_cs_level, res_cs_type));
-    if (OB_SUCC(ret)) {
-      type.set_collation_level(res_cs_level);
-      type.set_collation_type(res_cs_type);
-      //deduce length
-      if (type.get_collation_type() == CS_TYPE_BINARY) {
-        ObLength len_in_byte = -1;
-        OZ(type1.get_length_for_meta_in_bytes(len_in_byte));
-        OX(type.set_length(len_in_byte));
-      } else {
-        type.set_length(type1.get_length());
-      }
-    }
+    type.set_collation_level(type1.get_collation_level());
+    type.set_collation_type(type1.get_collation_type());
   }
   if (ob_is_enumset_tc(type.get_type()) || ob_is_enumset_inner_tc(type.get_type())) {
     type.set_varchar();
@@ -116,8 +101,6 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             type1.set_calc_type(calc_type);
             type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
           }
-          //if (ob_is_enumset_tc(type2.get_type())) {
-          //}
         }
         // set calc type for type2 no matter whether calc_type is varchar or not, and no matther which param is enum.
         type2.set_calc_type(calc_type);
@@ -127,14 +110,6 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
     if (OB_SUCC(ret)) {
       type.set_calc_meta(cmp_type.get_calc_meta());
       type.set_calc_accuracy(cmp_type.get_calc_accuracy());
-      if (ob_is_string_type(type1.get_type())
-          && ob_is_string_type(type2.get_type())
-          && ob_obj_type_class(type1.get_type()) != ob_obj_type_class(type2.get_type())
-          && ob_enable_lob_locator_v2()) {
-        // strings and texts cannot compare directly in 4.1
-        type1.set_calc_type(type.get_calc_meta().get_type());
-        type2.set_calc_type(type.get_calc_meta().get_type());
-      }
     }
   }
   return ret;
