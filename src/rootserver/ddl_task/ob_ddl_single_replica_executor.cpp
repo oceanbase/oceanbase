@@ -148,6 +148,9 @@ int ObDDLSingleReplicaExecutor::schedule_task()
         } else if (OB_FAIL(location_service->get_leader(GCONF.cluster_id, tenant_id_, ls_id, force_renew, leader_addr))) {
           LOG_WARN("get leader failed", K(ret), K(tenant_id_), K(ls_id));
         } else if (FALSE_IT(arg.ls_id_ = ls_id)) {
+        } else if (!arg.is_valid()) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("fail to send build single replica request", K(ret), K(arg));
         } else if (OB_FAIL(proxy.call(leader_addr, rpc_timeout, tenant_id_, arg))) {
           LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
         } else if (OB_FAIL(idxs.push_back(i))) {

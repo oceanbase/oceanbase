@@ -3108,17 +3108,6 @@ int ObCalcColumnChecksumRequestArg::SingleItem::assign(const SingleItem &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(
-    ObCalcColumnChecksumRequestArg,
-    tenant_id_,
-    target_table_id_,
-    schema_version_,
-    execution_id_,
-    snapshot_version_,
-    source_table_id_,
-    task_id_,
-    calc_items_);
-
 bool ObCalcColumnChecksumRequestArg::is_valid() const
 {
   bool bret = OB_INVALID_ID != tenant_id_ &&  OB_INVALID_ID != target_table_id_
@@ -3140,6 +3129,53 @@ void ObCalcColumnChecksumRequestArg::reset()
   execution_id_ = -1;
   task_id_ = 0;
 }
+
+OB_DEF_SERIALIZE(ObCalcColumnChecksumRequestArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              tenant_id_,
+              target_table_id_,
+              schema_version_,
+              execution_id_,
+              snapshot_version_,
+              source_table_id_,
+              task_id_,
+              calc_items_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObCalcColumnChecksumRequestArg)
+{
+  int ret = OB_SUCCESS;
+  execution_id_ = 0; // set default to 0
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              target_table_id_,
+              schema_version_,
+              execution_id_,
+              snapshot_version_,
+              source_table_id_,
+              task_id_,
+              calc_items_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObCalcColumnChecksumRequestArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              tenant_id_,
+              target_table_id_,
+              schema_version_,
+              execution_id_,
+              snapshot_version_,
+              source_table_id_,
+              task_id_,
+              calc_items_);
+  return len;
+}
+
 
 OB_SERIALIZE_MEMBER(ObCalcColumnChecksumRequestRes, ret_codes_);
 
@@ -6400,10 +6436,6 @@ OB_SERIALIZE_MEMBER(ObLogReqUnloadProxyResponse, err_);
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressRequest, agency_addr_seq_, principal_addr_seq_);
 OB_SERIALIZE_MEMBER(ObLogReqLoadProxyProgressResponse, err_, progress_);
 
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, source_tablet_id_, dest_tablet_id_,
-  source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_, execution_id_,
-  parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_);
-
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
   int ret = OB_SUCCESS;
@@ -6425,6 +6457,73 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
   return ret;
 }
 
+OB_DEF_SERIALIZE(ObDDLBuildSingleReplicaRequestArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              tenant_id_,
+              ls_id_,
+              source_tablet_id_,
+              dest_tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              schema_version_,
+              snapshot_version_,
+              ddl_type_,
+              task_id_,
+              execution_id_,
+              parallelism_,
+              tablet_task_id_,
+              data_format_version_,
+              consumer_group_id_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDDLBuildSingleReplicaRequestArg)
+{
+  int ret = OB_SUCCESS;
+  execution_id_ = 0; // set default to 0;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              ls_id_,
+              source_tablet_id_,
+              dest_tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              schema_version_,
+              snapshot_version_,
+              ddl_type_,
+              task_id_,
+              execution_id_,
+              parallelism_,
+              tablet_task_id_,
+              data_format_version_,
+              consumer_group_id_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDDLBuildSingleReplicaRequestArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              tenant_id_,
+              ls_id_,
+              source_tablet_id_,
+              dest_tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              schema_version_,
+              snapshot_version_,
+              ddl_type_,
+              task_id_,
+              execution_id_,
+              parallelism_,
+              tablet_task_id_,
+              data_format_version_,
+              consumer_group_id_);
+  return len;
+}
+
 OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestResult, ret_code_, row_inserted_, row_scanned_);
 
 int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRequestResult &other)
@@ -6435,8 +6534,6 @@ int ObDDLBuildSingleReplicaRequestResult::assign(const ObDDLBuildSingleReplicaRe
   row_scanned_ = other.row_scanned_;
   return ret;
 }
-
-OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaResponseArg, tenant_id_, ls_id_, tablet_id_, source_table_id_, dest_schema_id_, ret_code_, snapshot_version_, schema_version_, task_id_, execution_id_, row_scanned_, row_inserted_);
 
 int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResponseArg &other)
 {
@@ -6454,6 +6551,64 @@ int ObDDLBuildSingleReplicaResponseArg::assign(const ObDDLBuildSingleReplicaResp
   row_scanned_ = other.row_scanned_;
   row_inserted_ = other.row_inserted_;
   return ret;
+}
+
+OB_DEF_SERIALIZE(ObDDLBuildSingleReplicaResponseArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              tenant_id_,
+              ls_id_,
+              tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              ret_code_,
+              snapshot_version_,
+              schema_version_,
+              task_id_,
+              execution_id_,
+              row_scanned_,
+              row_inserted_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDDLBuildSingleReplicaResponseArg)
+{
+  int ret = OB_SUCCESS;
+  execution_id_ = 0; // set default to 0;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              ls_id_,
+              tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              ret_code_,
+              snapshot_version_,
+              schema_version_,
+              task_id_,
+              execution_id_,
+              row_scanned_,
+              row_inserted_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDDLBuildSingleReplicaResponseArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              tenant_id_,
+              ls_id_,
+              tablet_id_,
+              source_table_id_,
+              dest_schema_id_,
+              ret_code_,
+              snapshot_version_,
+              schema_version_,
+              task_id_,
+              execution_id_,
+              row_scanned_,
+              row_inserted_);
+  return len;
 }
 
 int ObCreateDirectoryArg::assign(const ObCreateDirectoryArg &other)
@@ -7447,9 +7602,48 @@ int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_,
-                    table_id_, execution_id_, ddl_task_id_);
+OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLCommitLogArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              tenant_id_,
+              ls_id_,
+              table_key_,
+              start_scn_,
+              table_id_,
+              execution_id_,
+              ddl_task_id_);
+  return ret;
+}
 
+OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLCommitLogArg)
+{
+  int ret = OB_SUCCESS;
+  execution_id_ = 0; // set default to 0;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              tenant_id_,
+              ls_id_,
+              table_key_,
+              start_scn_,
+              table_id_,
+              execution_id_,
+              ddl_task_id_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLCommitLogArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              tenant_id_,
+              ls_id_,
+              table_key_,
+              start_scn_,
+              table_id_,
+              execution_id_,
+              ddl_task_id_);
+  return len;
+}
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {

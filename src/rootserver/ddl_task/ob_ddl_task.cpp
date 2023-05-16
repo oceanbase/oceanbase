@@ -2300,33 +2300,38 @@ int send_batch_calc_rpc(obrpc::ObSrvRpcProxy &rpc_proxy,
 {
   int ret = OB_SUCCESS;
   int64_t rpc_timeout = 0;
-  const int64_t tablet_count = arg.calc_items_.count();
-  if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_count, rpc_timeout))) {
-    LOG_WARN("get ddl rpc timeout failed", K(ret));
-  } else if (OB_FAIL(rpc_proxy.to(leader_addr)
-                       .by(arg.tenant_id_)
-                       .timeout(rpc_timeout)
-                       .calc_column_checksum_request(arg, res))) {
-    LOG_WARN("send rpc failed", K(ret), K(arg), K(leader_addr), K(arg.tenant_id_));
-  } else if (res.ret_codes_.count() != arg.calc_items_.count() || res.ret_codes_.count() != (group_end_idx - group_start_idx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("return codes count not match the argument", K(ret), K(arg.calc_items_.count()),
-        K(res.ret_codes_.count()), "group_count", group_end_idx - group_start_idx);
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to send batch calc rpc", K(ret), K(arg));
   } else {
-    LOG_INFO("send checksum validation task", K(arg));
-    SpinWLockGuard guard(item_lock);
-    for (int64_t j = group_start_idx, k = 0; j < group_end_idx; ++j, ++k) { // ignore ret
-      PartitionColChecksumStat *item = reinterpret_cast<PartitionColChecksumStat *>(send_array.at(j).other_info_);
-      int ret_code = res.ret_codes_.at(k);
-      if (OB_SUCCESS == ret_code) {
-        item->snapshot_ = arg.snapshot_version_;
-        item->col_checksum_stat_ = CCS_INVALID;
-        ++send_succ_count;
-      } else if (OB_EAGAIN == ret_code || OB_HASH_EXIST == ret_code) { // ignore
-        LOG_INFO("send checksum rpc not success", K(ret), KPC(item));
-      } else {
-        ret = OB_SUCCESS == ret ? ret_code : ret; // keep first error code
-        LOG_WARN("fail to calc column checksum request", K(ret_code), K(arg), KPC(item));
+    const int64_t tablet_count = arg.calc_items_.count();
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tablet_count, rpc_timeout))) {
+      LOG_WARN("get ddl rpc timeout failed", K(ret));
+    } else if (OB_FAIL(rpc_proxy.to(leader_addr)
+                        .by(arg.tenant_id_)
+                        .timeout(rpc_timeout)
+                        .calc_column_checksum_request(arg, res))) {
+      LOG_WARN("send rpc failed", K(ret), K(arg), K(leader_addr), K(arg.tenant_id_));
+    } else if (res.ret_codes_.count() != arg.calc_items_.count() || res.ret_codes_.count() != (group_end_idx - group_start_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("return codes count not match the argument", K(ret), K(arg.calc_items_.count()),
+          K(res.ret_codes_.count()), "group_count", group_end_idx - group_start_idx);
+    } else {
+      LOG_INFO("send checksum validation task", K(arg));
+      SpinWLockGuard guard(item_lock);
+      for (int64_t j = group_start_idx, k = 0; j < group_end_idx; ++j, ++k) { // ignore ret
+        PartitionColChecksumStat *item = reinterpret_cast<PartitionColChecksumStat *>(send_array.at(j).other_info_);
+        int ret_code = res.ret_codes_.at(k);
+        if (OB_SUCCESS == ret_code) {
+          item->snapshot_ = arg.snapshot_version_;
+          item->col_checksum_stat_ = CCS_INVALID;
+          ++send_succ_count;
+        } else if (OB_EAGAIN == ret_code || OB_HASH_EXIST == ret_code) { // ignore
+          LOG_INFO("send checksum rpc not success", K(ret), KPC(item));
+        } else {
+          ret = OB_SUCCESS == ret ? ret_code : ret; // keep first error code
+          LOG_WARN("fail to calc column checksum request", K(ret_code), K(arg), KPC(item));
+        }
       }
     }
   }

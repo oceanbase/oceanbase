@@ -342,7 +342,36 @@ int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t data_
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_);
+OB_DEF_SERIALIZE(ObDDLStartLog)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              table_key_,
+              data_format_version_,
+              execution_id_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDDLStartLog)
+{
+  int ret = OB_SUCCESS;
+  execution_id_ = 0; // set default to 0;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              table_key_,
+              data_format_version_,
+              execution_id_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDDLStartLog)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              table_key_,
+              data_format_version_,
+              execution_id_);
+  return len;
+}
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()
