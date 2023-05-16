@@ -10627,7 +10627,7 @@ bool ObHostnameStuct::is_ip_match(const common::ObString &client_ip, common::ObS
   }
 
   if (is_ip_valied) {
-    ret_bool = (client.as_subnet(mask) == host);
+    ret_bool = (client.as_subnet(mask) == host.as_subnet(mask));
   }
   return ret_bool;
 }
