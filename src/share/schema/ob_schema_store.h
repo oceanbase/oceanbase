@@ -32,7 +32,8 @@ public:
       refreshed_version_(0),
       received_version_(0),
       checked_sys_version_(0),
-      baseline_schema_version_(common::OB_INVALID_VERSION) {}
+      baseline_schema_version_(common::OB_INVALID_VERSION),
+      consensus_version_(0) {}
   ~ObSchemaStore() {}
   int init(const uint64_t tenant_id,
            const int64_t init_version_count,
@@ -42,16 +43,19 @@ public:
   void update_received_version(int64_t version);
   void update_checked_sys_version(int64_t version);
   void update_baseline_schema_version(int64_t version);
+  void update_consensus_version(int64_t version);
   int64_t get_refreshed_version() const { return ATOMIC_LOAD(&refreshed_version_); }
   int64_t get_received_version() const { return ATOMIC_LOAD(&received_version_); }
   int64_t get_checked_sys_version() const { return ATOMIC_LOAD(&checked_sys_version_); }
   int64_t get_baseline_schema_version() const { return ATOMIC_LOAD(&baseline_schema_version_); }
+  int64_t get_consensus_version() const { return ATOMIC_LOAD(&consensus_version_); }
 
   int64_t tenant_id_;
   int64_t refreshed_version_;
   int64_t received_version_;
   int64_t checked_sys_version_;
   int64_t baseline_schema_version_;
+  int64_t consensus_version_;
   ObSchemaMgrCache schema_mgr_cache_;
   ObSchemaMgrCache schema_mgr_cache_for_liboblog_;
 };
@@ -79,4 +83,3 @@ private:
 }; // end namespace oceanbase
 
 #endif /* OCEANBASE_SCHEMA_OB_TENANT_SCHEMA_STORE_H_ */
-

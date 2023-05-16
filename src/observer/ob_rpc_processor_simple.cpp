@@ -2275,5 +2275,17 @@ int ObSyncRewriteRulesP::process()
   return ret;
 }
 
+int ObBroadcastConsensusVersionP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->broadcast_consensus_version(arg_, result_);
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

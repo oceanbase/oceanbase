@@ -131,6 +131,9 @@ public:
   int stop_partition_write(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int check_partition_log(const obrpc::Int64 &switchover_timestamp, obrpc::Int64 &result);
   int get_wrs_info(const obrpc::ObGetWRSArg &arg, obrpc::ObGetWRSResult &result);
+  int broadcast_consensus_version(
+      const obrpc::ObBroadcastConsensusVersionArg &arg,
+      obrpc::ObBroadcastConsensusVersionRes &result);
   ////////////////////////////////////////////////////////////////
   // ObRpcFetchSysLSP @RS load balance
   int fetch_sys_ls(share::ObLSReplica &replica);

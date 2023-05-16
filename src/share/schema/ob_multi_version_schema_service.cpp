@@ -3608,6 +3608,47 @@ int ObMultiVersionSchemaService::get_tenant_received_broadcast_version(
   return ret;
 }
 
+int ObMultiVersionSchemaService::get_tenant_broadcast_consensus_version(
+    const uint64_t tenant_id,
+    int64_t &consensus_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    const ObSchemaStore* schema_store = NULL;
+    if (NULL == (schema_store = schema_store_map_.get(tenant_id))) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to get schema_store", KR(ret));
+    } else {
+      consensus_version = schema_store->get_consensus_version();
+    }
+  }
+  return ret;
+}
+
+int ObMultiVersionSchemaService::set_tenant_broadcast_consensus_version(
+    const uint64_t tenant_id,
+    const int64_t consensus_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id), K(consensus_version));
+  } else {
+    ObSchemaStore* schema_store = NULL;
+    if (NULL == (schema_store = schema_store_map_.get(tenant_id))) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to get schema_store", KR(ret));
+    } else {
+      schema_store->update_consensus_version(consensus_version);
+      LOG_INFO("try to set tenant broadcast consensus version", KR(ret), K(tenant_id), K(consensus_version));
+    }
+  }
+  return ret;
+}
+
 int ObMultiVersionSchemaService::set_tenant_received_broadcast_version(
     const uint64_t tenant_id,
     const int64_t version)

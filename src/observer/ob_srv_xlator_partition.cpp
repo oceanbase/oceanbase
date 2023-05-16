@@ -277,4 +277,5 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRefreshTenantInfoP, gctx_);
 
   RPC_PROCESSOR(ObSyncRewriteRulesP, gctx_);
+  RPC_PROCESSOR(ObBroadcastConsensusVersionP, gctx_);
 }
