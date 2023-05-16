@@ -1180,6 +1180,8 @@ int ObTabletCopyFinishTask::process()
     LOG_WARN("failed to create new table store with minor", K(ret), K_(tablet_id));
   } else if (OB_FAIL(trim_tablet_())) {
     LOG_WARN("failed to trim tablet", K(ret), K_(tablet_id));
+  } else if (OB_FAIL(check_tablet_valid_())) {
+    LOG_WARN("failed to check tablet valid", K(ret), KPC(this));
   } else if (OB_FAIL(update_tablet_data_status_())) {
     LOG_WARN("failed to update tablet data status", K(ret), K(tablet_id_));
   }
@@ -1414,6 +1416,26 @@ int ObTabletCopyFinishTask::trim_tablet_()
   } else if (tablet->get_tablet_meta().has_next_tablet_
       && OB_FAIL(ls_->trim_rebuild_tablet(tablet_id_, is_rollback))) {
     LOG_WARN("failed to trim rebuild tablet", K(ret), K(tablet_id_));
+  }
+  return ret;
+}
+
+int ObTabletCopyFinishTask::check_tablet_valid_()
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  const int64_t timeout_us = ObTabletCommon::NO_CHECK_GET_TABLET_TIMEOUT_US;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet finish restore task do not init", K(ret));
+  } else if (OB_FAIL(ls_->get_tablet(tablet_id_, tablet_handle, timeout_us))) {
+    LOG_WARN("failed to get tablet", K(ret), K(tablet_id_), K(timeout_us));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_id_));
+  } else if (OB_FAIL(tablet->check_valid(true/*ignore_ha_status*/))) {
+    LOG_WARN("failed to check valid", K(ret), KPC(tablet));
   }
   return ret;
 }

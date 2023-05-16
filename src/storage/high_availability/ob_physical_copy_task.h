@@ -232,6 +232,7 @@ private:
   int get_tables_handle_ptr_(
       const ObITable::TableKey &table_key,
       ObTablesHandleArray *&table_handle_ptr);
+  int check_tablet_valid_();
 
 private:
   bool is_inited_;
