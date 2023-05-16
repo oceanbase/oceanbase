@@ -1836,10 +1836,6 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.savepoint_,
                                   ctx_born_epoch,
                                   msg.tx_ptr_);
-  if (OB_NOT_NULL(msg.tx_ptr_)) {
-    ob_free((void*)msg.tx_ptr_);
-    msg.tx_ptr_ = NULL;
-  }
   result.status_ = ret;
   result.addr_ = self_;
   result.born_epoch_ = ctx_born_epoch;
