@@ -26,6 +26,7 @@
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/memtable/ob_memtable.h"
+#include "storage/memtable/ob_memtable_util.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_meta_pointer_map.h"
 #include "storage/meta_mem/ob_meta_pointer.h"
@@ -338,6 +339,7 @@ private:
   static const int64_t MIN_MINOR_SSTABLE_GC_INTERVAL_US = 1 * 1000 * 1000L; // 1s
   static const int64_t REFRESH_CONFIG_INTERVAL_US = 10 * 1000 * 1000L; // 10s
   static const int64_t ONE_ROUND_RECYCLE_COUNT_THRESHOLD = 20000L;
+  static const int64_t BATCH_MEMTABLE_GC_THRESHOLD = 100L;
   static const int64_t DEFAULT_TABLET_WASH_HEAP_COUNT = 16;
   static const int64_t DEFAULT_MINOR_SSTABLE_SET_COUNT = 49999;
   static const int64_t SSTABLE_GC_MAX_TIME = 500; // 500us
@@ -433,6 +435,9 @@ private:
       common::ObIArray<ObTenantMetaMemStatus> &info) const;
   int get_allocator_info(common::ObIArray<ObTenantMetaMemStatus> &info) const;
   int exist_pinned_tablet(const ObTabletMapKey &key);
+  int push_memtable_into_gc_map_(memtable::ObMemtable *memtable);
+  void batch_gc_memtable_();
+
 private:
   int cmp_ret_;
   HeapCompare compare_;
@@ -452,6 +457,8 @@ private:
   common::SpinRWLock sstable_set_lock_;
   ObBucketLock pin_set_lock_;
   PinnedTabletSet pinned_tablet_set_; // tablets which are in multi source data transaction procedure
+
+  common::hash::ObHashMap<share::ObLSID, memtable::ObMemtableSet*> gc_memtable_map_;
 
   ObTenantMetaObjPool<memtable::ObMemtable> memtable_pool_;
   ObTenantMetaObjPool<blocksstable::ObSSTable> sstable_pool_;

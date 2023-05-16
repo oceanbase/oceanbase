@@ -397,7 +397,9 @@ public:
   uint64_t get_tenant_id() const;
   inline bool has_read_elr_data() const { return read_elr_data_; }
   int remove_callbacks_for_fast_commit();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt, const share::SCN max_applied_scn);
+  int remove_callback_for_uncommited_txn(
+    const memtable::ObMemtableSet *memtable_set,
+    const share::SCN max_applied_scn);
   int rollback(const int64_t seq_no, const int64_t from_seq_no);
   bool is_all_redo_submitted();
   bool is_for_replay() const { return trans_mgr_.is_for_replay(); }

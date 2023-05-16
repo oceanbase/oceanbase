@@ -609,10 +609,10 @@ int ObTransService::handle_redo_sync_task_(ObDupTableRedoSyncTask *task, bool &n
   return OB_NOT_SUPPORTED;
 }
 
-int ObTransService::remove_callback_for_uncommited_txn(memtable::ObMemtable* mt)
+int ObTransService::remove_callback_for_uncommited_txn(
+  const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
-  ObLSID ls_id;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObTransService not inited");
@@ -620,24 +620,20 @@ int ObTransService::remove_callback_for_uncommited_txn(memtable::ObMemtable* mt)
   } else if (OB_UNLIKELY(!is_running_)) {
     TRANS_LOG(WARN, "ObTransService is not running");
     ret = OB_NOT_RUNNING;
-  } else if (OB_ISNULL(mt)) {
+  } else if (OB_ISNULL(memtable_set)) {
     TRANS_LOG(WARN, "memtable is NULL");
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(mt->get_ls_id(ls_id))) {
-    TRANS_LOG(WARN, "get ls id failed", K(ret));
   } else if (!ls_id.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "unexpected ls id", KR(ret), K(ls_id), KP(mt));
-  } else if (OB_FAIL(tx_ctx_mgr_.remove_callback_for_uncommited_tx(ls_id, mt))) {
-    TRANS_LOG(WARN, "participant remove callback for uncommitt txn failed", KR(ret), K(ls_id), KP(mt));
+    TRANS_LOG(ERROR, "unexpected ls id", KR(ret), K(ls_id), KPC(memtable_set));
+  } else if (OB_FAIL(tx_ctx_mgr_.remove_callback_for_uncommited_tx(ls_id, memtable_set))) {
+    TRANS_LOG(WARN, "participant remove callback for uncommitt txn failed", KR(ret), K(ls_id), KP(memtable_set));
   } else {
-    TRANS_LOG(DEBUG, "participant remove callback for uncommitt txn success", K(ls_id), KP(mt));
+    TRANS_LOG(DEBUG, "participant remove callback for uncommitt txn success", K(ls_id), KP(memtable_set));
   }
 
   return ret;
 }
-
-
 
 /**
  * get snapshot_version for stmt

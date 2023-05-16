@@ -1583,7 +1583,8 @@ int64_t ObPartTransCtx::to_string(char* buf, const int64_t buf_len) const
   return len1 + len2;
 }
 
-int ObPartTransCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
+int ObPartTransCtx::remove_callback_for_uncommited_txn(
+  const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -1591,12 +1592,13 @@ int ObPartTransCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(mt)) {
+  } else if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "memtable is NULL", K(mt));
+    TRANS_LOG(WARN, "memtable is NULL", K(memtable_set));
   } else if (OB_UNLIKELY(is_exiting_)) {
-  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(mt, exec_info_.max_applied_log_ts_))) {
-    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_), K(exec_info_.max_applied_log_ts_));
+  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(memtable_set, exec_info_.max_applied_log_ts_))) {
+    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_),
+              K(memtable_set), K(exec_info_.max_applied_log_ts_));
   }
 
   return ret;

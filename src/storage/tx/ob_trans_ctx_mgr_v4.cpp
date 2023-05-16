@@ -556,7 +556,7 @@ int ObLSTxCtxMgr::get_tx_ctx_directly_from_hash_map(const ObTransID &tx_id, ObPa
   return ret;
 }
 
-int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(ObMemtable* mt)
+int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("remove callback for uncommited txn", 10L * 1000L);
@@ -564,17 +564,15 @@ int ObLSTxCtxMgr::remove_callback_for_uncommited_tx(ObMemtable* mt)
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr not inited", K_(ls_id));
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(mt)) {
+  } else if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "memtable is null", K_(ls_id));
-  } else if (mt->get_timestamp() < online_ts_) {
-    TRANS_LOG(INFO, "pass old memtable", KPC(mt), K(online_ts_), K(ls_id_));
   } else {
-    ObRemoveCallbackFunctor fn(mt);
+    ObRemoveCallbackFunctor fn(memtable_set);
     if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-      TRANS_LOG(WARN, "for each transaction context error", KR(ret), KP(mt));
+      TRANS_LOG(WARN, "for each transaction context error", KR(ret), KPC(memtable_set));
     } else {
-      TRANS_LOG(DEBUG, "remove callback for uncommited txn success", KP(mt));
+      TRANS_LOG(DEBUG, "remove callback for uncommited txn success", KPC(memtable_set));
     }
   }
   return ret;
@@ -2037,7 +2035,8 @@ int ObTxCtxMgr::get_min_undecided_scn(const ObLSID &ls_id, SCN &scn)
   return ret;
 }
 
-int ObTxCtxMgr::remove_callback_for_uncommited_tx(const ObLSID &ls_id, ObMemtable* mt)
+int ObTxCtxMgr::remove_callback_for_uncommited_tx(
+  const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
@@ -2049,13 +2048,13 @@ int ObTxCtxMgr::remove_callback_for_uncommited_tx(const ObLSID &ls_id, ObMemtabl
     TRANS_LOG(WARN, "invalid argument", K(ls_id));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(get_ls_tx_ctx_mgr(ls_id, ls_tx_ctx_mgr))) {
-    TRANS_LOG(WARN, "get participant transaction context mgr error", KP(mt));
+    TRANS_LOG(WARN, "get participant transaction context mgr error", KP(memtable_set));
     ret = OB_PARTITION_NOT_EXIST;
   } else {
-    if (OB_FAIL(ls_tx_ctx_mgr->remove_callback_for_uncommited_tx(mt))) {
-      TRANS_LOG(WARN, "get remove callback for uncommited txn failed", KR(ret), KP(mt));
+    if (OB_FAIL(ls_tx_ctx_mgr->remove_callback_for_uncommited_tx(memtable_set))) {
+      TRANS_LOG(WARN, "get remove callback for uncommited txn failed", KR(ret), KP(memtable_set));
     } else {
-      TRANS_LOG(DEBUG, "get remove callback for uncommited txn succeed", KP(mt));
+      TRANS_LOG(DEBUG, "get remove callback for uncommited txn succeed", KP(memtable_set));
     }
     revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr);
   }
