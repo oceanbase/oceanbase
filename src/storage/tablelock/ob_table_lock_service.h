@@ -129,6 +129,7 @@ private:
     // share::ObLSArray ls_list_; // related ls list
     int64_t schema_version_;             // the schema version of the table to be locked
     bool tx_is_killed_;                   // used to kill a trans.
+    bool is_from_sql_;
 
     // use to kill the whole lock table stmt.
     int64_t stmt_savepoint_;
@@ -138,7 +139,8 @@ private:
                  K(origin_timeout_us_), K(timeout_us_),
                  K(abs_timeout_ts_), KPC(tx_desc_), K(tx_param_),
                  K(current_savepoint_), K(need_rollback_ls_),
-                 K(tablet_list_), K(schema_version_), K(tx_is_killed_), K(stmt_savepoint_));
+                 K(tablet_list_), K(schema_version_), K(tx_is_killed_),
+                 K(is_from_sql_), K(stmt_savepoint_));
   };
 public:
   class ObOBJLockGarbageCollector

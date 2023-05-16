@@ -54,6 +54,7 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx(const ObTableLockTaskType tas
     tablet_list_(),
     schema_version_(-1),
     tx_is_killed_(false),
+    is_from_sql_(false),
     stmt_savepoint_(-1)
 {
   abs_timeout_ts_ = (0 == timeout_us)
@@ -274,7 +275,7 @@ void ObTableLockService::ObTableLockCtx::clean_touched_ls()
 
 bool ObTableLockService::ObTableLockCtx::is_deadlock_avoid_enabled() const
 {
-  return tablelock::is_deadlock_avoid_enabled(origin_timeout_us_);
+  return tablelock::is_deadlock_avoid_enabled(is_from_sql_, origin_timeout_us_);
 }
 
 int ObTableLockService::mtl_init(ObTableLockService* &lock_service)
@@ -507,6 +508,7 @@ int ObTableLockService::lock_table(ObTxDesc &tx_desc,
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
   }
   return ret;
@@ -653,6 +655,7 @@ int ObTableLockService::lock_partition(ObTxDesc &tx_desc,
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
   }
   return ret;
@@ -708,6 +711,7 @@ int ObTableLockService::lock_subpartition(ObTxDesc &tx_desc,
     ctx.tx_desc_ = &tx_desc;
     ctx.tx_param_ = tx_param;
     ctx.lock_op_type_ = arg.op_type_;
+    ctx.is_from_sql_ = arg.is_from_sql_;
     ret = process_lock_task_(ctx, arg.lock_mode_, arg.owner_id_);
   }
   return ret;

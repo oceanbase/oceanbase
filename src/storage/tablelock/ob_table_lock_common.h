@@ -472,7 +472,7 @@ typedef common::ObSimpleIterator<ObTableLockOp, ObSimpleIteratorModIds::OB_OBJ_L
 
 // the threshold of timeout interval which will enable the deadlock avoid.
 static const int64_t MIN_DEADLOCK_AVOID_TIMEOUT_US = 60 * 1000 * 1000; // 1 min
-bool is_deadlock_avoid_enabled(const int64_t expire_time);
+bool is_deadlock_avoid_enabled(const bool is_from_sql, const int64_t expire_time);
 
 } // tablelock
 } // transaction

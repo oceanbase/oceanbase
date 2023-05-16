@@ -115,7 +115,8 @@ public:
       owner_id_(0),
       lock_mode_(NO_LOCK),
       op_type_(UNKNOWN_TYPE),
-      timeout_us_(0)
+      timeout_us_(0),
+      is_from_sql_(false)
   { type_ = ObLockMsgType::UNKNOWN_MSG_TYPE; }
   virtual ~ObLockRequest() { reset(); }
   virtual void reset();
@@ -127,6 +128,7 @@ public:
   ObTableLockMode lock_mode_;
   ObTableLockOpType op_type_;
   int64_t timeout_us_;
+  bool is_from_sql_;
 };
 
 struct ObLockObjRequest : public ObLockRequest

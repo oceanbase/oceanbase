@@ -1141,6 +1141,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
+    arg.is_from_sql_ = true;
 
     OZ (lock_service->lock_table(*session->get_tx_desc(),
                                 tx_param,
@@ -1153,6 +1154,8 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
+    arg.is_from_sql_ = true;
+
     for (int64_t i = 0; i < part_ids.count() && OB_SUCC(ret); ++i) {
       arg.part_object_id_ = part_ids.at(i);
       OZ(lock_service->lock_partition_or_subpartition(*session->get_tx_desc(),
