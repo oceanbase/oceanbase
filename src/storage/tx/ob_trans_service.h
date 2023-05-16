@@ -234,7 +234,8 @@ public:
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue
-  static const int64_t MAX_MSG_TASK = (1 << 20); // 8M
+  static const int64_t MAX_MSG_TASK_CNT = 1000 * 1000;
+  static const int64_t MSG_TASK_CNT_PER_GB = 50 * 1000;
   static const int64_t MAX_BIG_TRANS_WORKER = 8;
   static const int64_t MAX_BIG_TRANS_TASK = 100 * 1000;
   // max time bias between any two machine
