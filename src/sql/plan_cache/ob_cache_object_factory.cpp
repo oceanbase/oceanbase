@@ -48,12 +48,15 @@ int ObCacheObjectFactory::alloc(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, 
 void ObCacheObjectFactory::inner_free(ObILibCacheObject *&cache_obj,
                                       const CacheRefHandleID ref_handle)
 {
+  int ret = OB_SUCCESS;
   uint64_t tenant_id = cache_obj->get_tenant_id();
-  ObPlanCache *lib_cache = MTL(ObPlanCache*);
-  if (OB_ISNULL(lib_cache)) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid null plan cache");
-  } else {
-    lib_cache->free_cache_obj(cache_obj, ref_handle);
+  MTL_SWITCH(tenant_id) {
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
+    if (OB_ISNULL(lib_cache)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid null plan cache");
+    } else {
+      lib_cache->free_cache_obj(cache_obj, ref_handle);
+    }
   }
 }
 

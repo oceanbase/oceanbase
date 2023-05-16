@@ -325,7 +325,11 @@ int ObAllPlanCacheStatI1::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids_.count(); i++) {
     // to keep the save interface
-    ret = tenant_ids.push_back(tenant_ids_.at(i));
+    if (common::OB_INVALID_TENANT_ID == tenant_ids_.at(i)) {
+      // skip
+    } else {
+      ret = tenant_ids.push_back(tenant_ids_.at(i));
+    }
   }
   return ret;
 }
@@ -334,7 +338,10 @@ int ObAllPlanCacheStat::get_all_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   // sys tenant show all tenant plan cache stat
-  if (is_sys_tenant(effective_tenant_id_)) {
+  if (common::OB_INVALID_TENANT_ID == effective_tenant_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "invalid effective_tenant_id_", KR(ret), K(effective_tenant_id_));
+  } else if (is_sys_tenant(effective_tenant_id_)) {
     if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
       SERVER_LOG(WARN, "failed to add tenant id", K(ret));
     }
