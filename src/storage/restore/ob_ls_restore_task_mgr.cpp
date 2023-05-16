@@ -39,17 +39,16 @@ ObLSRestoreTaskMgr::~ObLSRestoreTaskMgr()
 int ObLSRestoreTaskMgr::init()
 {
   int ret = OB_SUCCESS;
-  const char *tablet_dag_net_task = "tabletDagNetTask";
-
+  ObMemAttr attr(MTL_ID(), "RestoreTaskMgr");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(tablet_map_.create(OB_RESTORE_MAX_DAG_NET_NUM, tablet_dag_net_task))) {
+  } else if (OB_FAIL(tablet_map_.create(OB_RESTORE_MAX_DAG_NET_NUM, attr))) {
     LOG_WARN("fail to create tablet_map_", K(ret));
-  } else if (OB_FAIL(schedule_tablet_set_.create(OB_LS_RESTORE_MAX_TABLET_NUM))) {
+  } else if (OB_FAIL(schedule_tablet_set_.create(OB_LS_RESTORE_MAX_TABLET_NUM, attr))) {
     LOG_WARN("fail to create schedule_tablet_set_", K(ret));
-  } else if (OB_FAIL(wait_tablet_set_.create(OB_LS_RESTORE_MAX_TABLET_NUM))) {
-    LOG_WARN("fail to create schedule_tablet_set_", K(ret));
+  } else if (OB_FAIL(wait_tablet_set_.create(OB_LS_RESTORE_MAX_TABLET_NUM, attr))) {
+    LOG_WARN("fail to create wait_tablet_set_", K(ret));
   } else {
     is_inited_ = true;
   }

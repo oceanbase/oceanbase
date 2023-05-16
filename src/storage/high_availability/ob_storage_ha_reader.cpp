@@ -380,11 +380,13 @@ ObCopyMacroBlockRestoreReader::ObCopyMacroBlockRestoreReader()
     second_meta_index_store_(nullptr),
     restore_macro_block_id_mgr_(nullptr),
     data_buffer_(),
-    allocator_("CMBReReader"),
+    allocator_(),
     macro_block_index_(0),
     macro_block_count_(0),
     data_size_(0)
 {
+  ObMemAttr attr(MTL_ID(), "CMBReReader");
+  allocator_.set_attr(attr);
 }
 
 ObCopyMacroBlockRestoreReader::~ObCopyMacroBlockRestoreReader()
@@ -424,15 +426,26 @@ int ObCopyMacroBlockRestoreReader::init(
 int ObCopyMacroBlockRestoreReader::alloc_buffers()
 {
   int ret = OB_SUCCESS;
+  const int64_t READ_BUFFER_SIZE = OB_DEFAULT_MACRO_BLOCK_SIZE * 2;
   char *buf = NULL;
+  char *read_buf = NULL;
 
   // used in init() func, should not check is_inited_
-  if (NULL == (buf = reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
+  if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret));
+  } else if (OB_ISNULL(read_buf = reinterpret_cast<char*>(allocator_.alloc(READ_BUFFER_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc read_buf", K(ret));
   } else {
     data_buffer_.assign(buf, OB_DEFAULT_MACRO_BLOCK_SIZE);
+    read_buffer_.assign(read_buf, READ_BUFFER_SIZE);
   }
+
+  if (OB_FAIL(ret)) {
+    allocator_.reset();
+  }
+
   return ret;
 }
 
@@ -468,6 +481,8 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
     share::ObBackupStorageInfo storage_info;
     share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
     share::ObBackupDest backup_set_dest;
+    data_buffer_.set_pos(0);
+    read_buffer_.set_pos(0);
     if (OB_FAIL(restore_macro_block_id_mgr_->get_macro_block_id(macro_block_index_, logic_block_id, physic_block_id))) {
       LOG_WARN("failed to get macro block id", K(ret), K(macro_block_index_), K(table_key_), KPC(restore_base_info_));
     } else if (OB_FAIL(physic_block_id.get_backup_macro_block_index(logic_block_id, macro_index))) {
@@ -482,7 +497,7 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
         data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
       LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
     } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(backup_path.get_obstr(),
-        restore_base_info_->backup_dest_.get_storage_info(), macro_index, align_size, allocator_, data_buffer_))) {
+        restore_base_info_->backup_dest_.get_storage_info(), macro_index, align_size, read_buffer_, data_buffer_))) {
       LOG_WARN("failed to read macro block data", K(ret), K(table_key_), K(macro_index), K(physic_block_id), KPC(restore_base_info_));
     } else {
       data_size_ += data_buffer_.length();

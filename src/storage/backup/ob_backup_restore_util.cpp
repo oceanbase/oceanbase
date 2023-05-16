@@ -167,43 +167,45 @@ int ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(const common::ObStr
 }
 
 int ObLSBackupRestoreUtil::read_macro_block_data(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
-    const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, common::ObIAllocator &allocator,
+    const ObBackupMacroBlockIndex &macro_index, const int64_t align_size, blocksstable::ObBufferReader &read_buffer,
     blocksstable::ObBufferReader &data_buffer)
 {
   int ret = OB_SUCCESS;
-  char *buf = NULL;
-
-  if (path.empty() || !macro_index.is_valid()) {
+  char *buf = read_buffer.current();
+  if (path.empty() || !macro_index.is_valid() || !read_buffer.is_valid() || !data_buffer.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(path), K(macro_index));
+    LOG_WARN("get invalid args", K(ret), K(path), K(macro_index), K(read_buffer), K(data_buffer));
   } else if (align_size <= 0 || !common::is_io_aligned(macro_index.length_) || !common::is_io_aligned(align_size)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(macro_index), K(align_size));
-  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(macro_index.length_)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc read buf", K(ret), K(macro_index));
+    LOG_WARN("get invalid args", K(ret), K(macro_index), K(align_size));
+  } else if (read_buffer.remain() < macro_index.length_) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("read buffer not enough", K(ret), K(path), K(macro_index), K(read_buffer), K(data_buffer));
   } else if (OB_FAIL(pread_file(path, storage_info, macro_index.offset_, macro_index.length_, buf))) {
     LOG_WARN("failed to pread buffer", K(ret), K(path), K(macro_index));
   } else {
-    blocksstable::ObBufferReader buffer_reader(buf, macro_index.length_);
     const ObBackupCommonHeader *common_header = NULL;
-    if (OB_FAIL(buffer_reader.get(common_header))) {
-      LOG_WARN("failed to get common_header", K(ret), K(path), K(macro_index), K(buffer_reader));
+    if (OB_FAIL(read_buffer.get(common_header))) {
+      LOG_WARN("failed to get common_header", K(ret), K(path), K(macro_index), K(read_buffer));
     } else if (OB_ISNULL(common_header)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("common header is null", K(ret), K(path), K(macro_index), K(buffer_reader));
+      LOG_WARN("common header is null", K(ret), K(path), K(macro_index), K(read_buffer));
     } else if (OB_FAIL(common_header->check_valid())) {
-      LOG_WARN("common_header is not valid", K(ret), K(path), K(macro_index), K(buffer_reader));
-    } else if (common_header->data_zlength_ > buffer_reader.remain()) {
+      LOG_WARN("common_header is not valid", K(ret), K(path), K(macro_index), K(read_buffer));
+    } else if (common_header->data_zlength_ > read_buffer.remain()) {
       ret = OB_BUF_NOT_ENOUGH;
-      LOG_WARN("buffer_reader not enough", K(ret), K(path), K(macro_index), K(buffer_reader));
-    } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
-      LOG_WARN("failed to check data checksum", K(ret), K(*common_header), K(path), K(macro_index), K(buffer_reader));
+      LOG_WARN("read_buffer not enough", K(ret), K(path), K(macro_index), K(read_buffer));
+    } else if (OB_FAIL(common_header->check_data_checksum(read_buffer.current(), common_header->data_zlength_))) {
+      LOG_WARN("failed to check data checksum", K(ret), K(*common_header), K(path), K(macro_index), K(read_buffer));
     } else {
-      const int64_t common_header_size = common_header->header_length_;
-      MEMMOVE(buf, buffer_reader.current(), macro_index.length_ - common_header_size);
-      data_buffer.assign(buf, macro_index.length_, macro_index.length_);
-      LOG_INFO("read macro block data", K(path), K(macro_index), K(data_buffer));
+      char *dest = data_buffer.current();
+      const int64_t macro_block_size = macro_index.length_ - common_header->header_length_;
+      if (OB_FAIL(data_buffer.set_pos(macro_index.length_/* IO size should be aligned */))) {
+        LOG_WARN("failed to set pos", K(ret), K(*common_header), K(path), K(macro_index), K(read_buffer), K(data_buffer), K(macro_block_size));
+      } else {
+        MEMCPY(dest, read_buffer.current(), macro_block_size);
+        LOG_INFO("read macro block data", K(path), K(macro_index), K(data_buffer));
+      }
     }
   }
   return ret;
