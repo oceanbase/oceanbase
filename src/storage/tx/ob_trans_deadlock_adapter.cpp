@@ -595,7 +595,7 @@ int ObTransDeadlockDetectorAdapter::create_detector_node_and_set_parent_if_neede
     DETECT_LOG(ERROR, "get session failed", PRINT_WRAPPER);
   } else if (OB_ISNULL(guard->get_tx_desc())) {
     ret = OB_BAD_NULL_ERROR;
-    DETECT_LOG(ERROR, "tx desc is NULL", PRINT_WRAPPER);
+    DETECT_LOG(WARN, "tx desc is NULL", PRINT_WRAPPER);
   } else if (FALSE_IT(scheduler_addr = guard->get_tx_desc()->get_addr())) {
   } else if (FALSE_IT(trans_begin_ts = guard->get_tx_desc()->get_active_ts())) {
   } else if (OB_FAIL(MTL(ObDeadLockDetectorMgr*)->register_key(self_trans_id,
