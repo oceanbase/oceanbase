@@ -21,26 +21,26 @@
 #include "ob_log_trans_msg_sorter.h"
 #include "ob_log_instance.h"            // IObLogErrHandler
 
-#define RETRY_FUNC_ON_ERROR_WITH_USLEEP(err_no, stop_flag, var, func, args...) \
+#define RETRY_FUNC_ON_ERROR_WITH_USLEEP(err_no, var, func, args...) \
   do {\
     if (OB_SUCC(ret)) \
     { \
       ret = (err_no); \
       uint64_t retry_cnt = 0; \
-      while ((err_no) == ret && ! (stop_flag)) \
+      while ((err_no) == ret && ! (common::ObSimpleThreadPool::has_set_stop())) \
       { \
         ret = OB_SUCCESS; \
         ret = (var).func(args); \
         if (err_no == ret) { \
           retry_cnt ++; \
-          if (0 == retry_cnt % 200) { \
-            LOG_WARN(#func " retry for too many times", KP(&var), K(var)); \
+          if (0 == retry_cnt % 1000) { \
+            LOG_WARN(#func " retry for too many times", KP(&var), K(var), K(retry_cnt)); \
           } \
           /* sleep 5 ms*/ \
           ob_usleep(5 * 1000); \
         }\
       } \
-      if ((stop_flag)) \
+      if ((common::ObSimpleThreadPool::has_set_stop())) \
       { \
         ret = OB_IN_STOP_STATE; \
       } \
@@ -53,7 +53,7 @@ namespace libobcdc
 {
 
 ObLogTransMsgSorter::ObLogTransMsgSorter() :
-  inited_(false),
+  is_inited_(false),
   thread_num_(0),
   task_limit_(0),
   total_task_count_(0),
@@ -78,8 +78,8 @@ int ObLogTransMsgSorter::init(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(inited_)) {
-    LOG_ERROR("br sorter has been initialized", K_(inited));
+  if (IS_INIT) {
+    LOG_ERROR("br sorter has been initialized", K_(is_inited));
     ret = OB_INIT_TWICE;
   } else if (OB_UNLIKELY(thread_num <= 0)
           || OB_UNLIKELY(task_limit <= 0)
@@ -97,6 +97,7 @@ int ObLogTransMsgSorter::init(
     } else {
       br_sort_func_ = &ObLogTransMsgSorter::sort_br_by_part_order_;
     }
+    is_inited_ = true;
   }
 
   LOG_INFO("start sorter succ", K(enable_sort_by_seq_no), K(thread_num), K(task_limit));
@@ -106,8 +107,9 @@ int ObLogTransMsgSorter::init(
 
 void ObLogTransMsgSorter::destroy()
 {
-  if (inited_) {
-    inited_ = false;
+  if (IS_INIT) {
+    is_inited_ = false;
+    TransMsgSorterThread::wait();
     TransMsgSorterThread::destroy();
     thread_num_ = 0;
     task_limit_ = 0;
@@ -128,7 +130,6 @@ int ObLogTransMsgSorter::start()
   if (OB_FAIL(TransMsgSorterThread::init(thread_num_, task_limit_, "obcdc-br-sorter"))) {
     LOG_ERROR("failed to init sorter thread pool", KR(ret), K_(thread_num), K_(task_limit));
   } else {
-    inited_ = true;
     LOG_INFO("start TransMsgSorter succ", K_(enable_sort_by_seq_no), K_(thread_num), K_(task_limit));
   }
 
@@ -137,22 +138,19 @@ int ObLogTransMsgSorter::start()
 
 void ObLogTransMsgSorter::stop()
 {
-  if (inited_) {
-    ObSimpleThreadPool::stop();
-    LOG_INFO("stop TransMsgSorter succ", K_(thread_num));
-  }
+  mark_stop_flag();
 }
 
 int ObLogTransMsgSorter::submit(TransCtx *trans)
 {
   int ret = OB_SUCCESS;
 
-  if (!inited_) {
-    ret = OB_ERR_UNEXPECTED;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
     LOG_ERROR("TransMsgSorter not init", KR(ret));
   } else if (has_set_stop()) {
     ret = OB_IN_STOP_STATE;
-    LOG_INFO("TransMsgSorter is stopped!", KR(ret), K_(inited));
+    LOG_INFO("TransMsgSorter is stopped!", KR(ret), K_(is_inited));
   } else if (OB_FAIL(TransMsgSorterThread::push(trans))) {
     if (OB_EAGAIN == ret) {
       ret = OB_NEED_RETRY;
@@ -168,7 +166,7 @@ int ObLogTransMsgSorter::get_task_count(int64_t &task_count)
 {
   int ret = OB_SUCCESS;
 
-  if (!inited_) {
+  if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
     task_count = ATOMIC_LOAD(&total_task_count_);
@@ -179,8 +177,8 @@ int ObLogTransMsgSorter::get_task_count(int64_t &task_count)
 
 void ObLogTransMsgSorter::mark_stop_flag()
 {
-  if (!has_set_stop()) {
-    has_set_stop() = true;
+  if (! has_set_stop()) {
+    TransMsgSorterThread::stop();
     LOG_INFO("mark TransMsgSorter stop succ");
   }
 }
@@ -190,12 +188,12 @@ void ObLogTransMsgSorter::handle(void *data)
   int ret = OB_SUCCESS;
   TransCtx *trans = NULL;
 
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_ERR_UNEXPECTED;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
     LOG_ERROR("TransMsgSorter not init", KR(ret));
   } else if (OB_UNLIKELY(has_set_stop())) {
     ret = OB_IN_STOP_STATE;
-    LOG_INFO("TransMsgSorter is stopped!", KR(ret), K_(inited));
+    LOG_INFO("TransMsgSorter is stopped!", KR(ret), K_(is_inited));
   } else if (OB_ISNULL(trans = static_cast<TransCtx*>(data))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("task to be handled should not null!", KR(ret));
@@ -227,7 +225,7 @@ int ObLogTransMsgSorter::sort_br_by_part_order_(TransCtx &trans)
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("part_trans_task of trans_ctx is null!", KR(ret), K(trans));
   } else {
-    while (OB_SUCC(ret) && !has_set_stop() && OB_NOT_NULL(part_trans_task)) {
+    while (OB_SUCC(ret) && ! has_set_stop() && OB_NOT_NULL(part_trans_task)) {
       if (OB_FAIL(handle_partition_br_(trans, *part_trans_task))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("failed to output br of part trans", KR(ret), KPC(part_trans_task), K(trans));
@@ -255,7 +253,7 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
   PartTransTask *part_trans_task = trans.get_participant_objs();
   // 2. get a dml_stmt contains a valid br from each part_trans and put into the heap
 
-  while (OB_SUCC(ret) && !has_set_stop() && OB_NOT_NULL(part_trans_task)) {
+  while (OB_SUCC(ret) && ! has_set_stop() && OB_NOT_NULL(part_trans_task)) {
     if (OB_FAIL(next_stmt_contains_valid_br_(*part_trans_task, dml_stmt_task))) {
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
@@ -272,7 +270,7 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
   }
 
   // 3. pop br from heap and push a new br into the heap
-  while(OB_SUCC(ret) && !has_set_stop() && !heap.empty()) {
+  while(OB_SUCC(ret) && ! has_set_stop() && !heap.empty()) {
     // 3.1. get the min br from heap top and then pop the br
     dml_stmt_task = heap.top();
     PartTransTask &cur_part_trans = dml_stmt_task->get_host();
@@ -318,7 +316,7 @@ int ObLogTransMsgSorter::handle_partition_br_(TransCtx &trans, PartTransTask &pa
   int ret = OB_SUCCESS;
   DmlStmtTask *dml_stmt_task = NULL;
 
-  while (OB_SUCC(ret) && !has_set_stop()) {
+  while (OB_SUCC(ret) && ! has_set_stop()) {
     if (OB_FAIL(next_stmt_contains_valid_br_(part_trans_task, dml_stmt_task))) {
       if (OB_ITER_END != ret && OB_IN_STOP_STATE != ret) {
         LOG_ERROR("failed to get next valid br of part trans", KR(ret), K(part_trans_task), K(trans));
@@ -351,7 +349,7 @@ int ObLogTransMsgSorter::next_stmt_contains_valid_br_(PartTransTask &part_trans_
 {
   int ret = OB_SUCCESS;
 
-  RETRY_FUNC_ON_ERROR_WITH_USLEEP(OB_NEED_RETRY, has_set_stop(), part_trans_task, next_dml_stmt, dml_stmt_task);
+  RETRY_FUNC_ON_ERROR_WITH_USLEEP(OB_NEED_RETRY, part_trans_task, next_dml_stmt, dml_stmt_task);
 
   if (OB_ITER_END != ret) {
     if (has_set_stop()) {
