@@ -1379,6 +1379,7 @@ BEGIN(in_c_comment);
   }
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    yylval->node->sql_str_off_ = yylloc->first_column - 1;
     check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
@@ -1399,6 +1400,7 @@ BEGIN(in_c_comment);
   yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    yylval->node->sql_str_off_ = yylloc->first_column - 1;
     check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
@@ -1424,6 +1426,7 @@ BEGIN(in_c_comment);
   }
   if (IS_FAST_PARAMETERIZE) {
     yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+    yylval->node->sql_str_off_ = yylloc->first_column - 1;
     check_malloc(yylval->node->raw_text_);
     STORE_PARAM_NODE();
   } else {
@@ -1443,6 +1446,7 @@ BEGIN(in_c_comment);
     yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
     if (IS_FAST_PARAMETERIZE) {
       yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+      yylval->node->sql_str_off_ = yylloc->first_column - 1;
       check_malloc(yylval->node->raw_text_);
       STORE_PARAM_NODE();
     } else {
