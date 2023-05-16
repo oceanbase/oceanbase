@@ -22,6 +22,7 @@
 #include "lib/queue/ob_dedup_queue.h"
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_ds_stat.h"
+#include "share/stat/ob_stat_item.h"
 
 namespace oceanbase {
 namespace common {
@@ -63,24 +64,12 @@ public:
 
   int get_column_stat(const uint64_t tenant_id,
                       const uint64_t tab_ref_id,
-                      const int64_t part_id,
-                      const uint64_t column_id,
-                      int64_t *num_distinct = NULL,
-                      int64_t *num_null = NULL,
-                      int64_t *avg_length = NULL,
-                      ObObj *min_obj = NULL,
-                      ObObj *max_obj = NULL,
-                      ObIAllocator *alloc = NULL);
-
-  int get_column_stat(const uint64_t tenant_id,
-                      const uint64_t tab_ref_id,
                       const ObIArray<int64_t> &part_ids,
                       const uint64_t column_id,
-                      int64_t *num_distinct = NULL,
-                      int64_t *num_null = NULL,
-                      int64_t *avg_length = NULL,
-                      ObObj *min_obj = NULL,
-                      ObObj *max_obj = NULL,
+                      const ObIArray<int64_t> &global_part_ids,
+                      const int64_t row_cnt,
+                      const double scale_ratio,
+                      ObGlobalColumnStat &stat,
                       ObIAllocator *alloc = NULL);
 
   int get_column_stat(const uint64_t tenant_id,
@@ -98,21 +87,15 @@ public:
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t table_ref_id,
                      const int64_t part_id,
-                     int64_t *row_count = NULL,
-                     int64_t *avg_len = NULL,
-                     int64_t *avg_part_size = NULL,
-                     int64_t *macro_block_count = NULL,
-                     int64_t *micro_block_count = NULL,
-                     int64_t *last_analyzed = NULL);
+                     const double scale_ratio,
+                     ObGlobalTableStat &stat);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t tab_ref_id,
                      const ObIArray<int64_t> &part_ids,
-                     int64_t *row_count = NULL,
-                     int64_t *avg_len = NULL,
-                     int64_t *avg_part_size = NULL,
-                     int64_t *micro_block_count = NULL,
-                     int64_t *last_analyzed = NULL);
+                     const ObIArray<int64_t> &global_part_ids,
+                     const double scale_ratio,
+                     ObGlobalTableStat &stat);
 
   int get_table_stat(const uint64_t tenant_id,
                      const uint64_t table_id,

@@ -311,11 +311,13 @@ private:
   int prepare_and_store_session(ObSQLSessionInfo *session,
                                 sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
                                 int64_t &nested_count,
-                                bool &is_no_backslash_escapes);
+                                bool &is_no_backslash_escapes,
+                                transaction::ObTxDesc *&tx_desc);
   int restore_session(ObSQLSessionInfo *session,
                       sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                       int64_t nested_count,
-                      bool is_no_backslash_escapes);
+                      bool is_no_backslash_escapes,
+                      transaction::ObTxDesc *tx_desc);
 
 private:
   ObOptimizerContext *ctx_;

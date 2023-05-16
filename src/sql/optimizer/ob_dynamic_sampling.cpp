@@ -505,6 +505,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   int64_t start_time = ObTimeUtility::current_time();
   ObSQLSessionInfo *session_info = ctx_->get_session_info();
   bool need_restore_session = false;
+  transaction::ObTxDesc *tx_desc = NULL;
   if (OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
   } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, degree))) {
@@ -512,7 +513,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   } else if (OB_FAIL(pack(raw_sql_str))) {
     LOG_WARN("failed to pack dynamic sampling", K(ret));
   } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
-                                               nested_count, is_no_backslash_escapes))) {
+                                               nested_count, is_no_backslash_escapes, tx_desc))) {
     throw_ds_error = true;//here we must throw error, because the seesion may be unavailable.
     LOG_WARN("failed to prepare and store session", K(ret));
   } else {
@@ -527,7 +528,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   if (need_restore_session) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = restore_session(session_info, session_value,
-                                                 nested_count, is_no_backslash_escapes))) {
+                                                 nested_count, is_no_backslash_escapes, tx_desc))) {
       throw_ds_error = true;//here we must throw error, because the seesion may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
@@ -1017,7 +1018,8 @@ int ObDynamicSampling::do_estimate_rowcount(ObSQLSessionInfo *session_info,
 int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
                                                  sql::ObSQLSessionInfo::StmtSavedValue *&session_value,
                                                  int64_t &nested_count,
-                                                 bool &is_no_backslash_escapes)
+                                                 bool &is_no_backslash_escapes,
+                                                 transaction::ObTxDesc *&tx_desc)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -1034,11 +1036,17 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
     } else {
       nested_count = session->get_nested_count();
       IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_no_backslash_escapes);
+      session->set_sql_mode(session->get_sql_mode() & ~SMO_NO_BACKSLASH_ESCAPES);
       session->set_query_start_time(ObTimeUtility::current_time());
       session->set_inner_session();
       session->set_nested_count(-1);
       //bug:
       session->set_autocommit(session_value->inc_autocommit_);
+      //ac is true, dynamic sampling select query no need tx desc.
+      if (session_value->inc_autocommit_ && session->get_tx_desc() != NULL) {
+        tx_desc = session->get_tx_desc();
+        session->get_tx_desc() = NULL;
+      }
     }
   }
   return ret;
@@ -1047,7 +1055,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
 int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
                                        sql::ObSQLSessionInfo::StmtSavedValue *session_value,
                                        int64_t nested_count,
-                                       bool is_no_backslash_escapes)
+                                       bool is_no_backslash_escapes,
+                                       transaction::ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session) || OB_ISNULL(session_value)) {
@@ -1059,6 +1068,9 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
     session->set_nested_count(nested_count);
     if (is_no_backslash_escapes) {
       session->set_sql_mode(session->get_sql_mode() | SMO_NO_BACKSLASH_ESCAPES);
+    }
+    if (tx_desc != NULL) {//reset origin tx desc.
+      session->get_tx_desc() = tx_desc;
     }
   }
   return ret;

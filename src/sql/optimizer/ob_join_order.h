@@ -2447,6 +2447,13 @@ struct NullAwareAntiJoinInfo {
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from,
                           bool is_persistent, ObExprEqualCheckContext &equal_ctx);
     int check_match_to_type(ObRawExpr *to_type, ObRawExpr *candi_expr, bool &is_same, ObExprEqualCheckContext &equal_ctx);
+    int check_can_use_global_stat_instead(const uint64_t ref_table_id,
+                                          const ObTableSchema &table_schema,
+                                          ObIArray<int64_t> &all_used_parts,
+                                          ObIArray<ObTabletID> &all_used_tablets,
+                                          bool &can_use,
+                                          ObIArray<int64_t> &global_part_ids,
+                                          double &scale_ratio);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
