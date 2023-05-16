@@ -356,7 +356,7 @@ int ObTabletCreator::execute()
 
 bool ObTabletCreator::need_retry(int ret)
 {
-  return OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_NOT_MASTER == ret;
+  return is_location_service_renew_error(ret) || OB_NOT_MASTER == ret;
 }
 
 } // rootserver
