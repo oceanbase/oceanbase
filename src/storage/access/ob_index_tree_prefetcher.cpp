@@ -432,7 +432,7 @@ int ObIndexTreeMultiPrefetcher::init(
     access_ctx_ = &access_ctx;
     iter_param_ = &iter_param;
     index_read_info_ = iter_param.get_full_read_info()->get_index_read_info();
-    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    data_version_ = sstable_->get_data_version();
     data_block_cache_ = &(ObStorageCacheSuite::get_instance().get_block_cache());
     index_block_cache_ = &(ObStorageCacheSuite::get_instance().get_index_block_cache());
     ext_read_handles_.set_allocator(access_ctx.stmt_allocator_);
@@ -472,7 +472,7 @@ int ObIndexTreeMultiPrefetcher::switch_context(
   } else {
     sstable_ = &sstable;
     access_ctx_ = &access_ctx;
-    data_version_ = sstable_->is_major_sstable() ? sstable_->get_snapshot_version() : sstable_->get_key().get_end_scn().get_val_for_tx();
+    data_version_ = sstable_->get_data_version();
     rowkeys_ = static_cast<const common::ObIArray<blocksstable::ObDatumRowkey> *> (query_range);
     index_read_info_ = &index_read_info;
     index_tree_height_ = sstable_->get_meta().get_index_tree_height();
