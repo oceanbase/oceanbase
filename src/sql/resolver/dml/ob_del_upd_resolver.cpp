@@ -1462,9 +1462,15 @@ int ObDelUpdResolver::resolve_returning(const ParseNode *parse_tree)
             }
           }
         }
-        if (OB_SUCC(ret) && ob_is_user_defined_type(expr->get_data_type())) {
+        if (OB_SUCC(ret)
+            && (ob_is_user_defined_sql_type(expr->get_data_type())
+                || ob_is_xml_pl_type(expr->get_data_type(), expr->get_udt_id()))) {
+          // ORA-22816 returning clause is currently not object type columns
+          // but this is success in ORA: execute immediate 'insert into t1 values(4,5) returning udt1(c1, c2) into :a' using out a;
+          // xmltype is not allowed: execute immediate 'insert into t2 values(:b) returning xmltype(c1) into :a' using b, out a;
           ret = OB_ERR_RETURNING_CLAUSE;
-          LOG_WARN("RETURNING clause is currently not supported for object type", K(ret));
+          LOG_WARN("RETURNING clause is currently not supported for object type",
+                   K(ret), K(expr->get_data_type()));
         }
 
         if (OB_SUCC(ret)) {

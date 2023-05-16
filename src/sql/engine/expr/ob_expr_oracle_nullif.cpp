@@ -134,7 +134,9 @@ bool ObExprOracleNullif::is_same_type(const ObExprResType &type1,
   if (oracleType1 == oracleType2 ||
       is_numberic_type(oracleType1, oracleType2) ||
       is_string_type(oracleType1, oracleType2) ||
-      is_time_type(oracleType1, oracleType2)) {
+      is_time_type(oracleType1, oracleType2) ||
+      ((oracleType1 == ObOExtendType || oracleType1 == ObOUDTSqlType)
+       && (oracleType2 == ObOExtendType || oracleType2 == ObOUDTSqlType))) {
     ret = true;
   }
 

@@ -1356,6 +1356,9 @@ int ObDMLResolver::implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr)
   if (OB_ISNULL(real_ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("real_ref_expr is null", K(ret));
+  } else if (real_ref_expr->get_result_type().get_type() >= ObMaxType
+             && OB_FAIL(real_ref_expr->formalize(session_info_))) {
+    LOG_WARN("failed to do formalize", K(ret), K(real_ref_expr));
   } else if (real_ref_expr->get_result_type().is_ext()) {
     if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
       // add implicit cast to sql xmltype
@@ -1453,13 +1456,13 @@ int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
         }
       }
       if (pos_col < 0) { // not found
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_WARN("get invalid identifier name", K(ret), K(tab_str), K(col_str), K(tab_has_alias));
       } else {
         ObColumnRefRawExpr* col_expr = the_col_item.get_expr();
         if (OB_ISNULL(col_expr)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("get invalid table name", K(ret), K(tab_str), K(tab_has_alias));
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("get invalid identifier name", K(ret), K(tab_str), K(col_str), K(tab_has_alias));
         } else if (!col_expr->get_result_type().is_user_defined_sql_type()) {
           ret = OB_ERR_NOT_OBJ_REF;
         }

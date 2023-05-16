@@ -1985,9 +1985,8 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_WARN("incorrect cmp type with json arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
-             && (ob_is_user_defined_type(type1.get_type())
-                 || ob_is_user_defined_type(type2.get_type()))
-             && ((type_ >= T_OP_EQ && type_ <= T_OP_NE) || type_ == T_FUN_SYS_NULLIF)) {
+             && (ob_is_user_defined_type(type1.get_type()) || ob_is_user_defined_type(type2.get_type()))) {
+    // udt tyes not implemented in ORACLE_RELATIONAL_CMP_TYPE curretly
     if ((ob_is_user_defined_type(type1.get_type()) && ob_is_user_defined_type(type2.get_type()))
         || (type1.is_null() || type2.is_null())) {
       ret = OB_ERR_NO_ORDER_MAP_SQL; // oracle error code compability
