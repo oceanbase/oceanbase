@@ -5658,6 +5658,9 @@ int ObStaticEngineCG::extract_non_aggr_expr(ObExpr *input,
   } else if (OB_ISNULL(input)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "input is null", KP(input), K(ret));
+  } else if (input->is_const_expr()) {
+    // Skip the const expr as implicit first aggr, all const implicit first aggr need add
+    // `remove_const` above to calc the result.
   } else if (has_exist_in_array(exist_in_child, input)
              && !has_exist_in_array(not_exist_in_aggr, input)
              && (NULL == not_exist_in_groupby || !has_exist_in_array(*not_exist_in_groupby, input))

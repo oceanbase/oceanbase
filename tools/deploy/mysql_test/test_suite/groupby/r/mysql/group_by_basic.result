@@ -1,4 +1,5 @@
 drop table if exists t1, t2, t3, t4, t5;
+drop sequence if exists s1;
 create table t1(c1 int primary key, c2 int, c3 varchar(10));
 create table t2(c1 int primary key,
 c2 int,
@@ -409,3 +410,69 @@ select 1 from t1, t2 group by c1;
 ERROR 23000: Column 'c1' in group statement is ambiguous
 drop table t1, t2;
 drop table `rpup_list_mcs_asoc_b`, `bidprcu_mcs_regcert_b`, `rpup_mcs_list_info_b`;
+CREATE TABLE `t1` (
+`c1` decimal(64,1) DEFAULT NULL,
+`c4` decimal(64,11) DEFAULT NULL,
+`c8` int(127) NOT NULL
+);
+create sequence s1 cache 10000000;
+insert into t1 select s1.nextval c1, s1.nextval c2, s1.nextval c3 from table(generator(20000));
+explain SELECT t29_25.c1, t29_25.c8
+FROM   (SELECT (SELECT t29_25.c1
+FROM   t1 AS t29_25
+ORDER  BY 1 DESC
+LIMIT  1)             AS c1,
+t29_25.c4,
+t29_25.c8
+FROM   t1 AS t29_25) AS t29_25
+GROUP  BY t29_25.c1, t29_25.c8
+HAVING Count(t29_25.c4) <> 990;
+Query Plan
+=======================================================
+|ID|OPERATOR             |NAME  |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |HASH GROUP BY        |      |5       |2609        |
+|1 |└─SUBPLAN FILTER     |      |9999    |1593        |
+|2 |  ├─TABLE FULL SCAN  |t29_25|9999    |1002        |
+|3 |  └─TOP-N SORT       |      |1       |566         |
+|4 |    └─TABLE FULL SCAN|t29_25|9999    |539         |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([:0], [t29_25.c8]), filter([T_FUN_COUNT(t29_25.c4) != 990]), rowset=256
+      group([t29_25.c8]), agg_func([T_FUN_COUNT(t29_25.c4)])
+  1 - output([t29_25.c8], [:0], [t29_25.c4]), filter(nil), rowset=256
+      exec_params_(nil), onetime_exprs_([subquery(1)(:0)]), init_plan_idxs_(nil), use_batch=false
+  2 - output([t29_25.c4], [t29_25.c8]), filter(nil), rowset=256
+      access([t29_25.c4], [t29_25.c8]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t29_25.c1]), filter(nil), rowset=256
+      sort_keys([t29_25.c1, DESC]), topn(1)
+  4 - output([t29_25.c1]), filter(nil), rowset=256
+      access([t29_25.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([t29_25.__pk_increment]), range(MIN ; MAX)always true
+create table t2 as SELECT t29_25.c1, t29_25.c8
+FROM   (SELECT (SELECT t29_25.c1
+FROM   t1 AS t29_25
+ORDER  BY 1 DESC
+LIMIT  1)             AS c1,
+t29_25.c4,
+t29_25.c8
+FROM   t1 AS t29_25) AS t29_25
+GROUP  BY t29_25.c1, t29_25.c8
+HAVING Count(t29_25.c4) <> 990;
+select * from t2 limit 10;
+c1	c8
+20000.0	1
+20000.0	2
+20000.0	3
+20000.0	4
+20000.0	5
+20000.0	6
+20000.0	7
+20000.0	8
+20000.0	9
+20000.0	10
+drop table t1, t2;
