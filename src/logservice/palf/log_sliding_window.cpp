@@ -778,10 +778,10 @@ int LogSlidingWindow::handle_committed_log_()
   int ret = OB_SUCCESS;
   if (commit_log_handling_lease_.acquire()) {
     do {
-      LSN unused_lsn;
+      LSN unused_lsn, unused_start_lsn;
       int64_t unused_id = OB_INVALID_LOG_ID;
       LSN committed_end_lsn;
-      if (is_all_committed_log_slided_out_(unused_lsn, unused_id, committed_end_lsn)) {
+      if (is_all_committed_log_slided_out_(unused_lsn, unused_id, unused_start_lsn, committed_end_lsn)) {
         // all logs have slided out, no need continue
         PALF_LOG(TRACE, "is_all_committed_log_slided_out_ returns true", K_(palf_id), K_(self),
             K(committed_end_lsn));
@@ -1917,16 +1917,17 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
     // 触发前需满足所有committed logs都已滑出, 并以committed_end_lsn作为新的fetch起点
     LSN last_slide_lsn;
     int64_t last_slide_log_id;
+    LSN sw_start_lsn;
     LSN committed_end_lsn;
-    if (!is_all_committed_log_slided_out_(last_slide_lsn, last_slide_log_id, committed_end_lsn)) {
+    if (!is_all_committed_log_slided_out_(last_slide_lsn, last_slide_log_id, sw_start_lsn, committed_end_lsn)) {
       if (palf_reach_time_interval(1 * 1000 * 1000, cannot_fetch_log_warn_time_)) {
         PALF_LOG(WARN, "is_all_committed_log_slided_out_ return false, cannot fetch log now", K(ret),
             K_(palf_id), K_(self), K(committed_end_lsn));
       }
     } else if (OB_FAIL(do_fetch_log_(fetch_log_type, fetch_log_dst, last_slide_lsn, \
-          committed_end_lsn, fetch_log_size, last_slide_log_id + 1))) {
+          sw_start_lsn, fetch_log_size, last_slide_log_id + 1))) {
       PALF_LOG(WARN, "do_fetch_log_ failed", K(ret), K_(palf_id), K_(self), K(fetch_log_type), K(fetch_log_dst),
-          K(last_slide_lsn), K(committed_end_lsn), K(last_slide_log_id));
+          K(last_slide_lsn), K(sw_start_lsn), K(committed_end_lsn), K(last_slide_log_id));
     }
   }
   PALF_LOG(TRACE, "runlin trace try_fetch_log", K(ret), K(all_valid), K(all_invalid));
@@ -1936,7 +1937,7 @@ int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
 int LogSlidingWindow::try_fetch_log_for_reconfirm(const common::ObAddr &dest, const LSN &fetch_end_lsn, bool &is_fetched)
 {
   int ret = OB_SUCCESS;
-  LSN prev_lsn;
+  LSN prev_lsn, sw_start_lsn;
   int64_t prev_log_id = OB_INVALID_LOG_ID;
   LSN committed_end_lsn;
   if (IS_NOT_INIT) {
@@ -1944,7 +1945,7 @@ int LogSlidingWindow::try_fetch_log_for_reconfirm(const common::ObAddr &dest, co
   } else if (!dest.is_valid() || !fetch_end_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(dest), K(fetch_end_lsn));
-  } else if (!is_all_committed_log_slided_out_(prev_lsn, prev_log_id, committed_end_lsn)) {
+  } else if (!is_all_committed_log_slided_out_(prev_lsn, prev_log_id, sw_start_lsn, committed_end_lsn)) {
     if (palf_reach_time_interval(1 * 1000 * 1000, cannot_fetch_log_warn_time_)) {
       PALF_LOG(WARN, "is_all_committed_log_slided_out_ return false, cannot fetch log now", K(ret),
           K_(palf_id), K_(self), K(committed_end_lsn));
@@ -2073,10 +2074,15 @@ int LogSlidingWindow::get_fetch_log_dst_(common::ObAddr &fetch_dst) const
 
 bool LogSlidingWindow::is_all_committed_log_slided_out(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const
 {
-  return is_all_committed_log_slided_out_(prev_lsn, prev_log_id, committed_end_lsn);
+  LSN unused_lsn;
+  return is_all_committed_log_slided_out_(prev_lsn, prev_log_id, unused_lsn, committed_end_lsn);
 }
 
-bool LogSlidingWindow::is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const
+bool LogSlidingWindow::is_all_committed_log_slided_out_(
+    LSN &prev_lsn,
+    int64_t &prev_log_id,
+    LSN &start_lsn,
+    LSN &committed_end_lsn) const
 {
   bool bool_ret = false;
   int64_t last_slide_log_id = OB_INVALID_LOG_ID;
@@ -2097,6 +2103,7 @@ bool LogSlidingWindow::is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &
   }
   prev_lsn = last_slide_lsn;
   prev_log_id = last_slide_log_id;
+  start_lsn = last_slide_end_lsn;
   return bool_ret;
 }
 
