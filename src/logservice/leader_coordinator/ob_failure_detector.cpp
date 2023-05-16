@@ -30,6 +30,7 @@
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/slog/ob_storage_logger.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 
 namespace oceanbase
 {
@@ -47,6 +48,7 @@ ObFailureDetector::ObFailureDetector()
       has_add_slog_hang_event_(false),
       has_add_sstable_hang_event_(false),
       has_add_clog_full_event_(false),
+      has_schema_error_(false),
       lock_(common::ObLatchIds::ELECTION_LOCK)
 {
   COORDINATOR_LOG(INFO, "ObFailureDetector constructed");
@@ -125,6 +127,7 @@ void ObFailureDetector::destroy()
   has_add_slog_hang_event_ = false;
   has_add_sstable_hang_event_ = false;
   has_add_clog_full_event_ = false;
+  has_schema_error_ = false;
   COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
 }
 
@@ -165,6 +168,8 @@ void ObFailureDetector::detect_failure()
   detect_sstable_io_failure_();
   // clog disk full check
   detect_palf_disk_full_();
+  // schema refreshed check
+  detect_schema_not_refreshed_();
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)
@@ -320,6 +325,11 @@ bool ObFailureDetector::is_data_disk_has_fatal_error(bool &slog_hang, bool &data
          || ATOMIC_LOAD(&has_add_sstable_hang_event_);
 }
 
+bool ObFailureDetector::is_schema_not_refreshed()
+{
+  return ATOMIC_LOAD(&has_schema_error_);
+}
+
 void ObFailureDetector::detect_palf_hang_failure_()
 {
   LC_TIME_GUARD(1_s);
@@ -459,6 +469,37 @@ void ObFailureDetector::detect_palf_disk_full_()
     } else {
       ATOMIC_SET(&has_add_clog_full_event_, false);
       COORDINATOR_LOG(INFO, "clog disk has left space, remove failure event", K(ret), K(clog_disk_full_event));
+    }
+  }
+}
+
+void ObFailureDetector::detect_schema_not_refreshed_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  bool schema_not_refreshed = GSCHEMASERVICE.is_tenant_not_refreshed(MTL_ID());
+  FailureEvent schema_not_refreshed_event(FailureType::SCHEMA_NOT_REFRESHED, FailureModule::SCHEMA, FailureLevel::SERIOUS);
+  if (OB_FAIL(schema_not_refreshed_event.set_info("schema not refreshed"))) {
+    COORDINATOR_LOG(ERROR, "schema_not_refreshed_event  set_info failed", KR(ret));
+  } else if (false == ATOMIC_LOAD(&has_schema_error_)) {
+    if (!schema_not_refreshed) {
+      // schema has been refreshed, skip.
+    } else if (OB_FAIL(add_failure_event(schema_not_refreshed_event))) {
+      COORDINATOR_LOG(ERROR, "add_failure_event failed", KR(ret), K(schema_not_refreshed));
+    } else {
+      ATOMIC_SET(&has_schema_error_, true);
+      COORDINATOR_LOG(WARN, "schema not refreshed, add failure event",
+                    K(schema_not_refreshed), K(now));
+    }
+  } else {
+    if (schema_not_refreshed) {
+      // schema is still not refreshed, cannot remove failure_event.
+    } else if (OB_FAIL(remove_failure_event(schema_not_refreshed_event))) {
+      COORDINATOR_LOG(ERROR, "remove_failure_event failed", KR(ret), K(schema_not_refreshed));
+    } else {
+      ATOMIC_SET(&has_schema_error_, false);
+      COORDINATOR_LOG(INFO, "schema is refreshed, remove failure event", KR(ret), K(schema_not_refreshed));
     }
   }
 }

@@ -236,6 +236,8 @@ public:
 
   bool is_tenant_full_schema(const uint64_t tenant_id) const;
 
+  bool is_tenant_not_refreshed(const uint64_t tenant_id);
+
   // sql should retry when tenant is normal but never refresh schema successfully.
   bool is_schema_error_need_retry(
        ObSchemaGetterGuard *guard,
