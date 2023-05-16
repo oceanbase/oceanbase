@@ -9153,6 +9153,57 @@ private:
   common::ObAddr server_;
   share::ObServerResourceInfo resource_info_;
 };
+
+struct ObBroadcastConsensusVersionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBroadcastConsensusVersionArg()
+    : tenant_id_(OB_INVALID_ID),
+      consensus_version_(OB_INVALID_VERSION) {}
+  ~ObBroadcastConsensusVersionArg() {}
+  int init(const uint64_t tenant_id, const int64_t consensus_version);
+  bool is_valid() const;
+  int assign(const ObBroadcastConsensusVersionArg &other);
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+  int64_t get_consensus_version() const
+  {
+    return consensus_version_;
+  }
+  void set_tenant_id(const uint64_t tenant_id)
+  {
+    tenant_id_ = tenant_id;
+  }
+  void set_consensus_version(const int64_t consensus_version)
+  {
+    consensus_version_ = consensus_version;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(consensus_version));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBroadcastConsensusVersionArg);
+private:
+  uint64_t tenant_id_;
+  int64_t consensus_version_;
+};
+
+struct ObBroadcastConsensusVersionRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBroadcastConsensusVersionRes()
+    : ret_(OB_SUCCESS) {}
+  ~ObBroadcastConsensusVersionRes() {}
+  void set_ret(int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBroadcastConsensusVersionRes);
+private:
+  int ret_;
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

@@ -290,4 +290,5 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // session info verification
   RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);
+  RPC_PROCESSOR(ObBroadcastConsensusVersionP, gctx_);
 }

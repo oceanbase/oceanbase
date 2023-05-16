@@ -8368,5 +8368,37 @@ void ObGetServerResourceInfoResult::reset()
   server_.reset();
   resource_info_.reset();
 }
+
+OB_SERIALIZE_MEMBER(ObBroadcastConsensusVersionArg, tenant_id_, consensus_version_);
+bool ObBroadcastConsensusVersionArg::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_ && OB_INVALID_VERSION != consensus_version_;
+}
+
+int ObBroadcastConsensusVersionArg::init(const uint64_t tenant_id, const int64_t consensus_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || OB_INVALID_VERSION == consensus_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(consensus_version));
+  } else {
+    tenant_id_ = tenant_id;
+    consensus_version_ = consensus_version;
+  }
+  return ret;
+}
+
+int ObBroadcastConsensusVersionArg::assign(const ObBroadcastConsensusVersionArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    consensus_version_ = other.consensus_version_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBroadcastConsensusVersionRes, ret_);
 }//end namespace obrpc
 }//end namepsace oceanbase

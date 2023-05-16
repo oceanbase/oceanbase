@@ -88,6 +88,15 @@ void ObSchemaStore::update_baseline_schema_version(int64_t version)
   }
 }
 
+void ObSchemaStore::update_consensus_version(int64_t version)
+{
+  if (version > consensus_version_) {
+    inc_update(&consensus_version_, version);
+    LOG_INFO("[SCHEMA_STORE] schema store update version",
+             K_(tenant_id), K(version), K_(consensus_version));
+  }
+}
+
 int ObSchemaStoreMap::init(int64_t bucket_num)
 {
   UNUSED(bucket_num);
