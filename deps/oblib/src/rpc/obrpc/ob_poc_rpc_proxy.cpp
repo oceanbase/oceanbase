@@ -87,6 +87,9 @@ ObAsyncRespCallback* ObAsyncRespCallback::create(ObRpcMemPool& pool, UAsyncCB* u
         RPC_LOG(WARN, "ucb.clone fail", K(ret));
       } else {
         cb->low_level_cb_ = pcb;
+        if (cb != ucb) {
+          cb->set_cloned(true);
+        }
       }
     }
     new(pcb)ObAsyncRespCallback(pool, cb);
@@ -107,23 +110,29 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   }
   if (ucb_ == NULL) {
     // do nothing
-  } else if (0 != io_err) {
-    ucb_->set_error(io_err);
-    if (OB_SUCCESS != ucb_->on_error(io_err)) {
-      ucb_->on_timeout();
-    }
-  } else if (NULL == buf) {
-    ucb_->on_timeout();
-  } else if (OB_FAIL(rpc_decode_ob_packet(pool_, buf, sz, ret_pkt))) {
-    ucb_->on_invalid();
-    RPC_LOG(WARN, "rpc_decode_ob_packet fail", K(ret));
-  } else if (OB_FAIL(ucb_->decode(ret_pkt))) {
-    ucb_->on_invalid();
-    RPC_LOG(WARN, "ucb.decode fail", K(ret));
   } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ucb_->process())) {
-      RPC_LOG(WARN, "ucb.process fail", K(tmp_ret));
+    bool cb_cloned = ucb_->get_cloned();
+    if (0 != io_err) {
+      ucb_->set_error(io_err);
+      if (OB_SUCCESS != ucb_->on_error(io_err)) {
+        ucb_->on_timeout();
+      }
+    } else if (NULL == buf) {
+      ucb_->on_timeout();
+    } else if (OB_FAIL(rpc_decode_ob_packet(pool_, buf, sz, ret_pkt))) {
+      ucb_->on_invalid();
+      RPC_LOG(WARN, "rpc_decode_ob_packet fail", K(ret));
+    } else if (OB_FAIL(ucb_->decode(ret_pkt))) {
+      ucb_->on_invalid();
+      RPC_LOG(WARN, "ucb.decode fail", K(ret));
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = ucb_->process())) {
+        RPC_LOG(WARN, "ucb.process fail", K(tmp_ret));
+      }
+    }
+    if (cb_cloned) {
+      ucb_->~AsyncCB();
     }
   }
   pool_.destroy();
