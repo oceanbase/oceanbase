@@ -368,7 +368,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
         const ObSrsItem *tmp = NULL;
         res_count++;
         if (OB_ISNULL(snapshot)) {
-          snapshot = OB_NEW(ObSrsCacheSnapShot, ObModIds::OMT, snapshot_type, tenant_id_);
+          snapshot = OB_NEW(ObSrsCacheSnapShot, ObModIds::OMT, snapshot_type);
           if (OB_ISNULL(snapshot)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to create ObSrsCacheSnapShot", K(ret));
