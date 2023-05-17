@@ -276,6 +276,17 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
     LOG_ERROR("update memory_limit or system_memory failed",
               K(memory_limit), K(system_memory));
   }
+
+  int64_t observer_tenant_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
+  if (observer_tenant_hold > system_memory_) {
+    if (server_config._ignore_system_memory_over_limit_error) {
+      LOG_WARN("the hold of observer tenant is over the system_memory",
+               K(observer_tenant_hold), K_(system_memory));
+    } else {
+      LOG_ERROR("the hold of observer tenant is over the system_memory",
+                K(observer_tenant_hold), K_(system_memory));
+    }
+  }
   return ret;
 }
 

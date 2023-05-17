@@ -482,7 +482,7 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
       char *buf = (char *)ctxalp(BUFLEN);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LIB_LOG(ERROR, "no memory", K(ret));
+        LIB_LOG(WARN, "no memory", K(ret));
       } else {
         int64_t ctx_pos = 0;
         const volatile int64_t *ctx_hold_bytes = mgr->get_ctx_hold_bytes();
