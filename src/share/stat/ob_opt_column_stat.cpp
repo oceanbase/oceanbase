@@ -158,6 +158,7 @@ ObOptColumnStat::ObOptColumnStat()
       histogram_(),
       last_analyzed_(0),
       cs_type_(CS_TYPE_INVALID),
+      total_col_len_(0),
       inner_max_allocator_("OptColStatMax"),
       inner_min_allocator_("OptColStatMin")
 {
@@ -182,6 +183,7 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       histogram_(),
       last_analyzed_(0),
       cs_type_(CS_TYPE_INVALID),
+      total_col_len_(0),
       inner_max_allocator_("OptColStatMax"),
       inner_min_allocator_("OptColStatMin")
 {
@@ -210,6 +212,7 @@ void ObOptColumnStat::reset()
   llc_bitmap_ = NULL;
   last_analyzed_ = 0;
   cs_type_ = CS_TYPE_INVALID;
+  total_col_len_ = 0;
   inner_max_allocator_.reset();
   inner_min_allocator_.reset();
   histogram_.reset();
@@ -280,6 +283,7 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int6
   avg_length_ = src.avg_length_;
   last_analyzed_ = src.last_analyzed_;
   cs_type_ = src.cs_type_;
+  total_col_len_ = src.total_col_len_;
 
   if (!src.is_valid() || nullptr == buf || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -343,6 +347,7 @@ OB_DEF_SERIALIZE(ObOptColumnStat) {
     MEMCPY(buf + pos, llc_bitmap_, llc_bitmap_size_);
     pos += llc_bitmap_size_;
   }
+  OB_UNIS_ENCODE(total_col_len_);
   return ret;
 
 }
@@ -363,6 +368,7 @@ OB_DEF_SERIALIZE_SIZE(ObOptColumnStat) {
               object_type_);
   if (llc_bitmap_size_ !=0)
     len += llc_bitmap_size_;
+  OB_UNIS_ADD_LEN(total_col_len_);
   return len;
 }
 
@@ -384,6 +390,7 @@ OB_DEF_DESERIALIZE(ObOptColumnStat) {
     memcpy(llc_bitmap_, buf + pos, llc_bitmap_size_);
     pos += llc_bitmap_size_;
   }
+  OB_UNIS_DECODE(total_col_len_);
   return ret;
 }
 
@@ -398,11 +405,10 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the key not match", K(ret));
   } else {
-    double avg_len = 0;
-    other.get_avg_len(avg_len);
-    merge_avg_len(avg_len, other.get_num_not_null() + other.get_num_null());
-    num_null_ += other.get_num_null();
-    num_not_null_ += other.get_num_not_null();
+    add_num_null(other.get_num_null());
+    add_num_not_null(other.get_num_not_null());
+    add_col_len(other.get_total_col_len());
+    calc_avg_len();
     const ObObj &min_val = other.get_min_value();
     const ObObj &max_val = other.get_max_value();
     if (!min_val.is_null() && (min_value_.is_null() || min_val < min_value_)) {
@@ -430,14 +436,6 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
 int ObOptColumnStat::merge_obj(const ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  //calc avg_len: avg_len should update before num_null, null_not_null -- since these are use in merge_avg_len.
-  // the following code is abandoned, since it is not accurate.
-  // set calc avg_row_len using ObExprSysOpOpnsize::calc_sys_op_opnsize by datum.
-  // and set avg_row_len outer side this function.
-  //int64_t row_len  = 0;
-  //row_len = sizeof(ObObj) + obj.get_deep_copy_size();
-  //merge_avg_len(row_len, 1);
-
   if (obj.is_null()) {
     num_null_++;
   } else {
@@ -469,88 +467,8 @@ int ObOptColumnStat::merge_obj(const ObObj &obj)
       //don't need to get call ObGlobalNdvEval::get_ndv_from_llc here, call it later.
     }
   }
-
   return ret;
 }
-
-// deep copy max/min
-/*int ObOptColumnStat::deep_copy_max_min_obj()
-{
-  int ret = OB_SUCCESS;
-  inner_min_allocator_.reuse();
-  inner_max_allocator_.reuse();
-  if (OB_FAIL(ob_write_obj(inner_max_allocator_, max_value_, max_value_))) {
-    LOG_WARN("fail to deep copy obj", K(ret));
-  } else if (OB_FAIL(ob_write_obj(inner_min_allocator_, min_value_, min_value_))) {
-    LOG_WARN("fail to deep copy obj", K(ret));
-  }
-  return ret;
-}*/
-/* the max_alloc and min_alloc must be res-able, only for future usage.
-int ObOptColumnStat::merge_obj(ObObj &obj,
-                               ObIAllocator &max_alloc,
-                               ObIAllocator &min_alloc)
-{
-  int ret = OB_SUCCESS;
-  int64_t row_len  = 0;
-
-  if (obj.is_null()) {
-    num_null_++;
-  } else {
-    num_not_null_++;
-  }
-  // max/min
-  if (OB_FAIL(merge_max_val(obj, max_alloc))) {
-    LOG_WARN("fail to merge max value", K(ret));
-  } else if (OB_FAIL(merge_min_val(obj, min_alloc))) {
-    LOG_WARN("fail to merge min value", K(ret));
-  }
-  // avg_len
-  row_len = sizeof(ObObj) + obj.get_deep_copy_size();
-  merge_avg_len(row_len, 1);
-
-  // calc llc.
-  if (OB_SUCC(ret)) {
-    uint64_t hash_value = 0;
-    hash_value = obj.is_string_type() ?
-                 obj.varchar_hash(obj.get_collation_type(), hash_value) :
-                 obj.hash(hash_value);
-    if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap_, llc_bitmap_size_))) {
-      LOG_WARN("fail to calc llc", K(ret));
-    } else {
-      num_distinct_ = ObGlobalNdvEval::get_ndv_from_llc(llc_bitmap_);
-    }
-  }
-  return ret;
-}*/
-
-// this two function couldn't guarantee the alloc is reuseable. So do not use it.
-// only for future usage.
-/*int ObOptColumnStat::merge_min_val(const common::ObObj &min_val,
-                                   common::ObIAllocator &alloc) {
-  int ret = OB_SUCCESS;
-  LOG_TRACE("MERGE min val", K(min_val), K(min_value_));
-  if (min_value_.is_null() || min_val < min_value_) {
-    alloc.reuse();
-    if (OB_FAIL(ob_write_obj(alloc, min_val, min_value_))) {
-      LOG_WARN("fail to deep copy obj", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObOptColumnStat::merge_max_val(const common::ObObj &max_val,
-                                   common::ObIAllocator &alloc) {
-  int ret = OB_SUCCESS;
-  LOG_TRACE("MERGE max val", K(max_val), K(max_value_));
-  if (max_value_.is_null() || max_val > max_value_) {
-    alloc.reuse();
-    if (OB_FAIL(ob_write_obj(alloc, max_val, max_value_))) {
-      LOG_WARN("fail to deep copy obj", K(ret));
-    }
-  }
-  return ret;
-}*/
 
 }
 }

@@ -392,6 +392,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
   ObObj res_obj;
+  int64_t col_len  = 0;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
@@ -403,20 +404,12 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
     LOG_WARN("eval expr failed", K(ret));
   } else if (OB_FAIL(datum->to_obj(res_obj, expr->obj_meta_))) {
     LOG_WARN("to obj failed", K(ret));
+  } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
+    LOG_WARN("fail to calc sys op opnsize", K(ret));
+  } else if (OB_FAIL(set_col_stats(all_stats, res_obj, col_len))) {
+    LOG_WARN("fail to set col stats", K(ret));
   } else {
-    int64_t col_len  = 0;
-    // we set avg_len outer size the set_col_stats function
-    // since derive avg_len from obj is inaccurate.
-    // and we need to calc avg_len before num_not_null/num_null.
-    if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
-      LOG_WARN("fail to calc sys op opnsize", K(ret));
-    } else if (FALSE_IT(set_col_stats_avg_len(all_stats, col_len))) {
-      LOG_WARN("fail to set col_stats_avg_len", K(ret), K(col_len));
-    } else if (OB_FAIL(set_col_stats(all_stats, res_obj))) {
-      LOG_WARN("fail to set col stats", K(ret));
-    } else {
-      row_len += col_len;
-    }
+    row_len += col_len;
   }
   return ret;
 }
@@ -488,18 +481,7 @@ int ObOptimizerStatsGatheringOp::get_col_stats_by_partinfo(PartIds &part_ids, ui
   return ret;
 }
 
-void ObOptimizerStatsGatheringOp::set_col_stats_avg_len(StatItems &all_stats, int64_t avg_len)
-{
-  all_stats.global_col_stat_->merge_avg_len(avg_len);
-  if (MY_SPEC.is_part_table()) {
-    all_stats.part_col_stat_->merge_avg_len(avg_len);
-  }
-  if (MY_SPEC.is_two_level_part()) {
-    all_stats.first_part_col_stat_->merge_avg_len(avg_len);
-  }
-}
-
-int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
+int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj, int64_t col_len)
 {
   int ret = OB_SUCCESS;
   const ObObj *tmp_obj;
@@ -513,12 +495,16 @@ int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(all_stats.global_col_stat_->merge_obj(obj))) {
       LOG_WARN("fail to set global column stat", K(ret), K(obj));
+    } else {
+      all_stats.global_col_stat_->add_col_len(col_len);
     }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_part_table()) {
     all_stats.part_col_stat_->set_stat_level(StatLevel::PARTITION_LEVEL);
     if (OB_FAIL(all_stats.part_col_stat_->merge_obj(obj))) {
       LOG_WARN("fail to set part column stat", K(ret), K(obj));
+    } else {
+      all_stats.part_col_stat_->add_col_len(col_len);
     }
   }
   if (OB_SUCC(ret) && MY_SPEC.is_two_level_part()) {
@@ -526,6 +512,8 @@ int ObOptimizerStatsGatheringOp::set_col_stats(StatItems &all_stats, ObObj &obj)
     all_stats.part_col_stat_->set_stat_level(StatLevel::SUBPARTITION_LEVEL);
     if (OB_FAIL(all_stats.first_part_col_stat_->merge_obj(obj))) {
       LOG_WARN("fail to set first part column stat", K(ret), K(obj));
+    } else {
+      all_stats.first_part_col_stat_->add_col_len(col_len);
     }
   }
   return ret;

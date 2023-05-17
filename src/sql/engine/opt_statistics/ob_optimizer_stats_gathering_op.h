@@ -131,8 +131,7 @@ private:
   int get_col_stats_by_partinfo(PartIds &part_ids, uint64_t column_id, StatItems &stat_item);
 
   // get stat by part_ids
-  int set_col_stats(StatItems &all_stat, common::ObObj &obj);
-  void set_col_stats_avg_len(StatItems &all_stats, int64_t avg_len);
+  int set_col_stats(StatItems &all_stat, common::ObObj &obj, int64_t col_len);
   int set_tab_stats(StatItems &all_stat, int64_t row_len);
 
   // get tab stat by key(tenant_id, table_id, partition_id), if NOT_EXISTS, alloc a new one.
