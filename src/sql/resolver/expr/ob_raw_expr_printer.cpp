@@ -1101,8 +1101,6 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("json_arrayagg");
     case T_FUN_JSON_OBJECTAGG:
       SET_SYMBOL_IF_EMPTY("json_objectagg");
-    case T_FUN_ORA_XMLAGG:
-      SET_SYMBOL_IF_EMPTY("xmlagg");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||
@@ -1160,6 +1158,12 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
     case T_FUN_ORA_JSON_ARRAYAGG: {
       if (OB_FAIL(print_ora_json_arrayagg(expr))) {
         LOG_WARN("fail to print oracle json_arrayagg.", K(ret));
+      }
+      break;
+    }
+    case T_FUN_ORA_XMLAGG: {
+      if (OB_FAIL(print_xml_agg_expr(expr))) {
+        LOG_WARN("fail to print oracle xmlagg.", K(ret));
       }
       break;
     }
@@ -3072,12 +3076,6 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
-      case T_FUN_ORA_XMLAGG: {
-        if (OB_FAIL(print_xml_agg_expr(expr))) {
-          LOG_WARN("print xml_parse expr failed", K(ret));
-        }
-        break;
-      }
       case T_FUN_SYS_XML_SERIALIZE: {
         if (OB_FAIL(print_xml_serialize_expr(expr))) {
           LOG_WARN("print xmlserialize expr failed", K(ret));
@@ -4515,10 +4513,47 @@ int ObRawExprPrinter::print_xml_element_expr(ObSysFunRawExpr *expr)
   return ret;
 }
 
-int ObRawExprPrinter::print_xml_agg_expr(ObSysFunRawExpr *expr)
+int ObRawExprPrinter::print_xml_agg_expr(ObAggFunRawExpr *expr)
 {
-  UNUSED(expr);
-  int ret = OB_NOT_IMPLEMENT; // ToDo: @gehao, implement soom later
+  INIT_SUCC(ret);
+  if (OB_UNLIKELY(2 == expr->get_real_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else {
+    DATA_PRINTF("xmlagg(");
+    PRINT_EXPR(expr->get_param_expr(0));
+    if (OB_NOT_NULL(expr->get_param_expr(1))) {
+      const ObIArray<OrderItem> &order_items = expr->get_order_items();
+      int64_t order_item_size = order_items.count();
+      if (order_item_size > 0) {
+        DATA_PRINTF(" order by ");
+        for (int64_t i = 0; OB_SUCC(ret) && i < order_item_size; ++i) {
+          const OrderItem &order_item = order_items.at(i);
+          PRINT_EXPR(order_item.expr_);
+          if (OB_SUCC(ret)) {
+            if (lib::is_mysql_mode()) {
+              if (is_descending_direction(order_item.order_type_)) {
+                DATA_PRINTF(" desc ");
+              }
+            } else if (order_item.order_type_ == NULLS_FIRST_ASC) {
+              DATA_PRINTF(" asc nulls first ");
+            } else if (order_item.order_type_ == NULLS_LAST_ASC) {//use default value
+              /*do nothing*/
+            } else if (order_item.order_type_ == NULLS_FIRST_DESC) {//use default value
+              DATA_PRINTF(" desc ");
+            } else if (order_item.order_type_ == NULLS_LAST_DESC) {
+              DATA_PRINTF(" desc nulls last ");
+            } else {/*do nothing*/}
+          }
+          DATA_PRINTF(",");
+        }
+        if (OB_SUCC(ret)) {
+          --*pos_;
+        }
+      }
+    }
+    DATA_PRINTF(")");
+  }
   return ret;
 }
 
