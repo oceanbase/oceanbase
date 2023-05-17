@@ -172,6 +172,11 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
     }
+    // check if it is a view
+    else if (table_schema->is_view_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support view table", KR(ret));
+    }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
       ret = OB_NOT_SUPPORTED;
