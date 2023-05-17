@@ -2752,7 +2752,8 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
       if (lib::is_oracle_mode()
       && NULL != params_.secondary_namespace_
       && get_basic_stmt()->is_insert_stmt()
-      && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()) {
+      && !static_cast<ObInsertStmt*>(get_basic_stmt())->value_from_select()
+      && T_FIELD_LIST_SCOPE != current_scope_) {
         //oracle模式insert语句的values子句，标识符优先解释为变量
         if (!q_name.access_idents_.empty()) { //q_name.access_idents_为NULL肯定是列
           if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
