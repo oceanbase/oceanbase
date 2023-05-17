@@ -109,6 +109,7 @@ protected:
                             //目前仅针对 merge except 和 merge intersect 置为TRUE, 因为无法区分 last_output_row_
                             //是来自初始化时的全NULL or 左侧child的全NULL, see bug
   int64_t last_row_idx_;
+  bool use_last_row_;
 };
 
 

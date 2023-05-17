@@ -160,6 +160,7 @@ int ObMergeExceptOp::inner_get_next_batch(const int64_t max_row_cnt)
                                                            first_got_left_row_))) {
       //when we succ locate a row in left batch, store row is out of date,
       //we will compare inside a batch
+      use_last_row_ = false;
       brs_.skip_->unset(curr_left_idx);
       last_left_idx = curr_left_idx;
       if (right_iter_end_) {
@@ -234,6 +235,8 @@ int ObMergeExceptOp::inner_get_next_batch(const int64_t max_row_cnt)
       batch_info_guard.set_batch_idx(last_left_idx);
       if (OB_FAIL(last_row_.save_store_row(left_->get_spec().output_, eval_ctx_, 0))) {
         LOG_WARN("failed to save last row", K(ret));
+      } else {
+        use_last_row_ = true;
       }
     }
   }
