@@ -3512,6 +3512,39 @@ bool ObMultiVersionSchemaService::is_tenant_full_schema(const uint64_t tenant_id
   return bret;
 }
 
+// factor of election priority
+bool ObMultiVersionSchemaService::is_tenant_not_refreshed(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool schema_not_refreshed = false;
+  if (OB_FAIL(refresh_full_schema_map_.get_refactored(tenant_id, schema_not_refreshed))) {
+    // 1. tenant not exist
+    // 2. tenant schema not refreshed yet after create tenant or restart observer.
+    schema_not_refreshed = true;
+    LOG_TRACE("fail to get refresh full schema flag from map", KR(ret), K(tenant_id));
+  } else {
+    // 1. when schema_not_refreshed = false, it means tenant refreshed full schema once.
+    // 2. when schema_not_refreshed = true, it means tenant schema should be refreshed or tenant has been dropped.
+    if (schema_not_refreshed) {
+      ObSchemaGetterGuard guard;
+      ObSimpleTenantSchema *tenant_schema = NULL;
+      if (OB_FAIL(get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
+        schema_not_refreshed = false;
+        LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        schema_not_refreshed = true;
+        LOG_TRACE("tenant should be refreshed or has been dropped", KR(ret), K(tenant_id));
+      } else if (tenant_schema->is_normal()) {
+        schema_not_refreshed = true;
+      } else {
+        // To make ls leader stable when tenant is in abnormal status.
+        schema_not_refreshed = false;
+      }
+    }
+  }
+  return schema_not_refreshed;
+}
+
 // sql should retry when tenant is normal but never refresh schema successfully.
 bool ObMultiVersionSchemaService::is_schema_error_need_retry(
      ObSchemaGetterGuard *guard,
