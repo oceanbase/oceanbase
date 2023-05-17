@@ -452,6 +452,20 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
   }
 
   if (REACH_TENANT_TIME_INTERVAL(1_hour)) {
+    for (auto iter = gc_memtable_map_.begin();
+         iter != gc_memtable_map_.end(); ++iter) {
+      memtable::ObMemtableSet *memtable_set = iter->second;
+      if (OB_NOT_NULL(memtable_set)) {
+        if (0 != memtable_set->size()) {
+          LOG_ERROR("leaked memtable", KPC(memtable_set));
+        }
+        if (OB_FAIL(memtable_set->destroy())) {
+          LOG_ERROR("memtable set destroy failed", K(ret));
+        }
+        ob_free(memtable_set);
+      }
+    }
+
     if (OB_TMP_FAIL(gc_memtable_map_.clear())) {
       LOG_ERROR("clear gc memtable map failed", K(tmp_ret));
     }
