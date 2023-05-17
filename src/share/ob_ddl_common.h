@@ -130,6 +130,73 @@ enum ObDDLTaskStatus {
   SUCCESS = 100
 };
 
+static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
+  const char *str = nullptr;
+  switch(task_status) {
+    case share::ObDDLTaskStatus::PREPARE:
+      str = "PREPARE";
+      break;
+    case share::ObDDLTaskStatus::LOCK_TABLE:
+      str = "LOCK_TABLE";
+      break;
+    case share::ObDDLTaskStatus::WAIT_TRANS_END:
+      str = "WAIT_TRANS_END";
+      break;
+    case share::ObDDLTaskStatus::REDEFINITION:
+      str = "REDEFINITION";
+      break;
+    case share::ObDDLTaskStatus::VALIDATE_CHECKSUM:
+      str = "VALIDATE_CHECKSUM";
+      break;
+    case share::ObDDLTaskStatus::COPY_TABLE_DEPENDENT_OBJECTS:
+      str = "COPY_TABLE_DEPENDENT_OBJECTS";
+      break;
+    case share::ObDDLTaskStatus::TAKE_EFFECT:
+      str = "TAKE_EFFECT";
+      break;
+    case share::ObDDLTaskStatus::CHECK_CONSTRAINT_VALID:
+      str = "CHECK_CONSTRAINT_VALID";
+      break;
+    case share::ObDDLTaskStatus::SET_CONSTRAINT_VALIDATE:
+      str = "SET_CONSTRAINT_VALIDATE";
+      break;
+    case share::ObDDLTaskStatus::MODIFY_AUTOINC:
+      str = "MODIFY_AUTOINC";
+      break;
+    case share::ObDDLTaskStatus::SET_WRITE_ONLY:
+      str = "SET_WRITE_ONLY";
+      break;
+    case share::ObDDLTaskStatus::WAIT_TRANS_END_FOR_WRITE_ONLY:
+      str = "WAIT_TRANS_END_FOR_WRITE_ONLY";
+      break;
+    case share::ObDDLTaskStatus::SET_UNUSABLE:
+      str = "SET_UNUSABLE";
+      break;
+    case share::ObDDLTaskStatus::WAIT_TRANS_END_FOR_UNUSABLE:
+      str = "WAIT_TRANS_END_FOR_UNUSABLE";
+      break;
+    case share::ObDDLTaskStatus::DROP_SCHEMA:
+      str = "DROP_SCHEMA";
+      break;
+    case ObDDLTaskStatus::CHECK_TABLE_EMPTY:
+      str = "CHECK_TABLE_EMPTY";
+      break;
+    case ObDDLTaskStatus::WAIT_CHILD_TASK_FINISH:
+      str = "WAIT_CHILD_TASK_FINISH";
+      break;
+    case ObDDLTaskStatus::REPENDING:
+      str = "REPENDING";
+      break;
+    case ObDDLTaskStatus::FAIL:
+      str = "FAIL";
+      break;
+    case ObDDLTaskStatus::SUCCESS:
+      str = "SUCCESS";
+      break;
+  }
+  return str;
+}
+
 static inline bool is_simple_table_long_running_ddl(const ObDDLType type)
 {
   return type > DDL_INVALID && type < DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS;
