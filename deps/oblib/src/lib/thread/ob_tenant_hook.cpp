@@ -5,20 +5,23 @@
 #include "lib/thread/thread.h"
 #include "lib/thread/ob_thread_name.h"
 #include "lib/thread/protected_stack_allocator.h"
+#include "lib/stat/ob_diagnose_info.h"
 #include <dlfcn.h>
+#include <poll.h>
+#include <sys/epoll.h>
 
-#define SYS_HOOK(func_name, ...)                    \
-  ({                                                \
-    int ret = 0;                                    \
-    if (!in_sys_hook++) {                           \
-      oceanbase::lib::Thread::is_blocking_ = true;  \
-      ret = real_##func_name(__VA_ARGS__);          \
-      oceanbase::lib::Thread::is_blocking_ = false; \
-    } else {                                        \
-      ret = real_##func_name(__VA_ARGS__);          \
-    }                                               \
-    in_sys_hook--;                                  \
-    ret;                                            \
+#define SYS_HOOK(func_name, ...)                                            \
+  ({                                                                        \
+    int ret = 0;                                                            \
+    if (!in_sys_hook++) {                                                   \
+      oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT; \
+      ret = real_##func_name(__VA_ARGS__);                                  \
+      oceanbase::lib::Thread::is_blocking_ = 0;                             \
+    } else {                                                                \
+      ret = real_##func_name(__VA_ARGS__);                                  \
+    }                                                                       \
+    in_sys_hook--;                                                          \
+    ret;                                                                    \
   })
 
 namespace oceanbase {
@@ -116,6 +119,28 @@ int pthread_rwlock_timedwrlock(pthread_rwlock_t *__restrict __rwlock,
 }
 #endif
 
+int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+		              int __maxevents, int __timeout)
+{
+  static int (*real_epoll_wait)(
+      int __epfd, struct epoll_event *__events,
+		  int __maxevents, int __timeout) = epoll_wait;
+  int ret = 0;
+  oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
+  ret = SYS_HOOK(epoll_wait, __epfd, __events, __maxevents, __timeout);
+  return ret;
+}
+
+int ob_poll(struct pollfd *__fds, nfds_t __nfds, int __timeout)
+{
+  static int (*real_poll)(
+      struct pollfd *__fds, nfds_t __nfds, int __timeout) = poll;
+  int ret = 0;
+  oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
+  ret = SYS_HOOK(poll, __fds, __nfds, __timeout);
+  return ret;
+}
+
 int ob_pthread_cond_wait(pthread_cond_t *__restrict __cond,
                          pthread_mutex_t *__restrict __mutex)
 {
@@ -136,6 +161,12 @@ int ob_pthread_cond_timedwait(pthread_cond_t *__restrict __cond,
   int ret = 0;
   ret = SYS_HOOK(pthread_cond_timedwait, __cond, __mutex, __abstime);
   return ret;
+}
+
+void ob_usleep(const useconds_t v)
+{
+  oceanbase::common::ObSleepEventGuard wait_guard((int64_t)v);
+  ::usleep(v);
 }
 
 int futex_hook(uint32_t *uaddr, int futex_op, uint32_t val, const struct timespec* timeout)

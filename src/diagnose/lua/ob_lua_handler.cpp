@@ -34,6 +34,8 @@ extern "C" {
   #include <lua.h>
   #include <lauxlib.h>
   #include <lualib.h>
+extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+		                     int __maxevents, int __timeout);
 }
 
 using namespace oceanbase;
@@ -178,7 +180,7 @@ int ObUnixDomainListener::run()
           int conn_fd = -1;
           int ret = OB_SUCCESS;
           lib::Thread::update_loop_ts();
-          int64_t event_cnt = epoll_wait(epoll_fd, events, EPOLL_EVENT_BUFFER_SIZE, TIMEOUT);
+          int64_t event_cnt = ob_epoll_wait(epoll_fd, events, EPOLL_EVENT_BUFFER_SIZE, TIMEOUT);
           if (event_cnt < 0) {
             if (EINTR == errno) {
               // timeout, ignore

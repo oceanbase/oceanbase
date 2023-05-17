@@ -1213,12 +1213,14 @@ int ObLocalDevice::io_getevents(
     SHARE_LOG(WARN, "Invalid io context pointer, ", K(ret), KP(io_context));
   } else {
     int sys_ret = 0;
+    oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT_FOR_IO_EVENT;
     while ((sys_ret = ::io_getevents(
         local_io_context->io_context_,
         min_nr,
         local_io_events->max_event_cnt_,
         local_io_events->io_events_,
         timeout)) < 0 && -EINTR == sys_ret); // ignore EINTR
+    oceanbase::lib::Thread::is_blocking_ = 0;
     if (sys_ret < 0) {
       ret = OB_IO_ERROR;
       SHARE_LOG(WARN, "Fail to get io events, ", K(ret), K(sys_ret), KERRMSG);

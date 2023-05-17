@@ -34,6 +34,11 @@
 #include "rpc/frame/ob_req_transport.h"
 #include "io/easy_negotiation.h"
 
+extern "C" {
+extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+		                     int __maxevents, int __timeout);
+};
+
 using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;
 using namespace oceanbase::lib;
@@ -442,7 +447,7 @@ void ObNetKeepAlive::do_server_loop()
     ob_abort();
   }
   while (!has_set_stop()) {
-    int cnt = epoll_wait(epfd, events, sizeof events/sizeof events[0], 1000);
+    int cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], 1000);
     for (int i = 0; i < cnt; i++) {
       struct server *s = (struct server *)events[i].data.ptr;
       int ev_fd = NULL == s? pipefd_ : s->fd_;
@@ -539,7 +544,7 @@ void ObNetKeepAlive::do_client_loop()
     int64_t now = get_usec();
     int64_t past = now - last_check_ts;
     if (past < KEEPALIVE_INTERVAL) {
-      usleep(KEEPALIVE_INTERVAL - past);
+      ob_usleep(KEEPALIVE_INTERVAL - past);
     }
     for (int i = 0; i < MAX_RS_COUNT; i++) {
       struct rpc_server *rs = ATOMIC_LOAD(&rss_[i]);
@@ -586,7 +591,7 @@ void ObNetKeepAlive::do_client_loop()
     }
 
     if (OB_SUCC(ret)) {
-      int cnt = epoll_wait(epfd, events, sizeof events/sizeof events[0], KEEPALIVE_INTERVAL/2/1000);
+      int cnt = ob_epoll_wait(epfd, events, sizeof events/sizeof events[0], KEEPALIVE_INTERVAL/2/1000);
       for (int i = 0; i < cnt; i++) {
         client *c = (client *)events[i].data.ptr;
         int ev_fd = c->fd_;

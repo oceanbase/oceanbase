@@ -375,7 +375,7 @@ void ObResourceGroup::check_worker_count()
           workers_.remove(wnode);
           destroy_worker(w);
         } else if (w->has_req_flag()
-                   && Thread::is_blocking_
+                   && 0 != Thread::is_blocking_
                    && w->is_default_worker()) {
           ++token;
         }
@@ -1018,6 +1018,7 @@ int ObTenant::get_new_request(
   ObLink* task = nullptr;
 
   req = nullptr;
+  Thread::is_blocking_ |= Thread::WAIT_IN_TENANT_QUEUE;
   if (w.is_group_worker()) {
     w.set_large_query(false);
     w.set_curr_request_level(0);
@@ -1361,7 +1362,7 @@ void ObTenant::check_worker_count()
           workers_.remove(wnode);
           destroy_worker(w);
         } else if (w->has_req_flag()
-                   && Thread::is_blocking_
+                   && 0 != Thread::is_blocking_
                    && w->is_default_worker()) {
           ++token;
         }

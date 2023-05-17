@@ -37,6 +37,11 @@ using namespace oceanbase::common;
 #define SO_REUSEPORT 15
 #endif
 
+extern "C" {
+extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+	                       int __maxevents, int __timeout);
+};
+
 namespace oceanbase
 {
 namespace obmysql
@@ -753,7 +758,7 @@ private:
   void handle_epoll_event() {
     const int maxevents = 512;
     struct epoll_event events[maxevents];
-    int cnt = epoll_wait(epfd_, events, maxevents, 1000);
+    int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
     for(int i = 0; i < cnt; i++) {
       ObSqlSock* s = (ObSqlSock*)events[i].data.ptr;
       if (OB_UNLIKELY(NULL == s)) {

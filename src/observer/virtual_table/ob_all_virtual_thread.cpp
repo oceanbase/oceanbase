@@ -57,15 +57,24 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
     for (auto* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
       auto* thread_base = (char*)(header->pth_);
       if (OB_NOT_NULL(thread_base)) {
+        GET_OTHER_TSI_ADDR(int64_t, tid, &get_tid_cache());
+        {
+          char path[64];
+          IGNORE_RETURN snprintf(path, 64, "/proc/self/task/%ld", tid);
+          if (-1 == access(path, F_OK)) {
+            // thread not exist, may have exited.
+            continue;
+          }
+        }
         GET_OTHER_TSI_ADDR(uint64_t, tenant_id, &ob_get_tenant_id());
         if (!is_sys_tenant(effective_tenant_id_)
             && tenant_id != effective_tenant_id_) {
           continue;
         }
-        GET_OTHER_TSI_ADDR(int64_t, tid, &get_tid_cache());
         GET_OTHER_TSI_ADDR(uint32_t*, wait_addr, &ObLatch::current_wait);
         GET_OTHER_TSI_ADDR(pthread_t, join_addr, &Thread::thread_joined_);
         GET_OTHER_TSI_ADDR(int64_t, sleep_us, &Thread::sleep_us_);
+        GET_OTHER_TSI_ADDR(uint8_t, is_blocking, &Thread::is_blocking_);
         for (int64_t i = 0; i < col_count && OB_SUCC(ret); ++i) {
           const uint64_t col_id = output_column_ids_.at(i);
           ObObj *cells = cur_row_.cells_;
@@ -81,7 +90,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               break;
             }
             case TENANT_ID: {
-              cells[i].set_int(tenant_id);
+              cells[i].set_int(0 == tenant_id ? OB_SERVER_TENANT_ID : tenant_id);
               break;
             }
             case TID: {
@@ -98,13 +107,12 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               break;
             }
             case STATUS: {
-              GET_OTHER_TSI_ADDR(bool, is_blocking, &Thread::is_blocking_);
               const char* status_str = nullptr;
               if (0 != join_addr) {
                 status_str = "Join";
               } else if (0 != sleep_us) {
                 status_str = "Sleep";
-              } else if (is_blocking) {
+              } else if (0 != is_blocking) {
                 status_str = "Wait";
               } else {
                 status_str = "Run";
@@ -138,6 +146,10 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 do_with_crash_restore([&] {
                   IGNORE_RETURN snprintf(wait_event_, 64, "rpc to %s", rpc_dest_addr);
                 }, has_segv);
+              } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
+                IGNORE_RETURN snprintf(wait_event_, 64, "tenant worker requests");
+              } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
+                IGNORE_RETURN snprintf(wait_event_, 64, "IO events");
               }
               cells[i].set_varchar(wait_event_);
               cells[i].set_collation_type(

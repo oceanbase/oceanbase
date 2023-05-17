@@ -20,6 +20,10 @@ static ussl_sf_t acceptfd_fty;
 static ussl_sf_t clientfd_fty;
 static pthread_t ussl_bg_thread_id;
 
+int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                      void *(*start_routine) (void *), void *arg);
+void ob_set_thread_name(const char* type);
+
 static int uloop_init(uloop_t *l)
 {
   int err = 0;
@@ -63,7 +67,7 @@ static int uloop_add_listen(uloop_t *l, int listen_fd, int backlog)
 
 static void *bg_thread_func(void *arg)
 {
-  prctl(PR_SET_NAME, "ussl_loop");
+  ob_set_thread_name("ussl_loop");
   uloop_run(&global_ussl_loop_struct);
   return NULL;
 }
@@ -86,7 +90,7 @@ int init_bg_thread()
   if (0 == ret) {
     if (0 != uloop_init(&global_ussl_loop_struct)) {
       ussl_log_error("initialize uloop failed.")
-    } else if (0 != pthread_create(&ussl_bg_thread_id, NULL, bg_thread_func, NULL)) {
+    } else if (0 != ob_pthread_create(&ussl_bg_thread_id, NULL, bg_thread_func, NULL)) {
       ret = EIO;
       ussl_log_error("create background thread failed, errno:%d", errno);
     } else {

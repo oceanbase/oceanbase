@@ -41,6 +41,8 @@ easy_ma_t g_ma;
 
 int ob_pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                       void *(*start_routine) (void *), void *arg);
+int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+		          int __maxevents, int __timeout);
 void easy_ma_init(int port)
 {
     int i;
@@ -170,7 +172,7 @@ void* easy_ma_thread_func(easy_ma_t* ma)
     while (!ma->stop) {
         const int maxevents = 64;
         struct epoll_event events[maxevents];
-        int cnt = epoll_wait(efd, events, maxevents, 1000);
+        int cnt = ob_epoll_wait(efd, events, maxevents, 1000);
         for (i = 0; i < cnt; i++) {
             int cfd = events[i].data.fd;
             int emask = events[i].events;

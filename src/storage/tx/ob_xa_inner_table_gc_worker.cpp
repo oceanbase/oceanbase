@@ -100,7 +100,7 @@ void ObXAInnerTableGCWorker::run1()
       }
     }
     //sleep 20 secnd whether gc succ or not
-    sleep(20);
+    SLEEP(20);
     // try refresh gc_interval,
     // if gc falied, and not update last_scan_ts, update gc_interval can be effective
     // gc_interval ～ [20s, 24h]

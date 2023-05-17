@@ -188,10 +188,16 @@ class ObSleepEventGuard : public ObWaitEventGuard
 {
 public:
   explicit ObSleepEventGuard(
-    const int64_t event_no,
-    const uint64_t timeout_ms = 0,
-    const int64_t sleep_us = 0
+      const int64_t event_no,
+      const uint64_t timeout_ms,
+      const int64_t sleep_us
   ) : ObWaitEventGuard(event_no, timeout_ms, sleep_us, 0, 0, false)
+  {
+    lib::Thread::sleep_us_ = sleep_us;
+  }
+  explicit ObSleepEventGuard(
+    const int64_t sleep_us = 0
+  ) : ObWaitEventGuard(ObWaitEventIds::DEFAULT_SLEEP, 0, sleep_us, 0, 0, false)
   {
     lib::Thread::sleep_us_ = sleep_us;
   }
@@ -322,13 +328,13 @@ private:
 
 #define SLEEP(time)                           \
   do {                                                          \
-    oceanbase::common::ObSleepEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, ((int64_t)time) * 1000 * 1000);    \
+    oceanbase::common::ObSleepEventGuard wait_guard(((int64_t)time) * 1000 * 1000);    \
     ::sleep(time);                                                      \
   } while (0)
 
 #define USLEEP(time)                           \
   do {                                                          \
-    oceanbase::common::ObSleepEventGuard wait_guard(oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP, 0, (int64_t)time);    \
+    oceanbase::common::ObSleepEventGuard wait_guard((int64_t)time);    \
     ::usleep(time);                                         \
   } while (0)
 

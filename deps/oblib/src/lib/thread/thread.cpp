@@ -33,7 +33,7 @@ using namespace oceanbase::lib;
 thread_local int64_t Thread::loop_ts_ = 0;
 thread_local pthread_t Thread::thread_joined_ = 0;
 thread_local int64_t Thread::sleep_us_ = 0;
-thread_local bool Thread::is_blocking_ = false;
+thread_local uint8_t Thread::is_blocking_ = 0;
 thread_local char* Thread::rpc_dest_addr_ = nullptr;
 thread_local Thread* Thread::current_thread_ = nullptr;
 int64_t Thread::total_thread_count_ = 0;
