@@ -53,6 +53,7 @@ bool TPSymbolTable::SymbolEntry::find(const char* name)
         break;
       } else if (TP_BCAS(&lock_, lock, SETTING)) {
         strncpy(name_, name, sizeof(name_) - 1);
+        name_[sizeof(name_) - 1] = '\0';
         has_found = true;
         TP_AS(&lock_, OK);
       }
