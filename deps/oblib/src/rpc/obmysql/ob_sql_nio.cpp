@@ -735,21 +735,18 @@ public:
     tcp_keepintvl_ = tcp_keepintvl;
     tcp_keepcnt_ = tcp_keepcnt;
   }
-  void close_all_fd() {
-    if (lfd_ > 0) {
-      IGNORE_RETURN epoll_ctl(epfd_, EPOLL_CTL_DEL, lfd_, NULL);
-      close(lfd_);
-      lfd_ = -1;
-    }
+  void close_all() {
     ObDLink* head = all_list_.head();
     ObLink* cur = head->next_;
     while (cur != head) {
       ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
       cur = cur->next_;
-      s->on_disconnect();
-      ObSqlSockSession *sess = (ObSqlSockSession *)s->sess_;
-      sess->destroy();
-      s->do_close();
+      prepare_destroy(s);
+    }
+    while(head->next_ != head) {
+      handle_write_req_queue();
+      handle_close_req_queue();
+      handle_pending_destroy_list();
     }
   }
 private:
@@ -1065,7 +1062,7 @@ void ObSqlNio::run(int64_t idx)
       impl_[idx].do_work();
     }
     if (has_set_stop()) {
-      impl_[idx].close_all_fd();
+      impl_[idx].close_all();
     }
   }
 }

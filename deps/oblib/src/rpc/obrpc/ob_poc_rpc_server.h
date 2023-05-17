@@ -51,12 +51,14 @@ class ObPocRpcServer
 public:
   enum {
     DEFAULT_PNIO_GROUP = 1,
-    RATELIMIT_PNIO_GROUP = 2
+    RATELIMIT_PNIO_GROUP = 2,
+    END_GROUP
   };
   ObPocRpcServer() : has_start_(false){}
   ~ObPocRpcServer() {}
   int start(int port, int net_thread_count, rpc::frame::ObReqDeliver* deliver);
-  void stop() {}
+  void stop();
+  void wait();
   bool has_start() {return has_start_;}
   int update_tcp_keepalive_params(int64_t user_timeout);
   int update_server_standby_fetch_log_bandwidth_limit(int64_t value);

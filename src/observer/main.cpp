@@ -396,6 +396,39 @@ static int check_uid_before_start(const char *dir_path)
 
   return ret;
 }
+
+static void print_all_thread(const char* desc)
+{
+  MPRINT("============= [%s]begin to show unstopped thread =============", desc);
+  DIR *dir = opendir("/proc/self/task");
+  if (dir == NULL) {
+    MPRINT("fail to print all thread");
+  } else {
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+      char *tid = entry->d_name;
+      if (tid[0] == '.')
+        continue;  // pass . and ..
+      char path[256];
+      sprintf(path, "/proc/self/task/%s/comm", tid);
+      FILE *file = fopen(path, "r");
+      if (file == NULL) {
+        MPRINT("fail to print thread tid: %s", tid);
+      }
+      char name[256];
+      fgets(name, 256, file);
+      size_t len = strlen(name);
+      if (len > 0 && name[len - 1] == '\n') {
+        name[len - 1] = '\0';
+      }
+      MPRINT("tid: %s, name: %s", tid, name);
+      fclose(file);
+    }
+  }
+  closedir(dir);
+  MPRINT("============= [%s]finish to show unstopped thread =============", desc);
+}
+
 extern "C" {
 typedef void *(*reasy_pool_realloc_pt)(void *ptr, size_t size);
 void reasy_pool_set_allocator(reasy_pool_realloc_pt alloc);
@@ -551,6 +584,7 @@ int main(int argc, char *argv[])
       } else if (OB_FAIL(observer.wait())) {
         LOG_ERROR("observer wait fail", K(ret));
       }
+      print_all_thread("BEFORE_DESTORY");
       observer.destroy();
       ObKVGlobalCache::get_instance().destroy();
       ObVirtualTenantManager::get_instance().destroy();
@@ -563,5 +597,6 @@ int main(int argc, char *argv[])
   OB_LOGGER.set_stop_append_log();
   OB_LOGGER.set_enable_async_log(false);
   OB_LOGGER.set_enable_log_limit(false);
+  print_all_thread("AFTER_DESTORY");
   return ret;
 }

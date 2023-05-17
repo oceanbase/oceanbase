@@ -223,6 +223,7 @@ static pn_t* pn_create(int listen_id, int gid, int tid)
     cfifo_alloc_init(&pn->server_resp_alloc, &pn->server_resp_chunk_alloc);
     cfifo_alloc_init(&pn->client_req_alloc, &pn->client_req_chunk_alloc);
     cfifo_alloc_init(&pn->client_cb_alloc, &pn->client_cb_chunk_alloc);
+    pn->is_stop_ = false;
   }
   if (0 != err && NULL != pn) {
     pn_destroy(pn);
@@ -394,6 +395,24 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
     err = pktc_post(&pn->pktc, r);
   }
   return err;
+}
+
+PN_API void pn_stop(uint64_t gid)
+{
+  pn_grp_t *pgrp = locate_grp(gid);
+  for (int tid = 0; tid < pgrp->count; tid++) {
+    pn_t *pn = get_pn_for_send(pgrp, tid);
+    ATOMIC_STORE(&pn->is_stop_, true);
+  }
+}
+
+PN_API void pn_wait(uint64_t gid)
+{
+  pn_grp_t *pgrp = locate_grp(gid);
+  for (int tid = 0; tid < pgrp->count; tid++) {
+    pn_t *pn = get_pn_for_send(pgrp, tid);
+    pthread_join(pn->pd, NULL);
+  }
 }
 
 typedef struct pn_resp_ctx_t

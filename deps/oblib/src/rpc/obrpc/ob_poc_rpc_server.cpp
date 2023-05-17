@@ -190,6 +190,21 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   }
   return ret;
 }
+
+void ObPocRpcServer::stop()
+{
+  for (uint64_t gid = 1; gid < END_GROUP; gid++) {
+    pn_stop(gid);
+  }
+}
+
+void ObPocRpcServer::wait()
+{
+  for (uint64_t gid = 1; gid < END_GROUP; gid++) {
+    pn_wait(gid);
+  }
+}
+
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {
   int ret = OB_SUCCESS;
   if (pn_set_keepalive_timeout(user_timeout) != user_timeout) {

@@ -1200,6 +1200,10 @@ int ObServer::stop()
   }
 
 
+  FLOG_INFO("begin to stop global_poc_server");
+  obrpc::global_poc_server.stop();
+  FLOG_INFO("stop global_poc_server success");
+
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
   if (OB_SUCCESS != fail_ret) {
@@ -1390,6 +1394,11 @@ int ObServer::wait()
       LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
     }
   }
+
+  FLOG_INFO("begin to wait global_poc_server");
+  obrpc::global_poc_server.wait();
+  FLOG_INFO("wait global_poc_server success");
+
   return ret;
 }
 

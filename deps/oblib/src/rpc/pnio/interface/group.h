@@ -38,6 +38,7 @@ typedef struct pn_grp_comm_t
 } pn_grp_comm_t;
 
 #define PN_COMM                \
+  bool is_stop_;               \
   pthread_t pd;                \
   int accept_qfd;              \
   int gid;                     \
@@ -62,6 +63,8 @@ PN_API int pn_ratelimit(int grp_id, int64_t value);
 PN_API int64_t pn_get_ratelimit(int grp_id);
 PN_API uint64_t pn_get_rxbytes(int grp_id);
 PN_API int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid);
+PN_API void pn_stop(uint64_t gid);
+PN_API void pn_wait(uint64_t gid);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
 

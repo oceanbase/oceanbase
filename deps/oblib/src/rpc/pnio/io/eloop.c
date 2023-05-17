@@ -102,7 +102,8 @@ int eloop_thread_run(eloop_t** udata) {
 }
 
 int eloop_run(eloop_t* ep) {
-  while(true) {
+  pn_comm_t* pn = get_current_pnio();
+  while(!ATOMIC_LOAD(&pn->is_stop_)) {
     int64_t epoll_timeout = 1000;
     ob_update_loop_ts();
     if (ep->ready_link.next != &ep->ready_link) {
@@ -116,7 +117,6 @@ int eloop_run(eloop_t* ep) {
     }
 
     PNIO_DELAY_WARN(eloop_delay_warn(start_us, ELOOP_WARN_US));
-    pn_comm_t* pn = get_current_pnio();
     if (unlikely(NULL != pn && 0 == pn->tid && PNIO_REACH_TIME_INTERVAL(1000000))) {
       static __thread uint64_t last_rx_bytes = 0;
       static __thread uint64_t last_time = 0;
