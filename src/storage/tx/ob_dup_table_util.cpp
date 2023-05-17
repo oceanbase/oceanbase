@@ -1011,7 +1011,7 @@ void ObDupTableLSHandler::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), K(ls_id),
+    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), K(ls_id_),
                   K(is_master()));
   }
   ATOMIC_STORE(&is_master_, false);
@@ -1023,7 +1023,7 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   int tmp_ret = OB_SUCCESS;
 
   if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), K(ls_id),
+    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), K(ls_id_),
                   K(is_master()));
   }
 
@@ -1032,10 +1032,10 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   if (OB_FAIL(ret)) {
     if (OB_TMP_FAIL(resume_leader())) {
       ret = OB_LS_NEED_REVOKE;
-      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), K(ls_id));
+      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), K(ls_id_));
     } else {
       DUP_TABLE_LOG(WARN, "resume leader successfully, return error code", K(ret), K(tmp_ret),
-                    K(ls_id));
+                    K(ls_id_));
     }
   }
 
@@ -1049,7 +1049,7 @@ int ObDupTableLSHandler::resume_leader()
   const bool is_resume = true;
 
   if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), K(ls_id), K(is_master()));
+    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
   }
 
   ATOMIC_STORE(&is_master_, true);
@@ -1062,7 +1062,7 @@ int ObDupTableLSHandler::switch_to_leader()
 
   const bool is_resume = false;
   if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "switch to leader failed for dup table", K(ret), K(ls_id), K(is_master()));
+    DUP_TABLE_LOG(WARN, "switch to leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
   }
   ATOMIC_STORE(&is_master_, true);
   return ret;
@@ -1073,8 +1073,9 @@ int ObDupTableLSHandler::leader_revoke_()
   int ret = OB_SUCCESS;
 
   if (!is_master()) {
-    ret = OB_STATE_NOT_MATCH;
-    DUP_TABLE_LOG(ERROR, "unexpected ObDupTableLSHandler role", K(ret), K(ls_id_), K(is_master()));
+    // ret = OB_STATE_NOT_MATCH;
+    DUP_TABLE_LOG(WARN, "ObDupTableLSHandler has already been follower",
+                  K(ret), K(ls_id_), K(is_master()));
   } else {
     // clean new/old tablet set
     if (OB_NOT_NULL(log_operator_)) {
