@@ -10797,6 +10797,13 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OX (expr->set_is_called_in_sql(true));
       }
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
+      if (OB_SUCC(ret) &&
+          udf_expr->get_result_type().is_ext() &&
+          (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
+           pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
+           pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
+        OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+      }
     } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
@@ -10809,6 +10816,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
@@ -10821,6 +10829,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     }
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {
