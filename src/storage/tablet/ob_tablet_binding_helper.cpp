@@ -893,7 +893,8 @@ int ObTabletBindingHelper::lock_tablet_binding(ObTabletHandle &handle, const ObM
       need_update = false; // already same
     } else {
       ret = OB_EAGAIN;
-      LOG_WARN("tablet binding locked by others", K(ret), K(tx_id), K(scn), K(tablet->get_tablet_meta().tablet_id_), K(tx_data));
+      handle.get_obj()->print_memtables_for_table();
+      LOG_WARN("tablet binding locked by others", K(ret), K(tx_id), K(scn), K(tablet->get_tablet_meta()), K(tx_data));
     }
     if (OB_FAIL(ret)) {
     } else if (need_update && OB_FAIL(tablet->set_tx_data(tx_data, memtable_scn, for_replay,
@@ -951,8 +952,8 @@ int ObTabletBindingHelper::set_scn(ObTabletHandle &handle, const ObMulSourceData
     LOG_WARN("failed to get data", K(ret));
   } else if (OB_UNLIKELY(data.tx_id_ != tx_id)) {
     ret = OB_ERR_UNEXPECTED;
-    handle.get_obj()->print_memtables_for_table();
-    LOG_WARN("cannot set log ts for unlocked tablet", K(ret), K(tx_id), K(data), "tablet_id", tablet->get_tablet_meta().tablet_id_);
+    tablet->print_memtables_for_table();
+    LOG_WARN("cannot set log ts for unlocked tablet", K(ret), K(tx_id), K(data), "tablet_id", tablet->get_tablet_meta());
   } else if (OB_UNLIKELY(!data.tx_scn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid log scn", K(ret), K(tx_id), K(scn), K(data));
