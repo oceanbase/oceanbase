@@ -4811,6 +4811,12 @@ int ObStaticEngineCG::recursive_get_column_expr(const ObColumnRefRawExpr *&colum
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected select expr", K(ret),
           K(offset), K(stmt->get_select_item_size()), K(select_expr));
+    } else if (OB_UNLIKELY(!select_expr->is_column_ref_expr()) && column->is_xml_column()
+              && select_expr->get_expr_type() == T_FUN_SYS_MAKEXML
+              && OB_NOT_NULL(select_expr->get_param_expr(1))) {
+      select_expr = select_expr->get_param_expr(1);
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(!select_expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(*select_expr));
