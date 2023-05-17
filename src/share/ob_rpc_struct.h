@@ -6476,7 +6476,7 @@ public:
 struct ObEstPartArgElement
 {
   ObEstPartArgElement() : batch_(), scan_flag_(),
-    index_id_(common::OB_INVALID_ID), range_columns_count_(0), tablet_id_(), ls_id_(), tenant_id_(0)
+    index_id_(common::OB_INVALID_ID), range_columns_count_(0), tablet_id_(), ls_id_(), tenant_id_(0), tx_id_()
   {}
   // Essentially, we can use ObIArray<ObNewRange> here
   // For compatibility reason, we still use ObSimpleBatch
@@ -6487,6 +6487,7 @@ struct ObEstPartArgElement
   ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   uint64_t tenant_id_;
+  transaction::ObTransID tx_id_;
 
   TO_STRING_KV(
       K(scan_flag_),
@@ -6495,7 +6496,8 @@ struct ObEstPartArgElement
       K(range_columns_count_),
       K(tablet_id_),
       K(ls_id_),
-      K(tenant_id_));
+      K(tenant_id_),
+      K(tx_id_));
   int64_t get_serialize_size(void) const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(common::ObIAllocator &allocator,

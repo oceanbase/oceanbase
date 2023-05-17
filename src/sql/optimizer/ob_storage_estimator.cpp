@@ -36,6 +36,7 @@ int ObStorageEstimator::estimate_row_count(const obrpc::ObEstPartArg &arg,
     param.scan_flag_ = arg.index_params_.at(i).scan_flag_;
     param.tablet_id_ = arg.index_params_.at(i).tablet_id_;
     param.ls_id_ = arg.index_params_.at(i).ls_id_;
+    param.tx_id_ = arg.index_params_.at(i).tx_id_;
     if (OB_FAIL(storage_estimate_rowcount(
                   arg.index_params_.at(i).tenant_id_,
                   param,

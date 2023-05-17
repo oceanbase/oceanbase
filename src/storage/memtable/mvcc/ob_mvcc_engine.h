@@ -113,7 +113,8 @@ public:
                        const ObMemtableKey *key,
                        storage::ObStoreRowLockState &lock_state);
   // estimate_scan_row_count estimate the row count for the range
-  int estimate_scan_row_count(const ObMvccScanRange &range,
+  int estimate_scan_row_count(const transaction::ObTransID &tx_id,
+                              const ObMvccScanRange &range,
                               storage::ObPartitionEst &part_est) const;
 private:
   int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,

@@ -5311,6 +5311,7 @@ int64_t ObEstPartArgElement::get_serialize_size(void) const
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(ls_id_);
   OB_UNIS_ADD_LEN(tenant_id_);
+  OB_UNIS_ADD_LEN(tx_id_);
 
   return len;
 }
@@ -5327,6 +5328,7 @@ int ObEstPartArgElement::serialize(char *buf,
   OB_UNIS_ENCODE(tablet_id_);
   OB_UNIS_ENCODE(ls_id_);
   OB_UNIS_ENCODE(tenant_id_);
+  OB_UNIS_ENCODE(tx_id_);
 
   return ret;
 }
@@ -5348,6 +5350,7 @@ int ObEstPartArgElement::deserialize(common::ObIAllocator &allocator,
   OB_UNIS_DECODE(tablet_id_);
   OB_UNIS_DECODE(ls_id_);
   OB_UNIS_DECODE(tenant_id_);
+  OB_UNIS_DECODE(tx_id_);
   return ret;
 }
 
