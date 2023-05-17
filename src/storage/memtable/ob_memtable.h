@@ -693,29 +693,6 @@ int ObMemtable::get_multi_source_data_unit_list(
   return ret;
 }
 
-typedef ObMemtable ObMemStore;
-
-/*
- * Print memtable statistics when receiving a signal.
- * For debug use.
- */
-class ObMemtableStat
-{
-public:
-  ObMemtableStat();
-  virtual ~ObMemtableStat();
-  static ObMemtableStat &get_instance();
-public:
-  int register_memtable(ObMemtable *memtable);
-  int unregister_memtable(ObMemtable *memtable);
-public:
-  int print_stat();
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableStat);
-  ObSpinLock lock_;
-  ObArray<ObMemtable *> memtables_;
-};
-
 class RowHeaderGetter
 {
 public:

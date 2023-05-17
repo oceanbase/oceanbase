@@ -181,7 +181,6 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     TRANS_LOG(WARN, "failed to set_table_key", K(ret), K(table_key));
   } else {
     ls_handle_ = ls_handle;
-    ObMemtableStat::get_instance().register_memtable(this);
     if (table_key.get_tablet_id().is_sys_tablet()) {
       mode_ = lib::Worker::CompatMode::MYSQL;
     } else {
@@ -231,8 +230,6 @@ void ObMemtable::destroy()
       STORAGE_LOG(WARN, "it costs too much time from release to destroy", K(cost_time), K(tablet_id), KP(this));
     }
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
-    time_guard.click();
-    ObMemtableStat::get_instance().unregister_memtable(this);
     time_guard.click();
     ObTenantFreezer *freezer = nullptr;
     freezer = MTL(ObTenantFreezer *);
@@ -2415,77 +2412,6 @@ bool ObMemtable::has_multi_source_data_unit(const MultiSourceDataUnitType type) 
   return multi_source_data_.is_valid() && multi_source_data_.has_multi_source_data_unit(type);
 }
 
-
-ObMemtableStat::ObMemtableStat()
-    : lock_(common::ObLatchIds::MEMTABLE_STAT_LOCK),
-      memtables_()
-{
-  memtables_.set_attr(SET_USE_500("MemTables"));
-}
-
-ObMemtableStat::~ObMemtableStat()
-{}
-
-ObMemtableStat &ObMemtableStat::get_instance()
-{
-  static ObMemtableStat s_instance;
-  return s_instance;
-}
-
-int ObMemtableStat::register_memtable(ObMemtable *memtable)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  if (OB_ISNULL(memtable)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(memtable));
-  } else if (OB_FAIL(memtables_.push_back(memtable))) {
-    TRANS_LOG(ERROR, "err push memtable ptr", K(ret));
-  }
-  return ret;
-}
-
-int ObMemtableStat::unregister_memtable(ObMemtable *memtable)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  bool done = false;
-  if (OB_ISNULL(memtable)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(memtable));
-  } else {
-    for (int64_t idx = 0, cnt = memtables_.size();
-         (OB_SUCC(ret)) && !done && (idx < cnt);
-         ++idx) {
-      if (memtable == memtables_.at(idx)) {
-        memtables_.at(idx) = memtables_.at(cnt - 1);
-        if (OB_FAIL(memtables_.remove(cnt - 1))) {
-          TRANS_LOG(WARN, "memtable remove fail", K(ret), K(idx));
-        } else {
-          done = true;
-        }
-      }
-    }
-    if (!done && OB_SUCCESS == ret) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
-int ObMemtableStat::print_stat()
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  TRANS_LOG(INFO, "[memtable stat]", "memtable_cnt", memtables_.size());
-  for (int64_t idx = 0, cnt = memtables_.size(); OB_SUCC(ret) && (idx < cnt); ++idx) {
-    if (OB_FAIL(memtables_.at(idx)->print_stat())) {
-      TRANS_LOG(ERROR, "print memtable stat fail", K(ret));
-    }
-  }
-  TRANS_LOG(INFO, "[memtable stat] end.");
-  return ret;
-}
 
 int RowHeaderGetter::get()
 {

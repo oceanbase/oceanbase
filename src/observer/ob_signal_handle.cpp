@@ -243,13 +243,6 @@ int ObSignalHandle::deal_signals(int signum)
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
       break;
     }
-    case 64: {
-      // Print memtable stat. By yijun.fyj.
-      if (OB_FAIL(memtable::ObMemtableStat::get_instance().print_stat())) {
-        LOG_WARN("Print memtable stat error", K(ret));
-      }
-      break;
-    }
     default: {
       LOG_WARN("Ignore unknown signal", K(signum));
       break;
