@@ -6297,8 +6297,10 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type())  // sql udt can cast to pl extend
+    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type() || obj.is_null())
                && result_types[i].get_meta_type().is_ext()) {
+      // sql udt or null can cast to pl extend
+      // example: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
     } else {
@@ -6342,7 +6344,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())
                     || ob_is_string_tc(result_type.get_type())))
             || (!((obj.get_meta().is_ext())
-                    || obj.get_meta().get_type() == ObUserDefinedSQLType)
+                    || obj.get_meta().get_type() == ObUserDefinedSQLType
+                    || obj.is_null())
                && (result_type.get_type() == ObExtendType
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
