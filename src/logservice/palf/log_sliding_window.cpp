@@ -4376,7 +4376,9 @@ int LogSlidingWindow::read_data_from_buffer(const LSN &read_begin_lsn,
   } else {
     RLockGuard guard(group_buffer_lock_);  // protect group_buffer_ from destroy by flashback().
     if (OB_FAIL(group_buffer_.read_data(read_begin_lsn, in_read_size, buf, out_read_size))) {
-      PALF_LOG(WARN, "read_data failed", K(ret), K_(palf_id), K(read_begin_lsn), K(in_read_size));
+      if (OB_ERR_OUT_OF_LOWER_BOUND != ret) {
+        PALF_LOG(WARN, "read_data failed", K(ret), K_(palf_id), K(read_begin_lsn), K(in_read_size));
+      }
     } else {
       PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
           K(in_read_size), K(out_read_size));
