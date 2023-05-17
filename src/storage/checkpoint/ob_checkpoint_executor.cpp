@@ -193,7 +193,9 @@ int ObCheckpointExecutor::update_clog_checkpoint()
   return ret;
 }
 
-int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn) {
+int ObCheckpointExecutor::advance_checkpoint_by_flush(
+    SCN recycle_scn)
+{
   int ret = OB_SUCCESS;
 
   RLockGuard guard(rwlock_);
@@ -278,7 +280,7 @@ int64_t ObCheckpointExecutor::get_cannot_recycle_log_size()
   LSN end_lsn;
   if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
     STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
-  } else {
+  } else if (!ls_->get_data_checkpoint()->is_flushing()) {
     cannot_recycle_log_size =
       end_lsn.val_ - ls_->get_clog_base_lsn().val_;
   }

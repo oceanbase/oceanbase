@@ -1505,7 +1505,7 @@ int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
   return ret;
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tennat_freeze)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -1515,7 +1515,12 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
     ret = OB_TIMEOUT;
     LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
   } else {
+    if (is_tennat_freeze) {
+      ObDataCheckpoint::set_tenant_freeze();
+      LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
+    }
     ret = checkpoint_executor_.advance_checkpoint_by_flush(recycle_scn);
+    ObDataCheckpoint::reset_tenant_freeze();
   }
   return ret;
 }

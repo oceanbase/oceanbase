@@ -694,7 +694,8 @@ public:
   // advance the checkpoint of this ls
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
   int advance_checkpoint_by_flush(share::SCN recycle_scn,
-                                  const int64_t abs_timeout_ts = INT64_MAX);
+                                  const int64_t abs_timeout_ts = INT64_MAX,
+                                  const bool is_tenant_freeze = false);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);

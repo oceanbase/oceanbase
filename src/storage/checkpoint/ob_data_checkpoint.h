@@ -120,6 +120,10 @@ public:
 
   bool is_empty();
 
+  static void set_tenant_freeze() { is_tenant_freeze_for_flush_ = true; }
+  static void reset_tenant_freeze() { is_tenant_freeze_for_flush_ = false; }
+  static bool is_tenant_freeze() { return is_tenant_freeze_for_flush_; }
+
 private:
   // traversal prepare_list to flush memtable
   // case1: some memtable flush failed when ls freeze
@@ -179,6 +183,8 @@ private:
   // avoid blocking other list due to traversal ls_frozen_list 
   common::ObSpinLock ls_frozen_list_lock_;
   bool ls_freeze_finished_;
+
+  static __thread bool is_tenant_freeze_for_flush_;
 };
 
 static const ObTabletID LS_DATA_CHECKPOINT_TABLET(ObDataCheckpoint::LS_DATA_CHECKPOINT_TABLET_ID);
