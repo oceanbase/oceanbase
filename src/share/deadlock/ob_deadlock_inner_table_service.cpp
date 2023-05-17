@@ -21,6 +21,7 @@
 #include "ob_deadlock_parameters.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "rootserver/ob_root_service.h"
 
 namespace oceanbase
 {
@@ -121,6 +122,7 @@ int ObDeadLockInnerTableService::insert_all(const ObIArray<ObDetectorInnerReport
   return ret;
 }
 
+// called by rs
 int ObDeadLockInnerTableService::ObDeadLockEventHistoryTableOperator::async_delete()
 {
   int ret = OB_SUCCESS;
@@ -131,7 +133,11 @@ int ObDeadLockInnerTableService::ObDeadLockEventHistoryTableOperator::async_dele
   const int64_t rs_delete_timestap = now - REMAIN_RECORD_DURATION;
 
   DETECT_TIME_GUARD(3_s);
-  if (CLICK() && OB_FAIL(schema::ObMultiVersionSchemaService::
+  rootserver::ObRootService *root_service = GCTX.root_service_;
+  if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    DETECT_LOG(WARN, "ptr is null", KR(ret), KP(root_service));
+  } else if (CLICK() && OB_FAIL(schema::ObMultiVersionSchemaService::
                          get_instance().get_tenant_schema_guard(OB_SYS_TENANT_ID,
                                                                 schema_guard))) {
     DETECT_LOG(WARN, "get schema guard failed", KR(ret));
@@ -143,16 +149,18 @@ int ObDeadLockInnerTableService::ObDeadLockEventHistoryTableOperator::async_dele
     DETECT_LOG(WARN, "assign_fmt failed", KR(ret));
   } else {
     CLICK();
-    for (int64_t idx = 0; idx < tenant_ids.count(); ++idx) {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < tenant_ids.count(); ++idx) {
       int64_t affected_rows = 0;
       uint64_t tenant_id = tenant_ids.at(idx);
       int temp_ret = OB_SUCCESS;
-      if (is_user_tenant(tenant_id)) {
+      if (!root_service->is_full_service()) {
+        ret = OB_CANCELED;
+        DETECT_LOG(WARN, "rs exit", KR(ret));
+      } else if (is_user_tenant(tenant_id)) {
         // skip
       } else if (OB_SUCCESS !=
-                 (temp_ret = GCTX.sql_proxy_->write(tenant_id,
-                                                    sql.ptr(),
-                                                    affected_rows))) {
+                 (temp_ret = root_service->get_sql_proxy().write(
+                  tenant_id, sql.ptr(), affected_rows))) {
         DETECT_LOG(WARN, "execute delete sql failed", K(sql), K(tenant_id), KR(temp_ret));
       } else {
         DETECT_LOG(INFO, "delete old history record event", K(sql), K(tenant_id), K(affected_rows));
