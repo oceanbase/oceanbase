@@ -737,6 +737,8 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   } else {
     time_guard.click("start register");
     do {
+      result.reset();
+      tx_result.reset();
       if (OB_NOT_MASTER == ret) {
         ob_usleep(RETRY_INTERVAL);
         retry_cnt += 1;

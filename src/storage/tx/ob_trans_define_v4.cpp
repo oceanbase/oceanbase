@@ -1107,10 +1107,11 @@ ObString ObTxReadSnapshot::get_source_name() const
 }
 
 ObTxExecResult::ObTxExecResult()
-  : incomplete_(false),
-    touched_ls_list_(),
-    parts_(),
-    cflict_txs_()
+  : allocator_("TxExecResult", MTL_ID()),
+    incomplete_(false),
+    touched_ls_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),
+    parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),
+    cflict_txs_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_)
 {}
 
 ObTxExecResult::~ObTxExecResult()
@@ -1124,6 +1125,7 @@ void ObTxExecResult::reset()
   touched_ls_list_.reset();
   parts_.reset();
   cflict_txs_.reset();
+  allocator_.reset();
 }
 
 int ObTxExecResult::add_touched_ls(const share::ObLSID ls)

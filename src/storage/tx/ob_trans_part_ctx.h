@@ -99,7 +99,9 @@ class ObPartTransCtx : public ObTransCtx,
 public:
   ObPartTransCtx()
       : ObTransCtx("participant", ObTransCtxType::PARTICIPANT), ObTsCbTask(),
-        ObTxCycleTwoPhaseCommitter(), is_inited_(false), mt_ctx_(), exec_info_(reserve_allocator_),
+        ObTxCycleTwoPhaseCommitter(),
+        is_inited_(false), mt_ctx_(), reserve_allocator_("PartCtx", MTL_ID()),
+        exec_info_(reserve_allocator_),
         mds_cache_(reserve_allocator_),
         role_state_(TxCtxRoleState::FOLLOWER),
         coord_prepare_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE,
@@ -781,6 +783,7 @@ private:
   // data sequence no of first access
   int64_t first_scn_;
 private:
+  TransModulePageAllocator reserve_allocator_;
   // ========================================================
   // newly added for 4.0
   share::ObLSID ls_id_;
@@ -841,7 +844,6 @@ private:
   const ObTxMsg * msg_2pc_cache_;
   share::SCN max_2pc_commit_scn_;
   ObLSLogInfoArray coord_prepare_info_arr_;
-  TransModulePageAllocator reserve_allocator_;
   // tmp scheduler addr is used to post response for the second phase of xa commit/rollback
   common::ObAddr tmp_scheduler_;
   // for standby
