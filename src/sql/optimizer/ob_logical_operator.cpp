@@ -4654,6 +4654,9 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     } else if (log_op_def::LOG_TABLE_SCAN != node->get_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect operator type", K(ret));
+    } else if (FALSE_IT(scan_op = static_cast<ObLogTableScan*>(node))) {
+    } else if (scan_op->is_part_join_filter_created()) {
+      /*do nothing*/
     } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to allocate exchange nodes", K(ret));
@@ -4662,7 +4665,6 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       LOG_WARN("fail to add parttition join filter info", K(ret));
     } else {
       bool is_shared_hash_join = static_cast<ObLogJoin*>(this)->is_shared_hash_join();
-      scan_op = static_cast<ObLogTableScan*>(node);
       ObPxBFStaticInfo bf_info;
       join_filter_create = static_cast<ObLogJoinFilter *>(filter_create);
       join_filter_create->set_is_create_filter(true);
@@ -4687,6 +4689,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           join_filter_create->get_p2p_sequence_ids().at(0),
           right_has_exchange));
       scan_op->set_join_filter_info(bf_info);
+      scan_op->set_part_join_filter_created(true);
       filter_id++;
       for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
         ObRawExpr *expr = info.lexprs_.at(j);
