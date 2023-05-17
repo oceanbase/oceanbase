@@ -451,6 +451,7 @@ void ObDupTableLSHandler::reset()
     ob_free(tablets_mgr_ptr_);
   }
   if (OB_NOT_NULL(log_operator_)) {
+    log_operator_->reset();
     share::mtl_free(log_operator_);
   }
 

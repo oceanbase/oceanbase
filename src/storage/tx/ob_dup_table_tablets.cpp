@@ -451,6 +451,10 @@ int ObLSDupTabletsMgr::destroy_free_tablet_pool_()
 
   if (OB_NOT_NULL(removing_old_set_)) {
     return_tablet_set(removing_old_set_);
+    if (free_set_pool_.add_last(removing_old_set_) == false) {
+      ret = OB_ERR_UNEXPECTED;
+      DUP_TABLE_LOG(ERROR, "insert into free set failed", K(ret), KPC(removing_old_set_));
+    }
     removing_old_set_ = nullptr;
   }
 
