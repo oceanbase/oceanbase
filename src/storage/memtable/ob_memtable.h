@@ -633,9 +633,10 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
             TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
           }
         }
-        // commit log is replayed to empty memtable whitch is frozen after clog switch to follower gracefully, commit status mds will be lost.
-        // so push max_end_scn to start_scn + 1
-        else if (start_scn == get_end_scn()) {
+        // commit log is replayed to empty memtable which is frozen after clog switch to follower gracefully, commit status mds will be lost.
+        // so push end_scn to start_scn + 1
+        else if (get_max_end_scn().is_min() && get_end_scn().is_max()) {
+          TRANS_LOG(INFO, "empty memtable push end_scn to start_scn + 1", K(ret), K(scn), KPC(this));
           if (OB_FAIL(set_end_scn(share::SCN::scn_inc(start_scn)))) {
             TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
           }
