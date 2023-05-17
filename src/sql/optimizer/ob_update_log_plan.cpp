@@ -416,14 +416,7 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
         //        INSERT INDEX (i2)
         //          DELETE INDEX (i2)
         //              ....
-        int64_t binlog_row_image = share::ObBinlogRowImage::FULL;
-        if (OB_FAIL(optimizer_context_.get_session_info()->get_binlog_row_image(binlog_row_image))) {
-          LOG_WARN("fail to get binlog row image", K(ret));
-        } else if (share::ObBinlogRowImage::FULL != binlog_row_image) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "when binlog_row_image is not set to FULL,"
-                         "parallel update with row movement");
-        } else if (OB_FAIL(split_update_index_dml_info(*index_dml_info,
+        if (OB_FAIL(split_update_index_dml_info(*index_dml_info,
                                                        index_delete_info,
                                                        index_insert_info))) {
           LOG_WARN("failed to create index delete info", K(ret));
