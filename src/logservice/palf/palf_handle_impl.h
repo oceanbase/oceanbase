@@ -108,18 +108,24 @@ struct PalfDiagnoseInfo {
   common::ObRole palf_role_;
   palf::ObReplicaState palf_state_;
   int64_t palf_proposal_id_;
+  bool enable_sync_;
+  bool enable_vote_;
   void reset() {
     election_role_ = FOLLOWER;
     election_epoch_ = 0;
     palf_role_ = FOLLOWER;
     palf_state_ = ObReplicaState::INVALID_STATE;
     palf_proposal_id_ = INVALID_PROPOSAL_ID;
+    enable_sync_ = false;
+    enable_vote_ = false;
   }
   TO_STRING_KV(K(election_role_),
                K(election_epoch_),
                K(palf_role_),
                K(palf_state_),
-               K(palf_proposal_id_));
+               K(palf_proposal_id_),
+               K(enable_sync_),
+               K(enable_vote_));
 };
 
 struct FetchLogStat {

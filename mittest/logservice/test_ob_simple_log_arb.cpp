@@ -81,7 +81,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
 {
   oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_1_0_0;
   SET_CASE_LOG_FILE(TEST_NAME, "arb_2f1a_degrade_upgrade");
-  OB_LOGGER.set_log_level("DEBUG");
+  OB_LOGGER.set_log_level("TRACE");
   MockLocCB loc_cb;
   int ret = OB_SUCCESS;
   PALF_LOG(INFO, "begin test_2f1a_degrade_upgrade");

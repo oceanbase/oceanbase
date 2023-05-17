@@ -11344,7 +11344,10 @@ def_table_schema(
     ('restore_handler_role', 'varchar:32'),
     ('restore_proposal_id', 'int'),
     ('restore_context_info', 'varchar:1024'),
-    ('restore_err_context_info', 'varchar:1024')
+    ('restore_err_context_info', 'varchar:1024'),
+    ('enable_sync', 'bool'),
+    ('enable_vote', 'bool'),
+    ('arb_srv_info', 'varchar:1024')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

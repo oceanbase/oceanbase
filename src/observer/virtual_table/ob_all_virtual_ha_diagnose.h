@@ -52,6 +52,9 @@ enum IOStatColumn
   RESTORE_HANDLER_PROPOSAL_ID,
   RESTORE_CONTEXT_INFO,
   RESTORE_ERR_CONTEXT_INFO,
+  ENABLE_SYNC,
+  ENABLE_VOTE,
+  ARB_SRV_INFO,
 };
 
 class ObAllVirtualHADiagnose : public common::ObVirtualTableScannerIterator

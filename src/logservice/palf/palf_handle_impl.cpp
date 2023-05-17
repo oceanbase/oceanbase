@@ -1467,7 +1467,12 @@ int PalfHandleImpl::advance_base_info(const PalfBaseInfo &palf_base_info, const 
     TruncatePrefixBlocksCbCtx truncate_prefix_cb_ctx(new_base_lsn);
     flush_meta_cb_ctx.type_ = SNAPSHOT_META;
     flush_meta_cb_ctx.base_lsn_ = new_base_lsn;
-    if (OB_FAIL(check_need_advance_base_info_(new_base_lsn, prev_log_info, is_rebuild))) {
+    // Note: can not rebuild while a truncate operation is doing, because group_buffer may be
+    //       truncated by LogCallback again after it has been advanced by rebuild operation.
+    if (false == sw_.is_allow_rebuild()) {
+      ret = OB_EAGAIN;
+      PALF_LOG(WARN, "can not advance_base_info for now, try again failed", K(ret), KPC(this), K(palf_base_info), K(is_rebuild));
+    } else if (OB_FAIL(check_need_advance_base_info_(new_base_lsn, prev_log_info, is_rebuild))) {
       PALF_LOG(WARN, "check_need_advance_base_info failed", K(ret), KPC(this), K(palf_base_info), K(is_rebuild));
     } else if (OB_FAIL(log_snapshot_meta.generate(new_base_lsn, prev_log_info))) {
         PALF_LOG(WARN, "LogSnapshotMeta generate failed", K(ret), KPC(this), K(palf_base_info));
@@ -3873,6 +3878,8 @@ int PalfHandleImpl::diagnose(PalfDiagnoseInfo &diagnose_info) const
   state_mgr_.get_role_and_state(diagnose_info.palf_role_, diagnose_info.palf_state_);
   diagnose_info.palf_proposal_id_ = state_mgr_.get_proposal_id();
   state_mgr_.get_election_role(diagnose_info.election_role_, diagnose_info.election_epoch_);
+  diagnose_info.enable_sync_ = state_mgr_.is_sync_enabled();
+  diagnose_info.enable_vote_ = state_mgr_.is_allow_vote();
   return ret;
 }
 
