@@ -294,9 +294,12 @@ int ObSessInfoVerify::fetch_verify_session_info(sql::ObSQLSessionInfo &sess,
       }
     }
   }
-
-  result.assign_ptr(buf, size);
-  LOG_TRACE("fetch serialize buf", KPHEX(buf + pos -size, size), K(pos), K(size), K(result));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    result.assign_ptr(buf, size);
+    LOG_TRACE("fetch serialize buf", KPHEX(buf, size), K(pos), K(size), K(result));
+  }
   return ret;
 }
 
