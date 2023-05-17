@@ -14,13 +14,18 @@
 #define OCEANBASE_OB_ALL_VIRTUAL_SERVER_CLOG_STAT_H_
 
 #include "share/ob_virtual_table_scanner_iterator.h"
+#include "share/ob_zone_info.h"
 
 namespace oceanbase {
+namespace share {
+class ObLocalityInfo;
+}
 namespace observer {
 class ObAllVirtualServerClogStat : public common::ObVirtualTableScannerIterator {
 public:
   ObAllVirtualServerClogStat();
   virtual ~ObAllVirtualServerClogStat();
+  virtual int inner_open() override;
   virtual int inner_get_next_row(common::ObNewRow*& row);
   virtual void reset();
   inline void set_addr(common::ObAddr& addr)
@@ -45,10 +50,35 @@ private:
     ZONE_STATUS,
     SVR_MIN_LOG_TIMESTAMP
   };
+
+  struct LocalLocalityInfo {
+    LocalLocalityInfo()
+        : region_(),
+          zone_(),
+          idc_(),
+          zone_type_(common::ObZoneType::ZONE_TYPE_INVALID),
+          merge_status_(share::ObZoneInfo::MERGE_STATUS_MAX),
+          zone_status_(share::ObZoneStatus::UNKNOWN)
+    {}
+    ~LocalLocalityInfo()
+    {}
+
+    void reset();
+    int assign(const share::ObLocalityInfo &locality_info);
+
+    common::ObRegion region_;
+    common::ObZone zone_;
+    common::ObIDC idc_;
+    common::ObZoneType zone_type_;
+    share::ObZoneInfo::MergeStatus merge_status_;
+    share::ObZoneStatus::Status zone_status_;
+  };
+
   common::ObAddr* addr_;
   common::ObString ipstr_;
   int32_t port_;
   bool is_end_;
+  LocalLocalityInfo local_locality_info_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualServerClogStat);
 };
 

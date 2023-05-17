@@ -648,6 +648,9 @@ select * from  oceanbase.__tenant_virtual_tenant_status limit 1;
 select * from  oceanbase.__tenant_virtual_warning limit 1;
 --enable_result_log
 
+# bugfix:issue/49611673
+select if(count(*) > 0, 1, 0) from __all_virtual_server_clog_stat where zone_type = "ReadWrite";
+
 ## Test all performance built-in views
 #--enable_query_log
 #################################

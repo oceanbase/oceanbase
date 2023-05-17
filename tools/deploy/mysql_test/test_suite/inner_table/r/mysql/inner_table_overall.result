@@ -6576,3 +6576,6 @@ select * from  oceanbase.__tenant_virtual_statname limit 1;
 select * from  oceanbase.__tenant_virtual_table_index limit 1;
 select * from  oceanbase.__tenant_virtual_tenant_status limit 1;
 select * from  oceanbase.__tenant_virtual_warning limit 1;
+select if(count(*) > 0, 1, 0) from __all_virtual_server_clog_stat where zone_type = "ReadWrite";
+if(count(*) > 0, 1, 0)
+1
