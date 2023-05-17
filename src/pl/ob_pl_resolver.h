@@ -948,6 +948,7 @@ private:
                            ObIArray<ObObjAccessIdx> &access_idxs,
                            bool &is_routine);
   static int get_number_literal_value(ObRawExpr *expr, int64_t &result);
+  int get_const_number_variable_literal_value(ObRawExpr *expr, int64_t &result);
   int check_assign_type(const ObPLDataType &dest_data_type, const ObRawExpr *right_expr);
   int is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_cursor_type);
   int make_udt_udf_self_expr(const ObIArray<ObString> &access_name,

@@ -1086,7 +1086,7 @@ int ObPLResolver::get_number_literal_value(ObRawExpr *expr, int64_t &result)
   CK (OB_NOT_NULL(expr));
 
 #define GET_CONST_EXPR_VAL(expr, result) \
-  ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(expr); \
+  const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(expr); \
   CK (OB_NOT_NULL(const_expr)); \
   CK (const_expr->get_value().is_integer_type() || const_expr->get_value().is_number()); \
   if (OB_FAIL(ret)) { \
@@ -1113,6 +1113,37 @@ int ObPLResolver::get_number_literal_value(ObRawExpr *expr, int64_t &result)
     LOG_WARN("unexpected expr type", K(ret), K(expr->get_expr_type()));
   }
 
+  return ret;
+}
+
+int ObPLResolver::get_const_number_variable_literal_value(ObRawExpr *expr, int64_t &result)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(expr));
+  CK (T_QUESTIONMARK == expr->get_expr_type());
+  CK (OB_NOT_NULL(current_block_));
+  CK (OB_NOT_NULL(current_block_->get_symbol_table()));
+
+  if (OB_SUCC(ret)) {
+    int64_t idx = static_cast<ObConstRawExpr*>(expr)->get_value().get_unknown();
+    const ObPLVar *var = current_block_->get_symbol_table()->get_symbol(idx);
+
+    const ObRawExpr *value_expr = nullptr;
+
+    if (OB_ISNULL(var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL symbol variable", K(ret), KPC(expr),
+               K(current_block_->get_symbol_table()), K(idx));
+    } else if (!var->is_readonly()
+               || OB_ISNULL(value_expr = current_block_->get_expr(var->get_default()))
+               || (T_NUMBER != value_expr->get_expr_type() && T_INT != value_expr->get_expr_type())) {
+      ret = OB_ERR_NUMERIC_LITERAL_REQUIRED;
+      LOG_WARN("PLS-00491: numeric literal required", K(ret), K(var), K(value_expr));
+    } else {
+      GET_CONST_EXPR_VAL(value_expr, result);
+    }
+  }
+
 #undef GET_CONST_EXPR_VAL
   return ret;
 }
@@ -1127,7 +1158,16 @@ int ObPLResolver::calc_subtype_range_bound(const ObStmtNodeTree *bound_node,
   CK (OB_NOT_NULL(bound_node));
   OZ (resolve_expr(bound_node, unit_ast, bound_expr, combine_line_and_col(bound_node->stmt_loc_)));
   CK (OB_NOT_NULL(bound_expr));
-  OZ (get_number_literal_value(bound_expr, result));
+  if (T_QUESTIONMARK == bound_expr->get_expr_type()){
+    OZ (get_const_number_variable_literal_value(bound_expr, result));
+  } else if (T_OP_NEG == bound_expr->get_expr_type()
+             && OB_NOT_NULL(bound_expr->get_param_expr(0))
+             && T_QUESTIONMARK == bound_expr->get_param_expr(0)->get_expr_type()) {
+    OZ (get_const_number_variable_literal_value(bound_expr->get_param_expr(0), result));
+    OX (result = (INT64_MIN == result) ? static_cast<uint64_t>(INT64_MAX + 1UL) : -result);
+  } else {
+    OZ (get_number_literal_value(bound_expr, result));
+  }
 
   if (OB_SUCC(ret)) {
     if (-2147483648 <= result && result <= 2147483647) {
