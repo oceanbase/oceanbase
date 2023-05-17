@@ -464,7 +464,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         break;
       case T_SP_CALL_STMT: {
         RESOLVE_STMT(PL_CALL, resolve_call, ObPLCallStmt);
-        OX (func.set_external_state());
+        func.set_external_state();
       }
         break;
       case T_SP_INNER_CALL_STMT: {
@@ -4634,7 +4634,9 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
         }
       }
       if (OB_SUCC(ret)) {
-        if (stmt::T_SELECT == prepare_result.type_) {
+        if (prepare_result.for_update_) {
+          func.set_modifies_sql_data();
+        } else if (stmt::T_SELECT == prepare_result.type_) {
           if (!func.is_modifies_sql_data()) {
             func.set_reads_sql_data();
           }
@@ -8301,7 +8303,9 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
   if (OB_FAIL(ret)) {
   } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
     OX (unit_ast.set_rps());
-  } else if (T_FUN_UDF == expr->get_expr_type()) {
+  } else if (T_FUN_UDF == expr->get_expr_type() ||
+             T_OP_GET_SYS_VAR == expr->get_expr_type() ||
+             T_OP_GET_USER_VAR == expr->get_expr_type()) {
     OX (unit_ast.set_external_state());
   } else {
     for (int64_t i = 0;
