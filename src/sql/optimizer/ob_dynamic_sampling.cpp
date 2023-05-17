@@ -1070,6 +1070,17 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
       session->set_sql_mode(session->get_sql_mode() | SMO_NO_BACKSLASH_ESCAPES);
     }
     if (tx_desc != NULL) {//reset origin tx desc.
+      // release curr
+      if (OB_NOT_NULL(session->get_tx_desc())) {
+        auto txs = MTL(transaction::ObTransService*);
+        if (OB_ISNULL(txs)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("can not acquire MTL TransService", KR(ret));
+          session->get_tx_desc()->dump_and_print_trace();
+        } else {
+          txs->release_tx(*session->get_tx_desc());
+        }
+      }
       session->get_tx_desc() = tx_desc;
     }
   }

@@ -36,8 +36,8 @@ int64_t MAX_STATE_SIZE = 4 * 1024; // 4KB
 
 bool ObTxnFreeRouteCtx::is_temp(const ObTxDesc &tx) const
 {
-  UNUSED(tx);
-  return txn_addr_.is_valid() && txn_addr_ != GCONF.self_addr_;
+  // match against tx_id to allow other txn commit or rollback on temp node
+  return tx_id_ == tx.tx_id_ && txn_addr_.is_valid() && txn_addr_ != GCONF.self_addr_;
 }
 void ObTxnFreeRouteCtx::init_before_update_state(bool proxy_support)
 {
