@@ -1516,9 +1516,6 @@ int ObHashJoinOp::calc_basic_info(bool global_info)
         LOG_WARN("failed to get px size", K(ret));
       } else {
         LOG_TRACE("trace left row count", K(row_count));
-        if (is_shared_) {
-          row_count *= (static_cast<ObHashJoinInput*>(input_))->get_sqc_thread_count();
-        }
         if (row_count < MIN_ROW_COUNT) {
           row_count = MIN_ROW_COUNT;
         }
@@ -1534,9 +1531,6 @@ int ObHashJoinOp::calc_basic_info(bool global_info)
         // it need to be considered swapping left and right
         input_size = left_batch_->get_size_on_disk();
         row_count = left_batch_->get_row_count_on_disk();
-        if (is_shared_) {
-          row_count *= (static_cast<ObHashJoinInput*>(input_))->get_sqc_thread_count();
-        }
       }
     }
   } else if (RECURSIVE == hj_processor_) {
