@@ -7014,8 +7014,10 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
     //no need add cast, will add column_conv later
     need_cast = false;
   } else if ((ob_is_xml_sql_type(in_type, src_type.get_subschema_id()) || ob_is_xml_pl_type(in_type, src_type.get_udt_id())) &&
-              ob_is_large_text(out_type)) {
+              ob_is_blob(out_type, out_cs_type)) {
     //no need add cast, will transform in make_xmlbinary
+    // there are cases cannot skip cast expr, and xmltype cast to clob is not support and cast func will check:
+    // case: select xmlserialize(content xmltype_var as clob) || xmltype_var from t;
     need_cast = false;
   } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(in_type, out_type,
                                                          is_same_need, need_wrap))) {
