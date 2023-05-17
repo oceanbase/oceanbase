@@ -159,9 +159,7 @@ int ObOptOSGColumnStat::merge_column_stat(const ObOptOSGColumnStat &other)
                                      other.max_val_.cmp_func_))) {
     LOG_WARN("failed to inner merge min val");
   } else {
-    // merge avg len before update number null/not null
-    col_stat_->merge_avg_len(other.col_stat_->get_avg_len(),
-                             other.col_stat_->get_num_not_null() + other.col_stat_->get_num_null());
+    col_stat_->add_col_len(other.col_stat_->get_total_col_len());
     col_stat_->add_num_null(other.col_stat_->get_num_null());
     col_stat_->add_num_not_null(other.col_stat_->get_num_not_null());
     if (col_stat_->get_llc_bitmap_size() == other.col_stat_->get_llc_bitmap_size()) {
@@ -182,8 +180,8 @@ int ObOptOSGColumnStat::update_column_stat_info(const ObDatum *datum,
     LOG_WARN("get unexpected null");
   } else if (OB_FAIL(calc_col_len(*datum, meta, col_len))) {
     LOG_WARN("failed to calc col len", K(datum), K(meta));
-  } else if (OB_FALSE_IT(col_stat_->merge_avg_len(col_len, 1))) {
-    // avg len should be set at the very begining
+  } else if (OB_FALSE_IT(col_stat_->add_col_len(col_len))) {
+    // do nothing
   } else if (datum->is_null()) {
     col_stat_->add_num_null(1);
   } else {

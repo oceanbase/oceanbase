@@ -229,7 +229,6 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
       for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
         int64_t col_id = param_.is_heap_table_ ? i + 1 : i;
         int64_t row_count = 0;
-        int64_t avg_len = 0;
         ObOptOSGColumnStat *osg_col_stat = nullptr;
         if (OB_FAIL(sql_statistics.allocate_col_stat(osg_col_stat))) {
           LOG_WARN("fail to allocate table stat", KR(ret));
@@ -251,7 +250,6 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
             LOG_WARN("fail to merge column stat", KR(ret));
           } else {
             row_count += task_array_.at(j)->get_row_count();
-            avg_len += osg_col_stat->col_stat_->get_avg_len();
           }
         }
         // scan fast heap table
@@ -271,12 +269,12 @@ int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
             LOG_WARN("fail to merge column stat", KR(ret));
           } else {
             row_count += fast_heap_table_array.at(j)->get_row_count();
-            avg_len += osg_col_stat->col_stat_->get_avg_len();
           }
         }
         if (OB_SUCC(ret)) {
           table_row_cnt = row_count;
-          table_avg_len += avg_len;
+          osg_col_stat->col_stat_->calc_avg_len();
+          table_avg_len += osg_col_stat->col_stat_->get_avg_len();
           osg_col_stat->col_stat_->set_table_id(param_.target_table_id_);
           osg_col_stat->col_stat_->set_partition_id(target_partition_id_);
           osg_col_stat->col_stat_->set_stat_level(stat_level);

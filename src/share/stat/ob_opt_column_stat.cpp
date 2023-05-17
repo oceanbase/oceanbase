@@ -193,6 +193,7 @@ ObOptColumnStat::ObOptColumnStat()
       histogram_(),
       last_analyzed_(0),
       cs_type_(CS_TYPE_INVALID),
+      total_col_len_(0),
       inner_allocator_("ObOptColumnStat"),
       allocator_(inner_allocator_)
 {
@@ -217,6 +218,7 @@ ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
       histogram_(),
       last_analyzed_(0),
       cs_type_(CS_TYPE_INVALID),
+      total_col_len_(0),
       inner_allocator_("ObOptColumnStat"),
       allocator_(allocator)
 {
@@ -245,6 +247,7 @@ void ObOptColumnStat::reset()
   llc_bitmap_ = NULL;
   last_analyzed_ = 0;
   cs_type_ = CS_TYPE_INVALID;
+  total_col_len_ = 0;
   histogram_.reset();
 }
 
@@ -297,6 +300,7 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
     last_analyzed_ = src.last_analyzed_;
     cs_type_ = src.cs_type_;
     llc_bitmap_size_ = src.llc_bitmap_size_;
+    total_col_len_ = src.total_col_len_;
     if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
       LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
     } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
@@ -330,6 +334,7 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int6
   avg_length_ = src.avg_length_;
   last_analyzed_ = src.last_analyzed_;
   cs_type_ = src.cs_type_;
+  total_col_len_ = src.total_col_len_;
   if (!src.is_valid() || nullptr == buf || size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments.", K(src), KP(buf), K(size), K(ret));
@@ -394,10 +399,10 @@ int ObOptColumnStat::merge_column_stat(const ObOptColumnStat &other)
     LOG_TRACE("succeed to merge min/max val", K(min_value_), K(max_value_),
                                               K(other.get_min_value()), K(other.get_max_value()));
     if (OB_SUCC(ret)) {
-      // merge avg len before update number null/not null
-      merge_avg_len(other.get_avg_len(), other.get_num_not_null() + other.get_num_null());
       add_num_null(other.get_num_null());
       add_num_not_null(other.get_num_not_null());
+      add_col_len(other.get_total_col_len());
+      calc_avg_len();
       if (get_llc_bitmap_size() == other.get_llc_bitmap_size()) {
         ObGlobalNdvEval::update_llc(get_llc_bitmap(), other.get_llc_bitmap());
       }
@@ -424,6 +429,7 @@ OB_DEF_SERIALIZE(ObOptColumnStat) {
     MEMCPY(buf + pos, llc_bitmap_, llc_bitmap_size_);
     pos += llc_bitmap_size_;
   }
+  OB_UNIS_ENCODE(total_col_len_);
   return ret;
 }
 
@@ -443,6 +449,7 @@ OB_DEF_SERIALIZE_SIZE(ObOptColumnStat) {
               object_type_);
   if (llc_bitmap_size_ !=0)
     len += llc_bitmap_size_;
+  OB_UNIS_ADD_LEN(total_col_len_);
   return len;
 }
 
@@ -464,6 +471,7 @@ OB_DEF_DESERIALIZE(ObOptColumnStat) {
     memcpy(llc_bitmap_, buf + pos, llc_bitmap_size_);
     pos += llc_bitmap_size_;
   }
+  OB_UNIS_DECODE(total_col_len_);
   return ret;
 }
 
