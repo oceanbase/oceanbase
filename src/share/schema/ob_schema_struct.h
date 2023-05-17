@@ -2958,9 +2958,9 @@ protected:
   int inner_add_partition(const ObSubPartition &part);
   template <class T>
   int inner_add_partition(const T &part, T **&part_array, int64_t &part_array_capacity, int64_t &part_num);
-  int get_subpart_name(const int64_t part_id, const int64_t subpart_id, char *buf, const int64_t buf_size,
+  int get_subpart_name_(const int64_t part_id, const int64_t subpart_id, char *buf, const int64_t buf_size,
       int64_t *pos /* = NULL*/) const;
-  int get_def_subpart_name(const int64_t subpart_id, char *buf, const int64_t buf_size, int64_t *pos /* = NULL*/) const;
+  int get_def_subpart_name_(const int64_t subpart_id, char *buf, const int64_t buf_size, int64_t *pos /* = NULL*/) const;
 
 protected:
   static const int64_t DEFAULT_ARRAY_CAPACITY = 128;

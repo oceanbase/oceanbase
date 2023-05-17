@@ -3961,7 +3961,7 @@ int ObPartitionSchema::get_partition_name(
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid partition_id", K(ret), K(partition_id));
     } else if (!is_sub_part_template()) {
-      if (OB_FAIL(get_subpart_name(part_id, subpart_id, buf, buf_size, pos))) {
+      if (OB_FAIL(get_subpart_name_(part_id, subpart_id, buf, buf_size, pos))) {
         LOG_WARN("fail to get sub part name", K(ret), K(partition_id), K(part_id), K(subpart_id));
       }
     } else {
@@ -3976,7 +3976,7 @@ int ObPartitionSchema::get_partition_name(
         } else {
           pname_size += n;
           int64_t subpart_name_size = 0;
-          if (OB_FAIL(get_def_subpart_name(subpart_id, buf + pname_size, buf_size - pname_size, &subpart_name_size))) {
+          if (OB_FAIL(get_def_subpart_name_(subpart_id, buf + pname_size, buf_size - pname_size, &subpart_name_size))) {
             LOG_WARN("fail to get def subpart name", K(ret), K(part_id), K(subpart_id));
           } else if (NULL != pos) {
             *pos = pname_size + subpart_name_size;
@@ -4065,18 +4065,18 @@ int ObPartitionSchema::get_subpart_name(const int64_t part_id, const int64_t sub
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid subpart id", K(subpart_id), K(ret));
   } else if (is_def_subpart) {
-    if (OB_FAIL(get_def_subpart_name(subpart_id, buf, buf_size, pos))) {
+    if (OB_FAIL(get_def_subpart_name_(subpart_id, buf, buf_size, pos))) {
       LOG_WARN("fail to gen subpart name", K(ret), K(part_id), K(subpart_id));
     }
   } else {
-    if (OB_FAIL(get_subpart_name(part_id, subpart_id, buf, buf_size, pos))) {
+    if (OB_FAIL(get_subpart_name_(part_id, subpart_id, buf, buf_size, pos))) {
       LOG_WARN("fail to subpart name", K(ret), K(part_id), K(subpart_id));
     }
   }
   return ret;
 }
 
-int ObPartitionSchema::get_subpart_name(
+int ObPartitionSchema::get_subpart_name_(
     const int64_t part_id, const int64_t subpart_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const
 {
   int ret = OB_SUCCESS;
@@ -4105,7 +4105,7 @@ int ObPartitionSchema::get_subpart_name(
     } else {
       // get subpart name
       ObString subpart_name;
-      if (is_range_subpart() || is_list_subpart()) {
+      if (OB_NOT_NULL(def_subpartition_array_)) {
         const ObSubPartition* subpartition = NULL;
         if (OB_FAIL(get_subpartition(part_id, subpart_id, subpartition))) {
           LOG_WARN("fail to find subpartition", K(ret), K(part_id), K(subpart_id));
@@ -4118,9 +4118,22 @@ int ObPartitionSchema::get_subpart_name(
           subpname_size += snprintf(buf + pname_pos, buf_size - pname_pos, "s%s", subpart_name.ptr());
         }
       } else {
-        // FIXME() Create table secondary hash without specifying def_subpartition_array
-        subpname_size = pname_pos;
-        subpname_size += snprintf(buf + pname_pos, buf_size - pname_pos, "sp%ld", subpart_id);
+        if (is_range_subpart() || is_list_subpart()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("def subpartition array is null", K(ret));
+        } else { // is_hash_like_subpart() (subpart_name not specified)
+          // FIXME() Create table secondary hash without specifying def_subpartition_array
+          bool is_oracle_mode = false;
+          if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(get_tenant_id(), is_oracle_mode))) {
+            LOG_WARN("fail to get oracle mode", K(ret), "tenant_id", get_tenant_id());
+          } else if (is_oracle_mode) {
+            subpname_size = pname_pos;
+            subpname_size += snprintf(buf + pname_pos, buf_size - pname_pos, "sP%ld", subpart_id);
+          } else {
+            subpname_size = pname_pos;
+            subpname_size += snprintf(buf + pname_pos, buf_size - pname_pos, "sp%ld", subpart_id);
+          }
+        }
       }
     }
   } else {
@@ -4146,7 +4159,7 @@ int ObPartitionSchema::get_subpart_name(
   return ret;
 }
 
-int ObPartitionSchema::get_def_subpart_name(
+int ObPartitionSchema::get_def_subpart_name_(
     const int64_t subpart_id, char* buf, const int64_t buf_size, int64_t* pos /* = NULL*/) const
 {
   int ret = OB_SUCCESS;
@@ -4169,11 +4182,9 @@ int ObPartitionSchema::get_def_subpart_name(
         get_part_level());
   } else {
     int64_t subpname_size = 0;
-    if (is_range_subpart() || is_list_subpart()) {
-      if (OB_ISNULL(def_subpartition_array_) || OB_ISNULL(def_subpartition_array_[subpart_id])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("iter is null", K(ret));
-      } else if (subpart_id >= def_subpartition_num_) {
+    if (OB_NOT_NULL(def_subpartition_array_)) {
+      if (OB_UNLIKELY(subpart_id >= def_subpartition_num_)
+          || OB_ISNULL(def_subpartition_array_[subpart_id])) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid subpart id", K(subpart_id), K_(def_subpartition_num), K(ret));
       } else {
@@ -4181,11 +4192,21 @@ int ObPartitionSchema::get_def_subpart_name(
         subpart_name = def_subpartition_array_[subpart_id]->get_part_name();
         subpname_size += snprintf(buf, buf_size, "%s", subpart_name.ptr());
       }
-    } else if (is_oracle_mode()) {
-      subpname_size += snprintf(buf, buf_size, "P%ld", subpart_id);
     } else {
-      // FIXME() Create table secondary hash without specifying def_subpartition_array
-      subpname_size += snprintf(buf, buf_size, "p%ld", subpart_id);
+      if (is_range_subpart() || is_list_subpart()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("def subpartition array is null", K(ret));
+      } else { // is_hash_like_subpart() (subpart_name not specified)
+        // FIXME(): Create table secondary hash without specifying def_subpartition_array
+        bool is_oracle_mode = false;
+        if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(get_tenant_id(), is_oracle_mode))) {
+          LOG_WARN("fail to get oracle mode", K(ret), "tenant_id", get_tenant_id());
+        } else if (is_oracle_mode) {
+          subpname_size += snprintf(buf, buf_size, "P%ld", subpart_id);
+        } else {
+          subpname_size += snprintf(buf, buf_size, "p%ld", subpart_id);
+        }
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(subpname_size <= 0 || subpname_size >= buf_size)) {
