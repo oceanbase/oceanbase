@@ -96,6 +96,7 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   ObTenantFreezeInfoMgr::FreezeInfo freeze_info;
   int64_t schedule_snapshot = 0;
+  int64_t last_sstable_schema_version = 0;
   const int64_t scheduler_frozen_version = MTL(ObTenantTabletScheduler*)->get_frozen_version();
   const ObMediumCompactionInfoList &medium_list = tablet.get_medium_compaction_info_list();
   ObITable *last_major = tablet.get_table_store().get_major_sstables().get_boundary_table(true/*last*/);
@@ -104,6 +105,8 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
   if (OB_ISNULL(last_major)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("major sstable is unexpected null", K(ret), KPC(last_major));
+  } else if (OB_FAIL(last_major->get_frozen_schema_version(last_sstable_schema_version))) {
+    LOG_WARN("failed to get frozen schema version", KR(ret), KPC(last_major));
   } else {
     schedule_snapshot = last_major->get_snapshot_version();
   }
@@ -117,10 +120,14 @@ int ObMediumCompactionScheduleFunc::choose_major_snapshot(
     } else if (OB_UNLIKELY(freeze_info.schema_version <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema version is invalid", K(ret), K(ls_id), K(tablet_id), K(freeze_info));
-    } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
+    } else if (freeze_info.schema_version < last_sstable_schema_version) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema version in freeze info is less than last sstable", K(ret), K(ls_id), K(tablet_id),
+        K(freeze_info), K(last_sstable_schema_version));
+    } else if (OB_FAIL(get_table_schema_to_merge(
         tablet, freeze_info.schema_version, allocator, medium_info))) {
       if (OB_TABLE_IS_DELETED == ret) {
-        // do nothing
+        // do nothing, end loop
       } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
         if (freeze_info.freeze_version <= scheduler_frozen_version) {
           FLOG_INFO("table schema may recycled, use newer freeze info instead", K(ret), KPC(last_major), K(freeze_info),
@@ -368,8 +375,13 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
       LOG_INFO("errsim", K(ret), KPC(this));
       if (OB_FAIL(ret)) {
-        FLOG_INFO("set schedule medium with errsim", KPC(this));
-        ret = OB_SUCCESS;
+        const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
+        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
+        medium_info.medium_snapshot_ = MAX(MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
+        if (medium_info.medium_snapshot_ > max_sync_medium_scn) {
+          FLOG_INFO("set schedule medium with errsim", KPC(this));
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
