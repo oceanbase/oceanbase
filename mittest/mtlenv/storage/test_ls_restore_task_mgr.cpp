@@ -120,7 +120,8 @@ class TestRestoreTaskMgr : public testing::Test
 {
 public:
   virtual void SetUp() {
-    task_mgr_.init();
+    EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
+    EXPECT_EQ(OB_SUCCESS, task_mgr_.init());
   }
   virtual void TearDown() {
   }
@@ -208,7 +209,6 @@ public:
   virtual ~TestLSRestoreHandler() = default;
   static void SetUpTestCase()
   {
-    EXPECT_EQ(OB_SUCCESS, MockTenantModuleEnv::get_instance().init());
     SAFE_DESTROY_INSTANCE.init();
     SAFE_DESTROY_INSTANCE.start();
     ObServerCheckpointSlogHandler::get_instance().is_started_ = true;

@@ -137,6 +137,7 @@ private:
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
   blocksstable::ObBufferReader data_buffer_; // Data used to assemble macroblocks
+  blocksstable::ObBufferReader read_buffer_; // Buffer used to read macro data
   common::ObArenaAllocator allocator_;
   int64_t macro_block_index_;
   int64_t macro_block_count_;
