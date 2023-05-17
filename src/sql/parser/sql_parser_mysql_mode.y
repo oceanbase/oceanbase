@@ -598,7 +598,7 @@ stmt:
   | rotate_master_key_stmt  { $$ = $1; check_question_mark($$, result); }
   | create_index_stmt       { $$ = $1; check_question_mark($$, result); }
   | drop_index_stmt         { $$ = $1; check_question_mark($$, result); }
-  | kill_stmt               { $$ = $1; check_question_mark($$, result); }
+  | kill_stmt               { $$ = $1; question_mark_issue($$, result); }
   | help_stmt               { $$ = $1; check_question_mark($$, result); }
   | create_view_stmt        { $$ = $1; check_question_mark($$, result); }
   | create_tenant_stmt      { $$ = $1; check_question_mark($$, result); }
