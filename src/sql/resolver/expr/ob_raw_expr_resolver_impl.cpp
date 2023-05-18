@@ -5703,6 +5703,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
   ObString func_name;
+  ObString actual_name;
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
@@ -5716,6 +5717,10 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     LOG_WARN("func_expr is null");
   } else {
     ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+    if (0 == name.case_compare("date_add_interval_date") || 0 == name.case_compare("date_add_date_interval")){
+      actual_name = name;
+      name = ObString::make_string("date_add");
+    }
     if (OB_FAIL(check_internal_function(name))) {
       LOG_WARN("unexpected internal function", K(ret));
     }
@@ -5811,24 +5816,9 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
           }
         }
 
-        const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_name);
-        if (OB_SUCC(ret) && T_FUN_SYS_NAME_CONST == expr_type && current_columns_count != ctx_.columns_->count()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
-          LOG_WARN("params of name_const contain column references", K(ret));
-        } else if ((T_FUN_SYS_UUID2BIN == expr_type ||
-                    T_FUN_SYS_BIN2UUID == expr_type) &&
-                    func_expr->get_param_count() == 2) {
-          //add bool expr for the second param
-          ObRawExpr *param_expr = func_expr->get_param_expr(1);
-          ObRawExpr *new_param_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
-            LOG_WARN("create_bool_expr failed", K(ret));
-          } else if (OB_ISNULL(new_param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("new param_expr is NULL", K(ret));
-          } else {
-            func_expr->replace_param_expr(1, new_param_expr);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count, actual_name))) {
+            LOG_WARN("fail process sys func params", K(ret));
           }
         }
       }
@@ -5874,6 +5864,62 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     }
   }
 
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count, ObString &node_name)
+{
+  int ret = OB_SUCCESS;
+  const ObExprOperatorType expr_type = ObExprOperatorFactory::get_type_by_name(func_expr.get_func_name());
+  switch (expr_type)
+  {
+    case T_FUN_SYS_NAME_CONST:
+      if (current_columns_count != ctx_.columns_->count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_NAME_CONST);
+        LOG_WARN("params of name_const contain column references", K(ret));
+      }
+      break;
+    case T_FUN_SYS_UUID2BIN:
+    case T_FUN_SYS_BIN2UUID:
+      if (2 == func_expr.get_param_count()) {
+        //add bool expr for the second param
+        ObRawExpr *param_expr = func_expr.get_param_expr(1);
+        ObRawExpr *new_param_expr = NULL;
+        if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(param_expr, new_param_expr, ctx_.expr_factory_))) {
+          LOG_WARN("create_bool_expr failed", K(ret));
+        } else if (OB_ISNULL(new_param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new param_expr is NULL", K(ret));
+        } else {
+          func_expr.replace_param_expr(1, new_param_expr);
+        }
+      }
+      break;
+    case T_FUN_SYS_DATE_ADD:
+      if (0 == node_name.case_compare("date_add_interval_date")) {
+        if (3 == func_expr.get_param_count()) {
+          ObRawExpr *expr0 = func_expr.get_param_expr(0);
+          ObRawExpr *expr1 = func_expr.get_param_expr(1);
+          if (OB_FAIL(func_expr.remove_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.remove_param_expr(0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.add_param_expr(expr0))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          } else if (OB_FAIL(func_expr.add_param_expr(expr1))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("the func expr param0 is invalid", K(ret));
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
   return ret;
 }
 

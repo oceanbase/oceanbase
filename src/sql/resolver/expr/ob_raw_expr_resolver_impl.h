@@ -202,6 +202,7 @@ private:
                                  const ParseNode *expr_node,
                                  ObRawExpr *&expr);
 private:
+  int process_sys_func_params(ObSysFunRawExpr &func_expr, int current_columns_count, ObString &node_name);
   int transform_ratio_afun_to_arg_div_sum(const ParseNode *ratio_to_report, ParseNode *&div);
   int convert_any_or_all_expr(ObRawExpr *&expr, bool &happened);
   int get_opposite_string(const common::ObString &orig_string, common::ObString &new_string, common::ObIAllocator &allocator);
