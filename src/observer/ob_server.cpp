@@ -646,9 +646,6 @@ void ObServer::destroy()
 
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
-  } else {
-    FLOG_WARN_RET(OB_ERROR, "[OBSERVER_NOTICE] can not destroy observer", K_(has_destroy), K_(has_stopped));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer exits without calling destroy()", K_(has_destroy), K_(has_stopped));
   }
 }
 
