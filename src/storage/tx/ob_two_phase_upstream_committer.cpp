@@ -377,11 +377,25 @@ int ObTxCycleTwoPhaseCommitter::handle_2pc_prepare_response(const int64_t partic
   int tmp_ret = OB_SUCCESS;
 
   switch (get_upstream_state()) {
-    case ObTxState::INIT:
+    case ObTxState::INIT: {
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        TRANS_LOG(INFO, "recv prepare resp when coord state is init",
+                  KR(ret), K(participant), K(*this));
+      }
+      break;
+    }
     case ObTxState::REDO_COMPLETE: {
       if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-        TRANS_LOG(INFO, "recv prepare resp when coord state is init or redo complete",
+        TRANS_LOG(INFO, "recv prepare resp when coord state is redo complete",
                   KR(ret), K(participant), K(*this));
+      }
+      if (is_sub2pc()) {
+        // if the trans enters into the second phase, the state must be drived by self
+        if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+          TRANS_LOG(WARN, "drive self failed", K(ret), K(participant));
+        } else {
+          TRANS_LOG(INFO, "drive by response", K(ret), K(participant));
+        }
       }
       break;
     }
