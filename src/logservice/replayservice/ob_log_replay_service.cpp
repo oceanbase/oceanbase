@@ -261,7 +261,7 @@ void ObLogReplayService::wait()
     PAUSE();
   }
   if (OB_FAIL(ret)) {
-    CLOG_LOG(WARN, "ObLogApplyService failed to get queue number");
+    CLOG_LOG(WARN, "ObLogReplayService failed to get queue number");
   }
   CLOG_LOG(INFO, "replay service SimpleQueue empty");
   TG_STOP(tg_id_);
