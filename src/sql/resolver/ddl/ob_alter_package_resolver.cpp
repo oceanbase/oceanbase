@@ -99,28 +99,6 @@ int ObAlterPackageResolver::resolve_alter_compile_clause(const ParseNode &alter_
   return ret;
 }
 
-int ObAlterPackageResolver::collec_error_info(const ObPackageInfo *package_info,
-                                              share::schema::ObErrorInfo &error_info) 
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  if (OB_FAIL(error_info.collect_error_info(package_info))) {
-    LOG_WARN("collect error info fail.", K(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, session_info_->get_effective_tenant_id()))) {
-    LOG_WARN("start trans fail when collect error info.", K(ret));
-  } else if (OB_FAIL(error_info.handle_error_info(trans, NULL))) {
-    LOG_WARN("insert error info failed.", K(ret));
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCCESS == ret))) {
-      LOG_WARN("trans end failed", K(ret), K(tmp_ret));
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    }
-  }
-  return ret;
-}
-
 int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
                                             const ObString &source,
                                             const ObPLBlockNS *parent_ns,
@@ -134,7 +112,9 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
                                             bool &has_error)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (OB_FAIL(compiler.analyze_package(source, parent_ns, package_ast, is_for_trigger))) {
+    ObPL::insert_error_msg(ret);
     switch (ret) {
       case OB_ERR_PACKAGE_DOSE_NOT_EXIST:
         LOG_USER_WARN(OB_ERR_PACKAGE_DOSE_NOT_EXIST, is_package ? "PACKAGE" : "PACKAGE BODY",
@@ -151,7 +131,8 @@ int ObAlterPackageResolver::analyze_package(ObPLCompiler &compiler,
         break;
     }
   }
-  OZ (error_info.collect_error_info(package_info));
+  tmp_ret = error_info.collect_error_info(package_info);
+  ret = OB_SUCCESS == ret ? tmp_ret : ret;
   return ret;
 }
 
