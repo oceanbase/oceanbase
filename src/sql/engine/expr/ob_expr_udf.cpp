@@ -600,6 +600,10 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                               ctx.exec_ctx_.get_allocator(), res));
       }
       OZ(expr.deep_copy_datum(ctx, res));
+
+      if (OB_SUCC(ret) && info->is_udt_cons_) {
+        OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
+      }
     }
     if (need_end_stmt) {
       session->set_end_stmt();
