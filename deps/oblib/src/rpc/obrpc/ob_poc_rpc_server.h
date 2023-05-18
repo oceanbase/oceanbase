@@ -29,7 +29,7 @@ public:
     OBCG_ELECTION = 2
   }; // same as src/share/resource_manager/ob_group_list.h
   ObPocServerHandleContext( ObRpcMemPool& pool, uint64_t resp_id):
-      pool_(pool), resp_id_(resp_id)
+      pool_(pool), resp_id_(resp_id), peer_()
   {}
   ~ObPocServerHandleContext() {
     destroy();
@@ -38,10 +38,12 @@ public:
   void destroy() { pool_.destroy(); }
   void resp(ObRpcPacket* pkt);
   ObAddr get_peer();
+  void set_peer_unsafe(); // This function can only be called from the pnio thread.
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
 private:
   ObRpcMemPool& pool_;
   uint64_t resp_id_;
+  ObAddr peer_;
 };
 
 

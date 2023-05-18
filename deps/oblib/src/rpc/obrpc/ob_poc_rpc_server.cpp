@@ -72,6 +72,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       RPC_LOG(WARN, "pool allocate memory failed", K(tenant_id), K(pcode_label));
     } else {
       ctx = new(temp)ObPocServerHandleContext(*pool, resp_id);
+      ctx->set_peer_unsafe();
       req = new(ctx + 1)ObRequest(ObRequest::OB_RPC, ObRequest::TRANSPORT_PROTO_POC);
       ObRpcPacket* pkt = (ObRpcPacket*)pool->alloc(sizeof(ObRpcPacket) + alloc_payload_sz);
       if (NULL == pkt) {
@@ -124,20 +125,23 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
   }
 }
 
-ObAddr ObPocServerHandleContext::get_peer()
+void ObPocServerHandleContext::set_peer_unsafe()
 {
-  ObAddr addr;
   struct sockaddr_storage sock_addr;
   if (0 == pn_get_peer(resp_id_, &sock_addr)) {
     if (AF_INET == sock_addr.ss_family) {
       struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
-      addr.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
+      peer_.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
     } else if (AF_INET6 == sock_addr.ss_family) {
       struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
-      addr.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
+      peer_.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
     }
   }
-  return addr;
+}
+
+ObAddr ObPocServerHandleContext::get_peer()
+{
+  return peer_;
 }
 
 int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)

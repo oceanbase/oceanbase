@@ -522,13 +522,14 @@ PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
   } else {
     pkts_t* pkts = &ctx->pn->pkts;
     pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
-    socklen_t sa_len = sizeof(struct sockaddr_storage);
     if (unlikely(NULL == sock)) {
       err = -EINVAL;
       rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
-    } else if (0 != getpeername(sock->fd, (struct sockaddr*)addr, &sa_len)) {
-      err = -EIO;
-      rk_warn("getpeername failed, fd=%d, errno=%d", sock->fd, errno);
+    } else {
+      struct sockaddr_in* sin = (typeof(sin))addr;
+      sin->sin_family = AF_INET;
+      sin->sin_addr.s_addr = sock->peer.ip;
+      sin->sin_port = htons(sock->peer.port);
     }
   }
   return err;

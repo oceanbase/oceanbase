@@ -7,6 +7,7 @@
 #include "r0/log.h"
 #include "r0/futex.h"
 #include "r0/debug.h"
+#include "nio/addr.h"
 
 #include "ds/link.h"
 #include "ds/dlink.h"
@@ -41,7 +42,6 @@
 #include "io/timerfd.h"
 #include "io/time_wheel.h"
 
-#include "nio/addr.h"
 #include "nio/inet.h"
 #include "nio/listenfd.h"
 #include "nio/easy_head.h"

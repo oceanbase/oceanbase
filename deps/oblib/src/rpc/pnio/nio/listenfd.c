@@ -20,6 +20,7 @@ void on_accept(int fd, sf_t* sf, eloop_t* ep)
     update_socket_keepalive_params(fd, pnio_keepalive_timeout);
     ns->fd = fd;
     ns->fty = sf;
+    ns->peer = get_remote_addr(fd);
     if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
       add_succ = true;
       rk_info("accept new connection, ns=%p, fd=%s", ns, T2S(sock_fd, ns->fd));
