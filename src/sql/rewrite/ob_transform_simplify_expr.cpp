@@ -1278,6 +1278,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
     LOG_WARN("stmt is NULL", K(stmt));
   } else if (stmt->is_sel_del_upd()) {
     ObNotNullContext not_null_ctx(*ctx_, stmt);
+    ObSEArray<ObRawExpr*, 4> ignore_exprs;
     if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))){
       LOG_WARN("failed to generate not null context", K(ret));
     }
@@ -1287,6 +1288,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
       } else if (OB_FAIL(inner_remove_dummy_nvl(stmt,
                                                 stmt->get_condition_exprs().at(i),
                                                 not_null_ctx,
+                                                ignore_exprs,
                                                 trans_happened))) {
         LOG_WARN("failed to remove dummy nvl", K(ret));
       } else if (OB_FAIL(not_null_ctx.add_filter(stmt->get_condition_exprs().at(i)))) {
@@ -1294,26 +1296,33 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
       }
     }
 
+    /**
+     * Do not simplify expr in rollup.
+     * e.g.
+     *     select nvl(NULL, a), a from t group by rollup(a, nvl(NULL, a));
+     *  != select a, a from t group by rollup(a, a);
+    */
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
-      not_null_ctx.reset();
-      if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_GROUPBY))){
-        LOG_WARN("failed to generate not null context", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_group_expr_size(); ++i) {
-        if (OB_FAIL(inner_remove_dummy_nvl(stmt,
-                                           sel_stmt->get_group_exprs().at(i),
-                                           not_null_ctx,
-                                           trans_happened))) {
-          LOG_WARN("failed to remove dummy nvl", K(ret));
+      if (sel_stmt->has_rollup()) {
+        if (OB_FAIL(append(ignore_exprs, sel_stmt->get_group_exprs()))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        } else if (OB_FAIL(append(ignore_exprs, sel_stmt->get_rollup_exprs()))) {
+          LOG_WARN("failed to append exprs", K(ret));
         }
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_rollup_expr_size(); ++i) {
-        if (OB_FAIL(inner_remove_dummy_nvl(stmt,
-                                           sel_stmt->get_rollup_exprs().at(i),
-                                           not_null_ctx,
-                                           trans_happened))) {
-          LOG_WARN("failed to remove dummy nvl", K(ret));
+      } else {
+        not_null_ctx.reset();
+        if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_GROUPBY))){
+          LOG_WARN("failed to generate not null context", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_group_expr_size(); ++i) {
+          if (OB_FAIL(inner_remove_dummy_nvl(stmt,
+                                            sel_stmt->get_group_exprs().at(i),
+                                            not_null_ctx,
+                                            ignore_exprs,
+                                            trans_happened))) {
+            LOG_WARN("failed to remove dummy nvl", K(ret));
+          }
         }
       }
     }
@@ -1330,6 +1339,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
         } else if (OB_FAIL(inner_remove_dummy_nvl(stmt,
                                                   sel_stmt->get_having_exprs().at(i),
                                                   not_null_ctx,
+                                                  ignore_exprs,
                                                   trans_happened))) {
           LOG_WARN("failed to remove dummy nvl", K(ret));
         } else if (OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
@@ -1341,6 +1351,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
         if (OB_FAIL(inner_remove_dummy_nvl(stmt,
                                            sel_stmt->get_select_item(i).expr_,
                                            not_null_ctx,
+                                           ignore_exprs,
                                            trans_happened))) {
           LOG_WARN("failed to remove dummy nvl", K(ret));
         }
@@ -1351,6 +1362,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
       if (OB_FAIL(inner_remove_dummy_nvl(stmt,
                                          stmt->get_order_item(i).expr_,
                                          not_null_ctx,
+                                         ignore_exprs,
                                          trans_happened))) {
         LOG_WARN("failed to remove dummy nvl", K(ret));
       }
@@ -1362,6 +1374,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
 int ObTransformSimplifyExpr::inner_remove_dummy_nvl(ObDMLStmt *stmt,
                                                     ObRawExpr *&expr,
                                                     ObNotNullContext &not_null_ctx,
+                                                    ObIArray<ObRawExpr *> &ignore_exprs,
                                                     bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -1374,6 +1387,7 @@ int ObTransformSimplifyExpr::inner_remove_dummy_nvl(ObDMLStmt *stmt,
     if (OB_FAIL(SMART_CALL(inner_remove_dummy_nvl(stmt,
                                                   expr->get_param_expr(i),
                                                   not_null_ctx,
+                                                  ignore_exprs,
                                                   trans_happened)))){
       LOG_WARN("failed to remove dummy nvl", K(ret));
     }
@@ -1382,7 +1396,9 @@ int ObTransformSimplifyExpr::inner_remove_dummy_nvl(ObDMLStmt *stmt,
   if (OB_SUCC(ret)
       && (T_FUN_SYS_NVL == expr->get_expr_type()
       || T_FUN_SYS_IFNULL == expr->get_expr_type())) {
-    if (OB_FAIL(do_remove_dummy_nvl(stmt,
+    if (ObOptimizerUtil::find_item(ignore_exprs, expr)) {
+      // nvl expr is rollup expr, do nothing
+    } else if (OB_FAIL(do_remove_dummy_nvl(stmt,
                                     expr,
                                     not_null_ctx,
                                     trans_happened))){
@@ -1452,8 +1468,7 @@ int ObTransformSimplifyExpr::do_remove_dummy_nvl(ObDMLStmt *stmt,
           }
         }
         if (OB_SUCC(ret) && new_expr != NULL) {
-          bool need_cast = expr->get_collation_level() != new_expr->get_collation_level();
-          if (need_cast && OB_FAIL(ObTransformUtils::add_cast_for_replace(
+          if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(
                               *ctx_->expr_factory_, expr, new_expr, ctx_->session_info_))) {
             LOG_WARN("failed to add cast for replace", K(ret));
           } else if (OB_ISNULL(new_expr)) {
@@ -1484,9 +1499,10 @@ int ObTransformSimplifyExpr::convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is NULL", K(stmt));
   } else if (stmt->is_sel_del_upd()) {
+    ObSEArray<ObRawExpr*, 4> ignore_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); ++i) {
       if (OB_FAIL(inner_convert_nvl_predicate(
-                    stmt, stmt->get_condition_exprs().at(i), is_happened))) {
+                    stmt, stmt->get_condition_exprs().at(i), ignore_exprs, is_happened))) {
         LOG_WARN("failed to replace is null expr", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -1494,9 +1510,18 @@ int ObTransformSimplifyExpr::convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_
     }
     if (OB_SUCC(ret) && stmt->is_select_stmt()) {
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
+      if (sel_stmt->has_rollup()) {
+        if (OB_FAIL(append(ignore_exprs, sel_stmt->get_group_exprs()))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        } else if (OB_FAIL(append(ignore_exprs, sel_stmt->get_rollup_exprs()))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(inner_convert_nvl_predicate(
-                      sel_stmt, sel_stmt->get_having_exprs().at(i), is_happened))) {
+        if (OB_FAIL(inner_convert_nvl_predicate(sel_stmt,
+                                                sel_stmt->get_having_exprs().at(i),
+                                                ignore_exprs,
+                                                is_happened))) {
           LOG_WARN("failed to replace is null expr", K(ret));
         } else {
           trans_happened |= is_happened;
@@ -1509,6 +1534,7 @@ int ObTransformSimplifyExpr::convert_nvl_predicate(ObDMLStmt *stmt, bool &trans_
 
 int ObTransformSimplifyExpr::inner_convert_nvl_predicate(ObDMLStmt *stmt,
                                                          ObRawExpr *&expr,
+                                                         ObIArray<ObRawExpr *> &ignore_exprs,
                                                          bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -1548,7 +1574,9 @@ int ObTransformSimplifyExpr::inner_convert_nvl_predicate(ObDMLStmt *stmt,
         sibling_expr = child_0;
       }
       if (OB_SUCC(ret) && is_nvl_cmp_const){
-        if (OB_FAIL(do_convert_nvl_predicate(stmt,
+        if (ObOptimizerUtil::find_item(ignore_exprs, expr)) {
+          // nvl pred is rollup expr, do nothing
+        } else if (OB_FAIL(do_convert_nvl_predicate(stmt,
                                              expr,
                                              nvl_expr,
                                              sibling_expr,
@@ -1599,11 +1627,10 @@ int ObTransformSimplifyExpr::do_convert_nvl_predicate(ObDMLStmt *stmt,
     if (OB_ISNULL(exp1) || OB_ISNULL(exp2)){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(exp1), K(exp2));
-    } else if (nvl_expr->get_collation_level() != exp2->get_collation_level() &&
-               OB_FAIL(ObTransformUtils::add_cast_for_replace(*ctx_->expr_factory_,
-                                                              nvl_expr,
-                                                              exp2,
-                                                              ctx_->session_info_))) {
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                      nvl_expr,
+                                                                      exp2,
+                                                                      ctx_->session_info_))) {
       LOG_WARN("failed to add cast for replace", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*(ctx_->expr_factory_),
                                                               ctx_->session_info_,
@@ -1625,7 +1652,12 @@ int ObTransformSimplifyExpr::do_convert_nvl_predicate(ObDMLStmt *stmt,
         // IF exp2 ~ exp3 ≡ FALSE, NVL(exp1, exp2) ~ exp3 -> exp1 is not null and exp1 ~ exp3
         // IF exp2 ~ exp3 ≡ TRUE,  NVL(exp1, exp2) ~ exp3 -> exp1 is null or exp1 ~ exp3
         ObRawExpr *exp1_cmp_exp3 = NULL;
-        if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*(ctx_->expr_factory_),
+        if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx_->expr_factory_,
+                                                                   nvl_expr,
+                                                                   exp1,
+                                                                   ctx_->session_info_))) {
+          LOG_WARN("failed to add cast for replace", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*(ctx_->expr_factory_),
                                                           ctx_->session_info_,
                                                           parent_expr->get_expr_type(),
                                                           exp1_cmp_exp3,
