@@ -335,6 +335,7 @@ _temporary_file_io_area_size
 _trace_control_info
 _tx_result_retention
 _upgrade_stage
+_wait_interval_after_truncate
 _xa_gc_interval
 _xa_gc_timeout
 __balance_controller

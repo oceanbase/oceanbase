@@ -1774,7 +1774,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                           && consensus_schema_version >= res.task_id_) {
                 break;
               } else if (refreshed_schema_version >= res.task_id_
-                          && ObTimeUtility::current_time() - step_time >= 10 * 1000 * 1000) { //10s
+                          && ObTimeUtility::current_time() - step_time >= GCONF._wait_interval_after_truncate) {
                 break;
               } else {
                 ob_usleep(10 * 1000);
