@@ -485,7 +485,12 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
 
     global_upper_limit = progress_controller_->get_global_upper_limit();
     if (OB_INVALID_TIMESTAMP != global_upper_limit) {
-      upper_limit_us = std::min(upper_limit_us, global_upper_limit);
+      int64_t log_progress = ls_fetch_ctx_->get_progress();
+      if (log_progress < global_upper_limit) {
+        upper_limit_us = INT64_MAX - 1;
+      } else {
+        upper_limit_us = std::min(upper_limit_us, global_upper_limit);
+      }
     }
   }
 

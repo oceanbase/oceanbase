@@ -48,6 +48,10 @@ using oceanbase::storage::ObLSService;
 // provide the ability to fetch log from remote cluster and backups
 class ObLogRestoreService : public share::ObThreadPool
 {
+  const int64_t SCHEDULE_INTERVAL = 1000 * 1000L;   // 1s
+  const int64_t UPDATE_RESTORE_UPPER_LIMIT_INTERVAL = 100 * 1000L;  // 100ms
+  const int64_t PRIMARY_THREAD_RUN_INTERVAL = 1000 * 1000L;   // 1s
+  const int64_t STANDBY_THREAD_RUN_INTERVAL = 100 * 1000L;  // 100ms
 public:
   ObLogRestoreService();
   ~ObLogRestoreService();
@@ -75,9 +79,13 @@ private:
   void schedule_resource_();
   void clean_resource_();
   void report_error_();
+  void update_restore_upper_limit_();
+  bool need_schedule_() const;
 
 private:
   bool inited_;
+  int64_t last_normal_work_ts_;
+  int64_t last_update_restore_upper_limit_ts_;
   ObLSService *ls_svr_;
   ObLogResSvrRpc proxy_;
   ObLogRestoreController restore_controller_;

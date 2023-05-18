@@ -98,5 +98,9 @@ void ObRemoteFetchLogImpl::clean_resource()
   net_driver_->clean_resource();
 }
 
+void ObRemoteFetchLogImpl::update_restore_upper_limit()
+{
+  (void)net_driver_->set_restore_log_upper_limit();
+}
 } // namespace logservice
 } // namespace oceanbase

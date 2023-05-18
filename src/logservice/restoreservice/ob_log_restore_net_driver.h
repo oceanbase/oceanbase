@@ -79,7 +79,7 @@ public:
   void clean_resource();
 
   // set the max scn can be restored
-  int set_restore_log_upper_limit_();
+  int set_restore_log_upper_limit();
 
 private:
   // TODO LogFetcher如何区分LogRestoreSource变化了, 比如从cluster 1的tenant A, 变为了cluster 2的tenant B

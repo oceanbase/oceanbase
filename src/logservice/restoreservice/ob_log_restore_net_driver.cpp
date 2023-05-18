@@ -216,7 +216,6 @@ int ObLogRestoreNetDriver::scan_ls(const share::ObLogRestoreSourceType &type)
     }
   }
   delete_fetcher_if_needed_with_lock_();
-  set_restore_log_upper_limit_();
   return ret;
 }
 
@@ -531,7 +530,7 @@ int ObLogRestoreNetDriver::get_ls_count_in_fetcher_(int64_t &count)
   return ret;
 }
 
-int ObLogRestoreNetDriver::set_restore_log_upper_limit_()
+int ObLogRestoreNetDriver::set_restore_log_upper_limit()
 {
   int ret = OB_SUCCESS;
   share::SCN upper_limit_scn;
