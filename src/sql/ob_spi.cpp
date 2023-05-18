@@ -4239,9 +4239,8 @@ int ObSPIService::spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, 
       LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, code, 0, "");
     }
   }
-  if (is_pop_warning_buf && lib::is_mysql_mode()) {
+  if (is_pop_warning_buf && lib::is_mysql_mode() && sqlcode_info->get_stack_warning_buf().count() > 0) {
     int64_t idx = sqlcode_info->get_stack_warning_buf().count() - 1;
-    CK (idx >= 0);
     OX (sqlcode_info->get_stack_warning_buf().at(idx).~ObWarningBuffer());
     OX (sqlcode_info->get_stack_warning_buf().pop_back());
     OX (ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(OB_SUCCESS));

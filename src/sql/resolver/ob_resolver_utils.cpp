@@ -6407,6 +6407,49 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   return ret;
 }
 
+int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       ObRawExpr &expr,
+                                       bool is_dml_stmt)
+{
+  int ret = OB_SUCCESS;
+  const ObRoutineInfo *routine_info = NULL;
+  ObUDFRawExpr &udf_raw_expr = static_cast<ObUDFRawExpr&>(expr);
+
+  if (udf_raw_expr.is_parallel_enable()) {
+    //do nothing
+  } else {
+    uint64_t tenant_id = session_info.get_effective_tenant_id();
+    bool enable_parallel = true;
+    if (udf_raw_expr.get_is_udt_udf()) {
+      tenant_id = pl::get_tenant_id_by_object_id(udf_raw_expr.get_pkg_id());
+      OZ (schema_guard.get_routine_info_in_udt(tenant_id, udf_raw_expr.get_pkg_id(), udf_raw_expr.get_udf_id(), routine_info));
+    } else if (udf_raw_expr.get_pkg_id() != OB_INVALID_ID) {
+      tenant_id = pl::get_tenant_id_by_object_id(udf_raw_expr.get_pkg_id());
+      OZ (schema_guard.get_routine_info_in_package(tenant_id, udf_raw_expr.get_pkg_id(), udf_raw_expr.get_udf_id(), routine_info));
+    } else {
+      OZ (schema_guard.get_routine_info(tenant_id,
+                                        udf_raw_expr.get_udf_id(),
+                                        routine_info));
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
+      if (routine_info->is_modifies_sql_data() ||
+          routine_info->is_wps() ||
+          routine_info->is_rps() ||
+          routine_info->is_has_sequence() ||
+          routine_info->is_external_state()) {
+        enable_parallel = false;
+      } else if (is_dml_stmt && routine_info->is_reads_sql_data()) {
+        enable_parallel = false;
+      }
+      OX (udf_raw_expr.set_parallel_enable(enable_parallel));
+    }
+  }
+  return ret;
+}
+
+
 int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              sql::ObRawExprFactory &expr_factory,
                                              sql::ObSQLSessionInfo &session_info,

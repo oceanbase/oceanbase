@@ -281,6 +281,11 @@ public:
                                          ObQualifiedName &q_name,
                                          const ObSQLSessionInfo &session_info);
 
+  static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
+                               share::schema::ObSchemaGetterGuard &schema_guard,
+                               ObRawExpr &expr,
+                               bool is_dml_stmt);
+
   static int resolve_external_symbol(common::ObIAllocator &allocator,
                                      sql::ObRawExprFactory &expr_factory,
                                      sql::ObSQLSessionInfo &session_info,

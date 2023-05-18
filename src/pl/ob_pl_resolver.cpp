@@ -8305,7 +8305,8 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
     OX (unit_ast.set_rps());
   } else if (T_FUN_UDF == expr->get_expr_type() ||
              T_OP_GET_SYS_VAR == expr->get_expr_type() ||
-             T_OP_GET_USER_VAR == expr->get_expr_type()) {
+             T_OP_GET_USER_VAR == expr->get_expr_type() ||
+             (T_FUN_SUBQUERY == expr->get_expr_type() && lib::is_mysql_mode())) { // user var expr has been rewrite to subquery expr in mysql mode
     OX (unit_ast.set_external_state());
   } else {
     for (int64_t i = 0;
@@ -10380,7 +10381,7 @@ int ObPLResolver::resolve_udf_info(
       OX (udf_raw_expr->set_is_udt_cons(udf_info.is_udf_udt_cons()));
       OX (udf_raw_expr->set_is_udt_udf(routine_info->is_udt_routine()));
       OX (udf_raw_expr->set_is_deterministic(routine_info->is_deterministic()));
-      if (OB_SUCC(ret)) {
+      /*if (OB_SUCC(ret)) {
         bool enable_parallel = true;
         if (udf_raw_expr->is_parallel_enable()) {
           //do nothing
@@ -10396,7 +10397,7 @@ int ObPLResolver::resolve_udf_info(
           }
           OX (udf_raw_expr->set_parallel_enable(enable_parallel));
         }
-      }
+      }*/
       if (OB_SUCC(ret)
           && udf_info.is_udf_udt_cons()
           && OB_NOT_NULL(udf_raw_expr->get_param_expr(0))) {

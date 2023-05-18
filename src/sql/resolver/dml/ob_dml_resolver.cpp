@@ -10776,6 +10776,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
       ObSchemaObjVersion udf_version;
       share::schema::ObSchemaGetterGuard *schema_guard = NULL;
       uint64_t database_id = OB_INVALID_ID;
+      CK (OB_NOT_NULL(stmt));
       CK (OB_NOT_NULL(udf_expr));
       if (OB_FAIL(ret)) {
       } else if (OB_ISNULL(schema_guard = params_.schema_checker_->get_schema_guard())) {
@@ -10789,7 +10790,6 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         uint64_t dep_obj_id = view_ref_id_;
         uint64_t dep_db_id = database_id;
         OZ (udf_expr->get_schema_object_version(udf_version));
-        CK (OB_NOT_NULL(stmt));
         OZ (stmt->add_global_dependency_table(udf_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
         //for udf without params, we just set called_in_sql = true,
@@ -10797,6 +10797,21 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         //the flag will change to false;
         OX (expr->set_is_called_in_sql(true));
       }
+
+      bool is_dml_stmt = false;
+      if (OB_FAIL(ret)) {
+      } else if (ObStmt::is_dml_write_stmt(stmt->get_stmt_type())) {
+        is_dml_stmt = true;
+      } else if (stmt::T_SELECT == stmt->get_stmt_type()) {
+        bool has_for_update = false;
+        OZ (stmt->check_if_contain_select_for_update(has_for_update));
+        OX (is_dml_stmt = has_for_update);
+      }
+
+      OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
+                                              *params_.schema_checker_->get_schema_guard(),
+                                              *expr,
+                                              is_dml_stmt));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
       if (OB_SUCC(ret) &&
           udf_expr->get_result_type().is_ext() &&
