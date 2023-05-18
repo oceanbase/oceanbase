@@ -359,6 +359,7 @@ ObTenant::ObTenant(
       use_group_map_(true),
       req_queue_(),
       large_req_queue_(),
+      multi_level_queue_(nullptr),
       recv_hp_rpc_cnt_(0),
       recv_np_rpc_cnt_(0),
       recv_lp_rpc_cnt_(0),
