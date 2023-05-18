@@ -39,7 +39,7 @@ ObStorageLogNopLog::~ObStorageLogNopLog()
   destroy();
 }
 
-int ObStorageLogNopLog::init(const int64_t buffer_size)
+int ObStorageLogNopLog::init(const int64_t tenant_id, const int64_t buffer_size)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -51,7 +51,7 @@ int ObStorageLogNopLog::init(const int64_t buffer_size)
   } else {
     buffer_ = static_cast<char *>(ob_malloc_align(
         ObLogConstants::LOG_FILE_ALIGN_SIZE,
-        buffer_size, "SlogNopLog"));
+        buffer_size, ObMemAttr(tenant_id, "SlogNopLog")));
     if (OB_ISNULL(buffer_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc nop log buffer", K(ret));

@@ -40,7 +40,7 @@ public:
 
   static const int64_t NEED_FLUSH_CLOG_DISK_PERCENT = 30;
   static int mtl_init(ObCheckPointService *&m);
-  int init();
+  int init(const int64_t tenant_id);
   int start();
   int stop();
   void wait();

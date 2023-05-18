@@ -1129,9 +1129,10 @@ const common::hash::ObHashMap<ObAddr, int64_t>& ObPhysicalPlan::get_minimal_work
 int ObPhysicalPlan::assign_worker_map(common::hash::ObHashMap<ObAddr, int64_t> &worker_map, const common::hash::ObHashMap<ObAddr, int64_t> &c)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), "WorkerMap");
   if (worker_map.created()) {
     worker_map.clear();
-  } else if (OB_FAIL(worker_map.create(common::hash::cal_next_prime(100), ObModIds::OB_SQL_PX, ObModIds::OB_SQL_PX))){
+  } else if (OB_FAIL(worker_map.create(common::hash::cal_next_prime(100), attr, attr))){
     LOG_WARN("create hash map failed", K(ret));
   }
   if (OB_SUCC(ret)) {

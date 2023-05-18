@@ -38,7 +38,7 @@ public:
   ObLSReservedSnapshotMgr();
   ~ObLSReservedSnapshotMgr();
 
-  int init(storage::ObLS *ls, logservice::ObLogHandler *log_handler);
+  int init(const int64_t tenant_id, storage::ObLS *ls, logservice::ObLogHandler *log_handler);
   virtual void destroy() override;
 
   // for leader

@@ -52,7 +52,7 @@ int ObDiskUsageReportTask::init(ObMySQLProxy &sql_proxy)
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init twice", K(ret));
-  } else if (OB_FAIL(result_map_.create(OB_MAX_SERVER_TENANT_CNT * 5, lib::ObLabel("OB_DISK_REP")))) {
+  } else if (OB_FAIL(result_map_.create(OB_MAX_SERVER_TENANT_CNT * 5, SET_USE_500("OB_DISK_REP")))) {
     STORAGE_LOG(WARN, "Failed to create result_map_", K(ret));
   } else if (OB_FAIL(disk_usage_table_operator_.init(sql_proxy))) {
     STORAGE_LOG(WARN, "failed to init disk_usage_table_operator_", K(ret));
@@ -572,4 +572,3 @@ int ObDiskUsageReportTask::delete_tenant_usage_stat(const uint64_t tenant_id)
 
 } // namespace storage
 } // namespace oceanbase
-

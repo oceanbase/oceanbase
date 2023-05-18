@@ -23,7 +23,10 @@ namespace election
 
 using namespace common;
 
-MemberList::MemberList() : replica_num_(0) {}
+MemberList::MemberList() : replica_num_(0)
+{
+  addr_list_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "AddrList"));
+}
 
 bool MemberList::only_membership_version_different(const MemberList &rhs) const
 {

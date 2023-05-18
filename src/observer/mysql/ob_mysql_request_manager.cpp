@@ -289,7 +289,7 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
 int ObMySQLRequestManager::mtl_new(ObMySQLRequestManager* &req_mgr)
 {
   int ret = OB_SUCCESS;
-  req_mgr = OB_NEW(ObMySQLRequestManager, ObModIds::OB_MYSQL_REQUEST_RECORD);
+  req_mgr = OB_NEW(ObMySQLRequestManager, ObMemAttr(MTL_ID(), ObModIds::OB_MYSQL_REQUEST_RECORD));
   if (nullptr == req_mgr) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for ObMySQLRequestManager", K(ret));

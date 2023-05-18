@@ -171,7 +171,7 @@ int ObTxLSLogWriter::init(const int64_t tenant_id,
                           const ObLSID &ls_id,
                           ObITxLogAdapter * adapter,
                           ObLSTxCtxMgr *ctx_mgr)
-{
+  {
   int ret = OB_SUCCESS;
 
   if (OB_NOT_NULL(tx_log_adapter_) || OB_NOT_NULL(ctx_mgr_)) {
@@ -180,6 +180,7 @@ int ObTxLSLogWriter::init(const int64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "[TxLsLogWriter] invalid arguments", K(ls_id), KP(adapter), KP(ctx_mgr));
   } else {
+    tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     tenant_id_ = tenant_id;
     ctx_mgr_ = ctx_mgr;
@@ -228,6 +229,7 @@ void ObTxLSLogWriter::reset()
   keep_alive_cbs_.reset();
   start_working_cbs_.reset();
   free_cbs_.reset();
+  tenant_id_ = OB_SERVER_TENANT_ID;
   ls_id_.reset();
   ctx_mgr_ = nullptr;
   tx_log_adapter_ = nullptr;
@@ -362,7 +364,8 @@ int ObTxLSLogWriter::append_free_log_cb_()
   char *cb_buf = nullptr;
   ObTxLSLogCb *tmp_cb = nullptr;
   if (nullptr
-      == (cb_buf = (char *)ob_malloc(sizeof(ObTxLSLogCb) * APPEND_LOG_CB_CNT, "ObTxLSLogCb"))) {
+      == (cb_buf = (char *)ob_malloc(sizeof(ObTxLSLogCb) * APPEND_LOG_CB_CNT,
+                                     ObMemAttr(tenant_id_, "ObTxLSLogCb")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
     for (int i = 0; i < APPEND_LOG_CB_CNT; i++) {

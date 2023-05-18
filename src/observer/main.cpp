@@ -439,6 +439,7 @@ int main(int argc, char *argv[])
     snprintf(ob_get_tname(), OB_THREAD_NAME_BUF_LEN, "observer");
   }
   ObStackHeaderGuard stack_header_guard;
+  // just take effect in observer
 #ifndef OB_USE_ASAN
   init_malloc_hook();
 #endif

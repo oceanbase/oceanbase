@@ -317,7 +317,7 @@ int ObTabletStream::get_all_tablet_stat(common::ObIArray<ObTabletStat> &tablet_s
 /************************************* ObTabletStreamPool *************************************/
 ObTabletStreamPool::ObTabletStreamPool()
   : dynamic_allocator_(MTL_ID()),
-    free_list_allocator_("FreeTbltStream"),
+    free_list_allocator_(ObMemAttr(MTL_ID(), "FreeTbltStream")),
     free_list_(),
     lru_list_(),
     max_free_list_num_(0),
@@ -490,7 +490,7 @@ ObTenantTabletStatMgr::~ObTenantTabletStatMgr()
   destroy();
 }
 
-int ObTenantTabletStatMgr::init()
+int ObTenantTabletStatMgr::init(const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   const bool repeat = true;
@@ -500,9 +500,10 @@ int ObTenantTabletStatMgr::init()
     LOG_WARN("ObTenantTabletStatMgr init twice", K(ret));
   } else if (OB_FAIL(stream_pool_.init(DEFAULT_MAX_FREE_STREAM_CNT, DEFAULT_UP_LIMIT_STREAM_CNT))) {
     LOG_WARN("failed to init tablet stream pool", K(ret));
-  } else if (OB_FAIL(stream_map_.create(DEFAULT_BUCKET_NUM, "TabletStats"))) {
+  } else if (OB_FAIL(stream_map_.create(DEFAULT_BUCKET_NUM, ObMemAttr(tenant_id, "TabletStats")))) {
     LOG_WARN("failed to create TabletStats", K(ret));
-  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_BUCKET_NUM))) {
+  } else if (OB_FAIL(bucket_lock_.init(DEFAULT_BUCKET_NUM, ObLatchIds::DEFAULT_BUCKET_LOCK,
+                                       ObMemAttr(tenant_id, "TabStatMgrLock")))) {
     LOG_WARN("failed to init bucket lock", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TabletStatRpt, report_tg_id_))) {
     LOG_WARN("failed to create TabletStatRpt thread", K(ret));
@@ -519,7 +520,7 @@ int ObTenantTabletStatMgr::init()
 int ObTenantTabletStatMgr::mtl_init(ObTenantTabletStatMgr* &tablet_stat_mgr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(tablet_stat_mgr->init())) {
+  if (OB_FAIL(tablet_stat_mgr->init(MTL_ID()))) {
     LOG_WARN("failed to init tablet stat mgr", K(ret), K(MTL_ID()));
   } else {
     LOG_INFO("success to init ObTenantTabletStatMgr", K(MTL_ID()));

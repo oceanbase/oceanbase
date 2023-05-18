@@ -37,6 +37,7 @@ int ObStorageHAService::mtl_init(ObStorageHAService *&ha_service)
   int ret = OB_SUCCESS;
   ObLSService *ls_service = nullptr;
 
+  ha_service->ls_id_array_.set_attr(ObMemAttr(MTL_ID(), "ls_id"));
   if (OB_ISNULL(ls_service =  (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
@@ -231,4 +232,3 @@ int ObStorageHAService::do_ha_handler_(const share::ObLSID &ls_id)
 
 }
 }
-

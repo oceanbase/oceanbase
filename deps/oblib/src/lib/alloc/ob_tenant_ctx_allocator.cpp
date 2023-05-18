@@ -371,7 +371,7 @@ int64_t ObTenantCtxAllocator::sync_wash(int64_t wash_size)
   int64_t washed_size = 0;
 
   auto stat = obj_mgr_.get_stat();
-  const double min_utilization = 0.9;
+  const double min_utilization = 0.95;
   if (stat.payload_ * min_utilization > stat.used_) {
     washed_size = obj_mgr_.sync_wash(wash_size);
   }

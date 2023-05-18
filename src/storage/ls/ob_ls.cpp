@@ -140,7 +140,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("init ls sync tablet seq handler failed", K(ret));
     } else if (OB_FAIL(ls_ddl_log_handler_.init(this))) {
       LOG_WARN("init ls ddl log handler failed", K(ret));
-    } else if (OB_FAIL(keep_alive_ls_handler_.init(ls_meta_.ls_id_, get_log_handler()))) {
+    } else if (OB_FAIL(keep_alive_ls_handler_.init(tenant_id, ls_meta_.ls_id_, get_log_handler()))) {
       LOG_WARN("init keep_alive_ls_handler failed", K(ret));
     } else if (OB_FAIL(gc_handler_.init(this))) {
       LOG_WARN("init gc handler failed", K(ret));
@@ -158,7 +158,7 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("failed to init ls rebuild cb impl", K(ret));
     } else if (OB_FAIL(tablet_gc_handler_.init(this))) {
       LOG_WARN("init tablet gc handler", K(ret));
-    } else if (OB_FAIL(reserved_snapshot_mgr_.init(this, &log_handler_))) {
+    } else if (OB_FAIL(reserved_snapshot_mgr_.init(tenant_id, this, &log_handler_))) {
       LOG_WARN("failed to init reserved snapshot mgr", K(ret), K(ls_id));
     } else if (OB_FAIL(reserved_snapshot_clog_handler_.init(this))) {
       LOG_WARN("failed to init reserved snapshot clog handler", K(ret), K(ls_id));

@@ -203,18 +203,18 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     LOG_WARN("fail to init basic session info", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(package_state_map_.create(hash::cal_next_prime(4),
-                                               ObModIds::OB_HASH_BUCKET,
-                                               ObModIds::OB_HASH_NODE))) {
+                                               "PackStateMap",
+                                               "PackStateMap"))) {
     LOG_WARN("create package state map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(sequence_currval_map_.create(hash::cal_next_prime(32),
-                                                  ObModIds::OB_HASH_BUCKET,
-                                                  ObModIds::OB_HASH_NODE))) {
+                                                  "SequenceMap",
+                                                  "SequenceMap"))) {
     LOG_WARN("create sequence current value map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(contexts_map_.create(hash::cal_next_prime(32),
-                                          ObModIds::OB_HASH_BUCKET,
-                                          ObModIds::OB_HASH_NODE))) {
+                                          "ContextsMap",
+                                          "ContextsMap"))) {
     LOG_WARN("create contexts map failed", K(ret));
   } else {
     curr_session_context_size_ = 0;

@@ -123,7 +123,7 @@ int ObTenantMetaMemMgr::mtl_new(ObTenantMetaMemMgr *&meta_mem_mgr)
   int ret = OB_SUCCESS;
 
   const uint64_t tenant_id = MTL_ID();
-  meta_mem_mgr = OB_NEW(ObTenantMetaMemMgr, oceanbase::ObModIds::OMT_TENANT, tenant_id);
+  meta_mem_mgr = OB_NEW(ObTenantMetaMemMgr, ObMemAttr(tenant_id, "MetaMemMgr"), tenant_id);
   if (OB_ISNULL(meta_mem_mgr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(tenant_id));
@@ -149,12 +149,12 @@ int ObTenantMetaMemMgr::init()
   } else if (OB_FAIL(tablet_map_.init(bucket_num, tenant_id_, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
-  } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
+  } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT, mem_attr))) {
     LOG_WARN("fail to create last min minor sstable set", K(ret));
   } else if (OB_FAIL(pin_set_lock_.init(pin_set_bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MPinLock",
       tenant_id_))) {
     LOG_WARN("fail to init pin set lock", K(ret));
-  } else if (OB_FAIL(pinned_tablet_set_.create(pin_set_bucket_num))) {
+  } else if (OB_FAIL(pinned_tablet_set_.create(pin_set_bucket_num, mem_attr))) {
     LOG_WARN("fail to create pinned tablet set", K(ret));
   } else if (OB_FAIL(gc_memtable_map_.create(10, "GCMemtableMap", "GCMemtableMap", tenant_id_))) {
     LOG_WARN("fail to initialize gc memtable map", K(ret));
@@ -1913,6 +1913,7 @@ ObT3mTabletMapIterator::ObT3mTabletMapIterator(ObTenantMetaMemMgr &t3m)
     tablet_items_(),
     idx_(0)
 {
+  tablet_items_.set_attr(SET_USE_500("TabletItems"));
 }
 
 ObT3mTabletMapIterator::ObT3mTabletMapIterator(
@@ -1923,6 +1924,7 @@ ObT3mTabletMapIterator::ObT3mTabletMapIterator(
     tablet_items_(),
     idx_(0)
 {
+  tablet_items_.set_attr(SET_USE_500("TabletItems"));
 }
 
 ObT3mTabletMapIterator::~ObT3mTabletMapIterator()

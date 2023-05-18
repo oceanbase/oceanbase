@@ -164,7 +164,7 @@ private:
 class TransModulePageAllocator : public common::ModulePageAllocator
 {
 public:
-  TransModulePageAllocator(const lib::ObLabel &label = common::ObModIds::OB_MODULE_PAGE_ALLOCATOR,
+  TransModulePageAllocator(const lib::ObLabel &label = "TransModulePage",
                            int64_t tenant_id = common::OB_SERVER_TENANT_ID,
                            int64_t ctx_id = 0)
     : ModulePageAllocator(label, tenant_id, ctx_id) {}

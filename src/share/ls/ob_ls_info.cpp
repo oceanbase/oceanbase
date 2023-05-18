@@ -542,6 +542,7 @@ ObLSInfo::ObLSInfo(
       ls_id_(ls_id),
       replicas_()
 {
+  replicas_.set_attr(ObMemAttr(tenant_id, "LSInfo"));
 }
 
 ObLSInfo::~ObLSInfo()

@@ -306,10 +306,12 @@ static int start_mysql_queue(QueueThread *&qthread)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
-    qthread = OB_NEW(QueueThread, ObModIds::OB_RPC, "MysqlQueueTh", tenant_id);
+    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC), "MysqlQueueTh", tenant_id);
     if (OB_ISNULL(qthread)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new qthread", K(ret), K(tenant_id));
+    } else if (OB_FAIL(qthread->init())) {
+      LOG_WARN("init qthread failed", K(tenant_id), K(ret));
     } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MysqlQueueTh,
                                         qthread->tg_id_))) {
       LOG_WARN("mysql queue init failed", K(ret), K(tenant_id),

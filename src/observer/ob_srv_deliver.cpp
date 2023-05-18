@@ -322,6 +322,8 @@ int ObSrvDeliver::create_queue_thread(int tg_id, const char *thread_name, QueueT
   qthread = OB_NEW(QueueThread, ObModIds::OB_RPC, thread_name);
   if (OB_ISNULL(qthread)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(qthread->init())) {
+    LOG_WARN("init qthread failed", K(ret));
   } else {
     qthread->queue_.set_qhandler(&qhandler_);
   }

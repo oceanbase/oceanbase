@@ -43,11 +43,13 @@ class QueueThread
 {
 public:
   QueueThread(const char *thread_name = nullptr,
-              uint64_t tenant_id = common::OB_INVALID_ID)
+              uint64_t tenant_id = OB_SERVER_TENANT_ID)
       : thread_(queue_, thread_name, tenant_id), tg_id_(0),
         tenant_id_(tenant_id), n_thread_(0) {}
 
   ~QueueThread() { destroy(); }
+
+  int init() { return queue_.init(tenant_id_); }
 
 public:
   int set_thread_count(int thread_cnt) {

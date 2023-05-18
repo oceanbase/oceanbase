@@ -80,7 +80,8 @@ int ObPxPools::init(uint64_t tenant_id)
   static int PX_POOL_COUNT = 128; // 128 groups, generally enough
   int ret = OB_SUCCESS;
   tenant_id_ = tenant_id;
-  if (OB_FAIL(pool_map_.create(PX_POOL_COUNT, "PxPoolBkt", "PxPoolNode"))) {
+  ObMemAttr attr(tenant_id, "PxPoolBkt");
+  if (OB_FAIL(pool_map_.create(PX_POOL_COUNT, attr, attr))) {
     LOG_WARN("fail init pool map", K(ret));
   }
   return ret;
@@ -110,7 +111,7 @@ int ObPxPools::create_pool(int64_t group_id, ObPxPool *&pool)
   common::SpinWLockGuard g(lock_);
   if (OB_FAIL(pool_map_.get_refactored(group_id, pool))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      pool = OB_NEW(ObPxPool, common::ObModIds::OMT_TENANT);
+      pool = OB_NEW(ObPxPool, ObMemAttr(tenant_id_, "PxPool"));
       if (OB_ISNULL(pool)) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
       } else {
@@ -198,7 +199,7 @@ int ObPxPool::submit(const RunFuncT &func)
   if (ATOMIC_LOAD(&active_threads_) < ATOMIC_LOAD(&concurrency_)) {
     ret = OB_SIZE_OVERFLOW;
   } else {
-    Task *t = OB_NEW(Task, ObModIds::OMT_TENANT, func);
+    Task *t = OB_NEW(Task, ObMemAttr(tenant_id_, "PxTask"), func);
     if (OB_ISNULL(t)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else if (OB_FAIL(queue_.push(static_cast<ObLink*>(t), 0))) {
@@ -219,7 +220,7 @@ void ObPxPool::handle(ObLink *task)
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "px task is invalid");
   } else {
     t->func_();
-    OB_DELETE(Task, ObModIds::OMT_TENANT, t);
+    OB_DELETE(Task, "PxTask", t);
   }
   ATOMIC_DEC(&concurrency_);
 }
@@ -455,7 +456,7 @@ int GroupMap::create_and_insert_group(int32_t group_id, ObTenant *tenant, ObCgro
   } else {
     const int64_t alloc_size = sizeof(ObResourceGroup);
     ObResourceGroup *buf = nullptr;
-    if (nullptr == (buf = (ObResourceGroup*)ob_malloc(alloc_size, ObModIds::OMT_TENANT))) {
+    if (nullptr == (buf = (ObResourceGroup*)ob_malloc(alloc_size, ObMemAttr(tenant->id(), "ResourceGroup")))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       group = new(buf)ObResourceGroup(group_id, tenant, cgroup_ctrl);
@@ -630,11 +631,11 @@ int ObTenant::init(const ObTenantMeta &meta)
   if (OB_FAIL(ObTenantBase::init(&cgroup_ctrl_))) {
     LOG_WARN("fail to init tenant base", K(ret));
   } else if (FALSE_IT(req_queue_.set_limit(GCONF.tenant_task_queue_size))) {
-  } else if (OB_ISNULL(multi_level_queue_ = OB_NEW(ObMultiLevelQueue, ObModIds::OMT_TENANT))) {
+  } else if (OB_ISNULL(multi_level_queue_ = OB_NEW(ObMultiLevelQueue, ObMemAttr(id_, "MulLevelQueue")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ObMultiLevelQueue failed", K(ret), K(*this));
   } else if (FALSE_IT(multi_level_queue_->set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size))) {
-  } else if (OB_ISNULL(rpc_stat_info_ = OB_NEW(RpcStatInfo, ObModIds::OMT_TENANT, id_))) {
+  } else if (OB_ISNULL(rpc_stat_info_ = OB_NEW(RpcStatInfo, ObMemAttr(id_, "RpcStatInfo"), id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc RpcStatInfo failed", K(ret), K(*this));
   } else if (OB_FAIL(construct_mtl_init_ctx(meta, mtl_init_ctx_))) {
@@ -694,7 +695,7 @@ int ObTenant::init(const ObTenantMeta &meta)
 int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantModuleInitCtx *&ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx = OB_NEW(share::ObTenantModuleInitCtx, ObModIds::OMT_TENANT))) {
+  if (OB_ISNULL(ctx = OB_NEW(share::ObTenantModuleInitCtx, ObMemAttr(id_, "ModuleInitCtx")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc ObTenantModuleInitCtx failed", K(ret));
   } else if (OB_FAIL(OB_FILE_SYSTEM_ROUTER.get_tenant_clog_dir(id_, mtl_init_ctx_->tenant_clog_dir_))) {

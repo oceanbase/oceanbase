@@ -70,6 +70,7 @@ int ObMajorMergeProgressChecker::init(
   } else if (OB_FAIL(cross_cluster_validator_.init(tenant_id, is_primary_service, sql_proxy, zone_merge_mgr))) {
     LOG_WARN("fail to init cross cluster validator", KR(ret), K(tenant_id));
   } else {
+    table_ids_.set_attr(ObMemAttr(tenant_id, "TableIds"));
     tenant_id_ = tenant_id;
     sql_proxy_ = &sql_proxy;
     schema_service_ = &schema_service;
@@ -241,7 +242,7 @@ int ObMajorMergeProgressChecker::check_merge_progress(
         if (OB_FAIL(iter.init(*sql_proxy_, tenant_id_))) {
           LOG_WARN("fail to init tablet table iterator", KR(ret), K_(tenant_id));
         }
-        // Keep set_filter_not_exist_server before setting all the other filters, 
+        // Keep set_filter_not_exist_server before setting all the other filters,
         // otherwise the other filters may return OB_ENTRY_NOT_EXIST error code.
         else if (OB_FAIL(iter.get_filters().set_filter_not_exist_server(*server_trace_))) {
           LOG_WARN("fail to set not exist server filter", KR(ret), K_(tenant_id));

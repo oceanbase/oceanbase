@@ -32,7 +32,7 @@ int ObDtlTenantMemManager::init()
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   hash_cnt_ = next_pow2(common::ObServerConfig::get_instance()._px_chunklist_count_ratio) * HASH_CNT;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "SqlDtlMgr");
+  ObMemAttr attr(tenant_id_, "SqlDtlMgr");
   buf = reinterpret_cast<char*>(ob_malloc(hash_cnt_ * sizeof(ObDtlChannelMemManager), attr));
   if (nullptr == buf) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

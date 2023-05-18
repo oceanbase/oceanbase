@@ -133,13 +133,13 @@ private:
 class ObKeepAliveLSHandler : public logservice::ObIReplaySubHandler,
                              public logservice::ObICheckpointSubHandler,
                              public logservice::ObIRoleChangeSubHandler,
-                             public logservice::AppendCb 
+                             public logservice::AppendCb
 {
 public:
   const int64_t KEEP_ALIVE_GTS_INTERVAL = 100 * 1000;
 public:
   ObKeepAliveLSHandler() : submit_buf_(nullptr) { reset(); }
-  int init(const share::ObLSID &ls_id,logservice::ObLogHandler * log_handler_ptr);
+  int init(const int64_t tenant_id, const share::ObLSID &ls_id,logservice::ObLogHandler * log_handler_ptr);
 
   void stop();
   // false - can not safe destroy
@@ -147,7 +147,7 @@ public:
   void destroy();
 
   void reset();
-  
+
   int try_submit_log(const share::SCN &min_start_scn, MinStartScnStatus status);
   void print_stat_info();
 public:
@@ -159,7 +159,7 @@ public:
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn);
   void switch_to_follower_forcedly()
   {
-   ATOMIC_STORE(&is_master_, false); 
+   ATOMIC_STORE(&is_master_, false);
   }
   int switch_to_leader() { ATOMIC_STORE(&is_master_,true); return OB_SUCCESS;}
   int switch_to_follower_gracefully() { ATOMIC_STORE(&is_master_,false); return OB_SUCCESS;}
@@ -171,7 +171,7 @@ public:
 private:
   bool check_gts_();
   int serialize_keep_alive_log_(const share::SCN &min_start_scn, MinStartScnStatus status);
-private : 
+private :
   SpinRWLock lock_;
 
   bool is_busy_;

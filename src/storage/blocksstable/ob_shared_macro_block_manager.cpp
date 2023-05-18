@@ -124,7 +124,8 @@ int ObSharedMacroBlockMgr::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("shared macro block handle has been inited", K(ret));
   } else if (FALSE_IT(common_header.set_attr(ObMacroBlockCommonHeader::MacroBlockType::SharedSSTableData))) {
-  } else if (OB_ISNULL(common_header_buf_ = reinterpret_cast<char*>(ob_malloc(header_size_, ObModIds::OB_MACRO_FILE)))) {
+  } else if (OB_ISNULL(common_header_buf_ = reinterpret_cast<char*>(ob_malloc(header_size_,
+      ObMemAttr(MTL_ID(), ObModIds::OB_MACRO_FILE))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for buffer that holds common header", K(ret), K(common_header));
   } else if (FALSE_IT(MEMSET(common_header_buf_, 9, header_size_))) {

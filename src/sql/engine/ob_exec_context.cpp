@@ -334,7 +334,7 @@ int ObExecContext::get_temp_expr_eval_ctx(const ObTempExpr &temp_expr,
   int ret = OB_SUCCESS;
   if (use_temp_expr_ctx_cache_) {
     if (!temp_expr_ctx_map_.created()) {
-      OZ(temp_expr_ctx_map_.create(8, ObLabel("TempExprCtx")));
+      OZ(temp_expr_ctx_map_.create(8, ObMemAttr(OB_SERVER_TENANT_ID, "TempExprCtx")));
     }
     if (OB_SUCC(ret)) {
       int64_t ctx_ptr = 0;

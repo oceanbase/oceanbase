@@ -67,6 +67,7 @@ OB_SERIALIZE_MEMBER(ObMigrateTabletAutoincSeqParam, src_tablet_id_, dest_tablet_
 
 ObTabletAutoincSeq::ObTabletAutoincSeq() : intervals_()
 {
+  intervals_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TabletAutoInc"));
 }
 
 int ObTabletAutoincSeq::assign(const ObTabletAutoincSeq &other)

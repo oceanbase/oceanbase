@@ -79,11 +79,12 @@ void TestTenantTabletStatMgr::SetUp()
 {
   int ret = OB_SUCCESS;
 
+  ObTenantEnv::set_tenant(&tenant_base_);
   stat_mgr_ = OB_NEW(ObTenantTabletStatMgr, ObModIds::TEST);
-  ret = stat_mgr_->init();
+  ret = stat_mgr_->init(tenant_id_);
   ASSERT_EQ(OB_SUCCESS, ret);
-
   tenant_base_.set(stat_mgr_);
+
   ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
   ASSERT_EQ(tenant_id_, MTL_ID());

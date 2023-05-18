@@ -257,6 +257,7 @@ int ObResourceColMappingRuleManager::drop_tenant(uint64_t tenant_id)
       ret = OB_SUCCESS;
     }
   }
+  tenant_rule_infos_.purge();
   LOG_INFO("drop resource column mapping rule info", K(ret), K(tenant_id));
   return ret;
 }

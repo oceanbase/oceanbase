@@ -122,7 +122,7 @@ int ObTxLSLogCb::serialize_ls_log(T &ls_log,
     //             K(block_header));
     // } else if (OB_FAIL(ls_log.before_serialize())) {
     //   TRANS_LOG(WARN, "[TxLsLogWriter] before serialize block header error", KR(ret), K(ls_log));
-    // } else 
+    // } else
     if (OB_FAIL(base_header.serialize(log_buf_, ObTxLSLogLimit::LOG_BUF_SIZE, pos_))) {
       TRANS_LOG(WARN, "[TxLsLogWriter] serialize base header error", KR(ret), KP(log_buf_),
                 K(pos_));
@@ -200,8 +200,8 @@ private:
   common::ObDList<ObTxLSLogCb> keep_alive_cbs_;
   common::ObDList<ObTxLSLogCb> start_working_cbs_;
 
-  share::ObLSID ls_id_;
   int64_t tenant_id_;
+  share::ObLSID ls_id_;
   ObLSTxCtxMgr *ctx_mgr_;
   ObITxLogAdapter *tx_log_adapter_;
 };

@@ -70,7 +70,10 @@ class ObDecoderCtxArray
 {
 public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
-  ObDecoderCtxArray() {};
+  ObDecoderCtxArray()
+  {
+    ctxs_.set_attr(SET_USE_500("DecoderCtxArray"));
+  }
   virtual ~ObDecoderCtxArray()
   {
     FOREACH(it, ctxs_) {

@@ -74,7 +74,7 @@ int ObTabletGCService::start()
   timer_for_tablet_gc_.set_run_wrapper(MTL_CTX());
   if (OB_FAIL(timer_for_tablet_change_.init())) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
-  } else if (OB_FAIL(timer_for_tablet_gc_.init())) {
+  } else if (OB_FAIL(timer_for_tablet_gc_.init("TabletGcTimer", ObMemAttr(MTL_ID(), "TabletGcTimer")))) {
     STORAGE_LOG(ERROR, "fail to init timer", KR(ret));
   } else if (OB_FAIL(timer_for_tablet_change_.schedule(tablet_change_task_, GC_CHECK_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule task", KR(ret));

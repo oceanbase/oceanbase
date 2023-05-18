@@ -31,7 +31,9 @@ using namespace share;
 OB_SERIALIZE_MEMBER(Lease, owner_, lease_end_ts_, ballot_number_);
 
 MemberListWithStates::MemberListWithStates()
-:p_impl_(nullptr) {}
+:p_impl_(nullptr)
+{
+}
 
 int MemberListWithStates::init()
 {

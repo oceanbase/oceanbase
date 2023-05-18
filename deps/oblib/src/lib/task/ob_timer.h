@@ -70,7 +70,8 @@ public:
       is_destroyed_(false), tokens_(nullptr), has_running_task_(false), has_running_repeat_task_(false),
       thread_id_(-1), thread_name_(nullptr) {}
   ~ObTimer();
-  int init(const char* thread_name = nullptr);
+  int init(const char* thread_name = nullptr,
+           const ObMemAttr &attr = ObMemAttr(OB_SERVER_TENANT_ID, "timer"));
   bool inited() const;
   int create(); // create new timer thread and start
   int start();  // only start

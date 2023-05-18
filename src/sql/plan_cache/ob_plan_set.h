@@ -261,7 +261,9 @@ public:
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
       enable_inner_part_parallel_exec_(false)
-      {}
+      {
+        table_locations_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "TableLocations"));
+      }
 
   virtual ~ObSqlPlanSet() {}
 public:
@@ -320,10 +322,10 @@ private:
   int get_plan_special(ObPlanCacheCtx &pc_ctx,
                        ObPhysicalPlan *&plan);
   int try_get_local_plan(ObPlanCacheCtx &pc_ctx,
-                         ObPhysicalPlan *&plan, 
+                         ObPhysicalPlan *&plan,
                          bool &get_next);
   int try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
-                          ObPhysicalPlan *&plan, 
+                          ObPhysicalPlan *&plan,
                           bool &get_next);
   int try_get_dist_plan(ObPlanCacheCtx &pc_ctx,
                         ObPhysicalPlan *&plan);

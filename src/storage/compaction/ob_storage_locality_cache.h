@@ -101,7 +101,7 @@ private:
   uint64_t tenant_id_;
   ObMySQLProxy *sql_proxy_;
   void *alloc_buf_;
-  common::DefaultPageAllocator allocator_;
+  common::ModulePageAllocator allocator_;
   common::ObArray<ObLSLocalityInCache> ls_locality_array_;
 };
 

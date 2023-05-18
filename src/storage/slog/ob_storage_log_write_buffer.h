@@ -30,7 +30,8 @@ public:
 
   int init(
       const int64_t align_size,
-      const int64_t buf_size);
+      const int64_t buf_size,
+      const int64_t tenant_id);
   void destroy();
   const char *get_buf() const { return buf_; }
   int64_t get_write_len() const { return write_len_; }

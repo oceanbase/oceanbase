@@ -23,7 +23,7 @@
 #include "lib/container/ob_array_wrap.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "share/io/ob_io_define.h"
-#include "share/io/io_schedule/ob_io_mclock.h"  
+#include "share/io/io_schedule/ob_io_mclock.h"
 
 namespace oceanbase
 {
@@ -437,7 +437,8 @@ class ObIOCallbackManager final
 public:
   ObIOCallbackManager();
   ~ObIOCallbackManager();
-  int init(const int64_t thread_count, const int32_t queue_depth, ObIOAllocator *io_allocator);
+  int init(const int64_t tenant_id, int64_t thread_count,
+           const int32_t queue_depth, ObIOAllocator *io_allocator);
   void destroy();
 
   int enqueue_callback(ObIORequest &req);
@@ -483,7 +484,7 @@ private:
   int record_write_failure();
   void set_device_warning();
   void set_device_error();
-  
+
 private:
   static const int64_t WRITE_FAILURE_DETECT_EVENT_COUNT = 100;
   bool is_inited_;

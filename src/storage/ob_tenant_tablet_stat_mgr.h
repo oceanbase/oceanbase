@@ -284,7 +284,7 @@ public:
   static int mtl_init(ObTenantTabletStatMgr* &tablet_stat_mgr);
   ObTenantTabletStatMgr();
   virtual ~ObTenantTabletStatMgr();
-  int init();
+  int init(const int64_t tenant_id);
   bool is_inited() const { return is_inited_; }
   // int start();
   void wait();

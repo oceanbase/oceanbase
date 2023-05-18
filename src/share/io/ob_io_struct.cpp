@@ -107,7 +107,7 @@ int ObIOMemoryPool<SIZE>::init(const int64_t block_count, ObIAllocator &allocato
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(pool_.init(capacity_))) {
+  } else if (OB_FAIL(pool_.init(capacity_, allocator_))) {
     LOG_WARN("fail to init memory pool", K(ret));
   } else if (OB_ISNULL(begin_ptr_ = reinterpret_cast<char *>(allocator_->alloc(capacity_ * SIZE)))){
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2546,10 +2546,12 @@ ObIOCallbackManager::~ObIOCallbackManager()
   destroy();
 }
 
-int ObIOCallbackManager::init(const int64_t thread_count, const int32_t queue_depth, ObIOAllocator *io_allocator)
+int ObIOCallbackManager::init(const int64_t tenant_id, const int64_t thread_count,
+                              const int32_t queue_depth, ObIOAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+  runners_.set_attr(ObMemAttr(tenant_id, "IORunners"));
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));

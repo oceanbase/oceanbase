@@ -331,14 +331,15 @@ int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
   sql_mem_mgr = nullptr;
   // 系统租户不创建
   if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
-    sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager, "SqlMemMgr", tenant_id);
+    sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager,
+                         ObMemAttr(tenant_id, "SqlMemMgr"), tenant_id);
     if (nullptr == sql_mem_mgr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
     } else if (OB_FAIL(sql_mem_mgr->allocator_.init(
               lib::ObMallocAllocator::get_instance(),
               OB_MALLOC_NORMAL_BLOCK_SIZE,
-              ObMemAttr(common::OB_SERVER_TENANT_ID, "SqlMemMgr")))) {
+              ObMemAttr(tenant_id, "SqlMemMgr")))) {
       LOG_WARN("failed to init fifo allocator", K(ret));
     } else {
       int64_t work_area_interval_size = sizeof(ObSqlWorkAreaInterval) * INTERVAL_NUM;

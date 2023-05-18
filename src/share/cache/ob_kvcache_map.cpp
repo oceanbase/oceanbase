@@ -28,7 +28,7 @@ ObKVCacheMap::ObKVCacheMap()
       bucket_num_(0),
       bucket_size_(0),
       buckets_(NULL),
-      store_(NULL), 
+      store_(NULL),
       global_hazard_version_()
 {
   bucket_allocator_.set_label("CACHE_MAP_BKT");
@@ -56,7 +56,7 @@ int ObKVCacheMap::init(const int64_t bucket_num, ObKVCacheStore *store)
   } else {
     bucket_size_ = DEFAULT_BUCKET_SIZE;
     if (is_mini_mode()) {
-      bucket_size_ /= (lib::ObRunningModeConfig::MINI_MEM_UPPER / lib::ObRunningModeConfig::instance().memory_limit_);
+      bucket_size_ *= lib::mini_mode_resource_ratio();
       bucket_size_ = bucket_size_ > MIN_BUCKET_SIZE ? bucket_size_ : MIN_BUCKET_SIZE;
     }
     const int64_t bucket_cnt = bucket_num % bucket_size_ == 0 ?
@@ -209,13 +209,13 @@ int ObKVCacheMap::put(
 
           // update mb_handle_ and inst
           if (NULL == iter) {
-            // put new node 
+            // put new node
             (void) ATOMIC_AAF(&inst.status_.kv_cnt_, 1);
           } else {
             // overwrite
             (void) ATOMIC_SAF(&iter->mb_handle_->kv_cnt_, 1);
             (void) ATOMIC_SAF(&iter->mb_handle_->get_cnt_, iter->get_cnt_);
-            
+
           }
           (void) ATOMIC_AAF(&mb_handle->kv_cnt_, 1);
           (void) ATOMIC_AAF(&mb_handle->get_cnt_, 1);
@@ -664,7 +664,7 @@ int ObKVCacheMap::replace_fragment_node(int64_t &start_pos, int64_t &replace_nod
     COMMON_LOG(WARN, "Invalid argument, ", K(start_pos), K_(bucket_num), K(replace_num), K(ret));
   } else {
     ObTimeGuard tg("replace_fragement_node", 100000);
-    // The variable 'replace_start_pos' do not need atomic operation because it is only used by replace thread 
+    // The variable 'replace_start_pos' do not need atomic operation because it is only used by replace thread
     int64_t replace_start_pos = start_pos % bucket_num_;
     int64_t replace_end_pos = MIN(replace_num + replace_start_pos, bucket_num_);
     Node *iter = NULL;
@@ -816,7 +816,7 @@ int ObKVCacheMap::internal_data_move(Node *&prev, Node *&old_iter, Node *&bucket
     // update inst and mb_handle
     (void) ATOMIC_SAF(&old_iter->mb_handle_->kv_cnt_, 1);
     (void) ATOMIC_SAF(&old_iter->mb_handle_->get_cnt_, old_iter->get_cnt_);
-    (void) ATOMIC_AAF(&new_mb_handle->kv_cnt_, 1); 
+    (void) ATOMIC_AAF(&new_mb_handle->kv_cnt_, 1);
     (void) ATOMIC_AAF(&new_mb_handle->get_cnt_, old_iter->get_cnt_);
     ++new_mb_handle->recent_get_cnt_;
 

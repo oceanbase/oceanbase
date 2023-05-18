@@ -57,7 +57,7 @@ public:
   ObLSFreezeThread();
   virtual ~ObLSFreezeThread();
 
-  int init(int tg_id);
+  int init(int64_t tenant_id, int tg_id);
   void destroy();
 
   int add_task(checkpoint::ObDataCheckpoint *data_checkpoint, share::SCN rec_scn);

@@ -32,7 +32,8 @@ int64_t ObKeepAliveLogBody::get_max_serialize_size()
   return max_log_body.get_serialize_size();
 }
 
-int ObKeepAliveLSHandler::init(const ObLSID &ls_id, logservice::ObLogHandler *log_handler_ptr)
+int ObKeepAliveLSHandler::init(const int64_t tenant_id, const ObLSID &ls_id,
+                               logservice::ObLogHandler *log_handler_ptr)
 {
   int ret = OB_SUCCESS;
   logservice::ObLogBaseHeader base_header(ObLogBaseType::KEEP_ALIVE_LOG_BASE_TYPE,
@@ -45,7 +46,7 @@ int ObKeepAliveLSHandler::init(const ObLSID &ls_id, logservice::ObLogHandler *lo
   } else if (OB_NOT_NULL(log_handler_ptr_)) {
     ret = OB_INIT_TWICE;
   } else if (OB_ISNULL(submit_buf_ =
-                           static_cast<char *>(ob_malloc(submit_buf_len_, "KeepAliveBuf")))) {
+                       static_cast<char *>(ob_malloc(submit_buf_len_, ObMemAttr(tenant_id, "KeepAliveBuf"))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     TRANS_LOG(WARN, "[Keep Alive] submit_buf alloc failed", K(ret), KP(submit_buf_),
               K(base_header));

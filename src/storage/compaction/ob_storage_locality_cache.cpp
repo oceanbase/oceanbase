@@ -60,8 +60,7 @@ ObStorageLocalityCache::ObStorageLocalityCache()
     tenant_id_(OB_INVALID_TENANT_ID),
     sql_proxy_(nullptr),
     alloc_buf_(nullptr),
-    allocator_("StoLocCache"),
-    ls_locality_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_))
+    ls_locality_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_)
 {}
 
 ObStorageLocalityCache::~ObStorageLocalityCache()
@@ -81,6 +80,9 @@ int ObStorageLocalityCache::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), KP(sql_proxy));
   } else {
+    ObMemAttr attr(tenant_id, "StoLocCache");
+    allocator_.set_attr(attr);
+    ls_locality_array_.set_attr(attr);
     tenant_id_ = tenant_id;
     sql_proxy_ = sql_proxy;
     is_inited_ = true;

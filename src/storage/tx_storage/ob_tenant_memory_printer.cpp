@@ -90,7 +90,6 @@ int ObTenantMemoryPrinter::print_tenant_usage()
           LOG_WARN("print mtl tenant usage failed", K(tmp_ret), K(tenant_id));
         }
       }
-      uint64_t tenant_ids[128] = {0};
       int tenant_cnt = 0;
       static uint64_t all_tenant_ids[OB_MAX_SERVER_TENANT_CNT] = {0};
       common::get_tenant_ids(all_tenant_ids, OB_MAX_SERVER_TENANT_CNT, tenant_cnt);

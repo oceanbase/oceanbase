@@ -195,10 +195,11 @@ int ObUDRItemMgr::init(uint64_t tenant_id, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   int bucket_size = 40960;
+  ObMemAttr attr(tenant_id, "RewriteRuleMap");
   if (OB_UNLIKELY(rule_key_node_map_.created())) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(rule_key_node_map_.create(bucket_size, "RewriteRuleMap", "RewriteRuleNode"))) {
+  } else if (OB_FAIL(rule_key_node_map_.create(bucket_size, attr, attr))) {
     LOG_WARN("failed create rule map", K(ret));
   } else {
     inited_ = true;

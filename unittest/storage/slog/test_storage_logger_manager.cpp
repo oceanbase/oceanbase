@@ -142,6 +142,7 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
   ObTenantBase tenant_base(5);
   tenant_base.set(tmp_slogger);
   ObTenantEnv::set_tenant(&tenant_base);
+  DEFER(ObTenantEnv::set_tenant(nullptr));
   ASSERT_EQ(OB_SUCCESS, tenant_base.init());
 
   ObTenantSwitchGuard guard;
@@ -183,19 +184,21 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
 TEST_F (TestStorageLoggerManager, test_build_item)
 {
   int ret = OB_SUCCESS;
+  ObTenantBase tenant_base(5);
+  ObTenantEnv::set_tenant(&tenant_base);
+  ASSERT_EQ(OB_SUCCESS, tenant_base.init());
   SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
 
   ObStorageLogger *tmp_slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, 500));
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->start());
 
-  ObTenantBase tenant_base(5);
   tenant_base.set(tmp_slogger);
-  ObTenantEnv::set_tenant(&tenant_base);
-  ASSERT_EQ(OB_SUCCESS, tenant_base.init());
 
   ObTenantSwitchGuard guard;
   guard.switch_to(5);
+  ObTenantEnv::set_tenant(&tenant_base);
+  DEFER(ObTenantEnv::set_tenant(nullptr));
   ObStorageLogger *slogger = MTL(ObStorageLogger*);
   slogger->start_log(start_cursor_);
 

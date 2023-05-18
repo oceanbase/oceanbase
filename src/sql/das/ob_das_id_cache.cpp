@@ -26,6 +26,7 @@ int ObDASIDCache::init(const common::ObAddr &server, rpc::frame::ObReqTransport 
   int ret = OB_SUCCESS;
   void *proxy_buf = nullptr;
   void *request_buf = nullptr;
+  alloc_.set_attr(ObMemAttr(MTL_ID(), "DASIDCache"));
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));

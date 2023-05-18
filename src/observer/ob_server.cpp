@@ -2035,7 +2035,7 @@ int ObServer::init_global_kvcache()
   int64_t bucket_num = ObKVGlobalCache::get_instance().get_suitable_bucket_num();
   int64_t max_cache_size = ObKVGlobalCache::DEFAULT_MAX_CACHE_SIZE;
   if (is_mini_mode()) {
-    max_cache_size /= (lib::ObRunningModeConfig::MINI_MEM_UPPER / lib::ObRunningModeConfig::instance().memory_limit_);
+    max_cache_size *= lib::mini_mode_resource_ratio();
   }
   if (OB_FAIL(ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
                                                    bucket_num,

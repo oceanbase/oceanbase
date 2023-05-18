@@ -511,7 +511,7 @@ void ObTransService::handle(void *task)
       } else if (OB_FAIL(advance_ckpt_task->try_advance_ls_ckpt_ts())) {
         TRANS_LOG(WARN, "advance ls ckpt ts failed", K(ret));
       }
-    
+
       if (OB_NOT_NULL(advance_ckpt_task)) {
         mtl_free(advance_ckpt_task);
         advance_ckpt_task = nullptr;
@@ -913,5 +913,3 @@ int ObTransService::get_max_commit_version(SCN &commit_version) const
 }
 } // transaction
 } // oceanbase
-
-

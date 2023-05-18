@@ -45,6 +45,7 @@ ObDedupQueue::ObDedupQueue() : is_inited_(false),
                                work_thread_num_(DEFAULT_THREAD_NUM),
                                thread_dead_threshold_(DEFALT_THREAD_DEAD_THRESHOLD),
                                hash_allocator_(allocator_),
+                               bucket_allocator_(&allocator_),
                                gc_queue_head_(NULL),
                                gc_queue_tail_(NULL),
                                thread_name_(nullptr)
@@ -89,7 +90,7 @@ int ObDedupQueue::init(const int64_t thread_num /*= DEFAULT_THREAD_NUM*/,
       COMMON_LOG(WARN, "allocator init fail", K(page_size), K(label), K(tenant_id),
                 K(total_mem_limit), K(ret));
     } else if (OB_SUCCESS != (ret = task_map_.create(task_map_size, &hash_allocator_,
-                                                      ObModIds::OB_HASH_BUCKET_TASK_MAP))) {
+                                                      &bucket_allocator_))) {
       COMMON_LOG(WARN, "task_map create fail", K(ret));
     } else if (OB_SUCCESS != (ret = task_queue_.init(queue_size, &allocator_))) {
       COMMON_LOG(WARN, "task_queue init fail", K(ret));

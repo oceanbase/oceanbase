@@ -242,7 +242,7 @@ int ObDBMSJobMaster::init(ObISQLClient *sql_client,
   int ret = OB_SUCCESS;
   uint64_t ready_queue_size = MAX_READY_JOBS_CAPACITY;
   if (is_mini_mode()) {
-    ready_queue_size /= (lib::ObRunningModeConfig::MINI_MEM_UPPER / lib::ObRunningModeConfig::instance().memory_limit_);
+    ready_queue_size *= lib::mini_mode_resource_ratio();
   }
   if (inited_) {
     ret = OB_INIT_TWICE;
@@ -503,7 +503,7 @@ int ObDBMSJobMaster::get_all_servers(int64_t tenant_id, ObString &pick_zone, ObI
             }
           }
         }
-      } 
+      }
     }
   }
   return ret;
@@ -725,4 +725,3 @@ int ObDBMSJobMaster::register_job(
 
 } // end for namespace dbms_job
 } // end for namespace oceanbase
-
