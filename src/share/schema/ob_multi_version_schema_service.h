@@ -264,6 +264,9 @@ public:
   int check_if_tenant_has_been_dropped(
       const uint64_t tenant_id,
       bool &is_dropped);
+  int check_if_tenant_schema_has_been_refreshed(
+    const uint64_t tenant_id,
+    bool &is_refreshed);
   int check_is_creating_standby_tenant(
     const uint64_t tenant_id,
     bool &is_creating_standby);

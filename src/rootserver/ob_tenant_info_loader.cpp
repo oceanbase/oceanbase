@@ -466,6 +466,9 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id,
              sql_proxy, false /* for_update */, ora_rowscn, new_tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+  } else if (INT64_MAX == ora_rowscn || 0 == ora_rowscn) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid ora_rowscn", KR(ret), K(ora_rowscn), K(tenant_id), K(new_tenant_info), K(lbt()));
   } else {
     /**
     * Only need to refer to tenant role, no need to refer to switchover status.
@@ -487,7 +490,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
       last_sql_update_time_ = new_refresh_time_us;
     } else {
       ret = OB_EAGAIN;
-      LOG_WARN("refresh tenant info conflict", K(new_tenant_info), K(new_refresh_time_us),
+      LOG_WARN("refresh tenant info conflict", KR(ret), K(new_tenant_info), K(new_refresh_time_us),
                                       K(tenant_id), K(tenant_info_), K(last_sql_update_time_), K(ora_rowscn_), K(ora_rowscn));
     }
   }
@@ -507,7 +510,7 @@ int ObAllTenantInfoCache::update_tenant_info_cache(
 {
   int ret = OB_SUCCESS;
   refreshed = false;
-  if (!new_tenant_info.is_valid() || 0 == new_ora_rowscn) {
+  if (!new_tenant_info.is_valid() || 0 == new_ora_rowscn || INT64_MAX == new_ora_rowscn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(new_tenant_info), K(new_ora_rowscn));
   } else {

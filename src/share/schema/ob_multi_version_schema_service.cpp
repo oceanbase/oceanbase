@@ -1998,6 +1998,37 @@ int ObMultiVersionSchemaService::check_if_tenant_has_been_dropped(
   return ret;
 }
 
+int ObMultiVersionSchemaService::check_if_tenant_schema_has_been_refreshed(
+    const uint64_t tenant_id,
+    bool &is_refreshed)
+{
+  int ret = OB_SUCCESS;
+  is_refreshed = false;
+  bool sys_schema_not_full = false;
+  bool tenant_schema_not_full = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(refresh_full_schema_map_.get_refactored(OB_SYS_TENANT_ID, sys_schema_not_full))) {
+  } else if (sys_schema_not_full) {
+    // observer may be not start service
+    is_refreshed = false;
+  } else if (OB_FAIL(refresh_full_schema_map_.get_refactored(tenant_id, tenant_schema_not_full))) {
+  } else if (tenant_schema_not_full) {
+    is_refreshed = false;
+  } else {
+    // tenant's schema is full
+    is_refreshed = true;
+  }
+
+  LOG_TRACE("check if tenant schema has been refreshed", KR(ret), K(sys_schema_not_full), K(tenant_schema_not_full), K(is_refreshed), K(tenant_id));
+  return ret;
+}
+
 int ObMultiVersionSchemaService::check_is_creating_standby_tenant(
     const uint64_t tenant_id,
     bool &is_creating_standby)

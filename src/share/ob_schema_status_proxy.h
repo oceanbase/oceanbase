@@ -86,6 +86,9 @@ public:
     const share::schema::ObRefreshSchemaStatus &refresh_schema_status);
 
   int update_schema_status(const share::schema::ObRefreshSchemaStatus &cur_schema_status);
+  int load_refresh_schema_status(
+    const uint64_t refresh_tenant_id,
+    schema::ObRefreshSchemaStatus &refresh_schema_status);
 
 private:
   int check_inner_stat();

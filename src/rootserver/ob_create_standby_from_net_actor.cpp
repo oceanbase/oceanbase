@@ -14,11 +14,16 @@
 #include "ob_create_standby_from_net_actor.h"
 #include "share/schema/ob_multi_version_schema_service.h" // ObMultiVersionSchemaService
 #include "observer/ob_server_struct.h"        // GCTX
+#include "observer/ob_service.h" // ObService
 #include "share/rc/ob_tenant_base.h"    // MTL_ID
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_rpc_struct.h" // ObCreateTenantEndArg
 #include "rootserver/restore/ob_restore_scheduler.h" //reset_schema_status
+#include "rootserver/ob_rs_async_rpc_proxy.h" // ObSwitchSchemaProxy
 #include "share/ob_common_rpc_proxy.h" // create_tenant_end
+#include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
+#include "share/ob_rpc_struct.h" // ObBroadcastSchemaArg
+#include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 
 #define STAT(level, fmt, args...) RS_LOG(level, "[NET_STANDBY_TNT_SERVICE] " fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
@@ -63,6 +68,7 @@ int ObCreateStandbyFromNetActor::init()
     WSTAT("failed to start NET_STANDBY_TNT_SERVICE", KR(ret));
   } else {
     tenant_id_ = MTL_ID();
+    schema_broadcasted_ = false;
     is_inited_ = true;
   }
 
@@ -95,6 +101,7 @@ void ObCreateStandbyFromNetActor::destroy()
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   sql_proxy_ = NULL;
+  schema_broadcasted_ = false;
 }
 
 int ObCreateStandbyFromNetActor::check_inner_stat_()
@@ -137,6 +144,8 @@ int ObCreateStandbyFromNetActor::check_has_user_ls(const uint64_t tenant_id, com
 int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObLSRecoveryStat recovery_stat;
   ObLSRecoveryStatOperator ls_recovery_operator;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
   obrpc::ObCreateTenantEndArg arg;
@@ -148,7 +157,7 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
 
   if (OB_ISNULL(rs_rpc_proxy)) {
     ret = OB_ERR_UNEXPECTED;
-    WSTAT("rs_rpc_proxy is null", KP(rs_rpc_proxy));
+    WSTAT("pointer is null", KP(rs_rpc_proxy));
   } else if (OB_FAIL(check_inner_stat_())) {
     WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));
   } else if (OB_FAIL(ls_recovery_operator.get_tenant_min_user_ls_create_scn(tenant_id_, *sql_proxy_,
@@ -159,19 +168,38 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
     WSTAT("tenant info loader should not be NULL", KR(ret), KP(tenant_info_loader));
   } else {
     ISTAT("start to wait whether can finish restore", K_(tenant_id), K(min_user_ls_create_scn));
+    int64_t retry_cnt_after_sync_user_ls = 0;
     // wait 1 minute, sleep 1s and retry 60 times
     for (int64_t retry_cnt = 60; OB_SUCC(ret) && retry_cnt > 0 && !has_set_stop(); --retry_cnt) {
-      if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+      bool is_dropped = false;
+      if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id_, is_dropped))) {
+        LOG_WARN("tenant has been dropped", KR(ret), K_(tenant_id));
+      } else if (is_dropped) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been dropped", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
         WSTAT("failed to get tenant info", KR(ret));
       } else if (tenant_info.get_standby_scn() >= min_user_ls_create_scn) {
-        ISTAT("tenant readable scn can read inner table", K(tenant_info), K(min_user_ls_create_scn));
+        retry_cnt_after_sync_user_ls++;
+        ISTAT("tenant readable scn can read inner table", K(tenant_info), K(min_user_ls_create_scn),
+                                                          K(retry_cnt_after_sync_user_ls));
 
-        if (OB_FAIL(ObRestoreService::reset_schema_status(tenant_id_, sql_proxy_))) {
-          WSTAT("failed to reset schema status", KR(ret), K_(tenant_id), K(tenant_info), K(min_user_ls_create_scn));
+        bool is_refreshed = false;
+        if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_schema_has_been_refreshed(tenant_id_, is_refreshed))) {
+          LOG_WARN("fail to check tenant schema has been refreshed", KR(ret), K_(tenant_id), K(retry_cnt_after_sync_user_ls));
+        } else if (!is_refreshed || !schema_broadcasted_) {
+          if (50 < retry_cnt_after_sync_user_ls) {
+            WSTAT("schema has not refreshed", KR(ret), KR(tmp_ret), K(is_refreshed),
+                                        K_(schema_broadcasted), K(retry_cnt_after_sync_user_ls));
+          }
+          if (OB_TMP_FAIL(refresh_schema_())) {
+            WSTAT("failed to refresh schema", KR(ret), KR(tmp_ret), K(is_refreshed), K_(schema_broadcasted),
+                                              K(retry_cnt_after_sync_user_ls));
+          }
         } else if (OB_FAIL(rs_rpc_proxy->create_tenant_end(arg))) {
-          WSTAT("fail to execute create tenant end", KR(ret), K_(tenant_id), K(arg));
+          WSTAT("fail to execute create tenant end", KR(ret), K_(tenant_id), K(arg), K(retry_cnt_after_sync_user_ls));
         } else {
-          ISTAT("execute create_tenant_end", KR(ret), K_(tenant_id), K(arg));
+          ISTAT("execute create_tenant_end", KR(ret), K_(tenant_id), K(arg), K(retry_cnt_after_sync_user_ls));
           break;
         }
       }
@@ -181,6 +209,44 @@ int ObCreateStandbyFromNetActor::finish_restore_if_possible_()
 
   ISTAT("finish_restore_if_possible", K(ret), K_(tenant_id), K(min_user_ls_create_scn), K(arg), K(tenant_info));
 
+  return ret;
+}
+
+int ObCreateStandbyFromNetActor::refresh_schema_()
+{
+  int ret = OB_SUCCESS;
+  observer::ObService *ob_service = GCTX.ob_service_;
+  int tmp_ret = OB_SUCCESS;
+  ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
+  ObRefreshSchemaStatus refresh_schema_status;
+
+  if (OB_ISNULL(ob_service) || OB_ISNULL(schema_status_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    WSTAT("pointer is null", KP(ob_service), KP(schema_status_proxy));
+  } else if (OB_FAIL(check_inner_stat_())) {
+    WSTAT("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_));
+  } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id_, refresh_schema_status))) {
+    LOG_WARN("fail to get refresh schema status", KR(ret), K_(tenant_id));
+  } else if (refresh_schema_status.snapshot_timestamp_ == 0) {
+    if (OB_FAIL(ObRestoreService::reset_schema_status(tenant_id_, sql_proxy_))) {
+      WSTAT("failed to reset schema status", KR(ret), K_(tenant_id));
+    }
+  }
+
+  if (OB_SUCC(ret) && !schema_broadcasted_) {
+    obrpc::ObBroadcastSchemaArg arg;
+    arg.tenant_id_ = tenant_id_;
+    if (OB_ISNULL(GCTX.rs_rpc_proxy_) || OB_ISNULL(GCTX.rs_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pointer is null", KR(ret), KP(GCTX.rs_mgr_), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to_rs(*GCTX.rs_mgr_).broadcast_schema(arg))) {
+      LOG_WARN("failed to broadcast schema", KR(ret), K(arg));
+    } else {
+      schema_broadcasted_ = true;
+    }
+  }
+
+  ISTAT("refresh_schema finished", KR(ret), K_(tenant_id), K_(schema_broadcasted), K(refresh_schema_status));
   return ret;
 }
 

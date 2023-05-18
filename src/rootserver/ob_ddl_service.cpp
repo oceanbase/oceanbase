@@ -21558,8 +21558,13 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
   ObDDLSQLTransaction trans(schema_service_, true, false, false, false);
   DEBUG_SYNC(BEFORE_CREATE_TENANT_END);
   ObTenantSchema new_tenant_schema;
+  ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
+  ObRefreshSchemaStatus schema_status;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
+  } else if (OB_ISNULL(schema_status_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid schema status proxy", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
           tenant_id, sql_proxy_, false, tenant_info))) {
     LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
@@ -21569,6 +21574,14 @@ int ObDDLService::create_tenant_end(const uint64_t tenant_id)
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret), KP_(schema_service));
+  /*
+    After the inner-table is synchronized by the network standby tenant, the schema refresh switch
+    is turned on, but standby tenant may not be in the same observer with RS, causing RS to use the
+    old cache when creating tenant end, which may cause create tenant end to fail.
+    So here, force trigger schema refresh refresh cache
+  */
+  } else if (OB_FAIL(schema_status_proxy->load_refresh_schema_status(tenant_id, schema_status))) {
+    LOG_WARN("fail to load refresh schema status", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {

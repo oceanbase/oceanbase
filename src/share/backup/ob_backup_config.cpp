@@ -195,7 +195,7 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
     } else if ((is_location && is_service) || (!is_location && !is_service)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("fail to parse restore source type", K(ret), K(value));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parse log restore source type");
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "log restore source type");
     } else if (is_location) {
       restore_source_type_ = share::ObLogRestoreSourceType::LOCATION;
     } else if (is_service) {
