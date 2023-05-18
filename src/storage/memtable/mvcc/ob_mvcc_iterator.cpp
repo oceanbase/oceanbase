@@ -221,6 +221,17 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     } else if (can_read && snapshot_version >= data_version) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
       //           snapshot
+      while (is_determined_state &&
+             !(iter->is_committed() || iter->is_aborted() || iter->is_elr())) {
+        // NB: We rely on the row_scn and state on the tx node if we really can
+        // read from the tx node. So if the tx node is not cleanout, we must
+        // wait until the tx node is written back its state.
+        if (REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(WARN, "waiting for the iter to be cleanout", K(ret),
+                    KPC(iter), K(lock_for_read_arg));
+        }
+        ob_usleep(10); //10us
+      }
       version_iter_ = iter;
     } else {
       // Case 5.1: data is cleanout by lock for read and cannot be read by

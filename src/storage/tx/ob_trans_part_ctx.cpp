@@ -1740,15 +1740,20 @@ int ObPartTransCtx::tx_end_(const bool commit)
   // suicide before the tnode can be cleanout by concurrent read using state in
   // ctx_tx_data.
   } else if (!commit && FALSE_IT(mt_ctx_.set_tx_rollbacked())) {
-  // STEP4: We need set state in order to informing others of the final status
-  // of my txn. What you need pay attention to is that after this action, others
-  // can cleanout the unfinished txn state and see all your data. We currently
-  // move set_state before mt_ctx_.trans_end for the commit state in order to
-  // accelerate users to see the data state.
+  // STEP4: We need set state in order to inform others of the final status of
+  // my txn. What you need pay attention to is that only after this action,
+  // others can cleanout the unfinished txn state and see all your data. It
+  // should guarantee that all necesary information(including commit_version and
+  // end_scn) is settled. What's more, it accelerates the data visibility for
+  // the user.
   } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
     TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
-  // STEP5: We need invoke mt_ctx_.trans_end before state is filled in here
-  // because we relay on the state in the ctx_tx_data_ to callback all txn ops.
+  // STEP5: We need invoke mt_ctx_.trans_end after the ctx_tx_data is decided
+  // and filled in because we obey the rule that ObMvccRowCallback::trans_commit
+  // is callbacked from front to back so that if the read or write is standing
+  // on one tx node, all previous tx node is decided or can be simply cleanout
+  // (which depends on the state in the ctx_tx_data). In conclusion, the action
+  // of callbacking is depended on all states in the ctx_tx_data.
   } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
   // STEP6: We need insert into the tx_data after all states are filled
