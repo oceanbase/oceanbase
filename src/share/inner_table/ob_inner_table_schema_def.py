@@ -11164,7 +11164,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'ws306254',
+  owner = 'handora.qc',
   table_name     = '__all_virtual_minor_freeze_info',
   table_id       = '12338',
   table_type = 'VIRTUAL_TABLE',
