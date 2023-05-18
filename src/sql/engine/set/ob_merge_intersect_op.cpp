@@ -158,6 +158,7 @@ int ObMergeIntersectOp::inner_get_next_batch(const int64_t max_row_cnt)
                                                            first_got_left_row_))) {
       //when we succ locate a row in left batch, store row is out of date,
       //we will compare inside a batch
+      use_last_row_ = false;
       while (OB_SUCC(ret) && !right_iter_end_) {
         if (!first_got_right_row_) {
           if (OB_FAIL(cmp_(right_->get_spec().output_, left_->get_spec().output_,
@@ -224,6 +225,8 @@ int ObMergeIntersectOp::inner_get_next_batch(const int64_t max_row_cnt)
       batch_info_guard.set_batch_idx(last_left_idx);
       if (OB_FAIL(last_row_.save_store_row(left_->get_spec().output_, eval_ctx_, 0))) {
         LOG_WARN("failed to save last row", K(ret));
+      } else {
+        use_last_row_ = true;
       }
     }
   } else {

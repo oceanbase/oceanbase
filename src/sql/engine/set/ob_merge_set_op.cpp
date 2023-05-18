@@ -365,14 +365,15 @@ int ObMergeSetOp::locate_next_left_inside(ObOperator &child_op,
       }
       if (curr_idx == row_brs.size_) {
         ret = OB_ITER_END;
-      } else if (OB_NOT_NULL(last_row_.store_row_)
+      } else if (OB_UNLIKELY(use_last_row_ && nullptr == last_row_.store_row_)
+                || OB_LIKELY(!use_last_row_ && last_idx < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get wrong last idx", K(ret), K(use_last_row_), KP(last_row_.store_row_), K(last_idx));
+      } else if (use_last_row_
                 && OB_FAIL(cmp_(*last_row_.store_row_, child_op.get_spec().output_,
                                 curr_idx, eval_ctx_, cmp))) {
         LOG_WARN("failed to compare row", K(ret));
-      } else if (nullptr == last_row_.store_row_ && last_idx < 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get wrong last idx", K(ret));
-      } else if (nullptr == last_row_.store_row_
+      } else if (!use_last_row_
                  && OB_FAIL(cmp_(child_op.get_spec().output_, child_op.get_spec().output_,
                                  last_idx, curr_idx, eval_ctx_, cmp))) {
         LOG_WARN("failed to compare row", K(ret));
