@@ -972,14 +972,14 @@ void ObMvccRow::set_row_header(const uint32_t modify_count, const uint32_t acc_c
 void ObMvccRow::lock_begin(ObIMvccCtx& ctx) const
 {
   if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
-    ctx.set_lock_start_time(OB_TSC_TIMESTAMP.current_time());
+    ctx.set_lock_start_time(common::ObTimeUtility::current_time());
   }
 }
 
 void ObMvccRow::lock_for_read_end(ObIMvccCtx& ctx, int64_t ret) const
 {
   if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
-    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
+    const int64_t lock_use_time = common::ObTimeUtility::current_time() - ctx.get_lock_start_time();
     EVENT_ADD(MEMSTORE_WAIT_READ_LOCK_TIME, lock_use_time);
     if (OB_FAIL(ret)) {
       EVENT_INC(MEMSTORE_READ_LOCK_FAIL_COUNT);
@@ -997,7 +997,7 @@ void ObMvccRow::lock_for_read_end(ObIMvccCtx& ctx, int64_t ret) const
 void ObMvccRow::lock_for_write_end(ObIMvccCtx& ctx, int64_t ret) const
 {
   if (!ctx.is_can_elr() && GCONF.enable_record_trace_log) {
-    const int64_t lock_use_time = OB_TSC_TIMESTAMP.current_time() - ctx.get_lock_start_time();
+    const int64_t lock_use_time = common::ObTimeUtility::current_time() - ctx.get_lock_start_time();
     EVENT_ADD(MEMSTORE_WAIT_WRITE_LOCK_TIME, lock_use_time);
     if (OB_FAIL(ret)) {
       EVENT_INC(MEMSTORE_WRITE_LOCK_FAIL_COUNT);

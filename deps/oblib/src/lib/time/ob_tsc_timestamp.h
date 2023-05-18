@@ -16,6 +16,7 @@
 #include <cpuid.h>
 #endif
 #include "lib/ob_define.h"
+#include "lib/time/ob_time_utility.h"
 
 #if defined(__i386__)
 static inline uint64_t rdtsc()

@@ -67,20 +67,13 @@ int ObTscTimestamp::init()
 int64_t ObTscTimestamp::current_time()
 {
   int ret = OB_SUCCESS;
-  int64_t result_time = 0;
-  if (OB_UNLIKELY(!is_init_)) {
-    // init failed, use system call.
-    struct timeval tv;
-    if (gettimeofday(&tv, NULL) < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LIB_LOG(WARN, "sys gettimeofday unexpected", K(ret));
-    }
-    result_time = (static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec));
-  } else {
-    const uint64_t current_tsc = rdtsc();
-    result_time = ((current_tsc - tsc_count_) * scale_ >> 20) + start_us_;
+  // init failed, use system call.
+  struct timeval tv;
+  if (gettimeofday(&tv, NULL) < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "sys gettimeofday unexpected", K(ret));
   }
-  return result_time;
+  return (static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec));
 }
 
 int64_t ObTscTimestamp::current_monotonic_time()
