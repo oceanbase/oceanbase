@@ -24,7 +24,7 @@ class ObLSRestoreTaskMgr
 {
 public:
   static const int64_t OB_RESTORE_MAX_DAG_NET_NUM = 5;
-  static const int64_t OB_LS_RESTORE_MAX_TABLET_NUM = 1000000;
+  static const int64_t OB_LS_RESTORE_MAX_TABLET_NUM = 10000;
   static const int64_t OB_LS_RESOTRE_TABLET_DAG_NET_BATCH_NUM = 1024;
 
   using TaskMap = common::hash::ObHashMap<share::ObTaskId, ObSArray<ObTabletID>, common::hash::NoPthreadDefendMode>;
