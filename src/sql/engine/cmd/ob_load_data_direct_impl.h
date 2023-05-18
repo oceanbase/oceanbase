@@ -335,15 +335,19 @@ private:
 
   struct TaskHandle
   {
-    TaskHandle() : task_id_(common::OB_INVALID_ID), session_id_(0), start_line_no_(0) {}
+    TaskHandle()
+      : task_id_(common::OB_INVALID_ID), worker_idx_(-1), session_id_(0), start_line_no_(0)
+    {
+    }
     int64_t task_id_;
     DataBuffer data_buffer_;
-    int32_t session_id_;
+    int64_t worker_idx_; // parse thread idx
+    int32_t session_id_; // table load session id
     DataDesc data_desc_;
     int64_t start_line_no_; // 从1开始
     TaskResult result_;
-    TO_STRING_KV(K_(task_id), K_(data_buffer), K_(session_id), K_(data_desc), K_(start_line_no),
-                 K_(result));
+    TO_STRING_KV(K_(task_id), K_(data_buffer), K_(worker_idx), K_(session_id), K_(data_desc),
+                 K_(start_line_no), K_(result));
   private:
     DISALLOW_COPY_AND_ASSIGN(TaskHandle);
   };
@@ -359,7 +363,7 @@ private:
     int alloc_task(observer::ObTableLoadTask *&task);
     void free_task(observer::ObTableLoadTask *task);
     void task_finished(TaskHandle *handle);
-    int process_task_handle(int64_t worker_idx, TaskHandle *handle, int64_t &line_count);
+    int process_task_handle(TaskHandle *handle, int64_t &line_count);
     int64_t get_total_line_count() const {return total_line_count_; }
   protected:
     virtual int prepare_execute() = 0;
@@ -367,7 +371,7 @@ private:
     virtual int fill_task(TaskHandle *handle, observer::ObTableLoadTask *task) = 0;
   protected:
     int inner_init(const LoadExecuteParam &execute_param, LoadExecuteContext &execute_ctx,
-                   int64_t handle_count);
+                   int64_t worker_count, int64_t handle_count);
     int init_worker_ctx_array();
     int fetch_task_handle(TaskHandle *&handle);
     int handle_task_result(int64_t task_id, TaskResult &result);
@@ -385,6 +389,7 @@ private:
     LoadExecuteContext *execute_ctx_;
     observer::ObTableLoadObjectAllocator<observer::ObTableLoadTask> task_allocator_;
     observer::ObITableLoadTaskScheduler *task_scheduler_;
+    int64_t worker_count_; // <= thread_count_
     WorkerContext *worker_ctx_array_;
     // task ctrl
     ObParallelTaskController task_controller_;
@@ -415,13 +420,13 @@ private:
     int get_next_task_handle(TaskHandle *&handle) override;
     int fill_task(TaskHandle *handle, observer::ObTableLoadTask *task) override;
   private:
-    int32_t get_session_id();
+    int64_t get_worker_idx();
     int skip_ignore_rows();
   private:
     DataDesc data_desc_;
     DataBuffer expr_buffer_;
     DataReader data_reader_;
-    int32_t next_session_id_;
+    int64_t next_worker_idx_;
     DISALLOW_COPY_AND_ASSIGN(LargeFileLoadExecutor);
   };
 
