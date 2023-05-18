@@ -2440,30 +2440,61 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
+  const ObPLDataType *real_pl_type = &pl_type;
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
-  if (pl_type.is_ref_cursor_type() || pl_type.is_sys_refcursor_type()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (pl_type.is_generic_type()) {
+    ObPLComposite *composite = NULL;
+    const ObUserDefinedType* user_type = NULL;
+    if (!obj.is_pl_extend()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
+    }
+    CK (OB_NOT_NULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext())));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(session->get_pl_context())
+          && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+      pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+      OZ (ns->get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    } else {
+      ObPLResolveCtx ns(allocator,
+                      *session,
+                      *schema_guard,
+                      *package_guard,
+                      *sql_proxy,
+                      false);
+      OZ (ns.get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    }
+    OX (real_pl_type = user_type);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
-  } else if (pl_type.is_udt_type()) {
+  } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
-  } else if (pl_type.is_package_type() || pl_type.is_rowtype_type()) {
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
+  } else if (real_pl_type->is_package_type() || real_pl_type->is_rowtype_type()) {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
                       *package_guard,
                       *sql_proxy,
                       false);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
   } else if (OB_NOT_NULL(session->get_pl_context())
       && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
     pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
   }
-  OX (obj.set_udt_id(pl_type.get_user_type_id()));
+  OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
 }
 
