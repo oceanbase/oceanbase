@@ -240,7 +240,7 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
     }
     // create whole bloom filter, no need wait
     if (OB_SUCC(ret)) {
-      if (map.atomic_refactored(dh_key, regen_call)) {
+      if (OB_FAIL(map.atomic_refactored(dh_key, regen_call))) {
         LOG_WARN("fail to update bloom filter msg", K(ret));
       }
     }
