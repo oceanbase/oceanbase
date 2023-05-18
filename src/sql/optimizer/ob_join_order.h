@@ -1107,25 +1107,28 @@ struct InnerPathInfo {
 typedef  common::ObSEArray<InnerPathInfo, 8, common::ModulePageAllocator, true> InnerPathInfos;
 
 struct NullAwareAntiJoinInfo {
-  NullAwareAntiJoinInfo() : is_naaj_(false),
+  NullAwareAntiJoinInfo() : is_naaj_(false), is_sna_(false),
                             left_side_not_null_(false), right_side_not_null_(false) {}
   ~NullAwareAntiJoinInfo() {}
-  TO_STRING_KV(K_(is_naaj), K_(left_side_not_null), K_(right_side_not_null));
-  bool get_is_sna(const ObJoinType &join_type, const bool is_reverse_path) const
+  TO_STRING_KV(K_(is_naaj), K_(is_sna), K_(left_side_not_null), K_(right_side_not_null), K_(expr_constraints));
+  void set_is_sna(const ObJoinType &join_type, const bool is_reverse_path)
   {
-    bool is_sna = false;
-    if (is_reverse_path) {
-      is_sna = ((LEFT_ANTI_JOIN == join_type && left_side_not_null_)
-                          || (RIGHT_ANTI_JOIN == join_type && right_side_not_null_));
-    } else {
-      is_sna = ((LEFT_ANTI_JOIN == join_type && right_side_not_null_)
-                          || (RIGHT_ANTI_JOIN == join_type && left_side_not_null_));
+    if (is_naaj_) {
+      if (is_reverse_path) {
+        is_sna_ = ((LEFT_ANTI_JOIN == join_type && left_side_not_null_)
+                            || (RIGHT_ANTI_JOIN == join_type && right_side_not_null_));
+      } else {
+        is_sna_ = ((LEFT_ANTI_JOIN == join_type && right_side_not_null_)
+                            || (RIGHT_ANTI_JOIN == join_type && left_side_not_null_));
+      }
     }
-    return is_sna;
+    return;
   }
   bool is_naaj_;
+  bool is_sna_;
   bool left_side_not_null_;
   bool right_side_not_null_;
+  ObSEArray<ObExprConstraint, 2> expr_constraints_;
 };
 
   class ObJoinOrder
@@ -1709,8 +1712,7 @@ struct NullAwareAntiJoinInfo {
                             const double equal_cond_sel,
                             const double other_cond_sel,
                             const ValidPathInfo &path_info,
-                            const bool is_naaj,
-                            const bool is_sna);
+                            const NullAwareAntiJoinInfo &naaj_info);
 
     int generate_mj_paths(const EqualSets &equal_sets,
                           const ObIArray<ObSEArray<Path*, 16>> &left_paths,
@@ -1786,8 +1788,7 @@ struct NullAwareAntiJoinInfo {
                                  const common::ObIArray<ObRawExpr*> &filters,
                                  const double equal_cond_sel,
                                  const double other_cond_sel,
-                                 const bool is_naaj,
-                                 const bool is_sna);
+                                 const NullAwareAntiJoinInfo &naaj_info);
 
     int generate_join_filter_infos(const Path *left_path,
                                   const Path *right_path,
@@ -2345,7 +2346,6 @@ struct NullAwareAntiJoinInfo {
                                      const ObRelIds &left_tables,
                                      const ObRelIds &right_tables,
                                      ObIArray<ObRawExpr*> &equal_join_conditions,
-                                     ObIArray<ObRawExpr*> &other_join_conditions,
                                      NullAwareAntiJoinInfo &naaj_info);
     bool is_main_table_use_das(const common::ObIArray<AccessPath *> &access_paths);
     int add_deduced_expr(ObRawExpr *deduced_expr, ObRawExpr *deduce_from, bool is_persistent);
