@@ -37,6 +37,13 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
+#define CASE_IGNORE_ERR_HELPER(ERR_CODE)  \
+case ERR_CODE: {                          \
+  should_ignore = true;                   \
+  LOG_USER_WARN(ERR_CODE);                \
+  break;                                  \
+}                                         \
+
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
 
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
@@ -3514,22 +3521,10 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
 {
   bool should_ignore = false;
   switch (error_code) {
-    case OB_ALLOCATE_MEMORY_FAILED: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_CONNECT_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_SEND_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_TENANT_NOT_IN_SERVER: {
-      should_ignore = true;
-      break;
-    }
+    CASE_IGNORE_ERR_HELPER(OB_ALLOCATE_MEMORY_FAILED)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_CONNECT_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_SEND_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
     default: {
       break;
     }
