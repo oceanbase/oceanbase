@@ -23,6 +23,9 @@ ob_define(OB_CMAKE_RULES_CHECK ON)
 ob_define(OB_STATIC_LINK_LGPL_DEPS ON)
 ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
+# get compiler from build.sh
+ob_define(OB_CC "")
+ob_define(OB_CXX "")
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -72,12 +75,23 @@ set(OB_OBJCOPY_BIN "${DEVTOOLS_DIR}/bin/objcopy")
 ob_define(OB_RELRO_FLAG "-Wl,-z,relro,-z,now")
 
 if (OB_USE_CLANG)
-  find_program(OB_CC clang
-  "${DEVTOOLS_DIR}/bin"
-    NO_DEFAULT_PATH)
-  find_program(OB_CXX clang++
-  "${DEVTOOLS_DIR}/bin"
-    NO_DEFAULT_PATH)
+
+  if (OB_CC)
+    message(STATUS "Using OB_CC compiler: ${OB_CC}")
+  else()
+    find_program(OB_CC clang
+    "${DEVTOOLS_DIR}/bin"
+      NO_DEFAULT_PATH)
+  endif()
+
+  if (OB_CXX)
+    message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
+  else()
+    find_program(OB_CXX clang++
+    "${DEVTOOLS_DIR}/bin"
+      NO_DEFAULT_PATH)
+  endif()
+
   find_file(GCC9 devtools
     PATHS ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase
     NO_DEFAULT_PATH)
