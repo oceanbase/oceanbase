@@ -6,7 +6,6 @@ oceanbase-ce:
     # for default system config used by farm, please see tools/deploy/obd/observer.include.yaml
     # You can also specify the configuration directly below (stored locally, switching the working directory and redeploying will still take effect)
     production_mode: false
-    home_path: /data/{user}/{deploy_name}/observer/{server}
     # memory_limit: '8G'
     # system_memory: '1G'
     # datafile_size: '20G'

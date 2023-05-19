@@ -16,8 +16,6 @@ env:
   ASAN_SYMBOLIZER_PATH: ./tools/llvm-symbolizer
 config:
   production_mode: false
-  mysql_port: auto
-  rpc_port: auto
   cluster_id: 1
   # datafile_disk_percentage: '50'
   datafile_size: '20G'
