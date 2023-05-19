@@ -71,7 +71,8 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       RPC_LOG(WARN, "pool allocate memory failed", K(tenant_id), K(pcode_label));
     } else {
-      ctx = new(temp)ObPocServerHandleContext(*pool, resp_id);
+      int64_t resp_expired_abs_us = ObTimeUtility::current_time() + tmp_pkt.get_timeout();
+      ctx = new(temp)ObPocServerHandleContext(*pool, resp_id, resp_expired_abs_us);
       ctx->set_peer_unsafe();
       req = new(ctx + 1)ObRequest(ObRequest::OB_RPC, ObRequest::TRANSPORT_PROTO_POC);
       ObRpcPacket* pkt = (ObRpcPacket*)pool->alloc(sizeof(ObRpcPacket) + alloc_payload_sz);
@@ -120,7 +121,7 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
     buf = NULL;
     sz = 0;
   }
-  if ((sys_err = pn_resp(resp_id_, buf, sz)) != 0) {
+  if ((sys_err = pn_resp(resp_id_, buf, sz, resp_expired_abs_us_)) != 0) {
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
   }
 }
@@ -163,7 +164,7 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
   }
   if (OB_SUCCESS != tmp_ret) {
     int sys_err = 0;
-    if ((sys_err = pn_resp(resp_id, NULL, 0)) != 0) {
+    if ((sys_err = pn_resp(resp_id, NULL, 0, OB_INVALID_TIMESTAMP)) != 0) {
       RPC_LOG(WARN, "pn_resp fail", K(resp_id), K(sys_err));
     }
   }

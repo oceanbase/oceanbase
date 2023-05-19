@@ -481,7 +481,7 @@ static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
   fifo_free(ctx);
 }
 
-PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
+PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us)
 {
   pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
 #ifdef PERF_MODE
@@ -501,6 +501,7 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
     r->flush_cb = pn_pkts_flush_cb_func;
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
+    r->expire_us = resp_expired_abs_us;
     eh_copy_msg(&r->msg, ctx->pkt_id, buf, sz);
   } else {
     r = (typeof(r))(ctx->reserve);
@@ -508,6 +509,7 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
     r->flush_cb = pn_pkts_flush_cb_error_func;
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
+    r->expire_us = resp_expired_abs_us;
   }
   pkts_t* pkts = &ctx->pn->pkts;
   return pkts_resp(pkts, r);

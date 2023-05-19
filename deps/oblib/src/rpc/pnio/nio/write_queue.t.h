@@ -19,7 +19,7 @@ static void my_flush_cb_after_flush(my_t* io, my_req_t* r) {
 
 static int my_sk_do_flush(my_sk_t* s, int64_t* remain) {
   dlink_t* h = NULL;
-  int err = wq_flush((sock_t*)s, &s->wq, &h);
+  int err = my_wq_flush((sock_t*)s, &s->wq, &h);
   my_t* io = structof(s->fty, my_t, sf);
   if (0 == err && NULL != h) {
     dlink_t* stop = dqueue_top(&s->wq.queue);

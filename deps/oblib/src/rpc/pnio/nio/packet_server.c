@@ -25,6 +25,23 @@ static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   return ret;
 }
 
+static int pkts_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
+  // delete response req that has reached expired time
+  if (PNIO_REACH_TIME_INTERVAL(10*1000)) {
+    int64_t cur_time = rk_get_us();
+    dlink_for(&wq->queue.head, p) {
+      pkts_req_t* req = structof(p, pkts_req_t, link);
+      if (req->expire_us > 0 && cur_time >= req->expire_us) {
+        if (PNIO_OK == wq_delete(wq, p)) {
+          rk_warn("rpc resp is expired, expire_us=%ld, sock_id=%ld", req->expire_us, req->sock_id);
+          pkts_flush_cb(NULL, req);
+        }
+      }
+    }
+  }
+  return wq_flush(s, wq, old_head);
+}
+
 #define tns(x) pkts ## x
 #include "nio-tpl-ns.h"
 #include "write_queue.t.h"

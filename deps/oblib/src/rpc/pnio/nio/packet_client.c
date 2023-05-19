@@ -10,8 +10,13 @@ static int pktc_sk_read(void** b, pktc_sk_t* s, int64_t sz, int64_t* read_bytes)
 }
 
 static void pktc_flush_cb(pktc_t* io, pktc_req_t* req) {
+  unused(io);
   PNIO_DELAY_WARN(delay_warn("pktc_flush_cb", req->ctime_us, FLUSH_DELAY_WARN_US));
   req->flush_cb(req);
+}
+
+static int pktc_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
+  return wq_flush(s, wq, old_head);
 }
 
 #include "pktc_resp.h"

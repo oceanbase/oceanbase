@@ -15,7 +15,8 @@ typedef struct pkts_req_t {
   int errcode;
   pkts_flush_cb_func_t flush_cb;
   uint64_t sock_id;
-  int64_t categ_id;
+  int64_t expire_us;
+  int64_t categ_id; // ATTENTION! Cannot add new structure field from categ_id!
   dlink_t link;
   str_t msg;
 } pkts_req_t;
