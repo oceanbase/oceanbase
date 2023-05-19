@@ -103,8 +103,11 @@ struct ModulePageAllocator: public ObIAllocator
   lib::ObLabel get_label() const { return label_; }
   void *alloc(const int64_t sz)
   {
-    ObMemAttr malloc_attr(tenant_id_, label_, ctx_id_);
-    return alloc(sz, malloc_attr);
+    return (nullptr != allocator_
+            && !label_.is_valid()
+            && OB_SERVER_TENANT_ID == tenant_id_
+            && 0 == ctx_id_)
+                ? allocator_->alloc(sz) : alloc(sz, ObMemAttr(tenant_id_, label_, ctx_id_));
   }
   void *alloc(const int64_t size, const ObMemAttr &attr)
   {
