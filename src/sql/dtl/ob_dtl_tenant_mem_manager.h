@@ -23,7 +23,7 @@ namespace dtl {
 
 // class ObDtlLinkedBuffer;
 
-
+class ObDtlChannelMemManager;
 class ObDtlTenantMemManager
 {
 public:
@@ -42,6 +42,7 @@ public:
 
   int get_channel_mem_manager(int64_t idx, ObDtlChannelMemManager *&mgr);
   int64_t get_channel_mgr_count() { return mem_mgrs_.count(); }
+  int64_t get_used_memory_size();
 private:
   void buffer_status();
 

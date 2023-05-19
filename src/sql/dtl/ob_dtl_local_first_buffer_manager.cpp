@@ -361,7 +361,7 @@ int ObDtlLocalFirstBufferCacheManager::init()
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
                 OB_MALLOC_NORMAL_BLOCK_SIZE,
-                ObMemAttr(tenant_id_, ObModIds::OB_SQL_DTL)))) {
+                ObMemAttr(tenant_id_, "SqlDtl1stBuf")))) {
     LOG_WARN("failed to init allocator", K(ret));
   } else {
     if (OB_FAIL(hash_table_.init(BUCKET_NUM, CONCURRENT_CNT))) {
