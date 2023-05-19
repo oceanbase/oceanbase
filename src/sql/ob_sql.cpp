@@ -3940,7 +3940,8 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
                          || OB_ERR_ONLY_FUNC_CAN_PIPELINED == ret
                          || OB_ERR_NO_ATTR_FOUND == ret
                          || OB_ERR_NON_INT_LITERAL == ret
-                         || OB_ERR_PARSER_INIT == ret)) {
+                         || OB_ERR_PARSER_INIT == ret
+                         || OB_NOT_SUPPORTED == ret)) {
       // parser返回已知的错误码，不需要断掉与客户端的连接
       exec_ctx.set_need_disconnect(false);
       //FIXME qianfu NG_TRACE_EXT(set_need_disconnect, OB_ID(need_disconnect), false);
