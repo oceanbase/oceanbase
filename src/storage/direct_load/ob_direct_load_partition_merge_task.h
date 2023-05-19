@@ -162,7 +162,7 @@ private:
     blocksstable::ObStorageDatum *deserialize_datums_;
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
-    table::ObTableLoadResultInfo *result_info_;
+    ObDirectLoadDMLRowHandler *dml_row_handler_;
     bool is_inited_;
   };
 private:
@@ -199,7 +199,7 @@ private:
     blocksstable::ObStorageDatum *deserialize_datums_;
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
-    table::ObTableLoadResultInfo *result_info_;
+    ObDirectLoadDMLRowHandler *dml_row_handler_;
     bool is_inited_;
   };
 private:
@@ -249,7 +249,7 @@ private:
     blocksstable::ObStorageDatum *deserialize_datums_;
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
-    table::ObTableLoadResultInfo *result_info_;
+    ObDirectLoadDMLRowHandler *dml_row_handler_;
     bool is_inited_;
   };
 private:

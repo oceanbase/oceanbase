@@ -60,5 +60,5 @@ private:
 };
 
 
-}  // namespace observer
+}  // namespace storage
 }  // namespace oceanbase

@@ -112,7 +112,7 @@ int ObTableLoadBeginP::process()
       param.px_mode_ = false;
       param.online_opt_stat_gather_ = false;
       param.data_type_ = static_cast<ObTableLoadDataType>(arg_.config_.flag_.data_type_);
-      param.dup_action_ = ObLoadDupActionType::LOAD_STOP_ON_DUP;
+      param.dup_action_ = static_cast<ObLoadDupActionType>(arg_.config_.flag_.dup_action_);
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));
       }

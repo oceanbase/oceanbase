@@ -9,6 +9,7 @@
 #include "share/stat/ob_stat_define.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
@@ -30,7 +31,7 @@ ObDirectLoadFastHeapTableBuildParam::ObDirectLoadFastHeapTableBuildParam()
     col_descs_(nullptr),
     insert_table_ctx_(nullptr),
     fast_heap_table_ctx_(nullptr),
-    result_info_(nullptr),
+    dml_row_handler_(nullptr),
     online_opt_stat_gather_(false)
 {
 }
@@ -43,7 +44,7 @@ bool ObDirectLoadFastHeapTableBuildParam::is_valid() const
 {
   return tablet_id_.is_valid() && snapshot_version_ > 0 && table_data_desc_.is_valid() &&
          nullptr != col_descs_ && nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_ &&
-         nullptr != result_info_ && nullptr != datum_utils_;
+         nullptr != dml_row_handler_ && nullptr != datum_utils_;
 }
 
 /**
@@ -225,7 +226,11 @@ int ObDirectLoadFastHeapTableBuilder::append_row(const ObTabletID &tablet_id,
         LOG_WARN("fail to collect", KR(ret));
       } else {
         ++row_count_;
-        ATOMIC_INC(&param_.result_info_->rows_affected_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(param_.dml_row_handler_->handle_insert_row(datum_row_))) {
+        LOG_WARN("fail to handle insert row", KR(ret), K_(datum_row));
       }
     }
   }

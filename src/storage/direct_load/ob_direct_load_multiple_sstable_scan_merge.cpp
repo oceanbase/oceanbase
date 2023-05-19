@@ -5,7 +5,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
-#include "observer/table_load/ob_table_load_error_row_handler.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/blocksstable/ob_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scanner.h"
@@ -16,7 +16,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace observer;
 using namespace sql;
 
 /**
@@ -24,7 +23,7 @@ using namespace sql;
  */
 
 ObDirectLoadMultipleSSTableScanMergeParam::ObDirectLoadMultipleSSTableScanMergeParam()
-  : datum_utils_(nullptr), error_row_handler_(nullptr), result_info_(nullptr)
+  : datum_utils_(nullptr), dml_row_handler_(nullptr)
 {
 }
 
@@ -32,8 +31,7 @@ ObDirectLoadMultipleSSTableScanMergeParam::~ObDirectLoadMultipleSSTableScanMerge
 
 bool ObDirectLoadMultipleSSTableScanMergeParam::is_valid() const
 {
-  return table_data_desc_.is_valid() && nullptr != datum_utils_ && nullptr != error_row_handler_ &&
-         nullptr != result_info_;
+  return table_data_desc_.is_valid() && nullptr != datum_utils_ && nullptr != dml_row_handler_;
 }
 
 /**
@@ -42,7 +40,7 @@ bool ObDirectLoadMultipleSSTableScanMergeParam::is_valid() const
 
 ObDirectLoadMultipleSSTableScanMerge::ObDirectLoadMultipleSSTableScanMerge()
   : datum_utils_(nullptr),
-    error_row_handler_(nullptr),
+    dml_row_handler_(nullptr),
     range_(nullptr),
     consumers_(nullptr),
     consumer_cnt_(0),
@@ -59,7 +57,7 @@ void ObDirectLoadMultipleSSTableScanMerge::reset()
 {
   table_data_desc_.reset();
   datum_utils_ = nullptr;
-  error_row_handler_ = nullptr;
+  dml_row_handler_ = nullptr;
   range_ = nullptr;
   for (int64_t i = 0; i < scanners_.count(); ++i) {
     scanners_[i]->~ObDirectLoadMultipleSSTableScanner();
@@ -131,8 +129,7 @@ int ObDirectLoadMultipleSSTableScanMerge::init(
     if (OB_SUCC(ret)) {
       table_data_desc_ = param.table_data_desc_;
       datum_utils_ = param.datum_utils_;
-      error_row_handler_ = param.error_row_handler_;
-      result_info_ = param.result_info_;
+      dml_row_handler_ = param.dml_row_handler_;
       range_ = &range;
       is_inited_ = true;
     }
@@ -215,20 +212,11 @@ int ObDirectLoadMultipleSSTableScanMerge::inner_get_next_row(
       } else if (OB_LIKELY(rows_merger_->is_unique_champion())) {
         datum_row = top_item->row_;
       } else {
-        // record same rowkey row
-        if (error_row_handler_->get_action() == ObLoadDupActionType::LOAD_REPLACE) {
-          ATOMIC_AAF(&result_info_->rows_affected_, 2);
-          ATOMIC_INC(&result_info_->deleted_);
-        } else if (error_row_handler_->get_action() == ObLoadDupActionType::LOAD_IGNORE) {
-          ATOMIC_INC(&result_info_->skipped_);
-        } else if (error_row_handler_->get_action() == ObLoadDupActionType::LOAD_STOP_ON_DUP) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(top_item->row_->to_datums(datum_row_.storage_datums_,
-                                                                    datum_row_.count_))) {
-            LOG_WARN("fail to transfer external row to datums", KR(tmp_ret));
-          } else if (OB_TMP_FAIL(error_row_handler_->append_error_row(datum_row_))) {
-            LOG_WARN("fail to append row to error row handler", KR(tmp_ret), K(datum_row_));
-          }
+        // handle same rowkey row
+        if (OB_FAIL(top_item->row_->to_datums(datum_row_.storage_datums_, datum_row_.count_))) {
+          LOG_WARN("fail to transfer external row to datums", KR(ret));
+        } else if (OB_FAIL(dml_row_handler_->handle_update_row(datum_row_))) {
+          LOG_WARN("fail to handle update row", KR(ret), K(datum_row_));
         }
       }
       if (OB_SUCC(ret)) {
