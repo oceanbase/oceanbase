@@ -213,6 +213,8 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 
+  virtual int compute_sharding_info() override;
+
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
