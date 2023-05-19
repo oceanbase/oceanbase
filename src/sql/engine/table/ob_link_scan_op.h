@@ -44,6 +44,7 @@ private:
   virtual void reset_dblink() override;
   void reset_result();
   bool need_tx(const ObSQLSessionInfo *my_session) const;
+  int fetch_row();
 private:
   common::ObMySQLProxy::MySQLResult res_;
   common::sqlclient::ObMySQLResult *result_;

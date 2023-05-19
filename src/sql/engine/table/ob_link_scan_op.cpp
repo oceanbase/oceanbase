@@ -268,11 +268,15 @@ int ObLinkScanOp::inner_open()
                      cast_coll_type,    \
                      NULL);
 
-
 int ObLinkScanOp::inner_get_next_row()
 {
-  int ret = OB_SUCCESS;
   row_allocator_.reuse();
+  return fetch_row();
+}
+
+int ObLinkScanOp::fetch_row()
+{
+  int ret = OB_SUCCESS;
   const ObString &stmt_fmt = MY_SPEC.stmt_fmt_;
   const ObIArray<ObParamPosIdx> &param_infos = MY_SPEC.param_infos_;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
@@ -362,11 +366,12 @@ int ObLinkScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     brs_.end_ = true;
     reset_result();
   } else {
+    row_allocator_.reuse();
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
     auto loop_cnt = common::min(max_row_cnt, MY_SPEC.max_batch_size_);
     while (row_cnt < loop_cnt && OB_SUCC(ret)) {
       batch_info_guard.set_batch_idx(row_cnt);
-      if (OB_FAIL(inner_get_next_row())) {
+      if (OB_FAIL(fetch_row())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("inner get next row failed", K(ret));
         }
