@@ -1859,10 +1859,14 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_charset_type(table_schema.get_charset_type());
             column.set_collation_type(expr->get_collation_type());
             column.set_accuracy(expr->get_accuracy());
+            column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
             if (lib::is_mysql_mode() && ob_is_number_tc(expr->get_result_type().get_type())) {
               // TODO@zuojiao.hzj: add decimal int type here
-              column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, expr->get_accuracy().get_precision()));
+              int16_t ori_scale = expr->get_accuracy().get_scale();
               column.set_data_scale(MIN(OB_MAX_DECIMAL_SCALE, expr->get_accuracy().get_scale()));
+              int16_t data_precision = expr->get_accuracy().get_precision() - (ori_scale - column.get_data_scale());
+              column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, data_precision));
+
             }
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
@@ -1966,6 +1970,11 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               } else if (is_oracle_mode() && column.is_xmltype() &&
                          OB_FAIL(add_generated_hidden_column_for_udt(table_schema, column))) {
                 LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
+              } else {
+                ObColumnNameHashWrapper name_key(column.get_column_name_str());
+                if (OB_FAIL(column_name_set_.set_refactored(name_key))) {
+                  SQL_RESV_LOG(WARN, "add column name to map failed", K(ret));
+                }
               }
             }
             LOG_DEBUG("ctas mysql mode, create_table_column_count = 0,end", K(column));
