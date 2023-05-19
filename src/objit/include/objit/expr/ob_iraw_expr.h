@@ -206,11 +206,32 @@ inline uint16_t ObIRawExpr::get_subschema_id() const
 
 inline uint32_t ObIRawExpr::get_result_flag() const
 {
-  return   (result_type_.get_collation_type() == common::CS_TYPE_UTF8MB4_BIN ||
-           result_type_.get_collation_type() == common::CS_TYPE_BINARY) ?
-           result_type_.get_result_flag() | BINARY_FLAG :
-           result_type_.get_result_flag();
+  uint32_t flag = result_type_.get_result_flag();
+  bool is_oracle_lob = false;
+  ObObjType obj_type = result_type_.get_type();
+  if (ObLongTextType == obj_type && lib::is_oracle_mode()) { // was ObLobType
+    is_oracle_lob = true;
+  }
+  if (ObCharset::is_bin_sort(result_type_.get_collation_type())) {
+    if (!is_column_ref_expr() ||
+       (!ob_is_numeric_type(result_type_.get_type()) &&
+        !ob_is_year_tc(result_type_.get_type()) &&
+        !is_oracle_lob)) {
+      flag |= BINARY_FLAG;
+    }
+  }
+  if (is_oracle_lob) {
+    flag &= (~BLOB_FLAG); // was ObLobType
+  }
+  if (ob_is_bit_tc(obj_type) && get_accuracy().get_precision() > 1) {
+    //
+    // bit(1) flags -> UNSIGNED
+    // bit(2) flags -> BINARY_FLAG | UNSIGNED
+    flag |= BINARY_FLAG;
+  }
+  return flag;
 }
+
 inline int ObIRawExpr::get_length_for_meta_in_bytes(common::ObLength &length) const
 {
   return result_type_.get_length_for_meta_in_bytes(length);
