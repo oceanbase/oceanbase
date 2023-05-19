@@ -6123,39 +6123,56 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (xid.empty() || xid != exec_info_.xid_) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), KPC(this));
-  } else if (!is_sub2pc() && !is_rollback) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected trans ctx", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(is_follower_())) {
-    ret = OB_NOT_MASTER;
-    TRANS_LOG(WARN, "transaction is replaying", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(is_2pc_logging_())) {
-    TRANS_LOG(WARN, "tx is 2pc logging", KPC(this));
   } else if (OB_UNLIKELY(is_exiting_)) {
     ret = OB_TRANS_IS_EXITING;
     TRANS_LOG(WARN, "transaction is exiting", K(ret), KPC(this));
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE > get_downstream_state()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "not in prepare state", K(ret), KPC(this));
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE < get_upstream_state()) {
-    // do nothing
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE == get_upstream_state() && ObTxState::REDO_COMPLETE == get_downstream_state() && !all_downstream_collected_()) {
-    // do nothing
-  } else {
-    tmp_scheduler_= tmp_scheduler;
-    // (void)set_sub2pc_coord_state(Ob2PCPrepareState::VERSION_PREPARING);
-    if (OB_FAIL(continue_execution(is_rollback))) {
-      TRANS_LOG(WARN, "fail to continue execution", KR(ret), KPC(this));
-    } else if (OB_FAIL(unregister_timeout_task_())) {
-      TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
-    } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
-                                              + trans_id_.hash() % USEC_PER_SEC))) {
-      TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_2pc_logging_())) {
+    TRANS_LOG(WARN, "tx is in 2pc logging", KPC(this));
+  } else if (OB_UNLIKELY(is_follower_())) {
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "not handle this request for follower", KR(ret), KPC(this));
+  } else if (xid.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), K(tmp_scheduler), KPC(this));
+  } else if (ObTxState::INIT == get_upstream_state() && !is_committing_()) {
+    // not in commit phase
+    // if sub rollback, abort the trans
+    // if sub commit, return an error
+    if (is_rollback) {
+      if (OB_FAIL(abort_(OB_TRANS_ROLLBACKED))) {
+        TRANS_LOG(WARN, "abort trans failed", KR(ret), K(*this));
+      }
+      last_request_ts_ = ObClockGenerator::getClock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected request, not in sub prepare state", K(ret), KPC(this));
     }
-    last_request_ts_ = ObClockGenerator::getClock();
+  } else {
+    // in commit phase
+    if (xid != exec_info_.xid_) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), KPC(this));
+    } else if (!is_sub2pc()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected trans ctx", KR(ret), K(is_rollback), K(xid), KPC(this));
+    } else if (ObTxState::REDO_COMPLETE == get_upstream_state() && !is_prepared_sub2pc()) {
+      // not finish in first phase
+    } else if (ObTxState::REDO_COMPLETE < get_upstream_state()
+        || ObTxState::REDO_COMPLETE < get_downstream_state()) {
+      // already in second phase
+      // in this case, drive by self
+    } else {
+      tmp_scheduler_ = tmp_scheduler;
+      if (OB_FAIL(continue_execution(is_rollback))) {
+        TRANS_LOG(WARN, "fail to continue execution", KR(ret), K(is_rollback), K(xid), KPC(this));
+      } else if (OB_FAIL(unregister_timeout_task_())) {
+        TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
+      } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
+                                                + trans_id_.hash() % USEC_PER_SEC))) {
+        TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
+      }
+      last_request_ts_ = ObClockGenerator::getClock();
+    }
   }
   TRANS_LOG(INFO, "sub end tx", K(ret), K(xid), K(is_rollback), K(tmp_scheduler), KPC(this));
   return ret;
