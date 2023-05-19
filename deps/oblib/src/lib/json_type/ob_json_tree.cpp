@@ -540,7 +540,7 @@ void ObJsonObject::update_serialize_size(int64_t change_size)
   }
 }
 
-ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   INIT_SUCC(ret);
 
@@ -551,14 +551,32 @@ ObJsonNode *ObJsonObject::clone(ObIAllocator* allocator) const
   } else {
     ObJsonObject *new_obj = static_cast<ObJsonObject *>(new_node);
     uint64_t len = element_count();
+    ObString key_str;
     for (uint64_t i = 0; i < len && OB_SUCC(ret); i++) {
-      ObJsonNode *old_value = object_array_[i].get_value();
-      if (OB_FAIL(new_obj->add(object_array_[i].get_key(), old_value->clone(allocator)))) {
-        LOG_WARN("add obj failed", K(ret), K(object_array_[i].get_key()));
+      if (is_deep_copy) {
+        char* str_buf = NULL;
+        if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(object_array_[i].get_key().length())))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(object_array_[i].get_key().length()));
+        } else {
+          key_str.assign_buffer(str_buf, object_array_[i].get_key().length());
+          if (object_array_[i].get_key().length() !=
+                key_str.write(object_array_[i].get_key().ptr(), object_array_[i].get_key().length())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get text from expr", K(ret), K(key_str));
+          }
+        }
+      } else {
+        key_str.assign_ptr(object_array_[i].get_key().ptr(), object_array_[i].get_key().length());
+      }
+      if (OB_SUCC(ret)) {
+        ObJsonNode *old_value = object_array_[i].get_value();
+        if (OB_FAIL(new_obj->add(key_str, old_value->clone(allocator, is_deep_copy)))) {
+          LOG_WARN("add obj failed", K(ret), K(object_array_[i].get_key()));
+        }
       }
     }
   }
-
   return ret != OB_SUCCESS ? NULL : new_node;
 }
 
@@ -865,7 +883,7 @@ void ObJsonArray::update_serialize_size(int64_t change_size)
   }
 }
 
-ObJsonNode *ObJsonArray::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonArray::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   INIT_SUCC(ret);
 
@@ -877,7 +895,7 @@ ObJsonNode *ObJsonArray::clone(ObIAllocator* allocator) const
     ObJsonArray *new_array = static_cast<ObJsonArray *>(new_node);
     uint64_t size = element_count();
     for (uint64_t i = 0; i < size && OB_SUCC(ret); i++) {
-      if (OB_FAIL(new_array->append(node_vector_[i]->clone(allocator)))) {
+      if (OB_FAIL(new_array->append(node_vector_[i]->clone(allocator, is_deep_copy)))) {
         LOG_WARN("array append clone failed", K(ret), K(i), K(size));
       }
     }
@@ -1078,67 +1096,131 @@ int ObJsonOInterval::parse()
   return ret;
 }
 
-ObJsonNode *ObJsonDecimal::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonDecimal::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonDecimal>(allocator, value(), get_precision(), get_scale());
 }
 
-ObJsonNode *ObJsonDouble::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonDouble::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonDouble>(allocator, value());
 }
 
-ObJsonNode *ObJsonOFloat::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonOFloat::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonOFloat>(allocator, value());
 }
 
-ObJsonNode *ObJsonInt::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonInt::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonInt>(allocator, value());
 }
 
-ObJsonNode *ObJsonUint::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonUint::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonUint>(allocator, value());
 }
 
-ObJsonNode *ObJsonString::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonString::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   ObJsonNode* str_node = ObJsonTreeUtil::clone_new_node<ObJsonString>(allocator, value().ptr(), length());
   if (OB_NOT_NULL(str_node)) {
     (static_cast<ObJsonString*>(str_node))->set_ext(ext_);
   }
+  if (is_deep_copy) {
+    char* str_buf =NULL;
+    if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(length())))) {
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+    } else {
+      ObString key_str(length(), 0, str_buf);
+      if (length() != key_str.write(value().ptr(), length())) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+      } else {
+        ObJsonString *json_str = static_cast<ObJsonString *>(str_node);
+        json_str->set_value(key_str.ptr(), key_str.length());
+        str_node = json_str;
+      }
+    }
+  }
   return str_node;
 }
 
-ObJsonNode *ObJsonORawString::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonORawString::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
-  return ObJsonTreeUtil::clone_new_node<ObJsonORawString>(allocator, value().ptr(), length(), json_type_);
+  ObJsonNode* str_node = ObJsonTreeUtil::clone_new_node<ObJsonORawString>(allocator, value().ptr(), length(), json_type_);
+  int ret = OB_SUCCESS;
+  if (is_deep_copy) {
+    char* str_buf =NULL;
+    if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(length())))) {
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+    } else {
+      ObString key_str(length(), 0, str_buf);
+      if (length() != key_str.write(value().ptr(), length())) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+      } else {
+        ObJsonORawString *json_str = static_cast<ObJsonORawString *>(str_node);
+        json_str->set_value(key_str.ptr(), key_str.length());
+        str_node = json_str;
+      }
+    }
+  }
+  return str_node;
 }
 
-ObJsonNode *ObJsonOInterval::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonOInterval::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
-  return ObJsonTreeUtil::clone_new_node<ObJsonOInterval>(allocator, value().ptr(), length(), field_type_);
+  ObJsonNode* str_node = ObJsonTreeUtil::clone_new_node<ObJsonOInterval>(allocator, value().ptr(), length(), field_type_);
+  if (is_deep_copy) {
+    char* str_buf =NULL;
+    if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(length())))) {
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+    } else {
+      ObString key_str(length(), 0, str_buf);
+      if (length() != key_str.write(value().ptr(), length())) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+      } else {
+        ObJsonOInterval *json_str = static_cast<ObJsonOInterval *>(str_node);
+        json_str->set_value(key_str.ptr(), key_str.length());
+        str_node = json_str;
+      }
+    }
+  }
+  return str_node;
 }
 
-ObJsonNode *ObJsonNull::clone(ObIAllocator* allocator) const 
+ObJsonNode *ObJsonNull::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonNull>(allocator, is_not_null_);
 }
 
-ObJsonNode *ObJsonDatetime::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonDatetime::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonDatetime>(allocator, json_type(), value_);
 }
 
-ObJsonNode *ObJsonOpaque::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonOpaque::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   ObString content(value_.length(), value_.ptr());
-  return ObJsonTreeUtil::clone_new_node<ObJsonOpaque>(allocator, content, field_type_);
+  ObJsonNode* str_node = ObJsonTreeUtil::clone_new_node<ObJsonOpaque>(allocator, content, field_type_);
+  if (is_deep_copy) {
+    char* str_buf =NULL;
+    if (OB_ISNULL(str_buf = static_cast<char*>(allocator->alloc(content.length())))) {
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+    } else {
+      ObString key_str(content.length(), 0, str_buf);
+      if (content.length() != key_str.write(content.ptr(), content.length())) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string");
+      } else {
+        ObJsonOpaque *json_str = static_cast<ObJsonOpaque *>(str_node);
+        json_str->set_value(key_str);
+        str_node = json_str;
+      }
+    }
+  }
+  return str_node;
 }
 
-ObJsonNode *ObJsonBoolean::clone(ObIAllocator* allocator) const
+ObJsonNode *ObJsonBoolean::clone(ObIAllocator* allocator, bool is_deep_copy) const
 {
   return ObJsonTreeUtil::clone_new_node<ObJsonBoolean>(allocator, value());
 }
