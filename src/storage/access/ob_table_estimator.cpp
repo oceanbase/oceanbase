@@ -173,7 +173,7 @@ int ObTableEstimator::estimate_memtable_scan_row_count(
   part_est.reset();
   if (!memtable->is_inited()) {
     ret = OB_NOT_INIT;
-    LOG_WARN( "memtable not init", K(ret), K(table_id));
+    LOG_WARN( "memtable not init", K(ret), K(base_input.table_id_));
   } else if (OB_UNLIKELY(!key_range.is_memtable_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid range to estimate row", K(ret), K(key_range));
