@@ -983,7 +983,7 @@ int ObDupTableLSHandler::replay(const void *buffer,
       DUP_TABLE_LOG(WARN, "merge replay buf failed", K(ret));
     }
   } else if (OB_FAIL(log_operator_->deserialize_log_entry())) {
-    DUP_TABLE_LOG(WARN, "deserialize log block failed", K(ret));
+    DUP_TABLE_LOG(WARN, "deserialize log block failed", K(ret), K(ts_ns));
   } else if (OB_FAIL(lease_mgr_ptr_->follower_try_acquire_lease(ts_ns))) {
     DUP_TABLE_LOG(WARN, "acquire lease from lease log error", K(ret), K(ts_ns));
   } else {
@@ -996,7 +996,9 @@ int ObDupTableLSHandler::replay(const void *buffer,
 
   // start require lease instantly
   if (OB_FAIL(ret)) {
-    // do nothing
+    if (OB_NOT_NULL(log_operator_)) {
+      log_operator_->reuse();
+    }
   } else if (no_dup_tablet_before_replay && has_dup_tablet()
              && OB_TMP_FAIL(
                  MTL(ObTransService *)->get_dup_table_loop_worker().append_dup_table_ls(ls_id_))) {
