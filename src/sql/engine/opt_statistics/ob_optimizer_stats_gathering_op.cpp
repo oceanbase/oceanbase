@@ -389,7 +389,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr,
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (OB_FAIL(get_col_stats_by_partinfo(part_ids, column_id, all_stats))) {
     LOG_WARN("fail to get column stat", K(ret));
-  } else if (!ObColumnStatParam::is_valid_histogram_type(expr->obj_meta_.get_type())) {
+  } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type())) {
     // do nothing yet, shoul use the plain stats.
   } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
     LOG_WARN("failed to eval expr", K(*expr));

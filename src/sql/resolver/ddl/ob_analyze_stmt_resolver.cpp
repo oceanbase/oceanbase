@@ -194,8 +194,8 @@ int ObAnalyzeStmtResolver::resolve_mysql_column_bucket_info(const ParseNode *col
         LOG_WARN("failed to get column schema", K(column_name), K(ret));
       } else if (OB_ISNULL(col_param = analyze_stmt.get_column_param(column_schema->get_column_id()))) {
         // do nothing
-      } else if (col_param->is_valid_hist_type_) {
-        col_param->need_basic_static_ = true;
+      } else if (col_param->is_valid_opt_col()) {
+        col_param->set_need_basic_stat();
         col_param->bucket_num_ = bucket_number;
         col_param->set_size_manual();
       }

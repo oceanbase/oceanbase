@@ -107,7 +107,7 @@ int ObDirectLoadFastHeapTableBuilder::collect_obj(const ObDatumRow &datum_row)
                                                 i + extra_rowkey_cnt + 1).get_cmp_func();
     const ObColDesc &col_desc = param_.col_descs_->at(i + 1);
     ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-    bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+    bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
     if (col_stat != nullptr && is_valid) {
       if (OB_FAIL(col_stat->update_column_stat_info(&datum,
                                                     col_desc.col_type_,

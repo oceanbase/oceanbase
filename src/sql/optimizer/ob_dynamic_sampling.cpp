@@ -210,7 +210,7 @@ int ObDynamicSampling::add_ds_stat_items_by_dml_info(const ObDSTableParam &param
       for (int64_t j = 0; j < ds_result_items.at(i).exprs_.count(); ++j) {
         if (ds_result_items.at(i).exprs_.at(j) != NULL &&
             ds_result_items.at(i).exprs_.at(j)->is_column_ref_expr() &&
-            ObColumnStatParam::is_valid_histogram_type(ds_result_items.at(i).exprs_.at(j)->get_data_type())) {
+            ObColumnStatParam::is_valid_opt_col_type(ds_result_items.at(i).exprs_.at(j)->get_data_type())) {
           ++ ds_column_cnt;
         }
       }
@@ -325,7 +325,7 @@ int ObDynamicSampling::add_ds_col_stat_item(const ObDSTableParam &param,
           }
         }
         if (!found_it) {
-          if (!ObColumnStatParam::is_valid_histogram_type(col_expr->get_data_type())) {
+          if (!ObColumnStatParam::is_valid_opt_col_type(col_expr->get_data_type())) {
             //do nothing, only ds fullfill with column stats type.
           } else if (OB_FAIL(add_ds_stat_item(ObDSStatItem(&result_item,
                                                            tmp_str,
@@ -1209,7 +1209,7 @@ bool ObDynamicSampling::all_ds_col_stats_are_gathered(const ObDSTableParam &para
       }
     }
     if (!found_it && column_exprs.at(i) != NULL && column_exprs.at(i)->is_column_ref_expr() &&
-        ObColumnStatParam::is_valid_histogram_type(column_exprs.at(i)->get_data_type())) {
+        ObColumnStatParam::is_valid_opt_col_type(column_exprs.at(i)->get_data_type())) {
       ++ ds_column_cnt;
       res = false;
     }

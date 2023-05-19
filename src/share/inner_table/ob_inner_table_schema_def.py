@@ -12407,7 +12407,7 @@ def_table_schema(
          CAST(V.INDEX_TYPE AS      CHAR(16))     AS INDEX_TYPE,
          CAST(V.COMMENT AS         CHAR(16))     AS COMMENT,
          CAST(V.INDEX_COMMENT AS   CHAR(1024))   AS INDEX_COMMENT,
-         CAST('YES' AS             CHAR(3))      AS IS_VISIBLE
+         CAST(V.IS_VISIBLE AS      CHAR(3))      AS IS_VISIBLE
   FROM   (SELECT db.database_name                                              AS TABLE_SCHEMA,
                  t.table_name                                                  AS TABLE_NAME,
                  CASE WHEN i.index_type IN (2,4,8) THEN 0 ELSE 1 END           AS NON_UNIQUE,
@@ -12416,11 +12416,12 @@ def_table_schema(
                  c.index_position                                              AS SEQ_IN_INDEX,
                  CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
                  CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
-                 CASE WHEN c.nullable = 1 THEN 'YES' ELSE NULL END             AS NULLABLE,
+                 CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
                  CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                  i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
                  t.comment                                                     AS COMMENT,
-                 i.comment                                                     AS INDEX_COMMENT
+                 i.comment                                                     AS INDEX_COMMENT,
+                 CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
           FROM   oceanbase.__all_table i
           JOIN   oceanbase.__all_table t
           ON     i.data_table_id=t.table_id
@@ -12452,11 +12453,12 @@ def_table_schema(
                   c.rowkey_position AS SEQ_IN_INDEX,
                   c.column_name     AS COLUMN_NAME,
                   NULL              AS SUB_PART,
-                  NULL              AS NULLABLE,
+                  ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
-                  t.comment        AS INDEX_COMMENT
+                  t.comment        AS INDEX_COMMENT,
+                  'YES'            AS IS_VISIBLE
           FROM   oceanbase.__all_table t
           JOIN   oceanbase.__all_column c
           ON     t.table_id=c.table_id
@@ -12478,11 +12480,12 @@ def_table_schema(
               c.index_position                                              AS SEQ_IN_INDEX,
               CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
               CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
-              CASE WHEN c.nullable = 1 THEN 'YES' ELSE NULL END             AS NULLABLE,
+              CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
               CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
               t.comment                                                     AS COMMENT,
-              i.comment                                                     AS INDEX_COMMENT
+              i.comment                                                     AS INDEX_COMMENT,
+              CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE i
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           ON     i.data_table_id=t.table_id
@@ -12512,11 +12515,12 @@ def_table_schema(
                   c.rowkey_position AS SEQ_IN_INDEX,
                   c.column_name     AS COLUMN_NAME,
                   NULL              AS SUB_PART,
-                  NULL              AS NULLABLE,
+                  ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
                   t.comment        AS COMMENT,
-                  t.comment        AS INDEX_COMMENT
+                  t.comment        AS INDEX_COMMENT,
+                  'YES'            AS IS_VISIBLE
           FROM   oceanbase.__ALL_VIRTUAL_CORE_ALL_TABLE t
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE c
           ON     t.table_id=c.table_id
@@ -12652,11 +12656,11 @@ def_table_schema(
                     left join (
                       select tenant_id,
                              table_id,
-                             sum(row_cnt) as row_cnt,
-                             sum(row_cnt * avg_row_len) / sum(row_cnt) as avg_row_len,
-                             sum(row_cnt * avg_row_len) as data_size
+                             row_cnt,
+                             avg_row_len,
+                             row_cnt * avg_row_len as data_size
                       from oceanbase.__all_table_stat
-                      group by tenant_id, table_id) ts
+                      where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     where a.tenant_id = 0
@@ -26427,7 +26431,8 @@ def_table_schema(
                ELSE ( CASE  WHEN type = 1 THEN 'AUTO GATHER'
                          ELSE ( CASE  WHEN type IS NULL THEN NULL
                                   ELSE 'UNDEFINED GATHER' END )END ) END ) AS CHAR(16)) AS TYPE,
-        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS CHAR(8)) AS STATUS,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS'
+                ELSE (CASE WHEN RET_CODE IS NULL THEN NULL ELSE 'FAILED' END) END) AS CHAR(8)) AS STATUS,
         CAST(TABLE_COUNT         AS     SIGNED) AS TABLE_COUNT,
         CAST(FAILED_COUNT        AS     SIGNED) AS FAILED_COUNT,
         CAST(START_TIME          AS     DATETIME(6)) AS START_TIME,
@@ -26452,7 +26457,8 @@ def_table_schema(
         CAST(DB.DATABASE_NAME         AS     CHAR(128)) AS OWNER,
         CAST(V.TABLE_NAME             AS     CHAR(256)) AS TABLE_NAME,
         CAST(STAT.TASK_ID             AS     CHAR(36)) AS TASK_ID,
-        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS CHAR(8)) AS STATUS,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS'
+                ELSE (CASE WHEN RET_CODE IS NULL THEN NULL ELSE 'FAILED' END) END) AS CHAR(8)) AS STATUS,
         CAST(STAT.START_TIME          AS     DATETIME(6)) AS START_TIME,
         CAST(STAT.END_TIME            AS     DATETIME(6)) AS END_TIME,
         CAST(STAT.MEMORY_USED         AS     SIGNED) AS MEMORY_USED,
@@ -31098,12 +31104,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -31271,12 +31277,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -31441,12 +31447,12 @@ FROM
   (SELECT
      TENANT_ID,
      TABLE_ID,
-     SUM(ROW_CNT) AS ROW_COUNT
+     ROW_CNT AS ROW_COUNT
    FROM
      SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
    WHERE
      TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-   GROUP BY TENANT_ID, TABLE_ID
+     AND (PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID)
   ) INFO
 
   RIGHT JOIN
@@ -32489,9 +32495,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -32646,9 +32652,9 @@ def_table_schema(
       LEFT JOIN (
         SELECT TENANT_ID,
                TABLE_ID,
-               SUM(ROW_CNT * AVG_ROW_LEN) AS DATA_SIZE
+               ROW_CNT * AVG_ROW_LEN AS DATA_SIZE
         FROM SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT
-        GROUP BY TENANT_ID, TABLE_ID) TS
+        WHERE PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID) TS
       ON T.TABLE_ID = TS.TABLE_ID
       AND T.TENANT_ID = TS.TENANT_ID
       WHERE T.PART_LEVEL = 0
@@ -36959,14 +36965,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -37102,14 +37106,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -37241,14 +37243,12 @@ FROM
     SELECT
       TENANT_ID,
       TABLE_ID,
-      SUM(ROW_CNT) AS ROW_COUNT
+      ROW_CNT AS ROW_COUNT
     FROM
       SYS.ALL_VIRTUAL_TABLE_STAT_REAL_AGENT TS
     WHERE
       TS.TENANT_ID = EFFECTIVE_TENANT_ID()
-    GROUP BY
-      TENANT_ID,
-      TABLE_ID
+    AND PARTITION_ID = -1 OR PARTITION_ID = TABLE_ID
   )
   INFO
 
@@ -44626,7 +44626,8 @@ def_table_schema(
                ELSE ( CASE  WHEN type = 1 THEN 'AUTO GATHER'
                          ELSE ( CASE  WHEN type IS NULL THEN NULL
                                   ELSE 'UNDEFINED GATHER' END )END ) END ) AS VARCHAR2(16)) AS TYPE,
-        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS VARCHAR2(8)) AS STATUS,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS'
+                ELSE (CASE WHEN RET_CODE IS NULL THEN NULL ELSE 'FAILED' END) END) AS VARCHAR2(8)) AS STATUS,
         CAST(TABLE_COUNT         AS     NUMBER) AS TASK_TABLE_COUNT,
         CAST(FAILED_COUNT  AS     NUMBER) AS FAILED_COUNT,
         CAST(START_TIME          AS     TIMESTAMP(6)) AS TASK_START_TIME,
@@ -44653,7 +44654,8 @@ def_table_schema(
         CAST(DB.DATABASE_NAME         AS     VARCHAR2(128)) AS OWNER,
         CAST(V.TABLE_NAME             AS     VARCHAR2(256)) AS TABLE_NAME,
         CAST(STAT.TASK_ID             AS     VARCHAR2(36)) AS TASK_ID,
-        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS' ELSE 'FAILED' END) AS VARCHAR2(8)) AS STATUS,
+        CAST((CASE WHEN RET_CODE = 0 THEN 'SUCCESS'
+                ELSE (CASE WHEN RET_CODE IS NULL THEN NULL ELSE 'FAILED' END) END) AS VARCHAR2(8)) AS STATUS,
         CAST(STAT.START_TIME          AS     TIMESTAMP(6)) AS START_TIME,
         CAST(STAT.END_TIME            AS     TIMESTAMP(6)) AS END_TIME,
         CAST(STAT.MEMORY_USED         AS     NUMBER) AS MEMORY_USED,
