@@ -195,12 +195,10 @@ int ObXAService::local_one_phase_xa_commit_(const ObXATransID &xid,
   bool alloc = false;
   share::ObLSID coordinator;
   int64_t end_flag = 0;
-  int64_t state = ObXATransState::NON_EXISTING;
-  // todo lixinze:修改内部表获取sql
   ObTransID moke_tx_id;
 
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(trans_id, alloc, xa_ctx))) {
-    if (OB_FAIL(query_xa_coord_from_tableone(MTL_ID(), xid, coordinator, moke_tx_id, state, end_flag))) {
+    if (OB_FAIL(query_xa_coord_from_tableone(MTL_ID(), xid, coordinator, moke_tx_id, end_flag))) {
       if (OB_ITER_END == ret) {
         ret = OB_TRANS_XA_NOTA;
         TRANS_LOG(WARN, "xid is not valid", K(ret), K(xid));
@@ -257,8 +255,8 @@ int ObXAService::revert_xa_ctx(ObXACtx *xa_ctx)
 
 #define INSERT_XA_STANDBY_TRANS_SQL "\
   insert into %s (tenant_id, gtrid, bqual, format_id, \
-  trans_id, coordinator, scheduler_ip, scheduler_port, state, flag) \
-  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %d, %ld)"
+  trans_id, coordinator, scheduler_ip, scheduler_port, flag) \
+  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %ld)"
 
 void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                             const ObXATransID &xid,
@@ -300,7 +298,7 @@ void ObXAService::insert_record_for_standby(const uint64_t tenant_id,
                                     trans_id.get_id(),
                                     coordinator.id(),
                                     scheduler_ip_buf, sche_addr.get_port(),
-                                    ObXATransState::ACTIVE, (long)0))) {
+                                    (long)0))) {
     TRANS_LOG(WARN, "generate insert xa trans sql fail", K(ret), K(sql));
   } else if (OB_FAIL(mysql_proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert record sql failed", KR(ret), K(exec_tenant_id), K(tenant_id));
@@ -487,71 +485,6 @@ int ObXAService::insert_xa_record(ObISQLClient &client,
   }
 
   THIS_WORKER.set_timeout_ts(original_timeout_us);
-
-  return ret;
-}
-
-#define QUERY_XA_STATE_FLAG_SQL "\
-  SELECT state, flag FROM %s WHERE \
-  tenant_id = %lu AND gtrid = x'%.*s' AND bqual = x'%.*s' AND format_id = %ld"
-
-int ObXAService::query_xa_state_and_flag(const uint64_t tenant_id,
-                                         const ObXATransID &xid,
-                                         int64_t &state,
-                                         int64_t &end_flag)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLProxy *mysql_proxy = NULL;
-  ObSqlString sql;
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    ObMySQLResult *result = NULL;
-    char gtrid_str[128] = {0};
-    int64_t gtrid_len = 0;
-    char bqual_str[128] = {0};
-    int64_t bqual_len = 0;
-
-    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-    int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
-
-    if (!is_valid_tenant_id(tenant_id) || xid.empty()) {
-      ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(xid));
-    } else if (FALSE_IT(mysql_proxy = MTL(ObTransService *)->get_mysql_proxy())) {
-    } else if (OB_ISNULL(mysql_proxy)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "mysql_proxy is null", K(ret), KP(mysql_proxy));
-    } else if (OB_FAIL(hex_print(xid.get_gtrid_str().ptr(),
-                                 xid.get_gtrid_str().length(),
-                                 gtrid_str, 128, gtrid_len))) {
-      TRANS_LOG(WARN, "fail to convert gtrid to hex", K(ret), K(tenant_id), K(xid));
-    } else if (OB_FAIL(hex_print(xid.get_bqual_str().ptr(),
-                                 xid.get_bqual_str().length(),
-                                 bqual_str, 128, bqual_len))) {
-      TRANS_LOG(WARN, "fail to convert bqual to hex", K(ret), K(tenant_id), K(xid));
-    } else if (OB_FAIL(sql.assign_fmt(QUERY_XA_STATE_FLAG_SQL,
-                                      OB_ALL_TENANT_GLOBAL_TRANSACTION_TNAME,
-                                      tenant_id,
-                                      (int)gtrid_len, gtrid_str,
-                                      (int)bqual_len, bqual_str,
-                                      xid.get_format_id()))) {
-      TRANS_LOG(WARN, "generate query xa state flag fail", K(ret));
-    } else if (OB_FAIL(mysql_proxy->read(res, exec_tenant_id, sql.ptr()))) {
-      TRANS_LOG(WARN, "execute sql read fail", KR(ret), K(exec_tenant_id), K(tenant_id), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "execute sql fail", K(ret), K(tenant_id), K(sql));
-    } else if (OB_FAIL(result->next())) {
-      if (OB_ITER_END != ret) {
-        TRANS_LOG(WARN, "iterate next result fail", K(ret), K(sql));
-      }
-    } else {
-      EXTRACT_INT_FIELD_MYSQL(*result, "state", state, int64_t);
-      EXTRACT_INT_FIELD_MYSQL(*result, "flag", end_flag, int64_t);
-    }
-
-    THIS_WORKER.set_timeout_ts(original_timeout_us);
-  }
 
   return ret;
 }
@@ -1582,11 +1515,7 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
   } else if (coordinator.is_valid()) {
     ret = OB_TRANS_XA_PROTO;
     TRANS_LOG(WARN, "xa has entered the commit phase", K(ret), K(tx_id), K(xid), K(coordinator));
-  } /*else if (ObXATransState::IDLE != state) {
-    ret = OB_TRANS_XA_PROTO;
-    TRANS_LOG(WARN, "xa trans one phase commit invoked in improper state",
-              K(ret), K(state), K(xid), K(tx_id));
-  }*/ else if (sche_addr == GCTX.self_addr()) {
+  } else if (sche_addr == GCTX.self_addr()) {
     if (OB_FAIL(local_one_phase_xa_commit_(xid, tx_id, timeout_us, request_id, has_tx_level_temp_table))) {
       TRANS_LOG(WARN, "local one phase commit failed", K(ret), K(tx_id), K(xid));
     }
@@ -1600,7 +1529,6 @@ int ObXAService::one_phase_xa_commit_(const ObXATransID &xid,
   // xa_proto is returned when in tightly couple mode, there are
   // still multiple branches and one phase commit is triggered.
   // Under such condition, oracle would not delete inner table record
-  // TODO, maybe should use OB_SUCC(ret)???
   if (OB_TRANS_XA_PROTO != ret) {
     const bool is_tightly = !ObXAFlag::contain_loosely(end_flag);
     int tmp_ret = OB_SUCCESS;
@@ -1736,7 +1664,6 @@ int ObXAService::xa_rollback_local(const ObXATransID &xid,
 {
   int ret = OB_SUCCESS;
   int64_t end_flag = 0;
-  int64_t state = ObXATransState::NON_EXISTING;
   share::ObLSID coordinator;
   
   if (OB_UNLIKELY(!xid.is_valid())
@@ -1842,7 +1769,6 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
   bool alloc = false;
   ObXACtx *xa_ctx = NULL;
   share::ObLSID coordinator;
-  int64_t state = ObXATransState::NON_EXISTING;
   // mock tmp_tx_id for query global transaction second time
   ObTransID tmp_tx_id;
 
@@ -1852,7 +1778,6 @@ int ObXAService::one_phase_xa_rollback_(const ObXATransID &xid,
                                                                 xid,
                                                                 coordinator,
                                                                 tmp_tx_id,
-                                                                state,
                                                                 end_flag))) {
         if (OB_ITER_END == tmp_ret) {
           ret = OB_SUCCESS;
@@ -2184,12 +2109,10 @@ int ObXAService::xa_prepare(const ObXATransID &xid,
     }
   }
 
-  // TODO,
   // 1. tightly coupled, OB_ERR_READ_ONLY_TRANSACTION, delete lock and record
   // 2. tightly coupled, OB_TRANS_XA_RDONLY, delete record only
   // 3. loosely coupled, OB_ERR_READ_ONLY_TRANSACTION, delete record
   if (OB_TRANS_XA_RDONLY == ret) {
-    // TODO, verify delete_xa_record_state and ret(tmp_ret)
     if (OB_SUCCESS != (tmp_ret = delete_xa_record(tenant_id, xid))) {
       TRANS_LOG(WARN, "delete xa record failed", K(tmp_ret), K(tenant_id), K(xid));
     }
@@ -2350,54 +2273,6 @@ int ObXAService::remote_xa_prepare_(const ObXATransID &xid,
   return ret;
 }
 
-#define QUERY_XA_COORDINATOR_WITH_TRANS_ID_SQL "\
-  SELECT coordinator FROM %s \
-  WHERE trans_id = %ld AND tenant_id = %lu"
-int ObXAService::query_xa_coordinator_with_trans_id(const uint64_t tenant_id,
-                                                    const ObTransID &trans_id,
-                                                    share::ObLSID &coordinator)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLProxy *mysql_proxy = NULL;
-  ObSqlString sql;
-  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    ObMySQLResult *result = NULL;
-    int64_t original_timeout_us = THIS_WORKER.get_timeout_ts();
-    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + XA_INNER_TABLE_TIMEOUT);
-    if (!is_valid_tenant_id(tenant_id) || trans_id.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(trans_id));
-    } else if (FALSE_IT(mysql_proxy = MTL(ObTransService *)->get_mysql_proxy())) {
-    } else if (OB_ISNULL(mysql_proxy)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "mysql_proxy is null", K(ret), KP(mysql_proxy));
-    } else if (OB_FAIL(sql.assign_fmt(QUERY_XA_COORDINATOR_WITH_TRANS_ID_SQL,
-                                      OB_ALL_PENDING_TRANSACTION_TNAME,
-                                      trans_id.get_id(),
-                                      ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
-      TRANS_LOG(WARN, "generate query coordinator sql fail", K(ret));
-    } else if (OB_FAIL(mysql_proxy->read(res, tenant_id, sql.ptr()))) {
-      TRANS_LOG(WARN, "execute sql read fail", KR(ret), K(tenant_id), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "execute sql fail", K(ret), K(tenant_id), K(sql));
-    } else if (OB_FAIL(result->next())) {
-      if (OB_ITER_END != ret) {
-        TRANS_LOG(WARN, "iterate next result fail", K(ret), K(sql));
-      }
-    } else {
-      int64_t id = 0;
-      EXTRACT_INT_FIELD_MYSQL(*result, "coordinator", id, int64_t);
-      coordinator = ObLSID(id);
-      if (OB_FAIL(ret)) {
-        TRANS_LOG(WARN, "fail to extract field from result", K(ret));
-      }
-    }
-    THIS_WORKER.set_timeout_ts(original_timeout_us);
-  }
-  return ret;
-}
-
 #define DELETE_XA_PENDING_RECORD_SQL "delete from %s where \
   tenant_id = %lu and trans_id = %ld"
 // delete record from pending trans (table two)
@@ -2510,8 +2385,8 @@ int ObXAService::query_xa_coordinator_with_xid(const uint64_t tenant_id,
 // for __all_pending_transaction
 #define INSERT_XA_PENDING_RECORD_SQL "\
   insert into %s (tenant_id, gtrid, bqual, format_id, \
-  trans_id, coordinator, scheduler_ip, scheduler_port, state) \
-  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d, %d)"
+  trans_id, coordinator, scheduler_ip, scheduler_port) \
+  values (%lu, x'%.*s', x'%.*s', %ld, %ld, %ld, '%s', %d)"
 
 int ObXAService::insert_xa_pending_record(const uint64_t tenant_id,
                                           const ObXATransID &xid,
@@ -2555,8 +2430,7 @@ int ObXAService::insert_xa_pending_record(const uint64_t tenant_id,
                                     (int)bqual_len, bqual_str,
                                     xid.get_format_id(),
                                     tx_id.get_id(), coordinator.id(),
-                                    scheduler_ip_buf, sche_addr.get_port(),
-                                    ObXATransState::PREPARING))) {
+                                    scheduler_ip_buf, sche_addr.get_port()))) {
     TRANS_LOG(WARN, "generate insert xa trans sql fail", K(ret), K(sql));
   } else if (OB_FAIL(mysql_proxy->write(tenant_id, sql.ptr(), affected_rows))) {
     TRANS_LOG(WARN, "execute insert xa trans sql fail",
@@ -2578,7 +2452,7 @@ int ObXAService::insert_xa_pending_record(const uint64_t tenant_id,
 }
 
 #define QUERY_XA_COORDINATOR_TRANSID_SQL "\
-  SELECT coordinator, trans_id, state, flag FROM %s WHERE \
+  SELECT coordinator, trans_id, flag FROM %s WHERE \
   tenant_id = %lu AND gtrid = x'%.*s' AND bqual = x'%.*s' AND format_id = %ld"
 
 // query coord from global transaction (table one)
@@ -2586,7 +2460,6 @@ int ObXAService::query_xa_coord_from_tableone(const uint64_t tenant_id,
                                               const ObXATransID &xid,
                                               share::ObLSID &coordinator,
                                               ObTransID &trans_id,
-                                              int64_t &state,
                                               int64_t &end_flag)
 {
   int ret = OB_SUCCESS;
@@ -2642,7 +2515,6 @@ int ObXAService::query_xa_coord_from_tableone(const uint64_t tenant_id,
       int64_t tx_id_value = 0;
 
       EXTRACT_INT_FIELD_MYSQL(*result, "trans_id", tx_id_value, int64_t);
-      EXTRACT_INT_FIELD_MYSQL(*result, "state", state, int64_t);
       EXTRACT_INT_FIELD_MYSQL(*result, "flag", end_flag, int64_t);
 
       trans_id = ObTransID(tx_id_value);
@@ -2852,12 +2724,10 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
   ObTransID tx_id;
   bool record_in_tableone = true;
   int64_t end_flag = 0;
-  int64_t state = ObXATransState::NON_EXISTING;
   // only used for constructor
   bool is_tightly_coupled = true;
 
-  if (OB_FAIL(query_xa_coord_from_tableone(tenant_id, xid, coordinator, tx_id,
-          state, end_flag))) {
+  if (OB_FAIL(query_xa_coord_from_tableone(tenant_id, xid, coordinator, tx_id, end_flag))) {
     if (OB_ITER_END == ret) {
       TRANS_LOG(INFO, "record not exist in global transaction", K(ret), K(xid));
       uint64_t data_version = 0;
@@ -2883,7 +2753,6 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
     } else {
       TRANS_LOG(WARN, "fail to query trans id and coordinator", K(ret), K(xid),
           K(tx_id), K(coordinator));
-      // TODO, check the TM action
       ret = OB_TRANS_XA_RETRY;
     }
   } else if (OB_UNLIKELY(!coordinator.is_valid())) {

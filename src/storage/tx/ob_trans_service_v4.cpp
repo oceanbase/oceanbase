@@ -640,7 +640,6 @@ int ObTransService::decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord)
  */
 int ObTransService::prepare_tx_coord(ObTxDesc &tx, share::ObLSID &coord_id)
 {
-  // TODO: for xa
   int ret = OB_SUCCESS;
   tx.lock_.lock();
   ObTxPart *coord = NULL;
@@ -676,7 +675,6 @@ int ObTransService::prepare_tx(ObTxDesc &tx,
   tx.commit_expire_ts_ = now + timeout_us;
   tx.state_ = ObTxDesc::State::SUB_PREPARING;
   ObTxSubPrepareMsg prepare_msg;
-  // TODO, retry mechanism
   if (OB_FAIL(tx.commit_task_.init(&tx, this))) {
     TRANS_LOG(WARN, "fail to init timeout task", K(ret), K(tx));
   } else if (OB_FAIL(register_commit_retry_task_(tx))) {
@@ -730,7 +728,6 @@ int ObTransService::end_two_phase_tx(const ObTransID &tx_id,
 {
   int ret = OB_SUCCESS;
   int64_t now = ObClockGenerator::getClock();
-  // TODO, alloc tx desc from tx mgr
   ObTxDesc *tx = NULL;
   if (OB_FAIL(tx_desc_mgr_.alloc(tx))) {
     TRANS_LOG(WARN, "alloc tx fail", K(ret), KPC(this));
@@ -792,9 +789,7 @@ int ObTransService::build_tx_sub_commit_msg_(const ObTxDesc &tx, ObTxSubCommitMs
   msg.sender_ = share::SCHEDULER_LS;
   msg.xid_ = tx.xid_;
   msg.cluster_version_ = GET_MIN_CLUSTER_VERSION();
-  // invalid
   msg.cluster_id_ = GCONF.cluster_id;
-  // TODO, a special request id
   msg.request_id_ = tx.op_sn_;
   return ret;
 }
@@ -809,9 +804,7 @@ int ObTransService::build_tx_sub_rollback_msg_(const ObTxDesc &tx, ObTxSubRollba
   msg.sender_ = share::SCHEDULER_LS;
   msg.xid_ = tx.xid_;
   msg.cluster_version_ = GET_MIN_CLUSTER_VERSION();
-  // invalid
   msg.cluster_id_ = GCONF.cluster_id;
-  // TODO, a special request id
   msg.request_id_ = tx.op_sn_;
   return ret;
 }
@@ -2755,12 +2748,13 @@ int ObTransService::handle_sub_prepare_result(const ObTransID &tx_id,
   if (OB_FAIL(tx_desc_mgr_.get(tx_id, tx))) {
     TRANS_LOG(WARN, "cannot found tx by id", K(ret), K(tx_id), K(result));
   } else {
+    bool need_cb = false;
     tx->lock_.lock();
-    // TODO, check state
-    if (ObTxDesc::State::IN_TERMINATE > tx->state_) {
+    if (ObTxDesc::State::IN_TERMINATE >= tx->state_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected tx state", K(ret),
                 K_(tx->state), K(tx_id), K(result), KPC(tx));
+      tx->print_trace_();
     } else if (ObTxDesc::State::SUB_PREPARED == tx->state_) {
       TRANS_LOG(WARN, "tx has been prepared", K_(tx->state),
                 K(tx_id), K(result), KPC(tx));
@@ -2772,10 +2766,11 @@ int ObTransService::handle_sub_prepare_result(const ObTransID &tx_id,
       TRANS_LOG(WARN, "unexpected tx state", K_(tx->state),
                 K(tx_id), K(result), KPC(tx));
     } else {
+      need_cb = true;
       ret = handle_sub_prepare_result_(*tx, result);
     }
     tx->lock_.unlock();
-    tx->execute_commit_cb();
+    if (need_cb) { tx->execute_commit_cb(); }
   }
   if (OB_NOT_NULL(tx)) {
     tx_desc_mgr_.revert(*tx);
@@ -2956,6 +2951,7 @@ int ObTransService::handle_sub_commit_result(const ObTransID &tx_id,
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected trans desc", K(ret), K(tx_id), K(result));
   } else {
+    bool need_cb = false;
     tx->lock_.lock();
     // TODO, check state
     if (ObTxDesc::State::SUB_COMMITTING != tx->state_) {
@@ -2968,10 +2964,11 @@ int ObTransService::handle_sub_commit_result(const ObTransID &tx_id,
       if (OB_TRANS_COMMITED == result) {
         final_result = OB_SUCCESS;
       }
+      need_cb = true;
       ret = handle_sub_end_tx_result_(*tx, is_rollback, final_result);
     }
     tx->lock_.unlock();
-    tx->execute_commit_cb();
+    if (need_cb) { tx->execute_commit_cb(); }
   }
   if (OB_NOT_NULL(tx)) {
     tx_desc_mgr_.revert(*tx);
@@ -3001,6 +2998,7 @@ int ObTransService::handle_sub_rollback_result(const ObTransID &tx_id,
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected trans desc", K(ret), K(tx_id), K(result));
   } else {
+    bool need_cb = false;
     tx->lock_.lock();
     // TODO, check state
     if (ObTxDesc::State::SUB_ROLLBACKING != tx->state_) {
@@ -3013,10 +3011,11 @@ int ObTransService::handle_sub_rollback_result(const ObTransID &tx_id,
       if (OB_TRANS_KILLED == result) {
         final_result = OB_SUCCESS;
       }
+      need_cb = true;
       ret = handle_sub_end_tx_result_(*tx, is_rollback, final_result);
     }
     tx->lock_.unlock();
-    tx->execute_commit_cb();
+    if (need_cb) { tx->execute_commit_cb(); }
   }
   if (OB_NOT_NULL(tx)) {
     tx_desc_mgr_.revert(*tx);

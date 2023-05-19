@@ -164,9 +164,11 @@ int ObXACtx::handle_timeout(const int64_t delay)
     } else if (is_terminated_) {
       ret = OB_TRANS_IS_EXITING;
       TRANS_LOG(WARN, "xa trans has terminated", K(ret));
-    } else if (ObXATransState::has_submitted(xa_trans_state_)) {
+    } else if (ObXATransState::has_submitted(xa_trans_state_) && !is_xa_one_phase_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "xa trans has entered commit phase, unexpected", K(ret), K(*this));
+    } else if (ObXATransState::has_submitted(xa_trans_state_)) {
+      // do nothing
     } else {
       timeout_task_.set_running(true);
       if (get_original_sche_addr() == GCONF.self_addr_) {
@@ -237,7 +239,6 @@ int ObXACtx::check_terminated_() const
   return ret;
 }
 
-//TODO, verify
 int ObXACtx::is_one_phase_end_trans_allowed_(const ObXATransID &xid, const bool is_rollback)
 {
   int ret = OB_SUCCESS;
@@ -261,7 +262,6 @@ int ObXACtx::is_one_phase_end_trans_allowed_(const ObXATransID &xid, const bool 
       if (info.xid_.all_equal_to(xid)) {
         if (ObXATransState::PREPARING == info.state_) {
           //in preparing state, the previous xa prepare req is still processing, need retry
-          //TODO, VERIFY prepared state
           ret = OB_EAGAIN;
         } else if (ObXATransState::PREPARED == info.state_) {
           ret = OB_TRANS_ROLLBACKED;
@@ -872,27 +872,6 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
   return ret;
 }
 
-int ObXACtx::tx_desc_copy_(const ObTxDesc &from_trans_desc, ObTxDesc &to_trans_desc)
-{
-  // todo tingshan
-  int ret = OB_SUCCESS;
-  UNUSED(from_trans_desc);
-  UNUSED(to_trans_desc);
-  // if (FALSE_IT(to_trans_desc.set_max_sql_no(from_trans_desc.get_sql_no()))) {
-  // } else if (FALSE_IT(to_trans_desc.set_stmt_min_sql_no(from_trans_desc.get_stmt_min_sql_no()))) {
-  // } else if (FALSE_IT(to_trans_desc.get_trans_param() = from_trans_desc.get_trans_param())) {
-  // } else if (OB_FAIL(to_trans_desc.merge_participants(from_trans_desc.get_participants()))) {
-  //   TRANS_LOG(WARN, "merge participants failed", K(ret), K(from_trans_desc));
-  // } else if (OB_FAIL(to_trans_desc.merge_participants_pla(from_trans_desc.get_participants_pla()))) {
-  //   TRANS_LOG(WARN, "merge participants pla failed", K(ret), K(from_trans_desc));
-  // } /*else if (OB_FAIL(to_trans_desc.set_trans_consistency_type(
-  //                    from_trans_desc.get_trans_param().get_consistency_type()))) {
-  //   TRANS_LOG(WARN, "set consistency type failed", K(ret), K(from_trans_desc));
-  // }*/
-
-  return ret;
-}
-
 // handle start stmt request in original scheduler
 // @param [in] req
 int ObXACtx::process_start_stmt(const obrpc::ObXAStartStmtRPCRequest &req)
@@ -934,7 +913,6 @@ int ObXACtx::process_start_stmt(const obrpc::ObXAStartStmtRPCRequest &req)
             executing_xid_ = xid;
           }
           if (OB_FAIL(ret)) {
-            // TODO, verify it
             stmt_unlock_(xid);
           }
         }
@@ -1006,7 +984,6 @@ int ObXACtx::process_end_stmt(const obrpc::ObXAEndStmtRPCRequest &req)
     // which should be considered successful at this time
   } else {
     const ObTxStmtInfo &stmt_info = req.get_stmt_info();
-    // TODO, remove duplicate
     if (OB_FAIL(MTL(ObTransService*)->update_tx_with_stmt_info(stmt_info, tx_desc_))) {
       TRANS_LOG(WARN, "update tx desc with stmt info failed", K(ret), K(xid), K(*this));
     } else if (OB_FAIL(update_xa_branch_hb_info_(xid))) {
@@ -1532,7 +1509,6 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
     TRANS_LOG(WARN, "post xa start request failed", K(ret), K(xid), K(*this));
   } else {
     if (OB_FAIL(cond.wait(wait_time, result)) || OB_FAIL(result)) {
-      // TODO, check loose couple mode but OB_TRANS_CTX_NOT_EXIST, check OB_TIMEOUT
       if (is_tightly_coupled_ && (OB_TRANS_XA_BRANCH_FAIL == ret || OB_TRANS_CTX_NOT_EXIST == ret)) {
         TRANS_LOG(INFO, "xa trans has terminated", K(ret), K(xid), K(result));
         //rewrite code
@@ -1549,8 +1525,6 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
   }
 
   if (OB_FAIL(ret)) {
-    // OB_TRANS_XA_BRANCH_FAIL,
-    // TODO, check whether need to delete inner table record
     if (OB_TRANS_XA_BRANCH_FAIL == ret) {
       set_terminated_();
     }
@@ -2774,9 +2748,7 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
           uint64_t data_version = 0;
           if (OB_FAIL(MTL(ObTransService*)->prepare_tx_coord(*tx_desc_, coord))) {
             if (OB_ERR_READ_ONLY_TRANSACTION == ret) {
-              TRANS_LOG(WARN, "fail to prepare tx coord", K(ret), K(*this));
-              // TODO, no need rewrite ret
-              // ret = OB_TRANS_XA_RDONLY;
+              TRANS_LOG(INFO, "xa is read only", K(ret), K(*this));
             } else {
               TRANS_LOG(WARN, "fail to prepare tx coord", K(ret), K(*this));
             }
@@ -2793,7 +2765,6 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
             insert_xa_pending_record(tenant_id_, xid, trans_id_, coord, original_sche_addr_))) {
             TRANS_LOG(WARN, "fail to insert xa trans record", K(ret), K(xid), K(coord), K(*this));
           } else if (OB_FAIL(drive_prepare_(xid, timeout_us))) {
-            // TODO, sche ctx should provide interfaces to drive xa prepare,
             TRANS_LOG(WARN, "drive prepare failed", K(ret), K(*this));
           }
           // if the last branch fails, need exit
@@ -2855,7 +2826,6 @@ int ObXACtx::wait_xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
     }
   }
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
-  // TODO, handle result
   if (OB_SUCC(ret) || OB_ERR_READ_ONLY_TRANSACTION == ret) {
     xa_trans_state_ = ObXATransState::PREPARED;
   }
@@ -3043,7 +3013,6 @@ int ObXACtx::check_trans_state_(const bool is_rollback,
         if (request_id_ == request_id) {
           ret = OB_EAGAIN;
         } else {
-          // todo lixinze:error or not
           if (is_xa_one_phase_) {
             ret = OB_TRANS_ROLLBACKED;
           } else {
