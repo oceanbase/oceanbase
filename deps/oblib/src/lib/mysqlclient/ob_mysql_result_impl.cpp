@@ -831,7 +831,9 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
       case ObRawType:
         if (OB_SUCC(get_raw(col_idx, obj_str)))
         {
-          if (OB_ISNULL(allocator)) {
+          if (obj_str.empty()) {
+            obj.set_null();
+          } else if (OB_ISNULL(allocator)) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("allocator is NULL", K(ret));
           } else if (OB_FAIL(ObHexUtilsBase::unhex(obj_str, *allocator, obj))) {
