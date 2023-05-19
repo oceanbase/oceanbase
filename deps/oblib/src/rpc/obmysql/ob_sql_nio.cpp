@@ -750,7 +750,6 @@ public:
     }
     while(head->next_ != head) {
       handle_write_req_queue();
-      handle_close_req_queue();
       handle_pending_destroy_list();
     }
   }
