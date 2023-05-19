@@ -81,7 +81,6 @@ int ObDropSequenceResolver::resolve(const ParseNode &parse_tree)
                                    session_info_,
                                    sequence_name,
                                    db_name))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse_tree", K(ret));
     } else if (sequence_name.length() > OB_MAX_SEQUENCE_NAME_LENGTH) {
         ret = OB_ERR_TOO_LONG_IDENT;
