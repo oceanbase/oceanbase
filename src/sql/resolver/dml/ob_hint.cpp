@@ -2486,9 +2486,16 @@ bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
 void ObTableInHint::set_table(const TableItem& table)
 {
   qb_name_.assign_ptr(table.qb_name_.ptr(), table.qb_name_.length());
-  table_name_.assign_ptr(table.get_table_name().ptr(), table.get_table_name().length());
-  if (table.is_basic_table()) {
-    db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
+  if (!table.alias_name_.empty()) {
+    table_name_.assign_ptr(table.alias_name_.ptr(), table.alias_name_.length());
+  } else if (table.is_synonym()) {
+    table_name_.assign_ptr(table.synonym_name_.ptr(), table.synonym_name_.length());
+    db_name_.assign_ptr(table.synonym_db_name_.ptr(), table.synonym_db_name_.length());
+  } else {
+    table_name_.assign_ptr(table.table_name_.ptr(), table.table_name_.length());
+    if (table.is_basic_table()) {
+      db_name_.assign_ptr(table.database_name_.ptr(), table.database_name_.length());
+    }
   }
 }
 
