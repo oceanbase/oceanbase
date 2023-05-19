@@ -1534,7 +1534,11 @@ int ObRootService::schedule_recyclebin_task(int64_t delay)
 
   if (OB_FAIL(get_inspect_task_queue().add_timer_task(
               purge_recyclebin_task_, delay, did_repeat))) {
-    LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    if (OB_CANCELED != ret) {
+      LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    } else {
+      LOG_WARN("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    }
   }
 
   return ret;
@@ -1977,9 +1981,9 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     } else if (OB_FAIL(update_all_server_and_rslist())) {
       LOG_WARN("failed to update all_server and rslist", K(ret));
     } else if (OB_FAIL(zone_manager_.reload())) {
-      LOG_ERROR("failed to reload zone manager", K(ret));
+      LOG_WARN("failed to reload zone manager", K(ret));
     } else if (OB_FAIL(set_cluster_version())) {
-      LOG_ERROR("set cluster version failed", K(ret));
+      LOG_WARN("set cluster version failed", K(ret));
     } else if (OB_FAIL(pl::ObPLPackageManager::load_all_sys_package(sql_proxy_))) {
       LOG_WARN("load all system package failed", K(ret));
     } else if (OB_FAIL(finish_bootstrap())) {
@@ -1990,7 +1994,7 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
                        baseline_schema_version_))) {
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_cpu_quota_concurrency_config_())) {
-      LOG_ERROR("failed to update cpu_quota_concurrency", K(ret));
+      LOG_WARN("failed to update cpu_quota_concurrency", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -2334,7 +2338,9 @@ int ObRootService::create_resource_unit(const obrpc::ObCreateResourceUnitArg &ar
     if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-        LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+        }
       }
     }
   }
@@ -2358,7 +2364,9 @@ int ObRootService::alter_resource_unit(const obrpc::ObAlterResourceUnitArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2386,7 +2394,9 @@ int ObRootService::drop_resource_unit(const obrpc::ObDropResourceUnitArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2440,7 +2450,9 @@ int ObRootService::create_resource_pool(const obrpc::ObCreateResourcePoolArg &ar
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2470,7 +2482,9 @@ int ObRootService::split_resource_pool(const obrpc::ObSplitResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2513,7 +2527,9 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
       LOG_WARN("fail to alter resource tenant", KR(ret), K(target_tenant_id),
                K(new_unit_num), K(delete_unit_group_id_array));
       if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
-        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+        }
       }
     }
     LOG_INFO("finish alter_resource_tenant", KR(ret), K(arg));
@@ -2538,8 +2554,11 @@ int ObRootService::merge_resource_pool(const obrpc::ObMergeResourcePoolArg &arg)
     const common::ObIArray<common::ObString> &new_pool_list = arg.new_pool_list_;
     if (OB_FAIL(unit_manager_.merge_resource_pool(old_pool_list, new_pool_list))) {
       LOG_WARN("fail to merge resource pool", K(ret));
-      if (OB_SUCCESS != submit_reload_unit_manager_task()) {//ensure submit task all case
-        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {//ensure submit task all case
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), K(tmp_ret));
+        }
       }
     }
     LOG_INFO("finish merge_resource_pool", K(ret), K(arg));
@@ -2578,7 +2597,9 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2609,7 +2630,9 @@ int ObRootService::drop_resource_pool(const obrpc::ObDropResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2647,7 +2670,9 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
   } else if (OB_FAIL(ddl_service_.create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", KR(ret), K(arg));
     if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
-      LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+      if (OB_CANCELED != tmp_ret) {
+        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+      }
     }
   } else {}
   LOG_INFO("finish create tenant", KR(ret), K(tenant_id), K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
