@@ -4352,11 +4352,19 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
         CK(l.cs_type_ == r.cs_type_);
         if (OB_SUCC(ret)) {
           const ObScale scale = ObDatumFuncs::max_scale(l.scale_, r.scale_);
-          equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
-                             r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode(),
-                             has_lob_header);
-          CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(calc_equal_cond_opposite(op, *raw_expr, equal_cond_info.is_opposite_));
+          if (OB_SUCC(ret)) {
+            if (equal_cond_info.is_opposite_) {
+              equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(r.type_,
+                                l.type_, default_null_pos(), r.cs_type_, scale, is_oracle_mode(),
+                                has_lob_header);
+            } else {
+              equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
+                                r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode(),
+                                has_lob_header);
+            }
+          }
+          CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(mj_spec.equal_cond_infos_.push_back(equal_cond_info));
           // when is_opposite_ is true: left child fetcher accept right
           // arg(args_[1]) and vice versa
