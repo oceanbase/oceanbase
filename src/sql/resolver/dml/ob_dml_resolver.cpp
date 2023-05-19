@@ -1356,9 +1356,6 @@ int ObDMLResolver::implict_cast_pl_udt_to_sql_udt(ObRawExpr* &real_ref_expr)
   if (OB_ISNULL(real_ref_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("real_ref_expr is null", K(ret));
-  } else if (real_ref_expr->get_result_type().get_type() >= ObMaxType
-             && OB_FAIL(real_ref_expr->formalize(session_info_))) {
-    LOG_WARN("failed to do formalize", K(ret), K(real_ref_expr));
   } else if (real_ref_expr->get_result_type().is_ext()) {
     if (real_ref_expr->get_result_type().get_udt_id() == T_OBJ_XML) {
       // add implicit cast to sql xmltype
