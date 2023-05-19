@@ -913,7 +913,9 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     for (int i = 0; i < location_keys.count() && OB_SUCC(ret); ++i) {
       // dml location always at first
       if (OB_ISNULL(table_loc) && location_keys.at(i).is_loc_uncertain_) {
-        OZ(ObTableLocation::get_full_leader_table_loc(sqc_arg_.exec_ctx_->get_allocator(),
+        ObDASLocationRouter &loc_router = DAS_CTX(*sqc_arg_.exec_ctx_).get_location_router();
+        OZ(ObTableLocation::get_full_leader_table_loc(loc_router,
+           sqc_arg_.exec_ctx_->get_allocator(),
            sqc_arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
            location_keys.at(i).table_location_key_,
            location_keys.at(i).ref_table_id_,

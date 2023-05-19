@@ -596,7 +596,8 @@ int ObCandiTableLoc::replace_local_index_loc(DASRelatedTabletMap &map, ObTableID
     const DASRelatedTabletMap::Value *rv = nullptr;
     if (OB_ISNULL(rv = map.get_related_tablet_id(tablet_loc.get_tablet_id(), ref_table_id))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("related tablet info is invalid", K(ret), K(tablet_loc.get_tablet_id()), K(ref_table_id));
+      LOG_WARN("related tablet info is invalid", K(ret),
+               K(tablet_loc.get_tablet_id()), K(ref_table_id), K(map));
     } else {
       tablet_loc.set_tablet_info(rv->tablet_id_, rv->part_id_, rv->first_level_part_id_);
     }

@@ -5290,7 +5290,8 @@ int ObTableLocation::try_split_integer_range(const common::ObIArray<common::ObNe
   return ret;
 }
 
-int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
+int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
+                                               ObIAllocator &allocator,
                                                uint64_t tenant_id,
                                                uint64_t table_id,
                                                uint64_t ref_table_id,
@@ -5333,7 +5334,7 @@ int ObTableLocation::get_full_leader_table_loc(ObIAllocator &allocator,
       OX(tablet_loc->loc_meta_ = loc_meta);
       OX(tablet_loc->partition_id_ = partition_ids.at(i));
       OX(tablet_loc->first_level_part_id_ = first_level_part_ids.at(i));
-      OZ(ObDASLocationRouter::nonblock_get_leader(tenant_id, tablet_ids.at(i), *tablet_loc));
+      OZ(loc_router.nonblock_get_leader(tenant_id, tablet_ids.at(i), *tablet_loc));
       OZ(table_loc->add_tablet_loc(tablet_loc));
     }
   }

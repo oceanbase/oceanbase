@@ -317,11 +317,12 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     } else if (dml_op && dml_op->is_table_location_uncertain()) {
       // 需要获取FULL TABLE LOCATION. FIX ME YISHEN.
       CK(OB_NOT_NULL(ctx.get_my_session()));
-      OZ(ObTableLocation::get_full_leader_table_loc(ctx.get_allocator(),
-                                   ctx.get_my_session()->get_effective_tenant_id(),
-                                   table_location_key,
-                                   ref_table_id,
-                                   table_loc));
+      OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                    ctx.get_allocator(),
+                                                    ctx.get_my_session()->get_effective_tenant_id(),
+                                                    table_location_key,
+                                                    ref_table_id,
+                                                    table_loc));
     } else {
       if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
@@ -953,11 +954,12 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
     } else {
       if (dml_op->is_table_location_uncertain()) {
         CK(OB_NOT_NULL(ctx.get_my_session()));
-        OZ(ObTableLocation::get_full_leader_table_loc(ctx.get_allocator(),
-                                     ctx.get_my_session()->get_effective_tenant_id(),
-                                     table_location_key,
-                                     ref_table_id,
-                                     table_loc));
+        OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                      ctx.get_allocator(),
+                                                      ctx.get_my_session()->get_effective_tenant_id(),
+                                                      table_location_key,
+                                                      ref_table_id,
+                                                      table_loc));
       } else {
         // 通过TSC或者DML获得当前的DFO的partition对应的location信息
         // 后续利用location信息构建对应的SQC meta
