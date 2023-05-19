@@ -950,7 +950,8 @@ int ObPLCompiler::generate_package_cursors(
                                   row_desc,
                                   cursor_type,
                                   ast_cursor->get_formal_params(),
-                                  ast_cursor->get_state()));
+                                  ast_cursor->get_state(),
+                                  ast_cursor->is_dup_column()));
     }
   }
   return ret;

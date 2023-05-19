@@ -2028,10 +2028,12 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
                                         int64_t hidden_column_count,
                                         pl::ObRecordType *&record_type,
                                         uint64_t &rowid_table_id,
-                                        pl::ObPLBlockNS *secondary_namespace)
+                                        pl::ObPLBlockNS *secondary_namespace,
+                                        bool &has_dup_column_name)
 {
   int ret = OB_SUCCESS;
   const common::ColumnsFieldIArray *columns = result_set.get_field_columns();
+  has_dup_column_name = false;
   if (OB_ISNULL(columns) || OB_ISNULL(record_type) || 0 == columns->count() || OB_ISNULL(secondary_namespace)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(columns), K(record_type), K(ret));
@@ -2076,6 +2078,7 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
           for (int64_t j = 0; OB_SUCC(ret) && j < columns->count() - hidden_column_count; ++j) {
             if (i != j && columns->at(j).cname_ == columns->at(i).cname_) {
               duplicate = true;
+              has_dup_column_name = true;
               break;
             }
           }
@@ -2156,7 +2159,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       prepare_result.has_hidden_rowid_ ? 1 : 0,
                                       prepare_result.record_type_,
                                       prepare_result.rowid_table_id_,
-                                      secondary_namespace));
+                                      secondary_namespace,
+                                      prepare_result.has_dup_column_name_));
           } else {
             PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
             const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
@@ -2178,7 +2182,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                         prepare_result.has_hidden_rowid_ ? 1 : 0,
                                         prepare_result.record_type_,
                                         prepare_result.rowid_table_id_,
-                                        secondary_namespace));
+                                        secondary_namespace,
+                                        prepare_result.has_dup_column_name_));
             }
           }
         }

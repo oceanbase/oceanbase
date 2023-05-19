@@ -268,7 +268,8 @@ int ObPLCursor::set(const ObString &sql,
                const ObPLDataType &cursor_type,
                CursorState state,
                const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
-               const common::ObIArray<int64_t> &params
+               const common::ObIArray<int64_t> &params,
+               bool has_dup_column_name
                )
 {
   int ret = OB_SUCCESS;
@@ -279,6 +280,9 @@ int ObPLCursor::set(const ObString &sql,
   set_row_desc(record_type);
   set_cursor_type(cursor_type);
   set_state(state);
+  if (has_dup_column_name) {
+    set_dup_column();
+  }
   OZ (set_ref_objects(ref_objects));
   OZ (set_formal_params(params));
   return ret;
@@ -298,7 +302,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const ObRecordType* row_desc, //sql返回的行描述(record)
                                 const ObPLDataType& cursor_type, // cursor返回值类型(record)
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
-                                ObPLCursor::CursorState state)
+                                ObPLCursor::CursorState state,
+                                bool has_dup_column_name)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -321,6 +326,9 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_cursor_type(cursor_type);
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
+      if (has_dup_column_name) {
+        cursor->set_dup_column();
+      }
       OZ (cursor->set_ref_objects(ref_objects));
       OZ (cursor->set_formal_params(formal_params));
       OZ (cursors_.push_back(cursor));
@@ -1087,7 +1095,8 @@ int ObPLBlockNS::add_questionmark_cursor(const int64_t symbol_idx)
                                                     NULL,
                                                     dummy_return_type,
                                                     dummy_formal_params,
-                                                    ObPLCursor::PASSED_IN))) {
+                                                    ObPLCursor::PASSED_IN,
+                                                    false))) {
     LOG_WARN("failed to add condition to condition table", K(ret));
   }
   return ret;
@@ -1107,6 +1116,7 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const ObPLDataType &cursor_type, // cursor返回值类型(record)
                             const common::ObIArray<int64_t> &formal_params,
                             ObPLCursor::CursorState state,
+                            bool has_dup_column_name,
                             int64_t &index)
 {
   int ret = OB_SUCCESS;
@@ -1138,7 +1148,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       row_desc,
                                                       cursor_type,
                                                       formal_params,
-                                                      state))) {
+                                                      state,
+                                                      has_dup_column_name))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);
@@ -4149,7 +4160,8 @@ int ObPLFunctionAST::add_argument(const common::ObString &name,
                                         NULL, /*ref cursor的row desc不确定*/
                                         dummy_return_type,
                                         dummy_formal_params,
-                                        ObPLCursor::PASSED_IN));
+                                        ObPLCursor::PASSED_IN,
+                                        false));
     } else { /*do nothing*/ }
   }
   OX (set_arg_count(get_arg_count() + 1));

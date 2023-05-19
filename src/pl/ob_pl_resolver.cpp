@@ -3583,6 +3583,13 @@ int ObPLResolver::resolve_cursor_for_loop(
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("name cursro node is invalid", K(ret), K(cursor_node->type_));
       }
+      if (OB_SUCC(ret)) {
+        ObPLCursor *cursor = current_block_->get_cursor(cursor_index);
+        if (OB_NOT_NULL(cursor) && cursor->is_dup_column()) {
+          ret = OB_ERR_DUP_NAME_IN_CURSOR;
+          LOG_WARN("alias required in SELECT list of cursor to avoid duplicate column names", K(ret), K(cursor_index));
+        }
+      }
     }
     // 解析index
     if (OB_SUCC(ret)) {
@@ -6386,21 +6393,6 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
       LOG_WARN("Sql with into clause should not in Declare cursor", K(prepare_result.route_sql_), K(ret));
     } else if (OB_FAIL(func.add_sql_exprs(prepare_result.exec_params_))) {
       LOG_WARN("failed to set precalc exprs", K(prepare_result.exec_params_), K(ret));
-    } else if (lib::is_oracle_mode()) {
-      CK (OB_NOT_NULL(record_type));
-      for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
-        for (int64_t j = i + 1; OB_SUCC(ret) && j < record_type->get_record_member_count(); ++j) {
-          const ObString *left = record_type->get_record_member_name(i);
-          const ObString *right = record_type->get_record_member_name(j);
-          CK (OB_NOT_NULL(left));
-          CK (OB_NOT_NULL(right));
-          if (OB_SUCC(ret) && 0 == left->case_compare(*right)) {
-            ret = OB_ERR_DUP_NAME_IN_CURSOR;
-            LOG_WARN("alias required in SELECT list of cursor to avoid duplicate column names",
-                      K(ret), K(i), K(j), KPC(left), KPC(right));
-          }
-        }
-      }
     }
     if (OB_SUCC(ret)) {
       if (prepare_result.for_update_) {
@@ -6471,6 +6463,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                                              cursor_type,
                                                              formal_params,
                                                              ObPLCursor::DEFINED,
+                                                             prepare_result.has_dup_column_name_,
                                                              index))) {
         LOG_WARN("failed to add cursor to symbol table",
                  K(cursor_name),
@@ -6529,7 +6522,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                           cursor_type,
                           ObPLCursor::DEFINED,
                           prepare_result.ref_objects_,
-                          cursor->get_formal_params()));
+                          cursor->get_formal_params(),
+                          prepare_result.has_dup_column_name_));
           if (OB_SUCC(ret)
           && (cursor->get_package_id() != current_block_->get_namespace().get_package_id()
               || cursor->get_routine_id() != current_block_->get_namespace().get_routine_id())) {
@@ -6555,7 +6549,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                           cursor_type,
                                           ObPLCursor::DEFINED,
                                           prepare_result.ref_objects_,
-                                          external_cursor->get_formal_params()),
+                                          external_cursor->get_formal_params(),
+                                          prepare_result.has_dup_column_name_),
                                           K(formal_params),
                                           K(external_cursor->get_formal_params()));
               }
@@ -6656,6 +6651,7 @@ int ObPLResolver::resolve_declare_cursor(
                                                                    return_type,
                                                                    formal_params,
                                                                    ObPLCursor::DECLARED,
+                                                                   false,
                                                                    cursor_index))) {
               LOG_WARN("failed to add cursor to symbol table", K(name), K(ret));
             } else if (OB_NOT_NULL(stmt)) {
@@ -13133,7 +13129,8 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
                                           row_desc,
                                           cursor_type,
                                           cursor.get_formal_params(),
-                                          cursor.get_state()));
+                                          cursor.get_state(),
+                                          cursor.is_dup_column()));
     OZ (ns.get_cursors().push_back(ns.get_cursor_table()->get_count() - 1));
     OX (index = ns.get_cursor_table()->get_count() - 1);
   }

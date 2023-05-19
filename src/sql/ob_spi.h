@@ -236,6 +236,7 @@ public:
     uint64_t rowid_table_id_;
     ObString ps_sql_; // sql prepare过后的参数化sql
     bool is_bulk_;
+    bool has_dup_column_name_;
   };
 
   struct PLPrepareCtx
@@ -573,7 +574,8 @@ public:
                                    int64_t hidden_column_count,
                                    pl::ObRecordType *&record_type,
                                    uint64_t &rowid_table_id,
-                                   pl::ObPLBlockNS *secondary_namespace);
+                                   pl::ObPLBlockNS *secondary_namespace,
+                                   bool &has_dup_column_name);
 
   static int spi_construct_collection(
     pl::ObPLExecCtx *ctx, uint64_t package_id, ObObjParam *result);
