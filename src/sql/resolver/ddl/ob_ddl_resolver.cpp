@@ -5711,6 +5711,9 @@ int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_RANGE_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid range partition define", K(element_node->type_));
       } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
                   || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
                  && !is_oracle_mode()) {
@@ -6009,6 +6012,9 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_LIST_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid list partition define", K(element_node->type_));
       } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
                   || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
                  && !is_oracle_mode()) {
