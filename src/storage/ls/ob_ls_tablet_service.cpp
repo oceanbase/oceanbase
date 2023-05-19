@@ -1499,6 +1499,11 @@ int ObLSTabletService::update_tablet_restore_status(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status), KPC(tablet));
     } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
       LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_restore_status(current_status))) {
+        LOG_WARN("failed to set restore status", K(tmp_ret), K(current_status), KPC(tablet));
+        ob_abort();
+      }
     } else if (FALSE_IT(time_guard.click("WrSlog"))) {
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key,
         disk_addr, tablet_handle, tablet_handle))) {
@@ -1558,6 +1563,11 @@ int ObLSTabletService::update_tablet_ha_data_status(
       LOG_WARN("failed to set data status", K(ret), KPC(tablet), K(data_status));
     } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
       LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_data_status(current_status))) {
+        LOG_WARN("failed to set data status", K(tmp_ret), K(current_status), KPC(tablet));
+        ob_abort();
+      }
     } else if (FALSE_IT(time_guard.click("WrSlog"))) {
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, tablet_handle, tablet_handle))) {
       LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr), K(lbt()));
@@ -1619,6 +1629,11 @@ int ObLSTabletService::update_tablet_ha_expected_status(
         LOG_WARN("failed to set ha meta status", K(ret), KPC(tablet), K(expected_status));
       } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
         LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_expected_status(current_status))) {
+          LOG_WARN("failed to set expected status", K(tmp_ret), K(current_status), KPC(tablet));
+          ob_abort();
+        }
       } else if (FALSE_IT(time_guard.click("WrSlog"))) {
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, tablet_handle, tablet_handle))) {
         LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr), K(lbt()));
