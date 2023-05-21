@@ -11647,6 +11647,9 @@ int ObPLResolver::get_names_by_access_ident(ObObjAccessIdent &access_ident,
   } else if (access_idxs.at(cnt - 1).var_type_.is_object_type()) {
     OZ (get_udt_names(
       resolve_ctx_.schema_guard_, access_idxs.at(cnt - 1).var_type_.get_user_type_id(), database_name, package_name));
+  } else {
+    ret = OB_ERR_FUNCTION_UNKNOWN;
+    LOG_WARN("unknow function invoke", K(ret));
   }
   return ret;
 }
