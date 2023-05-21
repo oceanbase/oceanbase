@@ -1203,7 +1203,7 @@ int ObMultiTenant::get_unit_id(const uint64_t tenant_id, uint64_t &unit_id)
   return ret;
 }
 
-int ObMultiTenant::get_tenant_units(share::TenantUnits &units)
+int ObMultiTenant::get_tenant_units(share::TenantUnits &units, bool include_hidden_sys)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
@@ -1211,7 +1211,7 @@ int ObMultiTenant::get_tenant_units(share::TenantUnits &units)
     if (OB_ISNULL(*it)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is nullptr", K(ret));
-    } else if (is_virtual_tenant_id((*it)->id()) || (*it)->is_hidden()) {
+    } else if (is_virtual_tenant_id((*it)->id()) || (!include_hidden_sys && (*it)->is_hidden())) {
       // skip
     } else if (OB_FAIL(units.push_back((*it)->get_unit()))) {
       LOG_WARN("fail to push back unit", K(ret));
