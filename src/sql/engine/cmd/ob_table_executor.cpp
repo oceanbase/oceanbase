@@ -1525,6 +1525,13 @@ int ObAlterTableExecutor::calc_range_values_exprs(
                                        *sub_part,
                                        ctx));
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObPartitionExecutorUtils::check_increasing_range_value(part->get_subpart_array(),
+                                                                           part->get_subpartition_num(),
+                                                                           stmt::T_ALTER_TABLE))) {
+          LOG_WARN("check increasing range value failed", K(ret));
+        }
+      }
     }
   } else {
     const int64_t part_num = new_table_schema.get_partition_num();
@@ -1539,6 +1546,13 @@ int ObAlterTableExecutor::calc_range_values_exprs(
                                      dst_res_type,
                                      *part,
                                      ctx));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObPartitionExecutorUtils::check_increasing_range_value(part_array,
+                                                                         part_num,
+                                                                         stmt::T_ALTER_TABLE))) {
+        LOG_WARN("check increasing range value failed", K(ret));
+      }
     }
   }
   return ret;
