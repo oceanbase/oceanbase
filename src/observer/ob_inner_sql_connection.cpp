@@ -693,13 +693,14 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
   } else if (OB_ISNULL(ob_sql_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sql engine", K(ret), K(ob_sql_));
-  } else if (OB_UNLIKELY(retry_info.is_inited())) {
-    if (is_inner_session()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("retry info is inited", K(ret), K(retry_info), K(executor));
+  }
+  if (OB_SUCC(ret)) {
+    if (retry_info.is_inited() && is_inner_session()) {
+      retry_info.reset();
     }
-  } else if (OB_FAIL(retry_info.init())) {
-    LOG_WARN("fail to init retry info", K(ret), K(retry_info), K(executor));
+    if (!retry_info.is_inited()  && OB_FAIL(retry_info.init())) {
+      LOG_WARN("fail to init retry info", K(ret), K(retry_info), K(executor));
+    }
   }
 
   // switch tenant for MTL tenant ctx
@@ -837,9 +838,6 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
 
   if (false == is_trace_id_init) {
     common::ObCurTraceId::reset();
-  }
-  if (is_inner_session()) {
-    retry_info.reset();
   }
   return ret;
 }
