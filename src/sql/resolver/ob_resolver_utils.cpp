@@ -4377,6 +4377,21 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
+    if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+      if (OB_FAIL(expr->formalize(session_info))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
+        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+        } else {
+          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+        }
+      }
+    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();

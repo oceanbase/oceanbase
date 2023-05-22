@@ -24,7 +24,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprXmlAttributes::ObExprXmlAttributes(ObIAllocator &alloc)
-    : ObFuncExprOperator(alloc, T_FUN_SYS_XML_ATTRIBUTES, N_XML_ATTRIBUTES, MORE_THAN_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+    : ObFuncExprOperator(alloc, T_FUN_SYS_XML_ATTRIBUTES, N_XML_ATTRIBUTES, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 

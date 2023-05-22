@@ -35,6 +35,7 @@ public:
                       ObExpr &rt_expr) const override;
   static int calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  virtual int is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprDateFormat);

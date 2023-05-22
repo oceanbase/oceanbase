@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprDateFormat::ObExprDateFormat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2, VALID_FOR_GENERATED_COL)
+    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -139,6 +139,21 @@ int ObExprDateFormat::calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ct
     LOG_WARN("get default cast mode failed", K(ret));
   } else if (!CM_IS_WARN_ON_FAIL(cast_mode)) {
     ret =OB_INVALID_ARGUMENT;
+  }
+  return ret;
+}
+
+int ObExprDateFormat::is_valid_for_generated_column(const ObRawExpr*expr, const common::ObIArray<ObRawExpr *> &exprs, bool &is_valid) const {
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  if (exprs.count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(ret), K(exprs.count()));
+  } else if (OB_ISNULL(exprs.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
+  } else if (ObTimeType == exprs.at(0)->get_result_type().get_type() || ObTimestampType == exprs.at(0)->get_result_type().get_type()) {
+    is_valid = false;
   }
   return ret;
 }

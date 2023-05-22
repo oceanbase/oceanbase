@@ -892,6 +892,8 @@ int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common
       }
     } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
       is_valid = false;
+    } else if (ObTimestampType == src && ObTimestampType != dst) {
+      is_valid = false;
     }
   }
   return ret;

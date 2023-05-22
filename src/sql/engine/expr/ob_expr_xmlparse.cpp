@@ -25,7 +25,7 @@ namespace sql
 {
 
 ObExprXmlparse :: ObExprXmlparse(common::ObIAllocator &alloc)
-  : ObFuncExprOperator(alloc, T_FUN_SYS_XMLPARSE, N_XMLPARSE, MORE_THAN_TWO, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+  : ObFuncExprOperator(alloc, T_FUN_SYS_XMLPARSE, N_XMLPARSE, MORE_THAN_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {
 }
 
