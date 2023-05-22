@@ -453,9 +453,6 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
                                      unused_allow_log_sync))) {
       LOG_WARN("enable ls palf failed", K(ret), K(arg), K(palf_base_info));
       // only restore ls does not need enable replay
-    } else if (!is_ls_to_restore_(arg) &&
-               OB_FAIL(ls->enable_replay_without_lock())) {
-      LOG_WARN("enable ls replay failed", K(ret), K(arg));
     } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_PALF_ENABLED)) {
       // inner tablet reverted by inner_del_ls_ if fail to create
       // only restore ls with base will not need create inner tablet
@@ -470,6 +467,9 @@ int ObLSService::create_ls(const obrpc::ObCreateLSArg &arg)
       ls->finish_create(is_commit);
       if (OB_FAIL(ls->start())) {
         LOG_ERROR("ls start failed", K(ret), K(arg));
+      } else if (!is_ls_to_restore_(arg) &&
+                 OB_FAIL(ls->enable_replay_without_lock())) {
+        LOG_WARN("enable ls replay failed", K(ret), K(arg));
       } else if (is_ls_to_restore_(arg)) {
         if (OB_FAIL(ls->offline_without_lock())) {
           LOG_WARN("failed to offline", K(ret), K(arg));
