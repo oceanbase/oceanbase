@@ -410,7 +410,7 @@ int ObInnerSqlRpcP::create_tmp_session(
     } else {
       const bool is_extern_session = true;
       if (OB_NOT_NULL(tmp_session)
-          && OB_FAIL(observer::ObInnerSQLConnection::init_session_info(
+            && OB_FAIL(observer::ObInnerSQLConnection::init_session_info(
             tmp_session,
             is_extern_session,
             is_oracle_mode,
@@ -425,7 +425,7 @@ int ObInnerSqlRpcP::create_tmp_session(
 }
 
 void ObInnerSqlRpcP::cleanup_tmp_session(
-    sql::ObSQLSessionInfo *tmp_session,
+    sql::ObSQLSessionInfo *&tmp_session,
     sql::ObFreeSessionCtx &free_session_ctx)
 {
   if (NULL != GCTX.session_mgr_ && NULL != tmp_session) {
@@ -531,20 +531,31 @@ int ObInnerSqlRpcP::process()
     } else if (OB_FAIL(pool->acquire(transmit_arg.get_conn_id(), transmit_arg.get_is_oracle_mode(),
                ObInnerSQLTransmitArg::OPERATION_TYPE_ROLLBACK == transmit_arg.get_operation_type(),
                conn, tmp_session))) {
-      cleanup_tmp_session(tmp_session, free_session_ctx);
       LOG_WARN("failed to acquire inner connection", K(ret), K(transmit_arg));
     }
     /* init session info */
     if (OB_SUCC(ret) && OB_NOT_NULL(tmp_session)) {
-      tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
-      tmp_session->switch_tenant(transmit_arg.get_tenant_id());
-      ObString sql_stmt(sql_str.ptr());
-      if (OB_FAIL(tmp_session->set_session_active(
-                                      sql_stmt,
-                                      0,  /* ignore this parameter */
-                                      ObTimeUtility::current_time(),
-                                      obmysql::COM_QUERY))) {
-        LOG_WARN("failed to set tmp session active", K(ret));
+      uint64_t tenant_id = transmit_arg.get_tenant_id();
+      share::schema::ObSchemaGetterGuard schema_guard;
+      const ObSimpleTenantSchema *tenant_schema = NULL;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant schema is null", K(ret));
+      } else {
+        tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
+        tmp_session->switch_tenant_with_name(transmit_arg.get_tenant_id(), tenant_schema->get_tenant_name_str());
+        ObString sql_stmt(sql_str.ptr());
+        if (OB_FAIL(tmp_session->set_session_active(
+            sql_stmt,
+            0,  /* ignore this parameter */
+            ObTimeUtility::current_time(),
+            obmysql::COM_QUERY))) {
+          LOG_WARN("failed to set tmp session active", K(ret));
+        }
       }
     }
     if (OB_FAIL(ret)) {

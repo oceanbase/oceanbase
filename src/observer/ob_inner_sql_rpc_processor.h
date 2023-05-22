@@ -46,7 +46,7 @@ private:
       sql::ObFreeSessionCtx &free_session_ctx,
       const bool is_oracle_mode);
   void cleanup_tmp_session(
-      sql::ObSQLSessionInfo *tmp_session,
+      sql::ObSQLSessionInfo *&tmp_session,
       sql::ObFreeSessionCtx &free_session_ctx);
 
   int process_start_transaction(
