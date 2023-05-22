@@ -1337,9 +1337,12 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       ObITable *sstable = table_store.get_minor_sstables().get_boundary_table(false /*is_last*/);
       if (OB_NOT_NULL(sstable)) {
         ObTableHandleV2 table_handle(sstable, this, ObITable::TableType::MAJOR_SSTABLE);
-        if (OB_FAIL(record_min_minor_sstable(key.ls_id_, table_handle))) {
-          LOG_WARN("fail to record min minor sstable", K(ret), K(key), K(table_handle));
-        }
+        do {
+          if (OB_FAIL(record_min_minor_sstable(key.ls_id_, table_handle))) {
+            LOG_WARN("fail to record min minor sstable", K(ret), K(key), K(table_handle));
+            usleep(1 * 1000 * 1000);
+          }
+        } while (OB_ALLOCATE_MEMORY_FAILED == ret);
       }
     }
   }
