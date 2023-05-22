@@ -142,6 +142,9 @@ int ObFsContainerMgr::remove_fsc(const logservice::TenantLSID &tls_id)
     LOG_ERROR("ObFsContainerMgr has not be inited");
   } else if (OB_FAIL(get_fsc(tls_id, fsc))) {
     LOG_ERROR("ObFsContainerMgr get_fsc failed", KR(ret));
+  // explicitly call FetchStreamContainer::reset because ObSmallObjPool may not invoke the destructor of the object,
+  // which cause incorrect destruct order of objects.
+  } else if (FALSE_IT(fsc->reset())) {
   } else if (OB_FAIL(fsc_pool_.free(fsc))) {
     LOG_ERROR("fsc_pool_ free failed", KR(ret), K(tls_id), KPC(fsc));
   } else if (OB_FAIL(fsc_map_.erase(tls_id))) {

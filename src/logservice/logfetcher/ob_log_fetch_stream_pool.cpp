@@ -61,6 +61,9 @@ int FetchStreamPool::alloc(FetchStream *&fs)
 
 int FetchStreamPool::free(FetchStream *fs)
 {
+  // explicitly call FetchStream::reset because ObSmallObjPool may not invoke the destructor of the object,
+  // which cause incorrect destruct order of objects.
+  fs->reset();
   return pool_.free(fs);
 }
 
