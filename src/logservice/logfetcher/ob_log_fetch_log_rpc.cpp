@@ -387,7 +387,7 @@ int FetchLogARpc::prepare_request(const share::ObLSID &ls_id,
         "flying_rpc", flying_req_list_.count_,
         K(rpc_timeout));
   } else {
-    LOG_DEBUG("[STAT] [FETCH_LOG_ARPC] prepare rpc request", K(fetch_stream),
+    LOG_TRACE("[STAT] [FETCH_LOG_ARPC] prepare rpc request", K(fetch_stream),
         "ready_result", res_queue_.count(),
         "flying_rpc", flying_req_list_.count_,
         K(rpc_timeout));
@@ -431,7 +431,7 @@ void FetchLogARpc::discard_request(const char *discard_reason, const bool is_nor
           "ready_result", res_queue_.count(),
           "flying_rpc", flying_req_list_.count_);
     } else {
-      LOG_DEBUG("[STAT] [FETCH_LOG_ARPC] discard rpc request", K(discard_reason),
+      LOG_TRACE("[STAT] [FETCH_LOG_ARPC] discard rpc request", K(discard_reason),
           K(fetch_stream), K_(cur_req), KPC_(cur_req),
           "ready_result", res_queue_.count(),
           "flying_rpc", flying_req_list_.count_);
@@ -862,7 +862,7 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
         "delta", next_upper_limit - req_upper_limit,
         K(rpc_time), KPC(resp));
   } else {
-    LOG_DEBUG("handle rpc result by rpc callback",
+    LOG_TRACE("handle rpc result by rpc callback",
         K(fetch_stream),
         K(need_stop_rpc),
         "stop_reason", print_rpc_stop_reason(rpc_stop_reason),
@@ -897,7 +897,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     // Use the trace id of the request
     ObLogTraceIdGuard guard(rpc_req.get_trace_id());
 
-    _LOG_DEBUG("launch async fetch log rpc by %s, request=%s",
+    _LOG_TRACE("launch async fetch log rpc by %s, request=%s",
         launch_by_cb ? "callback" : "fetch stream", to_cstring(rpc_req));
 
     // The default setting is flyin before sending an asynchronous request

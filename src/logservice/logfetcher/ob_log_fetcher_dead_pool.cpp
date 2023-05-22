@@ -100,7 +100,7 @@ int ObLogFetcherDeadPool::push(LSFetchCtx *task)
   } else {
     task->dispatch_in_dead_pool();
 
-    LOG_DEBUG("[STAT] [DEAD_POOL] [DISPATCH_IN]", K(task), KPC(task));
+    LOG_TRACE("[STAT] [DEAD_POOL] [DISPATCH_IN]", K(task), KPC(task));
 
     if (OB_FAIL(TG_PUSH_TASK(tg_id_, task, task->hash()))) {
       LOG_ERROR("push task into thread queue fail", KR(ret), K(task));
@@ -218,7 +218,7 @@ int ObLogFetcherDeadPool::handle_task_list_(
         // sleep
         ob_usleep(IDLE_WAIT_TIME);
         // The mission is still in use
-        LOG_DEBUG("[STAT] [DEAD_POOL] [TASK_IN_USE]", K(ls_fetch_ctx));
+        LOG_TRACE("[STAT] [DEAD_POOL] [TASK_IN_USE]", K(ls_fetch_ctx));
       }
     } // while
   }
