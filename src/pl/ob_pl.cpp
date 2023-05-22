@@ -106,6 +106,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_copy_datum));
   jit::ObLLVMHelper::add_symbol(ObString("spi_sub_nestedtable"),
                                 (void*)(sql::ObSPIService::spi_sub_nestedtable));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
+                                (void*)(sql::ObSPIService::spi_destruct_obj));
   jit::ObLLVMHelper::add_symbol(ObString("spi_alloc_complex_var"),
                                 (void*)(sql::ObSPIService::spi_alloc_complex_var));
   jit::ObLLVMHelper::add_symbol(ObString("spi_construct_collection"),
@@ -198,6 +200,19 @@ void ObPLCtx::reset_obj()
     }
   }
   objects_.reset();
+}
+
+void ObPLCtx::reset_obj_range_to_end(int64_t index)
+{
+  int tmp_ret = OB_SUCCESS;
+  if (index < objects_.count() && index >= 0) {
+    for (int64_t i = objects_.count() - 1; i >= index; i--) {
+      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(objects_.at(i)))) {
+        LOG_WARN_RET(tmp_ret, "failed to destruct pl object", K(i), K(tmp_ret));
+      }
+      objects_.pop_back();
+    }
+  }
 }
 
 ObPLCtx::~ObPLCtx()

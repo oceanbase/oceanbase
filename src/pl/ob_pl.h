@@ -703,6 +703,7 @@ public:
     objects_.reset();
   }
   void reset_obj();
+  void reset_obj_range_to_end(int64_t index);
   common::ObIArray<ObObj>& get_objects() { return objects_; }
 private:
   // 用于收集在PL执行过程中使用到的Allocator,
@@ -711,31 +712,6 @@ private:
   // 这样才能保证释放这里的allocator时指针是有效的
   ObSEArray<ObObj, 32> objects_;
 };
-
-class ObPLCtxGuard
-{
-public:
-  ObPLCtxGuard(ObPLCtx *ctx, int& ret) : ctx_(ctx), ret_(ret) {
-    if (OB_SUCCESS == ret_ && OB_NOT_NULL(ctx)) {
-      ret_ = objects_.assign(ctx->get_objects());
-      ctx_->clear();
-    }
-  }
-
-  ~ObPLCtxGuard() {
-    if (OB_SUCCESS == ret_ && OB_NOT_NULL(ctx_)) {
-      for (int64_t i = 0; OB_SUCCESS == ret_ && i < objects_.count(); ++i) {
-        ret_ = ctx_->add(objects_.at(i));
-      }
-    }
-  }
-
-private:
-  ObPLCtx *ctx_;
-  int &ret_;
-  ObSEArray<ObObj, 4> objects_;
-};
-
 
 class ObPLPackageGuard;
 

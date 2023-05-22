@@ -10139,6 +10139,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, object_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      stmt_->get_query_ctx()->has_pl_udf_ = true;
     } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
       ObDMLStmt *stmt = get_stmt();
       ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
@@ -10151,6 +10152,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OZ (stmt->add_global_dependency_table(coll_schema_version));
         OZ (stmt->add_ref_obj_version(dep_obj_id, coll_expr->get_database_id(), ObObjectType::VIEW, coll_schema_version, *allocator_));
       }
+      stmt_->get_query_ctx()->has_pl_udf_ = true;
     }
   }
   if (OB_ERR_SP_UNDECLARED_VAR == ret) {
