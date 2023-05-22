@@ -1412,7 +1412,7 @@ int ObMiniTaskBaseP::sync_send_result(ObExecContext& exec_ctx, ObOperator& op, O
       if (OB_FAIL(scanner.try_add_row(op.get_spec().output_, exec_ctx.get_eval_ctx(), added))) {
         LOG_WARN("fail add row to scanner", K(ret), K(op.get_spec().output_));
       } else if (!added) {
-        ret = OB_OVERSIZE_NEED_RETRY;
+        ret = OB_SIZE_OVERFLOW;
       } else {
         last_row_used = true;
         total_row_cnt++;
@@ -1487,8 +1487,6 @@ int ObMiniTaskBaseP::sync_send_result(ObExecContext& exec_ctx, const ObPhyOperat
       } else if (OB_FAIL(scanner.add_row(*row))) {
         if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
           LOG_WARN("fail add row to scanner", K(ret), K(*row));
-        } else {
-          ret = OB_OVERSIZE_NEED_RETRY;
         }
       } else {
         last_row_used = true;

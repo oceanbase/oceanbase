@@ -80,7 +80,7 @@ private:
   int wait_all_task(ObPhysicalPlanCtx* plan_ctx);
 
 private:
-  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1024l * 1024;
+  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1000L;
   const static int64_t DEFAULT_PARTITION_BATCH_ROW_COUNT = 1000L;
 
   common::ObArenaAllocator allocator_;
