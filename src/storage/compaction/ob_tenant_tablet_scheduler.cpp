@@ -690,8 +690,8 @@ int ObTenantTabletScheduler::schedule_tablet_meta_major_merge(
           LOG_WARN("failed to get meta merge tables", K(ret), K(param), K(tablet_id));
         }
       } else if (tablet_handle.get_obj()->get_multi_version_start() > result.merge_version_) {
-        ret = OB_SNAPSHOT_DISCARDED;
-        LOG_ERROR("multi version data is discarded, should not compaction now", K(ret),
+        ret = OB_NO_NEED_MERGE;
+        LOG_WARN("multi version data is discarded, no need meta merge", K(ret),
           K(ls_id), K(tablet_id), K(result.merge_version_));
       } else {
         ObTabletMergeDagParam dag_param(META_MAJOR_MERGE, ls_id, tablet_id);
@@ -949,6 +949,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool is_leader = false;
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
+    ObRole role = INVALID_ROLE;
     ObLSLocality ls_locality;
     if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
       could_major_merge = true;
@@ -958,7 +959,6 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     // check weak_read_ts
     if (merge_version >= 0) {
       if (check_weak_read_ts_ready(merge_version, ls)) { // weak read ts ready
-        ObRole role = INVALID_ROLE;
         if (OB_FAIL(ObMediumCompactionScheduleFunc::get_palf_role(ls_id, role))) {
           if (OB_LS_NOT_EXIST != ret) {
             LOG_WARN("failed to get palf handle role", K(ret), K(ls_id));
@@ -1013,7 +1013,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           }
         }
         LOG_DEBUG("schedule tablet medium", K(ret), K(ls_id), K(tablet_id), K(tablet_merge_finish),
-            KPC(latest_major), K(merge_version));
+            KPC(latest_major), K(merge_version), K(role), K(is_leader));
         bool could_schedule_next_medium = true;
         bool check_medium_finish = false;
         if (!is_leader || OB_ISNULL(latest_major)) {
@@ -1025,7 +1025,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
             LOG_WARN("failed to check medium finish", K(tmp_ret), K(ls_id), K(tablet_id));
           } else if (FALSE_IT(check_medium_finish = true)) {
           } else if (FALSE_IT(func.get_tablet_handle(new_handle))) {
-          } else if (ObTimeUtility::fast_current_time() <
+          } else if (ObTimeUtility::fast_current_time() * 1000 <
               tablet->get_medium_compaction_info_list().get_wait_check_medium_scn() + WAIT_MEDIUM_CHECK_THRESHOLD) {
             // need wait 10 mins before schedule meta major
           } else if (enable_adaptive_compaction_ && OB_TMP_FAIL(schedule_tablet_meta_major_merge(ls_handle, new_handle))) {
