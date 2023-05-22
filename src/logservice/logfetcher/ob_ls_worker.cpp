@@ -345,6 +345,10 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
     }
   } else if (OB_FAIL(task->handle(stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr"))) {
+        LOG_ERROR_RET(tmp_ret, "hibernate_stream_task on handle task failure", K(task), KPC(task));
+      }
       LOG_ERROR("handle fetch stream task fail", KR(ret), K(task));
     }
   } else {
