@@ -3504,13 +3504,37 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
       OB_LOG(WARN, "fail to init_duplicate_rollup_expr", K(ret));
     }
     bool is_duplicate = false;
+    const bool is_oracle_mode = lib::is_oracle_mode();
+    // In the two different modes of mysql and oracle, the behavior of rollup duplicate columns
+    // is different. For example, when there is one row [1] in t1, in oracle mode
+    // select c1 from t1 group by rollup(c1, c1);
+    // +------+
+    // | c1   |
+    // +------+
+    // |    1 |
+    // |    1 |
+    // | NULL |
+    // +------+
+    // In mysql mode
+    // select c1 from t1 group by c1, c1 with rollup;
+    // +------+
+    // | c1   |
+    // +------+
+    // |    1 |
+    // | NULL |
+    // | NULL |
+    // +------+
+    // So we need to distinguish between two modes when initializing `is_duplicate_rollup_expr_`
+    // array. For oracle, it is initialized from left to right. For mysql, it is initialized from
+    // right to left.
     ARRAY_FOREACH(rollup_exprs, i) {
       const ObRawExpr* raw_expr = rollup_exprs.at(i);
       ObExpr *expr = NULL;
       if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
         LOG_WARN("failed to generate_rt_expr", K(ret));
-      } else if (FALSE_IT(is_duplicate = (has_exist_in_array(spec.group_exprs_, expr)
-                                           || has_exist_in_array(spec.rollup_exprs_, expr)))) {
+      } else if (FALSE_IT(is_duplicate = (is_oracle_mode && // set is_duplicate to false in mysql
+                                           (has_exist_in_array(spec.group_exprs_, expr)
+                                             || has_exist_in_array(spec.rollup_exprs_, expr))))) {
       } else if (OB_FAIL(spec.is_duplicate_rollup_expr_.push_back(is_duplicate))) {
         OB_LOG(WARN, "fail to push distinct_rollup_expr", K(ret));
       } else if (OB_FAIL(spec.add_rollup_expr(expr))) {
@@ -3519,6 +3543,21 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
         LOG_DEBUG("rollup is duplicate key", K(is_duplicate));
       }
     } // end for
+    // mysql mode, reinit duplicate rollup expr from right to left
+    if (OB_SUCC(ret) && !is_oracle_mode && rollup_exprs.count() > 0) {
+      for (int64_t i = spec.rollup_exprs_.count() - 2; OB_SUCC(ret) && i >= 0; --i) {
+        if (has_exist_in_array(spec.group_exprs_, spec.rollup_exprs_.at(i))) {
+          spec.is_duplicate_rollup_expr_.at(i) = true;
+        } else {
+          for (int64_t j = i + 1; !spec.is_duplicate_rollup_expr_.at(i)
+                                      && j < spec.rollup_exprs_.count(); ++j) {
+            if (spec.rollup_exprs_.at(i) == spec.rollup_exprs_.at(j)) {
+              spec.is_duplicate_rollup_expr_.at(i) = true;
+            }
+          }
+        }
+      }
+    }
   }
 
   // 3. add aggr columns
