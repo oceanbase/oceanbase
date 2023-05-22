@@ -795,6 +795,11 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
       CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
     }
   }
+
+  // if connect to source tenant denied, rewrite ret_code
+  if (-ER_ACCESS_DENIED_ERROR == ret) {
+    ret = OB_PASSWORD_WRONG;
+  }
   return ret;
 }
 

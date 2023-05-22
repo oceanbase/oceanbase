@@ -202,6 +202,7 @@ sql_work_area
 ssl_client_authentication
 ssl_external_kms_info
 stack_size
+standby_db_fetch_log_rpc_timeout
 standby_fetch_log_bandwidth_limit
 syslog_io_bandwidth_limit
 syslog_level
