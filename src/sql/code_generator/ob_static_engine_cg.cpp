@@ -4154,6 +4154,10 @@ int ObStaticEngineCG::construct_hash_elements_for_connect_by(ObLogJoin &op, ObNL
   } else if (OB_ISNULL(left_op = op.get_child(0)) || OB_ISNULL(right_op = op.get_child(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child op is null", K(ret));
+  } else if (OB_FAIL(spec.hash_key_exprs_.init(op.get_other_join_conditions().count()))) {
+    LOG_WARN("failed to init hash key exprs", K(ret));
+  } else if (OB_FAIL(spec.hash_probe_exprs_.init(op.get_other_join_conditions().count()))) {
+    LOG_WARN("failed to init hash probe exprs", K(ret));
   } else {
     const ObRelIds &left_table_set = left_op->get_table_set();
     const ObRelIds &right_table_set = right_op->get_table_set();

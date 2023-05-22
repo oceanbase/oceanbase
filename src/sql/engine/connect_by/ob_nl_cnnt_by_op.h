@@ -121,10 +121,10 @@ class ObNLConnectBySpec : public ObNLConnectBySpecBase
 {
   OB_UNIS_VERSION_V(1);
 public:
-	common::ObArray<ObExpr *> hash_key_exprs_;
-  common::ObArray<ObExpr *> hash_probe_exprs_;
+	ExprFixedArray hash_key_exprs_;
+  ExprFixedArray hash_probe_exprs_;
   ObNLConnectBySpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-  : ObNLConnectBySpecBase(alloc, type), hash_key_exprs_(), hash_probe_exprs_()
+  : ObNLConnectBySpecBase(alloc, type), hash_key_exprs_(alloc), hash_probe_exprs_(alloc)
   {}
 };
 
