@@ -123,7 +123,7 @@ private:
   /*
    *  default row count
    * */
-  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1024l * 1024;
+  const static int64_t DEFAULT_BATCH_ROW_COUNT = 1000L;
   /*
    *  default max row count in single partition
    * */
