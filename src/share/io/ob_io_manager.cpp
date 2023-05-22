@@ -980,7 +980,7 @@ int ObTenantIOManager::modify_io_config(const uint64_t group_id,
   } else {
     uint64_t index = INT64_MAX;
     DRWLock::WRLockGuard guard(io_config_lock_);
-    if (group_id < GROUP_START_ID && group_id > 0) {
+    if (group_id < RESOURCE_GROUP_START_ID && group_id > 0) {
       ret = OB_INVALID_CONFIG;
       LOG_WARN("invalid group id", K(ret), K(tenant_id_), K(group_id));
     } else if (min_percent < 0 || min_percent > 100 ||
@@ -1046,7 +1046,7 @@ int ObTenantIOManager::add_group_io_config(const int64_t group_id,
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID || min_percent < 0 || min_percent > 100 ||
+  } else if (group_id < RESOURCE_GROUP_START_ID || min_percent < 0 || min_percent > 100 ||
             max_percent < 0 || max_percent > 100 || max_percent < min_percent ||
             weight_percent < 0 || weight_percent > 100) {
     ret = OB_INVALID_CONFIG;
@@ -1099,7 +1099,7 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot reset other group io config", K(ret), K(group_id));
   } else {
@@ -1138,7 +1138,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot delete other group io config", K(ret), K(group_id));
   } else {

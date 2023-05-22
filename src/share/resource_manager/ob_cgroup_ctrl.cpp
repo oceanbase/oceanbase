@@ -375,7 +375,7 @@ int ObCgroupCtrl::add_self_to_cgroup(const uint64_t tenant_id, int64_t group_id)
   bool exist_cgroup = false;
 
   if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id))) {
-    LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    LOG_WARN("fail get group path", K(tenant_id), K(ret), K(group_id));
   } else if (OB_FAIL(FileDirectoryUtils::is_exists(group_path, exist_cgroup))) {
     LOG_WARN("fail check file exist", K(group_path), K(ret));
   } else if (!exist_cgroup && OB_FAIL(init_cgroup_dir_(group_path))) {
@@ -752,7 +752,7 @@ int ObCgroupCtrl::reset_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));
   } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
@@ -787,7 +787,7 @@ int ObCgroupCtrl::delete_group_iops(const uint64_t tenant_id,
     } else {
       LOG_WARN("fail get group id", K(ret), K(group_id), K(group_name));
     }
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     //OTHER_GROUPS and all cannot be deleted
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid group id", K(ret), K(group_id), K(group_name));

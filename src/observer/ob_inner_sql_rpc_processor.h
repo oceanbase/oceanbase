@@ -95,6 +95,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
 };
 
+class ResourceGroupGuard
+{
+  //todo qilu:revert after ddl_back_threads are split under tenants
+public:
+  ResourceGroupGuard(const int32_t group_id);
+  ~ResourceGroupGuard();
+public:
+  bool group_change_;
+  int32_t old_group_id_;
+
+};
+
 }
 }
 #endif /* OBDEV_SRC_OBSERVER_INNER_SQL_RPC_PROCESSOR_H_ */

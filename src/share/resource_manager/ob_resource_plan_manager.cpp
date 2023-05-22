@@ -222,7 +222,7 @@ int ObResourcePlanManager::normalize_iops_directives(const uint64_t tenant_id,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
       ObPlanDirective &cur_directive = directives.at(i);
-      if (cur_directive.group_id_ < GROUP_START_ID) {
+      if (cur_directive.group_id_ < RESOURCE_GROUP_START_ID) {
         ret = OB_ERR_UNEXPECTED;
         // 理论上不应该出现
         LOG_WARN("unexpected error!!!", K(cur_directive));

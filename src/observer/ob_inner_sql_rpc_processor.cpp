@@ -103,12 +103,13 @@ int ObInnerSqlRpcP::process_write(
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = -1;
+  ResourceGroupGuard guard(transmit_arg.get_consumer_group_id());
   if (OB_FAIL(conn->execute_write(transmit_arg.get_tenant_id(), write_sql.ptr(), affected_rows))) {
     LOG_WARN("execute write failed", K(ret), K(transmit_arg), K(write_sql));
   } else {
     transmit_result.set_affected_rows(affected_rows);
     transmit_result.set_stmt_type(
-        static_cast<observer::ObInnerSQLConnection *>(conn)->get_session().get_stmt_type());
+    static_cast<observer::ObInnerSQLConnection *>(conn)->get_session().get_stmt_type());
   }
 
   return ret;
@@ -534,7 +535,6 @@ int ObInnerSqlRpcP::process()
       LOG_WARN("failed to acquire inner connection", K(ret), K(transmit_arg));
     }
     /* init session info */
-    const int64_t group_id = transmit_arg.get_consumer_group_id();
     if (OB_SUCC(ret) && OB_NOT_NULL(tmp_session)) {
       tmp_session->set_current_trace_id(ObCurTraceId::get_trace_id());
       tmp_session->switch_tenant(transmit_arg.get_tenant_id());
@@ -715,6 +715,23 @@ int ObInnerSqlRpcP::set_session_param_to_conn(
     }
   }
   return ret;
+}
+
+ResourceGroupGuard::ResourceGroupGuard(const int32_t group_id)
+  : group_change_(false), old_group_id_(0)
+{
+  if (group_id >= RESOURCE_GROUP_START_ID) {
+    old_group_id_ = THIS_WORKER.get_group_id();
+    THIS_WORKER.set_group_id(group_id);
+    group_change_ = true;
+  }
+}
+
+ResourceGroupGuard::~ResourceGroupGuard()
+{
+  if (group_change_) {
+    THIS_WORKER.set_group_id(old_group_id_);
+  }
 }
 
 }
