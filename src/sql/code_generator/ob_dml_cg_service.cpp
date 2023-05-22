@@ -1868,10 +1868,10 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (OB_ISNULL(trigger_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trigger info is null", K(tenant_id), K(trigger_id), K(ret));
-      } else if (trigger_info->is_enable()) {
+      } else {
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
-        need_fire = trigger_info->has_event(dml_event);
-        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
+        need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable();
+        if (OB_SUCC(ret) && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
           const ObTriggerInfo *ref_trigger_info = NULL;
           uint64_t ref_db_id = OB_INVALID_ID;
           OZ (schema_guard->get_database_id(tenant_id, trigger_info->get_ref_trg_db_name(), ref_db_id));
