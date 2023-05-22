@@ -4123,7 +4123,8 @@ public:
       access_indexs_(),
       var_indexs_(),
       for_write_(false),
-      property_type_(pl::ObCollectionType::INVALID_PROPERTY) {}
+      property_type_(pl::ObCollectionType::INVALID_PROPERTY),
+      orig_access_indexs_() {}
   ObObjAccessRawExpr()
     : ObOpRawExpr(),
       get_attr_func_(0),
@@ -4131,7 +4132,8 @@ public:
       access_indexs_(),
       var_indexs_(),
       for_write_(false),
-      property_type_(pl::ObCollectionType::INVALID_PROPERTY) {}
+      property_type_(pl::ObCollectionType::INVALID_PROPERTY),
+      orig_access_indexs_() {}
   virtual ~ObObjAccessRawExpr() {}
   int assign(const ObRawExpr &other) override;
   int inner_deep_copy(ObIRawExprCopier &copier) override;
@@ -4152,6 +4154,8 @@ public:
   bool is_property() const { return pl::ObCollectionType::INVALID_PROPERTY != property_type_; }
   pl::ObCollectionType::PropertyType get_property() const { return property_type_; }
   void set_property(pl::ObCollectionType::PropertyType property_type) { property_type_ = property_type; }
+  common::ObIArray<pl::ObObjAccessIdx> &get_orig_access_idxs() { return orig_access_indexs_; }
+  const common::ObIArray<pl::ObObjAccessIdx> &get_orig_access_idxs() const { return orig_access_indexs_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObObjAccessRawExpr);
   uint64_t get_attr_func_; //获取用户自定义类型数据的函数指针
@@ -4160,6 +4164,7 @@ private:
   common::ObSEArray<int64_t, 4, common::ModulePageAllocator, true> var_indexs_;
   bool for_write_;
   pl::ObCollectionType::PropertyType property_type_;
+  common::ObSEArray<pl::ObObjAccessIdx, 4, common::ModulePageAllocator, true> orig_access_indexs_;
 };
 
 enum ObMultiSetType {

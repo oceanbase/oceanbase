@@ -2574,6 +2574,8 @@ int ObObjAccessRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("append error", K(ret));
       } else if (OB_FAIL(append(var_indexs_, tmp.var_indexs_))) {
         LOG_WARN("append error", K(ret));
+      } else if (OB_FAIL(append(orig_access_indexs_, tmp.orig_access_indexs_))) {
+        LOG_WARN("append error", K(ret));
       } else {
         get_attr_func_ = tmp.get_attr_func_;
         func_name_ = tmp.func_name_;
@@ -2599,6 +2601,8 @@ int ObObjAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
     } else {
       pl::ObObjAccessIdx access;
       common::ObSEArray<pl::ObObjAccessIdx, 4> access_array;
+      pl::ObObjAccessIdx orig_access;
+      common::ObSEArray<pl::ObObjAccessIdx, 4> orig_access_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < access_indexs_.count(); ++i) {
         access.reset();
         if (OB_FAIL(access.deep_copy(*inner_alloc_, copier.get_expr_factory(), access_indexs_.at(i)))) {
@@ -2609,6 +2613,17 @@ int ObObjAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
       }
       if (OB_SUCC(ret) && OB_FAIL(access_indexs_.assign(access_array))) {
         LOG_WARN("assign array error", K(access_array), K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < orig_access_indexs_.count(); ++i) {
+        orig_access.reset();
+        if (OB_FAIL(orig_access.deep_copy(*inner_alloc_, copier.get_expr_factory(), orig_access_indexs_.at(i)))) {
+          LOG_WARN("failed to deep copy ObObjAccessIdx", K(i), K(orig_access_indexs_.at(i)), K(ret));
+        } else if (OB_FAIL(orig_access_array.push_back(orig_access))) {
+          LOG_WARN("push back error", K(i), K(orig_access_indexs_.at(i)), K(orig_access), K(ret));
+        } else { /*do nothing*/ }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.assign(orig_access_array))) {
+        LOG_WARN("assign array error", K(orig_access_array), K(ret));
       }
     }
   }
@@ -2627,7 +2642,8 @@ bool ObObjAccessRawExpr::inner_same_as(const ObRawExpr &expr,
         && is_array_equal(access_indexs_, obj_access_expr.access_indexs_)
         && is_array_equal(var_indexs_, obj_access_expr.var_indexs_)
         && for_write_ == obj_access_expr.for_write_
-        && property_type_ == obj_access_expr.property_type_;
+        && property_type_ == obj_access_expr.property_type_
+        && is_array_equal(orig_access_indexs_, obj_access_expr.orig_access_indexs_);
   } else { /*do nothing*/ }
   return bool_ret;
 }
@@ -2744,6 +2760,9 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
         LOG_WARN("store access index failed", K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.assign(access_idxs))) {
+    LOG_WARN("failed to assign access indexs", K(ret), K(access_idxs));
   }
   return ret;
 }

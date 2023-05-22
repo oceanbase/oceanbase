@@ -8331,18 +8331,13 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   // Step 1: resolve parse node to raw expr
   OZ (build_raw_expr(node, unit_ast, expr, expected_type));
   CK (OB_NOT_NULL(expr));
-  bool is_order = false;
-  OZ (replace_object_compare_expr(expr, unit_ast, is_order));
+  OZ (replace_object_compare_expr(expr, unit_ast));
   OZ (analyze_expr_type(expr, unit_ast));
   // check op illegal
-  if (OB_SUCC(ret) && !OB_ISNULL(expr)
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr)
       && (T_OP_EQ == expr->get_expr_type() || T_OP_NE == expr->get_expr_type())) {
     bool is_obj_acc = false;
-    if (OB_FAIL(check_collection_expr_illegal(expr, is_obj_acc))) {
-      LOG_WARN("failed to check collection expr illegal", K(ret));
-    } else {
-      // do nothing
-    }
+    OZ (check_collection_expr_illegal(expr, is_obj_acc));
   }
 
   CK (OB_NOT_NULL(current_block_));
@@ -8932,26 +8927,32 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
   return ret;
 }
 
+int ObPLResolver::init_udf_info_of_accessident(ObObjAccessIdent &access_ident)
+{
+  int ret = OB_SUCCESS;
+  ObUDFRawExpr *func_expr = NULL;
+  OX (new (&access_ident.udf_info_) ObUDFInfo());
+  OZ (expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
+  CK (OB_NOT_NULL(func_expr));
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); ++i) {
+    std::pair<ObRawExpr*, int64_t> &param = access_ident.params_.at(i);
+    if (0 == param.second) {
+      OZ (func_expr->add_param_expr(param.first));
+      OX (access_ident.udf_info_.udf_param_num_++);
+    } else {
+      break;
+    }
+  }
+  OX (func_expr->set_func_name(access_ident.access_name_));
+  OX (access_ident.udf_info_.ref_expr_ = func_expr);
+  return ret;
+}
+
 int ObPLResolver::init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &access_idents)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < access_idents.count(); ++i) {
-    ObObjAccessIdent &access_ident = access_idents.at(i);
-    ObUDFRawExpr *func_expr = NULL;
-    OX (new (&access_ident.udf_info_) ObUDFInfo());
-    OZ (expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
-    CK (OB_NOT_NULL(func_expr));
-    for (int64_t i = 0; OB_SUCC(ret) && i < access_ident.params_.count(); ++i) {
-      std::pair<ObRawExpr*, int64_t> &param = access_ident.params_.at(i);
-      if (0 == param.second) {
-        OZ (func_expr->add_param_expr(param.first));
-        OX (access_ident.udf_info_.udf_param_num_++);
-      } else {
-        break;
-      }
-    }
-    OX (func_expr->set_func_name(access_ident.access_name_));
-    OX (access_ident.udf_info_.ref_expr_ = func_expr);
+    OZ (init_udf_info_of_accessident(access_idents.at(i)));
   }
   return ret;
 }
@@ -9338,16 +9339,6 @@ do { \
     }
   }
 #undef MOCK_SELF_PARAM
-  return ret;
-}
-
-int ObPLResolver::make_udt_udf_self_expr(const ObIArray<ObString> &access_name,
-                                         ObPLCompileUnitAST &func,
-                                         ObRawExpr *&expr,
-                                         bool need_add)
-{
-  int ret = OB_SUCCESS;
-  UNUSEDx(access_name, func, expr, need_add);
   return ret;
 }
 
@@ -14811,189 +14802,107 @@ int64_t ObPLResolver::combine_line_and_col(const ObStmtLoc &loc)
   return bloc;
 }
 
-int ObPLResolver::resolve_mocked_map_order_udf(const uint64_t udt_id,
-                                   const ObString &self_name,
-                                   const ObString &other_name,
-                                   ObPLCompileUnitAST &unit_ast,
-                                   ObIArray<ObRawExpr *> &expr,
-                                   ObRawExpr *org_expr,
-                                   bool &is_order)
+int ObPLResolver::replace_map_or_order_expr(
+  uint64_t udt_id, ObRawExpr *&expr, ObPLCompileUnitAST &func)
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql_str;
-  is_order = false;
-  const ObRoutineInfo *routine_info = NULL;
-  CK (OB_INVALID_ID != udt_id);
-  CK (OB_NOT_NULL(org_expr));
-  if (OB_SUCC(ret)) {
-    ObArray<const ObRoutineInfo *> routine_infos;
-    uint64_t sess_id = resolve_ctx_.session_info_.get_effective_tenant_id();
-    OZ (resolve_ctx_.schema_guard_.get_routine_infos_in_udt(sess_id, udt_id, routine_infos));
-    for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {
-      routine_info = routine_infos.at(i);
-      CK (OB_NOT_NULL(routine_info));
-      CK (routine_info->is_udt_function());
-      if (OB_SUCC(ret)) {
-        if (routine_info->is_udt_order()) {
-          is_order = true;
-          break;
-        } else if(routine_info->is_udt_map()) {
-          break;
-        } else {
-          // do nothing
-        }
-      }
+  ObSEArray<const ObRoutineInfo *, 2> routine_infos;
+  const ObRoutineInfo* routine_info = NULL;
+  ObRawExpr *left = expr->get_param_expr(0);
+  ObRawExpr *right = expr->get_param_expr(1);
+  ObObjAccessRawExpr *left_access = static_cast<ObObjAccessRawExpr*>(left);
+  ObObjAccessRawExpr *right_access = static_cast<ObObjAccessRawExpr*>(right);
+  CK (OB_NOT_NULL(left_access));
+  CK (OB_NOT_NULL(right_access));
+  OZ (resolve_ctx_.schema_guard_.get_routine_infos_in_udt(
+                  get_tenant_id_by_object_id(udt_id), udt_id, routine_infos));
+  for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {
+    if (routine_infos.at(i)->is_udt_order()) {
+      CK (OB_ISNULL(routine_info));
+      OX (routine_info = routine_infos.at(i));
+    } else if (routine_info->is_udt_map()) {
+      CK (OB_ISNULL(routine_info));
+      OX (routine_info = routine_infos.at(i));
     }
-    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
-      const ObString &routine_name = routine_info->get_routine_name();
-      if (is_order) {
-        OZ (sql_str.append_fmt(
-          "select \"%.*s\".\"%.*s\"(\"%.*s\") from dual",
-           self_name.length(), self_name.ptr(),
-           routine_name.length(), routine_name.ptr(),
-           other_name.length(), other_name.ptr()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(routine_info)) {
+    const ObString &routine_name = routine_info->get_routine_name();
+    ObObjAccessIdent access_ident(routine_name);
+    ObSEArray<ObObjAccessIdx, 4> left_idxs;
+    ObSEArray<ObObjAccessIdx, 4> right_idxs;
+    OZ (left_idxs.assign(left_access->get_orig_access_idxs()));
+    OZ (right_idxs.assign(right_access->get_orig_access_idxs()));
+    OX (access_ident.set_pl_udf());
+    OX (access_ident.access_name_ = routine_name);
+    if (routine_info->is_udt_order()) {
+      OZ (access_ident.params_.push_back(std::make_pair(right, 0)));
+    }
+    CK (OB_NOT_NULL(current_block_));
+    OZ (init_udf_info_of_accessident(access_ident));
+    OZ (resolve_access_ident(access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, left_idxs, func, true));
+    CK (left_idxs.at(left_idxs.count() - 1).is_udf_type());
+    OX (left = left_idxs.at(left_idxs.count() - 1).get_sysfunc_);
+    if (OB_FAIL(ret)) {
+    } else if (routine_info->is_udt_order()) {
+      ObObjType result_type = left->get_result_type().get_type();
+      ObConstRawExpr *const_expr = NULL;
+      if (left->get_result_type().get_type() == ObNumberType) {
+        number::ObNumber zero;
+        OZ (zero.from(static_cast<int64_t>(0), resolve_ctx_.allocator_));
+        OZ (ObRawExprUtils::build_const_number_expr(expr_factory_, ObNumberType, zero, const_expr));
       } else {
-        OZ (sql_str.append_fmt(
-          "select \"%.*s\".\"%.*s\"(), \"%.*s\".\"%.*s\"() from dual",
-           self_name.length(), self_name.ptr(),
-           routine_name.length(), routine_name.ptr(),
-           other_name.length(), other_name.ptr(),
-           routine_name.length(), routine_name.ptr()));
+        OZ (ObRawExprUtils::build_const_int_expr(expr_factory_, left->get_result_type().get_type(), 0, const_expr));
       }
-      if (OB_SUCC(ret)) {
-        ParseResult parse_result;
-        ParseNode *select_node = NULL;
-        ParseNode *select_expr_list = NULL;
-        ParseNode *select_expr = NULL;
-        ParseNode *select_expr1 = NULL;
-        ObRawExpr *udf_expr = NULL;
-        ObRawExpr *udf_expr_r = NULL;
-        ObParser parser(resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_sql_mode(),
-                        resolve_ctx_.session_info_.get_local_collation_connection());
-        OZ (parser.parse(sql_str.string(), parse_result), sql_str.string());
-        CK (OB_NOT_NULL(parse_result.result_tree_));
-        CK (T_STMT_LIST == parse_result.result_tree_->type_);
-        CK (1 == parse_result.result_tree_->num_child_);
-        OX (select_node = parse_result.result_tree_->children_[0]);
-        CK (T_SELECT == select_node->type_);
-        OX (select_expr_list = select_node->children_[PARSE_SELECT_SELECT]);
-        CK (OB_NOT_NULL(select_expr_list) && OB_NOT_NULL(select_expr_list->children_[0]));
-        OX (select_expr = select_expr_list->children_[0]);
-        CK (OB_NOT_NULL(select_expr));
-
-#define RESOLVE_EXPR(cexpr, node, exp_type) \
-do { \
-      if (OB_SUCC(ret)) { \
-          CK (OB_NOT_NULL(node)); \
-          OZ (resolve_expr(node, unit_ast, cexpr, 0, true, exp_type)); \
-          CK (OB_NOT_NULL(cexpr)); \
-          CK (T_FUN_UDF == cexpr->get_expr_type()); \
-          OZ (cexpr->formalize(&resolve_ctx_.session_info_)); \
-          OZ (expr.push_back(cexpr)); \
-      } \
-}while (0)
-
-        if (is_order) {
-          CK (OB_NOT_NULL(select_expr->children_[0]));
-          RESOLVE_EXPR(udf_expr, select_expr->children_[0], NULL);
-        } else {
-          CK (2 == select_expr_list->num_child_);
-          CK (OB_NOT_NULL(select_expr->children_[0]));
-          OX (select_expr1 = select_expr_list->children_[1]);
-          CK (OB_NOT_NULL(select_expr1));
-          RESOLVE_EXPR(udf_expr, select_expr->children_[0], NULL);
-          RESOLVE_EXPR(udf_expr_r, select_expr1->children_[0], NULL);
-        }
-#undef RESOLVE_EXPR
-      }
-    } else if (OB_SUCC(ret) && OB_ISNULL(routine_info)) {
-      ret = OB_ERR_NO_ORDER_MAP;
-      LOG_WARN("A MAP or ORDER function is required for comparing objects in PL/SQL", K(ret));
+      OX (right = const_expr);
+    } else {
+      OZ (resolve_access_ident(access_ident, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, right_idxs, func, true));
+      CK (right_idxs.at(right_idxs.count() - 1).is_udf_type());
+      OX (right = right_idxs.at(right_idxs.count() - 1).get_sysfunc_);
     }
+    CK (OB_NOT_NULL(static_cast<ObOpRawExpr*>(expr)));
+    OZ (static_cast<ObOpRawExpr*>(expr)->replace_param_expr(0, left));
+    OZ (static_cast<ObOpRawExpr*>(expr)->replace_param_expr(1, right));
+    OZ (expr->formalize(&resolve_ctx_.session_info_));
+  } else {
+    ret = OB_ERR_NO_ORDER_MAP;
+    LOG_WARN("A MAP or ORDER function is required for comparing objects in PL/SQL", K(ret));
   }
   return ret;
 }
 
-int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitAST &unit_ast,
-                                                                bool &is_order)
+
+int ObPLResolver::replace_object_compare_expr(ObRawExpr *&expr, ObPLCompileUnitAST &unit_ast)
 {
   int ret = OB_SUCCESS;
-  is_order = false;
   CK (OB_NOT_NULL(expr));
-  if (OB_SUCC(ret)) {
-    if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
-      const ObOpRawExpr *op_cmp = static_cast<const ObOpRawExpr *>(expr);
-      CK (2 == op_cmp->get_param_count());
-      const ObRawExpr *left = NULL;
-      const ObRawExpr *right = NULL;
-      OX (left = op_cmp->get_param_expr(0));
-      OX (right = op_cmp->get_param_expr(1));
-      if (OB_ISNULL(left) || OB_ISNULL(right)) {
+  if (OB_FAIL(ret)) {
+  } else if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
+    CK (2 == expr->get_param_count());
+    CK (OB_NOT_NULL(expr->get_param_expr(0)));
+    CK (OB_NOT_NULL(expr->get_param_expr(1)));
+    if (OB_FAIL(ret)) {
+    } else if (T_OBJ_ACCESS_REF == expr->get_param_expr(0)->get_expr_type()
+               && T_OBJ_ACCESS_REF == expr->get_param_expr(1)->get_expr_type()) {
+      const ObObjAccessRawExpr *l
+        = static_cast<const ObObjAccessRawExpr *>(expr->get_param_expr(0));
+      const ObObjAccessRawExpr *r
+        = static_cast<const ObObjAccessRawExpr *>(expr->get_param_expr(1));
+      if (OB_ISNULL(l) || OB_ISNULL(r)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr left or right children is null", K(ret));
+        LOG_WARN("unexpected expression", K(ret), K(*expr));
       } else {
-        if (T_OBJ_ACCESS_REF == left->get_expr_type()
-            && T_OBJ_ACCESS_REF == right->get_expr_type()) {
-          const ObObjAccessRawExpr *l = static_cast<const ObObjAccessRawExpr *>(left);
-          const ObObjAccessRawExpr *r = static_cast<const ObObjAccessRawExpr *>(right);
-          if (OB_ISNULL(l) || OB_ISNULL(r)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected expression", K(ret), K(*expr));
-          } else {
-            ObArray<ObRawExpr *> cmp_expr;
-            const ObPLDataType &l_type = ObObjAccessIdx::get_final_type(l->get_access_idxs());
-            const ObPLDataType &r_type = ObObjAccessIdx::get_final_type(r->get_access_idxs());
-            uint64_t luid = l_type.get_user_type_id();
-            uint64_t ruid = r_type.get_user_type_id();
-            if (OB_INVALID_ID == luid || OB_INVALID_ID == ruid) {
-              // do nothing, such as: obj1.a > obj2.a
-            } else if (luid != ruid) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("compare between two different udt type", K(ret), K(luid), K(ruid));
-            } else if (l_type.is_object_type() && r_type.is_object_type()) {
-              const ObString &self_name
-                            = l->get_access_idxs().at(l->get_access_idxs().count() - 1).var_name_;
-              const ObString &other_name
-                            = r->get_access_idxs().at(r->get_access_idxs().count() - 1).var_name_;
-              OZ (resolve_mocked_map_order_udf(luid, self_name, other_name,
-                                               unit_ast, cmp_expr, expr, is_order));
-              if (is_order) {
-                // obj1 > obj2 => obj1.order() > 0
-                // obj1 < obj2 => obj1.order() < 0
-                // obj1 = obj2 => obj1.order() = 0
-                CK (1 == cmp_expr.count());
-                ObConstRawExpr *zero_expr = NULL;
-                ObObjType result_type;
-                OX (result_type = cmp_expr.at(0)->get_result_type().get_type());
-                if (OB_FAIL(ret)) {
-                } else if (ObNumberType == result_type) {
-                  number::ObNumber zero;
-                  OZ (zero.from(static_cast<int64_t>(0), resolve_ctx_.allocator_));
-                  OZ (ObRawExprUtils::build_const_number_expr(expr_factory_,
-                                              result_type, zero, zero_expr));
-                } else {
-                  OZ (ObRawExprUtils::build_const_int_expr(expr_factory_,
-                                              result_type, 0, zero_expr));
-                }
-                CK (OB_NOT_NULL(zero_expr));
-                OZ (const_cast<ObOpRawExpr *>(op_cmp)->replace_param_expr(0, cmp_expr.at(0)));
-                OZ (const_cast<ObOpRawExpr *>(op_cmp)->replace_param_expr(1, zero_expr));
-              } else {
-                CK (2 == cmp_expr.count());
-                // obj1 > obj2 => obj1.map() > obj2.map()
-                // obj1 = obj2 => obj1.map() = obj2.map()
-                // obj1 < obj2 => obj1.map() < obj2.map()
-                OZ (const_cast<ObOpRawExpr *>(op_cmp)->replace_param_expr(0, cmp_expr.at(0)));
-                OZ (const_cast<ObOpRawExpr *>(op_cmp)->replace_param_expr(1, cmp_expr.at(1)));
-              }
-              OZ (expr->formalize(&resolve_ctx_.session_info_));
-            } else {
-              // do nothing
-            }
-          }
+        const ObPLDataType &l_type = ObObjAccessIdx::get_final_type(l->get_access_idxs());
+        const ObPLDataType &r_type = ObObjAccessIdx::get_final_type(r->get_access_idxs());
+        if (l_type.get_user_type_id() != r_type.get_user_type_id()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("compare between two different udt type", K(ret), K(l_type), K(r_type));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "compare between two different composite type");
+        } else if (l_type.is_object_type() && r_type.is_object_type()) {
+          OZ (replace_map_or_order_expr(l_type.get_user_type_id(), expr, unit_ast));
         }
       }
-    } else { /* do nothing */ }
+    }
   }
   return ret;
 }
