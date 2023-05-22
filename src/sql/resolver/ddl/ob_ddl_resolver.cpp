@@ -2686,7 +2686,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     } else if (GEN_COLUMN_DEFINITION_NUM_CHILD == node->num_child_) {
       //处理identity column的定义
       if (OB_NOT_NULL(node->children_[4]) && node->children_[4]->type_ == T_IDENTITY_COLUMN) {
-        if (!column.get_meta_type().is_numeric_type()) {
+        if (ob_is_real_type(column.get_meta_type().get_type())
+              || !column.get_meta_type().is_numeric_type()) {
           ret = OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE;
           LOG_USER_ERROR(OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE);
         } else if (OB_FAIL(resolve_identity_column_definition(column, node))) {
