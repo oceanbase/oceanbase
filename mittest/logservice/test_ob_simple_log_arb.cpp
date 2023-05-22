@@ -424,7 +424,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_arb_with_highest_version)
   leader.reset();
   // block_net, so two F cann't reach majority
   block_net(another_f_idx, leader_idx);
-  restart_paxos_groups();
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 
   const int64_t restart_finish_time_us_ = common::ObTimeUtility::current_time();
   PalfHandleImplGuard new_leader;
@@ -501,6 +501,128 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_defensive)
 
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test_2f1a_defensive", K(id));
+}
+
+int get_palf_handle_lite(const int64_t tenant_id,
+                         const int64_t palf_id,
+                         ObSimpleArbServer *server,
+                         IPalfHandleImplGuard &handle_guard)
+{
+  int ret = OB_SUCCESS;
+  PalfEnvLiteGuard env_guard;
+  if (NULL == server) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(server->get_palf_env_lite(tenant_id, env_guard))) {
+    PALF_LOG(ERROR, "get_palf_env_lite failed", K(tenant_id), K(palf_id));
+  } else if (OB_FAIL(env_guard.palf_env_lite_->get_palf_handle_impl(palf_id, handle_guard))) {
+    PALF_LOG(ERROR, "get_palf_handle_impl failed", K(tenant_id), K(palf_id));
+  } else {
+  }
+  return ret;
+}
+
+using namespace palflite;
+
+TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_defensive");
+  OB_LOGGER.set_log_level("DEBUG");
+  MockLocCB loc_cb;
+  int ret = OB_SUCCESS;
+  PALF_LOG(INFO, "begin test_2f1a_defensive");
+	int64_t leader_idx = 0;
+  int64_t arb_replica_idx = -1;
+  PalfHandleImplGuard leader;
+  std::vector<PalfHandleImplGuard*> palf_list;
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  common::ObMember dummy_member;
+	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  // 为备副本设置location cb，用于备副本找leader
+  const int64_t another_f_idx = (leader_idx+1)%3;
+  loc_cb.leader_ = leader.palf_handle_impl_->self_;
+  palf_list[another_f_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+  sleep(2);
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
+  IPalfHandleImplGuard arb_guard;
+  ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+  PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
+  LogEngine *log_engine = &arb_palf->log_engine_;
+  LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
+  LogStorage *meta_storage = &log_engine->log_meta_storage_;
+  {
+    while (1) {
+      if (meta_storage->log_tail_ < LSN(meta_storage->logical_block_size_)) {
+        EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
+      } else {
+        break;
+      }
+    }
+  }
+  meta_tail = log_engine->log_meta_storage_.log_tail_;
+  ASSERT_EQ(meta_tail, LSN(log_engine->log_meta_storage_.logical_block_size_));
+  revert_cluster_palf_handle_guard(palf_list);
+  arb_guard.reset();
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    IPalfHandleImplGuard arb_guard;
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
+    LogEngine *log_engine = &arb_palf->log_engine_;
+    LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
+    LogStorage *meta_storage = &log_engine->log_meta_storage_;
+    EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
+    ASSERT_NE(meta_tail, LSN(log_engine->log_meta_storage_.logical_block_size_));
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    IPalfHandleImplGuard arb_guard;
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
+    LogEngine *log_engine = &arb_palf->log_engine_;
+    LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
+    LogStorage *meta_storage = &log_engine->log_meta_storage_;
+    while (1) {
+      if (meta_storage->log_tail_ < LSN(32 * meta_storage->logical_block_size_)) {
+        EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
+      } else {
+        break;
+      }
+    }
+  }
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(get_cluster()[arb_replica_idx]);
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 4000, id));
+    IPalfHandleImplGuard arb_guard;
+    ASSERT_EQ(OB_SUCCESS, get_palf_handle_lite(OB_SERVER_TENANT_ID, id, arb_server, arb_guard));
+    PalfHandleLite *arb_palf = dynamic_cast<PalfHandleLite *>(arb_guard.palf_handle_impl_);
+    LogEngine *log_engine = &arb_palf->log_engine_;
+    LSN meta_tail = log_engine->log_meta_storage_.log_tail_;
+    LogStorage *meta_storage = &log_engine->log_meta_storage_;
+    while (1) {
+      if (meta_storage->log_tail_ < LSN(34 * meta_storage->logical_block_size_ + 4*4*1024)) {
+        EXPECT_EQ(OB_SUCCESS, log_engine->append_log_meta_(log_engine->log_meta_));
+      } else {
+        break;
+      }
+    }
+  }
   delete_paxos_group(id);
   PALF_LOG(INFO, "end test_2f1a_defensive", K(id));
 }
