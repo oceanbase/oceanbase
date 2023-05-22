@@ -289,6 +289,7 @@ int ObRFBloomFilterMsg::reuse()
   int ret = OB_SUCCESS;
   is_empty_ = true;
   bloom_filter_.reset_filter();
+  need_send_msg_ = true;
   return ret;
 }
 
@@ -726,42 +727,45 @@ int ObRFBloomFilterMsg::broadcast(ObIArray<ObAddr> &target_addrs,
   ObPxP2PDatahubArg arg;
 
   arg.msg_ = &msg;
-  while (!*create_finish_ && OB_SUCC(ret)) {
+  while (!*create_finish_ && need_send_msg_ && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail to check status", K(ret));
     }
     ob_usleep(10);
   }
   if (OB_FAIL(ret)) {
+  } else if (!need_send_msg_) {
+    // when drain_exch, not need to send msg
   } else if (OB_FAIL(msg.shadow_copy(*this))) {
     LOG_WARN("fail to shadow copy second phase msg", K(ret));
   } else if (OB_ISNULL(create_finish_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected create finish ptr", K(ret));
-  }
-  while (*filter_idx_ <  filter_indexes_.count() && OB_SUCC(ret)) {
-    cur_idx = ATOMIC_FAA(filter_idx_, 1);
-    if (cur_idx < filter_indexes_.count()) {
-      msg.next_peer_addrs_.reuse();
-      auto addr_filter_idx = filter_indexes_.at(cur_idx);
-      msg.bloom_filter_.set_begin_idx(addr_filter_idx.begin_idx_);
-      msg.bloom_filter_.set_end_idx(addr_filter_idx.end_idx_);
-      for (int i = 0; OB_SUCC(ret) && i < addr_filter_idx.channel_ids_.count(); ++i) {
-        if (OB_FAIL(msg.next_peer_addrs_.push_back(
-            target_addrs.at(addr_filter_idx.channel_ids_.at(i))))) {
-          LOG_WARN("failed push back peer addr", K(i), K(ret));
+  } else {
+    while (*filter_idx_ <  filter_indexes_.count() && OB_SUCC(ret)) {
+      cur_idx = ATOMIC_FAA(filter_idx_, 1);
+      if (cur_idx < filter_indexes_.count()) {
+        msg.next_peer_addrs_.reuse();
+        auto addr_filter_idx = filter_indexes_.at(cur_idx);
+        msg.bloom_filter_.set_begin_idx(addr_filter_idx.begin_idx_);
+        msg.bloom_filter_.set_end_idx(addr_filter_idx.end_idx_);
+        for (int i = 0; OB_SUCC(ret) && i < addr_filter_idx.channel_ids_.count(); ++i) {
+          if (OB_FAIL(msg.next_peer_addrs_.push_back(
+              target_addrs.at(addr_filter_idx.channel_ids_.at(i))))) {
+            LOG_WARN("failed push back peer addr", K(i), K(ret));
+          }
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (addr_filter_idx.channel_id_ >= target_addrs.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected channel id", K(addr_filter_idx.channel_id_), K(target_addrs.count()));
-      } else if (OB_FAIL(p2p_dh_proxy.to(target_addrs.at(addr_filter_idx.channel_id_))
-                 .by(tenant_id_)
-                 .timeout(timeout_ts_)
-                 .compressed(ObCompressorType::LZ4_COMPRESSOR)
-                 .send_p2p_dh_message(arg, &msg_cb))) {
-        LOG_WARN("fail to send bloom filter", K(ret));
+        if (OB_FAIL(ret)) {
+        } else if (addr_filter_idx.channel_id_ >= target_addrs.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected channel id", K(addr_filter_idx.channel_id_), K(target_addrs.count()));
+        } else if (OB_FAIL(p2p_dh_proxy.to(target_addrs.at(addr_filter_idx.channel_id_))
+                  .by(tenant_id_)
+                  .timeout(timeout_ts_)
+                  .compressed(ObCompressorType::LZ4_COMPRESSOR)
+                  .send_p2p_dh_message(arg, &msg_cb))) {
+          LOG_WARN("fail to send bloom filter", K(ret));
+        }
       }
     }
   }

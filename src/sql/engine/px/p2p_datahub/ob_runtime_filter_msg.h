@@ -39,7 +39,7 @@ public:
   ObRFBloomFilterMsg() : phase_(), bloom_filter_(),
       next_peer_addrs_(), expect_first_phase_count_(0),
       piece_size_(0), filter_indexes_(), receive_count_array_(),
-      filter_idx_(nullptr), create_finish_(nullptr), is_finish_regen_(false) {}
+      filter_idx_(nullptr), create_finish_(nullptr), need_send_msg_(true), is_finish_regen_(false) {}
   ~ObRFBloomFilterMsg() { destroy(); }
   virtual int assign(const ObP2PDatahubMsgBase &) final;
   virtual int merge(ObP2PDatahubMsgBase &) final;
@@ -98,6 +98,7 @@ public:
   common::ObArray<BloomFilterReceiveCount> receive_count_array_;
   int64_t *filter_idx_; //for shared msg
   bool *create_finish_; //for shared msg
+  bool need_send_msg_;  //for shared msg, when drain_exch, msg is not need to be sent
   bool is_finish_regen_;
 };
 
