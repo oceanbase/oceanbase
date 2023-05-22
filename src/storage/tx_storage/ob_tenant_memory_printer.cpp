@@ -30,7 +30,6 @@ void ObPrintTenantMemoryUsage::runTimerTask()
   LOG_INFO("=== Run print tenant memory usage task ===");
   ObTenantMemoryPrinter &printer = ObTenantMemoryPrinter::get_instance();
   PRINT_WITH_TRACE_MODE(LIB, INFO, printer.print_tenant_usage());
-  ObObjFreeListList::get_freelists().dump();
 }
 
 ObTenantMemoryPrinter &ObTenantMemoryPrinter::get_instance()

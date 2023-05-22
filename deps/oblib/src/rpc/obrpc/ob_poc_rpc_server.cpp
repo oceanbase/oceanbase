@@ -46,11 +46,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
   ObRpcPacket tmp_pkt;
-#ifndef PERF_MODE
   const int64_t alloc_payload_sz = sz;
-#else
-  const int64_t alloc_payload_sz = 0;
-#endif
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
     RPC_LOG(ERROR, "decode packet fail", K(ret));
   } else {

@@ -22,7 +22,7 @@ using namespace oceanbase::lib;
 TEST(TestObSegmentedBuffer, base)
 {
   const int block_size = 100;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_MEM_META,
+  ObMemAttr attr(OB_SERVER_TENANT_ID, "MemMeta",
                  ObCtxIds::DEFAULT_CTX_ID);
   ObSegmentedBufffer sb(block_size, attr);
   char buf[block_size * 10];

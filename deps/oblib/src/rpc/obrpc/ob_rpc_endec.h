@@ -46,11 +46,7 @@ template <typename T>
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
   const int64_t payload_sz = calc_extra_payload_size() + common::serialization::encoded_length(args);
-#ifdef PERF_MODE
-  const int64_t reserve_bytes_for_pnio = 200;
-#else
   const int64_t reserve_bytes_for_pnio = 0;
-#endif
   char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
   char* payload_buf = header_buf + header_sz;
   int64_t pos = 0;

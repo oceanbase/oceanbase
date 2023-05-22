@@ -178,7 +178,6 @@ int ObSignalHandle::deal_signals(int signum)
       ob_print_mod_memory_usage();
       //GARL_PRINT();
       PC_REPORT();
-      ObObjFreeListList::get_freelists().dump();
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
       break;
     }

@@ -445,7 +445,7 @@ private:
     ObSchema &tmp_schema = const_cast<ObSchema &>(schema);
     ObSchemaCacheValue tmp_cache_value(schema_type, &tmp_schema);
     int64_t deep_copy_size = tmp_cache_value.size();
-    char *tmp_ptr = (char *)ob_malloc(deep_copy_size, ObModIds::OB_SCHEMA_CACHE_SYS_CACHE_VALUE);
+    char *tmp_ptr = (char *)ob_malloc(deep_copy_size, "ScheCacSysCacVa");
     ObIKVCacheValue *kv_cache_value = NULL;
     if (NULL == tmp_ptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

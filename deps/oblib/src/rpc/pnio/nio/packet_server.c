@@ -16,11 +16,7 @@ static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes
 
 static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   pkts_t* pkts = structof(s->fty, pkts_t, sf);
-#ifdef PERF_MODE
-  int ret = pkts->on_req(pkts, ib_ref(&s->ib), msg->payload, msg->sz, s->id);
-#else
   int ret = pkts->on_req(pkts, s->ib.b, msg->payload, msg->sz, s->id);
-#endif
   ib_consumed(&s->ib, msg->sz);
   return ret;
 }

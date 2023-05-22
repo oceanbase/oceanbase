@@ -15,7 +15,6 @@
 #include <gmock/gmock.h>
 #include "rootserver/ob_multi_cluster_manager.h"
 #include "share/ob_web_service_root_addr.h"
-#include "share/ob_cluster_info_proxy.h"
 #include "share/ob_multi_cluster_proxy.h"
 
 namespace oceanbase {

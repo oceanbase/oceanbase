@@ -97,7 +97,6 @@ inline bool ObMallocSampleLimiter::try_acquire(int64_t alloc_bytes)
   return ret;
 }
 
-#ifndef PERF_MODE
 inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
 {
   bool ret = false;
@@ -114,12 +113,6 @@ inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, con
   }
   return ret;
 }
-#else
-inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
-{
-  return false;
-}
-#endif
 
 inline void ObMallocSampleLimiter::set_interval(int32_t max_interval, int32_t min_interval)
 {

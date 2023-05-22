@@ -183,11 +183,7 @@ public:
     if (get_proxy_group_id(proxy) == ObPocServerHandleContext::OBCG_ELECTION) {
       src_tenant_id = OB_SERVER_TENANT_ID;
     }
-#ifndef PERF_MODE
     const int init_alloc_sz = 0;
-#else
-    const int init_alloc_sz = 400<<10;
-#endif
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     if (NULL == (pool = ObRpcMemPool::create(src_tenant_id, pcode_label, init_alloc_sz))) {

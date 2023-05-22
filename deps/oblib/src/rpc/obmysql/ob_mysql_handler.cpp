@@ -115,41 +115,6 @@ void do_wakeup_request(easy_request_t *r)
   do_wakeup(r);
 }
 
-#ifdef PERF_MODE
-int do_layer_perf_response(easy_request_t *r)
-{
-  //response
-  int ret = OB_SUCCESS;
-  void *buf = easy_pool_alloc(r->ms->pool, OB_MULTI_RESPONSE_BUF_SIZE + sizeof(easy_buf_t));
-  easy_buf_t *b = reinterpret_cast<easy_buf_t*>(buf);
-  init_easy_buf(b, reinterpret_cast<char*>(b + 1), r, OB_MULTI_RESPONSE_BUF_SIZE);
-  OMPKOK okp;
-  ObMySQLCapabilityFlags cap_flags(163553933);
-  okp.set_seq(1);
-  okp.set_capability(cap_flags);
-  int64_t seri_size = 0;
-  if (OB_FAIL(okp.encode(b->last, b->end - b->pos, seri_size))) {
-    LOG_ERROR("okp.serialize", K(ret));
-  } else {
-    b->last += seri_size;
-    //easy_request_addbuf(r, b);
-    r->opacket = b;
-  }
-  return ret;
-}
-
-bool do_rpc_layer_perf(easy_request_t *r)
-{
-  bool hit = false;
-  const oceanbase::obmysql::ObMySQLRawPacket &pkt
-          = reinterpret_cast<const oceanbase::obmysql::ObMySQLRawPacket &>(*((ObPacket*)(r->ipacket)));
-  if (pkt.get_cmd() == ObMySQLCmd::COM_QUERY && pkt.get_clen() > 9 && memcmp(pkt.get_cdata(), "[PM_EASY]", 9) == 0) {
-    hit = true;
-  }
-  return hit;
-}
-#endif
-
 int ObMySQLHandler::process(easy_request_t *r)
 {
   int eret = EASY_OK;
@@ -187,13 +152,6 @@ int ObMySQLHandler::process(easy_request_t *r)
           eret = EASY_OK;
           LOG_INFO("MySQL SSL Request", "sessid", sessid,
                    KCSTRING(easy_connection_str(r->ms->c)));
-        #ifdef PERF_MODE
-        } else if (do_rpc_layer_perf(r)) {
-          if (do_layer_perf_response(r) != OB_SUCCESS) {
-            ob_abort();
-          }
-          eret = EASY_OK;
-        #endif
         } else if (OB_ISNULL(buf = easy_alloc(r->ms->pool, sizeof (ObRequest)))) {
           RPC_LOG_RET(WARN, common::OB_ALLOCATE_MEMORY_FAILED, "alloc easy memory fail", K(sessid));
           eret = EASY_BREAK;

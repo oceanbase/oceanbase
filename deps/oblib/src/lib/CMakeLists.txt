@@ -105,7 +105,6 @@ ob_set_subtarget(oblib_lib common_mixed
   net/ob_addr.cpp
   net/ob_net_util.cpp
   number/ob_number_v2.cpp
-  objectpool/ob_concurrency_objpool.cpp
   objectpool/ob_pool.ipp
   objectpool/ob_server_object_pool.cpp
   profile/ob_atomic_event.cpp

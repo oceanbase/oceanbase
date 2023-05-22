@@ -27,11 +27,7 @@ namespace obrpc
 #define NEGOTIATION_PACKET_HEADER_MAGIC_EASY (0x1234567877668833)
 
 #define MAX_PROTOCOL_TYPE_SIZE (5)
-#ifdef PERF_MODE
-#define OB_LISTENER_MAX_THREAD_CNT         128
-#else
 #define OB_LISTENER_MAX_THREAD_CNT         64
-#endif
 
 inline struct sockaddr_in* make_unix_sockaddr(struct sockaddr_in *sin, in_addr_t ip, int port) {
   if (NULL != sin) {

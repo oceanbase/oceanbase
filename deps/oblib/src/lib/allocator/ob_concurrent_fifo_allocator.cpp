@@ -38,7 +38,7 @@ int ObConcurrentFIFOAllocator::init(const int64_t total_limit,
   const int64_t cache_page_count = lib::is_mini_mode() ? 0 : get_cpu_count() * STORAGE_SIZE_TIMES;
   if (OB_FAIL(inner_allocator_.init(
           page_size,
-          ObModIds::OB_CON_FIFO_ALLOC,
+          "ConFifoAlloc",
           OB_SERVER_TENANT_ID,
           cache_page_count,
           total_limit))) {

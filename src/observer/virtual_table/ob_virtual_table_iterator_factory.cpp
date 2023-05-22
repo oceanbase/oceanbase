@@ -1339,8 +1339,6 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           case OB_ALL_VIRTUAL_CONCURRENCY_OBJECT_POOL_TID: {
             ObAllConcurrencyObjectPool *object_pool = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllConcurrencyObjectPool, object_pool))) {
-              object_pool->set_allocator(&allocator);
-              object_pool->set_addr(addr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(object_pool);
             }
             break;

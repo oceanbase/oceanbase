@@ -27,7 +27,7 @@ namespace sql
 ObOptTabletLoc::ObOptTabletLoc()
     : partition_id_(OB_INVALID_INDEX),
       first_level_part_id_(OB_INVALID_INDEX),
-      replica_locations_(ObModIds::OB_SQL_OPTIMIZER_LOCATION_CACHE, OB_MALLOC_NORMAL_BLOCK_SIZE),
+      replica_locations_("SqlOptimLocaCac", OB_MALLOC_NORMAL_BLOCK_SIZE),
       renew_time_(0)
 {
 }
