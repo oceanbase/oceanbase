@@ -116,19 +116,19 @@ ObSimpleUDFSchema &ObSimpleUDFSchema::operator =(const ObSimpleUDFSchema &other)
 
 ObUDFMgr::ObUDFMgr() :
     is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF)),
-    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF))
+    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF, ObCtxIds::SCHEMA_SERVICE)),
+    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF, ObCtxIds::SCHEMA_SERVICE))
   {
   }
 
 ObUDFMgr::ObUDFMgr(common::ObIAllocator &allocator) :
     is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF)),
-    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF))
+    udf_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDF, ObCtxIds::SCHEMA_SERVICE)),
+    udf_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDF, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 

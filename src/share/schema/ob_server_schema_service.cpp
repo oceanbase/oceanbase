@@ -167,7 +167,7 @@ int ObServerSchemaService::init(ObMySQLProxy *sql_proxy,
                                 const ObCommonConfig *config)
 {
   int ret = OB_SUCCESS;
-  auto attr = SET_USE_500(ObModIds::OB_SCHEMA_ID_VERSIONS);
+  auto attr = SET_USE_500(ObModIds::OB_SCHEMA_ID_VERSIONS, ObCtxIds::SCHEMA_SERVICE);
   if (OB_ISNULL(sql_proxy)
      || NULL != schema_service_
      || OB_ISNULL(sql_proxy->get_pool())
@@ -5488,7 +5488,7 @@ int ObServerSchemaService::init_schema_struct(uint64_t tenant_id)
 #define INIT_TENANT_MEM_MGR(map, tenant_id, mem_mgr_label, schema_mgr_label) \
     if (OB_FAIL(ret)) { \
     } else if (OB_ISNULL(map.get(tenant_id))) { \
-      void *buff = ob_malloc(sizeof(ObSchemaMemMgr), mem_mgr_label); \
+      void *buff = ob_malloc(sizeof(ObSchemaMemMgr), SET_USE_500(mem_mgr_label, ObCtxIds::SCHEMA_SERVICE)); \
       ObSchemaMemMgr *schema_mem_mgr = NULL; \
       bool overwrite = true; \
       if (OB_ISNULL(buff)) { \

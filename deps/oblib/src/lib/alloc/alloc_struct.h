@@ -160,6 +160,12 @@ inline ObMemAttr DoNotUseMe(const ObLabel &label)
   return DoNotUseMe(attr);
 }
 
+inline ObMemAttr DoNotUseMe(const ObLabel &label, const uint64_t ctx_id)
+{
+  ObMemAttr attr(OB_SERVER_TENANT_ID, label, ctx_id);
+  return DoNotUseMe(attr);
+}
+
 #define SET_USE_500(args...) ::oceanbase::lib::DoNotUseMe(args)
 
 struct AllocHelper

@@ -232,19 +232,19 @@ ObSequenceHashWrapper ObGetSequenceKey<ObSequenceHashWrapper, ObSequenceSchema *
 
 ObSequenceMgr::ObSequenceMgr()
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE)),
-      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE))
+      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE, ObCtxIds::SCHEMA_SERVICE)),
+      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObSequenceMgr::ObSequenceMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE)),
-      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE))
+      sequence_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE, ObCtxIds::SCHEMA_SERVICE)),
+      sequence_map_(SET_USE_500(ObModIds::OB_SCHEMA_SEQUENCE, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 

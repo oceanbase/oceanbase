@@ -97,21 +97,21 @@ int64_t ObSimpleUDTSchema::get_convert_size() const
 }
 
 ObUDTMgr::ObUDTMgr()
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      udt_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDT_INFO_VECTOR)),
-      type_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_ID_MAP)),
-      type_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_NAME_MAP)),
+      udt_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDT_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      type_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      type_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }
 
 ObUDTMgr::ObUDTMgr(ObIAllocator &allocator)
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      udt_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDT_INFO_VECTOR)),
-      type_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_ID_MAP)),
-      type_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_NAME_MAP)),
+      udt_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_UDT_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      type_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      type_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_UDT_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }

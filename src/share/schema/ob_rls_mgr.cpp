@@ -30,21 +30,21 @@ const char *ObRlsContextMgr::RLS_CONTEXT_MGR = "RLS_CONTEXT_MGR";
 
 ObRlsPolicyMgr::ObRlsPolicyMgr()
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR)),
-    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR)),
-    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR))
+    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObRlsPolicyMgr::ObRlsPolicyMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR)),
-    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR)),
-    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR))
+    rls_policy_infos_(0, NULL, SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_policy_name_map_(SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_policy_id_map_(SET_USE_500(RLS_POLICY_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
@@ -506,21 +506,21 @@ int ObRlsPolicyMgr::rebuild_rls_policy_hashmap()
 
 ObRlsGroupMgr::ObRlsGroupMgr()
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR)),
-    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR)),
-    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR))
+    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObRlsGroupMgr::ObRlsGroupMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR)),
-    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR)),
-    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR))
+    rls_group_infos_(0, NULL, SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_group_name_map_(SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_group_id_map_(SET_USE_500(RLS_GROUP_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
@@ -951,21 +951,21 @@ int ObRlsGroupMgr::rebuild_rls_group_hashmap()
 
 ObRlsContextMgr::ObRlsContextMgr()
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR)),
-    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR)),
-    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR))
+    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObRlsContextMgr::ObRlsContextMgr(common::ObIAllocator &allocator)
   : is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR)),
-    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR)),
-    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR))
+    rls_context_infos_(0, NULL, SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_context_name_map_(SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE)),
+    rls_context_id_map_(SET_USE_500(RLS_CONTEXT_MGR, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 

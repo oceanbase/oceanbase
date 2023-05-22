@@ -132,24 +132,24 @@ int64_t ObSimpleOutlineSchema::get_convert_size() const
 }
 
 ObOutlineMgr::ObOutlineMgr()
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR)),
-      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP)),
-      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP)),
-      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)),
-      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP))
+      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObOutlineMgr::ObOutlineMgr(ObIAllocator &allocator)
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR)),
-      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP)),
-      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP)),
-      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP)),
-      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP))
+      outline_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 

@@ -79,7 +79,7 @@ const char *ObMultiVersionSchemaService::print_refresh_schema_mode(const Refresh
 
 ObSchemaConstructTask::ObSchemaConstructTask()
 {
-  schema_tasks_.set_attr(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "SchemaTasks")));
+  schema_tasks_.set_attr(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, "SchemaTasks", ObCtxIds::SCHEMA_SERVICE)));
   (void)pthread_mutex_init(&schema_mutex_, NULL);
   (void)pthread_cond_init(&schema_cond_, NULL);
 }

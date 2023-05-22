@@ -118,21 +118,21 @@ int64_t ObSimpleSynonymSchema::get_convert_size() const
 
 ObSynonymMgr::ObSynonymMgr()
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
-      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
-      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM))
+      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE)),
+      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE)),
+      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObSynonymMgr::ObSynonymMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
-      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM)),
-      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM))
+      synonym_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE)),
+      synonym_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE)),
+      synonym_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYNONYM, ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
