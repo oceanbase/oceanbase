@@ -131,6 +131,7 @@ public:
     return &stmt_stat_;
   }
   int update_stmt_stat();
+  int64_t get_mem_size();
 
   TO_STRING_KV(K_(is_inited), K_(ref_count), K_(min_merged_version));
 
@@ -138,7 +139,6 @@ private:
   static const int64_t MAX_PCV_SET_PLAN_NUM = 200;
   int create_pcv_and_add_plan(ObCacheObject* cache_obj, ObPlanCacheCtx& pc_ctx,
       const common::ObIArray<PCVSchemaObj>& schema_array, ObPlanCacheValue*& value);
-  int64_t get_mem_size();
 
   int64_t get_plan_num() const
   {

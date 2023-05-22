@@ -339,6 +339,9 @@ void ObPlanCacheManager::ObPlanCacheEliminationTask::run_plan_cache_task()
           if (OB_FAIL(plan_cache->cache_evict())) {
             SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
           }
+          if (OB_FAIL(plan_cache->cache_evict_by_glitch_node())) {
+            SQL_PC_LOG(ERROR, "Plan cache evict by glitch failed, please check", K(ret));
+          }
           plan_cache->dec_ref_count();
         }
       }
