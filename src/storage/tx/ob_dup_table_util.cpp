@@ -1102,7 +1102,7 @@ int ObDupTableLSHandler::leader_revoke_()
   }
 
   interface_stat_.reset();
-  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(ls_id_));
+  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(ls_id_), KPC(log_operator_));
   return ret;
 }
 

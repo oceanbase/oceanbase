@@ -910,7 +910,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   if (OB_LOG_TOO_LARGE == ret) {
     ret = OB_SUCCESS;
   }
-  DUP_TABLE_LOG(WARN, "finish prepare ser", K(ret), K(unique_id_array));
+  DUP_TABLE_LOG(DEBUG, "finish prepare ser", K(ret), K(max_ser_size), K(unique_id_array));
   return ret;
 }
 
