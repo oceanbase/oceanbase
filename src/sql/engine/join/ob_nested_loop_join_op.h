@@ -122,8 +122,6 @@ public:
   int fill_cur_row_rescan_param();
   int calc_other_conds(bool &is_match);
 
-public:
-  static const int64_t PX_RESCAN_BATCH_ROW_COUNT = 8192;
 private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoinOp::*state_operation_func_type)();

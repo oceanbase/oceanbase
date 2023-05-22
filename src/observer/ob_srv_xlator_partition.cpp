@@ -162,6 +162,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObInitTaskP, gctx_);
   RPC_PROCESSOR(ObInitFastSqcP, gctx_);
   RPC_PROCESSOR(ObPxTenantTargetMonitorP, gctx_);
+  RPC_PROCESSOR(ObPxCleanDtlIntermResP, gctx_);
   // SQL Estimate
   RPC_PROCESSOR(ObEstimatePartitionRowsP, gctx_);
 

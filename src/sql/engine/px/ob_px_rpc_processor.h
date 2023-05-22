@@ -193,6 +193,18 @@ private:
   const observer::ObGlobalContext &global_ctx_;
 };
 
+class ObPxCleanDtlIntermResP
+    : public obrpc::ObRpcProcessor<obrpc::ObPxRpcProxy::ObRpc<obrpc::OB_CLEAN_DTL_INTERM_RESULT> >
+{
+public:
+  ObPxCleanDtlIntermResP(const observer::ObGlobalContext &gctx)
+  {}
+  virtual ~ObPxCleanDtlIntermResP() = default;
+  virtual int init() final { return OB_SUCCESS; }
+  virtual void destroy() final {}
+  virtual int process() final;
+};
+
 }  // sql
 }  // oceanbase
 

@@ -178,6 +178,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObInitChannelPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObReportingWFPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
+  void clean_dtl_interm_result(ObExecContext &ctx);
   // end DATAHUB msg processing
 private:
   int do_cleanup_dfo(ObDfo &dfo);

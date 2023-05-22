@@ -77,6 +77,8 @@ OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
                     tablet_id_,
                     is_dml_,
                     is_loc_uncertain_);
+OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResInfo, ch_total_info_, sqc_id_, task_count_);
+OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
 
 int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
 {

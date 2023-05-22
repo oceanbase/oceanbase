@@ -51,7 +51,7 @@ public:
   // no need to serialize
   DTL_CHAN_STATE state_;
 
-  TO_STRING_KV(KP_(chid), K_(type), K_(peer), K_(role), K_(tenant_id), K(state_));
+  TO_STRING_KV(K_(chid), K_(type), K_(peer), K_(role), K_(tenant_id), K(state_));
 };
 
 class ObDtlChSet
@@ -70,6 +70,7 @@ public:
   int64_t count() const { return ch_info_set_.count(); }
   int assign(const ObDtlChSet &other);
   void reset() { ch_info_set_.reset(); }
+  common::ObIArray<dtl::ObDtlChannelInfo> &get_ch_info_set() { return ch_info_set_; }
   TO_STRING_KV(K_(exec_addr), K_(ch_info_set));
 protected:
   common::ObAddr exec_addr_;

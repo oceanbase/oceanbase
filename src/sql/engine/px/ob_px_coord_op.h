@@ -135,6 +135,8 @@ protected:
   int init_batch_info();
   int batch_rescan();
   int erase_dtl_interm_result();
+  // send rpc to clean dtl interm result of not scheduled dfos.
+  virtual void clean_dfos_dtl_interm_result() = 0;
 protected:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator row_allocator_;

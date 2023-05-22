@@ -145,6 +145,10 @@ private:
   int init_store_rows(int64_t n_ways);
   int setup_readers();
   void destroy_readers();
+  virtual void clean_dfos_dtl_interm_result() override
+  {
+    msg_proc_.clean_dtl_interm_result(ctx_);
+  }
 private:
   ObPxMSCoordOpEventListener listener_;
   ObSerialDfoScheduler serial_scheduler_;

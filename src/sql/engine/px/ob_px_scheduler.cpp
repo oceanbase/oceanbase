@@ -128,6 +128,16 @@ int ObPxMsgProc::startup_msg_loop(ObExecContext &ctx)
   return ret;
 }
 
+void ObPxMsgProc::clean_dtl_interm_result(ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scheduler_)) {
+    LOG_WARN("dfo scheduler is null");
+  } else {
+    scheduler_->clean_dtl_interm_result(ctx);
+  }
+}
+
 // 1. 根据 pkt 信息找到对应 dfo, sqc，标记当前 sqc 线程分配完成
 // 2. 判断该 dfo 下是否所有 sqc 都分配线程完成
 //    如果完成，则标记 dfo 为 thread_inited, 进入第 3 步，否则结束处理

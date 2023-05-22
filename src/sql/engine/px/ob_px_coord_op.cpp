@@ -567,6 +567,7 @@ int ObPxCoordOp::inner_close()
     LOG_WARN("release dtl channel failed", K(release_channel_ret));
   }
   ctx_.del_extra_check(server_alive_checker_);
+  clean_dfos_dtl_interm_result();
   LOG_TRACE("byebye. exit QC Coord");
   return ret;
 }

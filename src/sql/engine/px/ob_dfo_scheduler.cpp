@@ -627,6 +627,84 @@ int ObSerialDfoScheduler::do_schedule_dfo(ObExecContext &ctx, ObDfo &dfo) const
 }
 
 
+void ObSerialDfoScheduler::clean_dtl_interm_result(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObDfo *> &all_dfos = coord_info_.dfo_mgr_.get_all_dfos();
+  ObDfo *last_dfo = all_dfos.at(all_dfos.count() - 1);
+  if (OB_NOT_NULL(last_dfo) && last_dfo->is_scheduled() && OB_NOT_NULL(last_dfo->parent())
+      && last_dfo->parent()->is_root_dfo()) {
+    // all dfo scheduled, do nothing.
+    LOG_TRACE("all dfo scheduled.");
+  } else {
+    const ObDfo *root = coord_info_.dfo_mgr_.get_root_dfo();
+    int64_t batch_size = coord_info_.get_rescan_param_count();
+    ObSEArray<ObDfo*, 8> dfos;
+    common::hash::ObHashMap<ObAddr, ObPxCleanDtlIntermResArgs *> map;
+    ObIAllocator &allocator = exec_ctx.get_allocator();
+    for (int64_t i = 0; i < all_dfos.count(); i++) {
+      ObDfo *dfo = all_dfos.at(i);
+      ObDfo *parent = NULL;
+      if (OB_NOT_NULL(dfo) && dfo->is_scheduled() && NULL != (parent = dfo->parent())
+          && !parent->is_root_dfo() && !parent->is_scheduled()) {
+        // if current dfo is scheduled but parent dfo is not scheduled.
+        for (int64_t j = 0; j < parent->get_sqcs_count(); j++) {
+          ObPxSqcMeta &sqc = parent->get_sqcs().at(j);
+          int64_t msg_idx = 0;
+          for (; msg_idx < sqc.get_serial_receive_channels().count(); msg_idx++) {
+            if (sqc.get_serial_receive_channels().at(msg_idx).get_child_dfo_id() == dfo->get_dfo_id()) {
+              break;
+            }
+          }
+          if (OB_LIKELY(msg_idx < sqc.get_serial_receive_channels().count())) {
+            ObPxCleanDtlIntermResArgs *arg = NULL;
+            if (!map.created() && OB_FAIL(map.create(8, "CleanDtlRes"))) {
+              LOG_WARN("create map failed", K(ret));
+            } else if (OB_FAIL(map.get_refactored(sqc.get_exec_addr(), arg))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                void *buf = NULL;
+                if (OB_ISNULL(buf = allocator.alloc(sizeof(ObPxCleanDtlIntermResArgs)))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("alloc failed", K(ret));
+                } else {
+                  arg = new(buf) ObPxCleanDtlIntermResArgs();
+                  arg->batch_size_ = coord_info_.get_rescan_param_count();
+                  if (OB_FAIL(map.set_refactored(sqc.get_exec_addr(), arg))) {
+                    LOG_WARN("set refactored failed", K(ret));
+                  }
+                }
+              } else {
+                LOG_WARN("get refactored failed", K(ret));
+              }
+            }
+            if (OB_SUCC(ret) && OB_NOT_NULL(arg)) {
+              ObPxReceiveDataChannelMsg &msg = sqc.get_serial_receive_channels().at(msg_idx);
+              if (OB_FAIL(arg->info_.push_back(ObPxCleanDtlIntermResInfo(msg.get_ch_total_info(),
+                          sqc.get_sqc_id(), sqc.get_task_count())))) {
+                LOG_WARN("push back failed", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+    // ignore allocate, set_refactored and push_back failure.
+    //  send rpc to addrs inserted into the map successfully.
+    if (OB_UNLIKELY(!map.empty())) {
+      LOG_TRACE("clean dtl res map", K(map.size()));
+      ObSQLSessionInfo *session = exec_ctx.get_my_session();
+      uint64_t tenant_id = OB_NOT_NULL(session) ? session->get_effective_tenant_id() : OB_SYS_TENANT_ID;
+      auto iter = map.begin();
+      for (; iter != map.end(); iter++) {
+        if (OB_FAIL(coord_info_.rpc_proxy_.to(iter->first).by(tenant_id).clean_dtl_interm_result(*iter->second, NULL))) {
+          LOG_WARN("send clean dtl interm result rpc failed", K(ret), K(iter->first), KPC(iter->second));
+        }
+        LOG_TRACE("clean dtl res map", K(iter->first), K(*(iter->second)));
+      }
+    }
+  }
+}
+
 // -------------分割线-----------
 
 // 启动 DFO 的 SQC 线程
