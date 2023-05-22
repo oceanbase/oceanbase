@@ -4621,7 +4621,10 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
           }
           PRINT_EXPR(expr->get_param_expr(i));
           ObObj attr_key_obj = static_cast<ObConstRawExpr*>(expr->get_param_expr(i + 1))->get_value();
-          if (attr_key_obj.get_type() == ObObjType::ObUnknownType) {
+          ObItemType expr_type = expr->get_param_expr(i + 1)->get_expr_type();
+          if (expr_type == T_REF_COLUMN ||
+              expr_type == T_FUN_SYS_CAST ||
+              attr_key_obj.get_type() == ObObjType::ObUnknownType) {
             DATA_PRINTF(" as evalname ");
             PRINT_EXPR(expr->get_param_expr(i + 1));
           } else if (!attr_key_obj.get_string().empty()) {
