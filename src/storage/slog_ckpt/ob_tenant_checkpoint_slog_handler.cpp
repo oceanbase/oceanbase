@@ -205,7 +205,7 @@ int ObTenantCheckpointSlogHandler::replay_checkpoint(const ObTenantSuperBlock &s
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       super_block.ls_meta_entry_, replay_ls_op, meta_block_list))) {
     LOG_WARN("fail to replay ls meta checkpoint", K(ret));
-  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
+  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(meta_block_list, false /*switch handle*/))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       super_block.tablet_meta_entry_, replay_tablet_op, meta_block_list))) {
@@ -215,7 +215,7 @@ int ObTenantCheckpointSlogHandler::replay_checkpoint(const ObTenantSuperBlock &s
   } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       super_block.ls_dup_table_entry_, replay_dup_table_ls_meta_op, meta_block_list))) {
     LOG_WARN("fail to replay tablet checkpoint", K(ret));
-  } else if (OB_FAIL(tablet_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
+  } else if (OB_FAIL(ls_block_handle_.add_macro_blocks(meta_block_list, true /*switch handle*/))) {
     LOG_WARN("fail to add_macro_blocks", K(ret));
   }
 
