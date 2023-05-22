@@ -1108,7 +1108,7 @@ ObString ObTxReadSnapshot::get_source_name() const
 }
 
 ObTxExecResult::ObTxExecResult()
-  : allocator_("TxExecResult", MTL_ID()),
+  : allocator_("TxExecResult", 0 == MTL_ID() ? OB_SERVER_TENANT_ID : MTL_ID()),
     incomplete_(false),
     touched_ls_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),
     parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),

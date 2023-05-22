@@ -2131,7 +2131,7 @@ void ObPrimaryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    int64_t idle_time_us = 100 * 1000L;
+    int64_t idle_time_us = 1000 * 1000L;
     int tmp_ret = OB_SUCCESS;
     while (!has_set_stop()) {
       {
