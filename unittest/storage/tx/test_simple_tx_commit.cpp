@@ -12,6 +12,8 @@
 
 #include <gtest/gtest.h>
 #include <vector>
+#define private public
+#define protected public
 #include "ob_mock_2pc_ctx.h"
 
 namespace oceanbase
@@ -226,6 +228,81 @@ TEST_F(TestMockOb2pcCtx, test_simple_abort2)
   // ========== Check Test Valid ==========
   EXPECT_EQ(true, ctx1.check_status_valid(false/*should commit*/));
   EXPECT_EQ(true, ctx2.check_status_valid(false/*should commit*/));
+}
+
+TEST_F(TestMockOb2pcCtx, test_single_participants_prepare)
+{
+  MockOb2pcCtx ctx1;
+  ctx1.init(&mailbox_mgr_);
+  auto addr1 = ctx1.get_addr();
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  ctx1.participants_.assign(participants.begin(), participants.end());
+
+  // ========== Two Phase Commit prepare Phase ==========
+  // ctx1 start prepare state
+  ctx1.downstream_state_ = ObTxState::PREPARE;
+  ctx1.set_upstream_state(ObTxState::PREPARE);
+  ctx1.handle_timeout();
+  EXPECT_EQ(ObTxState::COMMIT, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::PRE_COMMIT, ctx1.get_downstream_state());
+}
+
+TEST_F(TestMockOb2pcCtx, test_single_participants_precommit)
+{
+  MockOb2pcCtx ctx1;
+  ctx1.init(&mailbox_mgr_);
+  auto addr1 = ctx1.get_addr();
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  ctx1.participants_.assign(participants.begin(), participants.end());
+
+  // ========== Two Phase Commit precommit Phase ==========
+  ctx1.downstream_state_ = ObTxState::PREPARE;
+  ctx1.set_upstream_state(ObTxState::PRE_COMMIT);
+  ctx1.handle_timeout();
+  EXPECT_EQ(ObTxState::COMMIT, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::PRE_COMMIT, ctx1.get_downstream_state());
+}
+
+TEST_F(TestMockOb2pcCtx, test_single_participants_precommit2)
+{
+  MockOb2pcCtx ctx1;
+  ctx1.init(&mailbox_mgr_);
+  auto addr1 = ctx1.get_addr();
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  ctx1.participants_.assign(participants.begin(), participants.end());
+
+  // ========== Two Phase Commit precommit Phase ==========
+  ctx1.downstream_state_ = ObTxState::PRE_COMMIT;
+  ctx1.set_upstream_state(ObTxState::PRE_COMMIT);
+  ctx1.handle_timeout();
+  EXPECT_EQ(ObTxState::COMMIT, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::PRE_COMMIT, ctx1.get_downstream_state());
+  ctx1.apply();
+  EXPECT_EQ(ObTxState::CLEAR, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::COMMIT, ctx1.get_downstream_state());
+}
+
+TEST_F(TestMockOb2pcCtx, test_single_participants_commit)
+{
+  MockOb2pcCtx ctx1;
+  ctx1.init(&mailbox_mgr_);
+  auto addr1 = ctx1.get_addr();
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  ctx1.participants_.assign(participants.begin(), participants.end());
+
+  // ========== Two Phase Commit precommit Phase ==========
+  ctx1.downstream_state_ = ObTxState::COMMIT;
+  ctx1.set_upstream_state(ObTxState::COMMIT);
+  ctx1.handle_timeout();
+  EXPECT_EQ(ObTxState::CLEAR, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::COMMIT, ctx1.get_downstream_state());
+  ctx1.apply();
+  EXPECT_EQ(ObTxState::CLEAR, ctx1.get_upstream_state());
+  EXPECT_EQ(ObTxState::CLEAR, ctx1.get_downstream_state());
 }
 
 }

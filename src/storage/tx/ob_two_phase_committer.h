@@ -351,6 +351,12 @@ private:
 
   virtual int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type) = 0;
 
+  // The next state of current state, it is based on the order of ObTxState.
+  //
+  // It will return ObTxState::UNKNOWN if you pass the state which is smaller
+  // than ObTxState::INIT or larger than ObTxState::CLEAR.
+  ObTxState decide_next_state_(const ObTxState cur_state);
+
   // Because the post_msg is best effect, we need retry to post the msg under
   // exception.
   //

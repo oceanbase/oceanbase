@@ -242,17 +242,34 @@ int ObTxCycleTwoPhaseCommitter::handle_timeout()
     TRANS_LOG(WARN, "retransmit upstream msg failed", KR(tmp_ret));
   }
 
-  // if a distributed trans has one participant and its 2pc state (up and down) is prepare,
-  // then try enter into pre commit state.
-  // NOTE that if a distributed trans has at least two participants,
-  // the state can be drived by message.
+  // If a distributed txn has one participant and it cannot drive its state by
+  // msg or log, then we will try enter into the next state by timeout.
+  //
+  // NOTE that if a distributed txn has at least two participants, the state
+  // can be drived by message.
   if (is_root()) {
     const int SINGLE_COUNT = 1;
     if (SINGLE_COUNT == get_downstream_size()
-        && ObTxState::PREPARE == get_downstream_state()
-        && ObTxState::PREPARE == get_upstream_state()) {
-      if (OB_FAIL(try_enter_pre_commit_state())) {
-        TRANS_LOG(WARN, "try enter into pre commit state failed", K(ret));
+        && !is_2pc_logging()) {
+      if (get_upstream_state() == get_downstream_state()
+          && ObTxState::CLEAR > get_downstream_state()
+          && ObTxState::PREPARE <= get_downstream_state()) {
+        ObTxState next_state = decide_next_state_(get_downstream_state());
+        if (OB_TMP_FAIL(drive_self_2pc_phase(next_state))) {
+          TRANS_LOG(WARN, "enter next phase failed", K(tmp_ret), K(*this));
+        }
+      }
+
+      // If a distributed txn has one participant and its state is pre_commit
+      // and cannot drive its state by msg, then we will try to apply the
+      // pre_commit.
+      //
+      // NOTE 2pc with other state will drive it self with log
+      if (ObTxState::PRE_COMMIT == get_upstream_state()
+          && ObTxState::PREPARE == get_downstream_state()) {
+        if (OB_TMP_FAIL(on_pre_commit())) {
+          TRANS_LOG(WARN, "apply pre commit failed", K(tmp_ret), K(*this));
+        }
       }
     }
   }
@@ -300,6 +317,45 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_()
     }
   }
   return ret;
+}
+
+ObTxState ObTxCycleTwoPhaseCommitter::decide_next_state_(const ObTxState cur_state)
+{
+  ObTxState next_state = ObTxState::UNKNOWN;
+
+  switch (cur_state)
+  {
+  case ObTxState::INIT: {
+    next_state = ObTxState::REDO_COMPLETE;
+    break;
+  }
+  case ObTxState::REDO_COMPLETE: {
+    next_state = ObTxState::PREPARE;
+    break;
+  }
+  case ObTxState::PREPARE: {
+    next_state = ObTxState::PRE_COMMIT;
+    break;
+  }
+  case ObTxState::PRE_COMMIT: {
+    next_state = ObTxState::COMMIT;
+    break;
+  }
+  case ObTxState::COMMIT: {
+    next_state = ObTxState::CLEAR;
+    break;
+  }
+  case ObTxState::ABORT: {
+    next_state = ObTxState::CLEAR;
+    break;
+  }
+  default: {
+    next_state = ObTxState::UNKNOWN;
+    break;
+  }
+  }
+
+  return next_state;
 }
 
 int ObTxCycleTwoPhaseCommitter::decide_downstream_msg_type_(bool &need_submit,
