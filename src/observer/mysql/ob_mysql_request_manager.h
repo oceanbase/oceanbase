@@ -75,8 +75,9 @@ public:
   // the high and low watermarks eliminated by line are set as a percentage of the queue size
   static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9;  // 90%
   static constexpr float LOW_LEVEL_EVICT_PERCENTAGE = 0.8;   // 80%
-  // percentage of sql audits deleted for each release operation
-  static constexpr float BATCH_RELEASE_PERCENTAGE = 0.005;  // 0.005
+  // record number of sql audits deleted for each release operation
+  static const int64_t BATCH_RELEASE_SIZE = 50000;           // 5w
+  static const int64_t MINI_MODE_BATCH_RELEASE_SIZE = 5000;  // 5k
   // interval between elimination
   static const int64_t EVICT_INTERVAL = 1000000;  // 1s
   typedef common::ObRaQueue::Ref Ref;

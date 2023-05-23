@@ -35,6 +35,13 @@ int ObEliminateTask::init(const ObMySQLRequestManager* request_manager)
     // can't call ObMySQLRequestManager::get_mem_limit for now, tenant not inited
     // set config_mem_limit_ to 64M
     config_mem_limit_ = 64 * 1024 * 1024;  // 64M
+    common::ObConcurrentFIFOAllocator *allocator = request_manager_->get_allocator();
+    if (OB_ISNULL(allocator)) {
+      ret = OB_NOT_INIT;
+      LOG_WARN("request manager allocator not init", K(ret));
+    } else {
+      allocator->set_total_limit(config_mem_limit_);
+    }
     disable_timeout_check();
   }
   return ret;
@@ -135,7 +142,9 @@ void ObEliminateTask::runTimerTask()
     LOG_WARN("fail to get sql audit evict memory level", K(ret));
   } else {
     int64_t queue_size = request_manager_->get_capacity();
-    release_cnt = queue_size * ObMySQLRequestManager::BATCH_RELEASE_PERCENTAGE;
+    bool use_mini_queue = lib::is_mini_mode();
+    release_cnt = use_mini_queue ? ObMySQLRequestManager::MINI_MODE_BATCH_RELEASE_SIZE
+                                 : ObMySQLRequestManager::BATCH_RELEASE_SIZE;
     evict_high_size_level = queue_size * ObMySQLRequestManager::HIGH_LEVEL_EVICT_PERCENTAGE;
     evict_low_size_level = queue_size * ObMySQLRequestManager::LOW_LEVEL_EVICT_PERCENTAGE;
     allocator = request_manager_->get_allocator();
