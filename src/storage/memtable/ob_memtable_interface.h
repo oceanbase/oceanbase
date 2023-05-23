@@ -78,7 +78,6 @@ public:
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual uint64_t get_tenant_id() const = 0;
-  virtual bool has_read_elr_data() const = 0;
   virtual storage::ObTxTableGuard *get_tx_table_guard() = 0;
   virtual int get_conflict_trans_ids(common::ObIArray<transaction::ObTransIDAndAddr> &array) = 0;
   VIRTUAL_TO_STRING_KV("", "");

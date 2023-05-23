@@ -2492,8 +2492,6 @@ int ObLSTabletService::insert_rows(
     void *ptr = nullptr;
     ObStoreRow *tbl_rows = nullptr;
     int64_t row_count = 0;
-    //index of row that exists
-    int64_t row_count_first_bulk = 0;
     bool first_bulk = true;
     ObNewRow *rows = nullptr;
     ObRowsInfo rows_info;
@@ -2504,16 +2502,21 @@ int ObLSTabletService::insert_rows(
     }
 
     while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+      ObStoreRow reserved_row;
       if (row_count <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("row_count should be greater than 0", K(ret));
+      } else if (!rows_info.is_inited()
+          && OB_FAIL(rows_info.init(data_table,
+                                    ctx,
+                                    tablet_handle.get_obj()->get_full_read_info()))) {
+        LOG_WARN("Failed to init rows info", K(ret), K(data_table));
+      } else if (1 == row_count) {
+        tbl_rows = &reserved_row;
+        tbl_rows[0].flag_.set_flag(ObDmlFlag::DF_INSERT);
       } else if (first_bulk) {
         first_bulk = false;
-        row_count_first_bulk = row_count;
-        const ObTableReadInfo &full_read_info = tablet_handle.get_obj()->get_full_read_info();
-        if (OB_FAIL(rows_info.init(data_table, ctx, full_read_info))) {
-          LOG_WARN("Failed to init rows info", K(ret), K(data_table));
-        } else if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
+        if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("fail to allocate memory", K(ret), K(row_count));
         } else {

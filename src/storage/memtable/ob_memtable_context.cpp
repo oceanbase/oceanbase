@@ -61,7 +61,7 @@ ObMemtableCtx::ObMemtableCtx()
       callback_free_count_(0),
       is_read_only_(false),
       is_master_(true),
-      read_elr_data_(false),
+      has_row_updated_(false),
       lock_mem_ctx_(ctx_cb_allocator_),
       is_inited_(false)
 {
@@ -132,7 +132,7 @@ void ObMemtableCtx::reset()
     callback_free_count_ = 0;
     callback_alloc_count_ = 0;
     callback_mem_used_ = 0;
-    read_elr_data_ = false;
+    has_row_updated_ = false;
     trans_mem_total_size_ = 0;
     lock_for_read_retry_count_ = 0;
     lock_for_read_elapse_ = 0;

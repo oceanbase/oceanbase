@@ -395,7 +395,8 @@ public:
   virtual void add_trans_mem_total_size(const int64_t size);
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }
   uint64_t get_tenant_id() const;
-  inline bool has_read_elr_data() const { return read_elr_data_; }
+  inline bool has_row_updated() const { return has_row_updated_; }
+  inline void set_row_updated() { has_row_updated_ = true; }
   int remove_callbacks_for_fast_commit();
   int remove_callback_for_uncommited_txn(
     const memtable::ObMemtableSet *memtable_set,
@@ -498,7 +499,6 @@ private:
       const transaction::tablelock::ObTableLockOp &lock_op,
       const bool is_replay);
   static int64_t get_us() { return ::oceanbase::common::ObTimeUtility::current_time(); }
-  void set_read_elr_data(const bool read_elr_data) { read_elr_data_ = read_elr_data; }
   int reset_log_generator_();
   int reuse_log_generator_();
   void inc_pending_log_size(const int64_t size)
@@ -539,9 +539,9 @@ private:
   int64_t callback_free_count_;
   bool is_read_only_;
   bool is_master_;
-  // Used to indicate whether elr data is read. When a statement executes,
-  // if one row involves elr data, set it to true, and the row can't be purged
-  bool read_elr_data_;
+  // Used to indicate whether mvcc row is updated or not.
+  // When a statement is update or select for update, the value can be set ture;
+  bool has_row_updated_;
   storage::ObTxTableGuard tx_table_guard_;
   // For deaklock detection
   // The trans id of the holder of the conflict row lock

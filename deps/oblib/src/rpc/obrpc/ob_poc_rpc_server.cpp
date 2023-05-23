@@ -178,6 +178,9 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
     RPC_LOG(ERROR, "pn_listen failed", K(ret));
   } else {
     ATOMIC_STORE(&global_deliver, deliver);
+    if (2 == net_thread_count) {
+      net_thread_count = 1;
+    }
     int count = 0;
     if ((count = pn_provision(lfd, DEFAULT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
       ret = OB_ERR_SYS;

@@ -408,6 +408,8 @@ int ObMemtable::lock_(ObStoreCtx &ctx,
   } else if (OB_FAIL(row_writer.write_rowkey(rowkey, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
+    // for elr optimization
+    ctx.mvcc_acc_ctx_.get_mem_ctx()->set_row_updated();
     ObMemtableData mtd(blocksstable::ObDmlFlag::DF_LOCK, len, buf);
     ObTxNodeArg arg(&mtd,        /*memtable_data*/
                     NULL,        /*old_data*/
@@ -2478,6 +2480,8 @@ int ObMemtable::set_(ObStoreCtx &ctx,
     } else {
       MEMCPY(new_buf, buf, len);
       old_row_data.set(new_buf, len);
+      // for elr optimization
+      ctx.mvcc_acc_ctx_.get_mem_ctx()->set_row_updated();
     }
   }
   if (OB_SUCC(ret)) {
