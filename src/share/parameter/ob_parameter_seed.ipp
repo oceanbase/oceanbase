@@ -766,6 +766,9 @@ DEF_CAP_WITH_CHECKER(log_disk_size, OB_CLUSTER_PARAMETER, "0G", common::ObConfig
     "maximum of clog disk size before reuse clog files, should be less than log_disk_size."
     "Range: [0G, +∞)",
     ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(_max_trx_ctx_count, OB_CLUSTER_PARAMETER, "500000", "[100000,)",
+    "The threshold of transaction context count in single server. Range : [100000,)",
+    ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(election_blacklist_interval, OB_CLUSTER_PARAMETER, "1800s", "[0s, 24h]",
     "If leader_revoke, this replica cannot be elected to leader in election_blacklist_interval"

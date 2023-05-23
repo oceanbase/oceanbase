@@ -115,20 +115,24 @@ const char* ObPartitionTransCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_M
 #define MAKE_FACTORY_CLASS_IMPLEMENT_USE_RP_ALLOC(object_name, LABEL, arg...) \
   MAKE_FACTORY_CLASS_IMPLEMENT(object_name, LABEL, RP, arg)
 
-ObTransCtx* ObTransCtxFactory::alloc(const int64_t ctx_type)
+int ObTransCtxFactory::alloc(const int64_t ctx_type, const bool for_replay, ObTransCtx *&ctx)
 {
-  int tmp_ret = OB_SUCCESS;
-  ObTransCtx* ctx = NULL;
+  int ret = OB_SUCCESS;
 
   if (OB_LIKELY(!ObTransErrsim::is_memory_errsim())) {
     if (ObTransCtxType::SCHEDULER == ctx_type) {
-      if (OB_UNLIKELY(ATOMIC_LOAD(&active_sche_ctx_count_) > MAX_SCHE_CTX_COUNT)) {
+      const int64_t max_sche_trx_count = GCONF._max_trx_ctx_count / 5;
+      if (OB_UNLIKELY(ATOMIC_LOAD(&active_sche_ctx_count_) > max_sche_trx_count)) {
+        ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
         TRANS_LOG(ERROR, "scheduler context memory alloc failed", K_(active_sche_ctx_count));
-        tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
       } else if (NULL != (ctx = op_reclaim_alloc(ObScheTransCtx))) {
         (void)ATOMIC_FAA(&active_sche_ctx_count_, 1);
       } else {
         // do nothing
+      }
+      // for alarm and no error code
+      if (OB_UNLIKELY(ATOMIC_LOAD(&active_sche_ctx_count_) > max_sche_trx_count * 0.9)) {
+        TRANS_LOG(ERROR, "scheduler context almostly reach threhold", K_(active_sche_ctx_count));
       }
     } else if (ObTransCtxType::COORDINATOR == ctx_type) {
       if (NULL != (ctx = op_reclaim_alloc(ObCoordTransCtx))) {
@@ -137,30 +141,44 @@ ObTransCtx* ObTransCtxFactory::alloc(const int64_t ctx_type)
     } else if (ObTransCtxType::PARTICIPANT == ctx_type) {
       // During restart, the number of transaction contexts is relatively large
       // and cannot be limited, otherwise there will be circular dependencies
+      const int64_t max_part_trx_count = for_replay ? GCONF._max_trx_ctx_count + 100000 : GCONF._max_trx_ctx_count;
       if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
+        ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
         TRANS_LOG(ERROR, "participant context memory alloc failed", K_(active_part_ctx_count));
-        tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
         //} else if (NULL != (ctx = op_reclaim_alloc(ObPartTransCtx))) {
       } else if (NULL != (ctx = sop_borrow(ObPartTransCtx))) {
         (void)ATOMIC_FAA(&active_part_ctx_count_, 1);
       } else {
         // do nothing
       }
+      // for alarm and no error code
+      if (OB_UNLIKELY(ATOMIC_LOAD(&active_part_ctx_count_) > max_part_trx_count * 0.9)) {
+        TRANS_LOG(ERROR, "participant context almostly reach threhold", K_(active_part_ctx_count));
+      }
     } else if (ObTransCtxType::SLAVE_PARTICIPANT == ctx_type) {
       // During restart, the number of transaction contexts is relatively large
       // and cannot be limited, otherwise there will be circular dependencies
+      const int64_t max_part_trx_count = for_replay ? GCONF._max_trx_ctx_count + 100000 : GCONF._max_trx_ctx_count;
       if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == observer::SS_SERVING) {
         TRANS_LOG(ERROR, "slave participant context memory alloc failed", K_(active_part_ctx_count));
-        tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
+        ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
       } else if (NULL != (ctx = op_reclaim_alloc(ObSlaveTransCtx))) {
         (void)ATOMIC_FAA(&active_part_ctx_count_, 1);
       } else {
         // do nothing
       }
+      // for alarm and no error code
+      if (OB_UNLIKELY(ATOMIC_LOAD(&active_part_ctx_count_) > max_part_trx_count * 0.9)) {
+        TRANS_LOG(ERROR, "participant context almostly reach threhold", K_(active_part_ctx_count));
+      }
     } else {
       TRANS_LOG(ERROR, "unexpected error when context alloc", K(ctx_type));
-      tmp_ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_UNEXPECTED;
     }
+  }
+  if (OB_SUCC(ret) && NULL == ctx) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "ObTransCtx alloc failed", K(ret), K(ctx_type), K(for_replay));
   }
   if (REACH_TIME_INTERVAL(TRANS_MEM_STAT_INTERVAL)) {
     TRANS_LOG(INFO,
@@ -172,8 +190,7 @@ ObTransCtx* ObTransCtxFactory::alloc(const int64_t ctx_type)
     (void)ATOMIC_STORE(&total_release_part_ctx_count_, 0);
   }
 
-  (void)tmp_ret;  // make compiler happy
-  return ctx;
+  return ret;
 }
 
 void ObTransCtxFactory::release(ObTransCtx* ctx)

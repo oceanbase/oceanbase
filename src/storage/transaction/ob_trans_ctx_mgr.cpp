@@ -470,9 +470,15 @@ int ObPartitionTransCtxMgr::get_trans_ctx_(const ObTransID& trans_id, const bool
       } else if (!for_replay && is_blocked_()) {
         TRANS_LOG(WARN, "partition is blocked", K_(partition), K(trans_id));
         ret = OB_PARTITION_IS_BLOCKED;
-      } else if (OB_ISNULL(tmp_ctx = ObTransCtxFactory::alloc(ctx_type_))) {
+      } else if (OB_FAIL(ObTransCtxFactory::alloc(ctx_type_, for_replay, tmp_ctx))) {
         TRANS_LOG(WARN, "alloc transaction context error", K_(partition), K(trans_id), K_(ctx_type));
-        ret = OB_ALLOCATE_MEMORY_FAILED;
+        // retry replay clog when alloc trans ctx encount memory fail;
+        if (for_replay) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+        }
+      } else if (OB_ISNULL(tmp_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "unexpected part ctx", K(ret), K_(partition), K(trans_id), K(for_replay));
       } else if (OB_FAIL(tmp_ctx->set_partition_trans_ctx_mgr(this))) {
         TRANS_LOG(WARN, "set partition trans ctx mgr error", KR(ret), K_(partition), K(trans_id));
         ObTransCtxFactory::release(tmp_ctx);

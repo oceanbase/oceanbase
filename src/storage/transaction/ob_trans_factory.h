@@ -47,7 +47,7 @@ class EndTransCallbackTask;
 
 class ObTransCtxFactory {
 public:
-  static ObTransCtx* alloc(const int64_t ctx_type);
+  static int alloc(const int64_t ctx_type, const bool for_replay, ObTransCtx *&ctx);
   static void release(ObTransCtx* ctx);
   static int64_t get_alloc_count()
   {

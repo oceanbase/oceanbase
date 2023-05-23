@@ -328,6 +328,7 @@ _large_query_io_percentage
 _max_elr_dependent_trx_count
 _max_partition_cnt_per_server
 _max_schema_slot_num
+_max_trx_ctx_count
 _max_trx_size
 _migrate_block_verify_level
 _mini_merge_concurrency
