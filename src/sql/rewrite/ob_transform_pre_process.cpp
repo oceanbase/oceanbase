@@ -8524,41 +8524,33 @@ int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
     LOG_WARN("failed to init compare context", K(ret));
   } else {
     if (is_mysql_mode()) {
-      if (OB_FAIL(ObTransformUtils::replace_exprs(static_const_exprs, static_remove_const_exprs, stmt->get_having_exprs()))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_exprs(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_having_exprs()))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+      ObStmtExprReplacer replacer;
+      replacer.remove_all();
+      replacer.add_scope(SCOPE_HAVING);
+      replacer.add_scope(SCOPE_SELECT);
+      replacer.add_scope(SCOPE_ORDERBY);
+      replacer.set_recursive(false);
+      replacer.set_skip_bool_param_mysql(true);
+      if (OB_FAIL(replacer.add_replace_exprs(static_const_exprs, static_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(replacer.add_replace_exprs(column_ref_exprs, column_ref_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
+        LOG_WARN("failed to iterate stmt expr", K(ret));
       }
-    } else if (is_oracle_mode() && OB_FAIL(ObTransformUtils::replace_exprs(exec_params, exec_params_remove_const_exprs, stmt->get_having_exprs()))) {
-      LOG_WARN("failed to replace exec_params in having expr", K(ret));
-    }
-  }
-  for (int i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
-    if (OB_ISNULL(stmt->get_select_item(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (is_mysql_mode()) {
-      if (OB_FAIL(ObTransformUtils::replace_expr(static_const_exprs, static_remove_const_exprs, stmt->get_select_item(i).expr_))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_select_item(i).expr_))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
+    } else {
+      ObStmtExprReplacer replacer;
+      replacer.remove_all();
+      replacer.add_scope(SCOPE_HAVING);
+      replacer.add_scope(SCOPE_SELECT);
+      replacer.add_scope(SCOPE_ORDERBY);
+      replacer.set_recursive(false);
+      replacer.set_skip_bool_param_mysql(false);
+      if (OB_FAIL(replacer.add_replace_exprs(exec_params, exec_params_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
+        LOG_WARN("failed to iterate stmt expr", K(ret));
       }
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(exec_params, exec_params_remove_const_exprs, stmt->get_select_item(i).expr_))) {
-      LOG_WARN("failed to replace exec_params in having expr", K(ret));
-    }
-  }
-  for (int i = 0; OB_SUCC(ret) && i < stmt->get_order_item_size(); ++i) {
-    if (OB_ISNULL(stmt->get_order_item(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (is_mysql_mode()) {
-      if (OB_FAIL(ObTransformUtils::replace_expr(static_const_exprs, static_remove_const_exprs, stmt->get_order_item(i).expr_))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::replace_expr(column_ref_exprs, column_ref_remove_const_exprs, stmt->get_order_item(i).expr_))) {
-        LOG_WARN("failed to replace exec_params in having expr", K(ret));
-      }
-    } else if (OB_FAIL(ObTransformUtils::replace_expr(exec_params, exec_params_remove_const_exprs, stmt->get_order_item(i).expr_))) {
-      LOG_WARN("failed to replace exec_params in having expr", K(ret));
     }
   }
 
