@@ -171,6 +171,9 @@ int ObCheckpointExecutor::update_clog_checkpoint()
           } else if (OB_NOT_INIT == ret) {
             STORAGE_LOG(WARN, "palf has been disabled", K(ret), K(checkpoint_scn), K(ls_->get_ls_id()));
             ret = OB_SUCCESS;
+          } else if (OB_NEED_RETRY == ret) {
+            STORAGE_LOG(WARN, "locate_by_scn_coarsely need retry", K(checkpoint_scn), K(ls_->get_ls_id()));
+            ret = OB_SUCCESS;
           } else {
             STORAGE_LOG(ERROR, "locate lsn by logts failed", K(ret), K(ls_id),
                         K(checkpoint_scn), K(checkpoint_scn_in_ls_meta));

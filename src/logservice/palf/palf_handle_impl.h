@@ -466,6 +466,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) = 0;
 
@@ -482,6 +483,7 @@ public:
   // - OB_SUCCESS; locate_by_lsn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
