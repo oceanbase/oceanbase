@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "lib/queue/ob_fixed_queue.h"
 #include "ob_sql_task.h"
 #include "ob_sql.h"
 
@@ -97,63 +96,22 @@ int ObSqlTask::init(const int msg_type, const ObReqTimestamp &req_ts, const char
 
 int ObSqlTaskFactory::init()
 {
-  int ret = OB_SUCCESS;
-  int64_t fixed_num = 0;
-  if (!lib::is_mini_mode()) {
-    fixed_num = NORMAL_FIXED_TASK_NUM;
-  } else {
-    fixed_num = MINI_FIXED_TASK_NUM;
-  }
-  if (OB_FAIL(fixed_queue_.init(fixed_num))) {
-    SQL_LOG(WARN, "init fixed queue failed", K(ret), K(fixed_num));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < fixed_num; i++) {
-      ObSqlTask *task = alloc_(common::OB_SERVER_TENANT_ID);
-      if (OB_ISNULL(task)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else {
-        task->set_fixed_alloc();
-        if (OB_FAIL(fixed_queue_.push(task))) {
-          free_(task);
-          task = NULL;
-        }
-      }
-    }
-  }
-  return ret;
+  // do nothing
+  return OB_SUCCESS;
 }
 
 void ObSqlTaskFactory::destroy()
 {
-  ObSqlTask *task = NULL;
-  while (OB_SUCCESS == fixed_queue_.pop(task)) {
-    free_(task);
-    task = NULL;
-  }
 }
 
 ObSqlTask *ObSqlTaskFactory::alloc(const uint64_t tenant_id)
 {
-  int ret = OB_SUCCESS;
-  ObSqlTask *task = NULL;
-  if (OB_FAIL(fixed_queue_.pop(task))) {
-    task = alloc_(tenant_id);
-  }
-  return task;
+  return alloc_(tenant_id);
 }
 
 void ObSqlTaskFactory::free(ObSqlTask *task)
 {
-  int ret = OB_SUCCESS;
-  if (NULL != task) {
-    if (task->is_fixed_alloc()) {
-      if (OB_FAIL(fixed_queue_.push(task))) {
-        SQL_LOG(WARN, "free sql task failed", K(ret));
-      }
-    } else {
-      free_(task);
-    }
-  }
+  free_(task);
 }
 
 ObSqlTaskFactory &ObSqlTaskFactory::get_instance()

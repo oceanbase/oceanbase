@@ -40,7 +40,7 @@ class ObSqlTask : public observer::ObSrvTask
 {
   friend class ObSqlTaskFactory;
 public:
-  ObSqlTask() : msg_type_(0), size_(0), is_fixed_alloc_(false), handler_() {}
+  ObSqlTask() : msg_type_(0), size_(0), handler_() {}
   ~ObSqlTask() {}
   int init(const int msg_type, const ObReqTimestamp &req_ts, const char *buf, const int64_t size, ObSql *sql_engine);
   void reset();
@@ -53,13 +53,9 @@ public:
 public:
   static const int64_t MAX_SQL_TASK_SIZE = 16 * 1024 - 128;
 private:
-  void set_fixed_alloc() { is_fixed_alloc_ = true; }
-  bool is_fixed_alloc() const { return is_fixed_alloc_; }
-private:
   int msg_type_;
   char buf_[MAX_SQL_TASK_SIZE];
   int64_t size_;
-  bool is_fixed_alloc_;
   ObSqlTaskHandler handler_;
   ObReqTimestamp req_ts_;
 };
@@ -78,11 +74,6 @@ public:
 private:
   ObSqlTask *alloc_(const uint64_t tenant_id);
   void free_(ObSqlTask *task);
-private:
-  static const int64_t NORMAL_FIXED_TASK_NUM = 4096;
-  static const int64_t MINI_FIXED_TASK_NUM = 128;
-private:
-  ObFixedQueue<ObSqlTask> fixed_queue_;
 };
 
 } // transaction 
