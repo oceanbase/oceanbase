@@ -792,7 +792,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
         if (OB_FAIL(ls_->logstream_freeze(false /* !is_sync */))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
-      } else if (OB_FAIL(ls_->batch_tablet_freeze(need_flush_tablets, true/*is_sync*/))) {
+      } else if (OB_FAIL(ls_->batch_tablet_freeze(need_flush_tablets, false /* !is_sync */))) {
         STORAGE_LOG(WARN, "batch tablet freeze failed",
                     K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
       }
