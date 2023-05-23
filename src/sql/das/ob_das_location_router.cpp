@@ -785,6 +785,8 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
      * If it fails, then proceed with statement-level retries.*/
     if (OB_FAIL(block_renew_tablet_location(tablet_id, ls_loc))) {
       LOG_WARN("block renew tablet location failed", K(ret), K(tablet_id));
+    } else {
+      tablet_loc.ls_id_ = ls_loc.get_ls_id();
     }
   }
   ObBLKey bl_key;
