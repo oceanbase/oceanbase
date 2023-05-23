@@ -26,20 +26,22 @@ struct ObTableLoadFlag
 public:
   static const uint64_t BIT_IS_NEED_SORT = 1;
   static const uint64_t BIT_DATA_TYPE = 2;
-  static const uint64_t BIT_RESERVED = 61;
+  static const uint64_t BIT_DUP_ACTION_TYPE = 2;
+  static const uint64_t BIT_RESERVED = 59;
 
   union {
     uint64_t flag_;
     struct {
-      uint64_t is_need_sort_  : BIT_IS_NEED_SORT;
-      uint64_t data_type_       : BIT_DATA_TYPE;
-      uint64_t reserved_      : BIT_RESERVED;
+      uint64_t is_need_sort_   : BIT_IS_NEED_SORT;
+      uint64_t data_type_      : BIT_DATA_TYPE;
+      uint64_t dup_action_     : BIT_DUP_ACTION_TYPE;
+      uint64_t reserved_       : BIT_RESERVED;
     };
   };
 
   ObTableLoadFlag() : flag_(0) {}
   void reset() { flag_ = 0; }
-  TO_STRING_KV(K_(is_need_sort), K_(data_type));
+  TO_STRING_KV(K_(is_need_sort), K_(data_type), K_(dup_action));
 };
 
 struct ObTableLoadConfig final

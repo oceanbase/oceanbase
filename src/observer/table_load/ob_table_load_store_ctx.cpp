@@ -201,10 +201,8 @@ int ObTableLoadStoreCtx::init(
                          OB_NEWx(ObTableLoadErrorRowHandler, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadErrorRowHandler", KR(ret));
-    } else if (OB_FAIL(error_row_handler_->init(ctx_))) {
-      LOG_WARN("fail to init error row handler", KR(ret), K(ctx_->param_.tenant_id_),
-               K(ctx_->param_.table_id_), K(ctx_->param_.max_error_row_count_),
-               K(ctx_->param_.session_count_));
+    } else if (OB_FAIL(error_row_handler_->init(this))) {
+      LOG_WARN("fail to init error row handler", KR(ret));
     }
     // init session_ctx_array_
     else if (OB_FAIL(init_session_ctx_array())) {

@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "share/table/ob_table_load_define.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
 #include "storage/direct_load/ob_direct_load_multiple_datum_range.h"
 #include "storage/direct_load/ob_direct_load_multiple_sstable_scan_merge.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
@@ -26,15 +26,13 @@ public:
   ~ObDirectLoadDataFuseParam();
   bool is_valid() const;
   TO_STRING_KV(K_(tablet_id), K_(store_column_count), K_(table_data_desc), KP_(datum_utils),
-               KP_(error_row_handler), KP_(result_info));
+               KP_(dml_row_handler));
 public:
   common::ObTabletID tablet_id_;
   int64_t store_column_count_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  observer::ObTableLoadErrorRowHandler *error_row_handler_;
-  sql::ObLoadDupActionType dup_action_;
-  table::ObTableLoadResultInfo *result_info_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
 
 class ObDirectLoadDataFuse

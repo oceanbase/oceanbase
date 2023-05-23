@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_parallel_merge_ctx.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
@@ -355,8 +356,7 @@ public:
     ObDirectLoadMultipleSSTableScanMergeParam scan_merge_param;
     scan_merge_param.table_data_desc_ = parallel_merge_ctx_->store_ctx_->table_data_desc_;
     scan_merge_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
-    scan_merge_param.error_row_handler_ = parallel_merge_ctx_->store_ctx_->error_row_handler_;
-    scan_merge_param.result_info_ =  &(parallel_merge_ctx_->store_ctx_->result_info_);
+    scan_merge_param.dml_row_handler_ = parallel_merge_ctx_->store_ctx_->error_row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ctx_->merge_sstable_count_; ++i) {
       ObDirectLoadMultipleSSTable *sstable = tablet_ctx_->sstables_.at(i);
       if (OB_FAIL(sstable_array_.push_back(sstable))) {
