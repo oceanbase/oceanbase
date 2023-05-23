@@ -393,6 +393,14 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
   return ret;
 }
 
+#define CHECK_SUPPORT_OPTION_USER_ERROR(args)                                           \
+{                                                                                       \
+  LOG_USER_ERROR(OB_INVALID_ARGUMENT, args);                                            \
+  ret = common::OB_INVALID_ARGUMENT;                                                    \
+  SQL_LOG(WARN, "invalid argument", KR(ret), K(node->type_));                           \
+  break;                                                                                \
+}
+
 template<class T>
 int ObTenantResolver<T>::check_support_option(const T *stmt, const ParseNode *node)
 {
@@ -405,40 +413,34 @@ int ObTenantResolver<T>::check_support_option(const T *stmt, const ParseNode *no
     if (stmt->get_stmt_type() == stmt::T_CREATE_STANDBY_TENANT) {
       switch (node->type_) {
         case T_REPLICA_NUM: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_num");
+          CHECK_SUPPORT_OPTION_USER_ERROR("replica_num");
         }
         case T_CHARSET: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "charset");
+          CHECK_SUPPORT_OPTION_USER_ERROR("charset");
         }
         case T_COLLATION: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "collation");
+          CHECK_SUPPORT_OPTION_USER_ERROR("collation");
         }
         case T_ENABLE_ARBITRATION_SERVICE: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "enable_arbitration_service");
+          CHECK_SUPPORT_OPTION_USER_ERROR("enable_arbitration_service");
         }
         case T_ZONE_LIST: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "zone_list");
+          CHECK_SUPPORT_OPTION_USER_ERROR("zone_list");
         }
         case T_READ_ONLY: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "read_only");
+          CHECK_SUPPORT_OPTION_USER_ERROR("read_only");
         }
         case T_LOGONLY_REPLICA_NUM: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "logonly_replica_num");
+          CHECK_SUPPORT_OPTION_USER_ERROR("logonly_replica_num");
         }
         case T_DEFAULT_TABLEGROUP: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "default_tablegroup");
+          CHECK_SUPPORT_OPTION_USER_ERROR("default_tablegroup");
         }
         case T_PROGRESSIVE_MERGE_NUM: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "progressive_merge_num");
+          CHECK_SUPPORT_OPTION_USER_ERROR("progressive_merge_num");
         }
         case T_ENABLE_EXTENDED_ROWID: {
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "enable_extended_rowid");
-        }
-        {
-          // not support option
-          ret = common::OB_INVALID_ARGUMENT;
-          SQL_LOG(WARN, "invalid argument", KR(ret), K(node->type_));
-          break;
+          CHECK_SUPPORT_OPTION_USER_ERROR("enable_extended_rowid");
         }
 
         case T_LOCALITY:
