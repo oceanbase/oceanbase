@@ -503,6 +503,7 @@ static const NonReservedKeyword Oracle_non_reserved_keywords[] =
   {"enable_extended_rowid", ENABLE_EXTENDED_ROWID},
   {"enclosed", ENCLOSED},
   {"encoding", ENCODING},
+  {"encrypted", ENCRYPTED},
   {"encryption", ENCRYPTION},
   {"ends", ENDS},
   {"engine", ENGINE_},
