@@ -212,7 +212,8 @@ inline uint32_t ObIRawExpr::get_result_flag() const
   if (ObLongTextType == obj_type && lib::is_oracle_mode()) { // was ObLobType
     is_oracle_lob = true;
   }
-  if (ObCharset::is_bin_sort(result_type_.get_collation_type())) {
+  if (ObCharset::is_valid_collation(static_cast<ObCollationType>(result_type_.get_collation_type()))
+    && ObCharset::is_bin_sort(result_type_.get_collation_type())) {
     if (!is_column_ref_expr() ||
        (!ob_is_numeric_type(result_type_.get_type()) &&
         !ob_is_year_tc(result_type_.get_type()) &&
