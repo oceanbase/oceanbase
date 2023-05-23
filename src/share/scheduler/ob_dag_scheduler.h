@@ -336,6 +336,8 @@ public:
   virtual int generate_next_dag(ObIDag *&next_dag) { UNUSED(next_dag); return common::OB_ITER_END; }
   virtual int set_result(const int32_t result) { UNUSED(result); return common::OB_SUCCESS; }
 
+  virtual bool is_ha_dag() const { return false; }
+
   DECLARE_VIRTUAL_TO_STRING;
   DISABLE_COPY_ASSIGN(ObIDag);
 public:
@@ -473,6 +475,7 @@ public:
   {
     return OB_SUCCESS;
   }
+  virtual bool is_ha_dag_net() const { return true; }
 public:
   friend class ObTenantDagScheduler;
 
@@ -822,17 +825,6 @@ public:
   int cancel_dag_net(const ObDagId &dag_id);
   int get_complement_data_dag_progress(const ObIDag *dag, int64_t &row_scanned, int64_t &row_inserted);
 
-  OB_INLINE bool is_ha_dag(ObDagType::ObDagTypeEnum type) const
-  {
-    return ObDagType::DAG_TYPE_MIGRATE <= type &&
-           ObDagType::DAG_TYPE_REMOVE_MEMBER >= type;
-  }
-  OB_INLINE bool is_ha_dag_net(ObDagNetType::ObDagNetTypeEnum type) const
-  {
-    return ObDagNetType::DAG_NET_TYPE_MIGARTION <= type &&
-           ObDagNetType::DAG_NET_TYPE_BACKUP_CLEAN >= type;
-  }
-
 private:
   typedef common::ObDList<ObIDag> DagList;
   typedef common::ObDList<ObIDagNet> DagNetList;
@@ -1006,7 +998,7 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
     COMMON_LOG(WARN, "Dag Object is too large", K(ret), K(sizeof(T)));
   } else {
     T tmp_dag;
-    common::ObFIFOAllocator *allocator = is_ha_dag(tmp_dag.get_type()) ? &ha_allocator_ : &allocator_;
+    common::ObFIFOAllocator *allocator = tmp_dag.is_ha_dag() ? &ha_allocator_ : &allocator_;
     if (NULL == (buf = allocator->alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag", K(ret));
@@ -1030,7 +1022,7 @@ template<typename T>
 void ObTenantDagScheduler::free_dag_net(T *&dag_net)
 {
   if (OB_NOT_NULL(dag_net)) {
-    const bool ha_dag_net = is_ha_dag_net(dag_net->get_type());
+    const bool ha_dag_net = dag_net->is_ha_dag_net();
     dag_net->~T();
     if (ha_dag_net) {
       ha_allocator_.free(dag_net);
@@ -1054,7 +1046,7 @@ int ObTenantDagScheduler::create_and_add_dag_net(const ObIDagInitParam *param, T
     COMMON_LOG(WARN, "scheduler is not init", K(ret));
   } else {
     T tmp_dag_net;
-    common::ObFIFOAllocator *allocator =  is_ha_dag_net(tmp_dag_net.get_type()) ? &ha_allocator_ : &allocator_;
+    common::ObFIFOAllocator *allocator =  tmp_dag_net.is_ha_dag_net() ? &ha_allocator_ : &allocator_;
     if (NULL == (buf = allocator->alloc(sizeof(T)))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       COMMON_LOG(WARN, "failed to alloc dag_net", K(ret));

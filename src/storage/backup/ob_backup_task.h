@@ -227,6 +227,7 @@ class ObBackupDag : public share::ObIDag
 public:
   explicit ObBackupDag(const ObBackupDagSubType &sub_type);
   virtual ~ObBackupDag();
+  virtual bool is_ha_dag() const override { return true; }
   ObBackupDagSubType get_sub_type() const { return sub_type_; };
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, K_(sub_type));
 protected:

@@ -1666,7 +1666,7 @@ void ObTenantDagScheduler::destroy()
     }
     if (dag_net_map_[RUNNING_DAG_NET_MAP].created()) {
       for (DagNetMap::iterator iter = dag_net_map_[RUNNING_DAG_NET_MAP].begin(); iter != dag_net_map_[RUNNING_DAG_NET_MAP].end(); ++iter) {
-        const bool ha_dag_net = is_ha_dag_net(iter->second->get_type());
+        const bool ha_dag_net = iter->second->is_ha_dag_net();
         iter->second->~ObIDagNet();
         if (ha_dag_net) {
           ha_allocator_.free(iter->second);
@@ -1733,7 +1733,7 @@ void ObTenantDagScheduler::inner_free_dag(ObIDag &dag)
   if (OB_UNLIKELY(nullptr != dag.prev_ || nullptr != dag.next_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "dag is in dag_list", K(dag), K(dag.prev_), K(dag.next_));
   }
-  const bool ha_dag = is_ha_dag(dag.get_type());
+  const bool ha_dag = dag.is_ha_dag();
   dag.~ObIDag();
   if (ha_dag) {
     ha_allocator_.free(&dag);
