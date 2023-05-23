@@ -135,10 +135,10 @@ const int64_t ObKVGlobalCache::bucket_num_array_[MAX_BUCKET_NUM_LEVEL] =
       6291469l,     // more than 16G, 50M kvcache meta
       12582917l,    // more than 32G, 100M kvcache meta
       25165843l,    // more than 64G, 200M kvcache meta
-      100663319l,   // more than 128G, 1G kvcache meta
-      402653189l,   // more than 256G, 3.2G kvcache meta
-      805306457l,   // more than 512G, 6.4G kvcache meta
-      1610612741l   // more than 1024G, 12.8G kvcache meta
+      50331653l,   // more than 128G, 500M kvcache meta
+      100663319l,   // more than 256G, 1G kvcache meta
+      201326611l,   // more than 512G, 2G kvcache meta
+      402653189ll   // more than 1024G, 4G kvcache meta
     };
 
 ObKVGlobalCache::ObKVGlobalCache()
