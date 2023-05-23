@@ -904,7 +904,7 @@ int ObTenantRoleTransitionService::wait_tenant_sync_to_latest_until_timeout_(
   if (OB_FAIL(ret) || !has_restore_source) {
   } else {
     bool has_sync_to_latest = false;
-    while (!THIS_WORKER.is_timeout()) {
+    while (!THIS_WORKER.is_timeout() && !logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)) {
       has_sync_to_latest = false;
       if (OB_FAIL(check_sync_to_latest_(tenant_id, tenant_info, has_sync_to_latest))) {
         LOG_WARN("fail to check_sync_to_latest_", KR(ret), K(tenant_id),
@@ -917,7 +917,8 @@ int ObTenantRoleTransitionService::wait_tenant_sync_to_latest_until_timeout_(
       }
       usleep(10L * 1000L);
     }
-    if (THIS_WORKER.is_timeout() || !has_sync_to_latest) {
+    if (logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)) {
+    } else if (THIS_WORKER.is_timeout() || !has_sync_to_latest) {
       // return NOT_ALLOW instead of timeout
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("has not sync to latest, can not swithover to primary", KR(ret));
