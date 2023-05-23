@@ -241,6 +241,8 @@ public:
   virtual int64_t get_last_submit_log_id_() const;
   virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
+  virtual int get_last_submit_log_info(LSN &last_submit_lsn,
+      LSN &last_submit_end_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();

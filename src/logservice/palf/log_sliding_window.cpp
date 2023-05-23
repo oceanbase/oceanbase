@@ -1446,6 +1446,18 @@ int LogSlidingWindow::get_last_submit_log_info(LSN &last_submit_lsn,
   return ret;
 }
 
+int LogSlidingWindow::get_last_submit_log_info(LSN &last_submit_lsn,
+    LSN &last_submit_end_lsn, int64_t &log_id, int64_t &log_proposal_id) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    get_last_submit_log_info_(last_submit_lsn, last_submit_end_lsn, log_id, log_proposal_id);
+  }
+  return ret;
+}
+
 int64_t LogSlidingWindow::get_last_submit_log_id_() const
 {
   ObSpinLockGuard guard(last_submit_info_lock_);

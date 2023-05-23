@@ -236,6 +236,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_reconfirm_degrade_upgrade)
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
   sleep(2);
   palf_list[leader_idx]->palf_handle_impl_->set_location_cache_cb(&loc_cb);
+  palf_list[another_f_idx]->palf_handle_impl_->set_location_cache_cb(&loc_cb);
   // block net of old leader, new leader will be elected
   // and degrade in RECONFIRM state
   block_net(leader_idx, another_f_idx);

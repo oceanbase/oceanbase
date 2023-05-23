@@ -81,6 +81,7 @@ public:
     mock_election_->role_ = role;
     mock_election_->leader_epoch_ = INIT_ELE_EPOCH;
     mock_sw_->mock_last_submit_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
+    mock_sw_->mock_last_submit_end_lsn_ = LSN(PALF_INITIAL_LSN_VAL);
     mock_sw_->mock_last_submit_pid_ = INIT_PROPOSAL_ID;
     mock_sw_->state_mgr_ = mock_state_mgr_;
     EXPECT_TRUE(config_info.is_valid());
@@ -755,6 +756,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
     int64_t prev_mode_pid = 1;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_mode_pid;
     mock_sw_->mock_max_flushed_lsn_ = prev_lsn;
@@ -842,6 +844,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
     mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
@@ -871,6 +874,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = INVALID_PROPOSAL_ID;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
     mock_sw_->mock_max_flushed_lsn_.val_ = PALF_INITIAL_LSN_VAL;
@@ -896,6 +900,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_pid;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
     mock_sw_->mock_max_flushed_lsn_.val_ = 1000;
@@ -926,6 +931,7 @@ TEST_F(TestLogConfigMgr, test_submit_config_log)
     args.server_ = common::ObMember(addr4, -1);
     bool is_already_finished = false;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_pid;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_pid;
     mock_sw_->mock_max_flushed_lsn_.val_ = 11000;
@@ -987,6 +993,7 @@ TEST_F(TestLogConfigMgr, test_degrade__upgrade_scenario)
     int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
     int64_t prev_mode_pid = 1;
     mock_sw_->mock_last_submit_lsn_ = prev_lsn;
+    mock_sw_->mock_last_submit_end_lsn_ = prev_lsn;
     mock_sw_->mock_last_submit_pid_ = prev_log_proposal_id;
     mock_mode_mgr_->mock_last_submit_mode_meta_.proposal_id_ = prev_mode_pid;
     mock_sw_->mock_max_flushed_lsn_ = prev_lsn;
