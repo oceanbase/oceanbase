@@ -8972,7 +8972,9 @@ int ObPLResolver::resolve_inner_call(
     OZ (resolve_obj_access_idents(*parse_tree->children_[0], obj_access_idents, func));
     OZ (init_udf_info_of_accessidents(obj_access_idents));
     for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
-      bool is_routine = obj_access_idents.at(i).is_pl_udf();
+      // TODO: distinguish coll(idx).proc() and func(arg1).proc()
+      bool is_routine = obj_access_idents.at(i).is_pl_udf()
+        || (obj_access_idents.at(i).params_.count() != 1 && obj_access_idents.at(i).has_brackets_);
       if (i == obj_access_idents.count() - 1) {
         if (access_idxs.count() > 0) {
           if (access_idxs.at(access_idxs.count() - 1).access_type_ == ObObjAccessIdx::IS_DB_NS
@@ -9881,7 +9883,8 @@ int ObPLResolver::resolve_udf_without_brackets(
   OX (udf_expr->set_func_name(q_name.col_name_));
   OX (udf_info.ref_expr_ = udf_expr);
   OX (udf_info.udf_name_ = access_ident.access_name_);
-  OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast));
+  OZ (resolve_name(q_name, current_block_->get_namespace(), expr_factory_, &resolve_ctx_.session_info_, access_idxs, unit_ast),
+    K(access_idxs), K(q_name));
   OV (access_idxs.at(access_idxs.count() - 1).is_udf_type());
   OX (expr = access_idxs.at(access_idxs.count() - 1).get_sysfunc_);
   CK (OB_NOT_NULL(expr));
@@ -11668,7 +11671,9 @@ int ObPLMockSelfArg::mock()
 {
   int ret = OB_SUCCESS;
   if (access_idxs_.count() > 0 && expr_params_.count() > 0) {
-    if (ObObjAccessIdx::IS_UDT_NS == access_idxs_.at(access_idxs_.count() - 1).access_type_
+    if (expr_params_.at(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
+      // already has self argument, do nothing ...
+    } else if (ObObjAccessIdx::IS_UDT_NS == access_idxs_.at(access_idxs_.count() - 1).access_type_
         && expr_params_.at(0)->get_result_type().get_udt_id()
               == access_idxs_.at(access_idxs_.count() - 1).var_index_) {
       expr_params_.at(0)->add_flag(IS_UDT_UDF_SELF_PARAM);
@@ -14820,7 +14825,7 @@ int ObPLResolver::replace_map_or_order_expr(
     if (routine_infos.at(i)->is_udt_order()) {
       CK (OB_ISNULL(routine_info));
       OX (routine_info = routine_infos.at(i));
-    } else if (routine_info->is_udt_map()) {
+    } else if (routine_infos.at(i)->is_udt_map()) {
       CK (OB_ISNULL(routine_info));
       OX (routine_info = routine_infos.at(i));
     }

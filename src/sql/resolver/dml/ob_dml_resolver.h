@@ -886,6 +886,9 @@ private:
   int check_column_udt_type(ParseNode *root_node);
   int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
 
+  int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
+  bool check_expr_has_colref(ObRawExpr *expr);
+
   //////////end of functions for sql hint/////////////
 protected:
   struct GenColumnExprInfo {

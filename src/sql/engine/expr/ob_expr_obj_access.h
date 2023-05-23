@@ -75,13 +75,28 @@ public:
     int update_coll_first_last(
         const ParamStore &param_store, const ObObj *objs_stack, int64_t param_num) const;
 
+    int get_attr_func(int64_t param_cnt,
+                      int64_t* params,
+                      int64_t *element_val,
+                      ObEvalCtx &ctx) const;
+    int get_record_attr(const pl::ObObjAccessIdx &current_access,
+                        uint64_t udt_id,
+                        bool for_write,
+                        void *&current_value,
+                        ObEvalCtx &ctx) const;
+    int get_collection_attr(int64_t* params,
+                            const pl::ObObjAccessIdx &current_access,
+                            bool for_write,
+                            void *&current_value) const;
+
 
     int calc(ObObj &result,
              const ObObjMeta &res_type,
              const int32_t extend_size,
              const ParamStore &param_store,
              const common::ObObj *params,
-             int64_t param_num) const;
+             int64_t param_num,
+             ObEvalCtx *ctx) const;
 
     TO_STRING_KV(K_(get_attr_func),
                  K_(param_idxs),
@@ -99,6 +114,7 @@ public:
     int64_t coll_idx_; // index of Collection in ParamArray
     // extend size only used in static engine, the old expr get extend size from ObExprResType
     int32_t extend_size_;
+    common::ObFixedArray<pl::ObObjAccessIdx, common::ObIAllocator> access_idxs_;
   };
 private:
   ExtraInfo info_;

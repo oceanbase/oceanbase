@@ -2678,6 +2678,64 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
   return ret;
 }
 
+bool ObDMLResolver::check_expr_has_colref(ObRawExpr *expr)
+{
+  bool has_colref = false;
+  if (OB_ISNULL(expr)) {
+  } else if (expr->is_column_ref_expr()) {
+    has_colref = true;
+  } else {
+    for (int64_t i = 0; !has_colref && i < expr->get_param_count(); ++i) {
+      has_colref = check_expr_has_colref(expr->get_param_expr(i));
+    }
+  }
+  return has_colref;
+}
+
+int ObDMLResolver::replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(real_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is NULL", K(ret));
+  } else if (real_ref_expr->is_const_raw_expr() //local variable access
+             || (real_ref_expr->is_obj_access_expr() && !check_expr_has_colref(real_ref_expr)) // composite variable access
+             || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package variable access, must not (system/user variable)
+             || real_ref_expr->is_sys_func_expr()
+             || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type()) { //允许CURSOR%ROWID通过
+    if (OB_FAIL(ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
+                                                             *params_.expr_factory_,
+                                                             params_.prepare_param_count_,
+                                                             real_ref_expr))) {
+      LOG_WARN("failed to resolve external param info", K(ret), KPC(real_ref_expr));
+    }
+  } else if (real_ref_expr->is_udf_expr() //replace self argument of udt routine
+             && OB_NOT_NULL(real_ref_expr->get_param_expr(0))
+             && real_ref_expr->get_param_expr(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
+    if (real_ref_expr->get_param_expr(0)->is_const_raw_expr()//local variable access
+        || (real_ref_expr->get_param_expr(0)->is_obj_access_expr()
+            && !check_expr_has_colref(real_ref_expr->get_param_expr(0)))//composite variable access
+        || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_param_expr(0)->get_expr_type()) {
+      ObRawExpr *self = real_ref_expr->get_param_expr(0);
+      if (OB_FAIL(ObResolverUtils::resolve_external_param_info(
+                        params_.external_param_info_, *params_.expr_factory_, params_.prepare_param_count_, self))) {
+        LOG_WARN("failed to resolve external param info", K(ret), KPC(self));
+      } else if (OB_FAIL(ObResolverUtils::revert_external_param_info(
+                        params_.external_param_info_, real_ref_expr->get_param_expr(0)))) {
+        LOG_WARN("failed to revert external param info", K(ret), KPC(self));
+      } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(
+                        real_ref_expr, real_ref_expr->get_param_expr(0), self))) {
+        LOG_WARN("failed to replace ref column", K(ret), KPC(self));
+      }
+    } else if (real_ref_expr->get_param_expr(0)->is_udf_expr()) {
+      if (OB_FAIL(replace_pl_relative_expr_to_question_mark(real_ref_expr->get_param_expr(0)))) {
+        LOG_WARN("failed replace pl relative expr to question mark", K(ret), KPC(real_ref_expr));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
                                                 ObIArray<ObQualifiedName> &columns,
                                                 ObIArray<ObRawExpr*> &real_exprs,
@@ -2838,10 +2896,18 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
           }
         }
       }
-      if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr) && real_ref_expr->is_udf_expr()) {
-        ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
-        if (OB_NOT_NULL(udf)) {
-          OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
+      if (OB_SUCC(ret) && OB_NOT_NULL(real_ref_expr)) {
+        if (T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
+          ret = OB_ERR_SP_UNDECLARED_VAR;
+          LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
+        } else if (real_ref_expr->is_udf_expr()) {
+          ObUDFRawExpr *udf = static_cast<ObUDFRawExpr *>(real_ref_expr);
+          if (OB_ISNULL(udf)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed cast udf raw expr", K(ret));
+          } else {
+            stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable();
+          }
         }
       }
     }
@@ -2856,50 +2922,14 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
   }
 
   //把需要传给PL的表达式整体替换成param
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(real_ref_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is NULL", K(ret));
-    } else if (T_FUN_PL_SQLCODE_SQLERRM == real_ref_expr->get_expr_type()) {
-      ret = OB_ERR_SP_UNDECLARED_VAR;
-      LOG_WARN("sqlcode or sqlerrm can not use in dml directly", K(ret), KPC(real_ref_expr));
-    } else {
-      if (q_name.is_access_root()
-          && is_external
-          && !params_.is_default_param_
-          && T_INTO_SCOPE != current_scope_
-          && NULL != params_.secondary_namespace_) { //仅PL里的SQL出现了外部变量需要替换成QUESTIONMARK，纯SQL语境的不需要
-        if (real_ref_expr->is_const_raw_expr() //local变量
-            || real_ref_expr->is_obj_access_expr() //复杂变量
-            || T_OP_GET_PACKAGE_VAR == real_ref_expr->get_expr_type() //package变量(system/user variable不会走到这里)
-            || real_ref_expr->is_sys_func_expr()
-            || T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type()) { //允许CURSOR%ROWID通过
-          /*
-           * 在已有的表达式里寻找是否有相同，如果有相同则使用同一个QuestionMark
-           * */
-          OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
-                                                          *params_.expr_factory_,
-                                                           params_.prepare_param_count_,
-                                                          real_ref_expr));
-        } else if (real_ref_expr->is_udf_expr()
-                   && OB_NOT_NULL(real_ref_expr->get_param_expr(0))
-                   && real_ref_expr->get_param_expr(0)->has_flag(IS_UDT_UDF_SELF_PARAM)) {
-          ObRawExpr *self = real_ref_expr->get_param_expr(0);
-          if (self->is_const_raw_expr()
-              || self->is_obj_access_expr()
-              || T_OP_GET_PACKAGE_VAR == self->get_expr_type()) {
-            OZ (ObResolverUtils::resolve_external_param_info(params_.external_param_info_,
-                                                            *params_.expr_factory_,
-                                                             params_.prepare_param_count_,
-                                                             self));
-            OZ (ObResolverUtils::revert_external_param_info(params_.external_param_info_,
-                                                           real_ref_expr->get_param_expr(0)));
-            OZ (ObRawExprUtils::replace_ref_column(real_ref_expr,
-                                                   real_ref_expr->get_param_expr(0),
-                                                   self));
-          }
-        }
-      }
+  if (OB_SUCC(ret)
+      && q_name.is_access_root()
+      && is_external
+      && !params_.is_default_param_
+      && T_INTO_SCOPE != current_scope_
+      && NULL != params_.secondary_namespace_) { //仅PL里的SQL出现了外部变量需要替换成QUESTIONMARK，纯SQL语境的不需要
+    if (OB_FAIL(replace_pl_relative_expr_to_question_mark(real_ref_expr))) {
+      LOG_WARN("failed to replace pl realtive expr to question mark", K(ret), KPC(real_ref_expr), K(q_name));
     }
   }
 

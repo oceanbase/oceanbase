@@ -743,25 +743,26 @@ int ObRawExprPrinter::print(ObOpRawExpr *expr)
       break;
     }
     case T_OBJ_ACCESS_REF: {
-      bool parent_is_table = false;
       ObObjAccessRawExpr *obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
-      for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_expr->get_access_idxs().count(); ++i) {
-        const ObString &var_name = obj_access_expr->get_access_idxs().at(i).var_name_;
-        if (!var_name.empty()) {
-          if (parent_is_table) {
-            DATA_PRINTF("(");
-          } else if (i > 0) {
-            DATA_PRINTF(".");
-          }
-          DATA_PRINTF("%.*s", LEN_AND_PTR(var_name));
-          if (parent_is_table) {
-            DATA_PRINTF(")");
-          }
-        } else {
-          int64_t var_index = obj_access_expr->get_access_idxs().at(i).var_index_;
-          DATA_PRINTF("(%ld)", var_index);
+      bool parent_is_table = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_expr->get_orig_access_idxs().count(); ++i) {
+        pl::ObObjAccessIdx &current_idx = obj_access_expr->get_orig_access_idxs().at(i);
+        if (parent_is_table) {
+          DATA_PRINTF("(");
+        } else if (i > 0) {
+          DATA_PRINTF(".");
         }
-        parent_is_table = obj_access_expr->get_access_idxs().at(i).elem_type_.is_nested_table_type();
+        if (OB_NOT_NULL(current_idx.get_sysfunc_)) {
+          PRINT_EXPR(current_idx.get_sysfunc_);
+        } else if (!current_idx.var_name_.empty()) {
+          DATA_PRINTF("%.*s", current_idx.var_name_.length(), current_idx.var_name_.ptr());
+        } else {
+          DATA_PRINTF("%ld", current_idx.var_index_);
+        }
+        if (parent_is_table) {
+          DATA_PRINTF(")");
+        }
+        parent_is_table = current_idx.elem_type_.is_nested_table_type();
       }
       break;
     }
