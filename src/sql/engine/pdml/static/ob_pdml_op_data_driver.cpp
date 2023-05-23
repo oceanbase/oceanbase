@@ -93,12 +93,11 @@ int ObPDMLOpDataDriver::destroy()
   return ret;
 }
 
-int ObPDMLOpDataDriver::set_with_barrier(uint64_t op_id,
-                                         const ObPxMultiPartModifyOpInput *modify_input)
+int ObPDMLOpDataDriver::set_dh_barrier_param(uint64_t op_id,
+                                             const ObPxMultiPartModifyOpInput *modify_input)
 {
     int ret = OB_SUCCESS;
     op_id_ = op_id;
-    with_barrier_ = true;
     if (OB_ISNULL(modify_input)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table modify is null", K(ret));

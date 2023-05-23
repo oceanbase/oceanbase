@@ -67,7 +67,7 @@ public:
 
   int destroy();
 
-  int set_with_barrier(uint64_t op_id, const ObPxMultiPartModifyOpInput *modify_input);
+  int set_dh_barrier_param(uint64_t op_id, const ObPxMultiPartModifyOpInput *modify_input);
 
   int get_next_row(ObExecContext &ctx, const ObExprPtrIArray &row);
 private:
