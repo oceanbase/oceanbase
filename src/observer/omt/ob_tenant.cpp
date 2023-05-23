@@ -376,7 +376,7 @@ void ObResourceGroup::check_worker_count()
           workers_.remove(wnode);
           destroy_worker(w);
         } else if (w->has_req_flag()
-                   && 0 != Thread::is_blocking_
+                   && w->is_blocking()
                    && w->is_default_worker()) {
           ++token;
         }
@@ -1363,7 +1363,7 @@ void ObTenant::check_worker_count()
           workers_.remove(wnode);
           destroy_worker(w);
         } else if (w->has_req_flag()
-                   && 0 != Thread::is_blocking_
+                   && w->is_blocking()
                    && w->is_default_worker()) {
           ++token;
         }

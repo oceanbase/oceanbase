@@ -85,8 +85,7 @@ public:
 
   OB_INLINE bool is_group_worker() const { return OB_NOT_NULL(group_); }
   OB_INLINE bool is_level_worker() const { return get_worker_level() > 0; }
-  OB_INLINE uint8_t priority_limit() const { return priority_limit_; }
-  OB_INLINE void set_priority_limit(bool v=true) { priority_limit_ = v; }
+  OB_INLINE void set_priority_limit(uint8_t limit) { priority_limit_ = limit; }
   OB_INLINE bool is_high_priority() const { return priority_limit_ == QQ_HIGH; }
   OB_INLINE bool is_normal_priority() const { return priority_limit_ == QQ_NORMAL; }
   OB_INLINE bool is_default_worker() const { return !is_group_worker() &&
@@ -101,7 +100,7 @@ public:
   OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
   OB_INLINE void set_last_wakeup_ts(int64_t last_wakeup_ts) { last_wakeup_ts_ = last_wakeup_ts; }
-
+  OB_INLINE bool is_blocking() const { return OB_NOT_NULL(is_blocking_) && (0 != *is_blocking_); }
 private:
   void set_th_worker_thread_name(uint64_t tenant_id);
   void process_request(rpc::ObRequest &req);
@@ -135,7 +134,7 @@ private:
   bool has_add_to_cgroup_;
 
   int64_t last_wakeup_ts_;
-
+  uint8_t* is_blocking_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObThWorker);
 }; // end of class ObThWorker
