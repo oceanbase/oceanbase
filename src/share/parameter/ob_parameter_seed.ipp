@@ -808,6 +808,9 @@ DEF_INT(ha_mid_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
 DEF_INT(ha_low_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of high availability low thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(ddl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "the current work thread score of ddl thread. Range: [0,100] in integer. Especially, 0 means default value",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(minor_compact_trigger, OB_TENANT_PARAMETER, "2", "[0,16]",
         "minor_compact_trigger, Range: [0,16] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
