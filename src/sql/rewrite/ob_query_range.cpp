@@ -2877,7 +2877,10 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
       LOG_WARN("failed to adjust in param values", K(ret));
     } else if (OB_FAIL(tmp_key_part->formalize_keypart(contain_row_))) {
       LOG_WARN("failed to formalize in key", K(ret));
-    } else {
+    } else if (tmp_key_part->is_always_true() || tmp_key_part->is_always_false()) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
+    if (OB_SUCC(ret)) {
       out_key_part = tmp_key_part;
     }
   }

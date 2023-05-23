@@ -1174,6 +1174,12 @@ int ObKeyPart::formalize_keypart(bool contain_row)
         LOG_WARN("failed to adjust in param values", K(ret));
       }
     }
+    if (OB_SUCC(ret) && is_in_key() &&
+       (in_keypart_->in_params_.empty() || in_keypart_->get_param_val_cnt() == 0)) {
+      if (OB_FAIL(convert_to_true_or_false(false))) {
+        LOG_WARN("failed to convert to always true");
+      }
+    }
   }
   return ret;
 }
