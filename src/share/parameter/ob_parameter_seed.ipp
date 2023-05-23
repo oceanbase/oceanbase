@@ -1479,3 +1479,6 @@ DEF_BOOL(_xsolapi_generate_with_clause, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_optimizer_group_by_placement, OB_TENANT_PARAMETER, "True",
         "enable group by placement transform rule",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_wait_interval_after_truncate, OB_CLUSTER_PARAMETER, "30s", "[0s,)",
+        "time interval for waiting other servers to refresh schema after truncate",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
