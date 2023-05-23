@@ -4904,7 +4904,7 @@ BINARY opt_string_length_i_v2
   $$->value_ = 0;
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_CHAR; /* data type */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = $2[0];        /* length */
-  $$->param_num_ = $2[1];
+  $$->param_num_ = $2[1] + $4->param_num_;
   $$->str_value_ = $4->str_value_;
   $$->str_len_ = $4->str_len_;
   $$->sql_str_off_ = @1.first_column;
