@@ -141,6 +141,7 @@ int ObTabletTableStore::deserialize(
     if (OB_SUCCESS != (tmp_ret = init_read_cache())) {
       LOG_WARN("failed to init read cache iterator", K(tmp_ret));
     }
+    FLOG_INFO("succeed to deserialize table store", K(major_tables_), K(minor_tables_), K(memtables_), K(PRINT_TS(*this)));
   }
 
   return ret;
