@@ -365,7 +365,7 @@ int ObDMLResolver::check_is_json_constraint(common::ObIAllocator &allocator, Par
     ObJsonBuffer sql_str(allocator_);
     if (OB_ISNULL(col_node->children_[0]) || col_node->children_[0]->type_ != T_IDENT
         || OB_ISNULL(col_node->children_[0]->str_value_)) { // do not check
-    } else if (OB_FAIL(check_depth_obj_access_ref(col_node, depth, exist_fun, sql_str))) {
+    } else if (OB_FAIL(check_depth_obj_access_ref(col_node, depth, exist_fun, sql_str, false))) {
       LOG_WARN("get depth of obj access ref failed");
     } else if (exist_fun || depth >= 3) {
       // do nothing
@@ -483,7 +483,7 @@ int ObDMLResolver::pre_process_json_object_contain_star(ParseNode *node, common:
             LOG_WARN("fail to check first node", K(ret), K(cur_node->children_[0]->str_value_));
           } else if (check_res) {
             // normal query do nothing
-          } else if (OB_FAIL(check_depth_obj_access_ref(cur_node, depth, exist_fun, sql_str))) {
+          } else if (OB_FAIL(check_depth_obj_access_ref(cur_node, depth, exist_fun, sql_str, false))) {
             LOG_WARN("get depth of obj access ref failed");
           } else if (!exist_fun) {
             if (depth < 3) {
@@ -1035,7 +1035,7 @@ int ObDMLResolver::check_first_node_name(const ObString &node_name, bool &check_
   return ret;
 }
 
-int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str)
+int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check)
 {
   INIT_SUCC(ret);
   ParseNode *cur_node = node;
@@ -1052,7 +1052,7 @@ int ObDMLResolver::check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bo
         cur_node = NULL;
       }
     } else if (cur_node->children_[0]->type_ == T_FUN_SYS) {
-      if ((depth == 3 && is_exist_array == true) || depth < 2) {
+      if (obj_check && ((depth == 3 && is_exist_array == true) || depth < 2)) {
         ret = OB_ERR_NOT_OBJ_REF;
         LOG_WARN("not an object or REF", K(ret));
       } else if (depth == 2 && OB_FAIL(check_column_udt_type(node))) {

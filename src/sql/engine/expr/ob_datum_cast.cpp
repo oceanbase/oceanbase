@@ -8562,7 +8562,7 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
         ObDatumMeta src_meta;
         if (ObDatumCast::is_implicit_cast(*expr.args_[0])) {
           const ObExpr &grand_child = *(expr.args_[0]->args_[0]);
-          if (OB_UNLIKELY(ObDatumCast::is_implicit_cast(grand_child))) {
+          if (OB_UNLIKELY(ObDatumCast::is_implicit_cast(grand_child) && !grand_child.obj_meta_.is_xml_sql_type())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("too many cast expr, max is 2", K(ret), K(expr));
           } else {
