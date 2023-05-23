@@ -4795,6 +4795,7 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
   int32_t old_bit_id = OB_INVALID_INDEX;
   int32_t new_bit_id = OB_INVALID_INDEX;
   const int64_t TARGET_TABLE_IDX = 0;
+  bool dummy = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(stmt_factory = ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_)) {
@@ -4918,6 +4919,8 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
       LOG_WARN("failed to replace relation exprs", K(ret));
     } else if (OB_FAIL(select_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
+    } else if (OB_FAIL(transform_exprs(select_stmt, dummy))) {
+      LOG_WARN("failed to transform exprs", K(ret));
     } else if (OB_FAIL(insert_stmt->adjust_subquery_list())) {
       LOG_WARN("failed to adjust subquery list", K(ret));
     } else {

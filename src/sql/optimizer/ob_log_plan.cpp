@@ -9503,8 +9503,8 @@ int ObLogPlan::allocate_subplan_filter_as_top(ObLogicalOperator *&top,
     LOG_WARN("get unexpected null", K(top), K(ret));
   } else if (OB_ISNULL(spf_node = static_cast<ObLogSubPlanFilter*>(
                        get_log_op_factory().allocate(*this, LOG_SUBPLAN_FILTER)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(spf_node), K(ret));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret));
   } else if (OB_FAIL(spf_node->add_child(top))) {
     LOG_WARN("failed to add child", K(ret));
   } else if (OB_FAIL(spf_node->add_child(subquery_ops))) {
