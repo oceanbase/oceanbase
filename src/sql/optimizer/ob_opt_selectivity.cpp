@@ -84,10 +84,12 @@ int OptTableMeta::assign(const OptTableMeta &other)
 int OptTableMeta::init(const uint64_t table_id,
                        const uint64_t ref_table_id,
                        const int64_t rows,
-                       const int64_t stat_type,
+                       const OptTableStatType stat_type,
                        ObSqlSchemaGuard &schema_guard,
                        ObIArray<int64_t> &all_used_part_id,
                        ObIArray<uint64_t> &column_ids,
+                       ObIArray<int64_t> &all_used_global_parts,
+                       const double scale_ratio,
                        const OptSelectivityCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -99,7 +101,10 @@ int OptTableMeta::init(const uint64_t table_id,
   ref_table_id_ = ref_table_id;
   rows_ = rows;
   stat_type_ = stat_type;
+  scale_ratio_ = scale_ratio;
   if (OB_FAIL(all_used_parts_.assign(all_used_part_id))) {
+    LOG_WARN("failed to assign all used partition ids", K(ret));
+  } else if (OB_FAIL(all_used_global_parts_.assign(all_used_global_parts))) {
     LOG_WARN("failed to assign all used partition ids", K(ret));
   } else if (OB_FAIL(schema_guard.get_table_schema(table_id_, ref_table_id_, ctx.get_stmt(), table_schema))) {
     LOG_WARN("failed to get table schmea", K(ret), K(ref_table_id_));
@@ -130,9 +135,8 @@ int OptTableMeta::init(const uint64_t table_id,
     column_id = column_ids.at(i);
     int64_t global_ndv = 0;
     int64_t num_null = 0;
-    int64_t avg_len = 0;
     bool is_single_pkey = (1 == pk_ids_.count() && pk_ids_.at(0) == column_id);
-    // get global llc bitmap
+    ObGlobalColumnStat stat;
     if (is_single_pkey) {
       global_ndv = rows_;
       num_null = 0;
@@ -147,18 +151,23 @@ int OptTableMeta::init(const uint64_t table_id,
                                                                    ref_table_id_,
                                                                    all_used_part_id,
                                                                    column_id,
-                                                                   &global_ndv,
-                                                                   &num_null,
-                                                                   &avg_len))) {
+                                                                   all_used_global_parts,
+                                                                   rows,
+                                                                   scale_ratio,
+                                                                   stat))) {
       LOG_WARN("failed to get column stats", K(ret));
-    } else if (0 == global_ndv && 0 == num_null) {
+    } else if (0 == stat.ndv_val_ && 0 == stat.null_val_) {
       global_ndv = std::min(rows, 100L);
       num_null = rows * EST_DEF_COL_NULL_RATIO;
-    } else if (0 == global_ndv && num_null > 0) {
+    } else if (0 == stat.ndv_val_ && stat.null_val_ > 0) {
       global_ndv = 1;
+      num_null = stat.null_val_;
+    } else {
+      global_ndv = stat.ndv_val_;
+      num_null = stat.null_val_;
     }
     if (OB_SUCC(ret)) {
-      column_metas_.at(i).init(column_id, global_ndv, num_null, avg_len);
+      column_metas_.at(i).init(column_id, global_ndv, num_null, stat.avglen_val_);
     }
   }
   return ret;
@@ -206,7 +215,9 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
                                             const int64_t rows,
                                             ObIArray<int64_t> &all_used_part_id,
                                             ObIArray<uint64_t> &column_ids,
-                                            const int64_t stat_type,
+                                            const OptTableStatType stat_type,
+                                            ObIArray<int64_t> &all_used_global_parts,
+                                            const double scale_ratio,
                                             int64_t last_analyzed)
 {
   int ret = OB_SUCCESS;
@@ -219,7 +230,8 @@ int OptTableMetas::add_base_table_meta_info(OptSelectivityCtx &ctx,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate place holder for table meta", K(ret));
   } else if (OB_FAIL(table_meta->init(table_id, ref_table_id, rows, stat_type,
-                                      *schema_guard, all_used_part_id, column_ids, ctx))) {
+                                      *schema_guard, all_used_part_id,
+                                      column_ids, all_used_global_parts, scale_ratio, ctx))) {
     LOG_WARN("failed to init new tstat", K(ret));
   } else {
     table_meta->set_version(last_analyzed);
@@ -3029,6 +3041,9 @@ int ObOptSelectivity::get_column_min_max(const OptTableMetas &table_metas,
     const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
     OptColumnMeta *column_meta = const_cast<OptColumnMeta *>(
                 table_metas.get_column_meta_by_table_id(table_id, column_id));
+    const ObTableSchema *table_schema = NULL;
+    ObSqlSchemaGuard *schema_guard = const_cast<OptSelectivityCtx&>(ctx).get_sql_schema_guard();
+    ObGlobalColumnStat stat;
     if (OB_NOT_NULL(table_meta) && OB_NOT_NULL(column_meta)) {
       if (column_meta->get_min_max_inited()) {
         min_obj = column_meta->get_min_value();
@@ -3042,15 +3057,16 @@ int ObOptSelectivity::get_column_min_max(const OptTableMetas &table_metas,
                                                                      table_meta->get_ref_table_id(),
                                                                      table_meta->get_all_used_parts(),
                                                                      column_id,
-                                                                     NULL,
-                                                                     NULL,
-                                                                     NULL,
-                                                                     &column_meta->get_min_value(),
-                                                                     &column_meta->get_max_value(),
+                                                                     table_meta->get_all_used_global_parts(),
+                                                                     table_meta->get_rows(),
+                                                                     table_meta->get_scale_ratio(),
+                                                                     stat,
                                                                      &ctx.get_allocator()))) {
         LOG_WARN("failed to get column stat", K(ret));
       } else {
         column_meta->set_min_max_inited(true);
+        column_meta->set_min_value(stat.min_val_);
+        column_meta->set_max_value(stat.max_val_);
         min_obj = column_meta->get_min_value();
         max_obj = column_meta->get_max_value();
         LOG_TRACE("var basic stat min/max", K(min_obj), K(max_obj));
@@ -3189,7 +3205,9 @@ int ObOptSelectivity::get_histogram_by_column(const OptTableMetas &table_metas,
   const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
   if (OB_ISNULL(table_meta) || OB_INVALID_ID == table_meta->get_ref_table_id()) {
     // do nothing
-  } else if (NULL == ctx.get_opt_stat_manager() || !table_meta->use_opt_stat()) {
+  } else if (NULL == ctx.get_opt_stat_manager() ||
+             !table_meta->use_opt_stat() ||
+             table_meta->use_opt_global_stat()) {
     // do nothing
   } else if (table_meta->get_all_used_parts().count() != 1) {
     // consider to use the global histogram here
