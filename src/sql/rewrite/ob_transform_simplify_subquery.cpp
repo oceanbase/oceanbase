@@ -1677,6 +1677,10 @@ int ObTransformSimplifySubquery::eliminate_groupby_distinct_in_any_all(ObRawExpr
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(ret), K(expr));
   } else if (!expr->has_flag(IS_WITH_ALL) && !expr->has_flag(IS_WITH_ANY)) {
+  } else if (OB_UNLIKELY(2 != expr->get_param_count())
+             || OB_UNLIKELY(!expr->get_param_expr(1)->is_query_ref_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected expr", K(ret), KPC(expr));
   } else if (OB_ISNULL(subq_expr = static_cast<ObQueryRefRawExpr *>(expr->get_param_expr(1))) ||
              OB_ISNULL(static_cast<ObRawExpr *>(expr->get_param_expr(0)))) {
     ret = OB_INVALID_ARGUMENT;
