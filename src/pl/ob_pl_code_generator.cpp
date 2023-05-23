@@ -7978,6 +7978,7 @@ int ObPLCodeGenerator::generate_simple(ObPLFunction &pl_func)
   OX (pl_func.set_action((uint64_t)(&ObPL::simple_execute)));
   OX (pl_func.set_can_cached(get_ast().get_can_cached()));
   OX (pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt()));
+  OX (pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor()));
 
   OX (sql_infos.set_capacity(static_cast<uint32_t>(ast.get_sql_stmts().count())));
   for (int64_t i = 0; OB_SUCC(ret) && i < ast.get_sql_stmts().count(); ++i) {
@@ -8098,6 +8099,7 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
       pl_func.set_action(helper_.get_function_address(get_ast().get_name()));
       pl_func.set_can_cached(get_ast().get_can_cached());
       pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt());
+      pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor());
     }
   }
   if (debug_mode_) {

@@ -1719,6 +1719,11 @@ public:
   inline int add_subprogram_path(int64_t path) { return subprogram_path_.push_back(path); }
   inline bool get_is_all_sql_stmt() const { return is_all_sql_stmt_; }
   inline void set_is_all_sql_stmt(bool is_all_sql_stmt) { is_all_sql_stmt_ = is_all_sql_stmt; }
+  inline bool has_parallel_affect_factor() const
+  {
+    return is_reads_sql_data() || is_modifies_sql_data() || is_wps() ||
+           is_rps() || is_has_sequence() || is_external_state();
+  }
   int add_argument(const common::ObString &name, const ObPLDataType &type,
                    const sql::ObRawExpr *expr = NULL,
                    const common::ObIArray<common::ObString> *type_info = NULL,

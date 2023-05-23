@@ -4649,7 +4649,9 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
           if (!func.is_modifies_sql_data()) {
             func.set_reads_sql_data();
           }
-        } else if (ObStmt::is_dml_write_stmt(prepare_result.type_)) {
+        } else if (ObStmt::is_dml_write_stmt(prepare_result.type_) ||
+                   ObStmt::is_savepoint_stmt(prepare_result.type_) ||
+                   ObStmt::is_tcl_stmt(prepare_result.type_)) {
           func.set_modifies_sql_data();
         } else if (!func.is_reads_sql_data() && !func.is_modifies_sql_data()) {
           func.set_contains_sql();

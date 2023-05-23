@@ -6422,10 +6422,16 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   return ret;
 }
 
+// judge whether pdml stmt contain udf can parallel execute or not has two stage:
+// stage1:check has dml write stmt or read/write package var info in this funciton;
+// stage2:record udf has select stmt info, and when optimize this stmt,
+// according outer stmt type to determine, if udf has select stmt:
+// case1: if outer stmt is select, can paralllel
+// case2: if outer stmt is dml write stmt, forbid parallel
 int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObRawExpr &expr,
-                                       bool is_dml_stmt)
+                                       bool &contain_select_stmt)
 {
   int ret = OB_SUCCESS;
   const ObRoutineInfo *routine_info = NULL;
@@ -6455,8 +6461,9 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
           routine_info->is_has_sequence() ||
           routine_info->is_external_state()) {
         enable_parallel = false;
-      } else if (is_dml_stmt && routine_info->is_reads_sql_data()) {
-        enable_parallel = false;
+      }
+      if (routine_info->is_reads_sql_data()) {
+        contain_select_stmt = true;
       }
       OX (udf_raw_expr.set_parallel_enable(enable_parallel));
     }

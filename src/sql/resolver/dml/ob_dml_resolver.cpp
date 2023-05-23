@@ -10825,20 +10825,10 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
         OX (expr->set_is_called_in_sql(true));
       }
 
-      bool is_dml_stmt = false;
-      if (OB_FAIL(ret)) {
-      } else if (ObStmt::is_dml_write_stmt(stmt->get_stmt_type())) {
-        is_dml_stmt = true;
-      } else if (stmt::T_SELECT == stmt->get_stmt_type()) {
-        bool has_for_update = false;
-        OZ (stmt->check_if_contain_select_for_update(has_for_update));
-        OX (is_dml_stmt = has_for_update);
-      }
-
       OZ (ObResolverUtils::set_parallel_info(*params_.session_info_,
                                               *params_.schema_checker_->get_schema_guard(),
                                               *expr,
-                                              is_dml_stmt));
+                                              stmt_->get_query_ctx()->udf_has_select_stmt_));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
       if (OB_SUCC(ret) &&
           udf_expr->get_result_type().is_ext() &&

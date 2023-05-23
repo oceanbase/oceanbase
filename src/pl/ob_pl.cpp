@@ -475,15 +475,16 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
 
 int ObPLContext::init(ObSQLSessionInfo &session_info,
                        ObExecContext &ctx,
-                       bool is_autonomous,
+                       ObPLFunction *routine,
                        bool is_function_or_trigger,
                        ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   int64_t pl_block_timeout = 0;
   int64_t query_start_time = session_info.get_query_start_time();
-  
-  OX (is_autonomous_ = is_autonomous);
+  CK (OB_NOT_NULL(routine));
+  OX (is_function_or_trigger |= routine->is_function());
+  OX (is_autonomous_ = routine->is_autonomous());
   OX (is_function_or_trigger_ = is_function_or_trigger);
 
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
@@ -579,7 +580,10 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
 
-  if (is_function_or_trigger && lib::is_mysql_mode()) {
+  if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode() &&
+      routine->get_has_parallel_affect_factor()) {
+    // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
+    // udf内部有tcl语句时，该标记为true
     last_insert_id_ = session_info.get_local_last_insert_id();
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
@@ -1546,7 +1550,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
     if (OB_SUCC(ret)) {
       SMART_VAR(ObPLContext, stack_ctx) {
         LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
-        OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine->is_autonomous(), false));
+        OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
         try {
           // execute it.
@@ -1650,7 +1654,7 @@ int ObPL::execute(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     SMART_VAR(ObPLContext, stack_ctx) {
       LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
-      OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine->is_autonomous(), false));
+      OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
       try {
         // execute it...
@@ -1791,9 +1795,8 @@ int ObPL::execute(ObExecContext &ctx,
     }
     // prepare it ...
     OZ (stack_ctx.init(*(ctx.get_my_session()), ctx,
-                      routine->is_autonomous(),
-                      routine->is_function()
-                      || in_function
+                      routine,
+                      in_function
                       || (package_id != OB_INVALID_ID
                           && ObTriggerInfo::is_trigger_package_id(package_id)),
                       &allocator));
