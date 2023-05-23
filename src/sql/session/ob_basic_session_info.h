@@ -407,6 +407,7 @@ public:
                  const uint64_t length,
                  uint64_t &ori_tenant_id);
   int switch_tenant(uint64_t effective_tenant_id);
+  int switch_tenant_with_name(uint64_t effective_tenant_id, const common::ObString &tenant_name);
   int set_default_database(const common::ObString &database_name,
                            common::ObCollationType coll_type = common::CS_TYPE_INVALID);
   int reset_default_database() { return set_default_database(""); }

@@ -3226,6 +3226,7 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
           LOG_WARN("assign sql string failed", K(ret));
         }
       }
+      LOG_INFO("kill session sql string", K(sql_string), K(task_id), K(sql_exec_addr));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) { // default use OB_SYS_TENANT_ID
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

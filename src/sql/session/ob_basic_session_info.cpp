@@ -528,6 +528,27 @@ int ObBasicSessionInfo::set_tenant(const common::ObString &tenant_name,
   return ret;
 }
 
+int ObBasicSessionInfo::switch_tenant_with_name(
+  uint64_t effective_tenant_id, const common::ObString &tenant_name)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(effective_tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(effective_tenant_id));
+  } else if (tenant_name.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant name is empty", K(ret), K(tenant_name));
+  } else if (tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant name too long", K(ret), K(tenant_name));
+  } else if (OB_FAIL(switch_tenant(effective_tenant_id))) {
+    LOG_WARN("fail to switch tenant", K(ret), K(effective_tenant_id));
+  } else if (OB_FAIL(ob_cstrcopy(effective_tenant_, sizeof(effective_tenant_), tenant_name))) {
+    LOG_WARN("tenant name too long", K(ret), K(tenant_name));
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::switch_tenant(uint64_t effective_tenant_id)
 {
   int ret = OB_SUCCESS;
