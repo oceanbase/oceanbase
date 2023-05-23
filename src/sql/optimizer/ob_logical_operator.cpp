@@ -3821,7 +3821,7 @@ int ObLogicalOperator::allocate_gi_recursively(AllocGIContext &ctx)
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
     }
-  } else if (is_fully_paratition_wise() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
+  } else if (is_fully_partition_wise() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) {
     ctx.alloc_gi_ = true;
     if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
       LOG_WARN("allocate gi above table scan failed", K(ret));
@@ -3895,7 +3895,7 @@ int ObLogicalOperator::pw_allocate_granule_post(AllocGIContext &ctx)
     // so that won't work in the plan found in this bug.
     // Now we support GI rescan in partition_wise_state so we just push up the GI here in such case
     //
-    if (ctx.is_in_partition_wise_state() && is_fully_paratition_wise()) {
+    if (ctx.is_in_partition_wise_state() && is_fully_partition_wise()) {
       ctx.alloc_gi_ = true;
       if (OB_FAIL(allocate_granule_nodes_above(ctx))) {
         LOG_WARN("allocate gi above table scan failed", K(ret));

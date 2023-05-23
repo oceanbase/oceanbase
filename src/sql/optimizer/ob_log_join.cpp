@@ -784,12 +784,29 @@ int ObLogJoin::print_join_tables_in_hint(const ObDMLStmt &stmt,
     bool is_first_table = true;
     const ObIArray<TableItem*> &table_items = stmt.get_table_items();
     const TableItem *table = NULL;
+    ObSEArray<const TableItem*, 2> join_tables;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
       if (OB_ISNULL(table = table_items.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(table));
       } else if (!table_set.has_member(stmt.get_table_bit_index(table->table_id_))) {
         /* do nothing */
+      } else if (OB_FAIL(join_tables.push_back(table))) {
+        LOG_WARN("failed to push back table", K(ret));
+      }
+    }
+    auto cmp_func = [](const TableItem *lhs, const TableItem *rhs) {
+      if (NULL != lhs && NULL != rhs) {
+        return lhs->get_table_name().compare(rhs->get_table_name()) > 0;
+      } else {
+        return false;
+      }
+    };
+    std::sort(join_tables.begin(), join_tables.end(), cmp_func);
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_tables.count(); ++i) {
+      if (OB_ISNULL(table = join_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(table));
       } else if (!is_first_table && OB_FAIL(BUF_PRINTF(" "))) {
       } else if (OB_FAIL(print_outline_table(plan_text, table))) {
         LOG_WARN("fail to print join table", K(ret));

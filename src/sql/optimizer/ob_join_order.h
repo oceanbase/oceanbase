@@ -746,12 +746,12 @@ struct EstimateCostInfo {
     inline bool is_left_local_order() const
     {
       return NULL != left_path_ && NULL != right_path_ && !left_sort_keys_.empty() &&
-             left_path_->is_local_order_ && !is_fully_paratition_wise();
+             left_path_->is_local_order_ && !is_fully_partition_wise();
     }
     inline bool is_right_local_order() const
     {
       return NULL != right_path_ && NULL != left_path_ && !right_sort_keys_.empty() &&
-             right_path_->is_local_order_ && !is_fully_paratition_wise();
+             right_path_->is_local_order_ && !is_fully_partition_wise();
     }
     inline bool is_left_need_sort() const
     {
@@ -786,7 +786,7 @@ struct EstimateCostInfo {
       return dist_method;
     }
 
-    inline bool is_fully_paratition_wise() const {
+    inline bool is_fully_partition_wise() const {
       return is_partition_wise() && !exchange_allocated_;
     }
     inline bool is_partition_wise() const

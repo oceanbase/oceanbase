@@ -4708,8 +4708,8 @@ int JoinPath::compute_join_path_ordering()
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
-          is_range_order_ = is_fully_paratition_wise() && left_path_->is_range_order_;
-          is_local_order_ = is_fully_paratition_wise() && !left_path_->is_range_order_;
+          is_range_order_ = is_fully_partition_wise() && left_path_->is_range_order_;
+          is_local_order_ = is_fully_partition_wise() && !left_path_->is_range_order_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -4721,7 +4721,7 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_paratition_wise();
+          is_local_order_ = is_fully_partition_wise();
         }
       }
     } else { /*do nothing*/ }
@@ -8760,6 +8760,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
     }
   } else if (((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0) || is_current_dfo) && right_path.is_join_path()) {
     const JoinPath &join_path = static_cast<const JoinPath&>(right_path);
+    is_fully_partition_wise |= join_path.is_fully_partition_wise();
     if (!is_current_dfo && join_path.is_left_need_exchange()) {
       // Stop recursive join_path.left_path_ if GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0 and
       // is_current_dfo is false and join_path.is_left_need_exchange().
@@ -8775,7 +8776,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                           right_tables,
                                                           config_disable,
                                                           !join_path.is_left_need_exchange() && is_current_dfo,
-                                                          join_path.is_fully_paratition_wise(),
+                                                          is_fully_partition_wise,
                                                           left_join_conditions,
                                                           right_join_conditions,
                                                           join_filter_infos)))) {
@@ -8797,7 +8798,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                         right_tables,
                                                         config_disable,
                                                         !join_path.is_right_need_exchange() && is_current_dfo,
-                                                        join_path.is_fully_paratition_wise(),
+                                                        is_fully_partition_wise,
                                                         left_join_conditions,
                                                         right_join_conditions,
                                                         join_filter_infos)))) {

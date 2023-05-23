@@ -669,13 +669,13 @@ int ObLogGroupBy::compute_op_ordering()
       LOG_WARN("failed to set op ordering.", K(ret));
     } else {
       is_range_order_ = child->get_is_range_order();
-      is_local_order_ = is_fully_paratition_wise() && !get_op_ordering().empty();
+      is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
     }
   } else if (OB_FAIL(set_op_ordering(child->get_op_ordering()))) {
     LOG_WARN("failed to set op ordering", K(ret));
   } else {
     is_range_order_ = child->get_is_range_order();
-    is_local_order_ = is_fully_paratition_wise() && !get_op_ordering().empty();
+    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
   }
   return ret;
 }

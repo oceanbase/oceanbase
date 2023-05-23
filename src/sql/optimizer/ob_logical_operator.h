@@ -1015,7 +1015,7 @@ public:
   inline bool is_partition_wise() const { return is_partition_wise_; }
   inline void set_is_partition_wise(bool is_partition_wise)
   { is_partition_wise_ = is_partition_wise; }
-  inline bool is_fully_paratition_wise() const
+  inline bool is_fully_partition_wise() const
   {
     return is_partition_wise() && !exchange_allocated_;
   }
