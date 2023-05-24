@@ -1273,6 +1273,14 @@ int ObTransService::revert_store_ctx(storage::ObStoreCtx &store_ctx)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "unexpected store ctx type", K(ret), K(store_ctx));
   }
+
+  if (OB_SUCC(ret) && (acc_ctx.is_read())) {
+    if (acc_ctx.tx_table_guard_.check_ls_offline()) {
+      ret = OB_NOT_MASTER;
+      STORAGE_LOG(WARN, "ls offline during the read operation", K(ret), K(acc_ctx.snapshot_));
+    }
+  }
+
   TRANS_LOG(TRACE, "revert store ctx", K(ret), K(*this), K(lbt()));
   return ret;
 }
