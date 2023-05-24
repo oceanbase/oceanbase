@@ -1928,7 +1928,7 @@ int ObTransformSimplifyExpr::do_remove_subquery(ObDMLStmt* stmt, ObRawExpr*& exp
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parameters have null", K(ret), K(stmt), K(expr));
-  } else if (expr->is_query_ref_expr()) {
+  } else if (expr->is_query_ref_expr() && !expr->is_multiset_expr()) {
     ObQueryRefRawExpr* query_ref = static_cast<ObQueryRefRawExpr*>(expr);
     ObSelectStmt* sub_stmt = query_ref->get_ref_stmt();
     if (OB_ISNULL(sub_stmt)) {
