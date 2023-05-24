@@ -285,6 +285,26 @@ FALSE {
   return BOOL_VALUE;
 }
 
+("N"|"n"){sqbegin} {
+  BEGIN(sq);
+  ParseResult *p = (ParseResult *)yyextra;
+  p->start_col_ = yylloc->first_column;
+  char **tmp_literal = &(p->tmp_literal_);
+  if (NULL == *tmp_literal)
+  {
+    *tmp_literal = (char*) parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+    check_malloc(*tmp_literal);
+  }
+  check_value(yylval);
+  malloc_new_node(yylval->node, p->malloc_pool_, T_NCHAR, 0);
+
+  yylval->node->str_len_ = 0;
+  if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
+    COPY_WRITE();
+  }
+}
+
+
 {sqbegin} {
   BEGIN(sq);
   ParseResult *p = (ParseResult *)yyextra;
@@ -305,6 +325,7 @@ FALSE {
   check_value(yylval);
   yylloc->first_column = p->start_col_;
   FORMAT_STR_NODE(yylval->node);
+  int32_t token_ret = yylval->node->type_ == T_NCHAR ? NATIONAL_LITERAL : STRING_VALUE;
   yylval->node->text_len_ = yylloc->last_column - p->start_col_ + 1;
   COPY_STRING(p->input_sql_ + p->start_col_ - 1, yylval->node->text_len_, yylval->node->raw_text_);
   if (IS_FAST_PARAMETERIZE) {
@@ -312,7 +333,7 @@ FALSE {
   } else {
     yylval->node->sql_str_off_ = yylloc->first_column;
     setup_token_pos_info(yylval->node, yylloc->first_column, yylval->node->text_len_ - 2);
-    return STRING_VALUE;
+    return token_ret;
   }
 }
 

@@ -1982,6 +1982,34 @@ int ObResolverUtils::resolve_stmt_type(const ParseResult &result, stmt::StmtType
   return ret;
 }
 
+int ObResolverUtils::set_string_val_charset(ObObjParam &val, ObString &charset, ObObj &result_val,
+                                            bool is_strict_mode,
+                                            bool return_ret)
+{
+  int ret = OB_SUCCESS;
+  ObCharsetType charset_type = CHARSET_INVALID;
+  if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
+    ret = OB_ERR_UNKNOWN_CHARSET;
+    LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+  } else {
+    // use the default collation of the specified charset
+    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+    val.set_collation_type(collation_type);
+    LOG_DEBUG("use default collation", K(charset_type), K(collation_type));
+    ObLength length = static_cast<ObLength>(ObCharset::strlen_char(val.get_collation_type(),
+          val.get_string_ptr(),
+          val.get_string_len()));
+    val.set_length(length);
+
+    // 为了跟mysql报错一样，这里检查一下字符串是否合法，仅仅是检查，不合法则报错，不做其他操作
+    // check_well_formed_str的ret_error参数为true的时候，is_strict_mode参数失效，因此这里is_strict_mode直接传入true
+    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, is_strict_mode, return_ret))) {
+      LOG_WARN("invalid str", K(ret), K(val), K(is_strict_mode), K(return_ret));
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const stmt::StmtType stmt_type,
                                    ObIAllocator &allocator,
@@ -2040,7 +2068,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
         ObString str_val;
         ObObj result_val;
         str_val.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
-        val.set_string(static_cast<ObObjType>(node->type_), str_val);
+        val.set_string(lib::is_mysql_mode() && is_nchar ?
+                              ObVarcharType : static_cast<ObObjType>(node->type_), str_val);
         // decide collation
         /*
          MySQL determines a literal's character set and collation in the following manner:
@@ -2061,7 +2090,14 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
 //        } else if (0 == node->num_child_) {
         if (0 == node->num_child_) {
           // for STRING without collation, e.g. show tables like STRING;
-          val.set_collation_type(connection_collation);
+          if (lib::is_mysql_mode() && is_nchar) {
+            ObString charset(strlen("utf8mb4"), "utf8mb4");
+            if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+              LOG_WARN("set string val charset failed", K(ret));
+            }
+          } else {
+            val.set_collation_type(connection_collation);
+          }
         } else {
           // STRING in SQL expression
           ParseNode *charset_node = NULL;
@@ -2076,31 +2112,15 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             ObCollationType collation_type = CS_TYPE_INVALID;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
-                ret = OB_ERR_UNKNOWN_CHARSET;
-                LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
-              } else {
-                // use the default collation of the specified charset
-                collation_type = ObCharset::get_default_collation(charset_type);
-                val.set_collation_type(collation_type);
-                LOG_DEBUG("use default collation", K(charset_type), K(collation_type));
-                ObLength length = static_cast<ObLength>(ObCharset::strlen_char(val.get_collation_type(),
-                      val.get_string_ptr(),
-                      val.get_string_len()));
-                val.set_length(length);
-
-                // 为了跟mysql报错一样，这里检查一下字符串是否合法，仅仅是检查，不合法则报错，不做其他操作
-                // check_well_formed_str的ret_error参数为true的时候，is_strict_mode参数失效，因此这里is_strict_mode直接传入true
-                if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, true, true))) {
-                  LOG_WARN("invalid str", K(ret), K(val));
-                }
+              if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+                LOG_WARN("set string val charset failed", K(ret));
               }
             }
           }
         }
         ObLengthSemantics length_semantics = LS_DEFAULT;
         if (OB_SUCC(ret)) {
-          if (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_) {
+          if (lib::is_oracle_mode() && (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_)) {
             length_semantics = LS_CHAR;
           } else {
             length_semantics = default_length_semantics;

@@ -54,6 +54,7 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 
 %token <node> NAME_OB
 %token <node> STRING_VALUE
+%token <node> NATIONAL_LITERAL
 %token <node> INTNUM
 %token <node> DATE_VALUE
 %token <node> TIMESTAMP_VALUE
@@ -938,6 +939,10 @@ STRING_VALUE %prec LOWER_THAN_COMP
   ParseNode *concat_node = NULL;
   make_name_node(concat_node, result->malloc_pool_, "concat");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, concat_node, string_list_node);
+}
+| NATIONAL_LITERAL
+{
+   $$ = $1;
 }
 ;
 
@@ -5222,6 +5227,52 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->sql_str_off_ = @1.first_column;
 }
+| NCHAR opt_string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, charset_node, NULL, $3);
+  $$->int32_values_[0] = $2[0];
+  $$->int32_values_[1] = 0; /* is char */
+  $$->sql_str_off_ = @1.first_column;
+}
+| NATIONAL CHARACTER opt_string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CHAR, 3, charset_node, NULL, $4);
+  $$->int32_values_[0] = $3[0];
+  $$->int32_values_[1] = 0; /* is char */
+  $$->sql_str_off_ = @1.first_column;
+}
+
 /*  | TEXT opt_binary opt_charset opt_collation
 //  {
 //    (void)($2);
@@ -5235,10 +5286,96 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = $2[0];
   $$->int32_values_[1] = 0; /* is char */
 }
+| NCHAR VARCHAR string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $4);
+  $$->int32_values_[0] = $3[0];
+  $$->int32_values_[1] = 0; /* is char */
+}
+| NVARCHAR string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $3);
+  $$->int32_values_[0] = $2[0];
+  $$->int32_values_[1] = 0; /* is char */
+}
+| NATIONAL VARCHAR string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $4);
+  $$->int32_values_[0] = $3[0];
+  $$->int32_values_[1] = 0; /* is char */
+}
 | CHARACTER VARYING string_length_i opt_binary opt_charset opt_collation
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, $5, $6, $4);
   $$->int32_values_[0] = $3[0];
+  $$->int32_values_[1] = 0; /* is char */
+}
+| NATIONAL CHARACTER VARYING string_length_i opt_binary
+{
+  ParseNode *charset_node = NULL;
+  ParseNode *charset_name = NULL;
+  malloc_terminal_node(charset_name, result->malloc_pool_, T_VARCHAR);
+  malloc_terminal_node(charset_node, result->malloc_pool_, T_CHARSET);
+  charset_name->str_value_ = parse_strdup("utf8mb4", result->malloc_pool_, &(charset_name->str_len_));
+  if (OB_UNLIKELY(NULL == charset_name->str_value_)) {
+    yyerror(NULL, result, "No more space for mallocing string\n");
+    YYABORT_NO_MEMORY;
+  }
+  charset_name->type_ = T_CHAR_CHARSET;
+  charset_name->param_num_ = 0;
+  charset_name->is_hidden_const_ = 1;
+  charset_node->str_value_ = charset_name->str_value_;
+  charset_node->str_len_ = charset_name->str_len_;
+  charset_node->sql_str_off_ = charset_name->sql_str_off_;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_VARCHAR, 3, charset_node, NULL, $5);
+  $$->int32_values_[0] = $4[0];
   $$->int32_values_[1] = 0; /* is char */
 }
 | blob_type_i opt_string_length_i_v2
