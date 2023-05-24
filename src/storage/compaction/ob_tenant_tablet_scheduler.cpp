@@ -141,6 +141,9 @@ void ObTenantTabletScheduler::MediumLoopTask::runTimerTask()
 void ObTenantTabletScheduler::SSTableGCTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  // use tenant config to loop minor && medium task
+  MTL(ObTenantTabletScheduler *)->reload_tenant_config();
+
   int64_t cost_ts = ObTimeUtility::fast_current_time();
   ObCurTraceId::init(GCONF.self_addr_);
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->update_upper_trans_version_and_gc_sstable())) {
@@ -155,7 +158,7 @@ constexpr ObMergeType ObTenantTabletScheduler::MERGE_TYPES[];
 ObTenantTabletScheduler::ObTenantTabletScheduler()
  : is_inited_(false),
    major_merge_status_(false),
-   is_stop_(true),
+   is_stop_(false),
    merge_loop_tg_id_(0),
    medium_loop_tg_id_(0),
    sstable_gc_tg_id_(0),
@@ -544,10 +547,6 @@ int ObTenantTabletScheduler::schedule_merge(const int64_t broadcast_version)
         schedule_stats_.start_timestamp_,
         "last_merged_version",
         merged_version_);
-
-    if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL, medium_loop_tg_id_, medium_loop_task_))) {
-      LOG_WARN("failed to restart schedule timer task", K(ret));
-    }
   }
   return ret;
 }
@@ -1154,9 +1153,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
         }
       } else {
         schedule_stats_.check_weak_read_ts_cnt_++;
-        if (OB_FAIL(restart_schedule_timer_task(CHECK_WEAK_READ_TS_SCHEDULE_INTERVAL, medium_loop_tg_id_, medium_loop_task_))) {
-          LOG_WARN("failed to restart schedule timer task", K(ret), K(medium_loop_tg_id_));
-        }
       }
 
       if (medium_ls_tablet_iter_.is_scan_finish() && REACH_TENANT_TIME_INTERVAL(ADD_LOOP_EVENT_INTERVAL)) {
@@ -1190,8 +1186,6 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
           current_time,
           "cost_time",
           current_time - schedule_stats_.start_timestamp_);
-
-      reload_tenant_config(); // tenant merge finish, use tenant default config to loop
     }
 
     LOG_INFO("finish schedule all tablet merge", K(merge_version), K(schedule_stats_),
@@ -1211,11 +1205,19 @@ int ObTenantTabletScheduler::restart_schedule_timer_task(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  if (OB_FAIL(TG_TASK_EXIST(medium_loop_tg_id_, medium_loop_task_, is_exist))) {
+  if (OB_FAIL(TG_TASK_EXIST(tg_id, timer_task, is_exist))) {
     LOG_ERROR("failed to check merge schedule task exist", K(ret));
-  } else if (is_exist && OB_FAIL(TG_CANCEL_R(medium_loop_tg_id_, medium_loop_task_))) {
-    LOG_WARN("failed to cancel task", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(medium_loop_tg_id_, medium_loop_task_, schedule_interval, true/*repeat*/))) {
+  } else if (is_exist) {
+    if (OB_FAIL(TG_WAIT_R(tg_id))) {
+      LOG_WARN("failed to wait schedule task before restart", K(ret), K(tg_id), K(schedule_interval));
+    } else if (OB_FAIL(TG_STOP_R(tg_id))) {
+      LOG_WARN("failed to stop schedule task before restart", K(ret), K(tg_id), K(schedule_interval));
+    } else if (OB_FAIL(TG_START(tg_id))) {
+      LOG_WARN("failed to restart schedule task", K(ret), K(tg_id), K(schedule_interval));
+    }
+  }
+
+  if (FAILEDx(TG_SCHEDULE(tg_id, timer_task, schedule_interval, true/*repeat*/))) {
     LOG_WARN("Fail to schedule minor merge scan task", K(ret));
   }
   return ret;
