@@ -4054,6 +4054,17 @@ struct ObOriginalDBKey
   {
     return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
   }
+
+  int deep_copy(const ObOriginalDBKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN,"failed to deep copy db", KR(ret), K(src.db_));
+    }
+    return ret;
+  }
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db));
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -4232,6 +4243,20 @@ struct ObTablePrivSortKey
   {
     return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
   }
+
+  int deep_copy(const ObTablePrivSortKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy db", KR(ret), K(src.db_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.table_, table_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy table", KR(ret), K(src.table_));
+    }
+    return ret;
+  }
+
   TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(table));
   uint64_t tenant_id_;
   uint64_t user_id_;
