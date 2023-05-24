@@ -269,7 +269,7 @@ int ObMacroBlockReader::alloc_buf(const int64_t req_size, char *&buf, int64_t &b
     }
     if (NULL == (buf = static_cast<char*>(allocator_.alloc(req_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(ERROR, "Fail to allocate memory for buf, ", K(req_size), K(ret));
+      STORAGE_LOG(WARN, "Fail to allocate memory for buf, ", K(req_size), K(ret));
     } else {
       buf_size = req_size;
     }
@@ -282,7 +282,7 @@ int ObMacroBlockReader::alloc_buf(ObIAllocator &allocator, const int64_t buf_siz
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("Fail to allocate memory for decompress buf", K(ret), K(buf_size));
+    LOG_WARN("Fail to allocate memory for decompress buf", K(ret), K(buf_size));
   }
   return ret;
 }
