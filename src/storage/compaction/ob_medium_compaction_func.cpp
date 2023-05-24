@@ -345,12 +345,16 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
           K(medium_info), K(max_reserved_snapshot));
       const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
       if (medium_info.medium_snapshot_ == tablet_.get_snapshot_version() //  no uncommitted sstable
-          && weak_read_ts.get_val_for_tx() <= max_reserved_snapshot
           && weak_read_ts.get_val_for_tx() + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
         const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-        medium_info.medium_snapshot_ = MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
-        LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-            K(medium_info), K(max_reserved_snapshot), K(weak_read_ts), K(snapshot_gc_ts));
+        // data before weak_read_ts & latest storage schema on memtable is match for schedule medium
+        medium_info.medium_snapshot_ = MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts);
+        if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
+          ret = OB_NO_NEED_MERGE;
+        } else {
+          LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
+              K(medium_info), K(max_reserved_snapshot), K(weak_read_ts), K(snapshot_gc_ts));
+        }
       } else {
         ret = OB_NO_NEED_MERGE;
       }
@@ -375,10 +379,11 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
       LOG_INFO("errsim", K(ret), KPC(this));
       if (OB_FAIL(ret)) {
-        const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
         const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-        medium_info.medium_snapshot_ = MAX(MAX(max_reserved_snapshot, MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts));
-        if (medium_info.medium_snapshot_ > max_sync_medium_scn) {
+        const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
+        medium_info.medium_snapshot_ = MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts);
+        if (medium_info.medium_snapshot_ > max_sync_medium_scn
+           && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
           FLOG_INFO("set schedule medium with errsim", KPC(this));
           ret = OB_SUCCESS;
         }

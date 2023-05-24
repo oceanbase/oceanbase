@@ -350,7 +350,7 @@ int ObTenantFreezeInfoMgr::inner_get_neighbour_major_freeze(
     }
   }
   if (OB_SUCC(ret) && !found) {
-    info.next.freeze_version = INT64_MAX;
+    info.next.freeze_version = snapshot_gc_ts_;
     info.prev = info_list.at(info_list.count() - 1);
   }
   return ret;

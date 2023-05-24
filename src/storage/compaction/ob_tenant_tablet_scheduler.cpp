@@ -118,6 +118,7 @@ void ObTenantTabletScheduler::MergeLoopTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
+  ObCurTraceId::init(GCONF.self_addr_);
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->schedule_all_tablets_minor())) {
     LOG_WARN("Fail to merge all partition", K(ret));
   }
@@ -129,6 +130,7 @@ void ObTenantTabletScheduler::MediumLoopTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
+  ObCurTraceId::init(GCONF.self_addr_);
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->schedule_all_tablets_medium())) {
     LOG_WARN("Fail to merge all partition", K(ret));
   }
@@ -140,6 +142,7 @@ void ObTenantTabletScheduler::SSTableGCTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   int64_t cost_ts = ObTimeUtility::fast_current_time();
+  ObCurTraceId::init(GCONF.self_addr_);
   if (OB_FAIL(MTL(ObTenantTabletScheduler *)->update_upper_trans_version_and_gc_sstable())) {
     LOG_WARN("Fail to update upper_trans_version and gc sstable", K(ret));
   }
@@ -997,7 +1000,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           }
         }
         LOG_DEBUG("schedule tablet medium", K(ret), K(ls_id), K(tablet_id), K(tablet_merge_finish),
-            KPC(latest_major), K(merge_version));
+            KPC(latest_major), K(merge_version), K(is_leader));
         if (!is_leader || OB_ISNULL(latest_major)) {
           // follower or no major: do nothing
         } else if (tablet->get_medium_compaction_info_list().need_check_finish()) { // need check finished
