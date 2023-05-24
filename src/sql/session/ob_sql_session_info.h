@@ -211,6 +211,26 @@ enum SessionSyncInfoType {
   SESSION_SYNC_MAX_TYPE,
 };
 
+
+struct SessSyncTxnTypeSet {
+  SessSyncTxnTypeSet() {
+    types_.add_member(SessionSyncInfoType::SESSION_SYNC_TXN_STATIC_INFO);
+    types_.add_member(SessionSyncInfoType::SESSION_SYNC_TXN_DYNAMIC_INFO);
+    types_.add_member(SessionSyncInfoType::SESSION_SYNC_TXN_PARTICIPANTS_INFO);
+    types_.add_member(SessionSyncInfoType::SESSION_SYNC_TXN_EXTRA_INFO);
+  };
+  common::ObFixedBitSet<oceanbase::sql::SessionSyncInfoType::SESSION_SYNC_MAX_TYPE> types_;
+  bool is_contain(const int t) { return types_.has_member(t); }
+  void type_range(int &min, int &max) {
+    min = SessionSyncInfoType::SESSION_SYNC_TXN_STATIC_INFO;
+    max = SessionSyncInfoType::SESSION_SYNC_TXN_EXTRA_INFO;
+  }
+  static SessSyncTxnTypeSet &get_instance() {
+    static SessSyncTxnTypeSet instance;
+    return instance;
+  }
+};
+
 class ObSessInfoEncoder {
 public:
   ObSessInfoEncoder() : is_changed_(false) {}
