@@ -458,6 +458,7 @@ private:
       ObIArray<ObKeyPart*> &next_key_parts, ObIArray<uint64_t> &next_or_count, uint64_t &range_size);
   int check_null_param_compare_in_row(const ObRawExpr *l_expr, const ObRawExpr *r_expr,
       ObKeyPart *&out_key_part);
+  int check_in_expr_null_param(ObKeyPart *tmp, bool &has_null_param);
 private:
   static const int64_t COMMON_KEY_PART_NUM = 256;
   static const int64_t RANGE_BUCKET_SIZE = 1000;

@@ -1612,6 +1612,7 @@ int ObQueryRange::pre_extract_single_in_op(
       for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
         ObKeyPart* tmp = NULL;
         ObExprResType res_type(alloc);
+        bool has_null_param = false;
         if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
           LOG_WARN("get in expr element result type failed", K(ret), K(i));
         } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
@@ -1630,6 +1631,10 @@ int ObQueryRange::pre_extract_single_in_op(
           cur_in_is_precise = (cur_in_is_precise && query_range_ctx_->cur_expr_is_precise_);
           break;
         } else if (tmp->is_always_false()) {  // find false
+          find_false = tmp;
+        } else if (OB_FAIL(check_in_expr_null_param(tmp, has_null_param))) {
+          LOG_WARN("failed to check null param in IN expr");
+        } else if (has_null_param) {
           find_false = tmp;
         } else if (NULL == tmp_tail) {
           tmp_tail = tmp;
@@ -1659,6 +1664,50 @@ int ObQueryRange::pre_extract_single_in_op(
   return ret;
 }
 
+int ObQueryRange::check_in_expr_null_param(ObKeyPart *tmp, bool &has_null_param)
+{
+  int ret = OB_SUCCESS;
+  has_null_param = false;
+  if (OB_ISNULL(tmp) || OB_UNLIKELY(!tmp->is_normal_key()) || OB_ISNULL(query_range_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(tmp), K(query_range_ctx_));
+  } else if (query_range_ctx_->params_ != NULL) {
+    for (ObKeyPart *cur = tmp; OB_SUCC(ret) && !has_null_param && cur != NULL; cur = cur->and_next_) {
+      if (!has_null_param && cur != NULL && cur->is_question_mark()) {
+        if (cur->normal_keypart_->start_.is_unknown()) {
+          ObObj start_tmp;
+          if (OB_FAIL(ob_write_obj(allocator_, cur->normal_keypart_->start_, start_tmp))) {
+            LOG_WARN("failed to deep copy obj", K(ret));
+          } else if (OB_FAIL(get_param_value(start_tmp, *query_range_ctx_->params_))) {
+            LOG_WARN("failed to get param val", K(ret));
+          } else if (start_tmp.is_null()) {
+            has_null_param = true;
+          }
+        }
+        if (OB_SUCC(ret) && !has_null_param && cur->normal_keypart_->end_.is_unknown()) {
+          ObObj end_tmp;
+          if (OB_FAIL(ob_write_obj(allocator_, cur->normal_keypart_->end_, end_tmp))) {
+            LOG_WARN("failed to deep copy obj", K(ret));
+          } else if (OB_FAIL(get_param_value(end_tmp, *query_range_ctx_->params_))) {
+            LOG_WARN("failed to get param val", K(ret));
+          } else if (end_tmp.is_null()) {
+            has_null_param = true;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && has_null_param) {
+      // convert to always false
+      tmp->normal_keypart_->start_.set_max_value();
+      tmp->normal_keypart_->end_.set_min_value();
+      tmp->normal_keypart_->always_false_ = true;
+      tmp->normal_keypart_->include_start_ = false;
+      tmp->normal_keypart_->include_end_ = false;
+    }
+  }
+  return ret;
+}
+
 int ObQueryRange::pre_extract_in_op(
     const ObOpRawExpr* b_expr, ObKeyPart*& out_key_part, const ObDataTypeCastParams& dtc_params)
 {
@@ -1682,6 +1731,7 @@ int ObQueryRange::pre_extract_in_op(
       for (int64_t i = 0; OB_SUCC(ret) && i < r_expr->get_param_count(); i++) {
         ObKeyPart* tmp = NULL;
         ObExprResType res_type(alloc);
+        bool has_null_param = false;
         if (OB_FAIL(get_in_expr_res_type(b_expr, i, res_type))) {
           LOG_WARN("get in expr element result type failed", K(ret), K(i));
         } else if (OB_FAIL(get_basic_query_range(b_expr->get_param_expr(0),
@@ -1692,6 +1742,8 @@ int ObQueryRange::pre_extract_in_op(
                        tmp,
                        dtc_params))) {
           LOG_WARN("Get basic query range failed", K(ret));
+        } else if (tmp != NULL && OB_FAIL(check_in_expr_null_param(tmp, has_null_param))) {
+          LOG_WARN("failed to check null param in IN expr", K(ret));
         } else if (OB_FAIL(add_or_item(key_part_list, tmp))) {
           LOG_WARN("push back failed", K(ret));
         } else {
