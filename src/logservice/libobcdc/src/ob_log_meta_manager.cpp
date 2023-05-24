@@ -90,6 +90,25 @@ namespace oceanbase
 {
 namespace libobcdc
 {
+void ObLogMetaManager::set_column_encoding_(const common::ObObjType &col_type,
+     const common::ObCharsetType &cs_type,
+     IColMeta *meta)
+{
+  if (1 == TCONF.enable_compatible_charset) {
+    if (cs_type > ObCharsetType::CHARSET_BINARY) {
+      SET_ENCODING(meta, cs_type);
+    } else if (ob_is_string_or_lob_type(col_type) ||
+        ob_is_enum_or_set_type(col_type) ||
+        ob_is_json(col_type)) {
+      SET_ENCODING(meta, cs_type);
+    } else {
+      meta->setEncoding(DEFAULT_ENCODING);
+    }
+  } else {
+    SET_ENCODING(meta, cs_type);
+  }
+}
+
 ObLogMetaManager::ObLogMetaManager() : inited_(false),
                                        enable_output_hidden_primary_key_(false),
                                        obj2str_helper_(NULL),
@@ -1160,7 +1179,8 @@ int ObLogMetaManager::set_column_meta_(
       col_meta->setSigned(signed_flag);
       col_meta->setIsPK(column_schema.is_original_rowkey_column());
       col_meta->setNotNull(! column_schema.is_nullable());
-      SET_ENCODING(col_meta, column_schema.get_charset_type());
+
+      set_column_encoding_(col_type, column_schema.get_charset_type(), col_meta);
 
       // mark if is generate column
       // default value of IColMeta::isGenerated is false

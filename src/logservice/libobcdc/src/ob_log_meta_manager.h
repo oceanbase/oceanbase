@@ -131,6 +131,12 @@ public:
 
 class ObLogMetaManager : public IObLogMetaManager
 {
+private:
+  static void set_column_encoding_(
+      const common::ObObjType &col_type,
+      const common::ObCharsetType &cs_type,
+      IColMeta *meta);
+
 public:
   ObLogMetaManager();
   virtual ~ObLogMetaManager();
