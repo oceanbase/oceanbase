@@ -83,8 +83,8 @@ public:
 
   virtual ~TXmlNodeBase() {}
 
-  int64_t size() const { return ObLibContainerNode::size(); }
-  int64_t count() const { return size(); }
+  int64_t size() { return ObLibContainerNode::size(); }
+  int64_t count() { return size(); }
 
   const common::ObString& get_key()
   {
@@ -99,6 +99,10 @@ public:
     return ret;
   }
 
+  int get_ns_value(ObString &ns_value) {
+    return 0;
+  }
+
   int get_value(ObString& value, int64_t index = -1)  override
   {
     INIT_SUCC(ret);
@@ -111,6 +115,8 @@ public:
     return 0;
   }
 
+  void set_standalone(uint16_t standalone) {  }
+
   // 用于确定key是否匹配
   int compare(const ObString& key, int& res) {
     UNUSED(key);
@@ -118,6 +124,16 @@ public:
     return 0;
   }
 
+  virtual int64_t attribute_size() { return 0; }
+  virtual int64_t attribute_count() { return 0; }
+  ObString get_version() { return ObString(); }
+  ObString get_prefix() { return ObString(); }
+  ObString get_encoding() { return ObString(); }
+  uint16_t get_standalone() { return 0; }
+  ObIMulModeBase* attribute_at(int64_t pos) { return nullptr; }
+  bool has_flags(ObMulModeNodeFlag flag) { return false; }
+  bool get_unparse() { return false; }
+  bool get_is_empty() { return false; }
   // 返回节点具体类型
   // 例如：json返回jsonInt，jsonDouble
   // xml 返回xmlElment, XmlAttribute

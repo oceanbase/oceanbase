@@ -173,7 +173,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_child)
   element1.set_ns(&ns);
   element1.set_prefix(ns.get_key());
   ASSERT_EQ(element1.size(), 2);
-  ASSERT_EQ(element1.attributes_size(), 1);
+  ASSERT_EQ(element1.attribute_size(), 1);
   element1.update_attribute(&attr2, 0);
   // ASSERT_EQ(element1.get_attribute().at(0).get_value(), "sttr2_value");
   ObString key_res1;
@@ -676,7 +676,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_well_from)
   ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, element1.type());
   ObString emelent1= "emelent1";
   ObString emelent2= "emelent2";
-  ASSERT_EQ(content.attributes_size(), 0);
+  ASSERT_EQ(content.attribute_size(), 0);
   element1.set_key(emelent1);
   element2.set_key(emelent2);
   ASSERT_EQ(element1.get_key(), "emelent1");
@@ -699,7 +699,7 @@ TEST_F(TestXmlNodeBase, test_xml_node_element_add_well_from)
   element1.add_attribute(&attr1);
   element2.add_attribute(&attr1);
   ASSERT_EQ(element1.size(), 2);
-  ASSERT_EQ(element1.attributes_size(), 1);
+  ASSERT_EQ(element1.attribute_size(), 1);
 
   comment.set_text(cdata1);
   int res = cdata.compare(cdata1, res);

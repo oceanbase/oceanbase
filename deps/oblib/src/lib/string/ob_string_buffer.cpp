@@ -87,7 +87,7 @@ int ObStringBuffer::append(const ObString &str)
 int ObStringBuffer::reserve(const uint64_t len)
 {
   INIT_SUCC(ret);
-  const uint64_t need_size = len_ + len + 1; // 1 more byte for C terminating null byte ('\0')
+  const uint64_t need_size = len_ + len + 8; // 1 more byte for C terminating null byte ('\0')
   static const uint64_t BIT_PER_BYTE = 8;
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_NULL_VALUE;
