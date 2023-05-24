@@ -936,6 +936,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           }
         }
         // retry on fetch remote log failure anyway
+        // for all scenario above, no need to fetch log and need to reset remote iterator.
         need_fetch_log = false;
         ls_fetch_ctx_->reset_remote_iter();
         ret = OB_SUCCESS;
@@ -948,6 +949,12 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
               K(lsn), K(kick_out_info), KPC(ls_fetch_ctx_));
         } else if (OB_NEED_RETRY == ret) {
           LOG_WARN("read_group_entry failed, retry", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
+          // reset remote iter to fetch log that match the next_lsn in progress next round,
+          // otherwise incorrect log may be fetched.
+          ls_fetch_ctx_->reset_remote_iter();
+          // reset memory storage to prevent the remain logentry in mem_storage from
+          // disruppting the iteration of log group entry.
+          ls_fetch_ctx_->reset_memory_storage();
           need_fetch_log = false;
           ret = OB_SUCCESS;
         }
@@ -986,11 +993,6 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
       }
     }
 
-    // rewrite ret code when ret equals OB_NEED_RETRY.
-    if (OB_NEED_RETRY == ret) {
-      ret = OB_SUCCESS;
-    }
-
     // when exit from loop, there could still be some fetch tasks to be synchronized
     if (OB_SUCC(ret)) {
       int64_t flush_time = 0;
@@ -1002,6 +1004,12 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
             read_log_time, fetch_remote_time, flush_time, tsi);
       }
     }
+
+    // rewrite ret code when ret equals OB_NEED_RETRY.
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
+    }
+
     if (OB_SUCC(ret)) {
       if (kick_out_info.need_kick_out()) {
         if (OB_FAIL(kick_out_task_(kick_out_info))) {
