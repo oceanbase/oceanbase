@@ -41,12 +41,12 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
-#define CASE_IGNORE_ERR_HELPER(ERR_CODE)  \
-case ERR_CODE: {                          \
-  should_ignore = true;                   \
-  LOG_USER_WARN(ERR_CODE);                \
-  break;                                  \
-}                                         \
+#define CASE_IGNORE_ERR_HELPER(ERR_CODE)                        \
+case ERR_CODE: {                                                \
+  should_ignore = true;                                         \
+  LOG_USER_WARN(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, ERR_CODE);  \
+  break;                                                        \
+}                                                               \
 
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
 

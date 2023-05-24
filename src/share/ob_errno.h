@@ -450,6 +450,7 @@ constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
 constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_CLUSTER_INFO_MAYBE_REMAINED = -4757;
 constexpr int OB_ARBITRATION_INFO_QUERY_FAILED = -4758;
+constexpr int OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE = -4759;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2294,6 +2295,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_MIGRATE_NOT_COMPATIBLE__USER_ERROR_MSG "Migration src and dest version is not compatible."
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__USER_ERROR_MSG "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__USER_ERROR_MSG "the arbitration service may be unavailable, please check and retry"
+#define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__USER_ERROR_MSG "An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4373,6 +4375,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_MIGRATE_NOT_COMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4756, Migration src and dest version is not compatible."
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4757, Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4758, the arbitration service may be unavailable, please check and retry"
+#define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4759, An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5903,7 +5906,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2075];
+extern int g_all_ob_errnos[2076];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
