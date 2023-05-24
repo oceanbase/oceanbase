@@ -137,7 +137,12 @@ int ObMergeJoinOp::inner_open()
                                                           MY_SPEC.equal_cond_infos_;
     const int64_t left_width = left_->get_spec().width_;
     const int64_t right_width = right_->get_spec().width_;
-    left_mem_bound_ratio_ = 1.2 * ((double)left_width) / ((double)(left_width + right_width));
+    const double width_ratio = ((double)left_width) / ((double)(left_width + right_width));
+    const double MIN_LEFT_MEM_BOUND_RATIO = 0.2;
+    const double MAX_LEFT_MEM_BOUND_RATIO = 0.8;
+    // We prefer more memory to the left, otherwise there may waste memory, so left_mem_bound_ratio_
+    // is multiplied by a coefficient of 1.2.
+    left_mem_bound_ratio_ = MAX(MIN(MAX_LEFT_MEM_BOUND_RATIO, 1.2 * width_ratio), MIN_LEFT_MEM_BOUND_RATIO);
     const int64_t cache_size = MY_SPEC.max_batch_size_ * BATCH_MULTIPLE_TIMES *
                                   (left_width + right_width);
     if (OB_FAIL(sql_mem_processor_.init(&mem_context_->get_malloc_allocator(),
