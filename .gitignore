@@ -345,6 +345,3 @@ deps/3rd
 ############# test #############
 test/tmp
 test/var
-
-single_ob2
-store
