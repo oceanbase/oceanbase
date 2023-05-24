@@ -161,7 +161,7 @@ private:
     ObChunkDatumStore::Iterator *iterator_;
     HashTableCell *tuple_;
     bool use_hash_;     // tuple is valid if use_hash_
-    int init(ObConnectByOpPump &connect_by_pump, const ObArray<ObExpr *> &hash_probe_exprs);
+    int init(ObConnectByOpPump &connect_by_pump, const ExprFixedArray &hash_probe_exprs);
     int get_next_row(const ObChunkDatumStore::StoredRow *&row);
     int get_next_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   };
@@ -285,7 +285,7 @@ public:
   int get_top_pump_node(PumpNode *&node);
   int get_sys_path(uint64_t sys_connect_by_path_id, ObString &parent_path);
   int concat_sys_path(uint64_t sys_connect_by_path_id, const ObString &cur_path);
-  int calc_hash_value(const ObArray<ObExpr *> &hash_exprs, uint64_t &hash_value);
+  int calc_hash_value(const ExprFixedArray &exprs, uint64_t &hash_value);
   int build_hash_table(ObIAllocator &alloc);
 
 private:
