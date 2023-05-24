@@ -2136,6 +2136,7 @@ void ObPrimaryLSService::do_work()
     int tmp_ret = OB_SUCCESS;
     ObAllTenantInfo tenant_info;
     while (!has_set_stop()) {
+      idle_time_us = 1000 * 1000L;
       {
         ObCurTraceId::init(GCONF.self_addr_);
         share::schema::ObSchemaGetterGuard schema_guard;
