@@ -50,7 +50,7 @@ int ObGIOpInput::init(ObTaskInfo &task_info)
   //new parallel framework do not use this interface to set parameters
   ret = OB_NOT_SUPPORTED;
   LOG_USER_ERROR(OB_NOT_SUPPORTED, "init gi input");
-  LOG_WARN("the interface shoud not be used", K(ret));
+  LOG_WARN("the interface should not be used", K(ret));
   return ret;
 }
 
@@ -207,7 +207,7 @@ int ObGranuleIteratorOp::parameters_init()
     LOG_WARN("the pump can not be null", K(ret));
   } else if (FALSE_IT(pump_ = input->pump_)){
   } else if (OB_FAIL(table_location_keys_.assign(input->table_location_keys_))) {
-    LOG_WARN("fail to assgin table location keys", K(ret));
+    LOG_WARN("fail to assign table location keys", K(ret));
   } else {
     parallelism_ = input->parallelism_;
     worker_id_ = input->worker_id_;
@@ -795,7 +795,7 @@ int ObGranuleIteratorOp::prepare_table_scan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected gi state", K(ret), K(state_));
   } else if (FALSE_IT(state_ = GI_GET_NEXT_GRANULE_TASK)) {
-  } else if (OB_FAIL(get_next_granule_task(true /* prapare */))) {
+  } else if (OB_FAIL(get_next_granule_task(true /* prepare */))) {
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to get next granule task", K(ret));
     } else {
@@ -979,7 +979,7 @@ int ObGranuleIteratorOp::fetch_rescan_pw_task_infos(const common::ObIArray<int64
           state_ = GI_END;
         } else if (OB_UNLIKELY(rescan_task_idx_ + repart_idx >= pwj_rescan_task_infos_.count())) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexected pwj_rescan_task_infos_ count", K(ret), K(rescan_task_idx_),
+          LOG_WARN("unexpected pwj_rescan_task_infos_ count", K(ret), K(rescan_task_idx_),
                   K(repart_idx), K(pwj_rescan_task_infos_.count()), K(op_ids));
         } else {
           partition_pruned = repart_partition_pruned(pwj_rescan_task_infos_.at(rescan_task_idx_ + repart_idx));

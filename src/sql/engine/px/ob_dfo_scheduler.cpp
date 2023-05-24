@@ -851,7 +851,7 @@ int ObParallelDfoScheduler::dispatch_transmit_channel_info(ObExecContext &ctx, O
                   "sent transmit_data_channel_msg to child task",
                   K(transmit_data_channel_msg), K(child), K(idx), K(cnt), K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
+      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channels_asyn_wait(sqcs))) {
         LOG_WARN("failed to wait for sqcs", K(ret));
       }
     }
@@ -910,7 +910,7 @@ int ObParallelDfoScheduler::dispatch_receive_channel_info(ObExecContext &ctx,
           }
         }
       }
-      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
+      if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channels_asyn_wait(sqcs))) {
         LOG_WARN("failed to wait for sqcs", K(ret));
       }
     }

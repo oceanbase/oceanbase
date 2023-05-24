@@ -96,7 +96,7 @@ int ObInitChannelPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sq
                 K(idx), K(cnt), K(whole_msg_), K(*ch));
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs))) {
+  if (OB_SUCC(ret) && OB_FAIL(ObPxChannelUtil::sqcs_channels_asyn_wait(sqcs))) {
     LOG_WARN("failed to wait response", K(ret));
   }
   return ret;

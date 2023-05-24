@@ -418,9 +418,9 @@ public:
     sql::ObOpMetric &metric);
 
   // asyn wait
-  static int dtl_channles_asyn_wait(
+  static int dtl_channels_asyn_wait(
             common::ObIArray<dtl::ObDtlChannel*> &channels, bool ignore_error = false);
-  static int sqcs_channles_asyn_wait(common::ObIArray<sql::ObPxSqcMeta *> &sqcs);
+  static int sqcs_channels_asyn_wait(common::ObIArray<sql::ObPxSqcMeta *> &sqcs);
 };
 
 class ObPxAffinityByRandom

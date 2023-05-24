@@ -287,7 +287,7 @@ int ObRDWFPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs)
       OZ(ch->send(msg, timeout_ts_));
       OZ(ch->flush(true /* wait */, false /* wait response */));
     }
-    OZ(ObPxChannelUtil::sqcs_channles_asyn_wait(sqcs));
+    OZ(ObPxChannelUtil::sqcs_channels_asyn_wait(sqcs));
   }
   for (int64_t i = 0; NULL != responses && i < sqcs.count(); i++) {
     responses[i].~ObRDWFWholeMsg();

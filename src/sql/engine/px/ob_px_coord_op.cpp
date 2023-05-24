@@ -675,7 +675,7 @@ int ObPxCoordOp::destroy_all_channel()
         }
         /*
          * actually, the qc and sqc can see the channel id of sqc.
-         * sqc channel's onwer is SQC, not QC.
+         * sqc channel's owner is SQC, not QC.
          * if we release there, all these channel will be release twice.
          * So, sqc channel will be release by sqc, not qc.
          *
@@ -726,7 +726,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   if (OB_SUCC(ret)) {
     // 专用于等待各个活跃sqc的msg proc.
     ObDtlChannelLoop &loop = msg_loop_;
-    ObIPxCoordEventListener &listener = get_listenner();
+    ObIPxCoordEventListener &listener = get_listener();
     ObPxTerminateMsgProc terminate_msg_proc(coord_info_, listener);
     ObPxFinishSqcResultP sqc_finish_msg_proc(ctx_, terminate_msg_proc);
     ObPxInitSqcResultP sqc_init_msg_proc(ctx_, terminate_msg_proc);
@@ -792,7 +792,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(loop.process_one_if(&control_channels, nth_channel))) {
         if (OB_EAGAIN == ret) {
-          LOG_DEBUG("no msessage, waiting sqc report", K(ret));
+          LOG_DEBUG("no message, waiting sqc report", K(ret));
           ret = OB_SUCCESS;
         } else if (OB_ITER_END != ret) {
           LOG_WARN("fail process message", K(ret));
@@ -932,7 +932,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
-    if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
+    if (OB_FAIL(get_listener().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
     bool enable_audit = GCONF.enable_sql_audit && ctx.get_my_session()->get_local_ob_enable_sql_audit();
@@ -1005,7 +1005,7 @@ int ObPxCoordOp::receive_channel_root_dfo(
   } else if (OB_FAIL(ObPxReceiveOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("fail link px coord data channels with its only child dfo", K(ret));
   } else {
-    if (OB_FAIL(get_listenner().on_root_data_channel_setup())) {
+    if (OB_FAIL(get_listener().on_root_data_channel_setup())) {
       LOG_WARN("fail notify listener", K(ret));
     }
     bool enable_audit = GCONF.enable_sql_audit && ctx.get_my_session()->get_local_ob_enable_sql_audit();

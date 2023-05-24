@@ -124,7 +124,7 @@ protected:
   void clear_interrupt();
 
   virtual int init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info);
-  virtual ObIPxCoordEventListener &get_listenner() = 0;
+  virtual ObIPxCoordEventListener &get_listener() = 0;
   dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return &first_buffer_cache_; }
 
   int init_batch_info();

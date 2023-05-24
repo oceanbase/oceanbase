@@ -120,7 +120,7 @@ public:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
 
-  virtual ObIPxCoordEventListener &get_listenner() override { return listener_; }
+  virtual ObIPxCoordEventListener &get_listener() override { return listener_; }
   int init_row_heap(int64_t n_ways);
 
   // initialize readers after receive channel root DFO.
