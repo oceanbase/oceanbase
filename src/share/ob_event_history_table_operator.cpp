@@ -184,7 +184,7 @@ int ObEventHistoryTableOperator::init(common::ObMySQLProxy &proxy)
     LOG_WARN("init twice", K(ret));
   } else {
     const int64_t thread_count = 1;
-    const int64_t queue_size_square_of_2 = 14;
+    const int64_t queue_size_square_of_2 = 10;
     if (OB_FAIL(event_queue_.init(thread_count, "EvtHisUpdTask", TASK_QUEUE_SIZE, TASK_MAP_SIZE,
         TOTAL_LIMIT, HOLD_LIMIT, PAGE_SIZE))) {
       LOG_WARN("task_queue_ init failed", K(thread_count), LITERAL_K(TASK_QUEUE_SIZE),

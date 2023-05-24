@@ -49,7 +49,7 @@ struct DefaultAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num++;
 #endif
-    return ob_malloc(size, SET_USE_500("OccamThreadPool"));
+    return share::mtl_malloc(size, "OccamThreadPool");
   }
   void* alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);
@@ -59,7 +59,7 @@ struct DefaultAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num--;
 #endif
-    ob_free(ptr);
+    share::mtl_free(ptr);
   }
 #ifdef UNIITTEST_DEBUG
   int total_alive_num = 0;
@@ -200,7 +200,7 @@ public:
     is_inited_(false),
     is_stopped_(false) {}
   ~ObOccamThreadPool() { destroy(); }
-  int init(int64_t thread_num, int64_t queue_size_square_of_2 = 14)
+  int init(int64_t thread_num, int64_t queue_size_square_of_2 = 10)
   {
     int ret = OB_SUCCESS;
     if (is_inited_) {
@@ -489,7 +489,7 @@ public:
   ObOccamThreadPool() :
     thread_num_(0),
     queue_size_square_of_2_(0) {}
-  int init_and_start(int thread_num, int queue_size_square_of_2 = 14)
+  int init_and_start(int thread_num, int queue_size_square_of_2 = 10)
   {
     int ret = OB_SUCCESS;
     ret = ob_make_shared<occam::ObOccamThreadPool>(thread_pool_);

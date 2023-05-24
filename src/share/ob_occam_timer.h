@@ -551,7 +551,7 @@ public:
   int init_and_start(const int64_t worker_number,
                      const int64_t precision,
                      const char *name,
-                     const int64_t queue_size_square_of_2 = 14)
+                     const int64_t queue_size_square_of_2 = 10)
   {
     TIMEGUARD_INIT(OCCAM, 100_ms);
     int ret = OB_SUCCESS;
