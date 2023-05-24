@@ -442,7 +442,7 @@ int ObTransformOrExpansion::is_match_index(const ObDMLStmt& stmt, const ObRawExp
         if (OB_ISNULL(temp_expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null expr", K(ret));
-        } else if (!temp_expr->is_const_expr()) {
+        } else if (!temp_expr->has_const_or_const_expr_flag()) {
           is_const = false;
         } else { /*do nothing*/
         }
