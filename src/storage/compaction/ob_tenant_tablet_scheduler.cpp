@@ -966,11 +966,13 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
           is_leader = true;
           if (OB_FAIL(ls_locality_cache_.get_ls_locality(ls_id, ls_locality))) {
             LOG_WARN("failed to get ls locality", K(ret), K(ls_id));
-          } else if (0 == ls_locality.svr_addr_list_.count()) {
-            ADD_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX),
-              "maybe bad case: locality change and leader change", K(ls_locality));
-          } else {
-            DEL_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX));
+          } else if (ls_locality.is_valid()) {
+            if (!ls_locality.check_exist(GCTX.self_addr())) {
+              ADD_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX),
+                "maybe bad case: ls leader is not in ls locality", "leader_addr", GCTX.self_addr(), K(ls_locality));
+            } else {
+              DEL_SUSPECT_INFO(MEDIUM_MERGE, ls_id, ObTabletID(INT64_MAX));
+            }
           }
         }
       } else {
