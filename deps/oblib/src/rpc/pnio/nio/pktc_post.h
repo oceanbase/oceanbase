@@ -9,6 +9,7 @@ static pktc_sk_t* pktc_do_connect(pktc_t* cl, addr_t dest) {
   return sk;
   el();
   if (sk) {
+    rk_warn("connect failed, sk=%p, fd=%d, errno=%d", sk, sk->fd, errno);
     pktc_sk_delete(&cl->sf, sk);
   }
   return NULL;
@@ -26,7 +27,7 @@ static pktc_sk_t* pktc_try_connect(pktc_t* cl, addr_t dest) {
   }
   return sk;
   el();
-  rk_error("sk create fail: %s sk=%p", T2S(addr, dest), sk);
+  rk_warn("sk create fail: %s sk=%p", T2S(addr, dest), sk);
   if (sk) {
     pktc_sk_destroy(&cl->sf, sk);
   }

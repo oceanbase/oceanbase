@@ -182,16 +182,7 @@ void ObPocClientStub::set_handle(ObRpcProxy& proxy, Handle* handle, const ObRpcP
   proxy.set_handle_attr(handle, pcode, opts, is_stream_next, session_id);
 }
 int ObPocClientStub::translate_io_error(int io_err) {
-  int ret = OB_SUCCESS;
-  if (PNIO_OK == io_err) {
-  } else if (ENOMEM == io_err || -ENOMEM == io_err) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (EINVAL == io_err || -EINVAL == io_err) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-  }
-  return ret;
+  return tranlate_to_ob_error(io_err);
 }
 
 int ObPocClientStub::log_user_error_and_warn(const ObRpcResultCode &rcode) const

@@ -76,7 +76,10 @@ private:
 
 extern ObPocRpcServer global_poc_server;
 extern ObListener* global_ob_listener;
-extern "C" int dispatch_to_ob_listener(int accept_fd);
+extern "C" {
+  int dispatch_to_ob_listener(int accept_fd);
+  int tranlate_to_ob_error(int err);
+}
 }; // end namespace obrpc
 }; // end namespace oceanbase
 

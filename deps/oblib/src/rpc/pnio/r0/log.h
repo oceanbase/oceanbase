@@ -31,9 +31,12 @@ int64_t ob_update_loop_ts()
 {
   return 0;
 }
+int tranlate_to_ob_error(int err) {
+  return 0;
+}
 #endif
 #define do_rk_log_macro(...) { format_reset(&g_log_fbuf); rk_log_macro(__VA_ARGS__); }
-#define rk_error(...) do_rk_log_macro(ERROR, oceanbase::common::OB_ERR_SYS, ##__VA_ARGS__)
+#define rk_error(...) do_rk_log_macro(ERROR, tranlate_to_ob_error(err), ##__VA_ARGS__)
 #define rk_info(...) do_rk_log_macro(INFO, oceanbase::common::OB_SUCCESS, ##__VA_ARGS__)
 #define rk_warn(...) do_rk_log_macro(WARN, oceanbase::common::OB_SUCCESS, ##__VA_ARGS__)
 #define rk_fatal(...) { rk_error(__VA_ARGS__); exit(1); }

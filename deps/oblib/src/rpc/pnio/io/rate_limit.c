@@ -27,19 +27,19 @@ void rl_sock_push(rl_impl_t* rl_impl, sock_t* sk) {
 }
 
 static int handle_rl_sock_read_event(eloop_t* ep, sock_t* s, rl_impl_t* rl, int64_t* avail_bytes) {
-  int handle_err = 0;
+  int err = 0;
   if ((handle_event_t)pkts_sk_handle_event == s->handle_event) {
-    handle_err = pkts_sk_consume((pkts_sk_t*)s, get_epoll_handle_time_limit(), avail_bytes);
+    err = pkts_sk_consume((pkts_sk_t*)s, get_epoll_handle_time_limit(), avail_bytes);
   } else if ((handle_event_t)pktc_sk_handle_event == s->handle_event) {
-    handle_err = pktc_sk_consume((pktc_sk_t*)s, get_epoll_handle_time_limit(), avail_bytes);
+    err = pktc_sk_consume((pktc_sk_t*)s, get_epoll_handle_time_limit(), avail_bytes);
   } else {
-    handle_err = -EIO;
+    err = -EIO;
     rk_error("unexpect socket struct:%p, s->handle_event=%p", s, s->handle_event);
   }
-  if (handle_err == EAGAIN && *avail_bytes <= 0) {
-    handle_err = 0; // not real EAGIAN
+  if (err == EAGAIN && *avail_bytes <= 0) {
+    err = 0; // not real EAGIAN
   }
-  return handle_err;
+  return err;
 }
 
 static int rl_timerfd_handle_event(rl_timerfd_t* s) {

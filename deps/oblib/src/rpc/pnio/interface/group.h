@@ -76,6 +76,7 @@ pn_comm_t* get_current_pnio();
 #define PNIO_DISPATCH_ERROR         (-51)
 #define PNIO_TIMEOUT_NOT_SENT_OUT       (-54)
 #define PNIO_DISCONNECT_NOT_SENT_OUT    (-55)
+#define PNIO_LISTEN_ERROR               (-56)
 
 /*
 // 启动listen线程和epool线程池, epoll线程池有10个线程

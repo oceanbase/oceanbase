@@ -13,6 +13,7 @@ static int do_accept(int fd, int is_pipe)
 
 void on_accept(int fd, sf_t* sf, eloop_t* ep)
 {
+  int err = 0;
   bool add_succ = false;
   sock_t* ns = sf->create(sf);
   if (NULL != ns) {
@@ -24,7 +25,11 @@ void on_accept(int fd, sf_t* sf, eloop_t* ep)
     if (eloop_regist(ep, ns, EPOLLIN | EPOLLOUT) == 0) {
       add_succ = true;
       rk_info("accept new connection, ns=%p, fd=%s", ns, T2S(sock_fd, ns->fd));
+    } else {
+      err = -EIO;
     }
+  } else {
+    err = -ENOMEM;
   }
   if (!add_succ) {
     if (fd >= 0) {
@@ -66,6 +71,7 @@ int listenfd_init(eloop_t* ep, listenfd_t* s, sf_t* sf, int fd) {
   rk_info("listen succ: %d", fd);
   return 0;
   el();
+  int err = PNIO_LISTEN_ERROR;
   rk_error("listen fd init fail: fd=%d", s->fd);
   if (s->fd >= 0) {
     close(s->fd);

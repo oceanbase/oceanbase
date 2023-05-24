@@ -346,7 +346,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
   if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
     err = -EINVAL;
-    rk_error("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
+    rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
   }
   pktc_req_t* r = pn_create_pktc_req(pn, gen_pkt_id(), dest, buf, sz, categ_id, expire_us, cb, arg);
   if (NULL == r) {

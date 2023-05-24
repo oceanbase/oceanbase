@@ -259,6 +259,22 @@ int dispatch_to_ob_listener(int accept_fd) {
   }
   return ret;
 }
+int tranlate_to_ob_error(int err) {
+  int ret = OB_SUCCESS;
+  if (PNIO_OK == err) {
+  } else if (PNIO_LISTEN_ERROR == err) {
+    ret = OB_SERVER_LISTEN_ERROR;
+  } else if (ENOMEM == err || -ENOMEM == err) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (EINVAL == err || -EINVAL == err) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (EIO == err || -EIO == err) {
+    ret = OB_IO_ERROR;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+  }
+  return ret;
+}
 #define PKT_NIO_MALLOC(sz, label)  pkt_nio_malloc(sz, label)
 #define PKT_NIO_FREE(ptr)   pkt_nio_free(ptr)
 #define SERVER_IN_BLACK(sa) server_in_black(sa)

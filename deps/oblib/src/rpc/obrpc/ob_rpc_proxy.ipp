@@ -63,6 +63,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     sockaddr_in sock_addr;
     uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    int pn_err = 0;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
     if (OB_LS_FETCH_LOG2 == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
@@ -72,7 +73,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     } else if(!dst_.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
       RPC_LOG(WARN, "invalid addr", K(ret));
-    } else if (OB_FAIL(pn_send(
+    } else if (0 != (pn_err = pn_send(
         (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
         pnio_req,
@@ -81,7 +82,8 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
         start_ts + proxy_.timeout(),
         ObSyncRespCallback::client_cb,
         &cb))) {
-      RPC_LOG(WARN, "pnio post fail", K(ret));
+      ret = ObPocClientStub::translate_io_error(pn_err);
+      RPC_LOG(WARN, "pnio post fail", K(pn_err));
     } else if (OB_FAIL(cb.wait())) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
@@ -198,6 +200,7 @@ int SSHandle<pcodeStruct>::abort()
     sockaddr_in sock_addr;
     uint8_t thread_id = ObPocClientStub::balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
+    int pn_err = 0;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
     if (OB_LS_FETCH_LOG2 == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
@@ -207,7 +210,7 @@ int SSHandle<pcodeStruct>::abort()
     } else if(!dst_.is_valid()) {
       ret = common::OB_INVALID_ARGUMENT;
       RPC_LOG(WARN, "invalid addr", K(ret));
-    } else if (OB_FAIL(pn_send(
+    } else if (0 != (pn_err = pn_send(
         (pnio_group_id<<32) + thread_id,
         ObPocClientStub::obaddr2sockaddr(&sock_addr, dst_),
         pnio_req,
@@ -216,7 +219,8 @@ int SSHandle<pcodeStruct>::abort()
         start_ts + proxy_.timeout(),
         ObSyncRespCallback::client_cb,
         &cb))) {
-      RPC_LOG(WARN, "pnio post fail", K(ret));
+      ret = ObPocClientStub::translate_io_error(pn_err);
+      RPC_LOG(WARN, "pnio post fail", K(pn_err));
     } else if (OB_FAIL(cb.wait())) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
