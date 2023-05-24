@@ -348,16 +348,12 @@ int ObKMPStateMachine::init(ObIAllocator &allocator, const ObString &str)
 int ObLoadDataUtils::check_session_status(ObSQLSessionInfo &session, int64_t reserved_us) {
   int ret = OB_SUCCESS;
   bool is_timeout = false;
-  int64_t query_timeout = 0;
-  int64_t query_start_time = session.get_query_start_time();
+  int64_t worker_query_timeout = THIS_WORKER.get_timeout_ts();
   int64_t current_time = ObTimeUtil::current_time();
 
-  if (OB_FAIL(session.get_query_timeout(query_timeout))) {
-    LOG_WARN("fail to get query timeout", K(ret));
-  } else if (OB_FAIL(session.is_timeout(is_timeout))) {
+  if (OB_FAIL(session.is_timeout(is_timeout))) {
     LOG_WARN("get session timeout info failed", K(ret));
-  } else if (OB_UNLIKELY(query_start_time + query_timeout
-                         < current_time + reserved_us)) {
+  } else if (OB_UNLIKELY(worker_query_timeout < current_time + reserved_us)) {
     ret = OB_TIMEOUT;
     LOG_WARN("query is timeout", K(ret));
   } else if (OB_UNLIKELY(is_timeout)) {
@@ -367,7 +363,7 @@ int ObLoadDataUtils::check_session_status(ObSQLSessionInfo &session, int64_t res
     LOG_WARN("session's state is not OB_SUCCESS", K(ret));
   }
   if (OB_FAIL(ret)) {
-    LOG_WARN("LOAD DATA timeout", K(ret), K(session.get_sessid()), K(query_timeout), K(query_start_time), K(current_time));
+    LOG_WARN("LOAD DATA timeout", K(ret), K(session.get_sessid()), K(worker_query_timeout), K(current_time), K(reserved_us));
   }
   return ret;
 }

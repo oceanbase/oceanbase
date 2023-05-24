@@ -2825,6 +2825,22 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
+    int64_t query_timeout = 0;
+    if (OB_FAIL(hint.get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
+      LOG_WARN("fail to get value", K(ret));
+    } else if (0 == query_timeout) {
+      if (OB_FAIL(ctx.get_my_session()->get_query_timeout(query_timeout))) {
+        LOG_WARN("fail to get query timeout", KR(ret));
+      } else {
+        query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
+        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+      }
+    } else if (query_timeout > 0) {
+      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(parser.init(file_formats, num_of_file_column, load_args.file_cs_type_))) {
       LOG_WARN("fail to init parser", K(ret));
     }

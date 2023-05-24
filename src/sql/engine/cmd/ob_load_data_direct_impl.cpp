@@ -1791,15 +1791,26 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
 
   if (OB_SUCC(ret)) {
     int64_t query_timeout = 0;
-    ObSQLSessionInfo *session = nullptr;
-    if (OB_ISNULL(session = ctx.get_my_session())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session is null", KR(ret));
-    } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
-      LOG_WARN("fail to get query timeout", KR(ret));
+    if (OB_FAIL(load_stmt_->get_hints().get_value(ObLoadDataHint::QUERY_TIMEOUT, query_timeout))) {
+      LOG_WARN("fail to get value", K(ret));
+    } else if (query_timeout < 0) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("session is timeout", K(ret));
+    } else if (0 == query_timeout) {
+      ObSQLSessionInfo *session = nullptr;
+      if (OB_ISNULL(session = ctx.get_my_session())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is null", KR(ret));
+      } else if (OB_FAIL(session->get_query_timeout(query_timeout))) {
+        LOG_WARN("fail to get query timeout", KR(ret));
+      } else if (query_timeout <= 0) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("session is timeout", K(ret));
+      } else {
+        THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
+      }
     } else {
-      query_timeout = MAX(query_timeout, RPC_BATCH_INSERT_TIMEOUT_US);
-      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + query_timeout);
+      THIS_WORKER.set_timeout_ts(ctx.get_my_session()->get_query_start_time() + query_timeout);
     }
   }
 
