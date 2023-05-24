@@ -336,9 +336,10 @@ private:
 class ObSqlSock: public ObLink
 {
 public:
-  ObSqlSock(ObSqlNioImpl *nio, int fd): nio_impl_(nio), fd_(fd), err_(0), read_buffer_(fd),
-            need_epoll_trigger_write_(false), may_handling_(true), handler_close_flag_(false),
-            need_shutdown_(false), last_decode_time_(0), last_write_time_(0), sql_session_info_(NULL) {
+  ObSqlSock(ObSqlNioImpl *nio, int fd): dlink_(), all_list_link_(), write_task_link_(), nio_impl_(nio),
+            fd_(fd), err_(0), read_buffer_(fd), need_epoll_trigger_write_(false), may_handling_(true),
+            handler_close_flag_(false), need_shutdown_(false), last_decode_time_(0), last_write_time_(0),
+            sql_session_info_(NULL) {
     memset(sess_, 0, sizeof(sess_));
   }
   ~ObSqlSock() {}
@@ -746,7 +747,9 @@ public:
     while (cur != head) {
       ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
       cur = cur->next_;
-      prepare_destroy(s);
+      if (s->set_error(EIO)) {
+        prepare_destroy(s);
+      }
     }
     while(head->next_ != head) {
       handle_write_req_queue();
@@ -839,7 +842,7 @@ private:
       }
       if (OB_UNLIKELY(0 != err)) {
         revert_sock(s);
-        if (s->set_error(err)) {
+        if (s->set_error(EIO)) {
           prepare_destroy(s);
         }
       }
