@@ -420,7 +420,6 @@ int ObRawExprCanonicalizerImpl::pull_parallel_expr(ObRawExpr *&expr)
                     LOG_WARN("Pull AND or OR expression failed", K(ret));
                   }
                 }
-                child_expr->reset();
               }
             } else {
               if (OB_FAIL(parent_expr->add_param_expr(sub_expr))) {
