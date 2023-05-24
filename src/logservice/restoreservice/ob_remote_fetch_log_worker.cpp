@@ -268,6 +268,7 @@ int ObRemoteFetchWorker::handle_single_task_()
   } else {
     ObFetchLogTask *task = static_cast<ObFetchLogTask *>(data);
     ObLSID id = task->id_;
+    palf::LSN cur_lsn = task->cur_lsn_;
     // after task handle, DON'T print it any more
     if (OB_FAIL(handle_fetch_log_task_(task))) {
       LOG_WARN("handle fetch log task failed", K(ret), KP(task), K(id));
@@ -275,7 +276,7 @@ int ObRemoteFetchWorker::handle_single_task_()
 
     // only fatal error report fail, retry with others
     if (is_fatal_error_(ret)) {
-      report_error_(id, ret);
+      report_error_(id, ret, cur_lsn);
     }
   }
   return ret;
@@ -292,6 +293,8 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   } else if (OB_FAIL(task->iter_.init(tenant_id_, task->id_, task->pre_scn_,
           task->cur_lsn_, task->end_lsn_, allocator_->get_buferr_pool()))) {
     LOG_WARN("ObRemoteLogIterator init failed", K(ret), K_(tenant_id), KPC(task));
+  } else if (!need_fetch_log_(task->id_)) {
+    LOG_TRACE("no need fetch log", KPC(task));
   } else if (OB_FAIL(task->iter_.pre_read(empty))) {
     LOG_WARN("pre_read failed", K(ret), KPC(task));
   } else if (empty) {
@@ -300,14 +303,13 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
     LOG_WARN("push submit array failed", K(ret));
   }
 
-  // if fatal error encounter, just free task. Restore can only be recovered with new log_restore_source
-  if (is_fatal_error_(ret)) {
-    LOG_ERROR("free fetch log task with restore fatal error", K(ret), KPC(task));
-    inner_free_task_(*task);
-  } else if (OB_SUCC(ret) && ! empty) {
+  if (OB_SUCC(ret) && ! empty) {
     // pre_read succ and push submit array succ, do nothing,
   } else {
-    if (! empty && OB_FAIL(ret)) {
+    if (is_fatal_error_(ret)) {
+      // fatal error may be false positive, for example restore in parallel, the range in pre-read maybe surpass the current log archive round, which not needed.
+      LOG_WARN("fatal error occur", K(ret), KPC(task));
+    } else if (! empty && OB_FAIL(ret)) {
       LOG_WARN("task data not empty and push submit array failed, try retire task", K(ret), KPC(task));
     } else if (OB_SUCC(ret)) {
       // pre_read data is empty, do notning
@@ -328,6 +330,16 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
   }
 #endif
   return ret;
+}
+
+bool ObRemoteFetchWorker::need_fetch_log_(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  GET_RESTORE_HANDLER_CTX(id) {
+    bret = !restore_handler->restore_to_end();
+  }
+  return bret;
 }
 
 int ObRemoteFetchWorker::submit_entries_(ObFetchLogTask &task)
@@ -568,11 +580,11 @@ bool ObRemoteFetchWorker::is_fatal_error_(const int ret_code) const
     || OB_ARCHIVE_LOG_RECYCLED == ret_code;
 }
 
-void ObRemoteFetchWorker::report_error_(const ObLSID &id, const int ret_code)
+void ObRemoteFetchWorker::report_error_(const ObLSID &id, const int ret_code, const palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   GET_RESTORE_HANDLER_CTX(id) {
-    restore_handler->mark_error(*ObCurTraceId::get_trace_id(), ret_code);
+    restore_handler->mark_error(*ObCurTraceId::get_trace_id(), ret_code, lsn);
   }
 }
 
