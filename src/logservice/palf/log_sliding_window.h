@@ -202,6 +202,7 @@ public:
   virtual int ack_log(const common::ObAddr &src_server, const LSN &end_lsn);
   virtual int truncate(const TruncateLogInfo &truncate_log_info, const LSN &expected_prev_lsn,
       const int64_t expected_prev_log_pid);
+  virtual bool is_allow_rebuild() const;
   virtual int truncate_for_rebuild(const PalfBaseInfo &palf_base_info);
   virtual bool is_prev_log_pid_match(const int64_t log_id,
                                      const LSN &lsn,

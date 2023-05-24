@@ -2652,6 +2652,16 @@ int LogSlidingWindow::get_majority_lsn_(const ObMemberList &member_list,
   return ret;
 }
 
+bool LogSlidingWindow::is_allow_rebuild() const
+{
+  // Caller holds palf_handle_impl's rlock.
+  bool bool_ret = false;
+  if (IS_INIT) {
+    bool_ret = !is_truncating_;
+  }
+  return bool_ret;
+}
+
 int LogSlidingWindow::truncate_for_rebuild(const PalfBaseInfo &palf_base_info)
 {
   int ret = OB_SUCCESS;
