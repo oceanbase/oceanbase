@@ -1220,12 +1220,15 @@ int ObLSDupTabletsMgr::tablet_log_synced(const bool sync_result,
     if (!logging_common_header.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       DUP_TABLE_LOG(WARN, "invalid common header", K(ret), K(logging_common_header));
-    } else if (logging_common_header.is_readable_set()) {
-      // do nothing
     } else if (OB_FAIL(get_target_tablet_set_(logging_common_header, logging_tablet_set))) {
-      // set my be cleaned, rewrite ret code?
       DUP_TABLE_LOG(WARN, "get target tablet set failed", K(ret), KPC(logging_tablet_set),
                     K(logging_common_header));
+    } else if (logging_common_header.is_readable_set()) {
+      // try return empty readable set
+      if (OB_FAIL(check_and_recycle_empty_readable_set(logging_tablet_set))) {
+        DUP_TABLE_LOG(WARN, "try return empty readable tablet set", K(ret),
+                      KPC(logging_tablet_set));
+      }
     } else if (logging_tablet_set->get_change_status()->is_change_logging()) {
       if (OB_SUCC(ret) && sync_result) {
         if (OB_FAIL(try_exec_special_op_(logging_tablet_set, scn, for_replay))) {
@@ -1311,6 +1314,7 @@ int ObLSDupTabletsMgr::merge_into_readable_tablets_(DupTabletChangeMap *change_m
 {
   int ret = OB_SUCCESS;
 
+  // merge a need confirm set into readable list
   if (OB_ISNULL(change_map_ptr)) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid hash map ptr", K(ret), KP(change_map_ptr));
@@ -1328,21 +1332,10 @@ int ObLSDupTabletsMgr::merge_into_readable_tablets_(DupTabletChangeMap *change_m
     // do nothing
   }
 
+  // an empty set first merge into readable list, return it to free pool
   if (OB_SUCC(ret)) {
-    if (!change_map_ptr->get_common_header().is_readable_set()) {
-      ret = OB_ERR_UNEXPECTED;
-      DUP_TABLE_LOG(WARN, "unexpected merging tablet set", K(ret), KPC(change_map_ptr));
-    } else if (change_map_ptr->empty()) {
-      DUP_TABLE_LOG(INFO, "try to remove empty readable tablet set from list", K(ret),
-                    KPC(change_map_ptr));
-      if (nullptr == readable_tablets_list_.remove(change_map_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        DUP_TABLE_LOG(WARN, "remove empty readable set from list failed", K(ret),
-                      KPC(change_map_ptr));
-      } else if (OB_FAIL(return_tablet_set(change_map_ptr))) {
-        DUP_TABLE_LOG(WARN, "return empty readable set failed", K(ret), KPC(change_map_ptr));
-      } else {
-      }
+    if (OB_FAIL(check_and_recycle_empty_readable_set(change_map_ptr))) {
+      DUP_TABLE_LOG(WARN, "return empty readable failed", K(ret), KPC(change_map_ptr));
     }
   }
 
@@ -2169,6 +2162,29 @@ int ObLSDupTabletsMgr::return_tablet_set(DupTabletChangeMap *need_free_set)
   return ret;
 }
 
+// remove emptry readable set
+int ObLSDupTabletsMgr::check_and_recycle_empty_readable_set(DupTabletChangeMap *readable_set)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(readable_set) || !readable_set->get_common_header().is_readable_set()) {
+    ret = OB_ERR_UNEXPECTED;
+    DUP_TABLE_LOG(WARN, "unexpected tablet set", K(ret), KPC(readable_set));
+  } else if (readable_set->empty()) {
+    DUP_TABLE_LOG(INFO, "try to remove empty readable tablet set from list", K(ret),
+                  KPC(readable_set));
+    if (OB_ISNULL(readable_tablets_list_.remove(readable_set))) {
+      ret = OB_ERR_UNEXPECTED;
+      DUP_TABLE_LOG(WARN, "remove empty readable set from list failed", K(ret),
+                    KPC(readable_set));
+    } else if (OB_FAIL(return_tablet_set(readable_set))) {
+      DUP_TABLE_LOG(WARN, "return empty readable set failed", K(ret), KPC(readable_set));
+    }
+  }
+
+  return ret;
+}
+
 int ObLSDupTabletsMgr::clean_readable_tablets_(const share::SCN &min_reserve_tablet_scn)
 {
   int ret = OB_SUCCESS;
@@ -2281,6 +2297,8 @@ int ObLSDupTabletsMgr::construct_empty_block_confirm_task_(const int64_t trx_ref
   DupTabletCommonHeader empty_new_common_header;
   empty_new_common_header.set_invalid_unique_id();
   empty_new_common_header.set_free();
+  uint64_t block_confirm_uid = DupTabletCommonHeader::INVALID_UNIQUE_ID;
+
   DupTabletChangeMap *block_confirm_task = nullptr;
   DupTabletSpecialOpArg tmp_op;
 
@@ -2294,14 +2312,14 @@ int ObLSDupTabletsMgr::construct_empty_block_confirm_task_(const int64_t trx_ref
     block_confirm_task->get_common_header().set_new();
     block_confirm_task->get_common_header().set_op_of_block_confirming();
     block_confirm_task->get_change_status()->trx_ref_ = trx_ref; // TODO
+    block_confirm_uid = block_confirm_task->get_common_header().get_unique_id();
     // set empty tablet_set as a normal tablet_set which has submit log failed
     if (OB_FAIL(block_confirm_task->get_change_status()->prepare_serialize())) {
       DUP_TABLE_LOG(WARN, "prepare serialize for block_confirm_task failed", K(ret));
     } else if (false == need_confirm_new_queue_.add_last(block_confirm_task)) {
       DUP_TABLE_LOG(WARN, "insert into need_confirm_new_queue_ failed", K(ret),
                     KPC(block_confirm_task), K(need_confirm_new_queue_.get_size()));
-    } else if (OB_FAIL(op_arg_map_.set_refactored(
-                   block_confirm_task->get_common_header().get_unique_id(), tmp_op))) {
+    } else if (OB_FAIL(op_arg_map_.set_refactored(block_confirm_uid, tmp_op))) {
       DUP_TABLE_LOG(WARN, "insert into special op map failed", K(ret), KPC(block_confirm_task),
                     K(tmp_op));
     }
@@ -2309,22 +2327,16 @@ int ObLSDupTabletsMgr::construct_empty_block_confirm_task_(const int64_t trx_ref
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(block_confirm_task)) {
-      if (nullptr == need_confirm_new_queue_.remove(block_confirm_task)) {
+      if (OB_ISNULL(need_confirm_new_queue_.remove(block_confirm_task))) {
         // may be error before insert into need_confirm_new_queue_
         DUP_TABLE_LOG(WARN, "remove block_confirm_task failed, it may not have been inserted",
                       K(ret), KPC(block_confirm_task));
       }
-
       if (OB_TMP_FAIL(return_tablet_set(block_confirm_task))) {
-        DUP_TABLE_LOG(WARN, "return block_confirm_task failed", K(ret), KPC(block_confirm_task));
+        DUP_TABLE_LOG(WARN, "return block_confirm_task failed", K(tmp_ret), KPC(block_confirm_task));
       }
     }
-
-    if (OB_TMP_FAIL(op_arg_map_.erase_refactored(
-            block_confirm_task->get_common_header().get_unique_id()))) {
-      DUP_TABLE_LOG(WARN, "erase block_confirm_op from op_arg_map", K(ret),
-                    KPC(block_confirm_task));
-    }
+    // if task is null, it would not insert into op_arg_map, do nothing
   } else {
     DUP_TABLE_LOG(INFO, "construct empty block confirming set task successfully", K(ret),
                   KPC(block_confirm_task), K(tmp_op));
@@ -2348,6 +2360,8 @@ int ObLSDupTabletsMgr::construct_clean_confirming_set_task_()
   DupTabletCommonHeader clean_confirming_common_header;
   clean_confirming_common_header.set_invalid_unique_id();
   clean_confirming_common_header.set_free();
+  uint64_t clean_confirming_uid = DupTabletCommonHeader::INVALID_UNIQUE_ID;
+
   DupTabletChangeMap *clean_confirming_task = nullptr;
   DupTabletSpecialOpArg tmp_op;
 
@@ -2357,6 +2371,7 @@ int ObLSDupTabletsMgr::construct_clean_confirming_set_task_()
   } else {
     clean_confirming_task->get_common_header().set_new();
     clean_confirming_task->get_common_header().set_op_of_clean_data_confirming_set();
+    clean_confirming_uid = clean_confirming_task->get_common_header().get_unique_id();
     // set empty tablet_set as a normal tablet_set which has submit log failed
     if (OB_FAIL(clean_confirming_task->get_change_status()->prepare_serialize())) {
       DUP_TABLE_LOG(WARN, "prepare serialize for empty_new_set failed", K(ret));
@@ -2378,8 +2393,7 @@ int ObLSDupTabletsMgr::construct_clean_confirming_set_task_()
       }
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(op_arg_map_.set_refactored(
-                     clean_confirming_task->get_common_header().get_unique_id(), tmp_op))) {
+      } else if (OB_FAIL(op_arg_map_.set_refactored(clean_confirming_uid, tmp_op))) {
         DUP_TABLE_LOG(WARN, "insert into special op map failed", K(ret), KPC(clean_confirming_task),
                       K(tmp_op));
       }
@@ -2388,23 +2402,17 @@ int ObLSDupTabletsMgr::construct_clean_confirming_set_task_()
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(clean_confirming_task)) {
-      if (nullptr == need_confirm_new_queue_.remove(clean_confirming_task)) {
+      if (OB_ISNULL(need_confirm_new_queue_.remove(clean_confirming_task))) {
         // may be error before insert into need_confirm_new_queue_
         DUP_TABLE_LOG(WARN, "remove clean_confirming_task failed, it may not have been inserted",
                       K(ret), KPC(clean_confirming_task));
       }
-
       if (OB_TMP_FAIL(return_tablet_set(clean_confirming_task))) {
-        DUP_TABLE_LOG(WARN, "return clean_confirming_task failed", K(ret),
+        DUP_TABLE_LOG(WARN, "return clean_confirming_task failed", K(tmp_ret),
                       KPC(clean_confirming_task));
       }
     }
-
-    if (OB_TMP_FAIL(op_arg_map_.erase_refactored(
-            clean_confirming_task->get_common_header().get_unique_id()))) {
-      DUP_TABLE_LOG(WARN, "erase clean_confirming_op from op_arg_map", K(ret),
-                    KPC(clean_confirming_task));
-    }
+    // if task is null, it would not insert into op_arg_map, do nothing
   } else {
     DUP_TABLE_LOG(INFO, "construct clean data confirming set task successfully", K(ret),
                   KPC(clean_confirming_task), K(tmp_op));
@@ -2421,6 +2429,8 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
   DupTabletCommonHeader clean_readable_common_header;
   clean_readable_common_header.set_invalid_unique_id();
   clean_readable_common_header.set_free();
+  uint64_t clean_readbale_uid = DupTabletCommonHeader::INVALID_UNIQUE_ID;
+
   DupTabletChangeMap *clean_readable_task = nullptr;
   DupTabletSpecialOpArg tmp_op;
 
@@ -2430,6 +2440,7 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
   } else {
     clean_readable_task->get_common_header().set_new();
     clean_readable_task->get_common_header().set_op_of_clean_all_readable_set();
+    clean_readbale_uid = clean_readable_task->get_common_header().get_unique_id();
     // set empty tablet_set as a normal tablet_set which has submit log failed
     if (OB_FAIL(clean_readable_task->get_change_status()->prepare_serialize())) {
       DUP_TABLE_LOG(WARN, "prepare serialize for empty_new_set failed", K(ret));
@@ -2446,8 +2457,7 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
       // }
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(op_arg_map_.set_refactored(
-                     clean_readable_task->get_common_header().get_unique_id(), tmp_op))) {
+      } else if (OB_FAIL(op_arg_map_.set_refactored(clean_readbale_uid, tmp_op))) {
         DUP_TABLE_LOG(WARN, "insert into special op map failed", K(ret), KPC(clean_readable_task),
                       K(tmp_op));
       }
@@ -2456,7 +2466,7 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
 
   if (OB_FAIL(ret)) {
     if (OB_NOT_NULL(clean_readable_task)) {
-      if (nullptr == need_confirm_new_queue_.remove(clean_readable_task)) {
+      if (OB_ISNULL(need_confirm_new_queue_.remove(clean_readable_task))) {
         // may be error before insert into need_confirm_new_queue_
         DUP_TABLE_LOG(WARN, "remove clean_readable_task failed, it may not have been inserted",
                       K(ret), KPC(clean_readable_task));
@@ -2466,12 +2476,7 @@ int ObLSDupTabletsMgr::construct_clean_all_readable_set_task_()
         DUP_TABLE_LOG(WARN, "return clean_readable_task failed", K(ret), KPC(clean_readable_task));
       }
     }
-
-    if (OB_TMP_FAIL(op_arg_map_.erase_refactored(
-            clean_readable_task->get_common_header().get_unique_id()))) {
-      DUP_TABLE_LOG(WARN, "erase clean_readable_op from op_arg_map", K(ret),
-                    KPC(clean_readable_task));
-    }
+    // if task is null, it would not insert into op_arg_map, do nothing
   } else {
     DUP_TABLE_LOG(INFO, "construct clean all readable task successfully", K(ret),
                   KPC(clean_readable_task), K(tmp_op));
