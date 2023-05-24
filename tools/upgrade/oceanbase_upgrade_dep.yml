@@ -29,7 +29,7 @@
       - 4.1.0.1
   require_from_binary:
     value: True
-    when_come_from: [4.0.0.0, 4.1.0.0]
+    when_come_from: [4.0.0.0]
 
 - version: 4.1.0.1
   can_be_upgraded_to:
