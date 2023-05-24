@@ -546,12 +546,12 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
     } else {
       LSN max_flushed_end_lsn;
       sw_.get_max_flushed_end_lsn(max_flushed_end_lsn);
-      resp.is_normal_replica_ = true;
       resp.max_flushed_end_lsn_ = max_flushed_end_lsn;
       resp.need_update_config_meta_ = false;
       resp.last_slide_log_id_ = sw_.get_last_slide_log_id();
 
     }
+    resp.is_normal_replica_ = true;
 
     // it's a optimization. To add one F members into 1F1A group,
     // leader will not accept appended logs until max_flushed_end_lsn of
