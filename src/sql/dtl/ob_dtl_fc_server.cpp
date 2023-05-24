@@ -43,7 +43,7 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  tenant_dfc = static_cast<ObTenantDfc *> (ob_malloc(sizeof(ObTenantDfc), ObMemAttr(tenant_id, ObModIds::OB_SQL_DTL)));
+  tenant_dfc = static_cast<ObTenantDfc *> (ob_malloc(sizeof(ObTenantDfc), ObMemAttr(tenant_id, "SqlDtlDfc")));
   if (OB_ISNULL(tenant_dfc)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc tenant dfc", K(ret));
@@ -58,7 +58,7 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
     if (OB_FAIL(tenant_dfc->tenant_mem_mgr_.init())) {
       LOG_WARN("failed to init tenant memory manager", K(ret));
     } else if (OB_FAIL(tenant_dfc->first_buffer_mgr_.init())) {
-      LOG_WARN("failed to init newe first buffer manager", K(ret));
+      LOG_WARN("failed to init new first buffer manager", K(ret));
     }
     // tenant_dfc->calc_max_buffer(10);
     LOG_INFO("init tenant dfc", K(ret), K(tenant_dfc->tenant_id_));
@@ -78,6 +78,7 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
 void ObTenantDfc::mtl_destroy(ObTenantDfc *&tenant_dfc)
 {
   if (nullptr != tenant_dfc) {
+    LOG_INFO("trace tenant dfc destroy", K(tenant_dfc->tenant_id_));
     tenant_dfc->first_buffer_mgr_.destroy();
     tenant_dfc->tenant_mem_mgr_.destroy();
     common::ob_delete(tenant_dfc);

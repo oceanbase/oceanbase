@@ -1213,7 +1213,7 @@ int ObDtlRowMsgWriter::init(ObDtlLinkedBuffer *buffer, uint64_t tenant_id)
     LOG_WARN("write buffer is null", K(ret));
   } else {
     reset();
-    row_store_.init(0, tenant_id, common::ObCtxIds::DEFAULT_CTX_ID, common::ObModIds::OB_SQL_DTL);
+    row_store_.init(0, tenant_id, common::ObCtxIds::DEFAULT_CTX_ID, "SqlDtlRowMsg");
     if (OB_FAIL(row_store_.init_block_buffer(static_cast<void *>(buffer->buf()), buffer->size(), block_))) {
       LOG_WARN("init shrink buffer failed", K(ret));
     } else {
