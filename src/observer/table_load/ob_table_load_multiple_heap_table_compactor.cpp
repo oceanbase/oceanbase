@@ -72,9 +72,11 @@ public:
       ctx_(ctx),
       mem_ctx_(mem_ctx),
       index_dir_id_(-1),
-      data_dir_id_(-1)
+      data_dir_id_(-1),
+      heap_table_allocator_("TLD_MHTCompact")
   {
     ctx_->inc_ref_count();
+    heap_table_allocator_.set_tenant_id(MTL_ID());
   }
   virtual ~CompactTaskProcessor()
   {

@@ -67,6 +67,8 @@ ObTableLoadParallelMergeTabletCtx::ObTableLoadParallelMergeTabletCtx()
     range_sstable_count_(0),
     range_allocator_("TLD_ParalMerge")
 {
+  allocator_.set_tenant_id(MTL_ID());
+  range_allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadParallelMergeTabletCtx::~ObTableLoadParallelMergeTabletCtx()
@@ -528,6 +530,7 @@ ObTableLoadParallelMergeCtx::ObTableLoadParallelMergeCtx()
     is_stop_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObTableLoadParallelMergeCtx::~ObTableLoadParallelMergeCtx()

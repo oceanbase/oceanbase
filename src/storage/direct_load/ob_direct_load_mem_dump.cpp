@@ -30,6 +30,7 @@ ObDirectLoadMemDump::Context::Context()
     finished_sub_dump_count_(0),
     sub_dump_count_(0)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMemDump::Context::~Context()

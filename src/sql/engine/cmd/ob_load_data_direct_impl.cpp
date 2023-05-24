@@ -123,8 +123,8 @@ int ObLoadDataDirectImpl::Logger::init(const ObString &load_info, int64_t max_er
   } else if (OB_UNLIKELY(load_info.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(load_info));
-  } else if (OB_ISNULL(
-        buf_ = static_cast<char *>(ob_malloc(DEFAULT_BUF_LENGTH, ObModIds::OB_SQL_LOAD_DATA)))) {
+  } else if (OB_ISNULL(buf_ = static_cast<char *>(
+                         ob_malloc(DEFAULT_BUF_LENGTH, ObMemAttr(MTL_ID(), "MTL_LogBuffer"))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else {

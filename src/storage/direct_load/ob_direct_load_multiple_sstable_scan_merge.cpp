@@ -39,7 +39,8 @@ bool ObDirectLoadMultipleSSTableScanMergeParam::is_valid() const
  */
 
 ObDirectLoadMultipleSSTableScanMerge::ObDirectLoadMultipleSSTableScanMerge()
-  : datum_utils_(nullptr),
+  : allocator_("TLD_ScanMerge"),
+    datum_utils_(nullptr),
     dml_row_handler_(nullptr),
     range_(nullptr),
     consumers_(nullptr),
@@ -92,6 +93,7 @@ int ObDirectLoadMultipleSSTableScanMerge::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(sstable_array), K(range));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     // construct scanners
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
       ObDirectLoadMultipleSSTable *sstable = sstable_array.at(i);
