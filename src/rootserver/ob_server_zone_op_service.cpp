@@ -18,6 +18,7 @@
 #include "share/ob_service_epoch_proxy.h"
 #include "share/ob_max_id_fetcher.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"  // ObMySQLTransaction
+#include "lib/utility/ob_tracepoint.h" // ERRSIM
 #include "rootserver/ob_root_service.h" // callback
 #include "share/ob_all_server_tracer.h"
 #include "rootserver/ob_server_manager.h"
@@ -134,10 +135,6 @@ int ObServerZoneOpService::add_servers(const ObIArray<ObAddr> &servers, const Ob
       } else {}
     }
   }
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
-  }
   return ret;
 }
 int ObServerZoneOpService::delete_servers(
@@ -164,10 +161,6 @@ int ObServerZoneOpService::delete_servers(
         LOG_WARN("delete_server failed", "server", servers.at(i), "zone", zone, KR(ret));
       }
     }
-  }
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
   }
   return ret;
 }
@@ -207,10 +200,6 @@ int ObServerZoneOpService::cancel_delete_servers(
       (void) end_trans_and_on_server_change_(ret, trans, "cancel_delete_server", server, server_info_in_table.get_zone(), now);
     }
   }
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
-  }
   return ret;
 }
 int ObServerZoneOpService::finish_delete_server(
@@ -240,10 +229,6 @@ int ObServerZoneOpService::finish_delete_server(
     LOG_WARN("fail to remove this server from __all_server table", KR(ret), K(server));
   }
   (void) end_trans_and_on_server_change_(ret, trans, "finish_delete_server", server, server_info_in_table.get_zone(), now);
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
-  }
   return ret;
 }
 int ObServerZoneOpService::stop_servers(
@@ -265,10 +250,6 @@ int ObServerZoneOpService::stop_servers(
       }
     }
   }
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
-  }
   return ret;
 }
 int ObServerZoneOpService::start_servers(
@@ -289,10 +270,6 @@ int ObServerZoneOpService::start_servers(
         LOG_WARN("fail to start server", KR(ret), K(server), K(zone));
       }
     }
-  }
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
-    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
   }
   return ret;
 }
@@ -739,6 +716,7 @@ int ObServerZoneOpService::check_zone_and_server_(
   }
   return ret;
 }
+ERRSIM_POINT_DEF(ALL_SERVER_LIST_ERROR);
 void ObServerZoneOpService::end_trans_and_on_server_change_(
     int &ret,
     common::ObMySQLTransaction &trans,
@@ -758,10 +736,15 @@ void ObServerZoneOpService::end_trans_and_on_server_change_(
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
+  if (OB_TMP_FAIL(SVR_TRACER.refresh())) {
+    LOG_WARN("fail to refresh server tracer", KR(ret), KR(tmp_ret));
+  }
+  bool no_on_server_change = ALL_SERVER_LIST_ERROR ? true : false;
   if (OB_ISNULL(server_change_callback_)) {
     tmp_ret = OB_ERR_UNEXPECTED;
     LOG_WARN("server_change_callback_ is null", KR(ret), KR(tmp_ret), KP(server_change_callback_));
     ret = OB_SUCC(ret) ? tmp_ret : ret;
+  } else if (no_on_server_change) {
   } else if (OB_TMP_FAIL(server_change_callback_->on_server_change())) {
     LOG_WARN("fail to callback on server change", KR(ret), KR(tmp_ret));
   }

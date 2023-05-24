@@ -290,6 +290,7 @@ public:
   class ObUpdateAllServerConfigTask : public common::ObAsyncTimerTask
   {
   public:
+    const static int64_t RETRY_INTERVAL = 600 * 1000L * 1000L;  // 10min
     explicit ObUpdateAllServerConfigTask(ObRootService &root_service);
     virtual ~ObUpdateAllServerConfigTask() {}
   public:
@@ -743,6 +744,7 @@ public:
   // @see ObInspector
   int schedule_inspector_task();
   int schedule_update_rs_list_task();
+  int schedule_update_all_server_config_task();
   //update statistic cache
   int update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg);
 
@@ -949,6 +951,7 @@ private:
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
   ObUpdateRsListTimerTask update_rs_list_timer_task_;
+  ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 
   // backup

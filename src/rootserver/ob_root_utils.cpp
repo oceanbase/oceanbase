@@ -1962,21 +1962,6 @@ bool ObRootUtils::has_intersection(const common::ObIArray<T> &this_array,
   return bret;
 }
 
-template<class T>
-bool ObRootUtils::is_subset(const common::ObIArray<T> &superset_array,
-                            const common::ObIArray<T> &array)
-{
-  bool bret = true;
-  for (int64_t i = 0; i < array.count() && bret; i++) {
-    if (has_exist_in_array(superset_array, array.at(i))) {
-      //nothing todo
-    } else {
-      bret = false;
-    }
-  }
-  return bret;
-}
-
 //iter the tenant, table's primary_zone is covered by zone_list
 int ObRootUtils::check_primary_region_in_zonelist(ObMultiVersionSchemaService *schema_service,
                                                   ObDDLService *ddl_service,

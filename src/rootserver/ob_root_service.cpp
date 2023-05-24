@@ -648,6 +648,7 @@ ObRootService::ObRootService()
     snapshot_manager_(),
     core_meta_table_version_(0),
     update_rs_list_timer_task_(*this),
+    update_all_server_config_task_(*this),
     baseline_schema_version_(0),
     backup_service_(),
     backup_task_scheduler_(),
@@ -1603,6 +1604,26 @@ int ObRootService::schedule_update_rs_list_task()
     LOG_WARN("fail to add timer task", K(ret));
   } else {
     LOG_INFO("add update rs list task success");
+  }
+  return ret;
+}
+ERRSIM_POINT_DEF(ALL_SERVER_SCHEDULE_ERROR);
+int ObRootService::schedule_update_all_server_config_task()
+{
+  int ret = OB_SUCCESS;
+  const bool did_repeat = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (task_queue_.exist_timer_task(update_all_server_config_task_)) {
+    LOG_WARN("already have one update rs list timer task , ignore this");
+  } else if (OB_FAIL(task_queue_.add_timer_task(
+      update_all_server_config_task_,
+      ALL_SERVER_SCHEDULE_ERROR ? (ObUpdateAllServerConfigTask::RETRY_INTERVAL / 2) : ObUpdateAllServerConfigTask::RETRY_INTERVAL,
+      did_repeat))) {
+    LOG_WARN("fail to add timer task", KR(ret));
+  } else {
+    LOG_INFO("add update server config task success");
   }
   return ret;
 }
@@ -5226,6 +5247,14 @@ int ObRootService::start_timer_tasks()
     }
   }
 
+  if (OB_SUCC(ret) && !task_queue_.exist_timer_task(update_all_server_config_task_)) {
+    if (OB_FAIL(schedule_update_all_server_config_task())) {
+      LOG_WARN("fail to schedule update_all_server_config_task", KR(ret));
+    } else {
+      LOG_INFO("add update_all_server_config_task");
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(schedule_inspector_task())) {
       LOG_WARN("start inspector fail", K(ret));
@@ -5270,6 +5299,7 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(event_table_clear_task_);
     task_queue_.cancel_timer_task(self_check_task_);
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
+    task_queue_.cancel_timer_task(update_all_server_config_task_);
     inspect_task_queue_.cancel_timer_task(inspector_task_);
     inspect_task_queue_.cancel_timer_task(purge_recyclebin_task_);
   }
@@ -8598,17 +8628,33 @@ int ObRootService::update_all_server_config()
   int ret = OB_SUCCESS;
   ObZone empty_zone;
   ObArray<ObAddr> server_list;
+  ObArray<ObAddr> config_all_server_list;
+  ObArray<ObAddr> empty_excluded_server_list;
+  bool need_update = true;
   HEAP_VAR(ObAdminSetConfigItem, all_server_config) {
     auto &value = all_server_config.value_;
     int64_t pos = 0;
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
+    } else if (OB_UNLIKELY(!SVR_TRACER.has_build())) {
+      need_update = false;
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, server_list))) {
       LOG_WARN("fail to get server", K(ret));
+    } else if (OB_UNLIKELY(0 == server_list.size())) {
+      need_update = false;
+      LOG_WARN("no servers in all_server_tracer");
     } else if (OB_FAIL(all_server_config.name_.assign(config_->all_server_list.name()))) {
       LOG_WARN("fail to assign name", K(ret));
+    } else if (OB_FAIL(ObShareUtil::parse_all_server_list(empty_excluded_server_list, config_all_server_list))) {
+      LOG_WARN("fail to parse all_server_list from GCONF", KR(ret));
+    } else if (ObRootUtils::is_subset(server_list, config_all_server_list)
+        && ObRootUtils::is_subset(config_all_server_list, server_list)) {
+      need_update = false;
+      LOG_TRACE("server_list is the same as config_all_server_list, no need to update GCONF.all_server_list",
+          K(server_list), K(config_all_server_list));
     } else {
+      LOG_INFO("GCONF.all_server_list should be updated", K(config_all_server_list), K(server_list));
       char ip_port_buf[MAX_IP_PORT_LENGTH];
       for (int64_t i = 0; i < server_list.count() - 1; i++) {
         if (OB_FAIL(server_list.at(i).ip_port_to_string(ip_port_buf, MAX_IP_PORT_LENGTH))) {
@@ -8630,7 +8676,7 @@ int ObRootService::update_all_server_config()
     if (OB_SIZE_OVERFLOW == ret) {
       LOG_ERROR("can't print server addr to buffer, size overflow", K(ret), K(server_list));
     }
-    if (OB_SUCC(ret)) {
+    if (need_update && OB_SUCC(ret)) {
       ObAdminSetConfigArg arg;
       arg.is_inner_ = true;
       if (OB_FAIL(arg.items_.push_back(all_server_config))) {
@@ -8644,7 +8690,6 @@ int ObRootService::update_all_server_config()
   }
   return ret;
 }
-
 /////////////////////////
 ObRootService::ObReportCoreTableReplicaTask::ObReportCoreTableReplicaTask(ObRootService &root_service)
 : ObAsyncTimerTask(root_service.task_queue_),

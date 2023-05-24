@@ -809,8 +809,8 @@ int ObLSLocationService::construct_rpc_dests_(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(rs_mgr_->construct_initial_server_list(check_ls_service, rs_list))) {
     LOG_WARN("fail to get rs list", KR(ret));
-  } else if (OB_FAIL(rs_mgr_->construct_all_server_list(rs_list, all_server_list))) {
-    LOG_WARN("fail to get all server list", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::parse_all_server_list(rs_list, all_server_list))) {
+    LOG_WARN("fail to get all server list", KR(ret), K(rs_list));
   } else if (OB_FAIL(dests.assign(rs_list))) {
     LOG_WARN("fail to assign rs_list", KR(ret));
   } else if (OB_FAIL(append(dests, all_server_list))) {

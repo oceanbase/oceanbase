@@ -719,6 +719,7 @@ public:
     return ObString::make_string(value_str_);
   }
   int copy(char *buf, const int64_t buf_len); // '\0' will be added
+  int deep_copy_value_string(ObIAllocator &allocator, ObString &dst);
   virtual ObConfigItemType get_config_item_type() const {
     return ObConfigItemType::OB_CONF_ITEM_TYPE_STRING;
   }

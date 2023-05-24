@@ -133,12 +133,6 @@ public:
   int construct_initial_server_list(
       const bool check_ls_service,
       common::ObIArray<common::ObAddr> &server_list);
-  // build a broader list to ask informations
-  // @param [in] rs_list, servers belongs to rs
-  // @param [out] server_list, all servers except rs_list
-  int construct_all_server_list(
-      const common::ObIArray<common::ObAddr> &rs_list,
-      common::ObIArray<common::ObAddr> &server_list);
 
 private:
   class ObRemoteClusterIdGetter

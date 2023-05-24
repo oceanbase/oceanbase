@@ -450,48 +450,6 @@ int ObRsMgr::construct_initial_server_list(
   return ret;
 }
 
-// case 4: try use all_server_list from local configure
-int ObRsMgr::construct_all_server_list(
-    const ObIArray<ObAddr> &rs_list,
-    ObIArray<ObAddr> &server_list)
-{
-  int ret = OB_SUCCESS;
-  server_list.reset();
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else {
-    bool split_end = false;
-    ObString sub_string;
-    ObString trimed_string;
-    ObString all_server_list(strlen(static_cast<common::ObServerConfig *>(config_)->all_server_list.str()),
-                                    static_cast<common::ObServerConfig *>(config_)->all_server_list.str());
-    char buf[OB_IP_PORT_STR_BUFF];
-    ObAddr addr;
-    while (!split_end && OB_SUCCESS == ret) {
-      sub_string = all_server_list.split_on(',');
-      if (sub_string.empty() && NULL == sub_string.ptr()) {
-        split_end = true;
-        sub_string = all_server_list;
-      }
-      trimed_string = sub_string.trim();
-      if (trimed_string.empty()) {
-        //nothing todo
-      } else if (0 > snprintf(buf, OB_IP_PORT_STR_BUFF, "%.*s", trimed_string.length(), trimed_string.ptr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to snprintf", KR(ret), K(trimed_string));
-      } else if (OB_FAIL(addr.parse_from_cstring(buf))) {
-        LOG_WARN("fail to parser addr from cstring", KR(ret));
-      } else if (has_exist_in_array(rs_list, addr)) {
-        //nothing todo
-      } else if (OB_FAIL(server_list.push_back(addr))) {
-        LOG_WARN("fail to push back", KR(ret), K(addr));
-      }
-    } // end while
-  } //end else
-  return ret;
-}
-
-
 int ObRsMgr::renew_remote_master_rootserver()
 {
   return OB_NOT_SUPPORTED;

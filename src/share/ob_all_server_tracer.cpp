@@ -573,7 +573,7 @@ int ObServerTraceMap::refresh()
         LOG_WARN("fail to push back", K(server_info_i), KR(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !has_build_) {
       has_build_ = true;
     }
   }
