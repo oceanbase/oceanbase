@@ -629,7 +629,7 @@ int ObPxSQCProxy::make_sqc_sample_piece_msg(ObDynamicSamplePieceMsg &msg, bool &
   int ret = OB_SUCCESS;
   if (msg.sample_type_ == HEADER_INPUT_SAMPLE && sample_msg_.row_stores_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected row sotres", K(ret));
+    LOG_WARN("unexpected row stores", K(ret));
   } else if (OB_FAIL(sample_msg_.merge_piece_msg(
       sqc_ctx_.get_task_count(),
       msg,

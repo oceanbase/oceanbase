@@ -311,7 +311,7 @@ int ObPxMsgProc::on_sqc_finish_msg(ObExecContext &ctx,
     if (OB_FAIL(ctx.add_temp_table_interm_result_ids(pkt.temp_table_id_,
                                                      sqc->get_exec_addr(),
                                                      pkt.interm_result_ids_))) {
-      LOG_WARN("failed to add temp table interm resuld ids.", K(ret));
+      LOG_WARN("failed to add temp table interm result ids.", K(ret));
     } else { /*do nothing.*/ }
   } else { /*do nothing.*/ }
   if (OB_SUCC(ret)) {

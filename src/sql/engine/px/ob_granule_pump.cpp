@@ -222,7 +222,7 @@ int ObGITaskSet::construct_taskset(ObIArray<ObDASTabletLoc*> &taskset_tablets,
                   taskset_tablets.count() != taskset_idxs.count() ||
                   taskset_tablets.empty() || ss_ranges.count() > 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("taskest count err", K(taskset_tablets.count()),
+    LOG_WARN("taskset count err", K(taskset_tablets.count()),
                                   K(taskset_ranges),
                                   K(taskset_idxs),
                                   K(ss_ranges.count()));
@@ -687,7 +687,7 @@ int ObGranulePump::get_first_tsc_range_cnt(int64_t &cnt)
     ObGITaskArray &taskset_array = gi_task_array_map_.at(0).taskset_array_;
     if (taskset_array.empty()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpeceted taskset array", K(ret));
+      LOG_WARN("unexpected taskset array", K(ret));
     } else {
       cnt = taskset_array.at(0).gi_task_set_.count();
     }
@@ -765,7 +765,7 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                               range_independent);
     }
     if (OB_FAIL(ret)) {
-      LOG_WARN("failed to get graunle task", K(ret), K(ranges), K(tablets), K(is_external_table));
+      LOG_WARN("failed to get granule task", K(ret), K(ranges), K(tablets), K(is_external_table));
     } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets,
                                                   taskset_ranges,
                                                   ss_ranges,
@@ -1182,7 +1182,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                                   ObGITaskSet::ObGIRandomType random_type,
                                                   bool partition_granule /* = true */)
 {
-  // 由于FULL PARTITION WISE的splite方法较为特殊（需要对INSERT进行任务切分），而目前的`ObGranuleSplitter`的接口`split_granule`仅仅考虑了TSC的处理，
+  // 由于FULL PARTITION WISE的split方法较为特殊（需要对INSERT进行任务切分），而目前的`ObGranuleSplitter`的接口`split_granule`仅仅考虑了TSC的处理，
   // 因此将`ObPartitionWiseGranuleSplitter`的该接口废弃掉
   UNUSED(args);
   UNUSED(scan_ops);
@@ -1265,7 +1265,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       LOG_WARN("failed to push back task set", K(ret));
     } else {
       // 获得对应的insert/replace op id
-      LOG_TRACE("splite modify gi task successfully", K(modify_op->get_id()));
+      LOG_TRACE("split modify gi task successfully", K(modify_op->get_id()));
       gi_task_array_result.at(index_idx).tsc_op_id_ = modify_op->get_id();
     }
   }
@@ -1332,7 +1332,7 @@ int ObPartitionWiseGranuleSplitter::split_insert_gi_task(ObGranulePumpArgs &args
                                                        taskset_ranges,
                                                        taskset_idxs,
                                                        range_independent))) {
-    LOG_WARN("failed to get insert graunle task", K(ret), K(each_partition_range), K(tablets));
+    LOG_WARN("failed to get insert granule task", K(ret), K(each_partition_range), K(tablets));
   } else if (OB_FAIL(task_set.construct_taskset(taskset_tablets, taskset_ranges,
                                                 empty_ss_ranges, taskset_idxs, random_type))) {
     // INSERT的任务划分一定是 partition wise的，并且INSERT算子每次rescan仅仅需要每一个task对应的partition key，

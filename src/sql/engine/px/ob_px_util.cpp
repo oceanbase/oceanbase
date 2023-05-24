@@ -1187,7 +1187,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(int64_t table_location_key,
     ObTabletIdxMap tablet_order_map;
     if (OB_FAIL(dst_locations.reserve(src_locations.size()))) {
       LOG_WARN("fail reserve locations", K(ret), K(src_locations.size()));
-    // virtual table is list parttion now,
+    // virtual table is list parition now,
     // no actual partition define, can't traverse
     // table schema for partition info
     } else if (!is_virtual_table(ref_table_id) &&
@@ -1321,7 +1321,7 @@ int ObPXServerAddrUtil::split_parallel_into_task(const int64_t parallel,
     /// 把剩下的线程安排出去
     thread_remain = parallel - total_thread_count;
     if (thread_remain <= 0) {
-      // 这种情况是正常的，paralllel < sqc count的时候就会出现这种情况。
+      // 这种情况是正常的，parallel < sqc count的时候就会出现这种情况。
     } else if (thread_remain > sqc_task_metas.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Thread remain is invalid", K(ret), K(thread_remain), K(sqc_task_metas.count()));
@@ -1452,7 +1452,7 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
   } else if (is_virtual_table(table_schema->get_table_id())) {
     // In observer 4.2, the table schema of a distributed virtual table will show all_part_num as 1,
     // whereas in lower versions it would display as 65536.
-    // For a distrubuted virtual table, we may encounter a situation where part_id is 1 in sqc1,
+    // For a distributed virtual table, we may encounter a situation where part_id is 1 in sqc1,
     // part_id is 2 in sqc2 and so on, but the idx_map only contains one item with key=1.
     // Hence, if we seek with part_id=2, the idx_map will return -4201 (OB_HASH_NOT_EXIST)
     // will return -4201(OB_HASH_NOT_EXIST). In such cases, we can directly obtain the value that equals part_id + 1.
@@ -2886,7 +2886,7 @@ int ObPxEstimateSizeUtil::get_px_size(
     }
   }
   if (ret_size > total_size || OB_FAIL(ret)) {
-    LOG_WARN("unpexpect status: estimate size is greater than total size",
+    LOG_WARN("unexpect status: estimate size is greater than total size",
       K(ret_size), K(total_size), K(ret));
     ret_size = total_size;
     ret = OB_SUCCESS;
@@ -3224,7 +3224,7 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
     LOG_WARN("unexpected dfo", K(ret), K(parent));
   } else if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()
       || ObPQDistributeMethod::PARTITION_RANGE == child.get_dist_method()) {
-    LOG_TRACE("build pkey affinitiezed channel map",
+    LOG_TRACE("build pkey affinitized channel map",
       K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
       //  .....
