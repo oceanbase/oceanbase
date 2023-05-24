@@ -383,6 +383,18 @@ struct ObDatumGeoCmp : public ObDefined<>
   }
 };
 
+template <bool HAS_LOB_HEADER>
+struct ObDatumUDTCmp : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    UNUSED(l);
+    UNUSED(r);
+    UNUSED(cmp_ret);
+    return OB_ERR_NO_ORDER_MAP_SQL;
+  }
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // begin define string compare functions
 ///////////////////////////////////////////////////////////////////////////////
