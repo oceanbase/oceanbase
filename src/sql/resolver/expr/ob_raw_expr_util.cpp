@@ -6393,7 +6393,8 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
         }
       }
     } else if (ObExtendType == obj_type
-               && OB_INVALID_ID != udt_id) {
+               && OB_INVALID_ID != udt_id
+               && src->get_expr_type() != T_QUESTIONMARK) {
       if (ObNullType == src->get_result_type().get_type()) {
         // do nothing
       } else if (src->get_result_type().is_user_defined_sql_type()) {
