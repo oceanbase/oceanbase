@@ -279,6 +279,7 @@ OB_INLINE ret_type get_##name() const { return name##_; }
         ref_obj_versions_()
     {
     }
+    ~ObDependencyObjItem() { reset(); }
     DEFINE_GETTER(int, error_ret)
     DEFINE_GETTER(int64_t, max_dependency_version)
     DEFINE_GETTER(int64_t, max_ref_obj_schema_version)
@@ -373,6 +374,8 @@ public:
       ref_obj_version_table_()
   {
   }
+  ~ObReferenceObjTable() { reset(); }
+  void reset();
   int process_reference_obj_table(
     const uint64_t tenant_id,
     const uint64_t dep_obj_id,
@@ -403,7 +406,6 @@ public:
     const ObSchemaRefObjOp ref_obj_op,
     common::ObIAllocator &allocator);
   inline bool is_inited() const { return inited_; }
-  inline void reset() { inited_ = false; ref_obj_version_table_.reuse(); }
   inline int set_need_del_schema_dep_obj(
     const uint64_t dep_obj_id,
     const uint64_t dep_db_id,
