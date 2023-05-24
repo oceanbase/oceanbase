@@ -26,9 +26,9 @@ class ObDirectReceiveSpec : public ObReceiveSpec
   OB_UNIS_VERSION_V(1);
 public:
   ObDirectReceiveSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-  : ObReceiveSpec(alloc, type)
+  : ObReceiveSpec(alloc, type), dynamic_const_exprs_(alloc)
   {}
-
+  ExprFixedArray dynamic_const_exprs_; // const expr which contain dynamic param
   virtual ~ObDirectReceiveSpec() {};
 };
 
@@ -49,6 +49,18 @@ private:
   int setup_next_scanner();
   int get_next_row_from_cur_scanner();
   int update_user_var();
+  // clear dynamic const expr parent evaluate flag, because when dynmaic param datum
+  // changed, if we don't clear dynamic const expr parent expr evaluate flag, the
+  // parent expr datum ptr may point to the last dynamic param datum memory which
+  // is invalid now
+  OB_INLINE void clear_dynamic_const_parent_flag()
+  {
+    const ObDirectReceiveSpec &spec = static_cast<const ObDirectReceiveSpec &>(spec_);
+    for (int64_t i = 0; i < spec.dynamic_const_exprs_.count(); i++) {
+      ObDynamicParamSetter::clear_parent_evaluated_flag(
+                          eval_ctx_, *spec.dynamic_const_exprs_.at(i));
+    }
+  }
 private:
   common::ObScanner *scanner_;
   ObChunkDatumStore::Iterator scanner_iter_;

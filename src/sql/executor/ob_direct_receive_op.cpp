@@ -26,7 +26,7 @@ namespace oceanbase
 {
 namespace sql
 {
-OB_SERIALIZE_MEMBER((ObDirectReceiveSpec, ObOpSpec));
+OB_SERIALIZE_MEMBER((ObDirectReceiveSpec, ObOpSpec), dynamic_const_exprs_);
 
 ObDirectReceiveOp::ObDirectReceiveOp(ObExecContext &exec_ctx,
                                      const ObOpSpec &spec,
@@ -309,11 +309,34 @@ int ObDirectReceiveOp::setup_next_scanner()
 int ObDirectReceiveOp::get_next_row_from_cur_scanner()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(scanner_iter_.get_next_row(MY_SPEC.output_, eval_ctx_))) {
-    if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail get next row", K(ret));
-    } else {}
+  const ObChunkDatumStore::StoredRow *tmp_sr = NULL;
+  if (OB_FAIL(scanner_iter_.get_next_row(tmp_sr))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("get next stored row failed", K(ret));
+    }
+  } else if (OB_ISNULL(tmp_sr) || (tmp_sr->cnt_ != MY_SPEC.output_.count())) {
+    ret = OB_ERR_UNEXPECTED;
   } else {
+    for (uint32_t i = 0; i < tmp_sr->cnt_; ++i) {
+      if (MY_SPEC.output_.at(i)->is_static_const_) {
+        continue;
+      } else {
+        MY_SPEC.output_.at(i)->locate_expr_datum(eval_ctx_) = tmp_sr->cells()[i];
+        MY_SPEC.output_.at(i)->set_evaluated_projected(eval_ctx_);
+      }
+    }
+    // deep copy dynamic const expr datum
+    clear_dynamic_const_parent_flag();
+    if (MY_SPEC.dynamic_const_exprs_.count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.dynamic_const_exprs_.count(); i++) {
+        ObExpr *expr = MY_SPEC.dynamic_const_exprs_.at(i);
+        if (0 == expr->res_buf_off_) {
+          // for compat 4.0, do nothing
+        } else if (OB_FAIL(expr->deep_copy_self_datum(eval_ctx_))) {
+          LOG_WARN("fail to deep copy datum", K(ret), K(eval_ctx_), K(*expr));
+        }
+      }
+    }
     LOG_DEBUG("direct receive next row", "row", ROWEXPR2STR(eval_ctx_, MY_SPEC.output_));
   }
   return ret;
