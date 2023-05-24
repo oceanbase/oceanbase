@@ -805,3 +805,28 @@ int ObLogGroupBy::set_third_stage_info(ObRawExpr *aggr_code_expr,
   }
   return ret;
 }
+
+int ObLogGroupBy::compute_sharding_info()
+{
+  int ret = OB_SUCCESS;
+  if (ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_) {
+    ObLogicalOperator *child = NULL;
+    if (get_num_of_child() == 0) {
+      /*do nothing*/
+    } else if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (child->get_strong_sharding() != NULL &&
+               OB_FAIL(weak_sharding_.push_back(child->get_strong_sharding()))) {
+      LOG_WARN("failed to push back weak sharding");
+    } else if (OB_FAIL(append(weak_sharding_, child->get_weak_sharding()))) {
+      LOG_WARN("failed to assign sharding info", K(ret));
+    } else {
+      inherit_sharding_index_ = ObLogicalOperator::first_child;
+      strong_sharding_ = NULL;
+    }
+  } else if (OB_FAIL(ObLogicalOperator::compute_sharding_info())) {
+    LOG_WARN("failed to compute sharding info", K(ret));
+  }
+  return ret;
+}
