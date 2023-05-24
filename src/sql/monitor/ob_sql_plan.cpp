@@ -298,7 +298,7 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
     } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text, /*ignore_parallel*/false))) {
       LOG_WARN("failed to print global hint", K(ret));
     } else {
-      BUF_PRINT_CONST_STR("END_OUTLINE_DATA*/", plan_text);
+      BUF_PRINT_CONST_STR(" END_OUTLINE_DATA*/", plan_text);
       plan_text.is_outline_data_ = false;
     }
     if (OB_SIZE_OVERFLOW == ret) {
