@@ -11,7 +11,32 @@ namespace oceanbase
 {
 namespace observer
 {
-int ObTableLoadExecCtx::check_status()
+using namespace common;
+using namespace sql;
+
+/**
+ * ObTableLoadSqlExecCtx
+ */
+
+ObIAllocator *ObTableLoadSqlExecCtx::get_allocator()
+{
+  ObIAllocator *allocator = nullptr;
+  if (nullptr != exec_ctx_) {
+    allocator = &exec_ctx_->get_allocator();
+  }
+  return allocator;
+}
+
+ObSQLSessionInfo *ObTableLoadSqlExecCtx::get_session_info()
+{
+  ObSQLSessionInfo *session_info = nullptr;
+  if (nullptr != exec_ctx_) {
+    session_info = exec_ctx_->get_my_session();
+  }
+  return session_info;
+}
+
+int ObTableLoadSqlExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
@@ -23,5 +48,19 @@ int ObTableLoadExecCtx::check_status()
   return ret;
 }
 
-}  // namespace observer
-}  // namespace oceanbase
+/**
+ * ObTableLoadClientExecCtx
+ */
+
+int ObTableLoadClientExecCtx::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
+    ret = OB_SERVER_IS_STOPPING;
+    LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
+  }
+  return ret;
+}
+
+} // namespace observer
+} // namespace oceanbase
