@@ -43,6 +43,7 @@ LogConfigMgr::LogConfigMgr()
       self_(),
       prev_log_proposal_id_(INVALID_PROPOSAL_ID),
       prev_lsn_(),
+      prev_end_lsn_(PALF_INITIAL_LSN_VAL),
       prev_mode_pid_(INVALID_PROPOSAL_ID),
       state_(INIT),
       last_submit_config_log_time_us_(OB_INVALID_TIMESTAMP),
@@ -732,7 +733,7 @@ int LogConfigMgr::change_config(const LogConfigChangeArgs &args,
   } else {
     ret = change_config_(args, proposal_id, election_epoch, config_version);
     PALF_LOG(INFO, "config_change stat", K_(palf_id), K_(self), K(args), K(proposal_id),
-      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_mode_pid), K_(state), K(config_version),
+      K_(prev_log_proposal_id), K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K(config_version),
       K_(persistent_config_version), K_(ms_ack_list), K_(resend_config_version),
       K_(resend_log_list), K_(log_ms_meta), K_(last_submit_config_log_time_us));
   }
@@ -910,23 +911,26 @@ int LogConfigMgr::renew_config_change_barrier_()
   int ret = OB_SUCCESS;
   int64_t prev_log_proposal_id = INVALID_PROPOSAL_ID;
   int64_t prev_mode_pid = INVALID_PROPOSAL_ID;
-  LSN prev_log_lsn;
-  if (OB_FAIL(get_log_barrier_(prev_log_lsn, prev_log_proposal_id))) {
+  LSN prev_log_lsn, prev_log_end_lsn;
+  if (OB_FAIL(get_log_barrier_(prev_log_lsn, prev_log_end_lsn, prev_log_proposal_id))) {
     PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
   } else {
     prev_mode_pid_ = mode_mgr_->get_last_submit_mode_meta().proposal_id_;
     prev_log_proposal_id_ = prev_log_proposal_id;
     prev_lsn_ = prev_log_lsn;
+    prev_end_lsn_ = prev_log_end_lsn;
+    PALF_LOG(INFO, "renew_config_change_barrier_ success", KR(ret), K_(palf_id), K_(self),
+        K_(prev_lsn), K_(prev_end_lsn), K_(prev_log_proposal_id), K_(prev_mode_pid));
   }
   return ret;
 }
 
-int LogConfigMgr::get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const
+int LogConfigMgr::get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const
 {
   int ret = OB_SUCCESS;
   int64_t unused_log_id;
   // log barrier must be last_submit_log_info
-  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, unused_log_id, prev_log_proposal_id))) {
+  if (OB_FAIL(sw_->get_last_submit_log_info(prev_log_lsn, prev_log_end_lsn, unused_log_id, prev_log_proposal_id))) {
     PALF_LOG(WARN, "get_last_submit_log_info failed", KR(ret), K_(palf_id), K_(self));
   }
   return ret;
@@ -1920,11 +1924,11 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
   LSN unused_lsn;
   int64_t unused_id = INT64_MAX;
   bool unused_bool = false;
-  LSN prev_log_lsn;
 
   constexpr int64_t conn_timeout_us = 3 * 1000 * 1000L;  // 3s
   constexpr bool need_remote_check = false;
   const bool need_skip_log_barrier = mode_mgr_->need_skip_log_barrier();
+  LSN prev_log_end_lsn = prev_end_lsn_;
   if (new_member_list.get_member_number() == 0) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(sync_get_committed_end_lsn_(args, new_member_list, new_replica_num,
@@ -1935,10 +1939,7 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
     ret = OB_SUCCESS;
     PALF_LOG(INFO, "PALF is in FLASHBACK mode, skip log barrier", K(ret), K_(palf_id), K_(self), \
         "accepted_mode_meta", mode_mgr_->get_accepted_mode_meta());
-    // wait log barrier during log commiting are stopped
-  } else if (OB_FAIL(get_log_barrier_(prev_log_lsn, unused_id))) {
-    PALF_LOG(WARN, "get_log_barrier_ failed", KR(ret), K_(palf_id), K_(self));
-  } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_lsn)? OB_SUCCESS: OB_EAGAIN)) {
+  } else if (FALSE_IT(ret = (first_committed_end_lsn >= prev_log_end_lsn)? OB_SUCCESS: OB_EAGAIN)) {
   } else if (OB_EAGAIN == ret) {
     // committed_end_lsn do not change during 2s, skip the reconfiguration
     const int64_t curr_ts_us = common::ObTimeUtility::current_time();
@@ -1963,12 +1964,12 @@ int LogConfigMgr::wait_log_barrier_(const LogConfigChangeArgs &args,
         args.type_ != LogConfigChangeType::STARTWORKING) {
       ret = OB_LOG_NOT_SYNC;
       PALF_LOG(WARN, "waiting for log barrier timeout, skip", KR(ret), K_(palf_id), K_(self),
-          K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_lsn));
+          K_(start_wait_barrier_time_us), K(first_committed_end_lsn), K(prev_log_end_lsn));
       start_wait_barrier_time_us_ = curr_ts_us;
     }
   }
   PALF_LOG(INFO, "waiting for log barrier", K(ret), K_(palf_id), K_(self), K(first_committed_end_lsn),
-      K(prev_log_lsn), K(new_member_list), K(new_replica_num));
+      K(prev_log_end_lsn), K(new_member_list), K(new_replica_num));
   return ret;
 }
 

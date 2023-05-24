@@ -354,9 +354,7 @@ public:
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
       K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
-      K_(applied_alive_paxos_memberlist), K_(applied_alive_paxos_replica_num),                   \
-      K_(applied_all_learnerlist),                                                               \
-      K_(prev_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version),                 \
+      K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version), \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
       K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
       K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
@@ -423,7 +421,7 @@ private:
   int try_resend_config_log_(const int64_t proposal_id);
   // broadcast leader info to global learners, only called in leader active
   int submit_broadcast_leader_info_(const int64_t proposal_id) const;
-  int get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const;
+  int get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const;
   int check_servers_lsn_and_version_(const common::ObAddr &server,
                                      const LogConfigVersion &config_version,
                                      const int64_t conn_timeout_us,
@@ -504,6 +502,7 @@ private:
   int64_t prev_log_proposal_id_;
   // previous lsn for barrier
   LSN prev_lsn_;
+  LSN prev_end_lsn_;
   // previous mode proposal_id for barrier
   int64_t prev_mode_pid_;
   ConfigChangeState state_;
