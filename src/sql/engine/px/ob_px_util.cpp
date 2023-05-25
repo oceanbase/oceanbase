@@ -1424,15 +1424,21 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
       ObTabletIdxMap &idx_map)
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_idx = 0;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "TabletOrderIdx"))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else if (is_virtual_table(table_schema->get_table_id())) {
+    for (int i = 0; OB_SUCC(ret) && i < table_schema->get_all_part_num(); ++i) {
+      if (OB_FAIL(idx_map.set_refactored(i + 1, tablet_idx++))) {
+        LOG_WARN("fail set value to hashmap", K(ret));
+      }
+    }
   } else {
     ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
     ObPartitionSchemaIter::Info info;
-    int64_t tablet_idx = 0;
     do {
       if (OB_FAIL(iter.next_partition_info(info))) {
         if (OB_ITER_END != ret) {
