@@ -409,6 +409,7 @@ public:
   int set_start_scn(const share::SCN start_ts);
   int set_end_scn(const share::SCN freeze_ts);
   int set_max_end_scn(const share::SCN scn);
+  int set_max_end_scn_to_inc_start_scn();
   inline int set_logging_blocked()
   {
     logging_blocked_start_time = common::ObTimeUtility::current_time();
@@ -636,10 +637,10 @@ int ObMemtable::save_multi_source_data_unit(const T *const multi_source_data_uni
         // commit log is replayed to empty memtable which is frozen after clog switch to follower gracefully, commit status mds will be lost.
         // so push end_scn to start_scn + 1
         else if (get_max_end_scn().is_min() && get_end_scn().is_max()) {
-          TRANS_LOG(INFO, "empty memtable push end_scn to start_scn + 1", K(ret), K(scn), KPC(this));
-          if (OB_FAIL(set_end_scn(share::SCN::scn_inc(start_scn)))) {
+          if (OB_FAIL(set_max_end_scn_to_inc_start_scn())) {
             TRANS_LOG(WARN, "failed to set max_end_scn", K(ret), K(scn), KPC(this));
           }
+          TRANS_LOG(INFO, "empty memtable push end_scn to start_scn + 1", K(ret), K(scn), KPC(this));
         }
 
         if (OB_FAIL(ret)) {

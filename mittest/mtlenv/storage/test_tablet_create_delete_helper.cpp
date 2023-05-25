@@ -3094,7 +3094,7 @@ TEST_F(TestTabletCreateDeleteHelper, empty_memtable_replay_commit)
   ASSERT_EQ(OB_SUCCESS, ret);
   share::SCN left_scn;
   left_scn.convert_for_gts(101);
-  share::SCN right_scn = ((memtable::ObMemtable*)new_memtable)->get_end_scn();
+  share::SCN right_scn = ((memtable::ObMemtable*)new_memtable)->get_max_end_scn();
   ASSERT_EQ(left_scn, right_scn);
 }
 
