@@ -18,6 +18,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/datum/ob_datum.h"
 #include "share/datum/ob_datum_funcs.h"
+#include "share/rc/ob_tenant_base.h"
 
 
 namespace oceanbase {
@@ -69,7 +70,11 @@ public:
     inner_max_allocator_("OptOSGMax"),
     inner_allocator_("OptOSG"),
     allocator_(inner_allocator_)
-  { }
+  {
+    inner_min_allocator_.set_tenant_id(MTL_ID());
+    inner_max_allocator_.set_tenant_id(MTL_ID());
+    inner_allocator_.set_tenant_id(MTL_ID());
+  }
   ObOptOSGColumnStat(ObIAllocator &alloc):
     col_stat_(NULL),
     min_val_(T_MIN_VAL),
@@ -78,7 +83,11 @@ public:
     inner_max_allocator_("OptOSGMax"),
     inner_allocator_("OptOSG"),
     allocator_(alloc)
-  { }
+  {
+    inner_min_allocator_.set_tenant_id(MTL_ID());
+    inner_max_allocator_.set_tenant_id(MTL_ID());
+    inner_allocator_.set_tenant_id(MTL_ID());
+  }
   virtual ~ObOptOSGColumnStat() { reset(); }
   void reset();
   int deep_copy(const ObOptOSGColumnStat &other);
