@@ -651,6 +651,7 @@ int ObLogInstance::init_self_addr_()
   } else if (!get_self_addr().set_ip_addr(local_ip, self_pid)) {
     LOG_ERROR("self addr set ip addr error", K(local_ip), K(self_pid));
   } else {
+    LOG_INFO("init self_addr success", "addr", get_self_addr());
     // succ
   }
 

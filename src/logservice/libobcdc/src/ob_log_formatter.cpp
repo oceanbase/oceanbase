@@ -59,6 +59,7 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(orig_default_value_, 0, sizeof(orig_default_value_));
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
+  (void)memset(is_null_lob_old_columns_, 0, sizeof(is_null_lob_old_columns_));
 }
 
 int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_old_column)
@@ -74,6 +75,7 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(orig_default_value_, 0, column_num * sizeof(orig_default_value_[0]));
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
+    (void)memset(is_null_lob_old_columns_, 0, column_num * sizeof(is_null_lob_old_columns_[0]));
   }
 
   return OB_SUCCESS;
@@ -308,6 +310,7 @@ int ObLogFormatter::get_task_count(
 int ObLogFormatter::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  set_cdc_thread_name("Formatter", thread_index);
   bool cur_stmt_need_callback = false;
   IStmtTask *stmt_task = static_cast<IStmtTask *>(data);
   DmlStmtTask *dml_stmt_task = dynamic_cast<DmlStmtTask *>(stmt_task);
@@ -1268,7 +1271,6 @@ int ObLogFormatter::fill_normal_cols_(
               } else {
                 rv->new_columns_[usr_column_idx] = new_col_str;
               }
-              // TODO remove
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(new_col_str->ptr(), new_col_str->length()),
                   "buf_len", new_col_str->length());
@@ -1311,7 +1313,8 @@ int ObLogFormatter::fill_normal_cols_(
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->old_columns_[usr_column_idx] = nullptr;
-              LOG_INFO("fill_normal_cols_ nullptr", K(is_new_value), KPC(cv), K(lob_ctx_cols));
+              rv->is_null_lob_old_columns_[usr_column_idx] = true;
+              LOG_INFO("fill_normal_cols_ nullptr", K(usr_column_idx), K(is_new_value), KPC(cv), K(lob_ctx_cols));
             }
           }
         }
@@ -1795,6 +1798,7 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
       }
 
       if (OB_SUCCESS == ret) {
+        bool is_changed = row_value->is_changed_[i];
         if (row_value->contain_old_column_) {
           // For full column logging, the old value is always filled with the value in old_column for updates
           // If there is no valid value in the old column, the original default value is filled
@@ -1805,15 +1809,21 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           }
 
           if (OB_ISNULL(str_val)) {
-            LOG_ERROR("old column value and original default value are all invalid",
-                K(i), "column_num", row_value->column_num_);
-            ret = OB_ERR_UNEXPECTED;
+            if (row_value->is_null_lob_old_columns_[i]) {
+              br_data->putOld(NULL, 0);
+              // NOTICE: LOB column doesn't have default value.
+              LOG_DEBUG("old_column is invalid, may outrow lob updated to inrow", K(i), K(row_value));
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("old column value and original default value are all invalid",
+                  K(i), "column_num", row_value->column_num_,
+                  "is_changed", row_value->is_changed_[i]);
+            }
           } else {
             br_data->putOld(str_val->ptr(), str_val->length());
           }
         } else {
           // When not full column logging, for update, the old value is filled with whether the corresponding column has been modified
-          bool is_changed = row_value->is_changed_[i];
           if (row_value->is_rowkey_[i]) {
             is_changed = true;
           }
