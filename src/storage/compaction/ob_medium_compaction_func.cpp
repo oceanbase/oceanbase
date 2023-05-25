@@ -343,20 +343,18 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       // chosen medium snapshot is far too old
       LOG_INFO("chosen medium snapshot is invalid for multi_version_start", K(ret), KPC(this),
           K(medium_info), K(max_reserved_snapshot));
-      const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
       if (medium_info.medium_snapshot_ == tablet_.get_snapshot_version() //  no uncommitted sstable
-          && weak_read_ts.get_val_for_tx() + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
-        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
+          && weak_read_ts_ + DEFAULT_SCHEDULE_MEDIUM_INTERVAL < ObTimeUtility::current_time_ns()) {
+        const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr *)->get_snapshot_gc_ts();
         // data before weak_read_ts & latest storage schema on memtable is match for schedule medium
-        medium_info.medium_snapshot_ = MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts);
+        // schema will be update in prepare_medium_info
+        medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
         if (medium_info.medium_snapshot_ < max_reserved_snapshot) {
           ret = OB_NO_NEED_MERGE;
         } else {
           LOG_INFO("use weak_read_ts to schedule medium", K(ret), KPC(this),
-              K(medium_info), K(max_reserved_snapshot), K(weak_read_ts), K(snapshot_gc_ts));
+                  K(medium_info), K(max_reserved_snapshot), K_(weak_read_ts), K(snapshot_gc_ts));
         }
-      } else {
-        ret = OB_NO_NEED_MERGE;
       }
     }
     if (OB_SUCC(ret) && !is_major) {
@@ -380,8 +378,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       LOG_INFO("errsim", K(ret), KPC(this));
       if (OB_FAIL(ret)) {
         const int64_t snapshot_gc_ts = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
-        const share::SCN &weak_read_ts = ls_.get_ls_wrs_handler()->get_ls_weak_read_ts();
-        medium_info.medium_snapshot_ = MIN(weak_read_ts.get_val_for_tx(), snapshot_gc_ts);
+        medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
         if (medium_info.medium_snapshot_ > max_sync_medium_scn
            && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
           FLOG_INFO("set schedule medium with errsim", KPC(this));
@@ -551,8 +548,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       ObSEArray<ObITable*, MAX_MEMSTORE_CNT> memtables;
       if (OB_FAIL(tablet_.get_memtables(memtables, true/*need_active*/))) {
         LOG_WARN("failed to get memtables", K(ret), KPC(this));
-      } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_latest_storage_schema_from_memtable(
-          allocator_, memtables, tmp_storage_schema))) {
+      } else if (OB_FAIL(get_latest_storage_schema_from_memtable(allocator_, memtables, tmp_storage_schema))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS; // clear errno
         } else {

@@ -944,6 +944,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
     bool could_major_merge = false;
     const int64_t major_frozen_scn = get_frozen_version();
     ObLSLocality ls_locality;
+    int64_t weak_read_ts = 0;
     if (MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
       could_major_merge = true;
     } else if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
@@ -970,6 +971,8 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
 
     while (OB_SUCC(ret)) { // loop all tablet in ls
       bool tablet_merge_finish = false;
+      // ATTENTION!!! load weak ts before get tablet
+      const share::SCN &weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
       if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -985,7 +988,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       } else if (tablet_id.is_special_merge_tablet()) { // data tablet
         // do nothing
       } else {
-        ObMediumCompactionScheduleFunc func(ls, *tablet);
+        ObMediumCompactionScheduleFunc func(ls, *tablet, weak_read_ts);
         ObITable *latest_major = tablet->get_table_store().get_major_sstables().get_boundary_table(true/*last*/);
         if (OB_NOT_NULL(latest_major) && latest_major->get_snapshot_version() >= merge_version) {
           tablet_merge_finish = true;
