@@ -1011,7 +1011,7 @@ do {\
 #define CHECK_MYSQL_COMMENT(p, node)\
   do {\
     if (p->mysql_compatible_comment_) {\
-      node->is_hidden_const_ = 1;\
+      node->is_forbid_parameter_ = 1;\
     }\
   } while(0);\
 

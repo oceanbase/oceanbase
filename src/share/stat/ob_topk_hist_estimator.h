@@ -14,6 +14,7 @@
 #define OB_TOPK_HIST_ESTIMATOR_H
 
 #include "share/stat/ob_stat_define.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {
@@ -53,13 +54,17 @@ class ObTopKFrequencyHistograms
       used_list_(),
       free_list_(),
       topk_map_(),
-      topk_buf_(),
+      topk_buf_("OptTopkHist"),
       use_first_alloc_(true),
-      obj_buf1_(),
-      obj_buf2_(),
+      obj_buf1_("OptTopkHist"),
+      obj_buf2_("OptTopkHist"),
       copied_count_(),
       need_deep_copy_(false)
-    {}
+    {
+      topk_buf_.set_tenant_id(MTL_ID());
+      obj_buf1_.set_tenant_id(MTL_ID());
+      obj_buf2_.set_tenant_id(MTL_ID());
+    }
 
     int read_result(const ObObj &result_obj);
 
