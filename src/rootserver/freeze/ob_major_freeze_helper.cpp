@@ -97,7 +97,12 @@ int ObMajorFreezeHelper::get_freeze_info(
         LOG_INFO("skip restoring tenant to do major freeze", K(tenant_id));
       } else if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
                                                                 false, tenant_info))) {
-        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS; // ignore ret, so as to process the next tenant
+          LOG_WARN("tenant may be deleted, skip major freeze for this tenant", K(tenant_id));
+        } else {
+          LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+        }
       }
       // Skip major freeze for standby tenants and thus avoid OB_MAJOR_FREEZE_NOT_ALLOW incurred by
       // standby tenants, only when launching major freeze on more than one tenant.
