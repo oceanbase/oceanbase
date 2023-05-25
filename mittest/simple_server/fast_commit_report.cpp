@@ -93,9 +93,7 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version
-                   || is_lock_node
-                   || (NDT_COMPACT == version_iter_->type_
-                       && skip_compact_))) {
+                   || is_lock_node)) {
         tnode = static_cast<const void *>(version_iter_);
       }
 

@@ -104,7 +104,6 @@ int ObMvccEngine::try_compact_row_when_mvcc_read_(const SCN &snapshot_version,
 
 int ObMvccEngine::get(ObMvccAccessCtx &ctx,
                       const ObQueryFlag &query_flag,
-                      const bool skip_compact,
                       const ObMemtableKey *parameter_key,
                       ObMemtableKey *returned_key,
                       ObMvccValueIterator &value_iter)
@@ -136,8 +135,7 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
     if (OB_FAIL(value_iter.init(ctx,
                                 returned_key,
                                 value,
-                                query_flag,
-                                skip_compact))) {
+                                query_flag))) {
       TRANS_LOG(WARN, "ObMvccValueIterator init fail", KR(ret));
     }
   }

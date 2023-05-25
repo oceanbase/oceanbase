@@ -352,13 +352,13 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
   int ret = OB_SUCCESS;
   const ObMemtableKey *key = NULL;
   ObMvccValueIterator *value_iter = NULL;
-  const bool skip_compact = false;
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", KP(this));
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(prepare_scan())) {
     TRANS_LOG(WARN, "prepare scan fail", K(ret));
-  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_, skip_compact))
+  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_))
       || NULL == key || NULL == value_iter) {
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "row_iter_ get_next_row fail", K(ret), KP(key), KP(value_iter));
@@ -1397,7 +1397,7 @@ OB_INLINE int ObReadRow::iterate_row_key(const ObStoreRowkey &rowkey, ObDatumRow
 OB_INLINE int ObReadRow::iterate_row_value_(
     const ObTableReadInfo &read_info,
     common::ObIAllocator &allocator,
-    ObIMvccValueIterator &value_iter,
+    ObMvccValueIterator &value_iter,
     ObDatumRow &row,
     ObNopBitMap &bitmap,
     int64_t &row_scn)
@@ -1436,7 +1436,15 @@ OB_INLINE int ObReadRow::iterate_row_value_(
       if (OB_FAIL(reader.read_memtable_row(mtd->buf_, mtd->buf_len_, read_info, row, bitmap, read_finished))) {
         TRANS_LOG(WARN, "Failed to read memtable row", K(ret));
       } else if (0 == row_scn) {
-        row_scn = reinterpret_cast<const ObMvccTransNode *>(tnode)->trans_version_.get_val_for_tx();
+        const ObMvccTransNode *tx_node = reinterpret_cast<const ObMvccTransNode *>(tnode);
+        const ObTransID snapshot_tx_id = value_iter.get_snapshot_tx_id();
+        const ObTransID reader_tx_id = value_iter.get_reader_tx_id();
+        row_scn = tx_node->trans_version_.get_val_for_tx();
+        if (!(snapshot_tx_id == tx_node->get_tx_id() || reader_tx_id == tx_node->get_tx_id())
+            && tx_node->trans_version_.is_max()) {
+          TRANS_LOG(ERROR, "meet row scn with undecided value", KPC(tx_node),
+                    K(is_committed), K(trans_version), K(value_iter));
+        }
       }
       if (OB_SUCC(ret) &&(ObDmlFlag::DF_INSERT == mtd->dml_flag_ || read_finished)) {
         LOG_DEBUG("chaser debug iter memtable row", KPC(mtd), K(read_finished));
@@ -1453,7 +1461,7 @@ int ObReadRow::iterate_row(
     const ObTableReadInfo &read_info,
     const ObStoreRowkey &key,
     common::ObIAllocator &allocator,
-    ObIMvccValueIterator &value_iter,
+    ObMvccValueIterator &value_iter,
     ObDatumRow &row,
     ObNopBitMap &bitmap,
     int64_t &row_scn)

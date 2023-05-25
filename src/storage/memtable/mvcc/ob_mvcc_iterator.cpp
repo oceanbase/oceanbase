@@ -32,11 +32,9 @@ namespace memtable
 int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
                               const ObMemtableKey *key,
                               ObMvccRow *value,
-                              const ObQueryFlag &query_flag,
-                              const bool skip_compact)
+                              const ObQueryFlag &query_flag)
 {
   int ret = OB_SUCCESS;
-  skip_compact_ = skip_compact;
   reset();
   int64_t lock_for_read_start = ObClockGenerator::getClock();
   ctx_ = &ctx;
@@ -62,7 +60,6 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
             KPC(value),
             KPC_(version_iter),
             K(query_flag.is_read_latest()),
-            K(skip_compact),
             KPC(key),
             K(ctx),
             K(lbt()));
@@ -297,9 +294,7 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version
-                   || is_lock_node
-                   || (NDT_COMPACT == version_iter_->type_
-                       && skip_compact_))) {
+                   || is_lock_node)) {                      // skip lock node
         tnode = static_cast<const void *>(version_iter_);
       }
 
@@ -314,11 +309,7 @@ void ObMvccValueIterator::move_to_next_node_()
 {
   if (OB_ISNULL(version_iter_)) {
   } else if (NDT_COMPACT == version_iter_->type_) {
-    if (skip_compact_) {
-      version_iter_ = version_iter_->prev_;
-    } else {
-      version_iter_ = NULL;
-    }
+    version_iter_ = NULL;
   } else {
     version_iter_ = version_iter_->prev_;
   }
@@ -387,8 +378,7 @@ int ObMvccRowIterator::init(
 int ObMvccRowIterator::get_next_row(
     const ObMemtableKey *&key,
     ObMvccValueIterator *&value_iter,
-    uint8_t& iter_flag,
-    const bool skip_compact)
+    uint8_t& iter_flag)
 {
   int ret = OB_SUCCESS;
   uint8_t read_partial_row = 0;
@@ -415,8 +405,7 @@ int ObMvccRowIterator::get_next_row(
     } else if (OB_FAIL(value_iter_.init(*ctx_,
                                         tmp_key,
                                         value,
-                                        query_flag_,
-                                        skip_compact))) {
+                                        query_flag_))) {
       TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
     } else if (!value_iter_.is_exist()) {
       read_partial_row = (query_engine_iter_->get_iter_flag() & STORE_ITER_ROW_PARTIAL);

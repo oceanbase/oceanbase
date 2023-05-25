@@ -704,9 +704,11 @@ int ObMemtable::exist(
   } else if (OB_FAIL(parameter_mtk.encode(read_info.get_columns_desc(),
                                           &rowkey.get_store_rowkey()))) {
     TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
-  } else if (OB_FAIL(mvcc_engine_.get(ctx.mvcc_acc_ctx_, query_flag,
-                                      false, // skip_compact
-                                      &parameter_mtk, &returned_mtk, value_iter))) {
+  } else if (OB_FAIL(mvcc_engine_.get(ctx.mvcc_acc_ctx_,
+                                      query_flag,
+                                      &parameter_mtk,
+                                      &returned_mtk,
+                                      value_iter))) {
     TRANS_LOG(WARN, "get value iter fail, ", K(ret));
   } else {
     const void *tnode = nullptr;
@@ -808,7 +810,7 @@ int ObMemtable::get(
   ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   const ObTableReadInfo *read_info = nullptr;
-  const bool skip_compact = false;
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
     ret = OB_NOT_INIT;
@@ -827,7 +829,6 @@ int ObMemtable::get(
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
     } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
                                         context.query_flag_,
-                                        skip_compact,
                                         &parameter_mtk,
                                         &returned_mtk,
                                         value_iter))) {

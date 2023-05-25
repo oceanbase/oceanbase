@@ -32,7 +32,7 @@ struct ObTransNodeDMLStat;
 namespace memtable
 {
 class ObMvccAccessCtx;
-class ObMultiVersionValueIterator : public ObIMvccValueIterator
+class ObMultiVersionValueIterator
 {
 public:
   ObMultiVersionValueIterator();
