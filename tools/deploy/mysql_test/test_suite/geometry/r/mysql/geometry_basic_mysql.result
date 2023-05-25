@@ -1,0 +1,134 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY BASIC.
+# ----------------------------------------------------------------------
+drop table if exists geo;
+create table geo(id int primary key auto_increment, g geometry not null srid 4326, j json);
+insert into geo(g, j) values(ST_GeomFromText('POINT(1 1)', 4326), '["hello"]');
+select id,st_astext(g),j from geo order by id;
+id	st_astext(g)	j
+1	POINT(1 1)	["hello"]
+truncate table geo;
+drop table geo;
+# column(UINT32_MAX),insert(all valid srid is allowed)
+create table geo(g geometry not null srid 432);
+ERROR SR001: There's no spatial reference system with SRID 432.
+create table geo(g geometry not null);
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+ERROR SR001: There's no spatial reference system with SRID 43.
+drop table geo;
+# column(4326),insert(4326 srid is allowed)
+create table geo(g geometry not null srid 4326);
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 0, but the SRID of the column is 4326. Consider changing the SRID of the geometry or the SRID property of the column.
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+ERROR SR001: There's no spatial reference system with SRID 43.
+drop table geo;
+# column(0),insert(0 srid is allowed)
+create table geo(g geometry not null srid 0);
+insert into geo values(ST_GeomFromText('POINT(1 1)', 0));
+insert into geo values(ST_GeomFromText('POINT(1 1)'));
+insert into geo values(ST_GeomFromText('POINT(1 1)', 4326));
+ERROR HY000: The SRID of the geometry does not match the SRID of the column. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column.
+insert into geo values(ST_GeomFromText('POINT(1 1)', 43));
+ERROR SR001: There's no spatial reference system with SRID 43.
+drop table if exists gis_point;
+create table if not exists gis_point (
+x decimal(19,16),
+y decimal(19,16),
+poi POINT not null srid 4326,
+index `xy_index` (x, y) local,
+index `poi_index` (poi) local
+);
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+insert into gis_point values (1,1,ST_srid(point(1,1), 4326)), (2,2,ST_srid(point(2,2), 4326));
+insert into gis_point values (3,3,ST_srid(point(3,3), 4326)), (4,4,ST_srid(point(5,5), 4326));
+insert into gis_point values (6,6,ST_srid(point(6,6), 4326)), (7,7,ST_srid(point(7,7), 4326));
+select x, y, st_astext(poi) from gis_point;
+x	y	st_astext(poi)
+1.0000000000000000	1.0000000000000000	POINT(1 1)
+2.0000000000000000	2.0000000000000000	POINT(2 2)
+3.0000000000000000	3.0000000000000000	POINT(3 3)
+4.0000000000000000	4.0000000000000000	POINT(5 5)
+6.0000000000000000	6.0000000000000000	POINT(6 6)
+7.0000000000000000	7.0000000000000000	POINT(7 7)
+1.0000000000000000	1.0000000000000000	POINT(1 1)
+2.0000000000000000	2.0000000000000000	POINT(2 2)
+3.0000000000000000	3.0000000000000000	POINT(3 3)
+4.0000000000000000	4.0000000000000000	POINT(5 5)
+6.0000000000000000	6.0000000000000000	POINT(6 6)
+7.0000000000000000	7.0000000000000000	POINT(7 7)
+1.0000000000000000	1.0000000000000000	POINT(1 1)
+2.0000000000000000	2.0000000000000000	POINT(2 2)
+3.0000000000000000	3.0000000000000000	POINT(3 3)
+4.0000000000000000	4.0000000000000000	POINT(5 5)
+6.0000000000000000	6.0000000000000000	POINT(6 6)
+7.0000000000000000	7.0000000000000000	POINT(7 7)
+1.0000000000000000	1.0000000000000000	POINT(1 1)
+2.0000000000000000	2.0000000000000000	POINT(2 2)
+3.0000000000000000	3.0000000000000000	POINT(3 3)
+4.0000000000000000	4.0000000000000000	POINT(5 5)
+6.0000000000000000	6.0000000000000000	POINT(6 6)
+7.0000000000000000	7.0000000000000000	POINT(7 7)
+drop table if exists gis_point;
+create table if not exists gis_point (
+x decimal(19,16),
+y decimal(19,16),
+poi POINT not null srid 4326,
+index `xy_index` (x, y) local,
+index `poi_index` (poi) local
+);
+DROP PROCEDURE IF EXISTS geom_insert;
+CREATE PROCEDURE geom_insert (IN n int)
+BEGIN
+DECLARE i INT DEFAULT 0;
+declare x double;
+declare y double;
+WHILE i<n DO
+SET y=rand()*(180) - 90;
+SET x=rand()*360 - 180;
+insert into gis_point values (x,y,ST_srid(point(x,y), 4326)),
+(x,y,ST_srid(point(x,y), 4326));
+SET i=i+1;
+END WHILE;
+END//
+call geom_insert(10000);
+explain select x,y,st_astext(poi) from gis_point order by x,y desc limit  ;
+Query Plan
+==================================================================
+|ID|OPERATOR           |NAME               |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------
+|0 |NESTED-LOOP JOIN   |                   |        |         |
+|  |├─TOP-N SORT       |                   |        |         |
+|  |│ └─TABLE FULL SCAN|gis_point(xy_index)|    |         |
+|  |└─TABLE GET        |gis_point_alias    |        |            |
+==================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([gis_point.x], [gis_point.y], [st_astext(gis_point_alias.poi)]), filter(nil)
+      conds(nil), nl_params_([gis_point.__pk_increment(:0)]), use_batch=false
+    - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
+      sort_keys([gis_point.x, ASC], [gis_point.y, DESC]), topn( ), prefix_pos( )
+    - output([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), filter(nil)
+      access([gis_point.__pk_increment], [gis_point.x], [gis_point.y]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([gis_point.x], [gis_point.y], [gis_point.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+    - output([gis_point_alias.poi]), filter(nil)
+      access([gis_point_alias.poi]), partitions(p0)
+      is_index_back=false, is_global_index=false,
+      range_key([gis_point_alias.__pk_increment]), range(MIN ; MAX),
+      range_cond([gis_point_alias.__pk_increment = :0])
+drop table if exists gis_point;
