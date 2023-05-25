@@ -49,7 +49,7 @@ struct DefaultAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num++;
 #endif
-    return share::mtl_malloc(size, "OccamThreadPool");
+    return ob_malloc(size, SET_USE_500("OccamThreadPool"));
   }
   void* alloc(const int64_t size, const ObMemAttr &attr) override {
     UNUSED(attr);
@@ -59,7 +59,7 @@ struct DefaultAllocator : public ObIAllocator {
 #ifdef UNIITTEST_DEBUG
     total_alive_num--;
 #endif
-    share::mtl_free(ptr);
+    ob_free(ptr);
   }
 #ifdef UNIITTEST_DEBUG
   int total_alive_num = 0;
