@@ -514,8 +514,8 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
     bool for_update = true;
     if (OB_FAIL(proxy.get_target_data_version(for_update, target_data_version))) {
       if (OB_ERR_NULL_VALUE == ret
-          && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_1_0_0) {
-        // 4.0 -> 4.1
+          && GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_1_0_1) {
+        // 4.0.0.0 -> 4.1.0.x
         uint64_t current_data_version = 0;
         ret = proxy.get_current_data_version(current_data_version);
         if (OB_ERR_NULL_VALUE != ret) {

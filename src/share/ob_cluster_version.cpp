@@ -283,7 +283,7 @@ int ObClusterVersion::get_tenant_data_version(
       data_version = tenant_config->compatible;
     } else if (is_sys_tenant(tenant_id)
                || is_meta_tenant(tenant_id)
-               || get_cluster_version() <= CLUSTER_VERSION_4_1_0_0) {
+               || get_cluster_version() <= CLUSTER_VERSION_4_1_0_1) {
       // 1. For sys/meta tenant, circular dependency problem may exist when load tenant config from inner tables.
       //    For safety, data_version will fallback to last barrier data version until actual tenant config is loaded.
       // 2. To compatible with upgrade path from 4.0 to 4.1.0.x
