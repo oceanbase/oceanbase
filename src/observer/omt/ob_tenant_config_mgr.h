@@ -145,6 +145,7 @@ public:
   int got_version(uint64_t tenant_id, int64_t version, const bool remove_repeat = true);
   int update_local(uint64_t tenant_id, int64_t expected_version);
   void notify_tenant_config_changed(uint64_t tenatn_id);
+  int add_config_to_existing_tenant(const char *config_str);
   int add_extra_config(const obrpc::ObTenantConfigArg &arg);
   int schedule(ObTenantConfig::TenantConfigUpdateTask &task, const int64_t delay);
   int cancel(const ObTenantConfig::TenantConfigUpdateTask &task);

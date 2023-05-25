@@ -1523,7 +1523,7 @@ int ObServer::init_config()
 
   config_.print();
 
-  // local_ip is a critical parameter, if if is set, then verify it; otherwise, set it via devname.
+  // local_ip is a critical parameter, if it is set, then verify it; otherwise, set it via devname.
   if (strlen(config_.local_ip) > 0) {
     char if_name[MAX_IFNAME_LENGTH] = { '\0' };
     if (0 != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name))) {
@@ -1632,8 +1632,11 @@ int ObServer::init_config()
         LOG_ERROR("config_mgr_ base_init failed", KR(ret));
       } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
         LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_, &config_mgr_, update_tenant_config_cb))) {
+      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
+                         &config_mgr_, update_tenant_config_cb))) {
         LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
+      } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
+        LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
       }
     }
   }
