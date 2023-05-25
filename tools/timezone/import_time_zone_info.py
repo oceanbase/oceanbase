@@ -35,7 +35,7 @@ class TimeZoneInfoImporter:
     def generate_sql(self):
         self.sql_list = []
         self.tz_version_sql_list = []
-        self.expect_count = [0, 0, 0, 0];
+        self.expect_count = [0, 0, 0, 0]
         replace_str1 = 'TRUNCATE TABLE time_zone'
         replace_str2 = 'INTO time_zone'
         replace_str3 = 'ALTER TABLE time_zone_transition'
@@ -44,7 +44,7 @@ class TimeZoneInfoImporter:
         replace_count_str2 = 'time_zone_transition count:'
         replace_count_str3 = 'time_zone_transition_type count:'
         with open(self.file_name) as f_read:
-            sql = "";
+            sql = ""
             for line in f_read:
                 if re.search('__all_sys_stat', line, re.IGNORECASE):
                     self.tz_version_sql_list.append(line)
@@ -66,11 +66,11 @@ class TimeZoneInfoImporter:
                         new_line = ''
                     else:
                         new_line = line
-                    new_line = new_line.replace('tid', "{0}".format(str(self.tenant_id)))
+                    new_line = new_line.replace('tid', "0")
                     sql += new_line
                     if ";" in new_line:
                         self.sql_list.append(sql)
-                        sql = "";
+                        sql = ""
 
     def connect_server(self):
         self.conn = mysql.connector.connect(user='root', password=self.pwd, host=self.host, port=self.port, database='mysql')
@@ -101,57 +101,61 @@ class TimeZoneInfoImporter:
                 self.cur.execute(sql)
         except mysql.connector.Error as err:
             print("ERROR : " + sql)
-            print(err);
+            print(err)
+	    raise
 
     def execute_sql(self):
         try:
             for sql in self.sql_list:
                 self.cur.execute(sql);
                 print "INFO : execute sql -- {0}".format(sql)
-            self.cur.execute("")
         except mysql.connector.Error as err:
             print("ERROR : " + sql)
-            print(err);
-            print("ERROR : fail to import time zone info");
+            print(err)
+            print("ERROR : fail to import time zone info")
+	    raise
         else:
-            print("INFO : success to import time zone info");
+            print("INFO : success to import time zone info")
 
     def execute_check_sql(self, table_name, idx):
-        self.cur.execute("select count(*) from {0}".format(table_name));
-        result = self.cur.fetchone();
-        self.result_count[idx] = result[0];
-        print "INFO : {0} record count -- {1}, expect count -- {2}".format(table_name, result[0], self.expect_count[idx]);
+        self.cur.execute("select count(*) from {0}".format(table_name))
+        result = self.cur.fetchone()
+        self.result_count[idx] = result[0]
+        print "INFO : {0} record count -- {1}, expect count -- {2}".format(table_name, result[0], self.expect_count[idx])
 
     def check_result(self):
-        self.result_count = [0, 0, 0, 0];
-        self.execute_check_sql("oceanbase.__all_tenant_time_zone", 0);
-        self.execute_check_sql("oceanbase.__all_tenant_time_zone_name", 1);
-        self.execute_check_sql("oceanbase.__all_tenant_time_zone_transition", 2);
-        self.execute_check_sql("oceanbase.__all_tenant_time_zone_transition_type", 3);
+        self.result_count = [0, 0, 0, 0]
+        self.execute_check_sql("oceanbase.__all_tenant_time_zone", 0)
+        self.execute_check_sql("oceanbase.__all_tenant_time_zone_name", 1)
+        self.execute_check_sql("oceanbase.__all_tenant_time_zone_transition", 2)
+        self.execute_check_sql("oceanbase.__all_tenant_time_zone_transition_type", 3)
         if self.expect_count[0] == self.result_count[0] \
             and self.expect_count[1] == self.result_count[1] \
             and self.expect_count[2] == self.result_count[2] \
             and self.expect_count[3] == self.result_count[3]:
             try:
                 for sql in self.tz_version_sql_list:
-                    self.cur.execute(sql);
+                    self.cur.execute(sql)
                     print "INFO : execute sql -- {0}".format(sql)
-                self.cur.execute("")
             except mysql.connector.Error as err:
                 print("ERROR : " + sql)
-                print(err);
-                print("ERROR : fail to insert time zone version");
+                print(err)
+                print("ERROR : fail to insert time zone version")
+		raise
             else:
-                print("INFO : success to insert time zone version");
+                print("INFO : success to insert time zone version")
 
 def main():
-    tz_info_importer = TimeZoneInfoImporter();
-    tz_info_importer.get_args();
-    tz_info_importer.connect_server();
-    if False == tz_info_importer.upgrade_mode:
-        tz_info_importer.generate_sql();
-        tz_info_importer.execute_sql();
-        tz_info_importer.check_result();
+    tz_info_importer = TimeZoneInfoImporter()
+    tz_info_importer.get_args()
+    try:
+	tz_info_importer.connect_server()
+	if False == tz_info_importer.upgrade_mode:
+	    tz_info_importer.generate_sql()
+	    tz_info_importer.execute_sql()
+	    tz_info_importer.check_result()
+    except:
+	print("except error in main")
 
 if __name__ == "__main__":
     main()
