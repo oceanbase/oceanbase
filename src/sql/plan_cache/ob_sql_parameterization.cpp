@@ -674,6 +674,12 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
       } //if is_fast_parse_const end
     }
 
+    // sql with charset need not ps parameterize
+    if (OB_SUCC(ret) && T_QUESTIONMARK == ctx.tree_->type_ && OB_NOT_NULL(ctx.tree_->children_)
+        && OB_NOT_NULL(ctx.tree_->children_[0]) && ctx.tree_->children_[0]->type_ == T_CHARSET) {
+      ctx.sql_info_->ps_need_parameterized_ = false;
+    }
+
     //判断insert中values()在tree中的哪一层，当某结点value_father_level_处于VALUE_VECTOR_LEVEL时,
     //便可通过判断该节点的num_child_数是否为0,来判断values中的项是否为复杂表达式；
     if (OB_SUCC(ret)) {
