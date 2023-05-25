@@ -308,6 +308,9 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     pl_query_sender_ = NULL;
     pl_ps_protocol_ = false;
     if (pl_cursor_cache_.is_inited()) {
+      // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+      // so we need get_thread_data_lock there
+      ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
       pl_cursor_cache_.reset();
     }
     inner_conn_ = NULL;
@@ -1294,16 +1297,21 @@ int ObSQLSessionInfo::add_cursor(pl::ObPLCursorInfo *cursor)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.set_refactored(id, cursor))) {
-      LOG_WARN("fail insert ps id to hash map", K(id), K(*cursor), K(ret));
     } else {
-      cursor->set_id(id);
-      add_cursor_success = true;
-      if (lib::is_diagnose_info_enabled()) {
-        EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
-        EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+      // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+      // so we need get_thread_data_lock there
+      ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
+      if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.set_refactored(id, cursor))) {
+        LOG_WARN("fail insert ps id to hash map", K(id), K(*cursor), K(ret));
+      } else {
+        cursor->set_id(id);
+        add_cursor_success = true;
+        if (lib::is_diagnose_info_enabled()) {
+          EVENT_INC(SQL_OPEN_CURSORS_CURRENT);
+          EVENT_INC(SQL_OPEN_CURSORS_CUMULATIVE);
+        }
+        LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
       }
-      LOG_DEBUG("ps cursor: add cursor", K(ret), K(id), K(get_sessid()));
     }
   }
   if (!add_cursor_success && OB_NOT_NULL(cursor)) {
@@ -1338,6 +1346,9 @@ int ObSQLSessionInfo::close_cursor(int64_t cursor_id)
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   LOG_INFO("ps cursor : remove cursor", K(ret), K(cursor_id), K(get_sessid()));
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   if (OB_FAIL(pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor))) {
     LOG_WARN("cursor info not exist", K(cursor_id));
   } else if (OB_ISNULL(cursor)) {
@@ -1390,6 +1401,9 @@ int ObSQLSessionInfo::init_cursor_cache()
 {
   int ret = OB_SUCCESS;
   if (!pl_cursor_cache_.is_inited()) {
+    // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+    // so we need get_thread_data_lock there
+    ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
     OZ (pl_cursor_cache_.init(get_effective_tenant_id()),
                               get_effective_tenant_id(),
                               get_proxy_sessid(),
@@ -1403,6 +1417,9 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   LOG_INFO("remove dbms cursor", K(ret), K(cursor_id), K(get_sessid()));
+  // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
+  // so we need get_thread_data_lock there
+  ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   OZ (pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor), cursor_id);
   OV (OB_NOT_NULL(cursor), OB_ERR_UNEXPECTED, cursor_id);
   if (OB_SUCC(ret) && lib::is_diagnose_info_enabled()) {
