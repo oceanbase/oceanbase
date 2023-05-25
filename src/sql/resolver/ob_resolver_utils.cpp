@@ -1982,7 +1982,8 @@ int ObResolverUtils::resolve_stmt_type(const ParseResult &result, stmt::StmtType
   return ret;
 }
 
-int ObResolverUtils::set_string_val_charset(ObObjParam &val, ObString &charset, ObObj &result_val,
+int ObResolverUtils::set_string_val_charset(ObIAllocator &allocator,
+                                            ObObjParam &val, ObString &charset, ObObj &result_val,
                                             bool is_strict_mode,
                                             bool return_ret)
 {
@@ -2000,6 +2001,24 @@ int ObResolverUtils::set_string_val_charset(ObObjParam &val, ObString &charset, 
           val.get_string_ptr(),
           val.get_string_len()));
     val.set_length(length);
+
+    //pad 0 front.
+    const ObCharsetInfo *cs = ObCharset::get_charset(collation_type);
+    if (OB_ISNULL(cs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else if (cs->mbminlen > 0 && val.get_string_len() % cs->mbminlen != 0) {
+      int64_t align_offset = cs->mbminlen - val.get_string_len() % cs->mbminlen;
+      char *buf = NULL;
+      if (OB_UNLIKELY(NULL == (buf = static_cast<char*>(allocator.alloc(val.get_string_len() + align_offset))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        MEMSET(buf, 0, align_offset);
+        MEMCPY(buf + align_offset, val.get_string_ptr(), val.get_string_len());
+        val.set_string(val.get_type(), buf, static_cast<int32_t>(val.get_string_len() + align_offset));
+      }
+    }
 
     // 为了跟mysql报错一样，这里检查一下字符串是否合法，仅仅是检查，不合法则报错，不做其他操作
     // check_well_formed_str的ret_error参数为true的时候，is_strict_mode参数失效，因此这里is_strict_mode直接传入true
@@ -2092,7 +2111,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
           // for STRING without collation, e.g. show tables like STRING;
           if (lib::is_mysql_mode() && is_nchar) {
             ObString charset(strlen("utf8mb4"), "utf8mb4");
-            if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+            if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false))) {
               LOG_WARN("set string val charset failed", K(ret));
             }
           } else {
@@ -2112,7 +2131,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             ObCollationType collation_type = CS_TYPE_INVALID;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+              if (OB_FAIL(set_string_val_charset(allocator, val, charset, result_val, false, false))) {
                 LOG_WARN("set string val charset failed", K(ret));
               }
             }
