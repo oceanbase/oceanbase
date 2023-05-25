@@ -9982,6 +9982,8 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(params_.session_info_), K(params_.allocator_));
   } else {
+    bool is_temp_table_clean = params_.session_info_->is_inner() && OB_NOT_NULL(table_schema)
+            && table_schema->is_oracle_tmp_table();
     for (ObTableSchema::const_constraint_iterator iter = table_schema->constraint_begin(); OB_SUCC(ret) &&
          iter != table_schema->constraint_end(); iter ++) {
       ObRawExpr *check_constraint_expr = NULL;
@@ -9992,7 +9994,7 @@ int ObDMLResolver::generate_check_constraint_exprs(const TableItem *table_item,
         continue;
       } else if (!(*iter)->get_enable_flag() &&
                  (*iter)->is_validated() &&
-                 !resolve_check_for_optimizer) {
+                 !resolve_check_for_optimizer && !is_temp_table_clean) {
         const ObSimpleDatabaseSchema *database_schema = NULL;
         if (OB_ISNULL(params_.schema_checker_->get_schema_guard())) {
           ret = OB_ERR_UNEXPECTED;
