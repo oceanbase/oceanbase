@@ -961,6 +961,8 @@ ObTableLocation& ObTableLocation::operator=(const ObTableLocation& other)
     is_valid_range_columns_part_range_ = other.is_valid_range_columns_part_range_;
     is_valid_range_columns_subpart_range_ = other.is_valid_range_columns_subpart_range_;
     report_err_for_pruned_partition_not_exist_ = other.report_err_for_pruned_partition_not_exist_;
+    is_valid_temporal_part_range_ = other.is_valid_temporal_part_range_;
+    is_valid_temporal_subpart_range_ = other.is_valid_temporal_subpart_range_;
     params_ = other.params_;
     for (int64_t i = 0; OB_SUCC(ret) && i < other.list_part_array_.count(); i++) {
       ObListPartMapValue value;
@@ -1189,6 +1191,8 @@ void ObTableLocation::reset()
   part_expr_param_idxs_.reset();
   is_valid_range_columns_part_range_ = false;
   is_valid_range_columns_subpart_range_ = false;
+  is_valid_temporal_part_range_ = false;
+  is_valid_temporal_subpart_range_ = false;
   params_ = NULL;
 }
 
@@ -1255,6 +1259,8 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
     } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_ &&
                OB_FAIL(can_get_part_by_range_for_range_columns(part_raw_expr, is_valid_range_columns_part_range_))) {
       LOG_WARN("failed ot check can get part by range for range columns", K(ret));
+    } else if (OB_FAIL(can_get_part_by_range_for_temporal_column(part_raw_expr, is_valid_temporal_part_range_))) {
+      LOG_WARN("failed to check can get part by range for temporal column", K(ret));
     } else if (FALSE_IT(is_col_part_expr_ = part_raw_expr->is_column_ref_expr())) {
       // never reach
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
@@ -1286,6 +1292,8 @@ int ObTableLocation::init_table_location(ObSqlSchemaGuard& schema_guard, uint64_
                OB_FAIL(
                    can_get_part_by_range_for_range_columns(subpart_raw_expr, is_valid_range_columns_subpart_range_))) {
       LOG_WARN("failed to check can get part by range for range columns", K(ret));
+    } else if (OB_FAIL(can_get_part_by_range_for_temporal_column(subpart_raw_expr, is_valid_temporal_subpart_range_))) {
+      LOG_WARN("failed to check can get part by range for temporal column", K(ret));
     } else if (OB_FAIL(ObExprGeneratorImpl::gen_expression_with_row_desc(
                    sql_expression_factory_, expr_op_factory_, loc_row_desc, subpart_raw_expr, subpart_expr_))) {
       LOG_WARN("gen expression with row desc failed", K(ret));
@@ -3107,6 +3115,12 @@ int ObTableLocation::get_partition_column_info(ObDMLStmt& stmt, const ObPartitio
              OB_FAIL(
                  can_get_part_by_range_for_range_columns(partition_raw_expr, is_valid_range_columns_subpart_range_))) {
     LOG_WARN("failed ot check can get part by range for range columns", K(ret));
+  } else if (PARTITION_LEVEL_ONE == part_level &&
+             OB_FAIL(can_get_part_by_range_for_temporal_column(partition_raw_expr, is_valid_temporal_part_range_))) {
+    LOG_WARN("failed ot check can get part by range for range columns", K(ret));
+  } else if (PARTITION_LEVEL_TWO == part_level &&
+             OB_FAIL(can_get_part_by_range_for_temporal_column(partition_raw_expr, is_valid_temporal_subpart_range_))) {
+    LOG_WARN("failed ot check can get part by range for range columns", K(ret));
   } else if (FALSE_IT(is_col_part_expr = partition_raw_expr->is_column_ref_expr())) {
   } else if (OB_FAIL(row_desc.init())) {
     LOG_WARN("Failed to init row desc", K(ret));
@@ -3900,18 +3914,26 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext& exec_ctx, commo
 {
   int ret = OB_SUCCESS;
   bool get_part_by_range = false;
+  bool need_calc_new_range = false;
   all_part = false;
+  ObSEArray<ObNewRange *, 1> new_ranges;
+  ObArenaAllocator allocator_for_range(CURRENT_CONTEXT->get_malloc_allocator());
   if (OB_ISNULL(part_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Part mgr should not be NULL", K(ret));
   } else if (NULL != gen_col_expr) {
     get_part_by_range = false;
+    need_calc_new_range = false;
     all_part = !is_all_single_value_ranges;
   } else if (NULL == part_ids) {  // PARTITION_LEVEL_ONE
     if (!is_range_part(part_type_) || (PARTITION_FUNC_TYPE_RANGE == part_type_ && !is_col_part_expr_) ||
         (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type_ && !is_valid_range_columns_part_range_)) {
       if (!is_all_single_value_ranges) {
-        all_part = true;
+        if (is_valid_temporal_part_range_) {
+          need_calc_new_range = true;
+        } else {
+          all_part = true;
+        }
       }
     } else {
       get_part_by_range = true;
@@ -3920,10 +3942,28 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext& exec_ctx, commo
     if (!is_range_part(subpart_type_) || (PARTITION_FUNC_TYPE_RANGE == subpart_type_ && !is_col_subpart_expr_) ||
         (PARTITION_FUNC_TYPE_RANGE_COLUMNS == subpart_type_ && !is_valid_range_columns_subpart_range_)) {
       if (!is_all_single_value_ranges) {
-        all_part = true;
+        if (is_valid_temporal_subpart_range_) {
+          need_calc_new_range = true;
+        } else {
+          all_part = true;
+        }
       }
     } else {
       get_part_by_range = true;
+    }
+  }
+  // if the part_key/subpart_key is in the form like year(datetime), the non-single-value range
+  // may be used to prune partition after calc by part_expr
+  if (OB_SUCC(ret) && need_calc_new_range) {
+    bool is_all_single_value_new_ranges = false;
+    if (OB_FAIL(calc_range_by_part_expr(
+            exec_ctx, ranges, part_ids, allocator_for_range, new_ranges, is_all_single_value_new_ranges))) {
+      LOG_WARN("fail to calc range by part expr", K(ret));
+    } else if ((NULL == part_ids && PARTITION_FUNC_TYPE_RANGE == part_type_) ||
+               (NULL != part_ids && PARTITION_FUNC_TYPE_RANGE == subpart_type_)) {
+      get_part_by_range = true;
+    } else if (!is_all_single_value_new_ranges) {
+      all_part = true;
     }
   }
 
@@ -3932,6 +3972,8 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext& exec_ctx, commo
       if (part_ids != NULL && use_range_part_opt_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("use range part opt with partition level two", K(ret));
+      } else if (need_calc_new_range) {
+        OZ(get_part_ids_by_ranges(part_mgr, new_ranges, partition_ids, part_ids));
       } else if (use_range_part_opt_ && 1 == ranges.count() && ranges.at(0)->is_single_rowkey()) {
         bool insert_or_replace = is_simple_insert_or_replace();
         if (OB_FAIL(get_range_part(ranges.at(0), insert_or_replace, partition_ids))) {
@@ -5780,6 +5822,115 @@ int ObTableLocation::recursive_convert_generated_column(
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       if (OB_FAIL(recursive_convert_generated_column(table_column, column_conv_exprs, expr->get_param_expr(i)))) {
         LOG_WARN("failed to recursive convert generated column", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLocation::can_get_part_by_range_for_temporal_column(const ObRawExpr *part_expr, bool &is_valid) const
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  if (OB_ISNULL(part_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    // do nothing
+  } else {
+    switch (part_expr->get_expr_type()) {
+      case T_FUN_SYS_TO_DAYS:
+      case T_FUN_SYS_TO_SECONDS:
+      case T_FUN_SYS_YEAR: {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
+          const ObRawExpr *sub_expr = part_expr->get_param_expr(i);
+          const ObRawExpr *real_sub_expr = NULL;
+          if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(true, sub_expr, real_sub_expr))) {
+            LOG_WARN("fail to get real expr", K(ret));
+          } else if (real_sub_expr->is_column_ref_expr() &&
+                     (ObDateType == real_sub_expr->get_result_type().get_type() ||
+                         ObDateTimeType == real_sub_expr->get_result_type().get_type())) {
+            is_valid = true;
+          }
+        }
+        break;
+      }
+      case T_FUN_SYS_UNIX_TIMESTAMP: {
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
+          const ObRawExpr *sub_expr = part_expr->get_param_expr(i);
+          const ObRawExpr *real_sub_expr = NULL;
+          if (OB_FAIL(ObRawExprUtils::get_real_expr_without_cast(true, sub_expr, real_sub_expr))) {
+            LOG_WARN("fail to get real expr", K(ret));
+          } else if (real_sub_expr->is_column_ref_expr() &&
+                     ObTimestampType == real_sub_expr->get_result_type().get_type()) {
+            is_valid = true;
+          }
+        }
+        break;
+      }
+      default: {
+        is_valid = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLocation::calc_range_by_part_expr(ObExecContext &exec_ctx, const ObIArray<ObNewRange *> &ranges,
+    const ObIArray<int64_t> *part_ids, ObIAllocator &allocator, ObIArray<ObNewRange *> &new_ranges,
+    bool &is_all_single_value_ranges) const
+{
+  int ret = OB_SUCCESS;
+  ObExprCtx expr_ctx;
+  ObSqlExpression *expr = NULL == part_ids ? part_expr_ : subpart_expr_;
+  is_all_single_value_ranges = true;
+  if (OB_FAIL(ObSQLUtils::wrap_expr_ctx(stmt_type_, exec_ctx, allocator, expr_ctx))) {
+    LOG_WARN("Failed to wrap expr ctx", K(ret));
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr should not be NULL", K(ret));
+  }
+  for (int64 i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
+    ObNewRange *range = ranges.at(i);
+    ObNewRange *new_range = NULL;
+    if (OB_ISNULL(range)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid range", K(ret));
+    } else if (OB_ISNULL(new_range = static_cast<ObNewRange *>(allocator.alloc(sizeof(ObNewRange))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("alloc memory failed", K(ret));
+    } else {
+      new (new_range) ObNewRange();
+      new_range->table_id_ = range->table_id_;
+      // the range after calc is always close even though the original range is open
+      new_range->border_flag_.set_inclusive_start();
+      new_range->border_flag_.set_inclusive_end();
+      if (range->start_key_.is_min_row()) {
+        new_range->start_key_.set_min_row();
+      } else {
+        ObNewRow input_row;
+        ObObj *func_result = NULL;
+        input_row.cells_ = const_cast<ObObj *>(range->start_key_.get_obj_ptr());
+        input_row.count_ = (range->start_key_.get_obj_cnt());
+        OV(OB_NOT_NULL(func_result = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj)))), OB_ALLOCATE_MEMORY_FAILED);
+        OZ(expr->calc(expr_ctx, input_row, *func_result), input_row, table_id_);
+        OX(new_range->start_key_.assign(func_result, 1));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (range->end_key_.is_max_row()) {
+        new_range->end_key_.set_max_row();
+      } else {
+        ObNewRow input_row;
+        ObObj *func_result = NULL;
+        input_row.cells_ = const_cast<ObObj *>(range->end_key_.get_obj_ptr());
+        input_row.count_ = (range->end_key_.get_obj_cnt());
+        OV(OB_NOT_NULL(func_result = static_cast<ObObj *>(allocator.alloc(sizeof(ObObj)))), OB_ALLOCATE_MEMORY_FAILED);
+        OZ(expr->calc(expr_ctx, input_row, *func_result), input_row, table_id_);
+        OX(new_range->end_key_.assign(func_result, 1));
+      }
+      OZ(new_ranges.push_back(new_range));
+      if (OB_SUCC(ret) && is_all_single_value_ranges) {
+        is_all_single_value_ranges = is_all_single_value_ranges && new_range->is_single_rowkey();
       }
     }
   }
