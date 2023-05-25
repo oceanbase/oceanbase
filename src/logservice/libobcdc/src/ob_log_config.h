@@ -410,6 +410,9 @@ public:
   // enable test_mode_switch_fetch_mode to test whether cdc service can fetch log correctly when switching fetch mode
   T_DEF_BOOL(test_mode_switch_fetch_mode, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
+  // simulate fetch missing error when fetching missing log for the first time
+  T_DEF_BOOL(test_fetch_missing_errsim, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
   // Whether check tenant status for each schema request with tenant_id under test mode, default disabled
   T_DEF_BOOL(test_mode_force_check_tenant_status, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 

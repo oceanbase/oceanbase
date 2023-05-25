@@ -296,6 +296,7 @@ if (! mem_storage_.is_inited()) {
 void LSFetchCtx::reset_memory_storage()
 {
   mem_storage_.destroy();
+  LOG_DEBUG("reset memory storage", KPC(this));
 }
 
 int LSFetchCtx::get_next_group_entry(palf::LogGroupEntry &group_entry, palf::LSN &lsn)
