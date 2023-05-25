@@ -92,13 +92,15 @@ private:
       store_column_idxs_; // Mapping of stored columns to source data columns
   };
 
-  struct LoadExecuteContext : public observer::ObTableLoadExecCtx
+  struct LoadExecuteContext
   {
   public:
     LoadExecuteContext();
     bool is_valid() const;
-    TO_STRING_KV(KP_(exec_ctx), KP_(allocator), KP_(direct_loader), KP_(job_stat), KP_(logger));
+    TO_STRING_KV(K_(exec_ctx), KP_(allocator), KP_(direct_loader), KP_(job_stat), KP_(logger));
   public:
+    observer::ObTableLoadSqlExecCtx exec_ctx_;
+    common::ObIAllocator *allocator_;
     observer::ObTableLoadInstance *direct_loader_;
     sql::ObLoadDataStat *job_stat_;
     Logger *logger_;

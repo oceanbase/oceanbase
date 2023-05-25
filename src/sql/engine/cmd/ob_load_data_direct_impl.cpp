@@ -76,7 +76,8 @@ bool ObLoadDataDirectImpl::LoadExecuteParam::is_valid() const
  */
 
 ObLoadDataDirectImpl::LoadExecuteContext::LoadExecuteContext()
-  : direct_loader_(nullptr),
+  : allocator_(nullptr),
+    direct_loader_(nullptr),
     job_stat_(nullptr),
     logger_(nullptr)
 {
@@ -84,8 +85,8 @@ ObLoadDataDirectImpl::LoadExecuteContext::LoadExecuteContext()
 
 bool ObLoadDataDirectImpl::LoadExecuteContext::is_valid() const
 {
-  return nullptr != exec_ctx_ && nullptr != allocator_ && nullptr != direct_loader_ &&
-         nullptr != job_stat_ && nullptr != logger_;
+  return exec_ctx_.is_valid() && nullptr != direct_loader_ && nullptr != job_stat_ &&
+         nullptr != logger_;
 }
 
 /**
@@ -1126,7 +1127,7 @@ int ObLoadDataDirectImpl::FileLoadExecutor::execute()
       LOG_WARN("fail to prepare execute", KR(ret));
     }
 
-    while (OB_SUCC(ret) && OB_SUCC(execute_ctx_->check_status())) {
+    while (OB_SUCC(ret) && OB_SUCC(execute_ctx_->exec_ctx_.check_status())) {
       TaskHandle *handle = nullptr;
       if (OB_FAIL(get_next_task_handle(handle))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1618,7 +1619,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
       }
     }
   }
-  while (OB_SUCC(ret) && OB_SUCC(execute_ctx_->check_status())) {
+  while (OB_SUCC(ret) && OB_SUCC(execute_ctx_->exec_ctx_.check_status())) {
     if (OB_FAIL(handle_->data_buffer_.squash())) {
       LOG_WARN("fail to squash data buffer", KR(ret));
     } else if (OB_FAIL(data_reader_.get_next_raw_buffer(handle_->data_buffer_))) {
@@ -1880,7 +1881,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     if (OB_FAIL(direct_loader_.commit(result_info))) {
       LOG_WARN("fail to commit direct loader", KR(ret));
     } else {
-      ObPhysicalPlanCtx *phy_plan_ctx = execute_ctx_.exec_ctx_->get_physical_plan_ctx();
+      ObPhysicalPlanCtx *phy_plan_ctx = ctx.get_physical_plan_ctx();
       phy_plan_ctx->set_affected_rows(result_info.rows_affected_);
       phy_plan_ctx->set_row_matched_count(total_line_count);
       phy_plan_ctx->set_row_deleted_count(result_info.deleted_);
@@ -2078,7 +2079,7 @@ int ObLoadDataDirectImpl::init_store_column_idxs(ObIArray<int64_t> &store_column
 int ObLoadDataDirectImpl::init_execute_context()
 {
   int ret = OB_SUCCESS;
-  execute_ctx_.exec_ctx_ = ctx_;
+  execute_ctx_.exec_ctx_.exec_ctx_ = ctx_;
   execute_ctx_.allocator_ = &ctx_->get_allocator();
   ObTableLoadParam load_param;
   load_param.tenant_id_ = execute_param_.tenant_id_;
@@ -2094,8 +2095,8 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
-  if (OB_FAIL(direct_loader_.init(load_param,
-      execute_param_.store_column_idxs_, &execute_ctx_))) {
+  if (OB_FAIL(direct_loader_.init(load_param, execute_param_.store_column_idxs_,
+                                  &execute_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));
   } else if (OB_FAIL(init_logger())) {
     LOG_WARN("fail to init logger", KR(ret));

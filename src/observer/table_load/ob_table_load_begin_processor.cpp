@@ -221,8 +221,11 @@ int ObTableLoadBeginP::create_table_ctx(const ObTableLoadParam &param,
       LOG_WARN("fail to alloc table ctx", KR(ret), K(param));
     } else if (OB_FAIL(table_ctx->init(param, ddl_param, &session_info))) {
       LOG_WARN("fail to init table ctx", KR(ret));
+    } else if (OB_FAIL(table_ctx->init_client_exec_ctx())) {
+      LOG_WARN("fail to init client exec ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadCoordinator::init_ctx(table_ctx, idx_array_,
-                                                        session_info.get_priv_user_id()))) {
+                                                        session_info.get_priv_user_id(),
+                                                        table_ctx->client_exec_ctx_))) {
       LOG_WARN("fail to coordinator init ctx", KR(ret));
     } else if (OB_FAIL(ObTableLoadService::add_ctx(table_ctx))) {
       LOG_WARN("fail to add ctx", KR(ret));
