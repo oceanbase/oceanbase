@@ -711,6 +711,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_when_no_leader)
 TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_upgrade_when_no_leader");
+//  OB_LOGGER.set_log_level("TRACE");
   MockLocCB loc_cb;
   int ret = OB_SUCCESS;
   PALF_LOG(INFO, "begin test_2f1a_upgrade_when_no_leader");
@@ -762,7 +763,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
     sleep(1);
   }
   // waiting for upgrading
-  is_upgraded(leader, another_f_idx);
+  is_upgraded(leader, id);
 
   revert_cluster_palf_handle_guard(palf_list);
   leader.reset();
