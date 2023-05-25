@@ -192,7 +192,9 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_SESSION_VAR_SYNC:            1;
     uint64_t OB_CAP_PROXY_WEAK_STALE_FEEDBACK:         1;
     uint64_t OB_CAP_PROXY_FULL_LINK_TRACING_EXT:       1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 45;
+    // duplicate session_info sync of transaction type
+    uint64_t OB_CAP_SERVER_DUP_SESS_INFO_SYNC:         1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 44;
   } cap_flags_;
 };
 

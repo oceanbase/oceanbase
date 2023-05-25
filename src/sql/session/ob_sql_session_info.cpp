@@ -201,6 +201,7 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   static const int64_t PS_BUCKET_NUM = 64;
   if (OB_FAIL(ObBasicSessionInfo::init(sessid, proxy_sessid, bucket_allocator, tz_info))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(package_state_map_.create(hash::cal_next_prime(4),
                                                "PackStateMap",
@@ -243,6 +244,7 @@ int ObSQLSessionInfo::test_init(uint32_t version, uint32_t sessid, uint64_t prox
   UNUSED(version);
   if (OB_FAIL(ObBasicSessionInfo::test_init(sessid, proxy_sessid, bucket_allocator))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else {
     is_inited_ = true;
   }
