@@ -180,7 +180,7 @@ int ObMPUtils::sync_session_info(sql::ObSQLSessionInfo &sess, const common::ObSt
     }
     // phase 2: handle txn relative types in order
     if (OB_SUCC(ret) && has_txn_type) {
-      for(int info_type = min; info_type <= max; info_type++) {
+      for(int info_type = min; OB_SUCC(ret) && info_type <= max; info_type++) {
         auto &info = txn_type_infos[info_type - min];
         if (info.has) {
           if (OB_FAIL(sess.update_sess_sync_info((sql::SessionSyncInfoType)info_type, buf, info.pos + info.len, info.pos))) {

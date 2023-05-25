@@ -16,16 +16,26 @@ namespace transaction {
 class ObTxDesc;
 union ObTxnFreeRouteFlag {
   int8_t v_;
-  struct {
-    // it is terminated (committed or rollbacked)
-    bool is_tx_terminated_ : 1;
-    // it is fallbacked to fixed route
-    bool is_fallback_ : 1;
+  static const int TX_TERMINATED_OFFSET = 0;
+  static const int FALLBACK_OFFSET = 1;
+  static const int IDLE_RELEASED_OFFSET = 2;
+  static const int STATE_MASK = ~(1 << 7);
+  static const int WITH_VERSION_OFFSET = 7;
+  // it is terminated (committed or rollbacked)
+  bool is_tx_terminated() const { return (v_ & (1 << TX_TERMINATED_OFFSET)) != 0; }
+  void set_tx_terminated() { v_ |= (1 << TX_TERMINATED_OFFSET); }
+  // it is fallbacked to fixed route
+  bool is_fallback() const { return (v_ & (1 << FALLBACK_OFFSET)) !=0; }
+  void set_fallback() { v_ |= (1 << FALLBACK_OFFSET); }
     // it is released during session idle, by doing check alive
-    bool is_idle_released_ : 1;
-  };
-  bool is_return_normal_state() const { return v_ == 0; }
-  TO_STRING_KV(K_(is_tx_terminated), K_(is_fallback), K_(is_idle_released));
+  bool is_idle_released() const { return (v_ & (1 << IDLE_RELEASED_OFFSET)) !=0; }
+  void set_idle_released() { v_ |= (1 << IDLE_RELEASED_OFFSET); }
+    // identify new Pkt format : Header part has version
+  bool is_with_version() const { return (v_ & (1 << WITH_VERSION_OFFSET)) !=0; }
+  void set_with_version(bool b) { if (b) { v_ |= (1 << WITH_VERSION_OFFSET); } else { v_ &= ~(1 << WITH_VERSION_OFFSET); } }
+  bool is_return_normal_state() const { return  (v_ & STATE_MASK) == 0; }
+  void reset() { v_ = 0; }
+  TO_STRING_KV(K_(v));
 };
 
 union ObTxnFreeRouteAuditRecord
@@ -66,6 +76,10 @@ union ObTxnFreeRouteAuditRecord
   };
 };
 
+enum TxnFreeRouteState {
+  STATIC = 0, DYNAMIC = 1, PARTICIPANT = 2, EXTRA = 3, _CNT_VAL = 4
+};
+
 struct ObTxnFreeRouteCtx {
   friend class ObTransService;
   ObTxnFreeRouteCtx() { reset(); }
@@ -82,9 +96,11 @@ struct ObTxnFreeRouteCtx {
     in_txn_before_handle_request_ = false;
     can_free_route_ = false;
     is_fallbacked_ = false;
+    MEMSET(state_sync_infos_, 0, sizeof(state_sync_infos_));
     reset_changed_();
     audit_record_.reset();
   }
+  void set_sessid(const uint32_t sessid) { session_id_ = sessid; }
   void init_before_update_state(bool proxy_support);
   void init_before_handle_request(ObTxDesc *txdesc);
   bool is_temp(const ObTxDesc &tx) const;
@@ -94,21 +110,42 @@ struct ObTxnFreeRouteCtx {
   bool is_dynamic_changed() const { return dynamic_changed_; }
   bool is_parts_changed() const { return parts_changed_; }
   bool is_extra_changed() const { return extra_changed_; }
-  void set_idle_released() { flag_.is_idle_released_ = true; }
-  bool is_idle_released() const { return flag_.is_idle_released_; }
+  void set_idle_released() { flag_.set_idle_released(); }
+  bool is_idle_released() const { return flag_.is_idle_released(); }
   bool has_calculated() const { return calculated_; }
   void set_calculated() { calculated_ = true; }
   int64_t get_local_version() const { return local_version_; }
   int64_t get_global_version() const { return global_version_; }
+  void inc_update_global_version(const int64_t v) { if (global_version_ < v) { global_version_ = v; } }
   void inc_global_version() { ++global_version_; }
   void reset_audit_record() { audit_record_.reset(); }
+  const ObTransID &get_prev_tx_id() const { return prev_tx_id_; }
+  const ObTransID &get_tx_id() const { return tx_id_; }
+  const ObTxnFreeRouteFlag &get_flag() const { return flag_; }
+  uint32_t get_session_id() const { return session_id_; }
   uint64_t get_audit_record() const { return audit_record_.v_; }
+  int state_update_verify_by_version(const TxnFreeRouteState state,
+                                     const int64_t version,
+                                     const uint32_t backend_sess_id,
+                                     bool &dup) const;
+  void update_last_synced_state(const TxnFreeRouteState state, uint32_t backend_sess_id, const int64_t version)
+  {
+    state_sync_infos_[state].last_backend_sess_id_ = backend_sess_id;
+    state_sync_infos_[state].last_version_ = version;
+    inc_update_global_version(version);
+    if (TxnFreeRouteState::STATIC == state) {
+      is_txn_switch_ = true;
+      global_version_water_mark_ = version;
+    }
+  }
 private:
   void reset_changed_() {
     _changed_ = false;
-    flag_.v_ = 0;
+    flag_.reset();
     calculated_ = false;
   }
+  // the session this ctx belongs to
+  uint32_t session_id_;
   // the local_version updated when session handle a request
   // from proxy which caused txn state synced
   // it is used as request id for checkAlive request
@@ -119,8 +156,7 @@ private:
   // when they update txn state and propagated in txn state
   // sync via OBProxy
   int64_t global_version_;
-  // used to mark the safe global version and verify the
-  // update's version in order to discover stale or dup
+  // the txn left boundary version, it's updated when txn started
   int64_t global_version_water_mark_;
   // remember txn is switched by sync 'static' state
   bool is_txn_switch_;
@@ -158,7 +194,13 @@ private:
   //   reset pre handle request
   //   setup post handle request, remember fallback decision
   bool is_fallbacked_;
-
+  // record each state's synced info, used to reject stale and duplicate sync
+  struct StateSyncInfo {
+    StateSyncInfo(): last_backend_sess_id_(0), last_version_(0) {}
+    uint32_t last_backend_sess_id_;
+    int64_t last_version_;
+    TO_STRING_KV(K_(last_backend_sess_id), K_(last_version));
+  } state_sync_infos_[TxnFreeRouteState::_CNT_VAL];
   // following are changed after request process
   // used to mark state changed and special state
   // need to return to proxy
@@ -180,6 +222,19 @@ private:
   // reset before handle request
   ObTxnFreeRouteFlag flag_;
   ObTxnFreeRouteAuditRecord audit_record_;
+private:
+  template<typename T, int N>
+  struct _ForRawArrayDisplay {
+    _ForRawArrayDisplay(const T (&a)[N]): a_(a) {}
+    const T (&a_)[N];
+    DEFINE_TO_STRING({
+        J_ARRAY_START();
+        for(int i = 0; i < N; i++) {  BUF_PRINTO(a_[i]);  J_COMMA(); }
+        J_ARRAY_END();
+    });
+  };
+  template<typename T, int N>
+  const _ForRawArrayDisplay<T, N> for_display_(const T (&a)[N]) const { return _ForRawArrayDisplay<T, N>(a); }
 public:
   TO_STRING_KV(K_(tx_id),
                K_(txn_addr),
@@ -196,6 +251,7 @@ public:
                K_(local_version),
                K_(global_version),
                K_(global_version_water_mark),
+               "state_sync_infos", for_display_(state_sync_infos_),
                "audit_record", audit_record_.v_);
 };
 }
