@@ -520,10 +520,11 @@ int ObLogService::update_palf_options_except_disk_usage_limit_size()
       palf_opts.disk_options_.log_disk_throttling_percentage_ = tenant_config->log_disk_throttling_percentage;
       palf_opts.compress_options_.enable_transport_compress_ = tenant_config->log_transport_compress_all;
       palf_opts.compress_options_.transport_compress_func_ = compressor_type;
+      palf_opts.rebuild_replica_log_lag_threshold_ = tenant_config->_rebuild_replica_log_lag_threshold;
       if (OB_FAIL(palf_env_->update_options(palf_opts))) {
-        CLOG_LOG(WARN, "palf update_options failed", K(MTL_ID()), K(ret));
+        CLOG_LOG(WARN, "palf update_options failed", K(MTL_ID()), K(ret), K(palf_opts));
       } else {
-        CLOG_LOG(INFO, "palf update_options success", K(MTL_ID()), K(ret));
+        CLOG_LOG(INFO, "palf update_options success", K(MTL_ID()), K(ret), K(palf_opts));
       }
     }
   }

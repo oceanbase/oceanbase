@@ -174,6 +174,7 @@ public:
   virtual int create_directory(const char *base_dir) = 0;
   virtual int remove_directory(const char *base_dir) = 0;
   virtual bool check_disk_space_enough() = 0;
+  virtual int64_t get_rebuild_replica_log_lag_threshold() const = 0;
   virtual int get_io_start_time(int64_t &last_working_time) = 0;
   virtual int64_t get_tenant_id() = 0;
   // should be removed in version 4.2.0.0
@@ -238,6 +239,8 @@ public:
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
   int update_options(const PalfOptions &options);
   int get_options(PalfOptions &options);
+  int64_t get_rebuild_replica_log_lag_threshold() const
+  {return rebuild_replica_log_lag_threshold_;}
   int for_each(const common::ObFunction<int(const PalfHandle&)> &func);
   int for_each(const common::ObFunction<int(IPalfHandleImpl *ipalf_handle_impl)> &func) override final;
   common::ObILogAllocator* get_log_allocator() override final;
@@ -349,6 +352,7 @@ private:
 
   // last_palf_epoch_ is used to assign increasing epoch for each palf instance.
   int64_t last_palf_epoch_;
+  int64_t rebuild_replica_log_lag_threshold_;//for rebuild test
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;

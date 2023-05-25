@@ -1095,6 +1095,7 @@ private:
   void report_switch_learner_to_acceptor_(const common::ObMember &learner);
   void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
   // ======================= report event end =======================================
+  bool check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {
@@ -1205,6 +1206,7 @@ private:
   int64_t last_check_sync_time_us_;
   int64_t last_renew_loc_time_us_;
   int64_t last_print_in_sync_time_us_;
+  int64_t last_hook_fetch_log_time_us_;
   int64_t chaning_config_warn_time_;
   bool cached_is_in_sync_;
   bool has_higher_prio_config_change_;
@@ -1212,5 +1214,4 @@ private:
 };
 } // end namespace palf
 } // end namespace oceanbase
-
 #endif // OCEANBASE_LOGSERVICE_LOG_SERVICE_

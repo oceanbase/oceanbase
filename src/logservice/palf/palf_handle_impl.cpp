@@ -82,6 +82,7 @@ PalfHandleImpl::PalfHandleImpl()
     last_check_sync_time_us_(OB_INVALID_TIMESTAMP),
     last_renew_loc_time_us_(OB_INVALID_TIMESTAMP),
     last_print_in_sync_time_us_(OB_INVALID_TIMESTAMP),
+    last_hook_fetch_log_time_us_(OB_INVALID_TIMESTAMP),
     chaning_config_warn_time_(OB_INVALID_TIMESTAMP),
     cached_is_in_sync_(false),
     has_higher_prio_config_change_(false),
@@ -3122,6 +3123,8 @@ int PalfHandleImpl::fetch_log_from_storage_(const common::ObAddr &server,
       PALF_LOG(INFO, "the LSN between leader and non paxos member is not same, do not fetch log",
           K_(palf_id), K(fetch_start_lsn), K(prev_log_info));
     }
+  } else if (check_need_hook_fetch_log_(fetch_type, fetch_start_lsn)) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
   } else if (OB_FAIL(iterator.init(fetch_start_lsn, get_file_end_lsn, log_engine_.get_log_storage()))) {
     PALF_LOG(WARN, "PalfGroupBufferIterator init failed", K(ret), K_(palf_id));
   } else {
@@ -4595,6 +4598,24 @@ void PalfHandleImpl::report_switch_acceptor_to_learner_(const common::ObMember &
   replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL, replica_full_name_, sizeof(replica_full_name_));
   plugins_.record_replica_type_change_event(palf_id_, config_version, replica_full_name_, replica_readonly_name_, EXTRA_INFOS);
 }
+
+bool PalfHandleImpl::check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn)
+{
+  bool bool_ret = false;
+  const int64_t rebuild_replica_log_lag_threshold = palf_env_impl_->get_rebuild_replica_log_lag_threshold();
+  if (rebuild_replica_log_lag_threshold > 0 && (FETCH_LOG_FOLLOWER == fetch_type)) {
+    LSN max_lsn = get_max_lsn();
+    LSN base_lsn = get_base_lsn_used_for_block_gc();
+    bool_ret = (start_lsn < base_lsn) && ((max_lsn - start_lsn) > rebuild_replica_log_lag_threshold);
+
+    if (bool_ret && palf_reach_time_interval(1 * 1000 * 1000L, last_hook_fetch_log_time_us_)) {
+      PALF_LOG(INFO, "hook fetch_log because of rebuild_replica_log_lag_threshold", K(palf_id_),
+               K(rebuild_replica_log_lag_threshold), K(start_lsn), K(max_lsn), K(base_lsn));
+    }
+  }
+  return bool_ret;
+}
+
 PalfStat::PalfStat()
     : self_(),
       palf_id_(INVALID_PALF_ID),
