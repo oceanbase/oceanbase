@@ -22,6 +22,8 @@ namespace oceanbase
 {
 namespace common
 {
+static thread_local bool is_thread_in_exit = false;
+
 template <class T, size_t tag>
 class ObDITls
 {
@@ -71,6 +73,7 @@ const char* ObDITls<T, tag>::get_label() {
 template <class T, size_t tag>
 ObDITls<T, tag>::~ObDITls()
 {
+  is_thread_in_exit = true;
   if (is_valid()) {
     lib::ObDisableDiagnoseGuard disable_diagnose_guard;
     ob_delete(instance_);
@@ -82,7 +85,7 @@ template <class T, size_t tag>
 T* ObDITls<T, tag>::get_instance()
 {
   static thread_local ObDITls<T, tag> di_tls;
-  if (!di_tls.is_valid()) {
+  if (OB_LIKELY(!di_tls.is_valid() && !is_thread_in_exit)) {
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
     // add tenant
@@ -141,6 +144,7 @@ const char* ObDITls<T[N], tag>::get_label() {
 template <class T, int N, size_t tag>
 ObDITls<T[N], tag>::~ObDITls()
 {
+  is_thread_in_exit = true;
   if (is_valid()) {
     for (auto i = 0; i < N; ++i) {
       instance_[i].~T();
@@ -153,7 +157,7 @@ template <class T, int N, size_t tag>
 T* ObDITls<T[N], tag>::get_instance()
 {
   static thread_local ObDITls<T[N], tag> di_tls;
-  if (!di_tls.is_valid()) {
+  if (OB_LIKELY(!di_tls.is_valid() && !is_thread_in_exit)) {
     static const char* label = get_label();
     di_tls.instance_ = (T*)PLACE_HOLDER;
     ObMemAttr attr(OB_SERVER_TENANT_ID, label);
