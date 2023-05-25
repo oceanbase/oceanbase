@@ -232,7 +232,10 @@ int GlobalHazardVersion::delete_node(KVCacheHazardNode *node)
     COMMON_LOG(WARN, "Fail to get thread store", K(ret));
   } else {
     node->set_version(ATOMIC_FAA(&version_, 1));
-    if (OB_FAIL(ts->delete_node(*node))) {
+    if (OB_UNLIKELY(nullptr != node->get_next())) {
+      COMMON_LOG(ERROR, "Unexpected hazard next", KPC(node));
+      ob_abort();
+    } else if (OB_FAIL(ts->delete_node(*node))) {
       COMMON_LOG(WARN, "Fail to add node to threadstore", K(ret), K(*ts));
     }
   }
