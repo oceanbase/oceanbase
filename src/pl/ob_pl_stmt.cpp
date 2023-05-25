@@ -3491,6 +3491,7 @@ int ObPLInto::generate_into_variable_info(ObPLBlockNS &ns, const ObRawExpr &expr
       if (final_type.is_cursor_type() || final_type.is_opaque_type()) {
         ObDataType ext_type;
         ext_type.set_obj_type(ObExtendType);
+        ext_type.set_udt_id(final_type.get_user_type_id());
         OZ (data_type_.push_back(ext_type));
         OZ (not_null_flags_.push_back(false));
         ObPLIntegerRange range;

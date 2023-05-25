@@ -1421,6 +1421,7 @@ int ObPLResolver::resolve_sp_composite_type(const ParseNode *sp_data_type_node,
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
       record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+      ObPL::insert_error_msg(ret);
       ret = OB_SUCCESS;
       OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_,
                                    resolve_ctx_.session_info_,
@@ -2253,6 +2254,7 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
                     obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
       record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+      ObPL::insert_error_msg(ret);
       ret = OB_SUCCESS;
       CK (T_SP_ROWTYPE == sp_data_type_node->type_ || T_SP_TYPE == sp_data_type_node->type_);
       OZ (resolve_extern_type_info(T_SP_ROWTYPE == sp_data_type_node->type_,
@@ -6879,11 +6881,15 @@ int ObPLResolver::convert_cursor_actual_params(
     }
   } else if (pl_data_type.get_user_type_id() != convert_expr->get_result_type().get_udt_id()) {
     bool is_compatible = false;
-    CK (OB_NOT_NULL(current_block_));
-    OZ (check_composite_compatible(current_block_->get_namespace(),
-                                   pl_data_type.get_user_type_id(),
-                                   convert_expr->get_result_type().get_udt_id(),
-                                   is_compatible));
+    if (convert_expr->get_result_type().is_null()) {
+      is_compatible = true;
+    } else if (convert_expr->get_result_type().is_ext()) {
+      CK (OB_NOT_NULL(current_block_));
+      OZ (check_composite_compatible(current_block_->get_namespace(),
+                                     pl_data_type.get_user_type_id(),
+                                     convert_expr->get_result_type().get_udt_id(),
+                                     is_compatible));
+    }
     if (OB_SUCC(ret) && !is_compatible) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("PLS-00382: expression is of wrong type",
@@ -10186,17 +10192,21 @@ int ObPLResolver::resolve_udf_info(
       OX (package_name = package_name.empty()
           ? current_block_->get_namespace().get_package_name() : package_name);
 
+      bool is_package_body_udf
+        = package_routine_info->get_pkg_id() == current_block_->get_namespace().get_package_id()
+          && (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY == current_block_->get_namespace().get_block_type()
+              || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == current_block_->get_namespace().get_block_type()
+              || ObPLBlockNS::BlockType::BLOCK_ROUTINE == current_block_->get_namespace().get_block_type());
       OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                   package_name,
                                                   package_routine_info->get_id(),
-                                                  current_block_->get_namespace().get_package_id(),
+                                                  package_routine_info->get_pkg_id(),
                                                   package_routine_info->get_subprogram_path(),
                                                   common::OB_INVALID_VERSION, /*udf_schema_version*/
                                                   current_block_->get_namespace().get_package_version(),
                                                   package_routine_info->is_deterministic(),
                                                   package_routine_info->is_parallel_enable(),
-                                                  ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY ==
-                                                    current_block_->get_namespace().get_block_type(),
+                                                  is_package_body_udf,
                                                   false,
                                                   common::OB_INVALID_ID,
                                                   udf_info));
@@ -11632,7 +11642,8 @@ int ObPLResolver::get_names_by_access_ident(ObObjAccessIdent &access_ident,
   if (cnt <= 0) {
     // do nothing ...
   } else if (ObObjAccessIdx::IS_PKG_NS == access_idxs.at(cnt - 1).access_type_
-             || ObObjAccessIdx::IS_UDT_NS == access_idxs.at(cnt - 1).access_type_) {
+             || ObObjAccessIdx::IS_UDT_NS == access_idxs.at(cnt - 1).access_type_
+             || ObObjAccessIdx::IS_LABEL_NS == access_idxs.at(cnt - 1).access_type_) {
     package_name = access_idxs.at(cnt - 1).var_name_;
     if (cnt >= 2) {
       OV (2 == cnt, OB_ERR_UNEXPECTED, K(cnt));
@@ -11647,7 +11658,7 @@ int ObPLResolver::get_names_by_access_ident(ObObjAccessIdent &access_ident,
       resolve_ctx_.schema_guard_, access_idxs.at(cnt - 1).var_type_.get_user_type_id(), database_name, package_name));
   } else {
     ret = OB_ERR_FUNCTION_UNKNOWN;
-    LOG_WARN("unknow function invoke", K(ret));
+    LOG_WARN("unknow function invoke", K(ret), K(access_idxs), K(access_ident));
   }
   return ret;
 }
