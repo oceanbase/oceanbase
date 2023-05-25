@@ -1245,16 +1245,8 @@ int ObLogJoin::check_and_set_use_batch()
       LOG_WARN("failed to check contains limit", K(ret));
     } else if (contains_limit) {
       can_use_batch_nlj_ = false;
-    } else if (get_child(1)->is_table_scan()) {
-      ObLogTableScan *ts = NULL;
-      if (OB_ISNULL(ts = static_cast<ObLogTableScan *>(get_child(1)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid input", K(ret));
-      } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
-        // For the global index lookup, if there is a pushdown filter when scanning the index,
-        // batch cannot be used.
-        can_use_batch_nlj_ = false;
-      }
+    } else if (OB_FAIL(check_if_disable_batch(get_child(1)))) {
+      LOG_WARN("failed to check if disable batch", K(ret));
     }
   }
   // set use batch
@@ -1263,6 +1255,60 @@ int ObLogJoin::check_and_set_use_batch()
       LOG_WARN("failed to set use batch nlj", K(ret));
     }
   }
+  return ret;
+}
+
+int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!can_use_batch_nlj_) {
+    // do nothing
+  } else if (root->is_table_scan()) {
+    ObLogTableScan *ts = NULL;
+    ObLogPlan *plan = NULL;
+    ObTablePartitionInfo *info = NULL;
+    if (OB_ISNULL(ts = static_cast<ObLogTableScan *>(root)) ||
+        OB_ISNULL(plan = get_plan()) ||
+        OB_ISNULL(info = ts->get_table_partition_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input", K(ret));
+    } else if (ts->has_index_scan_filter() && ts->get_index_back() && ts->get_is_index_global()) {
+      // For the global index lookup, if there is a pushdown filter when scanning the index,
+      // batch cannot be used.
+      can_use_batch_nlj_ = false;
+    } else {
+      SMART_VAR(ObTablePartitionInfo, tmp_info) {
+        ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
+        if (OB_FAIL(plan->gen_das_table_location_info(ts, tmp_info_ptr))) {
+          LOG_WARN("failed to gen das table location info", K(ret));
+        } else {
+          if (tmp_info.get_table_location().use_das() &&
+              tmp_info.get_table_location().get_has_dynamic_exec_param()) {
+            // dynamic partition pruning, no need to check
+          } else if (10 < info->get_phy_tbl_location_info().get_phy_part_loc_info_list().count()) {
+            can_use_batch_nlj_ = false;
+          }
+        }
+      }
+    }
+  } else if (log_op_def::LOG_SUBPLAN_SCAN == root->get_type()) {
+    if (OB_FAIL(SMART_CALL(check_if_disable_batch(root->get_child(0))))) {
+      LOG_WARN("failed to check if disable batch", K(ret));
+    }
+  } else if (log_op_def::LOG_SET == root->get_type()) {
+    for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj_ && i < root->get_num_of_child(); ++i) {
+      ObLogicalOperator *child = root->get_child(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_if_disable_batch(child)))) {
+        LOG_WARN("failed to check if disable batch", K(ret));
+      }
+    }
+  } else { /* do nothing */ }
   return ret;
 }
 
