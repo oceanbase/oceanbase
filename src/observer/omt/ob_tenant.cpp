@@ -367,15 +367,16 @@ void ObResourceGroup::check_worker_count()
       ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_->id()));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
     }
-    if (OB_LIKELY(enable_dynamic_worker)) {
-      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-        const auto w = static_cast<ObThWorker*>(wnode->get_data());
-        if (w->has_set_stop()) {
-          workers_.remove(wnode);
-          destroy_worker(w);
-        } else if (w->has_req_flag() && w->is_blocking() && w->is_default_worker()) {
-          ++token;
-        }
+    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+      const auto w = static_cast<ObThWorker*>(wnode->get_data());
+      if (w->has_set_stop()) {
+        workers_.remove(wnode);
+        destroy_worker(w);
+      } else if (w->has_req_flag()
+                 && w->is_blocking()
+                 && w->is_default_worker()
+                 && enable_dynamic_worker) {
+        ++token;
       }
     }
     token = std::max(token, min_worker_cnt());
@@ -391,6 +392,7 @@ void ObResourceGroup::check_worker_count()
                && ObMallocAllocator::get_instance()->get_tenant_remain(tenant_->id()) > ObMallocAllocator::get_instance()->get_tenant_limit(tenant_->id()) * 0.05) {
       acquire_more_worker(1, succ_num);
       token_change_ts_ = now;
+      LOG_INFO("worker thread created", K(tenant_->id()), K(token_cnt_), K(token));
     }
     token_cnt_ = token;
     IGNORE_RETURN workers_lock_.unlock();
@@ -412,6 +414,7 @@ void ObResourceGroup::check_worker_count(ObThWorker &w)
           && OB_FAIL(cgroup_ctrl_->remove_self_from_cgroup(tenant_->id()))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), "tenant:", tenant_->id(), K_(group_id));
       }
+      LOG_INFO("worker thread exit", K(tenant_->id()), K(token_cnt_), K(workers_.get_size()));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
@@ -1345,16 +1348,17 @@ void ObTenant::check_worker_count()
       ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
       enable_dynamic_worker = tenant_config.is_valid() ? tenant_config->_ob_enable_dynamic_worker : true;
     }
-    if (OB_LIKELY(enable_dynamic_worker)) {
-      // assume that high priority and normal priority were busy.
-      DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
-        const auto w = static_cast<ObThWorker*>(wnode->get_data());
-        if (w->has_set_stop()) {
-          workers_.remove(wnode);
-          destroy_worker(w);
-        } else if (w->has_req_flag() && w->is_blocking() && w->is_default_worker()) {
-          ++token;
-        }
+    // assume that high priority and normal priority were busy.
+    DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
+      const auto w = static_cast<ObThWorker*>(wnode->get_data());
+      if (w->has_set_stop()) {
+        workers_.remove(wnode);
+        destroy_worker(w);
+      } else if (w->has_req_flag()
+                 && w->is_blocking()
+                 && w->is_default_worker()
+                 && enable_dynamic_worker) {
+        ++token;
       }
     }
     token = std::max(token, min_worker_cnt());
@@ -1370,6 +1374,7 @@ void ObTenant::check_worker_count()
                && ObMallocAllocator::get_instance()->get_tenant_remain(id_) > ObMallocAllocator::get_instance()->get_tenant_limit(id_) * 0.05) {
       acquire_more_worker(1, succ_num);
       token_change_ts_ = now;
+      LOG_INFO("worker thread created", K(id_), K(token_cnt_), K(token));
     }
     token_cnt_ = token;
     IGNORE_RETURN workers_lock_.unlock();
@@ -1405,6 +1410,7 @@ void ObTenant::check_worker_count(ObThWorker &w)
       if (cgroup_ctrl_.is_valid() && OB_FAIL(cgroup_ctrl_.remove_self_from_cgroup(id_))) {
         LOG_WARN("remove thread from cgroup failed", K(ret), K_(id));
       }
+      LOG_INFO("worker thread exit", K(id_), K(token_cnt_), K(workers_.get_size()));
     }
     IGNORE_RETURN workers_lock_.unlock();
   }
