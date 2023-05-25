@@ -446,7 +446,6 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_column_checksum_calculator.cpp
   compaction/ob_index_block_micro_iterator.cpp
   compaction/ob_i_compaction_filter.cpp
-  compaction/ob_merge_schedule_info.cpp
   compaction/ob_partition_merge_fuser.cpp
   compaction/ob_partition_merge_iter.cpp
   compaction/ob_partition_merge_progress.cpp
