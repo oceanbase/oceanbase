@@ -1794,6 +1794,30 @@ int ObMemtable::set_max_end_scn(const SCN scn)
   return ret;
 }
 
+// the difference from set_max_end_scn is not to check memtable range
+int ObMemtable::set_max_end_scn_to_inc_start_scn()
+{
+  int ret = OB_SUCCESS;
+  const share::SCN scn = share::SCN::scn_inc(get_start_scn());
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else {
+    SCN old_max_end_scn;
+    SCN new_max_end_scn = get_max_end_scn();
+    while ((old_max_end_scn = new_max_end_scn) < scn) {
+      if ((new_max_end_scn =
+           max_end_scn_.atomic_vcas(old_max_end_scn, scn))
+          == old_max_end_scn) {
+        new_max_end_scn = scn;
+      }
+    }
+  }
+
+  return ret;
+}
+
 bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
