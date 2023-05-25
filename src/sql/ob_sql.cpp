@@ -2800,8 +2800,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   ObStmtOraNeedPrivs stmt_ora_need_privs;
   stmt_need_privs.need_privs_.set_allocator(&allocator);
   stmt_ora_need_privs.need_privs_.set_allocator(&allocator);
-  // TODO: @linlin.xll remove ori_bl_key after eval_udf use identical sql ctx.
-  ObPlanBaseKeyGuard guard(sql_ctx.spm_ctx_.bl_key_);
+
   _LOG_DEBUG("start to generate physical plan for query.(query = %.*s)",
               parse_result.input_sql_len_, parse_result.input_sql_);
   if (OB_FAIL(sanity_check(sql_ctx))) { //check sql_ctx.session_info_ and sql_ctx.schema_guard_
