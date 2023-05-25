@@ -9578,11 +9578,9 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
                                ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  const ObRecordType *object_type = NULL;
-  CK (OB_NOT_NULL(object_type = static_cast<const ObRecordType *>(user_type)));
   uint64_t type_id = OB_INVALID_ID;
   bool is_sys_type = false;
-  OX (type_id = object_type->get_user_type_id());
+  OX (type_id = user_type->get_user_type_id());
   OX (is_sys_type = (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(type_id)));
   if (OB_SUCC(ret)) {
     ObUDFInfo &uinfo = const_cast<ObUDFInfo &>(udf_info);
@@ -9616,12 +9614,17 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     // actually, here we need to use the default construtor, that is: reolsve record construct
     // on the other side: object(a number, constructor(a number) constructor object(a varchar));
     // resolve_udf will pick the right one, we dont need to resolve record_construct.
-    bool use_default_cons = is_sys_type ? (user_type->is_opaque_type() ? false : true) : false;
-    if (OB_SUCC(ret) && !uinfo.is_udt_overload_default_cons() && !use_default_cons) {
+    bool use_buildin_default_constructor = is_sys_type ? (user_type->is_opaque_type() ? false : true) : false;
+    if (OB_SUCC(ret)
+        && !uinfo.is_udt_overload_default_cons()
+        && !is_sys_type
+        && !user_type->is_opaque_type()) { // opaque type has no member, do not check
+      const ObRecordType *object_type = NULL;
+      CK (OB_NOT_NULL(object_type = dynamic_cast<const ObRecordType *>(user_type)));
       // must have same attribute and param, exclude self param
-      if (udf_info.ref_expr_->get_param_exprs().count() -1 == object_type->get_member_count()) {
-        use_default_cons = true;
-
+      if (OB_FAIL(ret)) {
+      } else if (udf_info.ref_expr_->get_param_exprs().count() - 1 == object_type->get_member_count()) {
+        use_buildin_default_constructor = true;
 
         for (int64_t i = 1; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
           const ObRawExpr *param_expr = udf_info.ref_expr_->get_param_exprs().at(i);
@@ -9635,7 +9638,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
               (param_res_type.get_type() == pl_type->get_meta_type()->get_type())) {
                 // do nothing
             } else {
-              use_default_cons = false;
+              use_buildin_default_constructor = false;
               break;
             }
           }
@@ -9643,7 +9646,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
       }
     }
     // if cant find user define construtor, try default construct
-    if ((OB_SUCCESS == ret && use_default_cons)
+    if ((OB_SUCCESS == ret && use_buildin_default_constructor)
      || OB_ERR_SP_WRONG_ARG_NUM == ret
      || OB_ERR_FUNCTION_UNKNOWN == ret
      || OB_ERR_SP_UNDECLARED_VAR == ret
