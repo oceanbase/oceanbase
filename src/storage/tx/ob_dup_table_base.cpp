@@ -160,7 +160,7 @@ int ObDupTableLSCheckpoint::update_ckpt_after_lease_log_synced(
     if (!start_replay_scn_.is_valid()) {
       start_replay_scn_ = scn;
       DUP_TABLE_LOG(INFO, "[CKPT] replay the first dup_table log", K(ret), KPC(this), K(scn),
-                    K(for_replay));
+                    K(for_replay), K(modify_readable_sets), K(contain_all_readable));
     }
   }
 
@@ -173,7 +173,7 @@ int ObDupTableLSCheckpoint::update_ckpt_after_lease_log_synced(
 
       if (!lease_log_rec_scn_.is_valid()) {
         DUP_TABLE_LOG(INFO, "[CKPT] set rec log scn for lease", K(ret), KPC(this), K(scn),
-                      K(for_replay));
+                      K(for_replay), K(modify_readable_sets), K(contain_all_readable));
         lease_log_rec_scn_ = scn;
       }
     }
@@ -186,6 +186,8 @@ int ObDupTableLSCheckpoint::update_ckpt_after_lease_log_synced(
     } else if (!dup_ls_meta_.readable_tablets_min_base_applied_scn_.is_valid()) {
       dup_ls_meta_.readable_tablets_min_base_applied_scn_ = scn;
     }
+    DUP_TABLE_LOG(INFO, "[CKPT] modify ckpt scn for readable tablets", K(ret), KPC(this), K(scn),
+                  K(for_replay), K(modify_readable_sets), K(contain_all_readable));
   }
 
   return ret;
@@ -502,7 +504,7 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
                     K(logging_lease_addrs_));
     } else if (OB_FAIL(tablet_mgr_ptr_->tablet_log_synced(
                    true /*sync_result*/, logging_scn_, for_replay /*for_replay*/,
-                   logging_tablet_set_ids_, contain_all_readable))) {
+                   logging_tablet_set_ids_, modify_readable))) {
       DUP_TABLE_LOG(WARN, "apply tablet_log failed", K(ret), K(logging_scn_),
                     K(logging_tablet_set_ids_));
     } else if (OB_FAIL(dup_ls_ckpt_->update_ckpt_after_lease_log_synced(

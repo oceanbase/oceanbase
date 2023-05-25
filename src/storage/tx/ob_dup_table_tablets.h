@@ -628,7 +628,7 @@ public:
                         const share::SCN &scn,
                         const bool for_replay,
                         const DupTabletSetIDArray &unique_id_array,
-                        bool &merge_confirmed);
+                        bool &modify_readable_set);
 
   int try_to_confirm_tablets(const share::SCN &confirm_scn);
   // bool need_log_tablets();
@@ -764,7 +764,7 @@ private:
                              const bool construct_target_set = false,
                              const bool need_changing_new_set = false);
 
-  int check_and_recycle_empty_readable_set(DupTabletChangeMap *need_free_set);
+  int check_and_recycle_empty_readable_set(DupTabletChangeMap *need_free_set, bool &need_remove);
   int return_tablet_set(DupTabletChangeMap *need_free_set);
 
   int clean_readable_tablets_(const share::SCN & min_reserve_tablet_scn);
@@ -775,8 +775,9 @@ private:
   int clear_all_special_op_();
   int construct_clean_confirming_set_task_();
   int construct_clean_all_readable_set_task_();
-  int try_exec_special_op_(DupTabletChangeMap *op_tablet_set, const share::SCN &min_reserve_tablet_scn,const bool for_replay);
-
+  int try_exec_special_op_(DupTabletChangeMap *op_tablet_set,
+                           const share::SCN &min_reserve_tablet_scn,
+                           const bool for_replay);
   bool need_seralize_readable_set() { return true; }
 
   int cal_single_set_max_ser_size_(DupTabletChangeMap *hash_map,

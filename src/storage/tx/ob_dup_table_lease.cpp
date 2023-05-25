@@ -299,7 +299,7 @@ int ObDupTableLSLeaseMgr::lease_log_synced(const bool sync_result,
   }
 
   if (lease_header_array.count() > 0) {
-    DUP_TABLE_LOG(INFO, "lease log sync", K(ret), K(sync_result), K(for_replay), K(lease_log_scn),
+    DUP_TABLE_LOG(DEBUG, "lease log sync", K(ret), K(sync_result), K(for_replay), K(lease_log_scn),
                   K(lease_header_array), K(is_master()));
   }
   return ret;
