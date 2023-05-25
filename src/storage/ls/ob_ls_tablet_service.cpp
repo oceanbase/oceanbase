@@ -4331,18 +4331,19 @@ int ObLSTabletService::process_lob_row(
             ObLobCommon *lob_common = nullptr;
             ObLobAccessParam lob_param;
             if (OB_FAIL(new_lob.get_lob_data_byte_len(lob_param.update_len_))) {
-              LOG_WARN("fail to get new lob byte len", K(ret), K(new_lob));
+              LOG_WARN("fail to get new lob byte len", K(ret), K(new_lob), K(i));
             } else if (OB_FAIL(delete_lob_col(run_ctx, run_ctx.col_descs_->at(i), old_obj, old_sql_obj, lob_common, lob_param))) {
-              LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_sql_row), K(old_row));
+              LOG_WARN("[STORAGE_LOB]failed to erase old lob col", K(ret), K(old_sql_row), K(old_row), K(i));
             } else if (OB_FAIL(insert_lob_col(run_ctx, run_ctx.col_descs_->at(i), new_obj, &lob_param, lob_common))) {
-              LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row));
+              LOG_WARN("[STORAGE_LOB]failed to insert new lob col.", K(ret), K(new_row), K(i));
             }
           } else if (new_lob.is_delta_temp_lob()) {
             if (OB_FAIL(process_delta_lob(run_ctx, run_ctx.col_descs_->at(i), old_sql_obj, new_lob, new_obj))) {
-              LOG_WARN("failed to process delta lob.", K(ret));
+              LOG_WARN("failed to process delta lob.", K(ret), K(i));
             }
           } else {
             ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected obj for new lob", K(ret), K(i), K(new_obj), K(new_lob));
           }
         } else {
           if (old_obj.is_null()) {
@@ -4362,12 +4363,12 @@ int ObLSTabletService::process_lob_row(
               if (!lob_common->in_row_ && data_tbl_rowkey_change) {
                 if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
                   ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("not enough space for lob header", K(ret), K(val_str));
+                  LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
                 } else {
                   char *buf = reinterpret_cast<char*>(run_ctx.lob_allocator_.alloc(val_str.length()));
                   if (OB_ISNULL(buf)) {
                     ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_WARN("alloc memory failed.", K(ret), K(val_str));
+                    LOG_WARN("alloc memory failed.", K(ret), K(val_str), K(i));
                   } else {
                     MEMCPY(buf, val_str.ptr(), val_str.length());
                     lob_common = reinterpret_cast<ObLobCommon*>(buf);
