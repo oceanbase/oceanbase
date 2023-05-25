@@ -2298,8 +2298,6 @@ int ObTransService::iterate_tx_ctx_mgr_stat(ObTxCtxMgrStatIterator &tx_ctx_mgr_s
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(tx_ctx_mgr_.iterate_tx_ctx_mgr_stat(self_, tx_ctx_mgr_stat_iter))) {
     TRANS_LOG(WARN, "iterate_tx_ctx_mgr_stat error", KR(ret), K_(self));
-  } else if (OB_FAIL(tx_ctx_mgr_stat_iter.set_ready())) {
-    TRANS_LOG(WARN, "tx_ctx_mgr_stat_iter set ready error", KR(ret));
   } else {
     // do nothing
   }
@@ -2319,11 +2317,8 @@ int ObTransService::iterate_tx_lock_stat(const share::ObLSID& ls_id,
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(tx_ctx_mgr_.iterate_ls_tx_lock_stat(ls_id, tx_lock_stat_iter))) {
     TRANS_LOG(WARN, "iterate_tx_lock_stat error", KR(ret));
-  } else if (OB_FAIL(tx_lock_stat_iter.set_ready())) {
-    TRANS_LOG(WARN, "iterate_tx_lock_stat set ready error", KR(ret));
   } else {
     // do nothing
-    TRANS_LOG(INFO, "iterate_tx_lock_stat set ready succ", KR(ret));
   }
 
   return ret;
@@ -2341,8 +2336,6 @@ int ObTransService::iterate_ls_id(ObLSIDIterator &ls_id_iter)
     ret = OB_NOT_RUNNING;
   } else if (OB_FAIL(tx_ctx_mgr_.iterate_ls_id(ls_id_iter))) {
     TRANS_LOG(WARN, "iterate ls id error", KR(ret));
-  } else if (OB_FAIL(ls_id_iter.set_ready())) {
-    TRANS_LOG(WARN, "ls_id_iter set ready error", KR(ret));
   } else {
     // do nothing
   }

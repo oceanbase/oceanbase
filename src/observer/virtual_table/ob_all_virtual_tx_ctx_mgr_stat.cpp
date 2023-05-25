@@ -53,9 +53,13 @@ int ObGVTxCtxMgrStat::prepare_start_to_read_()
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
   } else if (OB_FAIL(trans_service_->iterate_tx_ctx_mgr_stat(tx_ctx_mgr_stat_iter_))) {
     SERVER_LOG(WARN, "iterate_tx_ctx_mgr_stat error", K(ret));
-  } else if (!tx_ctx_mgr_stat_iter_.is_ready()) {
-    SERVER_LOG(WARN, "tx_ctx_mgr_stat_iter_ is not ready");
-    ret = OB_ERR_UNEXPECTED;
+    if (OB_NOT_RUNNING == ret || OB_NOT_INIT == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tx_ctx_mgr_stat_iter_.set_ready())) {
+    TRANS_LOG(WARN, "tx_ctx_mgr_stat_iter set ready error", KR(ret));
   } else {
     start_to_read_ = true;
   }

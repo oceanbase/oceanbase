@@ -78,6 +78,8 @@ int ObGVTxLockStat::get_next_tx_lock_stat_(ObTxLockStat &tx_lock_stat)
         tx_lock_stat_iter_.reset();
         if (OB_FAIL(txs_->iterate_tx_lock_stat(ls_id_, tx_lock_stat_iter_))) {
           TRANS_LOG(WARN, "iterate_tx_lock_stat error", K(ret), K(ls_id));
+        } else if (OB_FAIL(tx_lock_stat_iter_.set_ready())) {
+          TRANS_LOG(WARN, "iterate_tx_lock_stat set ready error", KR(ret));
         }
       }
     } else {
@@ -109,18 +111,22 @@ int ObGVTxLockStat::prepare_start_to_read_()
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(txs_->iterate_ls_id(ls_id_iter_))) {
     TRANS_LOG(WARN, "iterate ls id error", K(ret));
-  } else if (!ls_id_iter_.is_ready()) {
-    TRANS_LOG(WARN, "ls_id_iter is not ready");
-    ret = OB_ERR_UNEXPECTED;
+    if (OB_NOT_RUNNING == ret || OB_NOT_INIT == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ls_id_iter_.set_ready())) {
+    TRANS_LOG(WARN, "ls_id_iter set ready error", KR(ret));
   } else if (OB_FAIL(ls_id_iter_.get_next(ls_id_))) {
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "ls_id_iter get next ls id error", K(ret));
     }
   } else if (OB_FAIL(txs_->iterate_tx_lock_stat(ls_id_, tx_lock_stat_iter_))) {
     TRANS_LOG(WARN, "iterate_tx_lock_stat error", K(ret), K(ls_id_));
-  } else if (!tx_lock_stat_iter_.is_ready()) {
-    TRANS_LOG(WARN, "ls_id_iter is not ready");
-    ret = OB_ERR_UNEXPECTED;
+    // if ls_id_iter_.get_next success, we can believe obTransService is running
+  } else if (OB_FAIL(tx_lock_stat_iter_.set_ready())) {
+    TRANS_LOG(WARN, "iterate_tx_lock_stat set ready error", KR(ret));
   } else {
     start_to_read_ = true;
   }
