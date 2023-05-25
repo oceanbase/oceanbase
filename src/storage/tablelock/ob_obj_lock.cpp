@@ -1551,7 +1551,11 @@ int ObOBJLock::compact_tablelock_(ObTableLockOpList *&op_list,
         // do nothing
       }
     }
-    drop_op_list_if_empty_(unlock_op.lock_mode_, op_list, allocator);
+    // maybe we can not get any complete unlock_op,
+    // so we should judge whether it's valid.
+    if (unlock_op.is_valid()) {
+      drop_op_list_if_empty_(unlock_op.lock_mode_, op_list, allocator);
+    }
     if (OB_OBJ_LOCK_NOT_EXIST == ret) {
       // compact finished succeed
       ret = OB_SUCCESS;
