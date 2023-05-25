@@ -953,6 +953,18 @@ private:
   int gen_leader_normal_schema_version(const uint64_t tenant_id,
                                        const int64_t refreshed_schema_version,
                                        int64_t &schema_version);
+
+  int set_refresh_full_schema_timeout_ctx_(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const char* tname,
+      ObTimeoutCtx &ctx);
+
+  int calc_refresh_full_schema_timeout_ctx_(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const char* tname,
+      int64_t &timeout);
 private:
   common::ObMySQLProxy *mysql_proxy_;
   common::ObDbLinkProxy *dblink_proxy_;
