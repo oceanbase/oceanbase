@@ -315,17 +315,6 @@ int ObPxTargetMgr::update_peer_target_used(uint64_t tenant_id, const ObAddr &ser
   return ret;
 }
 
-int ObPxTargetMgr::rollback_local_report_target_used(uint64_t tenant_id, const ObAddr &server, int64_t local_report)
-{
-  int ret = OB_SUCCESS;
-  GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->rollback_local_report_target_used(server, local_report))) {
-      LOG_WARN("rollback local report target_used failed", K(ret), K(tenant_id), K(local_report));
-    }
-  });
-  return ret;
-}
-
 int ObPxTargetMgr::gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather)
 {
   int ret = OB_SUCCESS;

@@ -249,10 +249,13 @@ int ObPxTenantTargetMonitor::query_statistics(ObAddr &leader)
           int ret = OB_SUCCESS;
           // 和上次汇报相比，本机又消耗了entry 机器几个资源，把这个数目汇报给 leader，leader 会把这个值加到全局统计中。
           // 为什么是汇报“增量”呢？因为 entry 机器的资源被多台机器使用，任何一个人都拿不到全量数据
-          if (OB_FAIL(args.push_local_target_usage(entry.first, entry.second.get_local_used() - entry.second.get_report_used()))) {
+          int64_t local_used = entry.second.get_local_used();
+          if (local_used == entry.second.get_report_used()) {
+            // do nothing
+          } else if (OB_FAIL(args.push_local_target_usage(entry.first, local_used - entry.second.get_report_used()))) {
             LOG_WARN("push server and target_usage failed", K(ret));
           } else {
-            entry.second.set_report_used(entry.second.get_local_used());
+            entry.second.set_report_used(local_used);
           }
           return ret;
         };
@@ -342,18 +345,6 @@ int ObPxTenantTargetMonitor::update_peer_target_used(const ObAddr &server, int64
     }
   } else if (OB_FAIL(global_target_usage_.atomic_refactored(server, update_peer_used))) {
     LOG_WARN("atomic refactored, update_peer_used failed", K(ret));
-  }
-  return ret;
-}
-
-int ObPxTenantTargetMonitor::rollback_local_report_target_used(const ObAddr &server, int64_t local_report)
-{
-  int ret = OB_SUCCESS;
-  auto report_local_report = [=](hash::HashMapPair<ObAddr, ServerTargetUsage> &entry) -> void {
-    entry.second.update_report_used(-local_report);
-  };
-  if (OB_FAIL(global_target_usage_.atomic_refactored(server, report_local_report))) {
-    LOG_WARN("atomic refactored, report_local_report failed", K(ret));
   }
   return ret;
 }

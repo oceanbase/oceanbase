@@ -119,7 +119,6 @@ public:
   int is_leader(uint64_t tenant_id,  bool &is_leader);
   int get_version(uint64_t tenant_id, uint64_t &version);
   int update_peer_target_used(uint64_t tenant_id, const ObAddr &server, int64_t peer_used);
-  int rollback_local_report_target_used(uint64_t tenant_id, const ObAddr &server, int64_t local_report);
   int gather_global_target_usage(uint64_t tenant_id, ObPxGlobalResGather &gather);
   int reset_leader_statistics(uint64_t tenant_id);
   
