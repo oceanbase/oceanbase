@@ -14387,6 +14387,17 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
                              new_index_table_name))) {
             LOG_WARN("failed to build new index table name!", K(hidden_table_schema.get_table_id()),
             K(new_index_table_name), K(ret));
+          } else if (hidden_table_schema.get_part_level() > 0 && new_index_schema.is_index_local_storage()) {
+            if (INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == new_index_schema.get_index_type()) {
+              new_index_schema.set_index_type(INDEX_TYPE_NORMAL_GLOBAL);
+            } else if (INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == new_index_schema.get_index_type()) {
+              new_index_schema.set_index_type(INDEX_TYPE_UNIQUE_GLOBAL);
+            } else if (INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == new_index_schema.get_index_type()) {
+              new_index_schema.set_index_type(INDEX_TYPE_SPATIAL_GLOBAL);
+            }
+          }
+
+          if (OB_FAIL(ret)) {
           } else if (new_index_schema.is_global_index_table() && new_index_schema.is_partitioned_table()) {
             ObArray<std::pair<ObString, ObString>> changed_names;
             if (OB_FAIL(col_name_map.get_changed_names(changed_names))) {
@@ -14420,6 +14431,8 @@ int ObDDLService::reconstruct_index_schema(const ObTableSchema &orig_table_schem
             } else if (OB_FAIL(generate_tablet_id(new_index_schema))) {
               LOG_WARN("fail to generate tablet id for hidden table", K(ret), K(new_index_schema));
             } else {
+              new_index_schema.set_max_used_column_id(max(
+                  new_index_schema.get_max_used_column_id(), hidden_table_schema.get_max_used_column_id()));
               new_index_schema.set_table_id(new_idx_tid);
               new_index_schema.set_data_table_id(hidden_table_schema.get_table_id());
               new_index_schema.set_index_status(INDEX_STATUS_UNAVAILABLE);
