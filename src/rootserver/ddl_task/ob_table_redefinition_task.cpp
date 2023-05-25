@@ -1053,6 +1053,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     case ObDDLTaskStatus::PREPARE: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
                                   "STATUS: PREPARE"))) {
         LOG_WARN("failed to print", K(ret));
       }
@@ -1164,6 +1165,7 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
     case ObDDLTaskStatus::FAIL: {
       if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
+                                  pos,
                                   "STATUS: CLEAN ON FAIL"))) {
         LOG_WARN("failed to print", K(ret));
       }
