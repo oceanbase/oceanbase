@@ -913,7 +913,7 @@ int ObPLContext::check_routine_legal(ObPLFunction &routine, bool in_function, bo
       ret = OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG;
       LOG_WARN("Dynamic SQL is not allowed in stored function", K(ret));
       LOG_USER_ERROR(OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, "Dynamic SQL");
-    } else if (routine.get_multi_results() || in_tg) {
+    } else if (routine.get_multi_results()) {
       ret = OB_ER_SP_NO_RETSET;
       LOG_WARN("Not allowed to return a result set in pl function", K(ret));
       if (in_tg) {
