@@ -945,7 +945,8 @@ public:
   int prepare_spi_result(ObPLExecCtx *ctx, sql::ObSPIResultSet *&spi_result);
   int prepare_spi_cursor(sql::ObSPICursor *&spi_cursor,
                           uint64_t tenant_id,
-                          uint64_t mem_limit);
+                          uint64_t mem_limit,
+                          bool is_local_for_update = false);
 
   TO_STRING_KV(K_(id),
                K_(is_explicit),

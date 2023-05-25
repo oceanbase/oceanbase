@@ -3236,16 +3236,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           do {
             ret = OB_SUCCESS;
             // 如果当前cursor已经有spi_result则复用,避免内存占用过多
-            spi_result =  (NULL == cursor->get_cursor_handler())
-                ? static_cast<ObSPIResultSet*>(cursor->get_allocator()->alloc(sizeof(ObSPIResultSet)))
-                  : cursor->get_cursor_handler();
-            if (OB_ISNULL(spi_result)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to alloc mysql result");
-            }
-            OX (new(spi_result)ObSPIResultSet());
-            OZ (spi_result->init(*session_info));
-            OX (cursor->set_spi_cursor(spi_result));
+            OZ (cursor->prepare_spi_result(ctx, spi_result));
             OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), false));
             OZ ((GCTX.schema_service_->get_tenant_schema_guard(session_info->get_effective_tenant_id(), spi_result->get_scheme_guard())));
             OX (spi_result->get_sql_ctx().schema_guard_ = &spi_result->get_scheme_guard());
@@ -3369,7 +3360,8 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 OZ (session_info->get_tmp_table_size(size));
                 OZ (cursor->prepare_spi_cursor(spi_cursor,
                                               session_info->get_effective_tenant_id(),
-                                              size), K(size));
+                                              size,
+                                              for_update && !is_server_cursor), K(size));
                 if (is_server_cursor) {
                   CK (OB_NOT_NULL(cursor->get_allocator()));
                   CK (OB_NOT_NULL(spi_result.get_result_set()));
