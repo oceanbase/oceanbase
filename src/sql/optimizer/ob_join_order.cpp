@@ -889,9 +889,9 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
   ObIArray<ColumnItem> &range_columns = range_info.get_range_columns();
   bool is_geo_index = false;
-  ColumnIdInfoMap geo_columnInfo_map;
   ObWrapperAllocator wrap_allocator(*allocator_);
   ColumnIdInfoMapAllocer map_alloc(OB_MALLOC_NORMAL_BLOCK_SIZE, wrap_allocator);
+  ColumnIdInfoMap geo_columnInfo_map;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(schema_guard = opt_ctx->get_sql_schema_guard()) ||
