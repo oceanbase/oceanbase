@@ -922,15 +922,25 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
     bool has_exec_param = false;
-    if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
-                                                                 helper.filters_,
+    common::ObSEArray<ObRawExpr *, 4> agent_table_filter;
+    bool is_oracle_inner_index_table = share::is_oracle_mapping_real_virtual_table(index_schema->get_table_id());
+    if (is_oracle_inner_index_table
+        && OB_FAIL(extract_valid_range_expr_for_oracle_agent_table(helper.filters_,
+                                                                   agent_table_filter))) {
+      LOG_WARN("failed to extract expr", K(ret));
+    } else if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
+                                                                 is_oracle_inner_index_table
+                                                                  ? agent_table_filter
+                                                                    : helper.filters_,
                                                                  range_info.get_expr_constraints(),
 								 query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
-                                                                           helper.filters_,
-                                                                           geo_columnInfo_map,
-                                                                           query_range))) {
+                                                                      is_oracle_inner_index_table
+                                                                      ? agent_table_filter
+                                                                        : helper.filters_,
+                                                                      geo_columnInfo_map,
+                                                                      query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (OB_ISNULL(query_range)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1072,7 +1082,8 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid table id", K(table_id), K(ref_table_id), K(ret));
   } else {
-    if (is_virtual_table(ref_table_id)) {
+    if (is_virtual_table(ref_table_id)
+        && !share::is_oracle_mapping_real_virtual_table(ref_table_id)) {
       // check virtual table heuristics
       if (OB_FAIL(virtual_table_heuristics(table_id, ref_table_id, index_info_cache,
                                            valid_index_ids, index_to_use))) {
@@ -13901,5 +13912,71 @@ int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
   }
   LOG_TRACE("succeed to check can use global stat instead", K(all_used_parts), K(all_used_tablets),
                                                     K(can_use), K(global_part_ids), K(scale_ratio));
+  return ret;
+}
+
+int ObJoinOrder::is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr,
+                                                            bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to do stack overflow check", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack overflow", K(ret));
+  } else if (OB_NOT_NULL(range_expr) && range_expr->is_op_expr()) {
+    const ObOpRawExpr *expr = static_cast<const ObOpRawExpr *>(range_expr);
+    if (IS_BASIC_CMP_OP(expr->get_expr_type()) && T_OP_EQ == expr->get_expr_type()) {
+      is_valid = true;
+    } else if (T_OP_IS == expr->get_expr_type()
+              || T_OP_IN  == expr->get_expr_type()) {
+      is_valid = true;
+    } else if (T_OP_AND == expr->get_expr_type()) {
+      is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); ++i) {
+        if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(expr->get_param_expr(i),
+                                                               is_valid))) {
+          LOG_WARN("failed to check expr", K(ret));
+        }
+      }
+    } else if (T_OP_OR == expr->get_expr_type()) {
+      is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); ++i) {
+        if (OB_NOT_NULL(expr->get_param_expr(i))
+            && (T_OP_AND == expr->get_param_expr(i)->get_expr_type()
+                || T_OP_OR == expr->get_param_expr(i)->get_expr_type()
+                || expr->get_param_expr(i)->get_expr_type() != expr->get_param_expr(0)->get_expr_type())) {
+          is_valid = false;
+          LOG_TRACE("invalid expr type for oracle agent table range",
+                    K(expr->get_param_expr(i)->get_expr_type()),
+                    K(expr->get_param_expr(0)->get_expr_type()));
+        } else if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(expr->get_param_expr(i),
+                                                                      is_valid))) {
+          LOG_WARN("failed to check expr", K(ret));
+        }
+      }
+    } else {
+      LOG_TRACE("invalid expr type for oracle agent table range", K(expr->get_expr_type()));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_valid_range_expr_for_oracle_agent_table(const ObIArray<ObRawExpr *> &filters,
+                                                                 ObIArray<ObRawExpr *> &new_filters)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    bool is_valid_expr = false;
+    if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(filters.at(i), is_valid_expr))) {
+      LOG_WARN("failed to check range expr", K(ret));
+    } else if (!is_valid_expr) {
+      // skip
+    } else if (OB_FAIL(new_filters.push_back(filters.at(i)))) {
+      LOG_WARN("failed to push back filter exprs", K(ret));
+    }
+  }
   return ret;
 }

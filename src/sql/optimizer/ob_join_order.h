@@ -2454,6 +2454,9 @@ struct NullAwareAntiJoinInfo {
                                           bool &can_use,
                                           ObIArray<int64_t> &global_part_ids,
                                           double &scale_ratio);
+    int is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr, bool &is_valid);
+    int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
+                                                        common::ObIArray<ObRawExpr *> &new_filters);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
