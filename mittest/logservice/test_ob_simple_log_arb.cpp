@@ -528,11 +528,11 @@ using namespace palflite;
 
 TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
 {
-  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_defensive");
-  OB_LOGGER.set_log_level("DEBUG");
+  SET_CASE_LOG_FILE(TEST_NAME, "test_mutli_meta_block");
+  OB_LOGGER.set_log_level("INFO");
   MockLocCB loc_cb;
   int ret = OB_SUCCESS;
-  PALF_LOG(INFO, "begin test_2f1a_defensive");
+  PALF_LOG(INFO, "begin test_multi_meta_block");
 	int64_t leader_idx = 0;
   int64_t arb_replica_idx = -1;
   PalfHandleImplGuard leader;
@@ -625,7 +625,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_multi_meta_block)
     }
   }
   delete_paxos_group(id);
-  PALF_LOG(INFO, "end test_2f1a_defensive", K(id));
+  PALF_LOG(INFO, "end test_mutli_meta_block", K(id));
 }
 
 // 1. 2F1A, the leader starts to degrade another F
