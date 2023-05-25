@@ -5398,8 +5398,12 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       break;
     case ObStringTC:
       data_type.set_length(length);
-
-      if (ObVarcharType != data_type.get_obj_type()
+      if (length < -1) { // length is more than 32 bit
+        ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+        LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
+                      static_cast<int>(OB_MAX_MYSQL_VARCHAR_LENGTH));
+      } else if (ObVarcharType != data_type.get_obj_type()
           && ObCharType != data_type.get_obj_type()
           && ObNVarchar2Type != data_type.get_obj_type()
           && ObNCharType != data_type.get_obj_type()) {

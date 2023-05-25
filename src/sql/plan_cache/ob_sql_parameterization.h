@@ -146,11 +146,34 @@ public:
                                            const SqlInfo &not_param_info,
                                            common::ObIArray<ObPCParam *> &special_param_info);
   static int transform_neg_param(ObIArray<ObPCParam *> &pc_params);
+  static int construct_not_param(const ObString &no_param_sql,
+                                  ObPCParam *pc_param,
+                                  char *buf,
+                                  int32_t buf_len,
+                                  int32_t &pos,
+                                  int32_t &idx);
+  static int construct_neg_param(const ObString &no_param_sql,
+                                  ObPCParam *pc_param,
+                                  char *buf,
+                                  int32_t buf_len,
+                                  int32_t &pos,
+                                  int32_t &idx);
+  static int construct_trans_neg_param(const ObString &no_param_sql,
+                                      ObPCParam *pc_param,
+                                      char *buf,
+                                      int32_t buf_len,
+                                      int32_t &pos,
+                                      int32_t &idx);
   static int construct_sql(const common::ObString &no_param_sql,
                            common::ObIArray<ObPCParam *> &not_params,
                            char *buf,
                            int32_t buf_len,
                            int32_t &pos);
+  static int construct_sql_for_pl(const common::ObString &no_param_sql,
+                                  common::ObIArray<ObPCParam *> &not_params,
+                                  char *buf,
+                                  int32_t buf_len,
+                                  int32_t &pos);
   static int parameterize_syntax_tree(common::ObIAllocator &allocator,
                                       bool is_transform_outline,
                                       ObPlanCacheCtx &pc_ctx,

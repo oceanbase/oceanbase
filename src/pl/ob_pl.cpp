@@ -1341,10 +1341,8 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
       if (NULL == buf) {
         LOG_WARN("fail to alloc buf", K(pc_ctx.raw_sql_.length()));
         ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(ObSqlParameterization::construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
+      } else if (OB_FAIL(ObSqlParameterization::construct_sql_for_pl(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
         LOG_WARN("fail to construct_sql", K(ret));
-      } else if (OB_FAIL(ObSqlParameterization::transform_neg_param(pc_ctx.fp_result_.raw_params_))) {
-        LOG_WARN("fail to transform_neg_param", K(ret));
       } else {
         if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + pos) {
           ret = OB_ERR_UNEXPECTED;
