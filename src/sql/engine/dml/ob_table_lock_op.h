@@ -74,6 +74,7 @@ public:
   int inner_close() override;
   void destroy() override
   {
+    part_infos_.reset();
     return ObTableModifyOp::destroy();
   }
 
