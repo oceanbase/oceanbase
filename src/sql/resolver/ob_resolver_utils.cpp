@@ -4499,7 +4499,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                 *
         ERROR at line 1:
         ORA-12899: value too large for column "Z0_TEST2" (actual: 4000, maximum: 200) */
-        if (expr_length_in_byte < 0 && ObLongTextType == expr->get_result_type().get_type()) {
+        if (ObLongTextType == expr->get_result_type().get_type()) {
           expr_length_in_byte = OB_MAX_ORACLE_CHAR_LENGTH_BYTE * 2;
         }
       }

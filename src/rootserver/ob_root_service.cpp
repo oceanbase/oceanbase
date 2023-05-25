@@ -3022,7 +3022,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           LOG_WARN("fail to check oracle_object exist", K(ret), K(table_schema));
         } else if (conflict_schema_types.count() > 0) {
           ret = OB_ERR_EXIST_OBJECT;
-          LOG_WARN("Name is already used by an existing object", K(ret), K(table_schema));
+          LOG_WARN("Name is already used by an existing object",
+                   K(ret), K(table_schema), K(conflict_schema_types));
         }
       }
       if (FAILEDx(schema_guard.check_synonym_exist_with_name(table_schema.get_tenant_id(),
@@ -5934,7 +5935,8 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
         // 这里检查 oracle 模式下新对象的名字是否已经被其他对象占用了
         ret = OB_ERR_EXIST_OBJECT;
         LOG_WARN("Name is already used by an existing object in oralce mode",
-                 K(ret), K(routine_info.get_routine_name()));
+                 K(ret), K(routine_info.get_routine_name()),
+                 K(conflict_schema_types));
       }
     }
     bool exist = false;
@@ -6182,7 +6184,8 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
         // skip
       } else if (conflict_schema_types.count() > 0) {
         ret = OB_ERR_EXIST_OBJECT;
-        LOG_WARN("Name is already used by an existing object", K(ret), K(udt_info.get_type_name()));
+        LOG_WARN("Name is already used by an existing object", K(ret), K(udt_info.get_type_name()),
+            K(conflict_schema_types));
       }
     }
     bool exist = false;
@@ -6558,7 +6561,8 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
         // 这里检查 oracle 模式下新对象的名字是否已经被其他对象占用了
         ret = OB_ERR_EXIST_OBJECT;
         LOG_WARN("Name is already used by an existing object in oralce mode",
-                 K(ret), K(new_package_info.get_package_name()));
+                 K(ret), K(new_package_info.get_package_name()),
+                 K(conflict_schema_types));
       }
     }
     if (OB_SUCC(ret)) {

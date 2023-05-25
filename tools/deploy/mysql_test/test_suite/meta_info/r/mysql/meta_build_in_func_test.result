@@ -280,7 +280,7 @@ def					substr(cast(date_c as char(1024)), 10)	251	536870908	17	Y	16	0	45
 +----------------------------------------+
 select substr(cast(1024 as char(1024)), 1, 2) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(1024 as char(1024)), 1, 2)	251	536870908	2	Y	16	0	45
+def					substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	0	45
 +----------------------------------------+
 | substr(cast(1024 as char(1024)), 1, 2) |
 +----------------------------------------+
@@ -296,7 +296,7 @@ def					substr(cast(date_c as char(1024)) from 10)	251	536870908	17	Y	16	0	45
 +--------------------------------------------+
 select substr(cast(date_c as char(1024)) from 10 for 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)) from 10 for 10)	251	536870908	10	Y	16	0	45
+def					substr(cast(date_c as char(1024)) from 10 for 10)	253	40	10	Y	0	0	45
 +---------------------------------------------------+
 | substr(cast(date_c as char(1024)) from 10 for 10) |
 +---------------------------------------------------+

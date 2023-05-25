@@ -12514,7 +12514,8 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
                 // is already occupied by other objects
                 ret = OB_ERR_EXIST_OBJECT;
                 LOG_WARN("Name is already used by an existing object in oralce mode",
-                         K(ret), K(to_table_item.table_name_));
+                         K(ret), K(to_table_item.table_name_),
+                         K(conflict_schema_types));
               }
               // check similar to rename table t1 to t3, t2 to t3 in mysql mode
               if (OB_FAIL(ret)) {
@@ -18333,7 +18334,8 @@ int ObDDLService::flashback_table_from_recyclebin(const ObFlashBackTableFromRecy
           LOG_WARN("fail to check oracle_object exist", K(ret), K(table_schema));
         } else if (conflict_schema_types.count() > 0) {
           ret = OB_ERR_EXIST_OBJECT;
-          LOG_WARN("Name is already used by an existing object", K(ret), K(table_schema));
+          LOG_WARN("Name is already used by an existing object", K(ret), K(table_schema),
+              K(conflict_schema_types));
         } else {
           new_db_id = new_db_schema->get_database_id();
         }

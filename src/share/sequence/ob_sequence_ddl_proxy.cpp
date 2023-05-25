@@ -85,7 +85,8 @@ int ObSequenceDDLProxy::create_sequence(
     LOG_WARN("fail to check oracle_object exist", K(ret), K(seq_schema));
   } else if (conflict_schema_types.count() > 0) {
     ret = OB_ERR_EXIST_OBJECT;
-    LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema));
+    LOG_WARN("Name is already used by an existing object", K(ret), K(seq_schema),
+        K(conflict_schema_types));
   } else if (OB_FAIL(schema_guard.check_sequence_exist_with_name(
               seq_schema.get_tenant_id(),
               seq_schema.get_database_id(),
