@@ -18,6 +18,7 @@
 #include "lib/lock/ob_latch.h"
 #include "lib/net/ob_addr.h"
 #include "lib/task/ob_timer.h"
+#include "lib/container/ob_se_array.h"
 
 namespace oceanbase
 {

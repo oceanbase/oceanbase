@@ -21,6 +21,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/worker.h"
+#include "lib/net/ob_addr.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
@@ -420,7 +421,6 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
 {
   int ret = OB_SUCCESS;
   ObPacket *pkt = NULL;
-  char buff[OB_SERVER_ADDR_STR_LEN] = {'\0'};
 
   if (OB_ISNULL(s)) {
     ret = OB_INVALID_ARGUMENT;
@@ -440,14 +440,13 @@ ObPacket *ObReqTransport::send_session(easy_session_t *s) const
       s->addr.cidx = balance_assign(s);
     }
 
-    easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
-    lib::Thread::rpc_dest_addr_ = buff;
+    IGNORE_RETURN new (&lib::Thread::rpc_dest_addr_) ObAddr(s->addr);
     pkt = reinterpret_cast<ObPacket*>(easy_client_send(eio_, s->addr, s));
-    lib::Thread::rpc_dest_addr_ = nullptr;
+    lib::Thread::rpc_dest_addr_.reset();
     if (NULL == pkt) {
+      char buff[OB_SERVER_ADDR_STR_LEN] = {'\0'};
+      easy_inet_addr_to_str(&s->addr, buff, OB_SERVER_ADDR_STR_LEN);
       SERVER_LOG(WARN, "send packet fail", "dst", buff, KP(s));
-    } else {
-      SERVER_LOG(DEBUG, "send session successfully", "dst", buff);
     }
   }
   return pkt;

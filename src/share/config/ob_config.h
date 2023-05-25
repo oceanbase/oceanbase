@@ -15,6 +15,7 @@
 
 #include <pthread.h>
 #include "lib/compress/ob_compressor_pool.h"
+#include "lib/container/ob_array_serialization.h"
 #include "share/config/ob_config_helper.h"
 #include "share/ob_encryption_util.h"
 #include "share/parameter/ob_parameter_attr.h"

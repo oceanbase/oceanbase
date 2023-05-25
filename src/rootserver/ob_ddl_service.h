@@ -42,6 +42,8 @@ namespace oceanbase
 {
 namespace common
 {
+using ObAddrIArray = ObIArray<ObAddr>;
+using ObAddrArray = ObSEArray<ObAddr, 3>;
 class ObMySQLProxy;
 class ObAddr;
 class ObMySQLTransaction;
@@ -116,7 +118,6 @@ private:
 
 class ObDDLService
 {
-
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
 public:

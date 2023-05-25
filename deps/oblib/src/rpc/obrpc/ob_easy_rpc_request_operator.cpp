@@ -11,6 +11,7 @@
  */
 
 #include "rpc/obrpc/ob_easy_rpc_request_operator.h"
+#include "lib/utility/utility.h"
 
 using namespace oceanbase::rpc;
 using namespace oceanbase::common;

@@ -170,17 +170,19 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
             case LATCH_HOLD: {
               GET_OTHER_TSI_ADDR(uint32_t**, locks_addr, &ObLatch::current_locks);
               GET_OTHER_TSI_ADDR(int8_t, slot_cnt, &ObLatch::max_lock_slot_idx)
+              const int64_t cnt = std::min(ARRAYSIZEOF(ObLatch::current_locks), (int64_t)slot_cnt);
               locks_addr = (uint32_t**)(thread_base + locks_addr_offset);
               locks_addr_[0] = 0;
-              for (auto i = 0, j = 0; i < slot_cnt; ++i) {
-                if (OB_NOT_NULL(locks_addr[i])) {
+              for (int64_t i = 0, j = 0; i < cnt; ++i) {
+                int64_t idx = (slot_cnt + i) % ARRAYSIZEOF(ObLatch::current_locks);
+                if (OB_NOT_NULL(locks_addr[idx]) && j < 256) {
                   bool has_segv = false;
                   uint32_t val = 0;
                   do_with_crash_restore([&] {
-                    val = *locks_addr[i];
+                    val = *locks_addr[idx];
                   }, has_segv);
-                  if (!has_segv && 0 != val && j < 256) {
-                    j += snprintf(locks_addr_ + j, 256 - j, "%p ", locks_addr[i]);
+                  if (!has_segv && 0 != val) {
+                    j += snprintf(locks_addr_ + j, 256 - j, "%p ", locks_addr[idx]);
                   }
                 }
               }

@@ -17,6 +17,7 @@
 #include "common/ob_zone.h"      // for ObZone
 #include "lib/net/ob_addr.h"     // for ObAddr
 #include "lib/ob_replica_define.h" //for ObReplicaProperty
+#include "lib/container/ob_array_serialization.h" // for ObSArray
 #include "common/ob_role.h"      // for ObRole
 #include "common/ob_member_list.h" // for ObMemberList
 #include "share/restore/ob_ls_restore_status.h"

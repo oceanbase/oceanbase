@@ -22,6 +22,7 @@
 #include "lib/guard/ob_shared_guard.h"
 #include "lib/utility/utility.h"
 #include "lib/utility/ob_print_utils.h"
+#include "lib/container/ob_array_serialization.h"
 #include "share/ob_occam_time_guard.h"
 
 #define DETECT_TIME_GUARD(threshold) TIMEGUARD_INIT(DETECT, threshold, 10_s)

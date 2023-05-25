@@ -11,6 +11,9 @@
  */
 
 #include "share/ob_proposal_id.h"
+
+#include "lib/json/ob_yson_encode.h"
+#include "lib/ob_name_id_def.h"
 #include "share/ob_cluster_version.h"
 
 namespace oceanbase
