@@ -1171,7 +1171,6 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
         LOG_WARN("failed to check transform happened", K(ret));
       }
     }
-
     if (OB_SUCC(ret)) {
       typedef ObSEArray<ObSEArray<ObRawExpr*, 16>, 4> PredsArray;
       SMART_VAR(PredsArray, all_old_preds) {
@@ -1360,14 +1359,16 @@ int ObTransformPredicateMoveAround::check_conds_deduced(const ObIArray<ObRawExpr
   int ret = OB_SUCCESS;
   if (!is_happened || !real_happened_) {
     bool happened = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !happened && i < new_conditions.count(); ++i) {
-      if (!ObPredicateDeduce::find_equal_expr(old_conditions, new_conditions.at(i))) {
-        happened = true;
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !happened && i < old_conditions.count(); ++i) {
-      if (!ObPredicateDeduce::find_equal_expr(new_conditions, old_conditions.at(i))) {
-        happened = true;
+    uint64_t new_conditions_count = new_conditions.count();
+    uint64_t old_conditions_count = old_conditions.count();
+    if (new_conditions_count != old_conditions_count) {
+      happened = true;
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !happened && i < new_conditions_count; ++i) {
+        if (!ObPredicateDeduce::find_equal_expr(old_conditions, new_conditions.at(i)) ||
+            !ObPredicateDeduce::find_equal_expr(new_conditions, old_conditions.at(i))) {
+          happened = true;
+        }
       }
     }
     if (OB_SUCC(ret) && happened) {
@@ -2643,6 +2644,8 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
                                                           right_table,
                                                           &right_filters))) {
     LOG_WARN("failed to create view with table", K(ret));
+  } else {
+    real_happened_ = true;
   }
   return ret;
 }
