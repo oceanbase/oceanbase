@@ -484,6 +484,8 @@ public:
         is_valid_range_columns_part_range_(false),
         is_valid_range_columns_subpart_range_(false),
         report_err_for_pruned_partition_not_exist_(false),
+        is_valid_temporal_part_range_(false),
+        is_valid_temporal_subpart_range_(false),
         params_(NULL)
   {}
 
@@ -559,6 +561,8 @@ public:
         is_valid_range_columns_part_range_(false),
         is_valid_range_columns_subpart_range_(false),
         report_err_for_pruned_partition_not_exist_(false),
+        is_valid_temporal_part_range_(false),
+        is_valid_temporal_subpart_range_(false),
         params_(NULL)
   {}
   virtual ~ObTableLocation()
@@ -1049,6 +1053,10 @@ private:
   int can_get_part_by_range_for_range_columns(const ObRawExpr* part_expr, bool& is_valid) const;
   int recursive_convert_generated_column(const ObIArray<ObColumnRefRawExpr*>& table_column,
       const ObIArray<ObRawExpr*>& column_conv_exprs, ObRawExpr*& expr);
+  int can_get_part_by_range_for_temporal_column(const ObRawExpr *part_expr, bool &is_valid) const;
+  int calc_range_by_part_expr(ObExecContext &exec_ctx, const common::ObIArray<common::ObNewRange *> &ranges,
+      const ObIArray<int64_t> *part_ids, common::ObIAllocator &allocator,
+      common::ObIArray<common::ObNewRange *> &new_ranges, bool &is_all_single_value_ranges) const;
 
 private:
   bool inited_;
@@ -1148,6 +1156,9 @@ private:
   bool is_valid_range_columns_subpart_range_;
 
   bool report_err_for_pruned_partition_not_exist_;
+  // mysql enable partition pruning by query range if part expr is temporal func like year(date)
+  bool is_valid_temporal_part_range_;
+  bool is_valid_temporal_subpart_range_;
   const ParamStore *params_;
 };
 
