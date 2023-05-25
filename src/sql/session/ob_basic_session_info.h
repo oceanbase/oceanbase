@@ -1151,6 +1151,7 @@ public:
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
+  void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }
   void set_last_trace_id(common::ObCurTraceId::TraceId *trace_id)
   {
@@ -2058,8 +2059,7 @@ private:
   common::ObLogIdLevelMap log_id_level_map_;
   //===============================================================
 
-  // 当前运行的physical_plan，目前只是用于获取该语句运行过程中哪些用户变量和额外的系统变量需要序列化，
-  // 而该语句执行完之后要将其设为NULL
+  // 生命周期不保证，谨慎使用该指针
   ObPhysicalPlan *cur_phy_plan_;
   // sql_id of cur_phy_plan_ sql
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];

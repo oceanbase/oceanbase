@@ -2032,9 +2032,6 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
 
 void ObBasicSessionInfo::reset_cur_phy_plan_to_null()
 {
-  if (NULL != cur_phy_plan_) {
-    last_plan_id_ = cur_phy_plan_->get_plan_id();
-  }
   cur_phy_plan_ = NULL;
 }
 
