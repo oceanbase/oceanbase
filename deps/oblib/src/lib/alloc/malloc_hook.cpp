@@ -20,9 +20,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 bool g_malloc_hook_inited = false;
-thread_local ObMemAttr ObMallocHookAttrGuard::tl_mem_attr(OB_SERVER_TENANT_ID,
-                                                          "glibc_malloc",
-                                                          ObCtxIds::GLIBC);
+
 void init_malloc_hook()
 {
   g_malloc_hook_inited = true;

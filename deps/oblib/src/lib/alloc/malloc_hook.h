@@ -20,31 +20,5 @@ inline bool& in_hook()
   thread_local bool in_hook = false;
   return in_hook;
 }
-namespace oceanbase
-{
-namespace lib
-{
-class ObMallocHookAttrGuard
-{
-public:
-  ObMallocHookAttrGuard(ObMemAttr& attr)
-   : old_attr_(tl_mem_attr)
-  {
-    tl_mem_attr = attr;
-  }
-  ~ObMallocHookAttrGuard()
-  {
-    tl_mem_attr = old_attr_;
-  }
-  static ObMemAttr get_tl_mem_attr()
-  {
-    return tl_mem_attr;
-  }
-private:
-  static thread_local ObMemAttr tl_mem_attr;
-  ObMemAttr old_attr_;
-};
-}
-}
 
 #endif /* MALLOC_HOOK_H */

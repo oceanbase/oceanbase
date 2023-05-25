@@ -23,6 +23,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_package.h"
+#include "lib/alloc/malloc_hook.h"
 
 namespace oceanbase {
 using namespace common;
@@ -159,6 +160,7 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
         if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
@@ -385,6 +387,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
         if (OB_FAIL(cg.init())) {
           LOG_WARN("failed to init code generator", K(ret));
         } else if (OB_FAIL(cg.generate(func))) {
@@ -704,6 +707,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                package.get_di_helper(),
                lib::is_oracle_mode()) {
 #endif
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
       OZ (cg.init());
       OZ (cg.generate(package));
     }
@@ -1121,6 +1125,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
                    routine->get_di_helper(),
                    lib::is_oracle_mode()) {
 #endif
+            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
             } else if (OB_FAIL(cg.generate(*routine))) {
