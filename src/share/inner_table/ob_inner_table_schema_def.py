@@ -25151,7 +25151,7 @@ def_table_schema(
            CAST(f.table_name AS CHAR(256)) AS TABLE_NAME,
            CAST('FOREIGN KEY' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST('YES' AS CHAR(3)) AS ENFORCED
-    FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS f
+    FROM information_schema.REFERENTIAL_CONSTRAINTS f
 
   """.replace("\n", " "),
 )
