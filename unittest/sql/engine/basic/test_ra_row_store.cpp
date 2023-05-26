@@ -32,7 +32,7 @@ public:
   virtual void SetUp() override
   {
     GCONF.enable_sql_operator_dump.set_value("True");
-    lib::AChunkMgr::instance().set_max_chunk_cache_cnt(0);
+    lib::AChunkMgr::instance().set_max_chunk_cache_size(0);
     int ret = OB_SUCCESS;
     lib::ObMallocAllocator *malloc_allocator = lib::ObMallocAllocator::get_instance();
     ret = malloc_allocator->create_and_add_tenant_allocator(OB_SYS_TENANT_ID);

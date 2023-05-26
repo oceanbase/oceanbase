@@ -285,6 +285,7 @@ _max_elr_dependent_trx_count
 _max_malloc_sample_interval
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
+_memory_large_chunk_cache_size
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
 _minor_compaction_interval
