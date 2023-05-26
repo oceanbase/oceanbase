@@ -739,7 +739,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
             palf_list[leader_idx]->get_palf_handle_impl()->config_mgr_.config_meta_.curr_.config_version_);
 
   // waiting for leader revoke
-  while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+  while (leader.palf_handle_impl_->state_mgr_.role_ == LEADER) {
     sleep(1);
   }
 
@@ -748,7 +748,7 @@ TEST_F(TestObSimpleLogClusterArbService, test_2f1a_upgrade_when_no_leader)
   unblock_all_net(leader_idx);
 
   // waiting for leader takeover
-  while (leader.palf_handle_impl_->state_mgr_.role_ != common::ObRole::LEADER) {
+  while (!leader.palf_handle_impl_->state_mgr_.is_leader_active()) {
     sleep(1);
   }
   // waiting for upgrading
