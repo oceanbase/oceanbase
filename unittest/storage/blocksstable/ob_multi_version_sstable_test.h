@@ -541,6 +541,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.data_index_tree_height_ = res.root_desc_.height_;
   param.index_blocks_cnt_ = res.index_blocks_cnt_;
   param.data_blocks_cnt_ = res.data_blocks_cnt_;
+  param.micro_block_cnt_ = res.micro_block_cnt_;
   param.use_old_macro_block_count_ = 0;
   param.column_cnt_= column_cnt;
   param.data_checksum_ = 0;
