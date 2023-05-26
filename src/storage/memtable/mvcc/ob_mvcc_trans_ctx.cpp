@@ -442,11 +442,13 @@ void ObTransCallbackMgr::reset_pdml_stat()
   force_merge_multi_callback_lists();
 }
 
-int ObTransCallbackMgr::remove_callbacks_for_fast_commit(bool &has_remove)
+int ObTransCallbackMgr::remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                                         bool &meet_generate_cursor)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(callback_list_.remove_callbacks_for_fast_commit(has_remove))) {
+  if (OB_FAIL(callback_list_.remove_callbacks_for_fast_commit(generate_cursor,
+                                                              meet_generate_cursor))) {
     TRANS_LOG(WARN, "remove callbacks for fast commit fail", K(ret));
   }
 

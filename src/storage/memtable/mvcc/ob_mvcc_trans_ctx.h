@@ -217,7 +217,8 @@ public:
                   const int64_t from_seq_no);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
-  int remove_callbacks_for_fast_commit(bool &has_remove);
+  int remove_callbacks_for_fast_commit(const ObITransCallback *generate_cursor,
+                                       bool &meet_generate_cursor);
   int remove_callback_for_uncommited_txn(
     const memtable::ObMemtableSet *memtable_set,
     const share::SCN max_applied_scn);

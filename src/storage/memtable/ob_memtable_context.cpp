@@ -857,13 +857,15 @@ bool ObMemtableCtx::is_all_redo_submitted()
 int ObMemtableCtx::remove_callbacks_for_fast_commit()
 {
   int ret = OB_SUCCESS;
-  bool has_remove = false;
+  bool meet_generate_cursor = false;
   common::ObTimeGuard timeguard("remove callbacks for fast commit", 10 * 1000);
   ObByteLockGuard guard(lock_);
 
-  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(has_remove))) {
+  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(
+                log_gen_.get_generate_cursor(),
+                meet_generate_cursor))) {
     TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), KPC(this));
-  } else if (has_remove && OB_FAIL(reuse_log_generator_())) {
+  } else if (meet_generate_cursor && OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret), KPC(this));
   }
 
