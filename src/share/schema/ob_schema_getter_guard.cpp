@@ -2663,13 +2663,16 @@ int ObSchemaGetterGuard::verify_db_read_only(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   const ObString &db_name = need_priv.db_;
+  const ObPrivSet &priv_set = need_priv.priv_set_;
   const ObDatabaseSchema *db_schema =  NULL;
+  const ObPrivSet &read_only_privs = OB_PRIV_SELECT | OB_PRIV_SHOW_VIEW | OB_PRIV_SHOW_DB |
+                                     OB_PRIV_READ;
   if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(get_database_schema(tenant_id, db_name, db_schema))) {
     LOG_WARN("get database schema failed", KR(ret), K(tenant_id), K(db_name));
   } else if (NULL != db_schema) {
-    if (db_schema->is_read_only()) {
+    if (db_schema->is_read_only() && OB_PRIV_HAS_OTHER(priv_set, read_only_privs)) {
       ret = OB_ERR_DB_READ_ONLY;
       LOG_USER_ERROR(OB_ERR_DB_READ_ONLY, db_name.length(), db_name.ptr());
       LOG_WARN("database is read only, can't not execute this statment",
