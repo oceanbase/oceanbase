@@ -236,9 +236,9 @@ class ObTriggerMgr
 {
   typedef common::ObSortedVector<ObSimpleTriggerSchema *> TriggerInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimpleTriggerSchema *,
-      ObGetTriggerKey> TriggerIdMap;
+      ObGetTriggerKey, 128> TriggerIdMap;
   typedef common::hash::ObPointerHashMap<ObTriggerNameHashWrapper, ObSimpleTriggerSchema *,
-      ObGetTriggerKey> TriggerNameMap;
+      ObGetTriggerKey, 128> TriggerNameMap;
   typedef TriggerInfos::iterator TriggerIter;
   typedef TriggerInfos::const_iterator ConstTriggerIter;
 public:

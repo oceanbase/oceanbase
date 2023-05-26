@@ -143,7 +143,7 @@ class ObUDFMgr
 {
 public:
   typedef common::ObSortedVector<ObSimpleUDFSchema *> UDFInfos;
-  typedef common::hash::ObPointerHashMap<ObUDFHashWrapper, ObSimpleUDFSchema *, ObGetUDFKey> ObUDFMap;
+  typedef common::hash::ObPointerHashMap<ObUDFHashWrapper, ObSimpleUDFSchema *, ObGetUDFKey, 128> ObUDFMap;
   typedef UDFInfos::iterator UDFIter;
   typedef UDFInfos::const_iterator ConstUDFIter;
   ObUDFMgr();

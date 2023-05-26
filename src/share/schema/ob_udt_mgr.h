@@ -237,9 +237,9 @@ class ObUDTMgr
 {
   typedef common::ObSortedVector<ObSimpleUDTSchema *> UDTInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimpleUDTSchema *,
-      ObGetUDTKey> UDTIdMap;
+      ObGetUDTKey, 512> UDTIdMap;
   typedef common::hash::ObPointerHashMap<ObUDTNameHashWrapper, ObSimpleUDTSchema *,
-      ObGetUDTKey> UDTNameMap;
+      ObGetUDTKey, 512> UDTNameMap;
   typedef UDTInfos::iterator UDTIter;
   typedef UDTInfos::const_iterator ConstUDTIter;
 public:

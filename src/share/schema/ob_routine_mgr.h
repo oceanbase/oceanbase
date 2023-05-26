@@ -256,9 +256,9 @@ class ObRoutineMgr
 {
   typedef common::ObSortedVector<ObSimpleRoutineSchema *> RoutineInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimpleRoutineSchema *,
-      ObGetRoutineKey> RoutineIdMap;
+      ObGetRoutineKey, 1024> RoutineIdMap;
   typedef common::hash::ObPointerHashMap<ObRoutineNameHashWrapper, ObSimpleRoutineSchema *,
-      ObGetRoutineKey> RoutineNameMap;
+      ObGetRoutineKey, 1024> RoutineNameMap;
   typedef RoutineInfos::iterator RoutineIter;
   typedef RoutineInfos::const_iterator ConstRoutineIter;
 public:

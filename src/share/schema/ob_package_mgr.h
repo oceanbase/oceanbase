@@ -253,9 +253,9 @@ class ObPackageMgr
 {
   typedef common::ObSortedVector<ObSimplePackageSchema *> PackageInfos;
   typedef common::hash::ObPointerHashMap<uint64_t, ObSimplePackageSchema *,
-      ObGetPackageKey> PackageIdMap;
+      ObGetPackageKey, 1024> PackageIdMap;
   typedef common::hash::ObPointerHashMap<ObPackageNameHashWrapper, ObSimplePackageSchema *,
-      ObGetPackageKey> PackageNameMap;
+      ObGetPackageKey, 1024> PackageNameMap;
   typedef PackageInfos::iterator PackageIter;
   typedef PackageInfos::const_iterator ConstPackageIter;
 public:

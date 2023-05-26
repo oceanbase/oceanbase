@@ -107,11 +107,11 @@ class ObLabelSePolicyMgr
 public:
   typedef common::ObSortedVector<ObLabelSePolicySchema *> LabelSePolicyInfos;
   typedef common::hash::ObPointerHashMap<ObLabelSeNameHashKey, ObLabelSePolicySchema *,
-                                         ObGetLabelSePolicyKey> ObLabelSePolicyNameMap;
+                                         ObGetLabelSePolicyKey, 128> ObLabelSePolicyNameMap;
   typedef common::hash::ObPointerHashMap<ObLabelSeColumnNameHashKey, ObLabelSePolicySchema *,
-                                         ObGetLabelSePolicyKey> ObLabelSeColumnNameMap;
+                                         ObGetLabelSePolicyKey, 128> ObLabelSeColumnNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t, ObLabelSePolicySchema *,
-                                         ObGetLabelSePolicyKey> ObLabelSePolicyIdMap;
+                                         ObGetLabelSePolicyKey, 128> ObLabelSePolicyIdMap;
   typedef LabelSePolicyInfos::iterator LabelSePolicyIter;
   typedef LabelSePolicyInfos::const_iterator ConstLabelSePolicyIter;
   ObLabelSePolicyMgr();
@@ -309,16 +309,16 @@ class ObLabelSeCompMgr
 public:
   typedef common::ObSortedVector<ObLabelSeComponentSchema *> LabelSeCompInfos;
   typedef common::hash::ObPointerHashMap<ObLabelSeCompShortNameHashKey, ObLabelSeComponentSchema *,
-                                         ObGetLabelSeCompKey> ObLabelSeCompShortNameMap;
+                                         ObGetLabelSeCompKey, 128> ObLabelSeCompShortNameMap;
 
   typedef common::hash::ObPointerHashMap<ObLabelSeCompLongNameHashKey, ObLabelSeComponentSchema *,
-                                         ObGetLabelSeCompKey> ObLabelSeCompLongNameMap;
+                                         ObGetLabelSeCompKey, 128> ObLabelSeCompLongNameMap;
 
   typedef common::hash::ObPointerHashMap<uint64_t, ObLabelSeComponentSchema *,
-                                         ObGetLabelSeCompKey> ObLabelSeCompIdMap;
+                                         ObGetLabelSeCompKey, 128> ObLabelSeCompIdMap;
 
   typedef common::hash::ObPointerHashMap<ObLabelSeCompNumHashKey, ObLabelSeComponentSchema *,
-                                         ObGetLabelSeCompKey> ObLabelSeCompNumMap;
+                                         ObGetLabelSeCompKey, 128> ObLabelSeCompNumMap;
   typedef LabelSeCompInfos::iterator LabelSeCompIter;
   typedef LabelSeCompInfos::const_iterator ConstLabelSeCompIter;
   ObLabelSeCompMgr();
@@ -458,13 +458,13 @@ class ObLabelSeLabelMgr
 public:
   typedef common::ObSortedVector<ObLabelSeLabelSchema *> LabelSeLabelInfos;
   typedef common::hash::ObPointerHashMap<ObLabelSeNameHashKey, ObLabelSeLabelSchema *,
-                                         ObGetLabelSeLabelKey> ObLabelSeLabelLabelMap;
+                                         ObGetLabelSeLabelKey, 128> ObLabelSeLabelLabelMap;
 
   typedef common::hash::ObPointerHashMap<uint64_t, ObLabelSeLabelSchema *,
-                                         ObGetLabelSeLabelKey> ObLabelSeLabelIdMap;
+                                         ObGetLabelSeLabelKey, 128> ObLabelSeLabelIdMap;
 
   typedef common::hash::ObPointerHashMap<ObLabelSeLabelTagHashKey, ObLabelSeLabelSchema *,
-                                         ObGetLabelSeLabelKey> ObLabelSeLabelTagMap;
+                                         ObGetLabelSeLabelKey, 128> ObLabelSeLabelTagMap;
 
   typedef LabelSeLabelInfos::iterator LabelSeLabelIter;
   typedef LabelSeLabelInfos::const_iterator ConstLabelSeLabelIter;
@@ -596,10 +596,10 @@ public:
   typedef common::ObSortedVector<ObLabelSeUserLevelSchema *> LabelSeUserLevelInfos;
 
   typedef common::hash::ObPointerHashMap<ObLabelSeUserLevelHashKey, ObLabelSeUserLevelSchema *,
-                                         ObGetLabelSeUserLevelKey> ObLabelSeUserLevelKeyMap;
+                                         ObGetLabelSeUserLevelKey, 128> ObLabelSeUserLevelKeyMap;
 
   typedef common::hash::ObPointerHashMap<uint64_t, ObLabelSeUserLevelSchema *,
-                                         ObGetLabelSeUserLevelKey> ObLabelSeUserLevelIdMap;
+                                         ObGetLabelSeUserLevelKey, 128> ObLabelSeUserLevelIdMap;
 
   typedef LabelSeUserLevelInfos::iterator LabelSeUserLevelIter;
   typedef LabelSeUserLevelInfos::const_iterator ConstLabelSeUserLevelIter;

@@ -72,8 +72,8 @@ class ObPrivMgr
   typedef common::ObSortedVector<ObTablePriv *> TablePrivInfos;
   typedef common::ObSortedVector<ObObjPriv *>ObjPrivInfos;
   typedef common::ObSortedVector<ObSysPriv *>SysPrivInfos;
-  typedef common::hash::ObPointerHashMap<ObTablePrivSortKey, ObTablePriv *, ObGetTablePrivKeyV3> TablePrivMap;
-  typedef common::hash::ObPointerHashMap<ObObjPrivSortKey, ObObjPriv *, ObGetObjPrivKey> ObjPrivMap;
+  typedef common::hash::ObPointerHashMap<ObTablePrivSortKey, ObTablePriv *, ObGetTablePrivKeyV3, 128> TablePrivMap;
+  typedef common::hash::ObPointerHashMap<ObObjPrivSortKey, ObObjPriv *, ObGetObjPrivKey, 128> ObjPrivMap;
   typedef DBPrivInfos::iterator DBPrivIter;
   typedef DBPrivInfos::const_iterator ConstDBPrivIter;
   typedef TablePrivInfos::iterator TablePrivIter;

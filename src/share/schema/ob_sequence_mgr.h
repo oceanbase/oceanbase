@@ -93,7 +93,7 @@ class ObSequenceMgr
 public:
   typedef common::ObSortedVector<ObSequenceSchema *> SequenceInfos;
   typedef common::hash::ObPointerHashMap<ObSequenceHashWrapper, ObSequenceSchema *,
-                                         ObGetSequenceKey> ObSequenceMap;
+                                         ObGetSequenceKey, 128> ObSequenceMap;
   typedef SequenceInfos::iterator SequenceIter;
   typedef SequenceInfos::const_iterator ConstSequenceIter;
   ObSequenceMgr();

@@ -73,7 +73,7 @@ class ObKeystoreMgr
 public:
   typedef common::ObSortedVector<ObKeystoreSchema *> KeystoreInfos;
   typedef common::hash::ObPointerHashMap<ObKeystoreHashWrapper, ObKeystoreSchema *,
-                                         ObGetKeystoreKey> ObKeystoreMap;
+                                         ObGetKeystoreKey, 128> ObKeystoreMap;
   typedef KeystoreInfos::iterator KeystoreIter;
   typedef KeystoreInfos::const_iterator ConstKeystoreIter;
   ObKeystoreMgr();

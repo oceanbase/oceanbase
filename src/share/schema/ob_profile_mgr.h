@@ -16,6 +16,7 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_struct.h"
+#include "lib/container/ob_vector.h"
 
 namespace oceanbase
 {
@@ -85,9 +86,9 @@ class ObProfileMgr
 public:
   typedef common::ObSortedVector<ObProfileSchema *> ProfileInfos;
   typedef common::hash::ObPointerHashMap<ObProfileNameHashKey, ObProfileSchema *,
-                                     ObGetProfileKey> ObProfileNameMap;
+                                     ObGetProfileKey, 128> ObProfileNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t, ObProfileSchema *,
-                                       ObGetProfileKey> ObProfileIdMap;
+                                       ObGetProfileKey, 128> ObProfileIdMap;
   typedef ProfileInfos::iterator ProfileIter;
   typedef ProfileInfos::const_iterator ConstProfileIter;
   ObProfileMgr();

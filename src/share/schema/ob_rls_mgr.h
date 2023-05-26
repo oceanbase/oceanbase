@@ -17,6 +17,7 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_struct.h"
+#include "lib/container/ob_vector.h"
 
 namespace oceanbase
 {
@@ -140,10 +141,10 @@ public:
   typedef common::ObSortedVector<ObRlsPolicySchema *> RlsPolicyInfos;
   typedef common::hash::ObPointerHashMap<ObRlsPolicyNameHashKey,
                                          ObRlsPolicySchema *,
-                                         ObGetRlsPolicyKey> ObRlsPolicyNameMap;
+                                         ObGetRlsPolicyKey, 128> ObRlsPolicyNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t,
                                          ObRlsPolicySchema *,
-                                         ObGetRlsPolicyKey> ObRlsPolicyIdMap;
+                                         ObGetRlsPolicyKey, 128> ObRlsPolicyIdMap;
   typedef RlsPolicyInfos::iterator RlsPolicyIter;
   typedef RlsPolicyInfos::const_iterator ConstRlsPolicyIter;
 private:
@@ -284,10 +285,10 @@ public:
   typedef common::ObSortedVector<ObRlsGroupSchema *> RlsGroupInfos;
   typedef common::hash::ObPointerHashMap<ObRlsGroupNameHashKey,
                                          ObRlsGroupSchema *,
-                                         ObGetRlsGroupKey> ObRlsGroupNameMap;
+                                         ObGetRlsGroupKey, 128> ObRlsGroupNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t,
                                          ObRlsGroupSchema *,
-                                         ObGetRlsGroupKey> ObRlsGroupIdMap;
+                                         ObGetRlsGroupKey, 128> ObRlsGroupIdMap;
   typedef RlsGroupInfos::iterator RlsGroupIter;
   typedef RlsGroupInfos::const_iterator ConstRlsGroupIter;
 private:
@@ -435,10 +436,10 @@ public:
   typedef common::ObSortedVector<ObRlsContextSchema *> RlsContextInfos;
   typedef common::hash::ObPointerHashMap<ObRlsContextNameHashKey,
                                          ObRlsContextSchema *,
-                                         ObGetRlsContextKey> ObRlsContextNameMap;
+                                         ObGetRlsContextKey, 128> ObRlsContextNameMap;
   typedef common::hash::ObPointerHashMap<uint64_t,
                                          ObRlsContextSchema *,
-                                         ObGetRlsContextKey> ObRlsContextIdMap;
+                                         ObGetRlsContextKey, 128> ObRlsContextIdMap;
   typedef RlsContextInfos::iterator RlsContextIter;
   typedef RlsContextInfos::const_iterator ConstRlsContextIter;
 private:
