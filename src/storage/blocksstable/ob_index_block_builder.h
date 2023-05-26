@@ -455,11 +455,15 @@ public:
   TO_STRING_KV(K(roots_.count()));
 public:
   static bool check_version_for_small_sstable(const ObDataStoreDesc &index_desc);
+  static int load_single_macro_block(
+      const ObDataMacroBlockMeta &macro_meta,
+      ObMacroBlockHandle &read_handle,
+      ObSSTableMacroBlockHeader &macro_header);
 private:
   int check_and_rewrite_sstable(ObSSTableMergeRes &res);
   int check_and_rewrite_sstable_without_size(ObSSTableMergeRes &res);
   int do_check_and_rewrite_sstable(ObBlockInfo &block_info);
-  int parse_macro_header(
+  static int parse_macro_header(
       const char *buf,
       const int64_t buf_size,
       ObSSTableMacroBlockHeader &macro_header);

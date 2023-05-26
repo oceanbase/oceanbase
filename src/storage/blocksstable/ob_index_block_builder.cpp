@@ -1036,20 +1036,10 @@ int ObSSTableIndexBuilder::do_check_and_rewrite_sstable(ObBlockInfo &block_info)
   int ret = OB_SUCCESS;
   ObMacroBlockHandle read_handle;
   const ObDataMacroBlockMeta &macro_meta = *(roots_[0]->macro_metas_->at(0));
-  ObMacroBlockReadInfo read_info;
-  read_info.macro_block_id_ = macro_meta.val_.macro_id_;
-  read_info.offset_ = 0;
-  read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   ObSSTableMacroBlockHeader macro_header;
 
-  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
-    STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta), K(roots_[0]->last_macro_size_));
-  } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
-    STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(io_timeout_ms));
-  } else if (OB_FAIL(parse_macro_header(read_handle.get_buffer(), read_handle.get_data_size(), macro_header))) {
-    STORAGE_LOG(WARN, "fail to parse macro header", K(ret));
+  if (OB_FAIL(load_single_macro_block(macro_meta, read_handle, macro_header))) {
+    STORAGE_LOG(WARN, "fail to load macro block", K(ret), K(macro_meta), KPC(roots_[0]));
   } else {
     roots_[0]->meta_block_offset_ = macro_header.fixed_header_.meta_block_offset_;
     roots_[0]->meta_block_size_ = macro_header.fixed_header_.meta_block_size_;
@@ -1065,6 +1055,30 @@ int ObSSTableIndexBuilder::do_check_and_rewrite_sstable(ObBlockInfo &block_info)
         STORAGE_LOG(WARN, "successfully rewrite small sstable, but block info is invalid", K(ret), K(block_info));
       }
     }
+  }
+
+  return ret;
+}
+
+int ObSSTableIndexBuilder::load_single_macro_block(
+    const ObDataMacroBlockMeta &macro_meta,
+    ObMacroBlockHandle &read_handle,
+    ObSSTableMacroBlockHeader &macro_header)
+{
+  int ret = OB_SUCCESS;
+  ObMacroBlockReadInfo read_info;
+  read_info.macro_block_id_ = macro_meta.val_.macro_id_;
+  read_info.offset_ = 0;
+  read_info.size_ = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
+  const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
+
+  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+    STORAGE_LOG(WARN, "fail to async read macro block", K(ret), K(read_info), K(macro_meta));
+  } else if (OB_FAIL(read_handle.wait(io_timeout_ms))) {
+    STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(io_timeout_ms));
+  } else if (OB_FAIL(parse_macro_header(read_handle.get_buffer(), read_handle.get_data_size(), macro_header))) {
+    STORAGE_LOG(WARN, "fail to parse macro header", K(ret));
   }
 
   return ret;
@@ -2233,10 +2247,23 @@ int ObMetaIndexBlockBuilder::build_single_macro_row_desc(const IndexMicroBlockDe
 {
   int ret = OB_SUCCESS;
   ObDataStoreDesc data_desc;
-  if (OB_UNLIKELY(1 != roots.count() || 1 != roots[0]->macro_metas_->count())
-               || 0 >= roots[0]->meta_block_size_ || 0 >= roots[0]->meta_block_offset_) {
+  if (OB_UNLIKELY(1 != roots.count() || 1 != roots[0]->macro_metas_->count())) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected roots", K(ret), K(roots));
+    STORAGE_LOG(WARN, "unexpected roots", K(ret), K(roots.count()), K(roots[0]->macro_metas_->count()), KPC(roots[0]));
+  } else if (0 >= roots[0]->meta_block_size_ || 0 >= roots[0]->meta_block_offset_) {
+    const ObDataMacroBlockMeta &macro_meta = *(roots[0]->macro_metas_->at(0));
+    ObMacroBlockHandle read_handle;
+    ObSSTableMacroBlockHeader macro_header;
+    if (OB_FAIL(ObSSTableIndexBuilder::load_single_macro_block(macro_meta, read_handle, macro_header))) {
+      STORAGE_LOG(WARN, "fail to load macro block", K(ret), K(macro_meta), KPC(roots[0]));
+    } else {
+      roots[0]->meta_block_offset_ = macro_header.fixed_header_.meta_block_offset_;
+      roots[0]->meta_block_size_ = macro_header.fixed_header_.meta_block_size_;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(data_desc.assign(*index_store_desc_))) {
     STORAGE_LOG(WARN, "fail to assign data desc", K(ret), KPC(index_store_desc_));
   } else {
