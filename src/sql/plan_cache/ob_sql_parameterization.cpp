@@ -169,19 +169,32 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator& allocator, const 
           ctx.paramlized_questionmask_count_,
           K(ret));
     } else if (OB_NOT_NULL(raw_params) && OB_NOT_NULL(select_item_param_infos)) {
-      select_item_param_infos->set_capacity(ctx.project_list_.count());
-      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
-        ParseNode* tmp_root = static_cast<ParseNode*>(ctx.project_list_.at(i));
-        if (OB_ISNULL(tmp_root)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
-        } else if (0 == tmp_root->is_val_paramed_item_idx_ &&
-                   OB_FAIL(get_select_item_param_info(*raw_params, tmp_root, select_item_param_infos))) {
-          SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
-        } else {
-          // do nothing
-        }
-      }  // for end
+      if (sql_info.total_ != raw_params->count()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_PC_LOG(TRACE,
+            "const number of fast parse and normal parse is different",
+            "fast_parse_const_num",
+            raw_params->count(),
+            "normal_parse_const_num",
+            sql_info.total_,
+            K(session.get_current_query_string()),
+            "result_tree_",
+            SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+      } else {
+        select_item_param_infos->set_capacity(ctx.project_list_.count());
+        for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
+          ParseNode* tmp_root = static_cast<ParseNode*>(ctx.project_list_.at(i));
+          if (OB_ISNULL(tmp_root)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
+          } else if (0 == tmp_root->is_val_paramed_item_idx_ &&
+                     OB_FAIL(get_select_item_param_info(*raw_params, tmp_root, select_item_param_infos))) {
+            SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
+          } else {
+            // do nothing
+          }
+        }  // for end
+      }
     }
     SQL_PC_LOG(DEBUG, "after transform_tree", "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
   }
