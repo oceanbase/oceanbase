@@ -4335,7 +4335,7 @@ bool ObDMLStmt::is_set_stmt() const
   return is_select_stmt() ? (static_cast<const ObSelectStmt*>(this)->is_set_stmt()) : false;
 }
 
-int ObDMLStmt::disable_writing_external_table()
+int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt false */)
 {
   int ret = OB_SUCCESS;
   bool disable_write_table = false;
@@ -4345,7 +4345,8 @@ int ObDMLStmt::disable_writing_external_table()
       if (OB_ISNULL(table_item = table_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected NULL ptr", K(ret));
-      } else if (table_item->for_update_ && schema::EXTERNAL_TABLE == table_item->table_type_) {
+      } else if (schema::EXTERNAL_TABLE == table_item->table_type_ &&
+                  (table_item->for_update_ || basic_stmt_is_dml)) {
         disable_write_table = true;
       }
     }
@@ -4363,6 +4364,8 @@ int ObDMLStmt::disable_writing_external_table()
         LOG_WARN("get unexpected NULL ptr", K(ret));
       } else if (schema::EXTERNAL_TABLE == table_item->table_type_) {
         disable_write_table = true;
+      } else if (table_item->is_view_table_ && NULL != table_item->ref_query_) {
+        OZ( table_item->ref_query_->disable_writing_external_table(true) );
       }
     }
   }
