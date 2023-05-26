@@ -4,8 +4,6 @@ BASE_DIR=$(git rev-parse --show-toplevel 2>/dev/null)
 DEPLOY_PATH="$BASE_DIR/tools/deploy"
 OBSERVER_BIN="$BASE_DIR/tools/deploy/bin/observer"
 OBD_CLUSTER_PATH="$DEPLOY_PATH"/.obd/cluster
-OBD_LOCAL_VERSION_PATH="$DEPLOY_PATH"/.obd/version
-OBD_DEPS_PATH="$BASE_DIR/deps/3rd/oceanbase.el7.x86_64.deps"
 shopt -s expand_aliases
 source $DEPLOY_PATH/activate_obd.sh
 tag="latest"
@@ -47,8 +45,8 @@ function variables_parpare {
   HOST=$(hostname -i)
   DATA_PATH="/data/$(whoami)"
   IPADDRESS="127.0.0.1"
-    export IS_CE=1
-    COMPONENT="oceanbase-ce"
+  export IS_CE=1
+  COMPONENT="oceanbase-ce"
 
   if grep 'dep_create.sh' $BASE_DIR/build.sh 2>&1 >/dev/null
   then
@@ -93,11 +91,6 @@ function mirror_create {
   then
     echo "$OBSERVER_BIN not found"
     return 1
-  fi
-  if [ "x$IS_CE" == "x" ]
-  then
-    export IS_CE="0"
-    [[ $($OBSERVER_BIN -V 2>&1 | grep -E 'OceanBase[_ ]CE') ]] && COMPONENT="oceanbase-ce" && export IS_CE="1"
   fi
   $OBSERVER_BIN -V
   [[ -f "$BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version" ]] && obs_version=$(cat $BASE_DIR/tools/deploy/obd/.observer_obd_plugin_version)
@@ -321,18 +314,7 @@ function deploy_cluster {
   else
     obd cluster destroy "$deploy_name" -f
   fi
-  if [ "x$IS_CE" == "x" ]; then
-    [[ "$YAML_CONF" == "" ]] || yaml_config_args="-c $YAML_CONF"
-  else
-    yaml_config_args=""
-    if [ $IS_CE == '0' ]; then
-      sed 's/oceanbase-ce\(:\?\)$/oceanbase\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
-    fi
-    if [ $IS_CE == '1' ]; then
-      sed 's/oceanbase\(:\?\)$/oceanbase-ce\1/g' $config_yaml | obd cluster edit-config "$deploy_name"
-    fi
-  fi
-  obd cluster deploy "$deploy_name" -C $yaml_config_args || exit 1
+  obd cluster deploy "$deploy_name" -C -c $YAML_CONF || exit 1
   if ! obd cluster start "$deploy_name" -f;
   then
     while [[ "$NO_CONFIRM" != "1" && "$(grep 'config_status: NEED_REDEPLOY' $OBD_CLUSTER_PATH/$deploy_name/.data)" != "" ]] 
@@ -584,20 +566,6 @@ Options:
 function main() {
   entrance=${OBD_SH_ENTRANCE:-obd.sh}
   variables_parpare
-  if [[ -f ${OBD_LOCAL_VERSION_PATH} ]]
-  then
-    obd_local_version=`cat ${OBD_LOCAL_VERSION_PATH}`
-    obd_deps_version=`cat ${OBD_DEPS_PATH} | grep -E '^ob-deploy-' | grep -Eo '[0-9]+.[0-9]+.[0-9a-z]+-[0-9]+' | head -n1`
-    obd_deps_version=${obd_deps_version/-/.}
-    if [[ ${obd_local_version} != ${obd_deps_version} ]]
-    then
-      obd_local_version=`obd --version | grep -E '^OceanBase Deploy:' | awk '{print $3}'`
-      if [[ ${obd_local_version} != ${obd_deps_version} ]]
-      then
-        echo -e "\033[33m[WARN]\033[0m current obd version is not the latest version, use 'bash dep_create.sh all' in 'deps/3rd' dir to update"
-      fi
-    fi
-  fi
   commond="$1"
   shift
   extra_args=""
