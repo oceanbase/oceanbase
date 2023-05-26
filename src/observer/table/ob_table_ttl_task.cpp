@@ -293,7 +293,7 @@ int ObTableTTLDeleteTask::process_one()
                          first_key_,
                          second_key_);
   ObTableTTLOperationResult result;
-  ObTableServiceTTLCtx ctx(allocator_);
+  ObTableServiceQueryCtx ctx(allocator_);
   ctx.init_param(ONE_TASK_TIMEOUT + ObTimeUtility::current_time(), trans_desc_, &allocator_,
                  false /* returning_affected_rows */,
                  table::ObTableEntityType::ET_KV,
@@ -306,7 +306,7 @@ int ObTableTTLDeleteTask::process_one()
     LOG_WARN("fail to execute ttl delete, need rollback", K(ret));
   } else {/* do nothing */}
 
-  ctx.reset_ttl_ctx(GCTX.par_ser_);
+  ctx.reset_query_ctx(GCTX.par_ser_);
   bool need_rollback = (OB_SUCCESS != ret);
   int tmp_ret = ret;
   if (OB_FAIL(end_trans(need_rollback))) {

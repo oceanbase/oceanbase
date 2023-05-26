@@ -140,7 +140,9 @@ public:
        scan_result_(NULL),
        is_first_result_(true),
        has_more_rows_(true),
-       is_query_sync_(false)
+       is_query_sync_(false),
+       agg_cell_proj_(allocator_),
+       agg_results_(allocator_)
   {
   }
   virtual ~ObNormalTableQueryResultIterator() {}
@@ -151,6 +153,17 @@ public:
   virtual void set_one_result(ObTableQueryResult *result) {one_result_ = result;}
   void set_query(const ObTableQuery *query) {query_ = query;}
   void set_query_sync() { is_query_sync_ = true ; }
+  bool is_aggregate_query();
+  int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name);
+private:
+  int get_aggregate_result(table::ObTableQueryResult *&next_result); 
+  virtual int get_normal_result(table::ObTableQueryResult *&next_result);
+private:
+  int aggregate_max(uint64_t idx, const ObNewRow* row);
+  int aggregate_min(uint64_t idx, const ObNewRow* row);
+  int aggregate_count(uint64_t idx, const ObNewRow* row, const ObString& key_word);
+  int aggregate_sum(uint64_t idx, const ObNewRow* row);
+  int aggregate_avg(uint64_t idx, const ObNewRow* row, int64_t& count, double& count_double);
 private:
   table::ObTableQueryResult *one_result_;
   const ObTableQuery *query_;
@@ -161,6 +174,10 @@ private:
   bool is_first_result_;
   bool has_more_rows_;
   bool is_query_sync_;
+  common::ObArenaAllocator allocator_;
+  // store cell idx for each aggregation in full row
+  common::ObFixedArray<uint64_t, common::ObIAllocator> agg_cell_proj_;
+  common::ObFixedArray<ObObj, common::ObIAllocator> agg_results_; 
 };
 
 class ObTableTTLDeleteRowIterator : public common::ObNewRowIterator
@@ -213,19 +230,8 @@ public:
   table::ObHTableFilterOperator *get_htable_result_iterator(const ObTableQuery &query,
                                                             table::ObTableQueryResult &one_result);
   void destroy_result_iterator(storage::ObPartitionService *part_service);
-};
 
-struct ObTableServiceTTLCtx : public ObTableServiceGetCtx
-{
-public:
-  ObTableServiceTTLCtx(common::ObArenaAllocator &alloc): ObTableServiceGetCtx(alloc) {}
-  void destroy_scan_iterator(storage::ObPartitionService *part_service);
-
-  void reset_ttl_ctx(storage::ObPartitionService *part_service)
-  {
-    destroy_scan_iterator(part_service);
-    ObTableServiceGetCtx::reset_get_ctx();
-  }
+  bool is_aggregate_query() { return normal_result_iterator_ != NULL && normal_result_iterator_->is_aggregate_query(); }
 };
 
 /// table service
@@ -261,7 +267,7 @@ public:
   int execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuery &query, table::ObTableQueryResult &one_result,
       table::ObTableQueryResultIterator *&query_result, bool for_update = false);
   int batch_execute(ObTableServiceGetCtx &ctx, const ObTableBatchOperation &batch_operation, ObTableBatchOperationResult &result);
-  int execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result);
+  int execute_ttl_delete(ObTableServiceQueryCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result);
 private:
   static int cons_rowkey_infos(const share::schema::ObTableSchema &table_schema,
                                common::ObIArray<uint64_t> *column_ids,
@@ -269,7 +275,8 @@ private:
   static int cons_properties_infos(const share::schema::ObTableSchema &table_schema,
                                    const common::ObIArray<common::ObString> &properties,
                                    common::ObIArray<uint64_t> &column_ids,
-                                   common::ObIArray<sql::ObExprResType> *columns_type);
+                                   common::ObIArray<sql::ObExprResType> *columns_type,
+                                   ObTableServiceQueryCtx &ctx);
   static int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema, sql::ObExprResType &column_type);
   static int check_column_type(const sql::ObExprResType &column_type, common::ObObj &obj);
   static int add_index_columns_if_missing(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -346,7 +353,8 @@ private:
                              int64_t &schema_version,
                              uint64_t &index_id,
                              int64_t &padding_num,
-                             table::ObHColumnDescriptor *hcolumn_desc);
+                             table::ObHColumnDescriptor *hcolumn_desc,
+                             ObTableServiceQueryCtx &ctx);
   int fill_query_scan_ranges(ObTableServiceCtx &ctx,
                              const ObTableQuery &query,
                              int64_t padding_num,

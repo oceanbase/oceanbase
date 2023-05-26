@@ -1078,7 +1078,9 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       index_name_,
                       batch_size_,
                       max_result_size_,
-                      htable_filter_);
+                      htable_filter_,
+                      scan_range_columns_,
+                      aggregations_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1090,7 +1092,9 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            index_name_,
                            batch_size_,
                            max_result_size_,
-                           htable_filter_);
+                           htable_filter_,
+                           scan_range_columns_,
+                           aggregations_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1132,8 +1136,9 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 index_name_,
                 batch_size_,
                 max_result_size_,
-                htable_filter_
-                );
+                htable_filter_,
+                scan_range_columns_,
+                aggregations_);
   }
   return ret;
 }
@@ -1465,14 +1470,23 @@ int ObTableQueryResult::add_row(const ObNewRow &row)
   return ret;
 }
 
-int ObTableQueryResult::add_all_property(const ObTableQueryResult &other)
+int ObTableQueryResult::add_row(const ObIArray<ObObj> &row)
 {
   int ret = OB_SUCCESS;
-  if (0 != properties_names_.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid properties which has been initialized", K(ret));
-  } else if (OB_FAIL(append(properties_names_, other.properties_names_))) {
-    LOG_WARN("failed to append property", K(ret));
+  int64_t serialize_size = 0;
+  const int64_t cnt = row.count();
+  for (int i = 0; i < cnt; i++) {
+    serialize_size += row.at(i).get_serialize_size();
+  }
+
+  ret = alloc_buf_if_need(serialize_size);
+  for (int i = 0; OB_SUCC(ret) && i < cnt; i++) {
+    if (OB_FAIL(row.at(i).serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
+      LOG_WARN("failed to serialize obj", K(ret), K_(buf), K(row.at(i)));
+    }
+  } // end for
+  if (OB_SUCC(ret)) {
+    ++row_count_;
   }
   return ret;
 }
@@ -1615,3 +1629,8 @@ OB_SERIALIZE_MEMBER((ObTableQuerySyncResult, ObTableQueryResult),
   is_end_,
   query_session_id_
 ); 
+
+OB_SERIALIZE_MEMBER(ObTableAggregation,
+                    type_,
+                    column_
+                    );

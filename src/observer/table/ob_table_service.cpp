@@ -106,27 +106,52 @@ int ObTableService::cons_rowkey_infos(const schema::ObTableSchema &table_schema,
 int ObTableService::cons_properties_infos(const schema::ObTableSchema &table_schema,
                                           const ObIArray<ObString> &properties,
                                           ObIArray<uint64_t> &column_ids,
-                                          ObIArray<ObExprResType> *columns_type)
+                                          ObIArray<ObExprResType> *columns_type,
+                                          ObTableServiceQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   const schema::ObColumnSchemaV2 *column_schema = NULL;
   ObExprResType column_type;
-  const int64_t N = properties.count();
-  for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
-    const ObString &cname = properties.at(i);
-    if (NULL == (column_schema = table_schema.get_column_schema(cname))) {
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(cname));
-    } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
-      LOG_WARN("failed to add column id", K(ret));
-    } else if (NULL != columns_type) {
-      if (OB_FAIL(cons_column_type(*column_schema, column_type))) {
-        LOG_WARN("failed to cons column type", K(ret));
-      } else if (OB_FAIL(columns_type->push_back(column_type))) {
-        LOG_WARN("failed to push back", K(ret));
+  if (ctx.is_aggregate_query()) {
+    ObTableSchema::const_column_iterator iter = table_schema.column_begin();
+    ObTableSchema::const_column_iterator end = table_schema.column_end();
+    for (int64_t cell_idx = 0; OB_SUCC(ret) && iter != end; ++iter, cell_idx++) {
+      const schema::ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(column));
+      } else if (OB_FAIL(column_ids.push_back(column->get_column_id()))) {
+        LOG_WARN("failed to add column id", K(ret));
+      }
+      else if (ctx.normal_result_iterator_->add_aggregate_proj(cell_idx, column->get_column_name_str())) {
+        LOG_WARN("fail to add aggregate projector", K(ret), K(cell_idx), K(column->get_column_name_str()));
+      } 
+      else if (NULL != columns_type) {
+        if (OB_FAIL(cons_column_type(*column, column_type))) {
+          LOG_WARN("failed to cons column type", K(ret));
+        } else if (OB_FAIL(columns_type->push_back(column_type))) {
+          LOG_WARN("failed to push back", K(ret));
+        }  else {/* do nothing */}
       }
     }
-  } // end for
+  } else {
+    const int64_t N = properties.count();
+    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) {
+      const ObString &cname = properties.at(i);
+      if (NULL == (column_schema = table_schema.get_column_schema(cname))) {
+        ret = OB_ERR_COLUMN_NOT_FOUND;
+        LOG_WARN("column not exists", K(ret), K(cname));
+      } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+        LOG_WARN("failed to add column id", K(ret));
+      } else if (NULL != columns_type) {
+        if (OB_FAIL(cons_column_type(*column_schema, column_type))) {
+          LOG_WARN("failed to cons column type", K(ret));
+        } else if (OB_FAIL(columns_type->push_back(column_type))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    } // end for
+  }
   return ret;
 }
 
@@ -1725,7 +1750,8 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
                                            int64_t &schema_version,
                                            uint64_t &index_id,
                                            int64_t &padding_num,
-                                           table::ObHColumnDescriptor *hcolumn_desc)
+                                           table::ObHColumnDescriptor *hcolumn_desc,
+                                           ObTableServiceQueryCtx &ctx)
 {
   int ret = OB_SUCCESS;
   schema::ObSchemaGetterGuard schema_guard;
@@ -1756,7 +1782,7 @@ int ObTableService::fill_query_table_param(uint64_t table_id,
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("index type is not supported by table api", K(ret), K(table_id), K(index_id));
     } else if (OB_FAIL(cons_rowkey_infos(*table_schema, NULL, index_back ? NULL : &rowkey_columns_type))) {
-    } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL))) {
+    } else if (OB_FAIL(cons_properties_infos(*table_schema, properties, output_column_ids, NULL, ctx))) {
     } else if (OB_FAIL(table_param.convert(*table_schema, ((NULL == index_schema) ? *table_schema: *index_schema),
                                            output_column_ids, index_back))) {
       LOG_WARN("failed to convert table param", K(ret));
@@ -1865,7 +1891,7 @@ int ObTableService::fill_query_scan_ranges(ObTableServiceCtx &ctx,
         }
       }
     }
-  } // end for
+  } // end for   
   return ret;
 }
 
@@ -1912,7 +1938,497 @@ int ObTableService::fill_query_scan_param(ObTableServiceCtx &ctx, const ObIArray
   return ret;
 }
 
+bool ObNormalTableQueryResultIterator::is_aggregate_query()
+{
+  bool bret = false;
+  if (OB_NOT_NULL(query_) && !query_->get_aggregations().empty()) {
+    bret = true;
+  } 
+  return bret;
+}
+
+int ObNormalTableQueryResultIterator::add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query", K(ret));
+  } else {
+    const ObIArray<ObTableAggregation> &aggregations = query_->get_aggregations();
+    if (aggregations.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null aggregations", K(ret));
+    } else if (agg_cell_proj_.empty() && OB_FAIL(agg_cell_proj_.prepare_allocate(aggregations.count()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), K(aggregations.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < agg_cell_proj_.count(); i++) {
+        if (aggregations.at(i).get_column().case_compare(column_name) == 0 || aggregations.at(i).get_column() == "*") {
+          agg_cell_proj_.at(i) = cell_idx; 
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObNormalTableQueryResultIterator::get_next_result(table::ObTableQueryResult *&next_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_aggregate_query()) && OB_FAIL(get_aggregate_result(next_result))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("failt to get aggregate result", K(ret), K(next_result));
+    }
+  } else if (OB_FAIL(get_normal_result(next_result))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get normal result", K(ret), K(next_result));
+    }
+  } else { /* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryResult *&next_result)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableAggregation> *aggregations = NULL;  
+  ObNewRow *row = nullptr;
+  if (OB_ISNULL(one_result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("one_result_ should not be null", K(ret));
+  }
+  if (OB_ISNULL(query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null query", K(ret), K_(query));
+  } else if (FALSE_IT(aggregations = &query_->get_aggregations())) {
+  } else if (aggregations->empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty empty aggregations", K(ret));
+  } else if (agg_results_.empty() && agg_results_.prepare_allocate(aggregations->count())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate aggregate result", K(ret), K(aggregations->count()));
+  } else {/* do nothing*/}
+  
+  // for aggregate_avg
+  common::ObArenaAllocator allocator;
+  double* sum_double = nullptr;
+  int64_t* count_num = nullptr;
+  sum_double = static_cast<double *>(allocator.alloc(sizeof(double) * aggregations->count()));
+  count_num = static_cast<int64_t *>(allocator.alloc(sizeof(int64_t) * aggregations->count()));  
+  //
+  memset(sum_double, 0.0, sizeof(double) * aggregations->count());
+  memset(count_num, 0, sizeof(int64_t) * aggregations->count());
+  // TODO : check nullptr
+  // for aggregate_avg
+
+  while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < aggregations->count(); i++) {
+      switch (aggregations->at(i).get_type()) {
+        case ObTableAggregationType::MAX: {
+          ret = aggregate_max(i, row);
+        }
+        break;
+        case ObTableAggregationType::MIN: {
+          ret = aggregate_min(i, row);
+        }
+        break;
+        case ObTableAggregationType::COUNT: {
+          const ObString &key_word_ = aggregations->at(i).get_column();
+          ret = aggregate_count(i, row, key_word_);
+        }
+        break;
+        case ObTableAggregationType::SUM: {
+          ret = aggregate_sum(i, row);
+        }
+        break;
+        case ObTableAggregationType::AVG: {
+          ret = aggregate_avg(i, row, count_num[i], sum_double[i]);
+        }
+        break;
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+        }
+        break;
+      }
+      if (OB_FAIL(ret)) {
+        LOG_WARN("fail to aggregate result", K(ret), K(i), K(aggregations));
+      }
+    }
+  }  // end while
+
+  for (uint64_t i = 0; i < aggregations->count(); i++) {
+      if (aggregations->at(i).get_type() == ObTableAggregationType::AVG) {
+        const int64_t &count_num_ = count_num[i];
+        ObObj &agg_result = agg_results_.at(i);
+        if (count_num_ == 0) {
+          ObObj avg_value = ObObj(ObDoubleType);
+          avg_value.set_double(0.0);
+          if (OB_FAIL(ob_write_obj(allocator_, avg_value, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(avg_value)); 
+          }
+        } 
+        else {
+          ObObj avg_value = ObObj(ObDoubleType);
+          avg_value.set_double(sum_double[i] / count_num[i]);
+          if (OB_FAIL(ob_write_obj(allocator_, avg_value, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(avg_value)); 
+          }
+        }
+      }
+  }
+  //
+
+  //
+  has_more_rows_ = false;
+  if (OB_FAIL(one_result_->add_row(agg_results_))) {
+    LOG_WARN("fail to add aggregation result", K(ret), K(agg_results_));
+  } else if (one_result_->get_row_count() > 0) {
+    ret = OB_SUCCESS;
+  }
+  next_result = one_result_;
+  
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_max(uint64_t idx, const ObNewRow* row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (!agg_result.is_null() && !value.is_null()) {
+      int cmp_ret = 0;
+      if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
+        LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+      } else if (cmp_ret == ObObjCmpFuncs::CR_LT) {
+        if (OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+          LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value)); 
+        }
+      }
+  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+    LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+  } else {/* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_min(uint64_t idx, const ObNewRow* row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (!agg_result.is_null() && !value.is_null()) {
+      int cmp_ret = 0;
+      if (OB_FAIL(agg_result.compare(value, cmp_ret))) {
+        LOG_WARN("fail to compare", K(ret), K(agg_result), K(value));
+      } else if (cmp_ret == ObObjCmpFuncs::CR_GT) {
+        if (OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+          LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value)); 
+        }
+      }
+  } else if (!value.is_null() && OB_FAIL(ob_write_obj(allocator_, value, agg_result))) {
+    LOG_WARN("fail to write obj", K(ret), K(agg_result), K(value));
+  } else {/* do nothing */}
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_count(uint64_t idx, const ObNewRow* row, const ObString& key_word)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  if (key_word.empty() || key_word == "*") {
+      if (!agg_result.is_null()) {
+        agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + 1));
+      }
+      else {
+        ObObj count_begin = ObObj(static_cast<int64_t>(1));
+        if (OB_FAIL(ob_write_obj(allocator_, count_begin, agg_result))) {
+          LOG_WARN("fail to write obj", K(ret), K(agg_result), K(count_begin)); 
+        }
+      }    
+  }
+  else {
+    if (!value.is_null()) {
+      if (!agg_result.is_null()) {
+        agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + 1));
+      }
+      else {
+        ObObj count_begin = ObObj(static_cast<int64_t>(1));
+        if (OB_FAIL(ob_write_obj(allocator_, count_begin, agg_result))) {
+          LOG_WARN("fail to write obj", K(ret), K(agg_result), K(count_begin)); 
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_sum(uint64_t idx, const ObNewRow* row)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  ObObj &agg_result = agg_results_.at(idx);
+  const ObObjType &sum_type = value.get_type();
+  if (!value.is_null()) {
+    if (!agg_result.is_null()) {
+        switch(sum_type) {
+        //signed int
+        case ObTinyIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_tinyint()));
+        }
+        break;
+        case ObSmallIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_smallint()));
+        }
+        break;
+        case ObMediumIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_mediumint()));        
+        }
+        break;
+        case ObInt32Type: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_int32()));   
+        }
+        break;
+        case ObIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_int()));
+        }
+        break;
+        //unsigned int
+        case ObUTinyIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_utinyint()));
+        }
+        break;
+        case ObUSmallIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_usmallint()));
+        }
+        break;
+        case ObUMediumIntType: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_umediumint()));
+        }
+        break;
+        case ObUInt32Type: {
+         agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_uint32()));
+        }
+        break;
+        case ObUInt64Type: {
+          agg_result.set_int(static_cast<int64_t>(agg_result.get_int() + value.get_uint64()));
+        }
+        break;
+        //float and double
+        case ObFloatType: {
+          agg_result.set_double(static_cast<double>(agg_result.get_double() + value.get_float()));
+        }
+        break;
+        case ObDoubleType: {
+          agg_result.set_double(static_cast<double>(agg_result.get_double() + value.get_double()));
+        }
+        break;
+        //unsigned float and unsigned double
+        case ObUFloatType: {
+          agg_result.set_double(static_cast<double>(agg_result.get_double() + value.get_ufloat()));
+        }
+        break;
+        case ObUDoubleType: {
+          agg_result.set_double(static_cast<double>(agg_result.get_double() + value.get_udouble()));
+        }
+        break;
+        default: {
+          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
+        }
+      }
+    }
+    else {
+        switch(sum_type) {
+        //signed int
+        case ObTinyIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_tinyint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObSmallIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_smallint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObMediumIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_mediumint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }       
+        }
+        break;
+        case ObInt32Type: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_int32()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          } 
+        }
+        break;
+        case ObIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_int()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        //unsigned int
+        case ObUTinyIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_utinyint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObUSmallIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_usmallint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObUMediumIntType: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_umediumint()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObUInt32Type: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_uint32()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObUInt64Type: {
+          ObObj sum_begin = ObObj(static_cast<int64_t>(value.get_uint64()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        //float and double
+        case ObFloatType: {
+          ObObj sum_begin = ObObj(ObDoubleType);
+          sum_begin.set_double(static_cast<double>(value.get_float()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObDoubleType: {
+          ObObj sum_begin = ObObj(ObDoubleType);
+          sum_begin.set_double(static_cast<double>(value.get_double()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        //unsigned float and unsigned double
+        case ObUFloatType: {
+          ObObj sum_begin = ObObj(ObDoubleType);
+          sum_begin.set_double(static_cast<double>(value.get_ufloat()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        case ObUDoubleType: {
+          ObObj sum_begin = ObObj(ObDoubleType);
+          sum_begin.set_double(static_cast<double>(value.get_udouble()));
+          if (OB_FAIL(ob_write_obj(allocator_, sum_begin, agg_result))) {
+            LOG_WARN("fail to write obj", K(ret), K(agg_result), K(sum_begin)); 
+          }
+        }
+        break;
+        default: {
+          LOG_WARN("this data type does not support aggregate sum operation", K(ret), K(sum_type));  
+        }
+    }
+  }
+  }
+  return ret;
+}
+
+int ObNormalTableQueryResultIterator::aggregate_avg(uint64_t idx, const ObNewRow* row, int64_t& count, double& count_double)
+{
+  int ret = OB_SUCCESS;
+  const ObObj &value = row->get_cell(agg_cell_proj_.at(idx));
+  const ObObjType &avg_type = value.get_type();
+  if (!value.is_null()) {
+      count++;
+      switch(avg_type) {
+        //signed int
+        case ObTinyIntType: {
+          count_double += static_cast<double>(value.get_tinyint());
+        }
+        break;
+        case ObSmallIntType: {
+          count_double += static_cast<double>(value.get_smallint());
+        }
+        break;
+        case ObMediumIntType: {
+          count_double += static_cast<double>(value.get_mediumint());
+        }
+        break;
+        case ObInt32Type: {
+          count_double += static_cast<double>(value.get_int32());
+        }
+        break;
+        case ObIntType: {
+          count_double += static_cast<double>(value.get_int());
+        }
+        break;
+        //unsigned int
+        case ObUTinyIntType: {
+          count_double += static_cast<double>(value.get_utinyint());
+        }
+        break;
+        case ObUSmallIntType: {
+          count_double += static_cast<double>(value.get_usmallint());
+        }
+        break;
+        case ObUMediumIntType: {
+          count_double += static_cast<double>(value.get_umediumint());
+        }
+        break;
+        case ObUInt32Type: {
+          count_double += static_cast<double>(value.get_uint32());
+        }
+        break;
+        case ObUInt64Type: {
+          count_double += static_cast<double>(value.get_uint64());
+        }
+        break;
+        //float and double
+        case ObFloatType: {
+          count_double += static_cast<double>(value.get_float());
+        }
+        break;
+        case ObDoubleType: {
+          count_double += static_cast<double>(value.get_double());
+        }
+        break;
+        //unsigned float and unsigned double
+        case ObUFloatType: {
+          count_double += static_cast<double>(value.get_ufloat());
+        }
+        break;
+        case ObUDoubleType: {
+          count_double += static_cast<double>(value.get_udouble());
+        }
+        break;
+        default: {
+          LOG_WARN("this data type does not support aggregate avg operation", K(ret), K(avg_type));  
+        }
+      }
+  }return ret;
+}
+
+
+int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(one_result_)) {
@@ -2101,7 +2617,7 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
                                             *(ctx.table_param_), output_column_ids,
                                             ctx.columns_type_, schema_version,
                                             index_id, padding_num,
-                                            p_hcolumn_desc))) { // @todo optimize, table_param_ can be cached
+                                            p_hcolumn_desc, ctx))) { // @todo optimize, table_param_ can be cached
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(fill_query_scan_ranges(ctx, query,
                                             (table_id != index_id) ? padding_num : -1,
@@ -2149,7 +2665,7 @@ int ObTableService::execute_query(ObTableServiceQueryCtx &ctx, const ObTableQuer
    return the end k & cq
 */
 
-int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result)
+int ObTableService::execute_ttl_delete(ObTableServiceQueryCtx &ctx, const ObTableTTLOperation &ttl_operation, ObTableTTLOperationResult &result)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, COMMON_COLUMN_NUM> output_column_ids;
@@ -2170,7 +2686,7 @@ int ObTableService::execute_ttl_delete(ObTableServiceTTLCtx &ctx, const ObTableT
                                             *(ctx.table_param_), output_column_ids,
                                             ctx.columns_type_, schema_version,
                                             index_id, padding_num,
-                                            NULL))) {
+                                            NULL, ctx))) {
     LOG_WARN("failed to fill param", K(ret));
   } else if (OB_FAIL(fill_query_scan_ranges(ctx, query,
                                             (table_id != index_id) ? padding_num : -1,
@@ -2311,18 +2827,6 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
     }
   }
   return ret;
-}
-
-void ObTableServiceTTLCtx::destroy_scan_iterator(storage::ObPartitionService *part_service)
-{
-  if (NULL != scan_result_) {
-    if (NULL == part_service) {
-      LOG_ERROR("part_service is NULL, memory leak");
-    } else {
-      part_service->revert_scan_iter(scan_result_);
-      scan_result_ = NULL;
-    }
-  }
 }
 
 void ObTableTTLDeleteRowIterator::reset()
