@@ -78,10 +78,11 @@ public:
                                 bool is_prepare_protocol = true);
   int check_package_body_legal(const ObPLBlockNS *parent_ns,
                                       const ObPLPackageAST &package_ast);
-  static int update_schema_object_dep_info(pl::ObPLCompileUnitAST &ast,
+  static int update_schema_object_dep_info(ObIArray<ObSchemaObjVersion> &dp_tbl,
                                            uint64_t tenant_id,
-                                           uint64_t dep_obj_id, uint64_t schema_version,
                                            uint64_t owner_id,
+                                           uint64_t dep_obj_id,
+                                           uint64_t schema_version,
                                            share::schema::ObObjectType dep_obj_type);
 private:
   int init_function(const share::schema::ObRoutineInfo *proc, ObPLFunction &func);
