@@ -1260,7 +1260,10 @@ int ObRawExprResolverImpl::process_xml_attributes_values_node(const ParseNode *n
       ObRawExpr *para_key_expr = NULL;
       ObString col_name;
       para_expr = NULL;
-      if (OB_FAIL(get_column_raw_text_from_node(expr_value_node, col_name))) {
+      if (expr_value_node->type_ != T_COLUMN_REF && expr_value_node->type_ != T_OBJ_ACCESS_REF) {
+        ret = OB_ERR_XMLELEMENT_ALIASED;
+        LOG_WARN("get column raw text failed", K(ret));
+      } else if (OB_FAIL(get_column_raw_text_from_node(expr_value_node, col_name))) {
         // bugfix: 49298642
         // parameter 1 of function xmlelement without aliased
         ret = OB_ERR_XMLELEMENT_ALIASED;
