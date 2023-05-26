@@ -439,6 +439,8 @@ int ObPxTaskProcess::do_process()
     if (OB_SUCC(ret)) {
       if (nullptr != arg_.op_spec_root_) {
         const ObPxSqcMeta &sqc_meta = arg_.sqc_handler_->get_sqc_init_arg().sqc_;
+        // show monitoring information from qc
+        LOG_DEBUG("receive monitoring information", K(sqc_meta.get_monitoring_info()));
         ObExtraServerAliveCheck qc_alive_checker(sqc_meta.get_qc_addr(),
           arg_.exec_ctx_->get_my_session()->get_process_query_time());
         ObExtraServerAliveCheck::Guard check_guard(*arg_.exec_ctx_, qc_alive_checker);

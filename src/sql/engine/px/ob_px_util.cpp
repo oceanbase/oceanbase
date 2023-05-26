@@ -488,6 +488,7 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
         sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
+        sqc.get_monitoring_info().init(ctx);
         if (OB_SUCC(ret)) {
           if (!dfo.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()))) {
@@ -603,6 +604,7 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         sqc.set_fulltree(child.is_fulltree());
         sqc.set_qc_server_id(child.get_qc_server_id());
         sqc.set_parent_dfo_id(child.get_parent_dfo_id());
+        sqc.get_monitoring_info().init(exec_ctx);
         if (OB_SUCC(ret)) {
           if (!child.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(child.get_p2p_dh_map_info()))) {
@@ -688,6 +690,7 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_fulltree(parent.is_fulltree());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
+        sqc.get_monitoring_info().assign(child_sqc.get_monitoring_info());
         if (OB_FAIL(parent.add_sqc(sqc))) {
           LOG_WARN("fail add sqc", K(sqc), K(ret));
         }
@@ -776,6 +779,7 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         sqc.set_fulltree(parent.is_fulltree());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
+        sqc.get_monitoring_info().init(exec_ctx);
         if (OB_SUCC(ret)) {
           if (!parent.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
@@ -824,6 +828,7 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       sqc.set_fulltree(dfo.is_fulltree());
       sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
       sqc.set_qc_server_id(dfo.get_qc_server_id());
+      sqc.get_monitoring_info().init(exec_ctx);
       if (!dfo.get_p2p_dh_map_info().is_empty()) {
         OZ(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()));
       }
