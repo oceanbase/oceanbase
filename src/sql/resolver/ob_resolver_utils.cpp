@@ -6495,6 +6495,10 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
       OZ (schema_guard.get_routine_info(tenant_id,
                                         udf_raw_expr.get_udf_id(),
                                         routine_info));
+      if (OB_FAIL(ret)) {
+        ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
+        LOG_WARN("function 'string' may not be used in SQL", K(ret), K(udf_raw_expr));
+      }
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {

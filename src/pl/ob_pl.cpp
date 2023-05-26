@@ -584,12 +584,14 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       routine->get_has_parallel_affect_factor()) {
     // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
     // udf内部有tcl语句时，该标记为true
-    last_insert_id_ = session_info.get_local_last_insert_id();
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
     OX (has_stash_savepoint_ = true);
   }
-  if (is_autonomous_) {
+  if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode()) {
+    last_insert_id_ = session_info.get_local_last_insert_id();
+  }
+  if (OB_SUCC(ret) && is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
 
