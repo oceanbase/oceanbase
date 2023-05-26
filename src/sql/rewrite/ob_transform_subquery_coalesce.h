@@ -49,7 +49,7 @@ private:
     ObRawExpr *any_expr_;
     ObRawExpr *all_expr_;
     ObStmtMapInfo map_info_;
-    TransformFlag trans_flag_ = DEFAULT; //defalut value;
+    TransformFlag trans_flag_ = DEFAULT; //default value;
 
     TO_STRING_KV(K(exists_expr_), 
                  K(not_exists_expr_), 

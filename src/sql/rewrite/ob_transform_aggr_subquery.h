@@ -75,7 +75,7 @@ private:
     ObSEArray<bool, 4> is_null_prop_; // need case when for a expr
     ObArray<ObRawExpr *> not_null_const_;
     int64_t pullup_flag_; // the methods uesd when pulling up the ja query
-    ObRawExpr *not_null_expr_;  //  not null expr of subquery if corelated join happened
+    ObRawExpr *not_null_expr_;  //  not null expr of subquery if correlated join happened
     ObRawExpr *parent_expr_of_query_ref;  // parent expr need to be modified for vector subquery comparison
     bool limit_for_exists_;
     int64_t limit_value_;
