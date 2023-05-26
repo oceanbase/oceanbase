@@ -5630,10 +5630,6 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           aggr_info.rollup_idx_ = expr_idx + group_exprs->count();
         }
       }
-      if (OB_SUCC(ret) && !match) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected status: the argument of grouping is invalid", K(ret));
-      }
     }
 
     // The arguments of grouping_id are the indexs in rollup exprs.
@@ -5652,11 +5648,6 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           if (OB_FAIL(aggr_info.grouping_idxs_.push_back(group_exprs->count() + expr_idx))) {
             LOG_WARN("push_back fail", K(ret));
           }
-        }
-
-        if (OB_SUCC(ret) && expr_idx == OB_INVALID_INDEX) {
-          ret = OB_ERR_WRONG_FIELD_WITH_GROUP;
-          LOG_WARN("unexpected status: the argument of grouping_id is invalid");
         }
       }
     }

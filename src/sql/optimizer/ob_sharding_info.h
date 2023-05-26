@@ -322,8 +322,8 @@ private:
                         common::ObIArray<ObRawExpr*> &partition_keys);
 
   // check whether all partition keys are of the same type
-  static int is_compatible_partition_key(const ObShardingInfo &first_sharding,
-                                         const ObShardingInfo &second_sharding,
+  static int is_compatible_partition_key(const ObIArray<ObSEArray<ObRawExpr*, 8>> &first_part_keys_list,
+                                         const ObIArray<ObSEArray<ObRawExpr*, 8>> &second_part_keys_list,
                                          bool &is_compatible);
 
   // check whether all the partition keys are covered by join keys
