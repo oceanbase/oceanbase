@@ -79,10 +79,13 @@ enum class RestoreSyncStatus {
   INVALID_RESTORE_SYNC_STATUS = 0,
   RESTORE_SYNC_NORMAL = 1,
   RESTORE_SYNC_SOURCE_HAS_A_GAP = 2,
-  RESTORE_SYNC_STANDBY_LOG_NOT_MATCH = 3,
-  RESTORE_SYNC_CHECK_USER_OR_PASSWORD = 4,
-  RESTORE_SYNC_CHECK_NETWORK = 5,
-  RESTORE_SYNC_NOT_AVAILABLE = 6,
+  RESTORE_SYNC_SUBMIT_LOG_NOT_MATCH = 3,
+  RESTORE_SYNC_FETCH_LOG_NOT_MATCH = 4,
+  RESTORE_SYNC_CHECK_USER_OR_PASSWORD = 5,
+  RESTORE_SYNC_CHECK_NETWORK = 6,
+  RESTORE_SYNC_FETCH_LOG_TIME_OUT = 7,
+  RESTORE_SYNC_SUSPEND = 8,
+  RESTORE_SYNC_NOT_AVAILABLE = 9,
   MAX_RESTORE_SYNC_STATUS
 };
 
@@ -93,12 +96,17 @@ inline int restore_sync_status_to_string(const RestoreSyncStatus status, char *s
     strncpy(str_buf_, "NORMAL", str_len);
   } else if (RestoreSyncStatus::RESTORE_SYNC_SOURCE_HAS_A_GAP == status) {
     strncpy(str_buf_, "SOURCE HAS A GAP", str_len);
-  } else if (RestoreSyncStatus::RESTORE_SYNC_STANDBY_LOG_NOT_MATCH == status) {
+  } else if (RestoreSyncStatus::RESTORE_SYNC_SUBMIT_LOG_NOT_MATCH == status
+    || RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_NOT_MATCH == status) {
     strncpy(str_buf_, "STANDBY LOG NOT MATCH", str_len);
   } else if (RestoreSyncStatus::RESTORE_SYNC_CHECK_USER_OR_PASSWORD == status) {
     strncpy(str_buf_, "CHECK USER OR PASSWORD", str_len);
   } else if (RestoreSyncStatus::RESTORE_SYNC_CHECK_NETWORK == status) {
     strncpy(str_buf_, "CHECK NETWORK", str_len);
+  } else if (RestoreSyncStatus::RESTORE_SYNC_FETCH_LOG_TIME_OUT == status) {
+    strncpy(str_buf_, "FETCH LOG TIMEOUT", str_len);
+  } else if (RestoreSyncStatus::RESTORE_SYNC_SUSPEND == status) {
+    strncpy(str_buf_, "RESTORE SUSPEND", str_len);
   } else if (RestoreSyncStatus::RESTORE_SYNC_NOT_AVAILABLE == status) {
     strncpy(str_buf_, "NOT AVAILABLE", str_len);
   } else {
@@ -241,7 +249,9 @@ public:
   //            other code      unexpected ret_code
   int get_next_sorted_task(ObFetchLogTask *&task);
   bool restore_to_end() const;
+  int get_restore_error_unlock_(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   int diagnose(RestoreDiagnoseInfo &diagnose_info) const;
+  int refresh_error_context();
   int get_ls_restore_status_info(RestoreStatusInfo &restore_status_info);
   TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
 
@@ -256,7 +266,7 @@ private:
   int check_restore_to_newest_from_archive_(ObLogArchivePieceContext &piece_context,
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
-  int get_err_code_and_message_(int ret_code, ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &err_type, ObSqlString &comment);
+  int get_err_code_and_message_(int ret_code, ObLogRestoreErrorContext::ErrorType error_type, RestoreSyncStatus &err_type);
 
 private:
   ObRemoteLogParent *parent_;

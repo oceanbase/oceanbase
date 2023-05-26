@@ -285,6 +285,7 @@ private:
       const bool need_stop_rpc,
       const RpcStopReason rpc_stop_reason,
       const bool need_dispatch_stream_task);
+  void process_errsim_code_(FetchLogARpcResult *result);
 
 private:
   ////////////////////////////// RpcCB //////////////////////////////

@@ -120,6 +120,7 @@ void LSFetchCtx::reset()
   data_dict_iterator_.reset();
   fetched_log_size_ = 0;
   ctx_desc_.reset();
+  err_handler_ = NULL;
 }
 
 int LSFetchCtx::init(
@@ -129,7 +130,8 @@ int LSFetchCtx::init(
     const int64_t progress_id,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str,
-    ObILogFetcherLSCtxAddInfo &ls_ctx_add_info)
+    ObILogFetcherLSCtxAddInfo &ls_ctx_add_info,
+    IObLogErrHandler &err_handler)
 {
   int ret = OB_SUCCESS;
   const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
@@ -151,6 +153,7 @@ int LSFetchCtx::init(
   progress_.reset(start_lsn, start_tstamp_ns);
   start_parameters_ = start_parameters;
   fetched_log_size_ = 0;
+  err_handler_ = &err_handler;
 
   if (start_lsn.is_valid()) {
     // LSN is valid, init mem_storage; otherwise after need locate start_lsn success, we can init mem_storage
@@ -960,6 +963,18 @@ bool LSFetchCtx::need_switch_server(const common::ObAddr &cur_svr)
   } else {}
 
   return bool_ret;
+}
+
+void LSFetchCtx::handle_error(const share::ObLSID &ls_id,
+      const IObLogErrHandler::ErrType &err_type,
+      share::ObTaskId &trace_id,
+      const palf::LSN &lsn,
+      const int err_no,
+      const char *fmt, ...)
+{
+   if (OB_NOT_NULL(err_handler_)) {
+     err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
+   }
 }
 
 /////////////////////////////////// LSProgress ///////////////////////////////////

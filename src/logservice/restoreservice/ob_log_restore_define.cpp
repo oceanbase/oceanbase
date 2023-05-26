@@ -28,6 +28,7 @@ void ObLogRestoreErrorContext::reset()
 {
   ret_code_ = OB_SUCCESS;
   trace_id_.reset();
+  err_lsn_ = palf::LSN(palf::LOG_INVALID_LSN_VAL);
 }
 
 ObLogRestoreErrorContext &ObLogRestoreErrorContext::operator=(const ObLogRestoreErrorContext &other)

@@ -835,6 +835,7 @@ int FetchStream::read_group_entry_(
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ObTaskId trace_id(*ObCurTraceId::get_trace_id());
 
   if (OB_ISNULL(ls_fetch_ctx_) || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -853,6 +854,9 @@ int FetchStream::read_group_entry_(
       } else if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("LogHander handle_group_entry failed", KR(ret), K(tenant_id), K(ls_id), K(proposal_id),
             K(group_start_lsn), K(group_entry));
+        if (OB_NOT_NULL(ls_fetch_ctx_)) {
+          ls_fetch_ctx_->handle_error(ls_id, IObLogErrHandler::ErrType::SUBMIT_LOG, trace_id, group_start_lsn, ret, "%s");
+        }
       }
     }
   }
@@ -1217,21 +1221,39 @@ int FetchStream::handle_fetch_log_error_(
   int ret = OB_SUCCESS;
   bool need_kick_out = false;
   KickOutReason kick_out_reason = NONE;
+  ObTaskId trace_id(*ObCurTraceId::get_trace_id());
 
   // RPC failure, need switch server
   if (OB_SUCCESS != rcode.rcode_) {
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_RPC;
+    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+      ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
+                                  IObLogErrHandler::ErrType::FETCH_LOG,
+                                  trace_id,
+                                  ls_fetch_ctx_->get_next_lsn(),
+                                  rcode.rcode_,
+                                  "%s");
     LOG_ERROR("fetch log fail on rpc, need_switch_server", K(svr_), K(rcode), "fetch_stream", this);
+    }
   }
   // server return error
   else if (OB_SUCCESS != resp.get_err()) {
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
-    LOG_ERROR("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
-        "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
-        K(rcode), K(resp));
+    if (OB_NOT_NULL(ls_fetch_ctx_)) {
+      ls_fetch_ctx_->handle_error(ls_fetch_ctx_->get_tls_id().get_ls_id(),
+                                  IObLogErrHandler::ErrType::FETCH_LOG,
+                                  trace_id,
+                                  ls_fetch_ctx_->get_next_lsn(),
+                                  resp.get_err(),
+                                  "%s");
+      LOG_ERROR("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
+                "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
+                K(rcode), K(resp));
+    }
+
   } else {
     need_kick_out = false;
   }

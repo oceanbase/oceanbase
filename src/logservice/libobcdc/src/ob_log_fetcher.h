@@ -221,6 +221,21 @@ private:
         K_(part_count));
   };
 
+  class LogFetcherErrHandler : public logfetcher::IObLogErrHandler
+  {
+    public:
+      LogFetcherErrHandler();
+      virtual ~LogFetcherErrHandler() {}
+    public:
+      virtual void handle_error(const int err_no, const char *fmt, ...) override {}
+      virtual void handle_error(const share::ObLSID &ls_id,
+          const ErrType &err_type,
+          share::ObTaskId &trace_id,
+          const palf::LSN &lsn,
+          const int err_no,
+          const char *fmt, ...) override {}
+  };
+
 private:
   bool                          is_inited_;
   bool                          is_loading_data_dict_baseline_data_;

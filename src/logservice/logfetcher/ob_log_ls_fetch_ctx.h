@@ -35,6 +35,7 @@
 #include "ob_log_fetcher_ls_ctx_additional_info.h"     // PartTransDispatchInfo
 #include "logservice/common_util/ob_log_ls_define.h"        // logservice::TenantLSID
 #include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
+#include "logservice/logfetcher/ob_log_fetcher_err_handler.h" // IObLogErrHandler
 
 namespace oceanbase
 {
@@ -92,7 +93,8 @@ public:
       const int64_t progress_id,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest_str,
-      ObILogFetcherLSCtxAddInfo &ls_ctx_add_info);
+      ObILogFetcherLSCtxAddInfo &ls_ctx_add_info,
+      IObLogErrHandler &err_handler);
 
   void set_host(IObLogLSFetchMgr &ls_fetch_mgr) { ls_fetch_mgr_ = &ls_fetch_mgr; }
 
@@ -287,6 +289,13 @@ public:
   int64_t get_fetched_log_size() { return ATOMIC_LOAD(&fetched_log_size_); }
 
   int64_t get_proposal_id() const { return start_parameters_.get_proposal_id(); }
+
+  void handle_error(const share::ObLSID &ls_id,
+      const IObLogErrHandler::ErrType &err_type,
+      share::ObTaskId &trace_id,
+      const palf::LSN &lsn,
+      const int err_no,
+      const char *fmt, ...);
 
   // Internal member functions
 private:
@@ -539,6 +548,9 @@ protected:
 
   // extent description of LSFetchCtx
   LSFetchCtxDesc          ctx_desc_;
+
+  // Log fetcher error handler
+  IObLogErrHandler        *err_handler_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(LSFetchCtx);

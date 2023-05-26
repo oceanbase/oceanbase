@@ -15,6 +15,7 @@
 
 #include "share/ob_define.h"
 #include <stdint.h>
+#include "src/logservice/palf/lsn.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ public:
   virtual void handle_error(const share::ObLSID &ls_id,
       const ErrType &err_type,
       share::ObTaskId &trace_id,
+      const palf::LSN &lsn,
       const int err_no,
       const char *fmt, ...) = 0;
 };

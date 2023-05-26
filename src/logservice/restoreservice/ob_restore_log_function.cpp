@@ -146,7 +146,6 @@ int ObRestoreLogFunction::wait_restore_quota_(const int64_t size, bool &done, vo
   return ret;
 }
 
-//TODO 接入controller
 int ObRestoreLogFunction::process_(const share::ObLSID &id,
     const int64_t proposal_id,
     const palf::LSN &lsn,

@@ -544,6 +544,8 @@ void FetchLogARpc::stop()
   }
 }
 
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_TIME_OUT);
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_RESP_ERROR);
 int FetchLogARpc::next_result(FetchLogARpcResult *&result, bool &rpc_is_flying)
 {
   int ret = OB_SUCCESS;
@@ -581,7 +583,10 @@ int FetchLogARpc::next_result(FetchLogARpcResult *&result, bool &rpc_is_flying)
       }
     }
   }
-
+  if (OB_SUCC(ret) && (ERRSIM_FETCH_LOG_TIME_OUT || ERRSIM_FETCH_LOG_RESP_ERROR)) {
+    process_errsim_code_(result);
+    LOG_TRACE("process errsim code");
+  }
   return ret;
 }
 
@@ -873,6 +878,20 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
         "upper_limit", NTS_TO_STR(req_upper_limit),
         "delta", next_upper_limit - req_upper_limit,
         K(rpc_time), KPC(resp));
+  }
+}
+
+void FetchLogARpc::process_errsim_code_(FetchLogARpcResult *result)
+{
+  if (ERRSIM_FETCH_LOG_TIME_OUT) {
+    result->rcode_.rcode_ = ERRSIM_FETCH_LOG_TIME_OUT;
+    result->trace_id_ = *ObCurTraceId::get_trace_id();
+    LOG_TRACE("errsim fetch log time out", K(result));
+  }
+  if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    result->resp_.set_err(ERRSIM_FETCH_LOG_RESP_ERROR);
+    result->trace_id_ = *ObCurTraceId::get_trace_id();
+    LOG_TRACE("errsim fetch log resp error", K(result));
   }
 }
 

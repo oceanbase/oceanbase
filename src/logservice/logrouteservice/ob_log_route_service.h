@@ -75,6 +75,7 @@ public:
       const common::ObRegion &prefer_region,
       const int64_t cluster_id,
       const bool is_across_cluster,
+      logfetcher::IObLogErrHandler *err_handler,
       const char *external_server_blacklist = "|",
       const int64_t background_refresh_time_sec = 10,
       const int64_t all_server_cache_update_interval_sec = 5,
@@ -361,6 +362,7 @@ private:
   ObLogAllSvrCache all_svr_cache_;
   ObLSRouteTimerTask ls_route_timer_task_;
   common::ObTimer timer_;
+  logfetcher::IObLogErrHandler *err_handler_;
   int timer_id_;
   int tg_id_;
   int64_t background_refresh_time_sec_;
