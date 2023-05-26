@@ -521,6 +521,20 @@ int ObLogFetcher::update_fetching_log_upper_limit(const share::SCN &upper_limit_
   return ret;
 }
 
+int ObLogFetcher::update_compressor_type(const common::ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("LogFetcher is not inited", KR(ret));
+  } else if (OB_FAIL(rpc_.update_compressor_type(compressor_type))) {
+    LOG_WARN("ObLogRpc update_compressor_type failed", K(compressor_type));
+  }
+
+  return ret;
+}
+
 int ObLogFetcher::get_progress_info(ProgressInfo &progress_info)
 {
   int ret = OB_SUCCESS;

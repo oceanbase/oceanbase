@@ -201,6 +201,8 @@ void ObLogRestoreService::do_thread_task_()
       last_normal_work_ts_ = common::ObTimeUtility::fast_current_time();
     }
     update_restore_upper_limit_();
+
+    set_compressor_type_();
   }
 }
 
@@ -237,6 +239,31 @@ void ObLogRestoreService::report_error_()
 void ObLogRestoreService::update_restore_upper_limit_()
 {
   fetch_log_impl_.update_restore_upper_limit();
+}
+
+void ObLogRestoreService::set_compressor_type_()
+{
+  int ret = OB_SUCCESS;
+  logservice::ObLogService* log_service = MTL(logservice::ObLogService*);
+  palf::PalfOptions options;
+  common::ObCompressorType compressor_type = INVALID_COMPRESSOR;
+
+  if (OB_NOT_NULL(log_service)) {
+    if (OB_FAIL(log_service->get_palf_options(options))) {
+      LOG_WARN("log_service get_palf_options failed", KR(ret));
+    } else {
+      if (options.compress_options_.enable_transport_compress_) {
+        compressor_type = options.compress_options_.transport_compress_func_;
+        fetch_log_impl_.set_compressor_type(compressor_type);
+      } else {
+        // close
+        fetch_log_impl_.set_compressor_type(common::INVALID_COMPRESSOR);
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log_service is nullptr", KR(ret));
+  }
 }
 
 bool ObLogRestoreService::need_schedule_() const

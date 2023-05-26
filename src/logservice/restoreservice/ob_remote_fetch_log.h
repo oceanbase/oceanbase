@@ -16,6 +16,7 @@
 #include <cstdint>
 #include "common/ob_role.h"     // ObRole
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/compress/ob_compress_util.h"
 #include "share/restore/ob_log_restore_source.h"
 
 namespace oceanbase
@@ -39,6 +40,7 @@ public:
   int do_schedule(const share::ObLogRestoreSourceItem &source);
   void clean_resource();
   void update_restore_upper_limit();
+  void set_compressor_type(const common::ObCompressorType &compressor_type);
 
 private:
   bool inited_;

@@ -16,6 +16,7 @@
 #define OCEANBASE_LOG_FETCHER_LOG_FETCHER_H_
 
 #include "share/scn.h"                          // SCN
+#include "lib/compress/ob_compress_util.h"      // ObCompressorType
 #include "ob_log_ls_fetch_mgr.h"                // ObLogLSFetchMgr
 #include "ob_log_fetch_stream_container_mgr.h"  // ObFsContainerMgr
 #include "ob_log_rpc.h"                         // ObLogRpc
@@ -112,6 +113,8 @@ public:
   // @retval OB_SUCCESS          success
   // @retval Other error codes   Failed
   virtual int update_fetching_log_upper_limit(const share::SCN &upper_limit_scn) = 0;
+
+  virtual int update_compressor_type(const common::ObCompressorType &compressor_type) = 0;
 
   virtual int get_progress_info(ProgressInfo &progress_info) = 0;
 
@@ -219,6 +222,8 @@ public:
   int get_ls_proposal_id(const share::ObLSID &id, int64_t &proposal_id);
 
   virtual int update_fetching_log_upper_limit(const share::SCN &upper_limit_scn);
+
+  virtual int update_compressor_type(const common::ObCompressorType &compressor_type);
 
   virtual int get_progress_info(ProgressInfo &progress_info);
 

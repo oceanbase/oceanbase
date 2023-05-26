@@ -16,6 +16,7 @@
 #include "lib/container/ob_iarray.h"     // Array
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/compress/ob_compress_util.h" // ObCompressorType
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_additional_info_factory.h"
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h"
 #include "logservice/logfetcher/ob_log_fetcher_ls_ctx_default_factory.h"
@@ -80,6 +81,8 @@ public:
 
   // set the max scn can be restored
   int set_restore_log_upper_limit();
+
+  int set_compressor_type(const common::ObCompressorType &compressor_type);
 
 private:
   // TODO LogFetcher如何区分LogRestoreSource变化了, 比如从cluster 1的tenant A, 变为了cluster 2的tenant B

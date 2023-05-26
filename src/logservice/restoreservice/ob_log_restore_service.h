@@ -80,6 +80,7 @@ private:
   void clean_resource_();
   void report_error_();
   void update_restore_upper_limit_();
+  void set_compressor_type_();
   bool need_schedule_() const;
 
 private:

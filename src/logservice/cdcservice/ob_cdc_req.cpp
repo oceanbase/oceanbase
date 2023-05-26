@@ -249,7 +249,7 @@ OB_DEF_DESERIALIZE(ObCdcReqStartLSNByTsResp)
  *
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchLogReq, rpc_ver_, ls_id_, start_lsn_,
-                    upper_limit_ts_, client_pid_, client_id_, progress_, flag_);
+                    upper_limit_ts_, client_pid_, client_id_, progress_, flag_, compressor_type_);
 OB_SERIALIZE_MEMBER(ObCdcFetchStatus,
                     is_reach_max_lsn_,
                     is_reach_upper_limit_ts_,
@@ -475,7 +475,7 @@ void ObCdcLSFetchLogResp::reset()
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq::MissLogParam, miss_lsn_);
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_,
-                    client_pid_, client_id_, flag_);
+                    client_pid_, client_id_, flag_, compressor_type_);
 
 void ObCdcLSFetchMissLogReq::reset()
 {

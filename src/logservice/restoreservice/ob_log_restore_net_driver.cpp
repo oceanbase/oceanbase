@@ -571,6 +571,19 @@ int ObLogRestoreNetDriver::set_restore_log_upper_limit()
   return ret;
 }
 
+int ObLogRestoreNetDriver::set_compressor_type(const common::ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (NULL == fetcher_) {
+    // do nothing
+  } else if (OB_FAIL(fetcher_->update_compressor_type(compressor_type))) {
+    LOG_WARN("ObLogFetcher update_compressor_type failed", K(compressor_type));
+  }
+
+  return ret;
+}
+
 int ObLogRestoreNetDriver::LogErrHandler::init(storage::ObLSService *ls_svr)
 {
   int ret = OB_SUCCESS;

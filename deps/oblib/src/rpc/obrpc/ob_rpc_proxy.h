@@ -138,6 +138,7 @@ public:
   uint64_t get_tenant() const { return tenant_id_; }
   void set_tenant(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   int32_t get_group_id() const { return group_id_; }
+  common::ObCompressorType  get_compressor_type() const { return compressor_type_; }
   void set_group_id(int32_t group_id) { group_id_ = group_id; }
   void set_priv_tenant(uint64_t tenant_id) { priv_tenant_id_ = tenant_id; }
   void set_server(const common::ObAddr &dst) { dst_ = dst; }
