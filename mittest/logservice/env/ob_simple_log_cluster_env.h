@@ -72,6 +72,17 @@ class MockLSAdapter;
   ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION); \
   return RUN_ALL_TESTS();
 
+#define EXPECT_UNTIL_EQ(x, y) while(!(x == y))        \
+        { usleep(500);                                \
+          SERVER_LOG(INFO, "EXPECT_UNTIL_EQ WAIT",    \
+          "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
+          "line", __LINE__); }
+#define EXPECT_UNTIL_NE(x, y) while(x == y)           \
+        { usleep(500);                                \
+          SERVER_LOG(INFO, "EXPECT_UNTIL_NE WAIT",    \
+          "file", oceanbase::common::occam::get_file_name_without_dir(__FILE__), \
+          "line", __LINE__); }
+
 void init_gtest_output(std::string &gtest_log_name);
 int generate_data(char *&buf, int buf_len, int &real_data_size, const int wanted_data_size);
 int generate_specifice_size_data(char *&buf, int buf_len, int wanted_data_size);
@@ -141,10 +152,26 @@ public:
   int create_paxos_group(const int64_t id, const share::SCN &create_scn, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group(const int64_t id, const LSN &lsn, int64_t &leader_idx, PalfHandleImplGuard &leader);
   int create_paxos_group(const int64_t id, const PalfBaseInfo &info, int64_t &leader_idx, PalfHandleImplGuard &leader);
-  int create_paxos_group(const int64_t id, const PalfBaseInfo &info, palf::PalfLocationCacheCb *loc_cb, int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group(const int64_t id,
+                         const PalfBaseInfo &info,
+                         palf::PalfLocationCacheCb *loc_cb,
+                         int64_t &leader_idx,
+                         const bool with_mock_election,
+                         PalfHandleImplGuard &leader);
   int create_paxos_group_with_arb(const int64_t id, int64_t &arb_replica_idx, int64_t &leader_idx, PalfHandleImplGuard &leader);
-  int create_paxos_group_with_arb(const int64_t id, palf::PalfLocationCacheCb *loc_cb, int64_t &arb_replica_idx,
-                                  int64_t &leader_idx, PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb(const int64_t id,
+                                  palf::PalfLocationCacheCb *loc_cb,
+                                  int64_t &arb_replica_idx,
+                                  int64_t &leader_idx,
+                                  const bool with_mock_election,
+                                  PalfHandleImplGuard &leader);
+  int create_paxos_group_with_mock_election(const int64_t id,
+                                            int64_t &leader_idx,
+                                            PalfHandleImplGuard &leader);
+  int create_paxos_group_with_arb_mock_election(const int64_t id,
+                                                int64_t &arb_replica_idx,
+                                                int64_t &leader_idx,
+                                                PalfHandleImplGuard &leader);
   virtual int delete_paxos_group(const int64_t id);
   virtual int update_disk_options(const int64_t server_id, const int64_t log_block_number);
   virtual int restart_paxos_groups();
