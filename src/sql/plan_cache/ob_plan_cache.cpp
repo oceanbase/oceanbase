@@ -396,11 +396,8 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   bool enable_udr = false;
   bool need_late_compilation = false;
   ObJITEnableMode jit_mode = ObJITEnableMode::OFF;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-  if (tenant_config.is_valid()) {
-    enable_udr = tenant_config->enable_user_defined_rewrite_rules;
-  }
+
   if (cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
   }
@@ -411,7 +408,7 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
     } else if (OB_FAIL(pc_ctx.sql_ctx_.session_info_->get_jit_enabled_mode(jit_mode))) {
       LOG_WARN("failed to get jit mode");
     } else {
-      // do nothing
+      enable_udr = pc_ctx.sql_ctx_.session_info_->enable_udr();
     }
   }
   if (OB_SUCC(ret) && plan != NULL) {

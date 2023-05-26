@@ -133,5 +133,29 @@ int ObTxTableGuard::self_freeze_task()
   }
 }
 
+bool ObTxTableGuard::check_ls_offline()
+{
+  bool discover_ls_offline = false;
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(tx_table_)) {
+    ret = OB_NOT_INIT;
+    discover_ls_offline = false;
+    STORAGE_LOG(WARN, "tx table is nullptr", K(ret), K(discover_ls_offline));
+  } else {
+    int64_t cur_epoch = tx_table_->get_epoch();
+    ObTxTable::TxTableState tx_table_state = tx_table_->get_state();
+    if (cur_epoch != epoch_ || tx_table_state == ObTxTable::TxTableState::PREPARE_OFFLINE
+        || tx_table_state == ObTxTable::TxTableState::OFFLINE) {
+      discover_ls_offline = true;
+
+      STORAGE_LOG(INFO, "discover ls offline", K(discover_ls_offline), K(cur_epoch), K(epoch_),
+                  K(tx_table_state));
+    }
+  }
+
+  return discover_ls_offline;
+}
+
 }  // namespace storage
 }  // end namespace oceanbase

@@ -112,6 +112,10 @@ void *ObMallocAllocator::alloc(const int64_t size, const oceanbase::lib::ObMemAt
 #else
   const bool do_not_use_me = false;
 #endif
+  if (OB_INVALID_TENANT_ID == inner_attr.tenant_id_) {
+    inner_attr.tenant_id_ = OB_SERVER_TENANT_ID;
+    LOG_ERROR("invalid tenant id", K(attr.tenant_id_), K(inner_attr.tenant_id_), K(ret));
+  }
   if (OB_SUCCESS != ret) {
   } else if (OB_UNLIKELY(0 == inner_attr.tenant_id_)
              || OB_UNLIKELY(INT64_MAX == inner_attr.tenant_id_)) {
@@ -482,7 +486,7 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
       char *buf = (char *)ctxalp(BUFLEN);
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LIB_LOG(ERROR, "no memory", K(ret));
+        LIB_LOG(WARN, "no memory", K(ret));
       } else {
         int64_t ctx_pos = 0;
         const volatile int64_t *ctx_hold_bytes = mgr->get_ctx_hold_bytes();

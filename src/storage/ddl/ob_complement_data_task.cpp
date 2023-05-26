@@ -225,14 +225,14 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
 {
   int ret = OB_SUCCESS;
   void *builder_buf = nullptr;
-  const ObSSTable *latest_major_sstable = nullptr;
+  const ObSSTable *first_major_sstable = nullptr;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataContext has already been inited", K(ret));
   } else if (OB_UNLIKELY(!param.is_valid() || !desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param), K(desc));
-  } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.ls_id_, param.dest_tablet_id_, latest_major_sstable))) {
+  } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.ls_id_, param.dest_tablet_id_, first_major_sstable))) {
     LOG_WARN("check if major sstable exist failed", K(ret), K(param));
   } else if (OB_FAIL(data_sstable_redo_writer_.init(param.ls_id_,
                                                     param.dest_tablet_id_))) {
@@ -250,7 +250,7 @@ int ObComplementDataContext::init(const ObComplementDataParam &param, const ObDa
                                           ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("failed to init index builder", K(ret), K(desc));
   } else {
-    is_major_sstable_exist_ = nullptr != latest_major_sstable ? true : false;
+    is_major_sstable_exist_ = nullptr != first_major_sstable ? true : false;
     concurrent_cnt_ = param.concurrent_cnt_;
     is_inited_ = true;
   }
@@ -1204,10 +1204,10 @@ int ObComplementMergeTask::process()
   } else if (OB_FAIL(guard.switch_to(param_->tenant_id_))) {
     LOG_WARN("switch to tenant failed", K(ret), K(param_->tenant_id_));
   } else if (context_->is_major_sstable_exist_) {
-    const ObSSTable *latest_major_sstable = nullptr;
-    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param_->ls_id_, param_->dest_tablet_id_, latest_major_sstable))) {
+    const ObSSTable *first_major_sstable = nullptr;
+    if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param_->ls_id_, param_->dest_tablet_id_, first_major_sstable))) {
       LOG_WARN("check if major sstable exist failed", K(ret), K(*param_));
-    } else if (OB_ISNULL(latest_major_sstable)) {
+    } else if (OB_ISNULL(first_major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, major sstable shoud not be null", K(ret), K(*param_));
     } else if (OB_FAIL(ObTabletDDLUtil::report_ddl_checksum(param_->ls_id_,
@@ -1215,7 +1215,7 @@ int ObComplementMergeTask::process()
                                                             param_->dest_table_id_,
                                                             1 /* execution_id */,
                                                             param_->task_id_,
-                                                            latest_major_sstable->get_meta().get_col_checksum()))) {
+                                                            first_major_sstable->get_meta().get_col_checksum()))) {
       LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
     } else if (OB_FAIL(GCTX.ob_service_->submit_tablet_update_task(param_->tenant_id_, param_->ls_id_, param_->dest_tablet_id_))) {
       LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));

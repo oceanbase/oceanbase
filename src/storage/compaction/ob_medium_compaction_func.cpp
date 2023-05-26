@@ -278,6 +278,7 @@ int ObMediumCompactionScheduleFunc::schedule_next_medium_primary_cluster(
         ret = decide_medium_snapshot(is_major);
       } else {
         ++schedule_stat.wait_rs_validate_cnt_;
+        LOG_DEBUG("cannot schedule next round merge now", K(ret), K(ret_info), K(medium_list), KPC(tablet));
       }
     } else {
       ret = decide_medium_snapshot(is_major, adaptive_merge_reason);

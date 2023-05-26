@@ -114,6 +114,20 @@ public:
   PALF_PLUGINS_DELEGATE_PTR(loc_cb_, loc_lock_, nonblock_get_leader);
   PALF_PLUGINS_DELEGATE_PTR(loc_cb_, loc_lock_, nonblock_renew_leader);
 
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_set_initial_member_list_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_election_leader_change_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_reconfiguration_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_replica_type_change_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_access_mode_change_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_set_base_lsn_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_enable_sync_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_disable_sync_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_enable_vote_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_disable_vote_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_advance_base_info_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_rebuild_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_flashback_event);
+  PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_truncate_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, record_role_change_event);
   PALF_PLUGINS_DELEGATE_PTR(palf_monitor_, palf_monitor_lock_, add_log_write_stat);
 

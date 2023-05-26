@@ -46,7 +46,7 @@ private:
       sql::ObFreeSessionCtx &free_session_ctx,
       const bool is_oracle_mode);
   void cleanup_tmp_session(
-      sql::ObSQLSessionInfo *tmp_session,
+      sql::ObSQLSessionInfo *&tmp_session,
       sql::ObFreeSessionCtx &free_session_ctx);
 
   int process_start_transaction(
@@ -93,6 +93,18 @@ private:
                          const ObInnerSQLTransmitArg &arg);
   const observer::ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObInnerSqlRpcP);
+};
+
+class ResourceGroupGuard
+{
+  //todo qilu:revert after ddl_back_threads are split under tenants
+public:
+  ResourceGroupGuard(const int32_t group_id);
+  ~ResourceGroupGuard();
+public:
+  bool group_change_;
+  int32_t old_group_id_;
+
 };
 
 }

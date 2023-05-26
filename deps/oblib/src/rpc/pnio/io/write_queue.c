@@ -92,7 +92,7 @@ int wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
   int err = 0;
   int64_t wbytes = 0;
   err = sk_flush_blist((sock_t*)s, &wq->queue.head, wq->pos, &wbytes);
-  if (0 == err) {
+  if (0 == err && wbytes > 0) {
     *old_head = wq_consume(wq, wbytes);
   }
   return err;

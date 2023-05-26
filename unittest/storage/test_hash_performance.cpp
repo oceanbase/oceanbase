@@ -95,7 +95,7 @@ int TestHashMapPerformance::prepare_hash_map(const int64_t count, const double l
   if (hash_map_.created()) {
     hash_map_.destroy();
   }
-  if (OB_FAIL(hash_map_.create(bucket_num, common::ObModIds::TEST_SERVICE, common::ObModIds::TEST_SERVICE))) {
+  if (OB_FAIL(hash_map_.create(bucket_num, "TestService", "TestService"))) {
     STORAGE_LOG(WARN, "fail to create hash map", K(ret));
   }
   return ret;
@@ -107,7 +107,7 @@ int TestHashMapPerformance::prepare_array_hash_map(const int64_t count, const do
   const double bucket_num_tmp = load_factor * static_cast<double>(count);
   const int64_t bucket_num = static_cast<int64_t>(bucket_num_tmp);
   STORAGE_LOG(INFO, "array hash map bucket num", K(bucket_num));
-  if (OB_FAIL(array_hash_map_.init(common::ObModIds::TICKET_QUEUE, bucket_num))) {
+  if (OB_FAIL(array_hash_map_.init("TicketQueue", bucket_num))) {
     STORAGE_LOG(WARN, "fail to create hash map", K(ret));
   }
   return ret;

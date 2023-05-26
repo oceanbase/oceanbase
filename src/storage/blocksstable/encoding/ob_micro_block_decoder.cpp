@@ -70,12 +70,15 @@ class ObDecoderCtxArray
 {
 public:
   typedef ObColumnDecoderCtx ObDecoderCtx;
-  ObDecoderCtxArray() {};
+  ObDecoderCtxArray() : ctxs_()
+  {
+    ctxs_.set_attr(SET_USE_500("DecoderCtxArray"));
+  };
   virtual ~ObDecoderCtxArray()
   {
     FOREACH(it, ctxs_) {
       ObDecoderCtx *c = *it;
-      OB_DELETE(ObDecoderCtx, ObModIds::OB_SSTABLE_READER, c);
+      OB_DELETE(ObDecoderCtx, "TLDecoderCtx", c);
     }
     ctxs_.reset();
   }
@@ -90,15 +93,15 @@ public:
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
     } else {
-      if (ctxs_.size() < size) {
-        for (int64_t i = ctxs_.size(); OB_SUCC(ret) && i < size; ++i) {
-          ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, ObModIds::OB_SSTABLE_READER);
+      if (ctxs_.count() < size) {
+        for (int64_t i = ctxs_.count(); OB_SUCC(ret) && i < size; ++i) {
+          ObDecoderCtx *ctx = OB_NEW(ObDecoderCtx, "TLDecoderCtx");
           if (NULL == ctx) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc memory failed", K(ret));
           } else if (OB_FAIL(ctxs_.push_back(ctx))) {
             LOG_WARN("array push back failed", K(ret));
-            OB_DELETE(ObDecoderCtx, ObModIds::OB_SSTABLE_READER, ctx);
+            OB_DELETE(ObDecoderCtx, "TLDecoderCtx", ctx);
           }
         }
         if (OB_SUCC(ret)) {
@@ -112,7 +115,8 @@ public:
   }
 
 private:
-  ObArray<ObDecoderCtx *> ctxs_;
+  static const int64_t LOCAL_CTX_CNT = 128;
+  ObSEArray<ObDecoderCtx *, LOCAL_CTX_CNT> ctxs_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDecoderCtxArray);
 };
@@ -123,13 +127,16 @@ ObColumnDecoderCtx ObMicroBlockDecoder::none_exist_column_decoder_ctx_;
 class ObTLDecoderCtxArray
 {
 public:
-  ObTLDecoderCtxArray() {}
+  ObTLDecoderCtxArray() : ctxs_array_()
+  {
+    ctxs_array_.set_attr(SET_USE_500("TLDecoderCtxArr"));
+  }
 
   virtual ~ObTLDecoderCtxArray()
   {
     FOREACH(it, ctxs_array_) {
       ObDecoderCtxArray *ctxs = *it;
-      OB_DELETE(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER, ctxs);
+      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
     }
   }
 
@@ -142,7 +149,7 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("NULL instance", K(ret));
     } else if (tl_array->ctxs_array_.empty()) {
-      ctxs = OB_NEW(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER);
+      ctxs = OB_NEW(ObDecoderCtxArray, "TLDecoderCtx");
       if (NULL == ctxs) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
@@ -163,9 +170,12 @@ public:
       LOG_WARN("NULL instance", K(ret));
     } else if (NULL == ctxs) {
       // do nothing
+    } else if (tl_array->ctxs_array_.count() >= MAX_ARRAY_CNT) {
+      // reach the threshold, release memory
+      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
     } else if (OB_FAIL(tl_array->ctxs_array_.push_back(ctxs))) {
       LOG_WARN("array push back failed", K(ret));
-      OB_DELETE(ObDecoderCtxArray, ObModIds::OB_SSTABLE_READER, ctxs);
+      OB_DELETE(ObDecoderCtxArray, "TLDecoderCtx", ctxs);
     }
   }
 
@@ -173,7 +183,8 @@ private:
   static ObTLDecoderCtxArray *instance() { return GET_TSI_MULT(ObTLDecoderCtxArray, 1); }
 
 private:
-  ObArray<ObDecoderCtxArray *> ctxs_array_;
+  static const int64_t MAX_ARRAY_CNT = 32;
+  ObSEArray<ObDecoderCtxArray *, MAX_ARRAY_CNT> ctxs_array_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTLDecoderCtxArray);
 };

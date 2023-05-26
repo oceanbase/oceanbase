@@ -201,20 +201,21 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
   static const int64_t PS_BUCKET_NUM = 64;
   if (OB_FAIL(ObBasicSessionInfo::init(sessid, proxy_sessid, bucket_allocator, tz_info))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(package_state_map_.create(hash::cal_next_prime(4),
-                                               ObModIds::OB_HASH_BUCKET,
-                                               ObModIds::OB_HASH_NODE))) {
+                                               "PackStateMap",
+                                               "PackStateMap"))) {
     LOG_WARN("create package state map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(sequence_currval_map_.create(hash::cal_next_prime(32),
-                                                  ObModIds::OB_HASH_BUCKET,
-                                                  ObModIds::OB_HASH_NODE))) {
+                                                  "SequenceMap",
+                                                  "SequenceMap"))) {
     LOG_WARN("create sequence current value map failed", K(ret));
   } else if (!is_acquire_from_pool() &&
              OB_FAIL(contexts_map_.create(hash::cal_next_prime(32),
-                                          ObModIds::OB_HASH_BUCKET,
-                                          ObModIds::OB_HASH_NODE))) {
+                                          "ContextsMap",
+                                          "ContextsMap"))) {
     LOG_WARN("create contexts map failed", K(ret));
   } else {
     curr_session_context_size_ = 0;
@@ -243,6 +244,7 @@ int ObSQLSessionInfo::test_init(uint32_t version, uint32_t sessid, uint64_t prox
   UNUSED(version);
   if (OB_FAIL(ObBasicSessionInfo::test_init(sessid, proxy_sessid, bucket_allocator))) {
     LOG_WARN("fail to init basic session info", K(ret));
+  } else if (FALSE_IT(txn_free_route_ctx_.set_sessid(sessid))) {
   } else {
     is_inited_ = true;
   }
@@ -2428,6 +2430,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&sort_area_size_, tenant_config->_sort_area_size);
       ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
+      ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,

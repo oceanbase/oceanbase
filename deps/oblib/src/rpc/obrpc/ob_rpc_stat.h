@@ -18,6 +18,7 @@
 #include "lib/random/ob_random.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "lib/list/ob_dlist.h"
+#include "lib/worker.h"
 
 namespace oceanbase
 {

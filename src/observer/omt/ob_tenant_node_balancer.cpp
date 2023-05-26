@@ -242,7 +242,7 @@ int ObTenantNodeBalancer::get_server_allocated_resource(ServerResource &server_r
   server_resource.reset();
   TenantUnits tenant_units;
 
-  if (OB_FAIL(omt_->get_tenant_units(tenant_units))) {
+  if (OB_FAIL(omt_->get_tenant_units(tenant_units, true))) {
     LOG_WARN("failed to get tenant units");
   } else {
     for (int64_t i = 0; i < tenant_units.count(); i++) {
@@ -535,7 +535,7 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
   int ret = OB_SUCCESS;
 
   TenantUnits local_units;
-  if (OB_FAIL(omt_->get_tenant_units(local_units))) {
+  if (OB_FAIL(omt_->get_tenant_units(local_units, false))) {
     LOG_WARN("failed to get local tenant units");
   } else if (OB_FAIL(fetch_effective_tenants(local_units, units))) {
     LOG_WARN("failed to fetch effective tenants", K(local_units));

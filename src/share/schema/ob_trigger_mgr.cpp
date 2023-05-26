@@ -87,21 +87,21 @@ uint64_t ObSimpleTriggerSchema::get_exec_tenant_id() const
 }
 
 ObTriggerMgr::ObTriggerMgr()
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      trigger_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_INFO_VECTOR)),
-      trigger_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_ID_MAP)),
-      trigger_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_NAME_MAP)),
+      trigger_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      trigger_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      trigger_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }
 
 ObTriggerMgr::ObTriggerMgr(ObIAllocator &allocator)
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      trigger_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_INFO_VECTOR)),
-      trigger_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_ID_MAP)),
-      trigger_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_NAME_MAP)),
+      trigger_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      trigger_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      trigger_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_TRIGGER_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }

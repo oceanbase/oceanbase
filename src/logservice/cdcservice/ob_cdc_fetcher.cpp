@@ -141,14 +141,7 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
 
   // set debug error
   resp.set_debug_err(ret);
-  if (OB_SUCC(ret)) {
-    // do nothing
-  } else if (OB_LS_NOT_EXIST == ret) {
-    LOG_INFO("LS not exist when fetch log", KR(ret), K(tenant_id_), K(req));
-  } else {
-    LOG_WARN("fetch log error", KR(ret), K(tenant_id_), K(req));
-    ret = OB_ERR_SYS;
-  }
+  resp.set_err(ret);
 
   if (OB_SUCC(ret)) {
     const int64_t fetch_log_size = resp.get_pos();
@@ -160,8 +153,6 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
   }
 
   fetch_log_time_stat.inc_fetch_total_time(ObTimeUtility::current_time() - cur_tstamp);
-
-  resp.set_err(ret);
 
   LOG_INFO("fetch_log done", K(req), K(resp), K(fetch_log_time_stat));
   return ret;
@@ -208,6 +199,7 @@ int ObCdcFetcher::fetch_missing_log(const obrpc::ObCdcLSFetchMissLogReq &req,
 
   // set debug error
   resp.set_debug_err(ret);
+
   if (OB_SUCC(ret)) {
     // do nothing
   } else if (OB_LS_NOT_EXIST == ret) {
@@ -298,11 +290,10 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   } else { }
 
   // Update statistics
-  if (OB_SUCC(ret)) {
-    frt.fetch_status_.reset(reach_max_lsn, reach_upper_limit, scan_round_count);
-    resp.set_fetch_status(frt.fetch_status_);
-    // update_monitor(frt.fetch_status_);
-  } else {
+  frt.fetch_status_.reset(reach_max_lsn, reach_upper_limit, scan_round_count);
+  resp.set_fetch_status(frt.fetch_status_);
+  // update_monitor(frt.fetch_status_);
+  if (OB_FAIL(ret)) {
     LOG_WARN("fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
         K(req), K(resp));
   }
@@ -369,7 +360,8 @@ int ObCdcFetcher::fetch_log_in_archive_(
         LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
       }
     } else if (start_lsn != lsn) {
-      ret = OB_ERR_UNEXPECTED;
+      // to keep consistency with the ret code of palf
+      ret = OB_INVALID_DATA;
       LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
           K(remote_iter));
     } else {
@@ -635,8 +627,8 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
     ret = OB_SUCCESS;
   } else if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
     // log not exists
-    ret = OB_SUCCESS;
-    if (OB_FAIL(handle_log_not_exist_(ls_id, resp))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(handle_log_not_exist_(ls_id, resp))) {
       LOG_WARN("handle log_not_exist error", K(ret));
     }
   } else {

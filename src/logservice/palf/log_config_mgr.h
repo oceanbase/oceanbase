@@ -70,6 +70,31 @@ enum LogConfigChangeType
   FORCE_SINGLE_MEMBER,
 };
 
+inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
+{
+  #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
+  switch(state)
+  {
+    CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
+    CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
+    CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
+    CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
+    default:
+      return "Invalid";
+  }
+  #undef CHECK_LOG_CONFIG_TYPE_STR
+}
+
 typedef common::ObArrayHashMap<common::ObAddr, common::ObRegion> LogMemberRegionMap;
 
 inline bool is_add_log_sync_member_list(const LogConfigChangeType type)
@@ -167,32 +192,8 @@ public:
   }
   bool is_valid() const;
   void reset();
-  const char *Type2Str(const LogConfigChangeType state) const
-  {
-    #define CHECK_LOG_CONFIG_TYPE_STR(x) case(LogConfigChangeType::x): return #x
-    switch(state)
-    {
-      CHECK_LOG_CONFIG_TYPE_STR(CHANGE_REPLICA_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_ARB_MEMBER);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_MEMBER_AND_NUM);
-      CHECK_LOG_CONFIG_TYPE_STR(ADD_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(REMOVE_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(SWITCH_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(DEGRADE_ACCEPTOR_TO_LEARNER);
-      CHECK_LOG_CONFIG_TYPE_STR(UPGRADE_LEARNER_TO_ACCEPTOR);
-      CHECK_LOG_CONFIG_TYPE_STR(STARTWORKING);
-      default:
-        return "Invalid";
-    }
-    #undef CHECK_LOG_CONFIG_TYPE_STR
-  }
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
-      K_(config_version), K_(ref_scn), "type", Type2Str(type_));
+      K_(config_version), K_(ref_scn), "type", LogConfigChangeType2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;
@@ -358,9 +359,7 @@ public:
     J_OBJ_START();
     J_KV(K_(palf_id), K_(self), K_(alive_paxos_memberlist), K_(alive_paxos_replica_num),         \
       K_(log_ms_meta), K_(prev_log_proposal_id),                                                 \
-      K_(applied_alive_paxos_memberlist), K_(applied_alive_paxos_replica_num),                   \
-      K_(applied_all_learnerlist),                                                               \
-      K_(prev_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version),                 \
+      K_(prev_lsn), K_(prev_end_lsn), K_(prev_mode_pid), K_(state), K_(persistent_config_version), \
       K_(ms_ack_list), K_(resend_config_version), K_(resend_log_list),                           \
       K_(last_submit_config_log_time_us), K_(region), K_(paxos_member_region_map),                 \
       K_(register_time_us), K_(parent), K_(parent_keepalive_time_us),                                \
@@ -427,7 +426,7 @@ private:
   int try_resend_config_log_(const int64_t proposal_id);
   // broadcast leader info to global learners, only called in leader active
   int submit_broadcast_leader_info_(const int64_t proposal_id) const;
-  int get_log_barrier_(LSN &prev_log_lsn, int64_t &prev_log_proposal_id) const;
+  int get_log_barrier_(LSN &prev_log_lsn, LSN &prev_log_end_lsn, int64_t &prev_log_proposal_id) const;
   int check_servers_lsn_and_version_(const common::ObAddr &server,
                                      const LogConfigVersion &config_version,
                                      const int64_t conn_timeout_us,
@@ -510,6 +509,7 @@ private:
   int64_t prev_log_proposal_id_;
   // previous lsn for barrier
   LSN prev_lsn_;
+  LSN prev_end_lsn_;
   // previous mode proposal_id for barrier
   int64_t prev_mode_pid_;
   ConfigChangeState state_;

@@ -226,6 +226,10 @@ public:
   int get_schema_store_tenants(common::ObIArray<uint64_t> &tenant_ids);
   bool check_schema_store_tenant_exist(const uint64_t &tenant_id);
 
+  int get_tenant_broadcast_consensus_version(const uint64_t tenant_id,
+                                             int64_t &consensus_version);
+  int set_tenant_broadcast_consensus_version(const uint64_t tenant_id,
+                                             const int64_t consensus_version);
   virtual int set_tenant_received_broadcast_version(const uint64_t tenant_id, const int64_t version);
   virtual int set_last_refreshed_schema_info(const ObRefreshSchemaInfo &schema_info);
   int update_baseline_schema_version(const uint64_t tenant_id, const int64_t baseline_schema_version);
@@ -260,6 +264,9 @@ public:
   int check_if_tenant_has_been_dropped(
       const uint64_t tenant_id,
       bool &is_dropped);
+  int check_if_tenant_schema_has_been_refreshed(
+    const uint64_t tenant_id,
+    bool &is_refreshed);
   int check_is_creating_standby_tenant(
     const uint64_t tenant_id,
     bool &is_creating_standby);

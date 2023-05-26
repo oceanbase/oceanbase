@@ -1062,24 +1062,6 @@ public:
   bool has_lob_header_; // for observer 4.0 compatibility
 };
 
-// mock xml binary header for test;
-class ObMockXmlBinHeader {
-public:
-  ObMockXmlBinHeader(bool is_unparsed, bool is_document) :
-    is_unparsed_(is_unparsed), is_document_(is_document), reserved_(0) {}
-  ~ObMockXmlBinHeader(){};
-
-  TO_STRING_KV(K_(is_unparsed), K_(is_document), K_(reserved));
-  union {
-    uint32_t flag_;
-    struct {
-      uint32_t is_unparsed_: 1;
-      uint32_t is_document_: 1;
-      uint32_t reserved_: 30;
-    };
-  };
-};
-
 struct ObObjPrintParams
 {
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):
@@ -1115,7 +1097,8 @@ struct ObObjPrintParams
       uint32_t binary_string_print_hex_:1;
       uint32_t need_print_converter_:1;
       uint32_t print_const_expr_type_:1;
-      uint32_t reserved_:23;
+      uint32_t print_null_string_value_:1;
+      uint32_t reserved_:22;
     };
   };
 

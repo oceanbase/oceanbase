@@ -51,7 +51,10 @@ void ObSignalHandle::run1()
     //to check _stop every second
     struct timespec timeout = {1, 0};
     while (!has_set_stop()) {//need not to check ret
-      if ( -1 == (signum = sigtimedwait(&waitset, NULL, &timeout))) {
+      oceanbase::lib::Thread::is_blocking_ |= oceanbase::lib::Thread::WAIT;
+      signum = sigtimedwait(&waitset, NULL, &timeout);
+      oceanbase::lib::Thread::is_blocking_ = 0;
+      if (-1 == signum) {
         //do not log error, because timeout will also return -1.
       } else if (OB_FAIL(deal_signals(signum))) {
         LOG_WARN("Deal signal error", K(ret), K(signum));
@@ -175,7 +178,6 @@ int ObSignalHandle::deal_signals(int signum)
       ob_print_mod_memory_usage();
       //GARL_PRINT();
       PC_REPORT();
-      ObObjFreeListList::get_freelists().dump();
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
       break;
     }
@@ -241,13 +243,6 @@ int ObSignalHandle::deal_signals(int signum)
     case 63: {
       // print tenant memstore consumption condition by wenduo.swd
       ObTenantMemoryPrinter::get_instance().print_tenant_usage();
-      break;
-    }
-    case 64: {
-      // Print memtable stat. By yijun.fyj.
-      if (OB_FAIL(memtable::ObMemtableStat::get_instance().print_stat())) {
-        LOG_WARN("Print memtable stat error", K(ret));
-      }
       break;
     }
     default: {

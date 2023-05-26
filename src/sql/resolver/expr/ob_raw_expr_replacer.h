@@ -54,6 +54,8 @@ public:
 
   virtual bool skip_child(ObRawExpr &expr) override;
   bool get_replace_happened() const { return replace_happened_; }
+  void set_skip_bool_param_mysql(bool skip) { skip_bool_param_mysql_ = skip; }
+  bool is_skip_bool_param_mysql() { return skip_bool_param_mysql_; }
   int add_replace_expr(ObRawExpr *from_expr,
                        ObRawExpr *to_expr);
   int add_replace_exprs(const ObIArray<ObRawExpr *> &from_exprs,
@@ -78,6 +80,9 @@ private:
   hash::ObHashMap<uint64_t, uint64_t> expr_replace_map_;
 
   bool replace_happened_;
+   //If true, skip param epxrs which are resolved as flags instead of exprs in mysql.
+   //(e.g. the second param of IS expr)
+  bool skip_bool_param_mysql_;
 };
 
 } // end namespace sql

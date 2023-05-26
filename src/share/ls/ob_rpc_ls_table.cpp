@@ -144,8 +144,8 @@ int ObRpcLSTable::get_ls_info_(ObLSInfo &ls_info)
     // case 4: try use all_server_list from local configure
     if (need_retry) { // overwrite ret
       ObArray<ObAddr> server_list;
-      if (OB_FAIL(rs_mgr_->construct_all_server_list(rs_list, server_list))) {
-        LOG_WARN("fail to construct all server list", KR(ret));
+      if (OB_FAIL(ObShareUtil::parse_all_server_list(rs_list, server_list))) {
+        LOG_WARN("fail to construct all server list", KR(ret), K(rs_list));
       } else if (server_list.empty()) {
         // server_list is empty, do nothing
         LOG_INFO("server_list is empty, do nothing", KR(ret), K(server_list));

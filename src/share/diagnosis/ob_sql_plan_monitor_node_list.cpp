@@ -48,6 +48,7 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id,
                                 const int64_t queue_size)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(tenant_id, "SqlPlanMonMap");
   if (inited_) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(queue_.init(MOD_LABEL, queue_size, tenant_id))) {
@@ -56,8 +57,8 @@ int ObPlanMonitorNodeList::init(uint64_t tenant_id,
     SERVER_LOG(WARN, "create failed", K(ret));
   } else if (OB_FAIL(node_map_.create(!lib::is_mini_mode() ? DEFAULT_BUCKETS_COUNT :
         DEFAULT_BUCKETS_COUNT / 100,
-        "SqlPlanMonMap",
-        "SqlPlanMonMap"))) {
+        attr,
+        attr))) {
     LOG_WARN("failed to create hash map", K(ret));
   } else if (OB_FAIL(TG_START(tg_id_))) {
     SERVER_LOG(WARN, "init timer fail", K(ret));
@@ -101,12 +102,12 @@ void ObPlanMonitorNodeList::destroy()
 int ObPlanMonitorNodeList::mtl_init(ObPlanMonitorNodeList* &node_list)
 {
   int ret = OB_SUCCESS;
-  node_list = OB_NEW(ObPlanMonitorNodeList, MOD_LABEL);
+  uint64_t tenant_id = lib::current_resource_owner_id();
+  node_list = OB_NEW(ObPlanMonitorNodeList, ObMemAttr(tenant_id, MOD_LABEL));
   if (nullptr == node_list) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for ObPlanMonitorNodeList", K(ret));
   } else {
-    uint64_t tenant_id = lib::current_resource_owner_id();
     int64_t mem_limit = get_tenant_memory_limit(tenant_id);
     if (OB_FAIL(node_list->init(tenant_id, mem_limit, MAX_QUEUE_SIZE))) {
       LOG_WARN("failed to init event list", K(ret));
@@ -221,4 +222,3 @@ int ObSqlPlanMonitorRecycleTask::init(ObPlanMonitorNodeList *node_list)
   }
   return ret;
 }
-

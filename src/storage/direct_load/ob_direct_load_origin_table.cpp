@@ -16,7 +16,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace observer;
 using namespace share;
 using namespace share::schema;
 

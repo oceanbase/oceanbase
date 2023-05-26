@@ -1982,6 +1982,34 @@ int ObResolverUtils::resolve_stmt_type(const ParseResult &result, stmt::StmtType
   return ret;
 }
 
+int ObResolverUtils::set_string_val_charset(ObObjParam &val, ObString &charset, ObObj &result_val,
+                                            bool is_strict_mode,
+                                            bool return_ret)
+{
+  int ret = OB_SUCCESS;
+  ObCharsetType charset_type = CHARSET_INVALID;
+  if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
+    ret = OB_ERR_UNKNOWN_CHARSET;
+    LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+  } else {
+    // use the default collation of the specified charset
+    ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
+    val.set_collation_type(collation_type);
+    LOG_DEBUG("use default collation", K(charset_type), K(collation_type));
+    ObLength length = static_cast<ObLength>(ObCharset::strlen_char(val.get_collation_type(),
+          val.get_string_ptr(),
+          val.get_string_len()));
+    val.set_length(length);
+
+    // 为了跟mysql报错一样，这里检查一下字符串是否合法，仅仅是检查，不合法则报错，不做其他操作
+    // check_well_formed_str的ret_error参数为true的时候，is_strict_mode参数失效，因此这里is_strict_mode直接传入true
+    if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, is_strict_mode, return_ret))) {
+      LOG_WARN("invalid str", K(ret), K(val), K(is_strict_mode), K(return_ret));
+    }
+  }
+  return ret;
+}
+
 int ObResolverUtils::resolve_const(const ParseNode *node,
                                    const stmt::StmtType stmt_type,
                                    ObIAllocator &allocator,
@@ -2040,7 +2068,8 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
         ObString str_val;
         ObObj result_val;
         str_val.assign_ptr(const_cast<char *>(node->str_value_), static_cast<int32_t>(node->str_len_));
-        val.set_string(static_cast<ObObjType>(node->type_), str_val);
+        val.set_string(lib::is_mysql_mode() && is_nchar ?
+                              ObVarcharType : static_cast<ObObjType>(node->type_), str_val);
         // decide collation
         /*
          MySQL determines a literal's character set and collation in the following manner:
@@ -2061,7 +2090,14 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
 //        } else if (0 == node->num_child_) {
         if (0 == node->num_child_) {
           // for STRING without collation, e.g. show tables like STRING;
-          val.set_collation_type(connection_collation);
+          if (lib::is_mysql_mode() && is_nchar) {
+            ObString charset(strlen("utf8mb4"), "utf8mb4");
+            if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+              LOG_WARN("set string val charset failed", K(ret));
+            }
+          } else {
+            val.set_collation_type(connection_collation);
+          }
         } else {
           // STRING in SQL expression
           ParseNode *charset_node = NULL;
@@ -2076,31 +2112,15 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             ObCollationType collation_type = CS_TYPE_INVALID;
             if (charset_node != NULL) {
               ObString charset(charset_node->str_len_, charset_node->str_value_);
-              if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
-                ret = OB_ERR_UNKNOWN_CHARSET;
-                LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
-              } else {
-                // use the default collation of the specified charset
-                collation_type = ObCharset::get_default_collation(charset_type);
-                val.set_collation_type(collation_type);
-                LOG_DEBUG("use default collation", K(charset_type), K(collation_type));
-                ObLength length = static_cast<ObLength>(ObCharset::strlen_char(val.get_collation_type(),
-                      val.get_string_ptr(),
-                      val.get_string_len()));
-                val.set_length(length);
-
-                // 为了跟mysql报错一样，这里检查一下字符串是否合法，仅仅是检查，不合法则报错，不做其他操作
-                // check_well_formed_str的ret_error参数为true的时候，is_strict_mode参数失效，因此这里is_strict_mode直接传入true
-                if (OB_SUCC(ret) && OB_FAIL(ObSQLUtils::check_well_formed_str(val, result_val, true, true))) {
-                  LOG_WARN("invalid str", K(ret), K(val));
-                }
+              if (OB_FAIL(set_string_val_charset(val, charset, result_val, false, false))) {
+                LOG_WARN("set string val charset failed", K(ret));
               }
             }
           }
         }
         ObLengthSemantics length_semantics = LS_DEFAULT;
         if (OB_SUCC(ret)) {
-          if (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_) {
+          if (lib::is_oracle_mode() && (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_)) {
             length_semantics = LS_CHAR;
           } else {
             length_semantics = default_length_semantics;
@@ -4377,6 +4397,21 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
+    if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+      if (OB_FAIL(expr->formalize(session_info))) {
+        LOG_WARN("fail to formalize expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
+        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+        } else {
+          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+        }
+      }
+    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
@@ -4464,7 +4499,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                                 *
         ERROR at line 1:
         ORA-12899: value too large for column "Z0_TEST2" (actual: 4000, maximum: 200) */
-        if (expr_length_in_byte < 0 && ObLongTextType == expr->get_result_type().get_type()) {
+        if (ObLongTextType == expr->get_result_type().get_type()) {
           expr_length_in_byte = OB_MAX_ORACLE_CHAR_LENGTH_BYTE * 2;
         }
       }
@@ -5363,8 +5398,12 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
       break;
     case ObStringTC:
       data_type.set_length(length);
-
-      if (ObVarcharType != data_type.get_obj_type()
+      if (length < -1) { // length is more than 32 bit
+        ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+        LOG_WARN("column data length is invalid", K(ret), K(length), K(data_type));
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, ident_name.ptr(),
+                      static_cast<int>(OB_MAX_MYSQL_VARCHAR_LENGTH));
+      } else if (ObVarcharType != data_type.get_obj_type()
           && ObCharType != data_type.get_obj_type()
           && ObNVarchar2Type != data_type.get_obj_type()
           && ObNCharType != data_type.get_obj_type()) {
@@ -6406,6 +6445,56 @@ int ObResolverUtils::resolve_string(const ParseNode *node, ObString &string)
   }
   return ret;
 }
+
+// judge whether pdml stmt contain udf can parallel execute or not has two stage:
+// stage1:check has dml write stmt or read/write package var info in this funciton;
+// stage2:record udf has select stmt info, and when optimize this stmt,
+// according outer stmt type to determine, if udf has select stmt:
+// case1: if outer stmt is select, can paralllel
+// case2: if outer stmt is dml write stmt, forbid parallel
+int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       ObRawExpr &expr,
+                                       bool &contain_select_stmt)
+{
+  int ret = OB_SUCCESS;
+  const ObRoutineInfo *routine_info = NULL;
+  ObUDFRawExpr &udf_raw_expr = static_cast<ObUDFRawExpr&>(expr);
+
+  if (udf_raw_expr.is_parallel_enable()) {
+    //do nothing
+  } else {
+    uint64_t tenant_id = session_info.get_effective_tenant_id();
+    bool enable_parallel = true;
+    if (udf_raw_expr.get_is_udt_udf()) {
+      tenant_id = pl::get_tenant_id_by_object_id(udf_raw_expr.get_pkg_id());
+      OZ (schema_guard.get_routine_info_in_udt(tenant_id, udf_raw_expr.get_pkg_id(), udf_raw_expr.get_udf_id(), routine_info));
+    } else if (udf_raw_expr.get_pkg_id() != OB_INVALID_ID) {
+      tenant_id = pl::get_tenant_id_by_object_id(udf_raw_expr.get_pkg_id());
+      OZ (schema_guard.get_routine_info_in_package(tenant_id, udf_raw_expr.get_pkg_id(), udf_raw_expr.get_udf_id(), routine_info));
+    } else {
+      OZ (schema_guard.get_routine_info(tenant_id,
+                                        udf_raw_expr.get_udf_id(),
+                                        routine_info));
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
+      if (routine_info->is_modifies_sql_data() ||
+          routine_info->is_wps() ||
+          routine_info->is_rps() ||
+          routine_info->is_has_sequence() ||
+          routine_info->is_external_state()) {
+        enable_parallel = false;
+      }
+      if (routine_info->is_reads_sql_data()) {
+        contain_select_stmt = true;
+      }
+      OX (udf_raw_expr.set_parallel_enable(enable_parallel));
+    }
+  }
+  return ret;
+}
+
 
 int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              sql::ObRawExprFactory &expr_factory,

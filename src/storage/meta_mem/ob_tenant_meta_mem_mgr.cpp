@@ -123,7 +123,7 @@ int ObTenantMetaMemMgr::mtl_new(ObTenantMetaMemMgr *&meta_mem_mgr)
   int ret = OB_SUCCESS;
 
   const uint64_t tenant_id = MTL_ID();
-  meta_mem_mgr = OB_NEW(ObTenantMetaMemMgr, oceanbase::ObModIds::OMT_TENANT, tenant_id);
+  meta_mem_mgr = OB_NEW(ObTenantMetaMemMgr, ObMemAttr(tenant_id, "MetaMemMgr"), tenant_id);
   if (OB_ISNULL(meta_mem_mgr)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(tenant_id));
@@ -135,6 +135,7 @@ int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
   lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
+  lib::ObMemAttr other_attr(tenant_id_, "T3MOtherMem");
   const int64_t bucket_num = cal_adaptive_bucket_num();
   const int64_t pin_set_bucket_num = common::hash::cal_next_prime(DEFAULT_BUCKET_NUM);
   if (OB_UNLIKELY(is_inited_)) {
@@ -149,13 +150,15 @@ int ObTenantMetaMemMgr::init()
   } else if (OB_FAIL(tablet_map_.init(bucket_num, tenant_id_, "TabletMap", TOTAL_LIMIT, HOLD_LIMIT,
         common::OB_MALLOC_NORMAL_BLOCK_SIZE))) {
     LOG_WARN("fail to initialize tablet map", K(ret), K(bucket_num));
-  } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT))) {
+  } else if (OB_FAIL(last_min_minor_sstable_set_.create(DEFAULT_MINOR_SSTABLE_SET_COUNT, other_attr))) {
     LOG_WARN("fail to create last min minor sstable set", K(ret));
   } else if (OB_FAIL(pin_set_lock_.init(pin_set_bucket_num, ObLatchIds::BLOCK_MANAGER_LOCK, "T3MPinLock",
       tenant_id_))) {
     LOG_WARN("fail to init pin set lock", K(ret));
-  } else if (OB_FAIL(pinned_tablet_set_.create(pin_set_bucket_num))) {
+  } else if (OB_FAIL(pinned_tablet_set_.create(pin_set_bucket_num, other_attr))) {
     LOG_WARN("fail to create pinned tablet set", K(ret));
+  } else if (OB_FAIL(gc_memtable_map_.create(10, "GCMemtableMap", "GCMemtableMap", tenant_id_))) {
+    LOG_WARN("fail to initialize gc memtable map", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TenantMetaMemMgr, tg_id_))) {
     LOG_WARN("fail to create thread for t3m", K(ret));
   } else {
@@ -233,6 +236,20 @@ void ObTenantMetaMemMgr::destroy()
   pin_set_lock_.destroy();
   pinned_tablet_set_.destroy();
   while (!is_all_clean && OB_SUCC(gc_tables_in_queue(is_all_clean)));
+  for (auto iter = gc_memtable_map_.begin();
+       OB_SUCC(ret) && iter != gc_memtable_map_.end(); ++iter) {
+    memtable::ObMemtableSet *memtable_set = iter->second;
+    if (OB_NOT_NULL(memtable_set)) {
+      if (0 != memtable_set->size()) {
+        LOG_ERROR("leaked memtable", KPC(memtable_set));
+      }
+      if (OB_FAIL(memtable_set->destroy())) {
+        LOG_ERROR("memtable set destroy failed", K(ret));
+      }
+      ob_free(memtable_set);
+    }
+  }
+  gc_memtable_map_.destroy();
   bucket_lock_.destroy();
   allocator_.reset();
   for (int64_t i = 0; i <= ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE; i++) {
@@ -320,8 +337,17 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("the table type is invalid", K(ret), KP(item), KPC(item), KPC(table), K(table->get_key()));
           } else {
-            pool_arr_[index]->free_obj(static_cast<void *>(table));
-            table_cnt_arr[index]++;
+            if (ObITable::TableType::DATA_MEMTABLE == table_type) {
+              if (OB_FAIL(push_memtable_into_gc_map_(static_cast<memtable::ObMemtable *>(table)))) {
+                LOG_WARN("push memtable into gc map failed", K(ret));
+              }
+            } else {
+              pool_arr_[index]->free_obj(static_cast<void *>(table));
+            }
+
+            if (OB_SUCC(ret)) {
+              table_cnt_arr[index]++;
+            }
           }
         } else if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
           LOG_INFO("the table is unsafe to destroy", KPC(table));
@@ -342,6 +368,9 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
         }
       }
     }
+
+    // batch gc memtable will handle error gracefully
+    batch_gc_memtable_();
 
     if (OB_SUCC(ret)) {
       all_table_cleaned = (0 == free_tables_queue_.size());
@@ -378,6 +407,111 @@ int ObTenantMetaMemMgr::gc_tables_in_queue(bool &all_table_cleaned)
           "tablet count", tablet_map_.count(),
           "min_minor_cnt", last_min_minor_sstable_set_.size(),
           "pinned_tablet_cnt", pinned_tablet_set_.size());
+    }
+  }
+
+  return ret;
+}
+
+void ObTenantMetaMemMgr::batch_gc_memtable_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  for (auto iter = gc_memtable_map_.begin();
+       iter != gc_memtable_map_.end(); ++iter) {
+    const ObLSID &ls_id = iter->first;
+    memtable::ObMemtableSet *memtable_set = iter->second;
+    if (OB_NOT_NULL(memtable_set)
+        && 0 != memtable_set->size()) {
+      if (OB_TMP_FAIL(ObMemtable::batch_remove_unused_callback_for_uncommited_txn(ls_id,
+                                                                                  memtable_set))) {
+        LOG_ERROR("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+        for (auto set_iter = memtable_set->begin(); set_iter != memtable_set->end(); ++set_iter) {
+          if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
+                                                   ObITable::TableType::DATA_MEMTABLE))) {
+            LOG_ERROR("push table into gc queue failed, maybe there will be leak",
+                      K(tmp_ret), KPC(memtable_set));
+          }
+        }
+
+        LOG_INFO("batch gc memtable failed and push into gc queue again", K(memtable_set->size()));
+        while (OB_TMP_FAIL(memtable_set->clear())) {
+          LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
+        }
+      } else {
+        for (auto set_iter = memtable_set->begin(); set_iter != memtable_set->end(); ++set_iter) {
+          pool_arr_[static_cast<int>(ObITable::TableType::DATA_MEMTABLE)]->free_obj((void *)(set_iter->first));
+        }
+
+        LOG_INFO("batch gc memtable successfully", K(memtable_set->size()));
+        while (OB_TMP_FAIL(memtable_set->clear())) {
+          LOG_ERROR("clear memtable set failed", K(tmp_ret), KPC(memtable_set));
+        }
+      }
+    }
+  }
+
+  if (REACH_TENANT_TIME_INTERVAL(1_hour)) {
+    for (auto iter = gc_memtable_map_.begin();
+         iter != gc_memtable_map_.end(); ++iter) {
+      memtable::ObMemtableSet *memtable_set = iter->second;
+      if (OB_NOT_NULL(memtable_set)) {
+        if (0 != memtable_set->size()) {
+          LOG_ERROR("leaked memtable", KPC(memtable_set));
+        }
+        if (OB_FAIL(memtable_set->destroy())) {
+          LOG_ERROR("memtable set destroy failed", K(ret));
+        }
+        ob_free(memtable_set);
+      }
+    }
+
+    if (OB_TMP_FAIL(gc_memtable_map_.clear())) {
+      LOG_ERROR("clear gc memtable map failed", K(tmp_ret));
+    }
+  }
+}
+
+int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtable)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID ls_id;
+  const ObMemAttr attr(tenant_id_, "memtable_set");
+  memtable::ObMemtableSet *memtable_set = nullptr;
+
+  if (OB_FAIL(memtable->get_ls_id(ls_id))) {
+    LOG_WARN("get memtable ls id failed", K(ret), KPC(memtable));
+  } else if (OB_FAIL(gc_memtable_map_.get_refactored(ls_id, memtable_set))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      memtable::ObMemtableSet *tmp_memtable_set;
+      void *buf = NULL;
+      if (OB_ISNULL(buf = ob_malloc(sizeof(memtable::ObMemtableSet), attr))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for hash set", K(ret));
+      } else if (OB_ISNULL(tmp_memtable_set = new (buf) ObMemtableSet())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for hash set", K(ret));
+      } else if (OB_FAIL(tmp_memtable_set->create(1024))) {
+        LOG_WARN("fail to create", K(ret));
+      } else if (OB_FAIL(gc_memtable_map_.set_refactored(ls_id, tmp_memtable_set))) {
+        LOG_WARN("fail to set hash set", K(ret));
+      } else {
+        memtable_set = tmp_memtable_set;
+      }
+
+      if (NULL != buf && OB_FAIL(ret)) {
+        ob_free(tmp_memtable_set);
+      }
+    } else {
+      LOG_WARN("map get failed", K(ret), KPC(memtable));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(memtable_set->set_refactored((uint64_t)(memtable), 0/*flag, not overwrite*/))) {
+      LOG_WARN("map set failed", K(ret), KPC(memtable));
     }
   }
 
@@ -1203,9 +1337,12 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
       ObITable *sstable = table_store.get_minor_sstables().get_boundary_table(false /*is_last*/);
       if (OB_NOT_NULL(sstable)) {
         ObTableHandleV2 table_handle(sstable, this, ObITable::TableType::MAJOR_SSTABLE);
-        if (OB_FAIL(record_min_minor_sstable(key.ls_id_, table_handle))) {
-          LOG_WARN("fail to record min minor sstable", K(ret), K(key), K(table_handle));
-        }
+        do {
+          if (OB_FAIL(record_min_minor_sstable(key.ls_id_, table_handle))) {
+            LOG_WARN("fail to record min minor sstable", K(ret), K(key), K(table_handle));
+            usleep(1 * 1000 * 1000);
+          }
+        } while (OB_ALLOCATE_MEMORY_FAILED == ret);
       }
     }
   }
@@ -1780,6 +1917,7 @@ ObT3mTabletMapIterator::ObT3mTabletMapIterator(ObTenantMetaMemMgr &t3m)
     tablet_items_(),
     idx_(0)
 {
+  tablet_items_.set_attr(SET_USE_500("TabletItems"));
 }
 
 ObT3mTabletMapIterator::ObT3mTabletMapIterator(
@@ -1790,6 +1928,7 @@ ObT3mTabletMapIterator::ObT3mTabletMapIterator(
     tablet_items_(),
     idx_(0)
 {
+  tablet_items_.set_attr(SET_USE_500("TabletItems"));
 }
 
 ObT3mTabletMapIterator::~ObT3mTabletMapIterator()

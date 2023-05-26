@@ -92,6 +92,8 @@ public: // dalegate functions
 
   int self_freeze_task();
 
+  bool check_ls_offline();
+
   void reuse() { mini_cache_.reset(); }
 
   TO_STRING_KV(KP_(tx_table), K_(epoch), K(mini_cache_));

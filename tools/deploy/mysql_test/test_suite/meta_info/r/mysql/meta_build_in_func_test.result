@@ -280,7 +280,7 @@ def					substr(cast(date_c as char(1024)), 10)	251	536870908	17	Y	16	0	45
 +----------------------------------------+
 select substr(cast(1024 as char(1024)), 1, 2) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(1024 as char(1024)), 1, 2)	251	536870908	2	Y	16	0	45
+def					substr(cast(1024 as char(1024)), 1, 2)	253	8	2	Y	0	0	45
 +----------------------------------------+
 | substr(cast(1024 as char(1024)), 1, 2) |
 +----------------------------------------+
@@ -296,7 +296,7 @@ def					substr(cast(date_c as char(1024)) from 10)	251	536870908	17	Y	16	0	45
 +--------------------------------------------+
 select substr(cast(date_c as char(1024)) from 10 for 10) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					substr(cast(date_c as char(1024)) from 10 for 10)	251	536870908	10	Y	16	0	45
+def					substr(cast(date_c as char(1024)) from 10 for 10)	253	40	10	Y	0	0	45
 +---------------------------------------------------+
 | substr(cast(date_c as char(1024)) from 10 for 10) |
 +---------------------------------------------------+
@@ -305,7 +305,7 @@ def					substr(cast(date_c as char(1024)) from 10 for 10)	251	536870908	10	Y	16	
 
 select coalesce(cast(null as signed int), null) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					coalesce(cast(null as signed int), null)	8	20	0	Y	32768	0	63
+def					coalesce(cast(null as signed int), null)	8	20	0	Y	32896	0	63
 +------------------------------------------+
 | coalesce(cast(null as signed int), null) |
 +------------------------------------------+
@@ -329,7 +329,7 @@ def					coalesce('jasimin', null, 'a,a', 123)	253	80	7	Y	0	0	45
 +---------------------------------------+
 select coalesce(cast(null as signed int), null, 32.23) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					coalesce(cast(null as signed int), null, 32.23)	246	24	5	Y	32768	2	63
+def					coalesce(cast(null as signed int), null, 32.23)	246	24	5	Y	32896	2	63
 +-------------------------------------------------+
 | coalesce(cast(null as signed int), null, 32.23) |
 +-------------------------------------------------+
@@ -403,7 +403,7 @@ def					cast('12' as  datetime)	12	19	0	N	129	0	63
 +-------------------------+
 select cast(cast('1970-01-01 08:00:12' as  datetime) as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)	8	19	14	N	32769	0	63
+def					cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)	8	19	14	N	32897	0	63
 +--------------------------------------------------------------+
 | cast(cast('1970-01-01 08:00:12' as  datetime) as signed int) |
 +--------------------------------------------------------------+
@@ -411,7 +411,7 @@ def					cast(cast('1970-01-01 08:00:12' as  datetime) as signed int)	8	19	14	N	3
 +--------------------------------------------------------------+
 select cast('1970-01-01 08:00:12' as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast('1970-01-01 08:00:12' as signed int)	8	19	4	N	32769	0	63
+def					cast('1970-01-01 08:00:12' as signed int)	8	19	4	N	32897	0	63
 +-------------------------------------------+
 | cast('1970-01-01 08:00:12' as signed int) |
 +-------------------------------------------+
@@ -443,7 +443,7 @@ def					cast(cast('12' as decimal) as datetime)	12	19	0	N	129	0	63
 +-----------------------------------------+
 select cast(v as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast(v as signed int)	8	21	0	Y	32768	0	63
+def					cast(v as signed int)	8	21	0	Y	32896	0	63
 +-----------------------+
 | cast(v as signed int) |
 +-----------------------+
@@ -460,7 +460,7 @@ def					trim('aba' from 'ababa')	253	20	2	Y	0	0	45
 +--------------------------+
 select length(trim('aba' from 'aba')) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					length(trim('aba' from 'aba'))	8	20	1	Y	32768	0	63
+def					length(trim('aba' from 'aba'))	8	20	1	Y	32896	0	63
 +--------------------------------+
 | length(trim('aba' from 'aba')) |
 +--------------------------------+
@@ -556,7 +556,7 @@ def					trim(2 from cast(12312312 as datetime))	253	76	0	Y	0	0	45
 +-----------------------------------------+
 select length(trim('     hi' || 'dir ')) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					length(trim('     hi' || 'dir '))	8	20	1	Y	32768	0	63
+def					length(trim('     hi' || 'dir '))	8	20	1	Y	32896	0	63
 +-----------------------------------+
 | length(trim('     hi' || 'dir ')) |
 +-----------------------------------+
@@ -615,7 +615,7 @@ def					trim(leading varchar_c from 'he')	253	8	2	Y	0	0	45
 set timestamp = 1456986986;
 select cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32768	0	63
+def					cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32896	0	63
 +-------------------------------------------------------------------------------+
 | cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed int) |
 +-------------------------------------------------------------------------------+
@@ -623,7 +623,7 @@ def					cast(current_timestamp() as signed int) - cast(utc_timestamp() as signed
 +-------------------------------------------------------------------------------+
 select cast(now() as signed int) - cast(utc_timestamp() as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast(now() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32768	0	63
+def					cast(now() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y	32896	0	63
 +-----------------------------------------------------------------+
 | cast(now() as signed int) - cast(utc_timestamp() as signed int) |
 +-----------------------------------------------------------------+
@@ -631,7 +631,7 @@ def					cast(now() as signed int) - cast(utc_timestamp() as signed int)	8	20	5	Y
 +-----------------------------------------------------------------+
 select cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)	8	20	1	N	32769	0	63
+def					cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)	8	20	1	N	32897	0	63
 +-------------------------------------------------------------------------+
 | cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int) |
 +-------------------------------------------------------------------------+
@@ -640,7 +640,7 @@ def					cast(utc_timestamp() as signed int)-cast(utc_timestamp() as signed int)	
 
 select time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())	8	21	11	Y	32768	0	63
+def					time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())	8	21	11	Y	32896	0	63
 +-------------------------------------------------------------------+
 | time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp()) |
 +-------------------------------------------------------------------+
@@ -648,7 +648,7 @@ def					time_to_usec(current_timestamp()) - time_to_usec(utc_timestamp())	8	21	1
 +-------------------------------------------------------------------+
 select time_to_usec(now()) - time_to_usec(utc_timestamp()) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					time_to_usec(now()) - time_to_usec(utc_timestamp())	8	21	11	Y	32768	0	63
+def					time_to_usec(now()) - time_to_usec(utc_timestamp())	8	21	11	Y	32896	0	63
 +-----------------------------------------------------+
 | time_to_usec(now()) - time_to_usec(utc_timestamp()) |
 +-----------------------------------------------------+
@@ -656,7 +656,7 @@ def					time_to_usec(now()) - time_to_usec(utc_timestamp())	8	21	11	Y	32768	0	63
 +-----------------------------------------------------+
 select time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp()) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())	8	21	1	Y	32768	0	63
+def					time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())	8	21	1	Y	32896	0	63
 +-------------------------------------------------------------+
 | time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp()) |
 +-------------------------------------------------------------+
@@ -1314,7 +1314,7 @@ def					date_sub('1970-01-01 08:00:00', INTERVAL NULL DAY)	253	104	0	Y	0	0	45
 
 select extract(MICROSECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
+def					extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
 +-------------------------------------------------------+
 | extract(MICROSECOND FROM '2012-09-01 10:35:07:99999') |
 +-------------------------------------------------------+
@@ -1322,7 +1322,7 @@ def					extract(MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	6
 +-------------------------------------------------------+
 select extract(SECOND FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(SECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
+def					extract(SECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
 +--------------------------------------------------+
 | extract(SECOND FROM '2012-09-01 10:35:07:99999') |
 +--------------------------------------------------+
@@ -1330,7 +1330,7 @@ def					extract(SECOND FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
 +--------------------------------------------------+
 select extract(MINUTE FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
+def					extract(MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
 +--------------------------------------------------+
 | extract(MINUTE FROM '2012-09-01 10:35:07:99999') |
 +--------------------------------------------------+
@@ -1338,7 +1338,7 @@ def					extract(MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
 +--------------------------------------------------+
 select extract(HOUR FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(HOUR FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
+def					extract(HOUR FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
 +------------------------------------------------+
 | extract(HOUR FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------+
@@ -1346,7 +1346,7 @@ def					extract(HOUR FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
 +------------------------------------------------+
 select extract(DAY FROM '2012-09-01 10:35:07:99999') FROM build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
+def					extract(DAY FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
 +-----------------------------------------------+
 | extract(DAY FROM '2012-09-01 10:35:07:99999') |
 +-----------------------------------------------+
@@ -1354,7 +1354,7 @@ def					extract(DAY FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
 +-----------------------------------------------+
 select extract(WEEK FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
+def					extract(WEEK FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32896	0	63
 +------------------------------------------------+
 | extract(WEEK FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------+
@@ -1362,7 +1362,7 @@ def					extract(WEEK FROM '2012-09-01 10:35:07:99999')	8	20	2	Y	32768	0	63
 +------------------------------------------------+
 select extract(MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MONTH FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
+def					extract(MONTH FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
 +-------------------------------------------------+
 | extract(MONTH FROM '2012-09-01 10:35:07:99999') |
 +-------------------------------------------------+
@@ -1370,7 +1370,7 @@ def					extract(MONTH FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
 +-------------------------------------------------+
 select extract(QUARTER FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32896	0	63
 +---------------------------------------------------+
 | extract(QUARTER FROM '2012-09-01 10:35:07:99999') |
 +---------------------------------------------------+
@@ -1378,7 +1378,7 @@ def					extract(QUARTER FROM '2012-09-01 10:35:07:99999')	8	20	1	Y	32768	0	63
 +---------------------------------------------------+
 select extract(YEAR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(YEAR FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32768	0	63
+def					extract(YEAR FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32896	0	63
 +------------------------------------------------+
 | extract(YEAR FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------+
@@ -1386,7 +1386,7 @@ def					extract(YEAR FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32768	0	63
 +------------------------------------------------+
 select extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32768	0	63
+def					extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32896	0	63
 +--------------------------------------------------------------+
 | extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999') |
 +--------------------------------------------------------------+
@@ -1394,7 +1394,7 @@ def					extract(SECOND_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32
 +--------------------------------------------------------------+
 select extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	10	Y	32768	0	63
+def					extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	10	Y	32896	0	63
 +--------------------------------------------------------------+
 | extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999') |
 +--------------------------------------------------------------+
@@ -1402,7 +1402,7 @@ def					extract(MINUTE_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	10	Y	3
 +--------------------------------------------------------------+
 select extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32768	0	63
+def					extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32896	0	63
 +---------------------------------------------------------+
 | extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999') |
 +---------------------------------------------------------+
@@ -1410,7 +1410,7 @@ def					extract(MINUTE_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	4	Y	32768	0
 +---------------------------------------------------------+
 select extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	12	Y	32768	0	63
+def					extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	12	Y	32896	0	63
 +------------------------------------------------------------+
 | extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------------------+
@@ -1418,7 +1418,7 @@ def					extract(HOUR_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	12	Y	327
 +------------------------------------------------------------+
 select extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	13	Y	32768	0	63
+def					extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	13	Y	32896	0	63
 +-----------------------------------------------------------+
 | extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999') |
 +-----------------------------------------------------------+
@@ -1426,7 +1426,7 @@ def					extract(DAY_MICROSECOND FROM '2012-09-01 10:35:07:99999')	8	20	13	Y	3276
 +-----------------------------------------------------------+
 select extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32768	0	63
+def					extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32896	0	63
 +------------------------------------------------------+
 | extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------------+
@@ -1434,7 +1434,7 @@ def					extract(DAY_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	7	Y	32768	0	63
 +------------------------------------------------------+
 select extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32768	0	63
+def					extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32896	0	63
 +-------------------------------------------------------+
 | extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999') |
 +-------------------------------------------------------+
@@ -1442,7 +1442,7 @@ def					extract(HOUR_SECOND FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32768	0	6
 +-------------------------------------------------------+
 select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32768	0	63
+def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32896	0	63
 +------------------------------------------------------+
 | extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------------+
@@ -1450,7 +1450,7 @@ def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32768	0	63
 +------------------------------------------------------+
 select extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32768	0	63
+def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32896	0	63
 +------------------------------------------------------+
 | extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------------+
@@ -1458,7 +1458,7 @@ def					extract(DAY_MINUTE FROM '2012-09-01 10:35:07:99999')	8	20	5	Y	32768	0	63
 +------------------------------------------------------+
 select extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')	8	20	3	Y	32768	0	63
+def					extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')	8	20	3	Y	32896	0	63
 +----------------------------------------------------+
 | extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999') |
 +----------------------------------------------------+
@@ -1466,7 +1466,7 @@ def					extract(DAY_HOUR FROM '2012-09-01 10:35:07:99999')	8	20	3	Y	32768	0	63
 +----------------------------------------------------+
 select extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32768	0	63
+def					extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32896	0	63
 +------------------------------------------------------+
 | extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999') |
 +------------------------------------------------------+
@@ -1474,7 +1474,7 @@ def					extract(YEAR_MONTH FROM '2012-09-01 10:35:07:99999')	8	20	6	Y	32768	0	63
 +------------------------------------------------------+
 select extract(MICROSECOND FROM '2012-09-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(MICROSECOND FROM '2012-09-01')	8	20	1	Y	32768	0	63
+def					extract(MICROSECOND FROM '2012-09-01')	8	20	1	Y	32896	0	63
 +----------------------------------------+
 | extract(MICROSECOND FROM '2012-09-01') |
 +----------------------------------------+
@@ -1482,7 +1482,7 @@ def					extract(MICROSECOND FROM '2012-09-01')	8	20	1	Y	32768	0	63
 +----------------------------------------+
 select extract(QUARTER FROM '2012-02-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-02-01')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-02-01')	8	20	1	Y	32896	0	63
 +------------------------------------+
 | extract(QUARTER FROM '2012-02-01') |
 +------------------------------------+
@@ -1490,7 +1490,7 @@ def					extract(QUARTER FROM '2012-02-01')	8	20	1	Y	32768	0	63
 +------------------------------------+
 select extract(QUARTER FROM '2012-05-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-05-01')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-05-01')	8	20	1	Y	32896	0	63
 +------------------------------------+
 | extract(QUARTER FROM '2012-05-01') |
 +------------------------------------+
@@ -1498,7 +1498,7 @@ def					extract(QUARTER FROM '2012-05-01')	8	20	1	Y	32768	0	63
 +------------------------------------+
 select extract(QUARTER FROM '2012-07-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-07-01')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-07-01')	8	20	1	Y	32896	0	63
 +------------------------------------+
 | extract(QUARTER FROM '2012-07-01') |
 +------------------------------------+
@@ -1506,7 +1506,7 @@ def					extract(QUARTER FROM '2012-07-01')	8	20	1	Y	32768	0	63
 +------------------------------------+
 select extract(QUARTER FROM '2012-10-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-10-01')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-10-01')	8	20	1	Y	32896	0	63
 +------------------------------------+
 | extract(QUARTER FROM '2012-10-01') |
 +------------------------------------+
@@ -1514,7 +1514,7 @@ def					extract(QUARTER FROM '2012-10-01')	8	20	1	Y	32768	0	63
 +------------------------------------+
 select extract(QUARTER FROM '2012-11-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(QUARTER FROM '2012-11-01')	8	20	1	Y	32768	0	63
+def					extract(QUARTER FROM '2012-11-01')	8	20	1	Y	32896	0	63
 +------------------------------------+
 | extract(QUARTER FROM '2012-11-01') |
 +------------------------------------+
@@ -1522,7 +1522,7 @@ def					extract(QUARTER FROM '2012-11-01')	8	20	1	Y	32768	0	63
 +------------------------------------+
 select extract(WEEK FROM '2012-01-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2012-01-01')	8	20	1	Y	32768	0	63
+def					extract(WEEK FROM '2012-01-01')	8	20	1	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2012-01-01') |
 +---------------------------------+
@@ -1530,7 +1530,7 @@ def					extract(WEEK FROM '2012-01-01')	8	20	1	Y	32768	0	63
 +---------------------------------+
 select extract(WEEK FROM '2012-05-30') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2012-05-30')	8	20	2	Y	32768	0	63
+def					extract(WEEK FROM '2012-05-30')	8	20	2	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2012-05-30') |
 +---------------------------------+
@@ -1538,7 +1538,7 @@ def					extract(WEEK FROM '2012-05-30')	8	20	2	Y	32768	0	63
 +---------------------------------+
 select extract(WEEK FROM '2012-06-15') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2012-06-15')	8	20	2	Y	32768	0	63
+def					extract(WEEK FROM '2012-06-15')	8	20	2	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2012-06-15') |
 +---------------------------------+
@@ -1546,7 +1546,7 @@ def					extract(WEEK FROM '2012-06-15')	8	20	2	Y	32768	0	63
 +---------------------------------+
 select extract(WEEK FROM '2012-10-25') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2012-10-25')	8	20	2	Y	32768	0	63
+def					extract(WEEK FROM '2012-10-25')	8	20	2	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2012-10-25') |
 +---------------------------------+
@@ -1554,7 +1554,7 @@ def					extract(WEEK FROM '2012-10-25')	8	20	2	Y	32768	0	63
 +---------------------------------+
 select extract(WEEK FROM '2013-01-01') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2013-01-01')	8	20	1	Y	32768	0	63
+def					extract(WEEK FROM '2013-01-01')	8	20	1	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2013-01-01') |
 +---------------------------------+
@@ -1562,7 +1562,7 @@ def					extract(WEEK FROM '2013-01-01')	8	20	1	Y	32768	0	63
 +---------------------------------+
 select extract(WEEK FROM '2019-03-09') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(WEEK FROM '2019-03-09')	8	20	1	Y	32768	0	63
+def					extract(WEEK FROM '2019-03-09')	8	20	1	Y	32896	0	63
 +---------------------------------+
 | extract(WEEK FROM '2019-03-09') |
 +---------------------------------+
@@ -1570,7 +1570,7 @@ def					extract(WEEK FROM '2019-03-09')	8	20	1	Y	32768	0	63
 +---------------------------------+
 select extract(YEAR FROM '12-09-02') from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(YEAR FROM '12-09-02')	8	20	4	Y	32768	0	63
+def					extract(YEAR FROM '12-09-02')	8	20	4	Y	32896	0	63
 +-------------------------------+
 | extract(YEAR FROM '12-09-02') |
 +-------------------------------+
@@ -1580,7 +1580,7 @@ select extract(HOUR FROM CAST('0' AS TIMESTAMP)) from build_in_func_test_table;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'TIMESTAMP)) from build_in_func_test_table' at line 1
 select extract(HOUR FROM NULL) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					extract(HOUR FROM NULL)	8	20	0	Y	32768	0	63
+def					extract(HOUR FROM NULL)	8	20	0	Y	32896	0	63
 +-------------------------+
 | extract(HOUR FROM NULL) |
 +-------------------------+
@@ -1729,7 +1729,7 @@ def					str_to_date('1970-02-03 10:56:56', NULL)	12	26	0	Y	128	6	63
 +------------------------------------------+
 select coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxddsd'))), length('dir')) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	8	20	3	Y	32768	0	63
+def					coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss	8	20	3	Y	32896	0	63
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | coalesce(length(lower(null)), length(lower(upper('yssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss |
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1738,8 +1738,8 @@ def					coalesce(length(lower(null)), length(lower(upper('ysssssssssssssssssssss
 
 select 'NAME:'||varchar_c,'ADDR:'||v from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'NAME:'||varchar_c	3	1	1	Y	32768	0	63
-def					'ADDR:'||v	3	1	0	Y	32768	0	63
+def					'NAME:'||varchar_c	3	1	1	Y	32896	0	63
+def					'ADDR:'||v	3	1	0	Y	32896	0	63
 +--------------------+------------+
 | 'NAME:'||varchar_c | 'ADDR:'||v |
 +--------------------+------------+
@@ -2125,7 +2125,7 @@ def					CAST(DATE_FORMAT(NULL, '%s') AS CHAR)	253	104	0	Y	0	0	45
 +---------------------------------------+
 SELECT CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6));
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6))	246	25	0	Y	32768	6	63
+def					CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6))	246	25	0	Y	32896	6	63
 +------------------------------------------------+
 | CAST(DATE_FORMAT(NULL, '%s') AS DECIMAL(23,6)) |
 +------------------------------------------------+
@@ -2141,7 +2141,7 @@ def					CAST(DATE_FORMAT(NULL, '%s') AS DATETIME)	12	19	0	Y	128	0	63
 +-------------------------------------------+
 SELECT DATE_FORMAT(NULL, '%s')+0e0;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					DATE_FORMAT(NULL, '%s')+0e0	5	23	0	Y	32768	31	63
+def					DATE_FORMAT(NULL, '%s')+0e0	5	23	0	Y	32896	31	63
 +-----------------------------+
 | DATE_FORMAT(NULL, '%s')+0e0 |
 +-----------------------------+
@@ -2204,7 +2204,7 @@ def					str_to_date('04/30/2004 ', '%m/%d/%Y ')	10	10	10	Y	128	0	63
 
 select '+' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'+' + 1	5	23	1	N	32769	31	63
+def					'+' + 1	5	23	1	N	32897	31	63
 +---------+
 | '+' + 1 |
 +---------+
@@ -2212,7 +2212,7 @@ def					'+' + 1	5	23	1	N	32769	31	63
 +---------+
 select '-' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'-' + 1	5	23	1	N	32769	31	63
+def					'-' + 1	5	23	1	N	32897	31	63
 +---------+
 | '-' + 1 |
 +---------+
@@ -2220,7 +2220,7 @@ def					'-' + 1	5	23	1	N	32769	31	63
 +---------+
 select '.' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'.' + 1	5	23	1	N	32769	31	63
+def					'.' + 1	5	23	1	N	32897	31	63
 +---------+
 | '.' + 1 |
 +---------+
@@ -2228,7 +2228,7 @@ def					'.' + 1	5	23	1	N	32769	31	63
 +---------+
 select '_' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'_' + 1	5	23	1	N	32769	31	63
+def					'_' + 1	5	23	1	N	32897	31	63
 +---------+
 | '_' + 1 |
 +---------+
@@ -2236,7 +2236,7 @@ def					'_' + 1	5	23	1	N	32769	31	63
 +---------+
 select '~' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'~' + 1	5	23	1	N	32769	31	63
+def					'~' + 1	5	23	1	N	32897	31	63
 +---------+
 | '~' + 1 |
 +---------+
@@ -2244,7 +2244,7 @@ def					'~' + 1	5	23	1	N	32769	31	63
 +---------+
 select '@' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'@' + 1	5	23	1	N	32769	31	63
+def					'@' + 1	5	23	1	N	32897	31	63
 +---------+
 | '@' + 1 |
 +---------+
@@ -2252,7 +2252,7 @@ def					'@' + 1	5	23	1	N	32769	31	63
 +---------+
 select '#' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'#' + 1	5	23	1	N	32769	31	63
+def					'#' + 1	5	23	1	N	32897	31	63
 +---------+
 | '#' + 1 |
 +---------+
@@ -2260,7 +2260,7 @@ def					'#' + 1	5	23	1	N	32769	31	63
 +---------+
 select '%' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'%' + 1	5	23	1	N	32769	31	63
+def					'%' + 1	5	23	1	N	32897	31	63
 +---------+
 | '%' + 1 |
 +---------+
@@ -2268,7 +2268,7 @@ def					'%' + 1	5	23	1	N	32769	31	63
 +---------+
 select '^' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'^' + 1	5	23	1	N	32769	31	63
+def					'^' + 1	5	23	1	N	32897	31	63
 +---------+
 | '^' + 1 |
 +---------+
@@ -2276,7 +2276,7 @@ def					'^' + 1	5	23	1	N	32769	31	63
 +---------+
 select '$%%%' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'$%%%' + 1	5	23	1	N	32769	31	63
+def					'$%%%' + 1	5	23	1	N	32897	31	63
 +------------+
 | '$%%%' + 1 |
 +------------+
@@ -2284,7 +2284,7 @@ def					'$%%%' + 1	5	23	1	N	32769	31	63
 +------------+
 select '(' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'(' + 1	5	23	1	N	32769	31	63
+def					'(' + 1	5	23	1	N	32897	31	63
 +---------+
 | '(' + 1 |
 +---------+
@@ -2292,7 +2292,7 @@ def					'(' + 1	5	23	1	N	32769	31	63
 +---------+
 select ')' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					')' + 1	5	23	1	N	32769	31	63
+def					')' + 1	5	23	1	N	32897	31	63
 +---------+
 | ')' + 1 |
 +---------+
@@ -2300,7 +2300,7 @@ def					')' + 1	5	23	1	N	32769	31	63
 +---------+
 select '=' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'=' + 1	5	23	1	N	32769	31	63
+def					'=' + 1	5	23	1	N	32897	31	63
 +---------+
 | '=' + 1 |
 +---------+
@@ -2308,7 +2308,7 @@ def					'=' + 1	5	23	1	N	32769	31	63
 +---------+
 select '{' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'{' + 1	5	23	1	N	32769	31	63
+def					'{' + 1	5	23	1	N	32897	31	63
 +---------+
 | '{' + 1 |
 +---------+
@@ -2316,7 +2316,7 @@ def					'{' + 1	5	23	1	N	32769	31	63
 +---------+
 select '}' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'}' + 1	5	23	1	N	32769	31	63
+def					'}' + 1	5	23	1	N	32897	31	63
 +---------+
 | '}' + 1 |
 +---------+
@@ -2324,7 +2324,7 @@ def					'}' + 1	5	23	1	N	32769	31	63
 +---------+
 select '|' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'|' + 1	5	23	1	N	32769	31	63
+def					'|' + 1	5	23	1	N	32897	31	63
 +---------+
 | '|' + 1 |
 +---------+
@@ -2332,7 +2332,7 @@ def					'|' + 1	5	23	1	N	32769	31	63
 +---------+
 select '\'' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'\'' + 1	5	23	1	N	32769	31	63
+def					'\'' + 1	5	23	1	N	32897	31	63
 +----------+
 | '\'' + 1 |
 +----------+
@@ -2340,7 +2340,7 @@ def					'\'' + 1	5	23	1	N	32769	31	63
 +----------+
 select '"' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'"' + 1	5	23	1	N	32769	31	63
+def					'"' + 1	5	23	1	N	32897	31	63
 +---------+
 | '"' + 1 |
 +---------+
@@ -2348,7 +2348,7 @@ def					'"' + 1	5	23	1	N	32769	31	63
 +---------+
 select ':' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					':' + 1	5	23	1	N	32769	31	63
+def					':' + 1	5	23	1	N	32897	31	63
 +---------+
 | ':' + 1 |
 +---------+
@@ -2356,7 +2356,7 @@ def					':' + 1	5	23	1	N	32769	31	63
 +---------+
 select '<' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'<' + 1	5	23	1	N	32769	31	63
+def					'<' + 1	5	23	1	N	32897	31	63
 +---------+
 | '<' + 1 |
 +---------+
@@ -2364,7 +2364,7 @@ def					'<' + 1	5	23	1	N	32769	31	63
 +---------+
 select '>' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'>' + 1	5	23	1	N	32769	31	63
+def					'>' + 1	5	23	1	N	32897	31	63
 +---------+
 | '>' + 1 |
 +---------+
@@ -2372,7 +2372,7 @@ def					'>' + 1	5	23	1	N	32769	31	63
 +---------+
 select '?' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'?' + 1	5	23	1	N	32769	31	63
+def					'?' + 1	5	23	1	N	32897	31	63
 +---------+
 | '?' + 1 |
 +---------+
@@ -2380,7 +2380,7 @@ def					'?' + 1	5	23	1	N	32769	31	63
 +---------+
 select '/' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'/' + 1	5	23	1	N	32769	31	63
+def					'/' + 1	5	23	1	N	32897	31	63
 +---------+
 | '/' + 1 |
 +---------+
@@ -2388,7 +2388,7 @@ def					'/' + 1	5	23	1	N	32769	31	63
 +---------+
 select '!@##' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'!@##' + 1	5	23	1	N	32769	31	63
+def					'!@##' + 1	5	23	1	N	32897	31	63
 +------------+
 | '!@##' + 1 |
 +------------+
@@ -2396,7 +2396,7 @@ def					'!@##' + 1	5	23	1	N	32769	31	63
 +------------+
 select '$^^%%^$%(*&^(*^&*^&)' + 1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					'$^^%%^$%(*&^(*^&*^&)' + 1	5	23	1	N	32769	31	63
+def					'$^^%%^$%(*&^(*^&*^&)' + 1	5	23	1	N	32897	31	63
 +----------------------------+
 | '$^^%%^$%(*&^(*^&*^&)' + 1 |
 +----------------------------+
@@ -2436,7 +2436,7 @@ def					concat('','aaa')	253	12	3	Y	0	0	45
 +------------------+
 select 1.1/0.0;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					1.1/0.0	246	8	0	Y	32768	5	63
+def					1.1/0.0	246	8	0	Y	32896	5	63
 +---------+
 | 1.1/0.0 |
 +---------+
@@ -2454,7 +2454,7 @@ select dump(1);
 ERROR 0A000: The input type of the DUMP function not supported
 select round(1.1234, 3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					round(1.1234, 3)	246	7	5	N	32769	3	63
+def					round(1.1234, 3)	246	7	5	N	32897	3	63
 +------------------+
 | round(1.1234, 3) |
 +------------------+
@@ -2462,7 +2462,7 @@ def					round(1.1234, 3)	246	7	5	N	32769	3	63
 +------------------+
 select round(1.1234);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					round(1.1234)	246	3	1	N	32769	0	63
+def					round(1.1234)	246	3	1	N	32897	0	63
 +---------------+
 | round(1.1234) |
 +---------------+
@@ -2470,7 +2470,7 @@ def					round(1.1234)	246	3	1	N	32769	0	63
 +---------------+
 select false is true;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					false is true	3	1	1	N	32769	0	63
+def					false is true	3	1	1	N	32897	0	63
 +---------------+
 | false is true |
 +---------------+
@@ -2478,7 +2478,7 @@ def					false is true	3	1	1	N	32769	0	63
 +---------------+
 select NULL is true;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					NULL is true	3	1	1	N	32769	0	63
+def					NULL is true	3	1	1	N	32897	0	63
 +--------------+
 | NULL is true |
 +--------------+
@@ -2486,7 +2486,7 @@ def					NULL is true	3	1	1	N	32769	0	63
 +--------------+
 select true is true;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					true is true	3	1	1	N	32769	0	63
+def					true is true	3	1	1	N	32897	0	63
 +--------------+
 | true is true |
 +--------------+
@@ -2494,7 +2494,7 @@ def					true is true	3	1	1	N	32769	0	63
 +--------------+
 select true is not  true;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					true is not  true	3	1	1	N	32769	0	63
+def					true is not  true	3	1	1	N	32897	0	63
 +-------------------+
 | true is not  true |
 +-------------------+
@@ -2502,7 +2502,7 @@ def					true is not  true	3	1	1	N	32769	0	63
 +-------------------+
 select NULL is NULL;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					NULL is NULL	3	1	1	N	32769	0	63
+def					NULL is NULL	3	1	1	N	32897	0	63
 +--------------+
 | NULL is NULL |
 +--------------+
@@ -2510,7 +2510,7 @@ def					NULL is NULL	3	1	1	N	32769	0	63
 +--------------+
 select NULL is not NULL;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					NULL is not NULL	3	1	1	N	32769	0	63
+def					NULL is not NULL	3	1	1	N	32897	0	63
 +------------------+
 | NULL is not NULL |
 +------------------+
@@ -2518,7 +2518,7 @@ def					NULL is not NULL	3	1	1	N	32769	0	63
 +------------------+
 select true is false;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					true is false	3	1	1	N	32769	0	63
+def					true is false	3	1	1	N	32897	0	63
 +---------------+
 | true is false |
 +---------------+
@@ -2526,7 +2526,7 @@ def					true is false	3	1	1	N	32769	0	63
 +---------------+
 select -'aaa';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					-'aaa'	5	23	2	N	32769	31	63
+def					-'aaa'	5	23	2	N	32897	31	63
 +--------+
 | -'aaa' |
 +--------+
@@ -2566,7 +2566,7 @@ def					DATE_FORMAT(null, '%Y/%m/%D')	253	104	0	Y	0	0	45
 +-------------------------------+
 select time_to_usec(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					time_to_usec(null)	8	20	0	Y	32768	0	63
+def					time_to_usec(null)	8	20	0	Y	32896	0	63
 +--------------------+
 | time_to_usec(null) |
 +--------------------+
@@ -2582,7 +2582,7 @@ def					usec_to_time(null)	7	26	0	Y	1152	6	63
 +--------------------+
 select EXTRACT(DAY FROM null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					EXTRACT(DAY FROM null)	8	20	0	Y	32768	0	63
+def					EXTRACT(DAY FROM null)	8	20	0	Y	32896	0	63
 +------------------------+
 | EXTRACT(DAY FROM null) |
 +------------------------+
@@ -2592,7 +2592,7 @@ def					EXTRACT(DAY FROM null)	8	20	0	Y	32768	0	63
 ####test abs func
 select abs(10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(10)	8	2	2	N	32769	0	63
+def					abs(10)	8	2	2	N	32897	0	63
 +---------+
 | abs(10) |
 +---------+
@@ -2600,7 +2600,7 @@ def					abs(10)	8	2	2	N	32769	0	63
 +---------+
 select abs(-10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-10)	8	2	2	N	32769	0	63
+def					abs(-10)	8	2	2	N	32897	0	63
 +----------+
 | abs(-10) |
 +----------+
@@ -2608,7 +2608,7 @@ def					abs(-10)	8	2	2	N	32769	0	63
 +----------+
 select abs(-0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0)	8	2	1	N	32769	0	63
+def					abs(-0)	8	2	1	N	32897	0	63
 +---------+
 | abs(-0) |
 +---------+
@@ -2616,7 +2616,7 @@ def					abs(-0)	8	2	1	N	32769	0	63
 +---------+
 select abs(0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(0)	8	2	1	N	32769	0	63
+def					abs(0)	8	2	1	N	32897	0	63
 +--------+
 | abs(0) |
 +--------+
@@ -2624,7 +2624,7 @@ def					abs(0)	8	2	1	N	32769	0	63
 +--------+
 select abs(1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1)	8	2	1	N	32769	0	63
+def					abs(1)	8	2	1	N	32897	0	63
 +--------+
 | abs(1) |
 +--------+
@@ -2632,7 +2632,7 @@ def					abs(1)	8	2	1	N	32769	0	63
 +--------+
 select abs(-1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1)	8	2	1	N	32769	0	63
+def					abs(-1)	8	2	1	N	32897	0	63
 +---------+
 | abs(-1) |
 +---------+
@@ -2640,7 +2640,7 @@ def					abs(-1)	8	2	1	N	32769	0	63
 +---------+
 select abs(-1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-1000000000000)	8	2	13	N	32769	0	63
+def					abs(-1000000000000)	8	2	13	N	32897	0	63
 +---------------------+
 | abs(-1000000000000) |
 +---------------------+
@@ -2648,7 +2648,7 @@ def					abs(-1000000000000)	8	2	13	N	32769	0	63
 +---------------------+
 select abs(1000000000000);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(1000000000000)	8	2	13	N	32769	0	63
+def					abs(1000000000000)	8	2	13	N	32897	0	63
 +--------------------+
 | abs(1000000000000) |
 +--------------------+
@@ -2656,7 +2656,7 @@ def					abs(1000000000000)	8	2	13	N	32769	0	63
 +--------------------+
 select abs(0.1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(0.1)	246	4	3	N	32769	1	63
+def					abs(0.1)	246	4	3	N	32897	1	63
 +----------+
 | abs(0.1) |
 +----------+
@@ -2664,7 +2664,7 @@ def					abs(0.1)	246	4	3	N	32769	1	63
 +----------+
 select abs(-0.1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1)	246	4	3	N	32769	1	63
+def					abs(-0.1)	246	4	3	N	32897	1	63
 +-----------+
 | abs(-0.1) |
 +-----------+
@@ -2672,7 +2672,7 @@ def					abs(-0.1)	246	4	3	N	32769	1	63
 +-----------+
 select abs(-11.10);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-11.10)	246	6	5	N	32769	2	63
+def					abs(-11.10)	246	6	5	N	32897	2	63
 +-------------+
 | abs(-11.10) |
 +-------------+
@@ -2680,7 +2680,7 @@ def					abs(-11.10)	246	6	5	N	32769	2	63
 +-------------+
 select abs(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(null)	5	23	0	Y	32768	31	63
+def					abs(null)	5	23	0	Y	32896	31	63
 +-----------+
 | abs(null) |
 +-----------+
@@ -2688,7 +2688,7 @@ def					abs(null)	5	23	0	Y	32768	31	63
 +-----------+
 select abs(NULL);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(NULL)	5	23	0	Y	32768	31	63
+def					abs(NULL)	5	23	0	Y	32896	31	63
 +-----------+
 | abs(NULL) |
 +-----------+
@@ -2696,7 +2696,7 @@ def					abs(NULL)	5	23	0	Y	32768	31	63
 +-----------+
 select abs(Null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(Null)	5	23	0	Y	32768	31	63
+def					abs(Null)	5	23	0	Y	32896	31	63
 +-----------+
 | abs(Null) |
 +-----------+
@@ -2704,7 +2704,7 @@ def					abs(Null)	5	23	0	Y	32768	31	63
 +-----------+
 select abs(5-5);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(5-5)	8	3	1	N	32769	0	63
+def					abs(5-5)	8	3	1	N	32897	0	63
 +----------+
 | abs(5-5) |
 +----------+
@@ -2712,7 +2712,7 @@ def					abs(5-5)	8	3	1	N	32769	0	63
 +----------+
 select abs(-0.1*3);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					abs(-0.1*3)	246	5	3	N	32769	1	63
+def					abs(-0.1*3)	246	5	3	N	32897	1	63
 +-------------+
 | abs(-0.1*3) |
 +-------------+
@@ -2795,7 +2795,7 @@ def					unhex(repeat('',10))	253	256	0	Y	128	0	63
 select SUBSTR( 'Sat' FROM 3 ) , SUBSTR( 'Sat' FROM 3 ) LIKE '%a_';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def					SUBSTR( 'Sat' FROM 3 )	253	4	1	Y	0	0	45
-def					SUBSTR( 'Sat' FROM 3 ) LIKE '%a_'	8	1	1	Y	32768	0	63
+def					SUBSTR( 'Sat' FROM 3 ) LIKE '%a_'	8	1	1	Y	32896	0	63
 +------------------------+-----------------------------------+
 | SUBSTR( 'Sat' FROM 3 ) | SUBSTR( 'Sat' FROM 3 ) LIKE '%a_' |
 +------------------------+-----------------------------------+
@@ -2833,22 +2833,22 @@ def	test	t1	t1	a	a	8	20	1	Y	32768	0	63
 +------+
 select  !w, !!w, !(!w), ! !w, not w, not not w, w is true, w is not false, (not w) is false, not(w is false), if(w,'true','false'), !1+1, !'a', !false, !isnull('a'), !!isnull('a') from (select 0 w union select 1) w;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					!w	8	1	1	Y	32768	0	63
-def					!!w	8	1	1	Y	32768	0	63
-def					!(!w)	8	1	1	Y	32768	0	63
-def					! !w	8	1	1	Y	32768	0	63
-def					not w	8	1	1	Y	32768	0	63
-def					not not w	8	1	1	Y	32768	0	63
-def					w is true	3	1	1	N	32769	0	63
-def					w is not false	3	1	1	N	32769	0	63
-def					(not w) is false	3	1	1	N	32769	0	63
-def					not(w is false)	8	1	1	N	32769	0	63
+def					!w	8	1	1	Y	32896	0	63
+def					!!w	8	1	1	Y	32896	0	63
+def					!(!w)	8	1	1	Y	32896	0	63
+def					! !w	8	1	1	Y	32896	0	63
+def					not w	8	1	1	Y	32896	0	63
+def					not not w	8	1	1	Y	32896	0	63
+def					w is true	3	1	1	N	32897	0	63
+def					w is not false	3	1	1	N	32897	0	63
+def					(not w) is false	3	1	1	N	32897	0	63
+def					not(w is false)	8	1	1	N	32897	0	63
 def					if(w,'true','false')	253	20	5	N	1	0	45
-def					!1+1	8	2	1	N	32769	0	63
-def					!'a'	8	1	1	N	32769	0	63
-def					!false	8	1	1	N	32769	0	63
-def					!isnull('a')	8	1	1	N	32769	0	63
-def					!!isnull('a')	8	1	1	N	32769	0	63
+def					!1+1	8	2	1	N	32897	0	63
+def					!'a'	8	1	1	N	32897	0	63
+def					!false	8	1	1	N	32897	0	63
+def					!isnull('a')	8	1	1	N	32897	0	63
+def					!!isnull('a')	8	1	1	N	32897	0	63
 +------+------+-------+------+-------+-----------+-----------+----------------+------------------+-----------------+----------------------+------+------+--------+--------------+---------------+
 | !w   | !!w  | !(!w) | ! !w | not w | not not w | w is true | w is not false | (not w) is false | not(w is false) | if(w,'true','false') | !1+1 | !'a' | !false | !isnull('a') | !!isnull('a') |
 +------+------+-------+------+-------+-----------+-----------+----------------+------------------+-----------------+----------------------+------+------+--------+--------------+---------------+

@@ -21,6 +21,7 @@ using namespace blocksstable;
 ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
   ObDirectLoadMemContext *mem_ctx)
   : mem_ctx_(mem_ctx),
+    allocator_("TLD_Sorter"),
     extra_buf_(nullptr),
     index_dir_id_(-1),
     data_dir_id_(-1),
@@ -36,6 +37,7 @@ ObDirectLoadMultipleHeapTableSorter::~ObDirectLoadMultipleHeapTableSorter()
 int ObDirectLoadMultipleHeapTableSorter::init()
 {
   int ret = OB_SUCCESS;
+  allocator_.set_tenant_id(MTL_ID());
   if (OB_ISNULL(extra_buf_ = static_cast<char *>(allocator_.alloc(mem_ctx_->table_data_desc_.extra_buf_size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate extra buf", KR(ret));

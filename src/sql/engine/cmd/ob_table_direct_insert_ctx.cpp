@@ -37,16 +37,15 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("exec_ctx cannot be null", KR(ret));
   } else {
-    load_exec_ctx_ = (ObTableLoadExecCtx *)exec_ctx->get_allocator().alloc(sizeof(ObTableLoadExecCtx));
-    table_load_instance_ = (ObTableLoadInstance *)exec_ctx->get_allocator().alloc(sizeof(ObTableLoadInstance));
-    if (OB_ISNULL(load_exec_ctx_) || OB_ISNULL(table_load_instance_)) {
+    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", KR(ret));
+      LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
+    } else if (OB_ISNULL(table_load_instance_ =
+                           OB_NEWx(ObTableLoadInstance, &exec_ctx->get_allocator()))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObTableLoadInstance", KR(ret));
     } else {
-      new (load_exec_ctx_) ObTableLoadExecCtx;
-      new (table_load_instance_) ObTableLoadInstance;
       load_exec_ctx_->exec_ctx_ = exec_ctx;
-      load_exec_ctx_->allocator_ = &(exec_ctx->get_allocator());
       uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
       omt::ObTenant *tenant = nullptr;
@@ -118,7 +117,7 @@ void ObTableDirectInsertCtx::destroy()
     table_load_instance_ = nullptr;
   }
   if (OB_NOT_NULL(load_exec_ctx_)) {
-    load_exec_ctx_->~ObTableLoadExecCtx();
+    load_exec_ctx_->~ObTableLoadSqlExecCtx();
     load_exec_ctx_ = nullptr;
   }
 }

@@ -19,12 +19,9 @@ namespace blocksstable
 {
 class ObStorageDatumUtils;
 } // namespace blocksstable
-namespace observer
-{
-class ObTableLoadErrorRowHandler;
-} // namespace observer
 namespace storage
 {
+class ObDirectLoadDMLRowHandler;
 
 struct ObDirectLoadMultipleSSTableScanMergeParam
 {
@@ -32,12 +29,11 @@ public:
   ObDirectLoadMultipleSSTableScanMergeParam();
   ~ObDirectLoadMultipleSSTableScanMergeParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_data_desc), KP_(datum_utils), KP_(error_row_handler), KP_(result_info));
+  TO_STRING_KV(K_(table_data_desc), KP_(datum_utils), KP_(dml_row_handler));
 public:
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  observer::ObTableLoadErrorRowHandler *error_row_handler_;
-  table::ObTableLoadResultInfo *result_info_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
 
 class ObDirectLoadMultipleSSTableScanMerge : public ObIStoreRowIterator
@@ -66,8 +62,7 @@ private:
   common::ObArenaAllocator allocator_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
-  observer::ObTableLoadErrorRowHandler *error_row_handler_;
-  table::ObTableLoadResultInfo *result_info_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
   const ObDirectLoadMultipleDatumRange *range_;
   common::ObSEArray<ObDirectLoadMultipleSSTableScanner *, 64> scanners_;
   int64_t *consumers_;

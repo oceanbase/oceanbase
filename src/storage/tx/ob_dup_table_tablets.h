@@ -764,6 +764,7 @@ private:
                              const bool construct_target_set = false,
                              const bool need_changing_new_set = false);
 
+  int check_and_recycle_empty_readable_set(DupTabletChangeMap *need_free_set);
   int return_tablet_set(DupTabletChangeMap *need_free_set);
 
   int clean_readable_tablets_(const share::SCN & min_reserve_tablet_scn);

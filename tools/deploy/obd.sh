@@ -668,7 +668,7 @@ function main() {
   if [[ ! -f $OBD_HOME/.obd/.obd_environ || "$(grep '"OBD_DEV_MODE": "1"' $OBD_HOME/.obd/.obd_environ)" == "" ]]
   then
   obd devmode enable || (echo "Exec obd cmd failed. If your branch is based on 3.1_opensource_release, please go to the deps/3rd directory and execute 'bash dep_create.sh all' to install obd." && exit 1)
-  [[ "$OBD_LOCK_MODE" ]] || obd env set OBD_LOCK_MODE 1
+  [[ "$OBD_LOCK_MODE" ]] || obd env set OBD_LOCK_MODE 0
   fi
   if [[  "$(grep '"OBD_DEPLOY_BASE_DIR":' $DEPLOY_PATH/.obd/.obd_environ)" == "" ]]
   then

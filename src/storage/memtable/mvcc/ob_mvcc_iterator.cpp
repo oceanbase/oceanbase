@@ -32,11 +32,9 @@ namespace memtable
 int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
                               const ObMemtableKey *key,
                               ObMvccRow *value,
-                              const ObQueryFlag &query_flag,
-                              const bool skip_compact)
+                              const ObQueryFlag &query_flag)
 {
   int ret = OB_SUCCESS;
-  skip_compact_ = skip_compact;
   reset();
   int64_t lock_for_read_start = ObClockGenerator::getClock();
   ctx_ = &ctx;
@@ -62,7 +60,6 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
             KPC(value),
             KPC_(version_iter),
             K(query_flag.is_read_latest()),
-            K(skip_compact),
             KPC(key),
             K(ctx),
             K(lbt()));
@@ -229,6 +226,23 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     } else if (can_read && ctx_->get_snapshot_version() >= data_version) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
       //           snapshot
+      int counter = 0;
+      while (OB_SUCC(ret)
+             && is_determined_state
+             && !(iter->is_committed() || iter->is_aborted() || iter->is_elr())) {
+        if (OB_FAIL(try_cleanout_tx_node_(iter))) {
+          TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(value_), KPC(iter));
+        }
+        // NB: We rely on the row_scn and state on the tx node if we really can
+        // read from the tx node. So if the tx node is not cleanout, we must
+        // wait until the tx node is written back its state.
+        if (0 == (++counter) % 10000
+            && REACH_TIME_INTERVAL(1_s)) {
+          TRANS_LOG(WARN, "waiting for the iter to be cleanout", K(ret),
+                    KPC(iter), K(lock_for_read_arg), KPC(value_), KPC(ctx_));
+        }
+        usleep(10); // 10us
+      }
       version_iter_ = iter;
     } else {
       // Case 5.1: data is cleanout by lock for read and cannot be read by
@@ -280,9 +294,7 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
       } else if (!(version_iter_->is_aborted()              // skip abort version
-                   || is_lock_node
-                   || (NDT_COMPACT == version_iter_->type_
-                       && skip_compact_))) {
+                   || is_lock_node)) {                      // skip lock node
         tnode = static_cast<const void *>(version_iter_);
       }
 
@@ -297,11 +309,7 @@ void ObMvccValueIterator::move_to_next_node_()
 {
   if (OB_ISNULL(version_iter_)) {
   } else if (NDT_COMPACT == version_iter_->type_) {
-    if (skip_compact_) {
-      version_iter_ = version_iter_->prev_;
-    } else {
-      version_iter_ = NULL;
-    }
+    version_iter_ = NULL;
   } else {
     version_iter_ = version_iter_->prev_;
   }
@@ -370,8 +378,7 @@ int ObMvccRowIterator::init(
 int ObMvccRowIterator::get_next_row(
     const ObMemtableKey *&key,
     ObMvccValueIterator *&value_iter,
-    uint8_t& iter_flag,
-    const bool skip_compact)
+    uint8_t& iter_flag)
 {
   int ret = OB_SUCCESS;
   uint8_t read_partial_row = 0;
@@ -398,8 +405,7 @@ int ObMvccRowIterator::get_next_row(
     } else if (OB_FAIL(value_iter_.init(*ctx_,
                                         tmp_key,
                                         value,
-                                        query_flag_,
-                                        skip_compact))) {
+                                        query_flag_))) {
       TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
     } else if (!value_iter_.is_exist()) {
       read_partial_row = (query_engine_iter_->get_iter_flag() & STORE_ITER_ROW_PARTIAL);

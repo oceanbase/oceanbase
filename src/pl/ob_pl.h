@@ -448,7 +448,8 @@ public:
     is_invoker_right_(false),
     is_pipelined_(false),
     name_debuginfo_(),
-    function_name_() { }
+    function_name_(),
+    has_parallel_affect_factor_(false) { }
   virtual ~ObPLFunction();
 
   inline const common::ObIArray<ObPLDataType> &get_variables() const { return variables_; }
@@ -489,6 +490,9 @@ public:
 
   inline bool is_pipelined() const { return is_pipelined_; }
   inline void set_pipelined(bool is_pipelined) { is_pipelined_ = is_pipelined; }
+
+  inline bool get_has_parallel_affect_factor() const { return has_parallel_affect_factor_; }
+  inline void set_has_parallel_affect_factor(bool value) { has_parallel_affect_factor_ = value; }
 
   inline const PLCacheObjStat get_stat() const { return stat_; }
   inline PLCacheObjStat &get_stat_for_update() { return stat_; }
@@ -576,6 +580,7 @@ private:
   common::ObString package_name_;
   common::ObString database_name_;
   common::ObString priv_user_;
+  bool has_parallel_affect_factor_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLFunction);
 };
@@ -875,7 +880,7 @@ public:
   int is_inited() { return session_info_ != NULL; }
 
   int init(sql::ObSQLSessionInfo &session_info, sql::ObExecContext &ctx,
-           bool is_autonomous, bool is_function_or_trigger, ObIAllocator *allocator = NULL);
+           ObPLFunction *routine, bool is_function_or_trigger, ObIAllocator *allocator = NULL);
   void destory(sql::ObSQLSessionInfo &session_info, sql::ObExecContext &ctx, int &ret);
 
   inline ObPLCursorInfo& get_cursor_info() { return cursor_info_; }

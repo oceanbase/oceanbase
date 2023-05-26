@@ -236,6 +236,17 @@ int ObAllVirtualHADiagnose::insert_stat_(storage::DiagnoseInfo &diagnose_info)
         cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                               ObCharset::get_default_charset()));
         break;
+      case ENABLE_SYNC:
+        cur_row_.cells_[i].set_bool(diagnose_info.palf_diagnose_info_.enable_sync_);
+        break;
+      case ENABLE_VOTE:
+        cur_row_.cells_[i].set_bool(diagnose_info.palf_diagnose_info_.enable_vote_);
+        break;
+      case ARB_SRV_INFO:
+        cur_row_.cells_[i].set_varchar(ObString(""));
+        cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
+                                              ObCharset::get_default_charset()));
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unkown column");

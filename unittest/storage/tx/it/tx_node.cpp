@@ -261,6 +261,7 @@ ObTxNode::~ObTxNode() __attribute__((optnone)) {
     delete fake_tx_log_adapter_;
   }
   FAST_FAIL();
+  ObTenantEnv::set_tenant(NULL);
 }
 
 int ObTxNode::create_memtable_(const int64_t tablet_id, memtable::ObMemtable *&mt) {

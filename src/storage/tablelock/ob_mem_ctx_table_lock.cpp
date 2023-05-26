@@ -344,7 +344,7 @@ int ObLockMemCtx::check_modify_schema_elapsed(
     RDLockGuard guard(list_rwlock_);
     DLIST_FOREACH(curr, lock_list_) {
       if (curr->lock_op_.lock_id_ == lock_id &&
-          curr->lock_op_.create_schema_version_ <= schema_version) {
+          curr->lock_op_.create_schema_version_ < schema_version) {
         // there is some trans that modify the tablet before schema version
         // running.
         ret = OB_EAGAIN;
@@ -370,7 +370,7 @@ int ObLockMemCtx::check_modify_time_elapsed(
     RDLockGuard guard(list_rwlock_);
     DLIST_FOREACH(curr, lock_list_) {
       if (curr->lock_op_.lock_id_ == lock_id &&
-          curr->lock_op_.create_timestamp_ <= timestamp) {
+          curr->lock_op_.create_timestamp_ < timestamp) {
         // there is some trans that modify the tablet before timestamp
         // running.
         ret = OB_EAGAIN;

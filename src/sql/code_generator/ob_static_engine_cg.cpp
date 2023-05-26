@@ -3504,13 +3504,37 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
       OB_LOG(WARN, "fail to init_duplicate_rollup_expr", K(ret));
     }
     bool is_duplicate = false;
+    const bool is_oracle_mode = lib::is_oracle_mode();
+    // In the two different modes of mysql and oracle, the behavior of rollup duplicate columns
+    // is different. For example, when there is one row [1] in t1, in oracle mode
+    // select c1 from t1 group by rollup(c1, c1);
+    // +------+
+    // | c1   |
+    // +------+
+    // |    1 |
+    // |    1 |
+    // | NULL |
+    // +------+
+    // In mysql mode
+    // select c1 from t1 group by c1, c1 with rollup;
+    // +------+
+    // | c1   |
+    // +------+
+    // |    1 |
+    // | NULL |
+    // | NULL |
+    // +------+
+    // So we need to distinguish between two modes when initializing `is_duplicate_rollup_expr_`
+    // array. For oracle, it is initialized from left to right. For mysql, it is initialized from
+    // right to left.
     ARRAY_FOREACH(rollup_exprs, i) {
       const ObRawExpr* raw_expr = rollup_exprs.at(i);
       ObExpr *expr = NULL;
       if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
         LOG_WARN("failed to generate_rt_expr", K(ret));
-      } else if (FALSE_IT(is_duplicate = (has_exist_in_array(spec.group_exprs_, expr)
-                                           || has_exist_in_array(spec.rollup_exprs_, expr)))) {
+      } else if (FALSE_IT(is_duplicate = (is_oracle_mode && // set is_duplicate to false in mysql
+                                           (has_exist_in_array(spec.group_exprs_, expr)
+                                             || has_exist_in_array(spec.rollup_exprs_, expr))))) {
       } else if (OB_FAIL(spec.is_duplicate_rollup_expr_.push_back(is_duplicate))) {
         OB_LOG(WARN, "fail to push distinct_rollup_expr", K(ret));
       } else if (OB_FAIL(spec.add_rollup_expr(expr))) {
@@ -3519,6 +3543,21 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
         LOG_DEBUG("rollup is duplicate key", K(is_duplicate));
       }
     } // end for
+    // mysql mode, reinit duplicate rollup expr from right to left
+    if (OB_SUCC(ret) && !is_oracle_mode && rollup_exprs.count() > 0) {
+      for (int64_t i = spec.rollup_exprs_.count() - 2; OB_SUCC(ret) && i >= 0; --i) {
+        if (has_exist_in_array(spec.group_exprs_, spec.rollup_exprs_.at(i))) {
+          spec.is_duplicate_rollup_expr_.at(i) = true;
+        } else {
+          for (int64_t j = i + 1; !spec.is_duplicate_rollup_expr_.at(i)
+                                      && j < spec.rollup_exprs_.count(); ++j) {
+            if (spec.rollup_exprs_.at(i) == spec.rollup_exprs_.at(j)) {
+              spec.is_duplicate_rollup_expr_.at(i) = true;
+            }
+          }
+        }
+      }
+    }
   }
 
   // 3. add aggr columns
@@ -4154,6 +4193,10 @@ int ObStaticEngineCG::construct_hash_elements_for_connect_by(ObLogJoin &op, ObNL
   } else if (OB_ISNULL(left_op = op.get_child(0)) || OB_ISNULL(right_op = op.get_child(1))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child op is null", K(ret));
+  } else if (OB_FAIL(spec.hash_key_exprs_.init(op.get_other_join_conditions().count()))) {
+    LOG_WARN("failed to init hash key exprs", K(ret));
+  } else if (OB_FAIL(spec.hash_probe_exprs_.init(op.get_other_join_conditions().count()))) {
+    LOG_WARN("failed to init hash probe exprs", K(ret));
   } else {
     const ObRelIds &left_table_set = left_op->get_table_set();
     const ObRelIds &right_table_set = right_op->get_table_set();
@@ -4352,11 +4395,19 @@ int ObStaticEngineCG::generate_join_spec(ObLogJoin &op, ObJoinSpec &spec)
         CK(l.cs_type_ == r.cs_type_);
         if (OB_SUCC(ret)) {
           const ObScale scale = ObDatumFuncs::max_scale(l.scale_, r.scale_);
-          equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
-                             r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode(),
-                             has_lob_header);
-          CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(calc_equal_cond_opposite(op, *raw_expr, equal_cond_info.is_opposite_));
+          if (OB_SUCC(ret)) {
+            if (equal_cond_info.is_opposite_) {
+              equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(r.type_,
+                                l.type_, default_null_pos(), r.cs_type_, scale, is_oracle_mode(),
+                                has_lob_header);
+            } else {
+              equal_cond_info.ns_cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(l.type_,
+                                r.type_, default_null_pos(), l.cs_type_, scale, is_oracle_mode(),
+                                has_lob_header);
+            }
+          }
+          CK(OB_NOT_NULL(equal_cond_info.ns_cmp_func_));
           OZ(mj_spec.equal_cond_infos_.push_back(equal_cond_info));
           // when is_opposite_ is true: left child fetcher accept right
           // arg(args_[1]) and vice versa
@@ -4811,6 +4862,12 @@ int ObStaticEngineCG::recursive_get_column_expr(const ObColumnRefRawExpr *&colum
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected select expr", K(ret),
           K(offset), K(stmt->get_select_item_size()), K(select_expr));
+    } else if (OB_UNLIKELY(!select_expr->is_column_ref_expr()) && column->is_xml_column()
+              && select_expr->get_expr_type() == T_FUN_SYS_MAKEXML
+              && OB_NOT_NULL(select_expr->get_param_expr(1))) {
+      select_expr = select_expr->get_param_expr(1);
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(!select_expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(*select_expr));
@@ -5992,6 +6049,10 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr *> &all_expr,
       } else if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null ", K(ret), K(expr));
+      } else if (ob_is_user_defined_sql_type(expr->datum_meta_.type_) || ob_is_user_defined_pl_type(expr->datum_meta_.type_)) {
+        // partition by clause not support xmltype
+        ret = OB_ERR_NO_ORDER_MAP_SQL;
+        LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
       } else if (OB_FAIL(wf_info.partition_exprs_.push_back(expr))) {
         LOG_WARN("push_back failed", K(ret), K(expr));
       }
@@ -6716,7 +6777,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     bool is_found = false;
     const ParamStore &param_store = plan_ctx->get_param_store();
     for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < param_store.count(); ++i) {
-      if (param_store.at(i).is_ext()) {
+      if (param_store.at(i).is_ext_sql_array()) {
         phy_plan.set_first_array_index(i);
         is_found = true;
       }

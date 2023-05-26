@@ -66,6 +66,8 @@ public:
     const int64_t timeout_us = ObTabletCommon::DIRECT_GET_COMMITTED_TABLET_TIMEOUT_US)
     : mod_(mod),
       is_major_(is_major),
+      scan_finish_(false),
+      merge_finish_(false),
       timeout_us_(timeout_us),
       ls_idx_(0),
       tablet_idx_(0),
@@ -76,6 +78,11 @@ public:
   int build_iter();
   int get_next_ls(ObLSHandle &ls_handle);
   int get_next_tablet(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
+  bool is_scan_finish() const { return scan_finish_; }
+  bool tenant_merge_finish() const { return merge_finish_ & scan_finish_; }
+  void update_merge_finish(bool merge_finish) {
+    merge_finish_ &= merge_finish;
+  }
   void reset();
   bool is_valid() const;
   void skip_cur_ls()
@@ -89,6 +96,8 @@ private:
   static const int64_t TABLET_ID_ARRAY_CNT = 2000;
   ObLSGetMod mod_;
   bool is_major_;
+  bool scan_finish_;
+  bool merge_finish_;
   int64_t timeout_us_;
   int64_t ls_idx_;
   uint64_t tablet_idx_;
@@ -219,7 +228,6 @@ private:
   int schedule_ls_medium_merge(
       int64_t &merge_version,
       ObLSHandle &ls_handle,
-      bool &ls_merge_finish,
       bool &all_ls_weak_read_ts_ready,
       int64_t &schedule_tablet_cnt);
   int schedule_ls_minor_merge(

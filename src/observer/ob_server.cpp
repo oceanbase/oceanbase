@@ -646,9 +646,6 @@ void ObServer::destroy()
 
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
-  } else {
-    FLOG_WARN_RET(OB_ERROR, "[OBSERVER_NOTICE] can not destroy observer", K_(has_destroy), K_(has_stopped));
-    LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer exits without calling destroy()", K_(has_destroy), K_(has_stopped));
   }
 }
 
@@ -1200,6 +1197,10 @@ int ObServer::stop()
   }
 
 
+  FLOG_INFO("begin to stop global_poc_server");
+  obrpc::global_poc_server.stop();
+  FLOG_INFO("stop global_poc_server success");
+
   has_stopped_ = true;
   FLOG_INFO("[OBSERVER_NOTICE] stop observer end", KR(ret));
   if (OB_SUCCESS != fail_ret) {
@@ -1390,6 +1391,11 @@ int ObServer::wait()
       LOG_DBA_ERROR(OB_ERR_OBSERVER_STOP, "msg", "observer wait() has failure", KR(fail_ret));
     }
   }
+
+  FLOG_INFO("begin to wait global_poc_server");
+  obrpc::global_poc_server.wait();
+  FLOG_INFO("wait global_poc_server success");
+
   return ret;
 }
 
@@ -1517,7 +1523,7 @@ int ObServer::init_config()
 
   config_.print();
 
-  // local_ip is a critical parameter, if if is set, then verify it; otherwise, set it via devname.
+  // local_ip is a critical parameter, if it is set, then verify it; otherwise, set it via devname.
   if (strlen(config_.local_ip) > 0) {
     char if_name[MAX_IFNAME_LENGTH] = { '\0' };
     if (0 != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name))) {
@@ -1626,8 +1632,11 @@ int ObServer::init_config()
         LOG_ERROR("config_mgr_ base_init failed", KR(ret));
       } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
         LOG_ERROR("config_mgr_ init failed", K_(self_addr), KR(ret));
-      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_, &config_mgr_, update_tenant_config_cb))) {
+      } else if (OB_FAIL(tenant_config_mgr_.init(sql_proxy_, self_addr_,
+                         &config_mgr_, update_tenant_config_cb))) {
         LOG_ERROR("tenant_config_mgr_ init failed", K_(self_addr), KR(ret));
+      } else if (OB_FAIL(tenant_config_mgr_.add_config_to_existing_tenant(opts_.optstr_))) {
+        LOG_ERROR("tenant_config_mgr_ add_config_to_existing_tenant failed", KR(ret));
       }
     }
   }
@@ -2029,7 +2038,7 @@ int ObServer::init_global_kvcache()
   int64_t bucket_num = ObKVGlobalCache::get_instance().get_suitable_bucket_num();
   int64_t max_cache_size = ObKVGlobalCache::DEFAULT_MAX_CACHE_SIZE;
   if (is_mini_mode()) {
-    max_cache_size /= (lib::ObRunningModeConfig::MINI_MEM_UPPER / lib::ObRunningModeConfig::instance().memory_limit_);
+    max_cache_size *= lib::mini_mode_resource_ratio();
   }
   if (OB_FAIL(ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
                                                    bucket_num,

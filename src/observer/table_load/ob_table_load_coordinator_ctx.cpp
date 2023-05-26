@@ -27,6 +27,7 @@ ObTableLoadCoordinatorCtx::ObTableLoadCoordinatorCtx(ObTableLoadTableCtx *ctx)
   : ctx_(ctx),
     allocator_("TLD_CoordCtx"),
     task_scheduler_(nullptr),
+    exec_ctx_(nullptr),
     last_trans_gid_(1024),
     next_session_id_(0),
     status_(ObTableLoadStatusType::NONE),
@@ -40,17 +41,20 @@ ObTableLoadCoordinatorCtx::~ObTableLoadCoordinatorCtx()
   destroy();
 }
 
-int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t user_id)
+int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t user_id,
+                                    ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(idx_array.count() != ctx_->param_.column_count_ ||
-                         OB_INVALID_ID == user_id)) {
+  } else if (OB_UNLIKELY(
+               idx_array.count() != ctx_->param_.column_count_ || OB_INVALID_ID == user_id ||
+               nullptr == exec_ctx || !exec_ctx->is_valid() ||
+               (ctx_->param_.online_opt_stat_gather_ && nullptr == exec_ctx->get_exec_ctx()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(idx_array.count()), K_(ctx_->param_.column_count),
-             K(user_id));
+    LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(idx_array.count()), K(user_id),
+             KPC(exec_ctx));
   } else {
     allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(target_schema_.init(ctx_->param_.tenant_id_, ctx_->ddl_param_.dest_table_id_))) {
@@ -116,6 +120,7 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<int64_t> &idx_array, uint64_t
       LOG_WARN("fail to start task scheduler", KR(ret));
     }
     if (OB_SUCC(ret)) {
+      exec_ctx_ = exec_ctx;
       is_inited_ = true;
     } else {
       destroy();

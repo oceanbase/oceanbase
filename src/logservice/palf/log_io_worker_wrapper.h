@@ -22,30 +22,30 @@ namespace palf
 class LogIOWorkerWrapper
 {
 public:
-LogIOWorkerWrapper();
-~LogIOWorkerWrapper();
+  LogIOWorkerWrapper();
+  ~LogIOWorkerWrapper();
 
-int init(const LogIOWorkerConfig &config,
-         const int64_t tenant_id,
-         int cb_thread_pool_tg_id,
-         ObIAllocator *allocaotr,
-         IPalfEnvImpl *palf_env_impl);
-void destroy();
-int start();
-void stop();
-void wait();
-LogIOWorker *get_log_io_worker(const int64_t palf_id);
-int notify_need_writing_throttling(const bool &need_throtting);
-int64_t get_last_working_time() const;
-TO_STRING_KV(K_(is_inited), K_(is_user_tenant), K_(sys_log_io_worker), K_(user_log_io_worker));
+  int init(const LogIOWorkerConfig &config,
+           const int64_t tenant_id,
+           int cb_thread_pool_tg_id,
+           ObIAllocator *allocaotr,
+           IPalfEnvImpl *palf_env_impl);
+  void destroy();
+  int start();
+  void stop();
+  void wait();
+  LogIOWorker *get_log_io_worker(const int64_t palf_id);
+  int notify_need_writing_throttling(const bool &need_throtting);
+  int64_t get_last_working_time() const;
+  TO_STRING_KV(K_(is_inited), K_(is_user_tenant), K_(sys_log_io_worker), K_(user_log_io_worker));
 
 private:
-bool is_inited_;
-bool is_user_tenant_;
-//for log stream  NO.1
-LogIOWorker sys_log_io_worker_;
-//for log streams except NO.1
-LogIOWorker user_log_io_worker_;
+  bool is_inited_;
+  bool is_user_tenant_;
+  //for log stream  NO.1
+  LogIOWorker sys_log_io_worker_;
+  //for log streams except NO.1
+  LogIOWorker user_log_io_worker_;
 };
 
 }//end of namespace palf

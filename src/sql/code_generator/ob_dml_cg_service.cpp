@@ -1802,7 +1802,11 @@ int ObDmlCgService::need_fire_update_event(const ObTableSchema &table_schema,
       OV (column_node->str_value_ != NULL && column_node->str_len_ > 0);
       OX (column_name.assign_ptr(column_node->str_value_, static_cast<int32_t>(column_node->str_len_)));
       OX (column_schema = table_schema.get_column_schema(column_name));
-      OV (column_schema != NULL);
+      if (OB_SUCC(ret) && OB_ISNULL(column_schema)) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_WARN("column not exist", K(ret), K(i), K(column_name));
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < base_column_ids.count(); j++) {
         if (column_schema->get_column_id() == base_column_ids.at(j)) {
           OX (need_fire = !assignments.at(j).is_implicit_);
@@ -1864,10 +1868,10 @@ int ObDmlCgService::convert_normal_triggers(ObLogDelUpd &log_op,
       } else if (OB_ISNULL(trigger_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trigger info is null", K(tenant_id), K(trigger_id), K(ret));
-      } else if (trigger_info->is_enable()) {
+      } else {
         // if disable trigger, use the previous plan cache, whether trigger is enable ???
-        need_fire = trigger_info->has_event(dml_event);
-        if (OB_SUCC(ret) && need_fire && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
+        need_fire = trigger_info->has_event(dml_event) && trigger_info->is_enable();
+        if (OB_SUCC(ret) && !trigger_info->get_ref_trg_name().empty() && lib::is_oracle_mode()) {
           const ObTriggerInfo *ref_trigger_info = NULL;
           uint64_t ref_db_id = OB_INVALID_ID;
           OZ (schema_guard->get_database_id(tenant_id, trigger_info->get_ref_trg_db_name(), ref_db_id));

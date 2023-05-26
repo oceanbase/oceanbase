@@ -21,6 +21,7 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/alloc_func.h"
 #include "share/config/ob_server_config.h"
+#include "src/sql/dtl/ob_dtl_tenant_mem_manager.h"
 
 namespace oceanbase {
 namespace sql {
@@ -28,10 +29,11 @@ namespace dtl {
 
 //class ObDtlLinkedBuffer;
 
+class ObDtlTenantMemManager;
 class ObDtlChannelMemManager
 {
 public:
-  ObDtlChannelMemManager(uint64_t tenant_id);
+  ObDtlChannelMemManager(uint64_t tenant_id, ObDtlTenantMemManager &tenant_mgr);
   virtual ~ObDtlChannelMemManager() { destroy(); }
 
   int init();
@@ -56,7 +58,7 @@ public:
   OB_INLINE void increase_free_cnt() { ATOMIC_INC(&free_cnt_); }
 
 
-  int64_t get_total_memory_size() { return size_per_buffer_ * free_queue_.size(); }
+  int64_t get_total_memory_size() { return allocator_.used(); }
 
   int get_max_mem_percent();
   void update_max_memory_percent();
@@ -88,14 +90,10 @@ private:
 
   int64_t real_alloc_cnt_;
   int64_t real_free_cnt_;
+  ObDtlTenantMemManager &tenant_mgr_;
+  int64_t mem_used_;
+  int64_t last_update_memory_time_;
 };
-
-OB_INLINE int64_t ObDtlChannelMemManager::get_used_memory_size()
-{
-  //lib::get_tenant_mod_memory(tenant_id_, common::ObModIds::OB_SQL_DTL, item);
-  //return item.hold_;
-  return 0;
-}
 
 OB_INLINE int64_t ObDtlChannelMemManager::get_max_dtl_memory_size()
 {

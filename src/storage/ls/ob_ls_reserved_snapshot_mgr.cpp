@@ -42,9 +42,10 @@ ObLSReservedSnapshotMgr::~ObLSReservedSnapshotMgr()
   destroy();
 }
 
-int ObLSReservedSnapshotMgr::init(ObLS *ls, ObLogHandler *log_handler)
+int ObLSReservedSnapshotMgr::init(const int64_t tenant_id, ObLS *ls, ObLogHandler *log_handler)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(tenant_id, "DepTabletSet");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLSReservedSnapshotMgr is inited", K(ret), KP(ls));
@@ -53,7 +54,7 @@ int ObLSReservedSnapshotMgr::init(ObLS *ls, ObLogHandler *log_handler)
     LOG_WARN("invalid argument", K(ret), K(ls), K(log_handler));
   } else if (OB_FAIL(ObIStorageClogRecorder::init(0/*max_saved_version*/, log_handler))) {
     LOG_WARN("failed to init", K(ret), KP(ls), K(log_handler));
-  } else if (OB_FAIL(dependent_tablet_set_.create(HASH_BUCKET))) {
+  } else if (OB_FAIL(dependent_tablet_set_.create(HASH_BUCKET, attr, attr))) {
     LOG_WARN("failed to create hash set", K(ret), K(ls));
   } else {
     ls_ = ls;

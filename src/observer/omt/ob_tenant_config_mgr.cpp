@@ -283,7 +283,7 @@ int ObTenantConfigMgr::add_tenant_config(uint64_t tenant_id)
     }
   } else {
     ObTenantConfig *new_config = nullptr;
-    new_config = OB_NEW(ObTenantConfig, ObModIds::OMT, tenant_id);
+    new_config = OB_NEW(ObTenantConfig, "TenantConfig", tenant_id);
     if (OB_NOT_NULL(new_config)) {
       if(OB_FAIL(new_config->init(this))) {
         LOG_WARN("new tenant config init failed", K(ret));
@@ -614,6 +614,25 @@ int ObTenantConfigMgr::update_local(uint64_t tenant_id, int64_t expected_version
 void ObTenantConfigMgr::notify_tenant_config_changed(uint64_t tenant_id)
 {
   update_tenant_config_cb_(tenant_id);
+}
+
+int ObTenantConfigMgr::add_config_to_existing_tenant(const char *config_str)
+{
+  int ret = OB_SUCCESS;
+  DRWLock::WRLockGuard guard(rwlock_);
+  if (!config_map_.empty() && nullptr != config_str) {
+    TenantConfigMap::const_iterator it = config_map_.begin();
+    for (; it != config_map_.end() && OB_SUCC(ret); ++it) {
+      if (OB_NOT_NULL(it->second)) {
+        int64_t version = ObTimeUtility::current_time();
+        if (OB_FAIL(it->second->add_extra_config(config_str, version))) {
+          LOG_WARN("add tenant extra config failed", "tenant_id", it->second->get_tenant_id(),
+                   "config_str", config_str, KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTenantConfigMgr::add_extra_config(const obrpc::ObTenantConfigArg &arg)

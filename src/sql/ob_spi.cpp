@@ -2028,10 +2028,12 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
                                         int64_t hidden_column_count,
                                         pl::ObRecordType *&record_type,
                                         uint64_t &rowid_table_id,
-                                        pl::ObPLBlockNS *secondary_namespace)
+                                        pl::ObPLBlockNS *secondary_namespace,
+                                        bool &has_dup_column_name)
 {
   int ret = OB_SUCCESS;
   const common::ColumnsFieldIArray *columns = result_set.get_field_columns();
+  has_dup_column_name = false;
   if (OB_ISNULL(columns) || OB_ISNULL(record_type) || 0 == columns->count() || OB_ISNULL(secondary_namespace)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(columns), K(record_type), K(ret));
@@ -2076,6 +2078,7 @@ int ObSPIService::spi_build_record_type(common::ObIAllocator &allocator,
           for (int64_t j = 0; OB_SUCC(ret) && j < columns->count() - hidden_column_count; ++j) {
             if (i != j && columns->at(j).cname_ == columns->at(i).cname_) {
               duplicate = true;
+              has_dup_column_name = true;
               break;
             }
           }
@@ -2156,7 +2159,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       prepare_result.has_hidden_rowid_ ? 1 : 0,
                                       prepare_result.record_type_,
                                       prepare_result.rowid_table_id_,
-                                      secondary_namespace));
+                                      secondary_namespace,
+                                      prepare_result.has_dup_column_name_));
           } else {
             PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
             const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
@@ -2178,7 +2182,8 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                         prepare_result.has_hidden_rowid_ ? 1 : 0,
                                         prepare_result.record_type_,
                                         prepare_result.rowid_table_id_,
-                                        secondary_namespace));
+                                        secondary_namespace,
+                                        prepare_result.has_dup_column_name_));
             }
           }
         }
@@ -4239,9 +4244,8 @@ int ObSPIService::spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, 
       LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, code, 0, "");
     }
   }
-  if (is_pop_warning_buf && lib::is_mysql_mode()) {
+  if (is_pop_warning_buf && lib::is_mysql_mode() && sqlcode_info->get_stack_warning_buf().count() > 0) {
     int64_t idx = sqlcode_info->get_stack_warning_buf().count() - 1;
-    CK (idx >= 0);
     OX (sqlcode_info->get_stack_warning_buf().at(idx).~ObWarningBuffer());
     OX (sqlcode_info->get_stack_warning_buf().pop_back());
     OX (ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(OB_SUCCESS));
@@ -6297,8 +6301,10 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         LOG_DEBUG("same type directyly copy", K(obj), K(tmp_obj), K(result_types[i]), K(i));
       }
-    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type())  // sql udt can cast to pl extend
+    } else if (!(obj.is_pl_extend() || obj.is_user_defined_sql_type() || obj.is_null())
                && result_types[i].get_meta_type().is_ext()) {
+      // sql udt or null can cast to pl extend
+      // example: select extract(xmlparse(document '<a>a</a>'), '/b') into xml_data from dual;
       ret = OB_ERR_INTO_EXPR_ILLEGAL;
       LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret));
     } else {
@@ -6342,7 +6348,8 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())
                     || ob_is_string_tc(result_type.get_type())))
             || (!((obj.get_meta().is_ext())
-                    || obj.get_meta().get_type() == ObUserDefinedSQLType)
+                    || obj.get_meta().get_type() == ObUserDefinedSQLType
+                    || obj.is_null())
                && (result_type.get_type() == ObExtendType
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;

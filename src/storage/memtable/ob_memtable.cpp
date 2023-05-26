@@ -181,7 +181,6 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
     TRANS_LOG(WARN, "failed to set_table_key", K(ret), K(table_key));
   } else {
     ls_handle_ = ls_handle;
-    ObMemtableStat::get_instance().register_memtable(this);
     if (table_key.get_tablet_id().is_sys_tablet()) {
       mode_ = lib::Worker::CompatMode::MYSQL;
     } else {
@@ -203,7 +202,8 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   return ret;
 }
 
-int ObMemtable::remove_unused_callback_for_uncommited_txn_()
+int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
+  const ObLSID ls_id, const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   // NB: Do not use cache here, because the trans_service may be destroyed under
@@ -212,8 +212,8 @@ int ObMemtable::remove_unused_callback_for_uncommited_txn_()
     MTL_CTX()->get<transaction::ObTransService *>();
 
   if (NULL != txs_svr
-      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(this))) {
-    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), K(*this));
+      && OB_FAIL(txs_svr->remove_callback_for_uncommited_txn(ls_id, memtable_set))) {
+    TRANS_LOG(WARN, "remove callback for uncommited txn failed", K(ret), KPC(memtable_set));
   }
 
   return ret;
@@ -231,16 +231,10 @@ void ObMemtable::destroy()
     }
     STORAGE_LOG(INFO, "memtable destroyed", K(*this));
     time_guard.click();
-    ObMemtableStat::get_instance().unregister_memtable(this);
-    time_guard.click();
     ObTenantFreezer *freezer = nullptr;
     freezer = MTL(ObTenantFreezer *);
     if (OB_SUCCESS != freezer->unset_tenant_slow_freeze(tablet_id)) {
       TRANS_LOG(WARN, "unset tenant slow freeze failed.", K(*this));
-    }
-
-    if (OB_FAIL(remove_unused_callback_for_uncommited_txn_())) {
-      TRANS_LOG(WARN, "failed to remove callback for uncommited txn", K(ret), K(*this));
     }
   }
   ObITable::reset();
@@ -414,6 +408,8 @@ int ObMemtable::lock_(ObStoreCtx &ctx,
   } else if (OB_FAIL(row_writer.write_rowkey(rowkey, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
+    // for elr optimization
+    ctx.mvcc_acc_ctx_.get_mem_ctx()->set_row_updated();
     ObMemtableData mtd(blocksstable::ObDmlFlag::DF_LOCK, len, buf);
     ObTxNodeArg arg(&mtd,        /*memtable_data*/
                     NULL,        /*old_data*/
@@ -708,9 +704,11 @@ int ObMemtable::exist(
   } else if (OB_FAIL(parameter_mtk.encode(read_info.get_columns_desc(),
                                           &rowkey.get_store_rowkey()))) {
     TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
-  } else if (OB_FAIL(mvcc_engine_.get(ctx.mvcc_acc_ctx_, query_flag,
-                                      false, // skip_compact
-                                      &parameter_mtk, &returned_mtk, value_iter))) {
+  } else if (OB_FAIL(mvcc_engine_.get(ctx.mvcc_acc_ctx_,
+                                      query_flag,
+                                      &parameter_mtk,
+                                      &returned_mtk,
+                                      value_iter))) {
     TRANS_LOG(WARN, "get value iter fail, ", K(ret));
   } else {
     const void *tnode = nullptr;
@@ -812,7 +810,7 @@ int ObMemtable::get(
   ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   const ObTableReadInfo *read_info = nullptr;
-  const bool skip_compact = false;
+
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
     ret = OB_NOT_INIT;
@@ -831,7 +829,6 @@ int ObMemtable::get(
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
     } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
                                         context.query_flag_,
-                                        skip_compact,
                                         &parameter_mtk,
                                         &returned_mtk,
                                         value_iter))) {
@@ -1798,6 +1795,30 @@ int ObMemtable::set_max_end_scn(const SCN scn)
   return ret;
 }
 
+// the difference from set_max_end_scn is not to check memtable range
+int ObMemtable::set_max_end_scn_to_inc_start_scn()
+{
+  int ret = OB_SUCCESS;
+  const share::SCN scn = share::SCN::scn_inc(get_start_scn());
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else {
+    SCN old_max_end_scn;
+    SCN new_max_end_scn = get_max_end_scn();
+    while ((old_max_end_scn = new_max_end_scn) < scn) {
+      if ((new_max_end_scn =
+           max_end_scn_.atomic_vcas(old_max_end_scn, scn))
+          == old_max_end_scn) {
+        new_max_end_scn = scn;
+      }
+    }
+  }
+
+  return ret;
+}
+
 bool ObMemtable::rec_scn_is_stable()
 {
   int ret = OB_SUCCESS;
@@ -2419,77 +2440,6 @@ bool ObMemtable::has_multi_source_data_unit(const MultiSourceDataUnitType type) 
 }
 
 
-ObMemtableStat::ObMemtableStat()
-    : lock_(common::ObLatchIds::MEMTABLE_STAT_LOCK),
-      memtables_()
-{
-  memtables_.set_attr(SET_USE_500("MemTables"));
-}
-
-ObMemtableStat::~ObMemtableStat()
-{}
-
-ObMemtableStat &ObMemtableStat::get_instance()
-{
-  static ObMemtableStat s_instance;
-  return s_instance;
-}
-
-int ObMemtableStat::register_memtable(ObMemtable *memtable)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  if (OB_ISNULL(memtable)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(memtable));
-  } else if (OB_FAIL(memtables_.push_back(memtable))) {
-    TRANS_LOG(ERROR, "err push memtable ptr", K(ret));
-  }
-  return ret;
-}
-
-int ObMemtableStat::unregister_memtable(ObMemtable *memtable)
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  bool done = false;
-  if (OB_ISNULL(memtable)) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(memtable));
-  } else {
-    for (int64_t idx = 0, cnt = memtables_.size();
-         (OB_SUCC(ret)) && !done && (idx < cnt);
-         ++idx) {
-      if (memtable == memtables_.at(idx)) {
-        memtables_.at(idx) = memtables_.at(cnt - 1);
-        if (OB_FAIL(memtables_.remove(cnt - 1))) {
-          TRANS_LOG(WARN, "memtable remove fail", K(ret), K(idx));
-        } else {
-          done = true;
-        }
-      }
-    }
-    if (!done && OB_SUCCESS == ret) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
-int ObMemtableStat::print_stat()
-{
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  TRANS_LOG(INFO, "[memtable stat]", "memtable_cnt", memtables_.size());
-  for (int64_t idx = 0, cnt = memtables_.size(); OB_SUCC(ret) && (idx < cnt); ++idx) {
-    if (OB_FAIL(memtables_.at(idx)->print_stat())) {
-      TRANS_LOG(ERROR, "print memtable stat fail", K(ret));
-    }
-  }
-  TRANS_LOG(INFO, "[memtable stat] end.");
-  return ret;
-}
-
 int RowHeaderGetter::get()
 {
   int ret = OB_ENTRY_NOT_EXIST;
@@ -2555,6 +2505,8 @@ int ObMemtable::set_(ObStoreCtx &ctx,
     } else {
       MEMCPY(new_buf, buf, len);
       old_row_data.set(new_buf, len);
+      // for elr optimization
+      ctx.mvcc_acc_ctx_.get_mem_ctx()->set_row_updated();
     }
   }
   if (OB_SUCC(ret)) {

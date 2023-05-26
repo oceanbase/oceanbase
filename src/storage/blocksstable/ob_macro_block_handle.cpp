@@ -229,6 +229,7 @@ int ObMacroBlockHandle::set_macro_block_id(const MacroBlockId &macro_block_id)
 ObMacroBlocksHandle::ObMacroBlocksHandle()
   : macro_id_list_()
 {
+  macro_id_list_.set_attr(ObMemAttr(OB_SERVER_TENANT_ID, "MacroIdList"));
 }
 
 ObMacroBlocksHandle::~ObMacroBlocksHandle()

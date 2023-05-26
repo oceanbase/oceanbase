@@ -44,7 +44,6 @@ ob_set_subtarget(ob_server common_mixed
   report/ob_tablet_table_updater.cpp
   report/ob_tenant_meta_checker.cpp
   report/ob_server_meta_table_checker.cpp
-  layer_perf/ob_layer_perf.cpp
 )
 
 ob_set_subtarget(ob_server dbms_job

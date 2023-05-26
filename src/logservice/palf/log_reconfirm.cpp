@@ -58,6 +58,7 @@ LogReconfirm::LogReconfirm()
       wait_slide_print_time_us_(OB_INVALID_TIMESTAMP),
       wait_majority_time_us_(OB_INVALID_TIMESTAMP),
       last_notify_fetch_time_us_(OB_INVALID_TIMESTAMP),
+      last_purge_throttling_time_us_(OB_INVALID_TIMESTAMP),
       is_inited_(false)
 {}
 
@@ -112,6 +113,7 @@ void LogReconfirm::reset_state()
     last_fetch_log_time_us_ = OB_INVALID_TIMESTAMP;
     last_record_sw_start_id_ = OB_INVALID_LOG_ID;
     last_notify_fetch_time_us_ = OB_INVALID_TIMESTAMP;
+    last_purge_throttling_time_us_ = OB_INVALID_TIMESTAMP;
   }
 }
 
@@ -121,6 +123,7 @@ void LogReconfirm::destroy()
   if (is_inited_) {
     is_inited_ = false;
     last_notify_fetch_time_us_ = OB_INVALID_TIMESTAMP;
+    last_purge_throttling_time_us_ = OB_INVALID_TIMESTAMP;
     state_ = INITED;
     new_proposal_id_ = INVALID_PROPOSAL_ID;
     prepare_log_ack_list_.reset();
@@ -345,16 +348,26 @@ int LogReconfirm::ack_log_with_end_lsn_()
   return ret;
 }
 
-bool LogReconfirm::is_fetch_log_finished_() const
+bool LogReconfirm::is_fetch_log_finished_()
 {
   bool bool_ret = false;
-  int tmp_ret = OB_SUCCESS;
   LSN max_flushed_end_lsn;
   (void) sw_->get_max_flushed_end_lsn(max_flushed_end_lsn);
+  const LSN max_lsn = sw_->get_max_lsn();
   if (majority_max_lsn_ == max_flushed_end_lsn) {
     bool_ret = true;
+  } else {
+    //In a scenario with writhing throttling, ensure that the fetched logs are written to disk as soon
+    //as possible.
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = purge_throttling_())) {
+      PALF_LOG_RET(WARN, tmp_ret, "purge throttling failed", K_(palf_id), K_(majority_max_lsn),
+                   K(max_flushed_end_lsn), K(max_lsn));
+    }
   }
-  PALF_LOG(TRACE, "is_fetch_log_finished_", K_(palf_id), K(bool_ret), K_(majority_max_lsn), K(max_flushed_end_lsn));
+
+  PALF_LOG(TRACE, "is_fetch_log_finished_", K_(palf_id), K(bool_ret), K_(majority_max_lsn),
+           K(max_flushed_end_lsn), K(max_lsn));
   return bool_ret;
 }
 
@@ -467,6 +480,8 @@ int LogReconfirm::reconfirm()
           PALF_LOG(WARN, "submit_prepare_log_ failed", K_(palf_id));
         } else {
           state_ = FETCH_MAX_LOG_LSN;
+          //reset last_purge_throttling_time_us_to avoid impacting purging throttling during RECONFIRM_FETCH_LOG
+          last_purge_throttling_time_us_ = OB_INVALID_TIMESTAMP;
           PALF_EVENT("Reconfirm come into FETCH_MAX_LOG_LSN state", palf_id_, K_(self), K_(majority_max_accept_pid));
         }
         break;
@@ -618,11 +633,16 @@ int LogReconfirm::reconfirm()
   }
   return ret;
 }
+
 int LogReconfirm::purge_throttling_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_engine_->submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_RECONFIRM))) {
-    PALF_LOG(WARN, "submit_purge_throttling_task", K_(palf_id));
+  if (palf_reach_time_interval(100 * 1000L, last_purge_throttling_time_us_)) {
+    if (OB_FAIL(log_engine_->submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_RECONFIRM))) {
+      PALF_LOG(WARN, "submit_purge_throttling_task", K_(palf_id));
+    } else {
+      PALF_LOG(INFO, "submit_purge_throttling_task during reconfirming", K_(palf_id));
+    }
   }
   return ret;
 }

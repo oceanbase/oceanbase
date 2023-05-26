@@ -121,7 +121,7 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_TEST_SWITCH_MODE);
   }
   SEND_RPC(async_stream_fetch_log, tenant_id, svr, timeout, req, &cb);
-  LOG_DEBUG("rpc: async fetch stream log", KR(ret), K(svr), K(timeout), K(req));
+  LOG_TRACE("rpc: async fetch stream log", KR(ret), K(svr), K(timeout), K(req));
   return ret;
 }
 
@@ -137,7 +137,7 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
   }
   SEND_RPC(async_stream_fetch_miss_log, tenant_id, svr, timeout, req, &cb);
-  LOG_DEBUG("rpc: async fetch stream missing_log", KR(ret), K(svr), K(timeout), K(req));
+  LOG_TRACE("rpc: async fetch stream missing_log", KR(ret), K(svr), K(timeout), K(req));
   return ret;
 }
 

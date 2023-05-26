@@ -676,6 +676,21 @@ public:
 
 };
 
+template<class T>
+bool ObRootUtils::is_subset(const common::ObIArray<T> &superset_array,
+                            const common::ObIArray<T> &array)
+{
+  bool bret = true;
+  for (int64_t i = 0; i < array.count() && bret; i++) {
+    if (has_exist_in_array(superset_array, array.at(i))) {
+      //nothing todo
+    } else {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
 class ObClusterInfoGetter
 {
 public:

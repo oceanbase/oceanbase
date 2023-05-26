@@ -724,7 +724,8 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
       int64_t flag = 0;
       (void)node.prev_->get_snapshot_version_barrier(snapshot_version_barrier, flag);
       if (commit_version.get_val_for_tx() <= snapshot_version_barrier) {
-        if ((node.is_elr() || node.is_delayed_cleanout()) && node.prev_->type_ == NDT_COMPACT) {
+        // TODO (yangyifei.yyf): Modify the defensive from trans_node to mvcc_row
+        if (node.prev_->type_ == NDT_COMPACT) {
           // do nothing
         } else {
           // ignore ret

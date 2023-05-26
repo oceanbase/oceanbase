@@ -203,6 +203,7 @@ public:
   virtual int ack_log(const common::ObAddr &src_server, const LSN &end_lsn);
   virtual int truncate(const TruncateLogInfo &truncate_log_info, const LSN &expected_prev_lsn,
       const int64_t expected_prev_log_pid);
+  virtual bool is_allow_rebuild() const;
   virtual int truncate_for_rebuild(const PalfBaseInfo &palf_base_info);
   virtual bool is_prev_log_pid_match(const int64_t log_id,
                                      const LSN &lsn,
@@ -240,6 +241,8 @@ public:
   virtual int64_t get_last_submit_log_id_() const;
   virtual void get_last_submit_end_lsn_(LSN &end_lsn) const;
   virtual int get_last_submit_log_info(LSN &last_submit_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
+  virtual int get_last_submit_log_info(LSN &last_submit_lsn,
+      LSN &last_submit_end_lsn, int64_t &log_id, int64_t &log_proposal_id) const;
   virtual int get_last_slide_end_lsn(LSN &out_end_lsn) const;
   virtual const share::SCN get_last_slide_scn() const;
   virtual int check_and_switch_freeze_mode();
@@ -368,7 +371,10 @@ private:
   int append_disk_log_to_sw_(const LSN &lsn, const LogGroupEntry &group_entry);
   int try_update_max_lsn_(const LSN &lsn, const LogGroupEntryHeader &header);
   int truncate_lsn_allocator_(const LSN &last_lsn, const int64_t last_log_id, const share::SCN &last_scn);
-  bool is_all_committed_log_slided_out_(LSN &prev_lsn, int64_t &prev_log_id, LSN &committed_end_lsn) const;
+  bool is_all_committed_log_slided_out_(LSN &prev_lsn,
+                                        int64_t &prev_log_id,
+                                        LSN &start_lsn,
+                                        LSN &committed_end_lsn) const;
   void get_last_fetch_info_(LSN &last_fetch_end_lsn,
                             LSN &last_committed_end_lsn,
                             int64_t &last_fetch_max_log_id) const;

@@ -5,9 +5,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_mem_dump.h"
-#include "observer/table_load/ob_table_load_mem_compactor.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_external_table.h"
 #include "storage/direct_load/ob_direct_load_external_table_builder.h"
 #include "storage/direct_load/ob_direct_load_external_table_compactor.h"
@@ -20,7 +17,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace observer;
 using namespace table;
 using namespace sql;
 
@@ -34,6 +30,7 @@ ObDirectLoadMemDump::Context::Context()
     finished_sub_dump_count_(0),
     sub_dump_count_(0)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadMemDump::Context::~Context()
@@ -268,22 +265,11 @@ int ObDirectLoadMemDump::dump_tables()
         LOG_WARN("fail to transfer dataum row", KR(ret));
       } else if (OB_FAIL(table_builder->append_row(external_row->tablet_id_, datum_row))) {
         if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
-          int tmp_ret = OB_SUCCESS;
-          if (mem_ctx_->error_row_handler_->get_action() == ObLoadDupActionType::LOAD_REPLACE) {
-            ATOMIC_AAF(&mem_ctx_->result_info_->rows_affected_, 2);
-            ATOMIC_INC(&mem_ctx_->result_info_->deleted_);
-          } else if (mem_ctx_->error_row_handler_->get_action() == ObLoadDupActionType::LOAD_IGNORE) {
-            ATOMIC_INC(&mem_ctx_->result_info_->skipped_);
-          } else if (mem_ctx_->error_row_handler_->get_action() == ObLoadDupActionType::LOAD_STOP_ON_DUP) {
-            if (OB_TMP_FAIL(mem_ctx_->error_row_handler_->append_error_row(datum_row))) {
-              LOG_WARN("failed to append row to error row handler", K(tmp_ret), K(datum_row));
-            }
-          }
-          if (OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-            ret = OB_SUCCESS;
+          if (OB_FAIL(mem_ctx_->dml_row_handler_->handle_update_row(datum_row))) {
+            LOG_WARN("fail to handle update row", KR(ret), K(datum_row));
           }
         } else {
-          LOG_WARN("fail to append row", K(ret), K(datum_row));
+          LOG_WARN("fail to append row", KR(ret), K(datum_row));
         }
       }
     }

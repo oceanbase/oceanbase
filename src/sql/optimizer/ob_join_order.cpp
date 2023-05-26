@@ -922,15 +922,25 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
     bool has_exec_param = false;
-    if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
-                                                                 helper.filters_,
+    common::ObSEArray<ObRawExpr *, 4> agent_table_filter;
+    bool is_oracle_inner_index_table = share::is_oracle_mapping_real_virtual_table(index_schema->get_table_id());
+    if (is_oracle_inner_index_table
+        && OB_FAIL(extract_valid_range_expr_for_oracle_agent_table(helper.filters_,
+                                                                   agent_table_filter))) {
+      LOG_WARN("failed to extract expr", K(ret));
+    } else if (!is_geo_index && OB_FAIL(extract_preliminary_query_range(range_columns,
+                                                                 is_oracle_inner_index_table
+                                                                  ? agent_table_filter
+                                                                    : helper.filters_,
                                                                  range_info.get_expr_constraints(),
 								 query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
-                                                                           helper.filters_,
-                                                                           geo_columnInfo_map,
-                                                                           query_range))) {
+                                                                      is_oracle_inner_index_table
+                                                                      ? agent_table_filter
+                                                                        : helper.filters_,
+                                                                      geo_columnInfo_map,
+                                                                      query_range))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (OB_ISNULL(query_range)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1072,7 +1082,8 @@ int ObJoinOrder::add_table_by_heuristics(const uint64_t table_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid table id", K(table_id), K(ref_table_id), K(ret));
   } else {
-    if (is_virtual_table(ref_table_id)) {
+    if (is_virtual_table(ref_table_id)
+        && !share::is_oracle_mapping_real_virtual_table(ref_table_id)) {
       // check virtual table heuristics
       if (OB_FAIL(virtual_table_heuristics(table_id, ref_table_id, index_info_cache,
                                            valid_index_ids, index_to_use))) {
@@ -3661,7 +3672,7 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
     if (OB_ISNULL(sel_expr = child_stmt->get_select_item(idx).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(idx), K(sel_expr));
-    } else if (!sel_expr->is_const_expr()) {
+    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob()) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
                                                           sel_expr,
@@ -7635,6 +7646,7 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
         other_cond_sel,
         get_plan()->get_predicate_selectivities()))) {
       LOG_WARN("failed to calculate selectivity", K(ret), K(hash_join_filters));
+    } else if (FALSE_IT(naaj_info.set_is_sna(path_info.join_type_, false))) {
     } else if ((HASH_JOIN & path_info.local_methods_) &&
                OB_FAIL(generate_hash_paths(equal_sets,
                                            left_paths,
@@ -7648,9 +7660,9 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                            equal_cond_sel,
                                            other_cond_sel,
                                            path_info,
-                                           naaj_info.is_naaj_,
-                                           naaj_info.get_is_sna(path_info.join_type_, false)))) {
+                                           naaj_info))) {
       LOG_WARN("failed to generate hash join paths", K(ret));
+    } else if (FALSE_IT(naaj_info.set_is_sna(reverse_path_info.join_type_, true))) {
     } else if ((HASH_JOIN & reverse_path_info.local_methods_) &&
                OB_FAIL(generate_hash_paths(equal_sets,
                                            right_paths,
@@ -7664,8 +7676,7 @@ int ObJoinOrder::inner_generate_join_paths(const ObJoinOrder &left_tree,
                                            equal_cond_sel,
                                            other_cond_sel,
                                            reverse_path_info,
-                                           naaj_info.is_naaj_,
-                                           naaj_info.get_is_sna(reverse_path_info.join_type_, true)))) {
+                                           naaj_info))) {
       LOG_WARN("failed to generate hash join paths", K(ret));
     } else {
       int64_t hash_join_path_num = interesting_paths_.count() - path_number;
@@ -7819,8 +7830,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                      const double equal_cond_sel,
                                      const double other_cond_sel,
                                      const ValidPathInfo &path_info,
-                                     const bool is_naaj,
-                                     const bool is_sna)
+                                     const NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
   ObSEArray<Path*, 8> left_best_paths;
@@ -7852,7 +7862,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                          path_info,
                                                          HASH_JOIN,
                                                          false,
-                                                         is_naaj,
+                                                         naaj_info.is_naaj_,
                                                          dist_method))) {
             LOG_WARN("failed to get distributed join method", K(ret));
           } else {
@@ -7874,8 +7884,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                      join_quals,
                                                      equal_cond_sel,
                                                      other_cond_sel,
-                                                     is_naaj,
-                                                     is_sna))) {
+                                                     naaj_info))) {
                   LOG_WARN("failed to create and add hash path", K(ret));
                 } else { /*do nothing*/ }
               }
@@ -9110,8 +9119,7 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                           const ObIArray<ObRawExpr*> &filters,
                                           const double equal_cond_sel,
                                           const double other_cond_sel,
-                                          const bool is_naaj,
-                                          const bool is_sna)
+                                          const NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
   JoinPath *join_path = NULL;
@@ -9137,9 +9145,9 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
                                        join_type);
     join_path->equal_cond_sel_ = equal_cond_sel;
     join_path->other_cond_sel_ = other_cond_sel;
-    join_path->is_naaj_ = is_naaj;
-    join_path->is_sna_ = is_sna;
-    join_path->is_slave_mapping_ &= (!is_naaj);
+    join_path->is_naaj_ = naaj_info.is_naaj_;
+    join_path->is_sna_ = naaj_info.is_sna_;
+    join_path->is_slave_mapping_ &= (!naaj_info.is_naaj_);
     OPT_TRACE("create new Hash Join path:", join_path);
     if (OB_FAIL(append(join_path->equal_join_conditions_, equal_join_conditions))) {
       LOG_WARN("failed to append join conditions", K(ret));
@@ -9147,12 +9155,14 @@ int ObJoinOrder::create_and_add_hash_path(const Path *left_path,
       LOG_WARN("failed to append join filters", K(ret));
     } else if (OB_FAIL(append(join_path->filter_, normal_filters))) {
       LOG_WARN("failed to append join quals", K(ret));
+    } else if (OB_FAIL(append(join_path->expr_constraints_, naaj_info.expr_constraints_))) {
+      LOG_WARN("failed to append constraints", K(ret));
     } else if (OB_FAIL(generate_join_filter_infos(*left_path,
                                                   *right_path,
                                                   join_type,
                                                   join_dist_algo,
                                                   equal_join_conditions,
-                                                  is_naaj,
+                                                  naaj_info.is_naaj_,
                                                   join_path->join_filter_infos_))) {
       LOG_WARN("failed to generate join filter info", K(ret));
     } else if (OB_FAIL(join_path->compute_join_path_property())) {
@@ -9922,8 +9932,7 @@ int ObJoinOrder::extract_hashjoin_conditions(const ObIArray<ObRawExpr*> &join_qu
       LOG_WARN("failed to get sys var naaj enabled", K(ret));
     } else if (naaj_enabled) {
       if (OB_FAIL(extract_naaj_join_conditions(join_quals, left_tables, right_tables,
-                                               equal_join_conditions, other_join_conditions,
-                                               naaj_info))) {
+                                               equal_join_conditions, naaj_info))) {
         LOG_WARN("failed to extract naaj join conditions", K(ret));
       }
     }
@@ -13716,7 +13725,6 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
                                               const ObRelIds &left_tables,
                                               const ObRelIds &right_tables,
                                               ObIArray<ObRawExpr*> &equal_join_conditions,
-                                              ObIArray<ObRawExpr*> &other_join_conditions,
                                               NullAwareAntiJoinInfo &naaj_info)
 {
   int ret = OB_SUCCESS;
@@ -13731,17 +13739,18 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
   } else if (T_OP_OR == join_quals.at(0)->get_expr_type()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < join_quals.at(0)->get_param_count(); ++i) {
       bool is_equal_cond = false;
-      bool skip_left = false;
-      bool skip_right = false;
       cur_expr = join_quals.at(0)->get_param_expr(i);
       if (OB_FAIL(check_is_join_equal_conditions(cur_expr, left_tables,
                                                  right_tables, is_equal_cond))) {
         LOG_WARN("failed to check equal cond", K(cur_expr), K(ret));
       } else if (is_equal_cond) {
-        OZ (join_quals_naaj.push_back(cur_expr));
+        if (OB_FAIL(join_quals_naaj.push_back(cur_expr))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       } else {
-        if (cur_expr->get_relation_ids().is_subset(get_tables())) {
-          OZ (join_other_naaj.push_back(cur_expr));
+        if (cur_expr->get_relation_ids().is_subset(get_tables()) &&
+            OB_FAIL(join_other_naaj.push_back(cur_expr))) {
+          LOG_WARN("failed to push back", K(ret));
         }
       }
     }
@@ -13752,33 +13761,68 @@ int ObJoinOrder::extract_naaj_join_conditions(const ObIArray<ObRawExpr*> &join_q
         left_join_key = join_quals_naaj.at(0)->get_param_expr(1);
         right_join_key = join_quals_naaj.at(0)->get_param_expr(0);
       }
-      bool left_is_null_eliminate = true;
-      bool right_is_null_eliminate = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < join_other_naaj.count(); ++i) {
+      bool left_has_is_null = false;
+      bool right_has_is_null = false;
+      bool is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_other_naaj.count(); ++i) {
         //eliminate join_key is null
         cur_expr = join_other_naaj.at(i);
         if (T_OP_IS == cur_expr->get_expr_type()
             && ObNullType == cur_expr->get_param_expr(1)->get_result_type().get_type()) {
           if (left_join_key == cur_expr->get_param_expr(0)) {
-            left_is_null_eliminate = false;
+            left_has_is_null = true;
           } else if (right_join_key == cur_expr->get_param_expr(0)) {
-            right_is_null_eliminate = false;
+            right_has_is_null = true;
           } else {
-            OZ (other_join_conditions.push_back(join_other_naaj.at(i)));
+            is_valid = false;
+          }
+        } else {
+          is_valid = false;
+        }
+      }
+
+      if (OB_FAIL(ret) || !is_valid) {
+        // do nothing
+      } else if (left_has_is_null && right_has_is_null) {
+        // Both "is null" was eliminated
+        // anti join na
+        // e.g. (a = b) or (a is null) or (b is null)
+        naaj_info.is_naaj_ = true;
+        if (OB_FAIL(equal_join_conditions.push_back(join_quals_naaj.at(0)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      } else if (left_has_is_null || right_has_is_null) {
+        // Only one "is null" was eliminated,
+        // Other side should be not null
+        // e.g.   ((a = b) or (a is null)) and (b is not null)
+        //    <=> ((a = b) or (a is null) or (b is null)) and (b is not null)
+        ObNotNullContext not_null_ctx(get_plan()->get_optimizer_context().get_exec_ctx(),
+                                      &get_plan()->get_allocator(),
+                                      get_plan()->get_stmt());
+        ObArray<ObRawExpr *> constraints;
+        if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
+          LOG_WARN("failed to generate stmt context", K(ret));
+        } else if (OB_FAIL(not_null_ctx.remove_filter(join_quals.at(0)))){
+          LOG_WARN("failed to remove filter", K(ret));
+        } else if (!left_has_is_null &&
+                   OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, left_join_key,
+                                                              naaj_info.left_side_not_null_, &constraints))) {
+          LOG_WARN("failed to check is expr not null");
+        } else if (!right_has_is_null &&
+                   OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, right_join_key,
+                                                              naaj_info.right_side_not_null_, &constraints))) {
+          LOG_WARN("failed to check is expr not null");
+        } else if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(naaj_info.expr_constraints_, constraints))) {
+          LOG_WARN("append expr constraints failed", K(ret));
+        } else if (naaj_info.left_side_not_null_ || naaj_info.right_side_not_null_) {
+          naaj_info.is_naaj_ = true;
+          if (OB_FAIL(equal_join_conditions.push_back(join_quals_naaj.at(0)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
-      // at least 1 isnull cond to choose naaj
-      if (!left_is_null_eliminate || !right_is_null_eliminate) {
-        naaj_info.is_naaj_ = true;
-        naaj_info.left_side_not_null_ = left_is_null_eliminate;
-        naaj_info.right_side_not_null_ = right_is_null_eliminate;
-        OZ (equal_join_conditions.push_back(join_quals_naaj.at(0)));
-      } else {
-        //rollback for other_join_conditions
-        other_join_conditions.reset();
-      }
     }
+    LOG_TRACE("extract naaj info", K(naaj_info), K(equal_join_conditions));
   }
   return ret;
 }
@@ -13819,7 +13863,7 @@ int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
        LOG_WARN("failed to push back global partition id", K(ret));
     } else {
       can_use = true;
-      scale_ratio = 1.0 * all_used_parts.count() / table_schema.get_all_part_num();
+      scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
     }
   } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
     int64_t total_subpart_cnt = 0;
@@ -13858,15 +13902,81 @@ int ObJoinOrder::check_can_use_global_stat_instead(const uint64_t ref_table_id,
           LOG_WARN("failed to push back global partition id", K(ret));
         } else {
           can_use = true;
-          scale_ratio = 1.0 * all_used_parts.count() / table_schema.get_all_part_num();
+          scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / table_schema.get_all_part_num());
         }
       } else {
         can_use = true;
-        scale_ratio = 1.0 * all_used_parts.count() / total_subpart_cnt;
+        scale_ratio = ObOptSelectivity::revise_between_0_1(1.0 * all_used_parts.count() / total_subpart_cnt);
       }
     }
   }
   LOG_TRACE("succeed to check can use global stat instead", K(all_used_parts), K(all_used_tablets),
                                                     K(can_use), K(global_part_ids), K(scale_ratio));
+  return ret;
+}
+
+int ObJoinOrder::is_valid_range_expr_for_oracle_agent_table(const ObRawExpr *range_expr,
+                                                            bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  bool is_stack_overflow = false;
+  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to do stack overflow check", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("stack overflow", K(ret));
+  } else if (OB_NOT_NULL(range_expr) && range_expr->is_op_expr()) {
+    const ObOpRawExpr *expr = static_cast<const ObOpRawExpr *>(range_expr);
+    if (IS_BASIC_CMP_OP(expr->get_expr_type()) && T_OP_EQ == expr->get_expr_type()) {
+      is_valid = true;
+    } else if (T_OP_IS == expr->get_expr_type()
+              || T_OP_IN  == expr->get_expr_type()) {
+      is_valid = true;
+    } else if (T_OP_AND == expr->get_expr_type()) {
+      is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); ++i) {
+        if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(expr->get_param_expr(i),
+                                                               is_valid))) {
+          LOG_WARN("failed to check expr", K(ret));
+        }
+      }
+    } else if (T_OP_OR == expr->get_expr_type()) {
+      is_valid = true;
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < expr->get_param_count(); ++i) {
+        if (OB_NOT_NULL(expr->get_param_expr(i))
+            && (T_OP_AND == expr->get_param_expr(i)->get_expr_type()
+                || T_OP_OR == expr->get_param_expr(i)->get_expr_type()
+                || expr->get_param_expr(i)->get_expr_type() != expr->get_param_expr(0)->get_expr_type())) {
+          is_valid = false;
+          LOG_TRACE("invalid expr type for oracle agent table range",
+                    K(expr->get_param_expr(i)->get_expr_type()),
+                    K(expr->get_param_expr(0)->get_expr_type()));
+        } else if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(expr->get_param_expr(i),
+                                                                      is_valid))) {
+          LOG_WARN("failed to check expr", K(ret));
+        }
+      }
+    } else {
+      LOG_TRACE("invalid expr type for oracle agent table range", K(expr->get_expr_type()));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::extract_valid_range_expr_for_oracle_agent_table(const ObIArray<ObRawExpr *> &filters,
+                                                                 ObIArray<ObRawExpr *> &new_filters)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    bool is_valid_expr = false;
+    if (OB_FAIL(is_valid_range_expr_for_oracle_agent_table(filters.at(i), is_valid_expr))) {
+      LOG_WARN("failed to check range expr", K(ret));
+    } else if (!is_valid_expr) {
+      // skip
+    } else if (OB_FAIL(new_filters.push_back(filters.at(i)))) {
+      LOG_WARN("failed to push back filter exprs", K(ret));
+    }
+  }
   return ret;
 }

@@ -136,7 +136,7 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             break;
           }
           case TENANT: {
-            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_tenant_name());
+            cur_row_->cells_[cell_idx].set_varchar(sess_info->get_effective_tenant_name());
             cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             break;
           }

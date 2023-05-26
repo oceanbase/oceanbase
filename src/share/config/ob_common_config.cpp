@@ -343,7 +343,7 @@ int ObCommonConfig::add_extra_config(const char *config_str,
         } else if (OB_ISNULL(pp_item = container_.get(ObConfigStringKey(name)))) {
           /* make compatible with previous configuration */
           ret = check_name ? OB_INVALID_CONFIG : OB_SUCCESS;
-          LOG_ERROR("Invalid config string, no such config item", K(name), K(value), K(ret));
+          LOG_WARN("Invalid config string, no such config item", K(name), K(value), K(ret));
         } else if (external_kms_info_cfg.case_compare(name) == 0
                    || ssl_external_kms_info_cfg.case_compare(name) == 0) {
           if (OB_FAIL(common::hex_to_cstr(value, value_len,

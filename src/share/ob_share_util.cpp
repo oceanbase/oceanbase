@@ -216,5 +216,47 @@ int ObShareUtil::fetch_current_data_version(
   } // end SMART_VAR
   return ret;
 }
+
+int ObShareUtil::parse_all_server_list(
+    const ObArray<ObAddr> &excluded_server_list,
+    ObArray<ObAddr> &config_all_server_list)
+{
+  int ret = OB_SUCCESS;
+  config_all_server_list.reset();
+  common::ObArenaAllocator allocator(lib::ObLabel("AllSvrList"));
+  ObString all_server_list;
+  LOG_TRACE("get all_server_list from GCONF", K(GCONF.all_server_list));
+  if (OB_FAIL(GCONF.all_server_list.deep_copy_value_string(allocator, all_server_list))) {
+    LOG_WARN("fail to deep copy GCONF.all_server_list", KR(ret), K(GCONF.all_server_list));
+  } else {
+    bool split_end = false;
+    ObAddr addr;
+    ObString sub_string;
+    ObString trimed_string;
+    while (!split_end && OB_SUCCESS == ret) {
+      sub_string.reset();
+      trimed_string.reset();
+      addr.reset();
+      sub_string = all_server_list.split_on(',');
+      if (sub_string.empty() && NULL == sub_string.ptr()) {
+        split_end = true;
+        sub_string = all_server_list;
+      }
+      trimed_string = sub_string.trim();
+      if (trimed_string.empty()) {
+        //nothing todo
+      } else if (OB_FAIL(addr.parse_from_string(trimed_string))) {
+        LOG_WARN("fail to parser addr from string", KR(ret), K(trimed_string));
+      } else if (has_exist_in_array(excluded_server_list, addr)) {
+        // nothing todo
+      } else if (has_exist_in_array(config_all_server_list, addr)) {
+        //nothing todo
+      } else if (OB_FAIL(config_all_server_list.push_back(addr))) {
+        LOG_WARN("fail to push back", KR(ret), K(addr));
+      }
+    } // end while
+  }
+  return ret;
+}
 } //end namespace share
 } //end namespace oceanbase

@@ -155,6 +155,12 @@ ObPlanCacheValue::ObPlanCacheValue()
     stmt_type_(stmt::T_MAX)
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
+  not_param_index_.set_attr(ObMemAttr(MTL_ID(), "NotParamIdex"));
+  neg_param_index_.set_attr(ObMemAttr(MTL_ID(), "NegParamIdex"));
+  must_be_positive_idx_.set_attr(ObMemAttr(MTL_ID(), "MustBePosiIdx"));
+  not_param_info_.set_attr(ObMemAttr(MTL_ID(), "NotParamInfo"));
+  not_param_var_.set_attr(ObMemAttr(MTL_ID(), "NotParamVar"));
+  param_charset_type_.set_attr(ObMemAttr(MTL_ID(), "ParamCharsType"));
 }
 
 int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
@@ -376,7 +382,7 @@ int ObPlanCacheValue::match_all_params_info(ObPlanSet *batch_plan_set,
       } else if (!is_same) {
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
         LOG_TRACE("params is not same type", K(param_store), K(i));
-      } 
+      }
     }
 
     if (OB_SUCC(ret)) {

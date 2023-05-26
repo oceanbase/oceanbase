@@ -548,7 +548,8 @@ int ObUpgradeUtils::filter_sys_stat(
 
 /* =========== upgrade processor ============= */
 ObUpgradeProcesserSet::ObUpgradeProcesserSet()
-  : inited_(false), allocator_("UpgProcSet"),
+  : inited_(false), allocator_(ObMemAttr(MTL_CTX() ? MTL_ID() : OB_SERVER_TENANT_ID,
+                                         "UpgProcSet")),
     processor_list_(OB_MALLOC_NORMAL_BLOCK_SIZE,
                     ModulePageAllocator(allocator_))
 {

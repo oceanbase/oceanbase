@@ -381,31 +381,6 @@ ObAsyncTask *ObRootService::ObMinorFreezeTask::deep_copy(char *buf, const int64_
   return task;
 }
 
-ObRootService::ObInnerTableMonitorTask::ObInnerTableMonitorTask(ObRootService &rs)
-:ObAsyncTimerTask(rs.task_queue_),
-    rs_(rs)
-{}
-
-int ObRootService::ObInnerTableMonitorTask::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(rs_.inner_table_monitor_.purge_inner_table_history())) {
-    LOG_WARN("failed to purge inner table history", K(ret));
-  }
-  return ret;
-}
-
-ObAsyncTask *ObRootService::ObInnerTableMonitorTask::deep_copy(char *buf, const int64_t buf_size) const
-{
-  ObInnerTableMonitorTask *task = NULL;
-  if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
-  } else {
-    task = new(buf) ObInnerTableMonitorTask(rs_);
-  }
-  return task;
-}
-
 ////////////////////////////////////////////////////////////////
 
 bool ObRsStatus::can_start_service() const
@@ -655,7 +630,6 @@ ObRootService::ObRootService()
     upgrade_executor_(),
     upgrade_storage_format_executor_(), create_inner_schema_executor_(),
     bootstrap_lock_(), broadcast_rs_list_lock_(ObLatchIds::RS_BROADCAST_LOCK),
-    inner_table_monitor_(),
     task_queue_(),
     inspect_task_queue_(),
     restart_task_(*this),
@@ -668,13 +642,13 @@ ObRootService::ObRootService()
                             SERVER_EVENT_INSTANCE,
                             DEALOCK_EVENT_INSTANCE,
                             task_queue_),
-    inner_table_monitor_task_(*this),
     inspector_task_(*this),
     purge_recyclebin_task_(*this),
     ddl_scheduler_(),
     snapshot_manager_(),
     core_meta_table_version_(0),
     update_rs_list_timer_task_(*this),
+    update_all_server_config_task_(*this),
     baseline_schema_version_(0),
     backup_service_(),
     backup_task_scheduler_(),
@@ -919,8 +893,6 @@ int ObRootService::init(ObServerConfig &config,
                                            server_manager_, zone_manager_, rpc_proxy_,
                                            self_addr_, sql_proxy, disaster_recovery_task_mgr_))) {
     FLOG_WARN("init root balancer failed", KR(ret));
-  } else if (OB_FAIL(inner_table_monitor_.init(sql_proxy, common_proxy_, *this))) {
-    FLOG_WARN("init inner table monitor failed", KR(ret));
   } else if (OB_FAIL(ROOTSERVICE_EVENT_INSTANCE.init(sql_proxy, self_addr_))) {
     FLOG_WARN("init rootservice event history failed", KR(ret));
   } else if (OB_FAIL(THE_RS_JOB_TABLE.init(&sql_proxy, self_addr_))) {
@@ -1346,6 +1318,10 @@ void ObRootService::wait()
   int64_t cost = ObTimeUtility::current_time() - start_time;
   ROOTSERVICE_EVENT_ADD("root_service", "finish_wait_stop", K(cost));
   FLOG_INFO("[ROOTSERVICE_NOTICE] rootservice wait finished", K(start_time), K(cost));
+  if (cost > 10 * 60 * 1000 * 1000L) { // 10min
+    int ret = OB_ERROR;
+    LOG_ERROR("cost too much time to wait rs stop", KR(ret), K(start_time), K(cost));
+  }
 }
 
 int ObRootService::reload_config()
@@ -1552,21 +1528,6 @@ int ObRootService::schedule_check_server_timer_task()
   return ret;
 }
 
-int ObRootService::schedule_inner_table_monitor_task()
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(task_queue_.add_timer_task(inner_table_monitor_task_,
-                                                ObInnerTableMonitorTask::PURGE_INTERVAL, true))) {
-    LOG_WARN("failed to add task", K(ret));
-  } else {
-    LOG_INFO("schedule inner_table_monitor task");
-  }
-  return ret;
-}
-
 int ObRootService::schedule_recyclebin_task(int64_t delay)
 {
   int ret = OB_SUCCESS;
@@ -1574,7 +1535,11 @@ int ObRootService::schedule_recyclebin_task(int64_t delay)
 
   if (OB_FAIL(get_inspect_task_queue().add_timer_task(
               purge_recyclebin_task_, delay, did_repeat))) {
-    LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    if (OB_CANCELED != ret) {
+      LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    } else {
+      LOG_WARN("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
+    }
   }
 
   return ret;
@@ -1639,6 +1604,26 @@ int ObRootService::schedule_update_rs_list_task()
     LOG_WARN("fail to add timer task", K(ret));
   } else {
     LOG_INFO("add update rs list task success");
+  }
+  return ret;
+}
+ERRSIM_POINT_DEF(ALL_SERVER_SCHEDULE_ERROR);
+int ObRootService::schedule_update_all_server_config_task()
+{
+  int ret = OB_SUCCESS;
+  const bool did_repeat = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (task_queue_.exist_timer_task(update_all_server_config_task_)) {
+    LOG_WARN("already have one update rs list timer task , ignore this");
+  } else if (OB_FAIL(task_queue_.add_timer_task(
+      update_all_server_config_task_,
+      ALL_SERVER_SCHEDULE_ERROR ? (ObUpdateAllServerConfigTask::RETRY_INTERVAL / 2) : ObUpdateAllServerConfigTask::RETRY_INTERVAL,
+      did_repeat))) {
+    LOG_WARN("fail to add timer task", KR(ret));
+  } else {
+    LOG_INFO("add update server config task success");
   }
   return ret;
 }
@@ -2017,9 +2002,9 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
     } else if (OB_FAIL(update_all_server_and_rslist())) {
       LOG_WARN("failed to update all_server and rslist", K(ret));
     } else if (OB_FAIL(zone_manager_.reload())) {
-      LOG_ERROR("failed to reload zone manager", K(ret));
+      LOG_WARN("failed to reload zone manager", K(ret));
     } else if (OB_FAIL(set_cluster_version())) {
-      LOG_ERROR("set cluster version failed", K(ret));
+      LOG_WARN("set cluster version failed", K(ret));
     } else if (OB_FAIL(pl::ObPLPackageManager::load_all_sys_package(sql_proxy_))) {
       LOG_WARN("load all system package failed", K(ret));
     } else if (OB_FAIL(finish_bootstrap())) {
@@ -2030,7 +2015,7 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
                        baseline_schema_version_))) {
       LOG_WARN("fail to get baseline schema version", KR(ret));
     } else if (OB_FAIL(set_cpu_quota_concurrency_config_())) {
-      LOG_ERROR("failed to update cpu_quota_concurrency", K(ret));
+      LOG_WARN("failed to update cpu_quota_concurrency", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -2374,7 +2359,9 @@ int ObRootService::create_resource_unit(const obrpc::ObCreateResourceUnitArg &ar
     if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-        LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+        }
       }
     }
   }
@@ -2398,7 +2385,9 @@ int ObRootService::alter_resource_unit(const obrpc::ObAlterResourceUnitArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit', please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2426,7 +2415,9 @@ int ObRootService::drop_resource_unit(const obrpc::ObDropResourceUnitArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2480,7 +2471,9 @@ int ObRootService::create_resource_pool(const obrpc::ObCreateResourcePoolArg &ar
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2510,7 +2503,9 @@ int ObRootService::split_resource_pool(const obrpc::ObSplitResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2553,7 +2548,9 @@ int ObRootService::alter_resource_tenant(const obrpc::ObAlterResourceTenantArg &
       LOG_WARN("fail to alter resource tenant", KR(ret), K(target_tenant_id),
                K(new_unit_num), K(delete_unit_group_id_array));
       if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
-        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+        }
       }
     }
     LOG_INFO("finish alter_resource_tenant", KR(ret), K(arg));
@@ -2578,8 +2575,11 @@ int ObRootService::merge_resource_pool(const obrpc::ObMergeResourcePoolArg &arg)
     const common::ObIArray<common::ObString> &new_pool_list = arg.new_pool_list_;
     if (OB_FAIL(unit_manager_.merge_resource_pool(old_pool_list, new_pool_list))) {
       LOG_WARN("fail to merge resource pool", K(ret));
-      if (OB_SUCCESS != submit_reload_unit_manager_task()) {//ensure submit task all case
-        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {//ensure submit task all case
+        if (OB_CANCELED != tmp_ret) {
+          LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), K(tmp_ret));
+        }
       }
     }
     LOG_INFO("finish merge_resource_pool", K(ret), K(arg));
@@ -2618,7 +2618,9 @@ int ObRootService::alter_resource_pool(const obrpc::ObAlterResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2649,7 +2651,9 @@ int ObRootService::drop_resource_pool(const obrpc::ObDropResourcePoolArg &arg)
       if (OB_TIMEOUT == ret || OB_TIMEOUT == mysql_error) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = submit_reload_unit_manager_task())) {
-          LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          if (OB_CANCELED != tmp_ret) {
+            LOG_ERROR("fail to reload unit_manager, please try 'alter system reload unit'", K(tmp_ret));
+          }
         }
       }
     }
@@ -2687,7 +2691,9 @@ int ObRootService::create_tenant(const ObCreateTenantArg &arg, UInt64 &tenant_id
   } else if (OB_FAIL(ddl_service_.create_tenant(arg, tenant_id))) {
     LOG_WARN("fail to create tenant", KR(ret), K(arg));
     if (OB_TMP_FAIL(submit_reload_unit_manager_task())) {
-      LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+      if (OB_CANCELED != tmp_ret) {
+        LOG_ERROR("fail to reload unit_mgr, please try 'alter system reload unit'", KR(ret), KR(tmp_ret));
+      }
     }
   } else {}
   LOG_INFO("finish create tenant", KR(ret), K(tenant_id), K(arg), "timeout_ts", THIS_WORKER.get_timeout_ts());
@@ -3016,7 +3022,8 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
           LOG_WARN("fail to check oracle_object exist", K(ret), K(table_schema));
         } else if (conflict_schema_types.count() > 0) {
           ret = OB_ERR_EXIST_OBJECT;
-          LOG_WARN("Name is already used by an existing object", K(ret), K(table_schema));
+          LOG_WARN("Name is already used by an existing object",
+                   K(ret), K(table_schema), K(conflict_schema_types));
         }
       }
       if (FAILEDx(schema_guard.check_synonym_exist_with_name(table_schema.get_tenant_id(),
@@ -5241,13 +5248,12 @@ int ObRootService::start_timer_tasks()
     }
   }
 
-  if (OB_SUCC(ret) && !task_queue_.exist_timer_task(inner_table_monitor_task_)) {
-    // remove purge inner table task, we may fail to get history schema after purge.
-    // if (OB_FAIL(schedule_inner_table_monitor_task())) {
-    //   LOG_WARN("start inner table monitor service fail", K(ret));
-    // } else {
-    //  LOG_INFO("start inner table monitor success");
-    // }
+  if (OB_SUCC(ret) && !task_queue_.exist_timer_task(update_all_server_config_task_)) {
+    if (OB_FAIL(schedule_update_all_server_config_task())) {
+      LOG_WARN("fail to schedule update_all_server_config_task", KR(ret));
+    } else {
+      LOG_INFO("add update_all_server_config_task");
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -5292,9 +5298,9 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(restart_task_);
     task_queue_.cancel_timer_task(check_server_task_);
     task_queue_.cancel_timer_task(event_table_clear_task_);
-    task_queue_.cancel_timer_task(inner_table_monitor_task_);
     task_queue_.cancel_timer_task(self_check_task_);
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
+    task_queue_.cancel_timer_task(update_all_server_config_task_);
     inspect_task_queue_.cancel_timer_task(inspector_task_);
     inspect_task_queue_.cancel_timer_task(purge_recyclebin_task_);
   }
@@ -5929,7 +5935,8 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
         // 这里检查 oracle 模式下新对象的名字是否已经被其他对象占用了
         ret = OB_ERR_EXIST_OBJECT;
         LOG_WARN("Name is already used by an existing object in oralce mode",
-                 K(ret), K(routine_info.get_routine_name()));
+                 K(ret), K(routine_info.get_routine_name()),
+                 K(conflict_schema_types));
       }
     }
     bool exist = false;
@@ -6177,7 +6184,8 @@ int ObRootService::create_udt(const ObCreateUDTArg &arg)
         // skip
       } else if (conflict_schema_types.count() > 0) {
         ret = OB_ERR_EXIST_OBJECT;
-        LOG_WARN("Name is already used by an existing object", K(ret), K(udt_info.get_type_name()));
+        LOG_WARN("Name is already used by an existing object", K(ret), K(udt_info.get_type_name()),
+            K(conflict_schema_types));
       }
     }
     bool exist = false;
@@ -6553,7 +6561,8 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
         // 这里检查 oracle 模式下新对象的名字是否已经被其他对象占用了
         ret = OB_ERR_EXIST_OBJECT;
         LOG_WARN("Name is already used by an existing object in oralce mode",
-                 K(ret), K(new_package_info.get_package_name()));
+                 K(ret), K(new_package_info.get_package_name()),
+                 K(conflict_schema_types));
       }
     }
     if (OB_SUCC(ret)) {
@@ -8623,17 +8632,33 @@ int ObRootService::update_all_server_config()
   int ret = OB_SUCCESS;
   ObZone empty_zone;
   ObArray<ObAddr> server_list;
+  ObArray<ObAddr> config_all_server_list;
+  ObArray<ObAddr> empty_excluded_server_list;
+  bool need_update = true;
   HEAP_VAR(ObAdminSetConfigItem, all_server_config) {
     auto &value = all_server_config.value_;
     int64_t pos = 0;
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("not init", K(ret));
+    } else if (OB_UNLIKELY(!SVR_TRACER.has_build())) {
+      need_update = false;
     } else if (OB_FAIL(SVR_TRACER.get_servers_of_zone(empty_zone, server_list))) {
       LOG_WARN("fail to get server", K(ret));
+    } else if (OB_UNLIKELY(0 == server_list.size())) {
+      need_update = false;
+      LOG_WARN("no servers in all_server_tracer");
     } else if (OB_FAIL(all_server_config.name_.assign(config_->all_server_list.name()))) {
       LOG_WARN("fail to assign name", K(ret));
+    } else if (OB_FAIL(ObShareUtil::parse_all_server_list(empty_excluded_server_list, config_all_server_list))) {
+      LOG_WARN("fail to parse all_server_list from GCONF", KR(ret));
+    } else if (ObRootUtils::is_subset(server_list, config_all_server_list)
+        && ObRootUtils::is_subset(config_all_server_list, server_list)) {
+      need_update = false;
+      LOG_TRACE("server_list is the same as config_all_server_list, no need to update GCONF.all_server_list",
+          K(server_list), K(config_all_server_list));
     } else {
+      LOG_INFO("GCONF.all_server_list should be updated", K(config_all_server_list), K(server_list));
       char ip_port_buf[MAX_IP_PORT_LENGTH];
       for (int64_t i = 0; i < server_list.count() - 1; i++) {
         if (OB_FAIL(server_list.at(i).ip_port_to_string(ip_port_buf, MAX_IP_PORT_LENGTH))) {
@@ -8655,7 +8680,7 @@ int ObRootService::update_all_server_config()
     if (OB_SIZE_OVERFLOW == ret) {
       LOG_ERROR("can't print server addr to buffer, size overflow", K(ret), K(server_list));
     }
-    if (OB_SUCC(ret)) {
+    if (need_update && OB_SUCC(ret)) {
       ObAdminSetConfigArg arg;
       arg.is_inner_ = true;
       if (OB_FAIL(arg.items_.push_back(all_server_config))) {
@@ -8669,7 +8694,6 @@ int ObRootService::update_all_server_config()
   }
   return ret;
 }
-
 /////////////////////////
 ObRootService::ObReportCoreTableReplicaTask::ObReportCoreTableReplicaTask(ObRootService &root_service)
 : ObAsyncTimerTask(root_service.task_queue_),

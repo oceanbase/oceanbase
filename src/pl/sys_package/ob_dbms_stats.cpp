@@ -3247,17 +3247,26 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
     } else {
       col_param.column_id_ = col->get_column_id();
       col_param.cs_type_   = col->get_collation_type();
-      col_param.need_basic_static_ = false;
+      col_param.gather_flag_ = 0;
       col_param.set_size_manual();
       col_param.bucket_num_ = -1;
       col_param.column_attribute_ = 0;
       if (lib::is_oracle_mode() && col->get_meta_type().is_varbinary_or_binary()) {
         //oracle don't have this type. but agent table will have this type, such as "SYS"."ALL_VIRTUAL_COLUMN_REAL_AGENT"
       } else {
-        col_param.is_valid_hist_type_ =
-          ObColumnStatParam::is_valid_histogram_type(col->get_meta_type().get_type());
-        col_param.need_truncate_str_ = ob_is_string_type(col->get_meta_type().get_type()) &&
-                                              col->get_data_length() > OPT_STATS_MAX_VALUE_CHAR_LEN;
+        //check basic column type
+        if (ObColumnStatParam::is_valid_opt_col_type(col->get_meta_type().get_type())) {
+          col_param.set_valid_opt_col();
+        }
+        //check need avglen
+        if (ObColumnStatParam::is_valid_avglen_type(col->get_meta_type().get_type())) {
+          col_param.set_need_avg_len();
+        }
+        //check need truncate str
+        if (ob_is_string_type(col->get_meta_type().get_type()) &&
+                              col->get_data_length() > OPT_STATS_MAX_VALUE_CHAR_LEN) {
+          col_param.set_need_truncate_str();
+        }
       }
       if (col->is_rowkey_column() && !table_schema.is_heap_table()) {
         col_param.set_is_index_column();
@@ -3338,8 +3347,8 @@ int ObDbmsStats::set_default_column_params(ObIArray<ObColumnStatParam> &column_p
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
     ObColumnStatParam &param = column_params.at(i);
-    if (param.is_valid_hist_type_) {
-      param.need_basic_static_ = true;
+    if (param.is_valid_opt_col()) {
+      param.set_need_basic_stat();
       param.set_size_auto();
       param.column_usage_flag_ = 0;
       param.bucket_num_ = 1;
@@ -3442,7 +3451,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
       } else {
         col_param.column_id_ = col->get_column_id();
         col_param.cs_type_   = col->get_collation_type();
-        col_param.need_basic_static_ = false;
+        col_param.gather_flag_ = 0;
         col_param.bucket_num_ = -1;
         if (col->is_index_column()) {
           col_param.set_is_index_column();
@@ -4240,7 +4249,7 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
       ObColumnStatParam &col_param = column_params.at(i);
       if (!is_match_column_option(col_param, for_all_conf)) {
         // do nothing
-      } else if (!col_param.is_valid_hist_type_) {
+      } else if (!col_param.is_valid_opt_col()) {
         // do nothing
       } else if (OB_FAIL(compute_bucket_num(column_params.at(i), size_conf))) {
         LOG_WARN("failed to compute histogram size", K(ret));
@@ -4312,7 +4321,7 @@ int ObDbmsStats::parser_for_columns_clause(const ParseNode *for_col_node,
         ObColumnStatParam &col_param = column_params.at(j);
         if (!is_match_column_option(col_param, for_col_list)) {
           // do nothing
-        } else if (!col_param.is_valid_hist_type_) {
+        } else if (!col_param.is_valid_opt_col()) {
           // do nothing
         } else if (OB_FAIL(compute_bucket_num(column_params.at(j), size_conf))) {
           LOG_WARN("failed to compute histogram size", K(ret));
@@ -4327,7 +4336,7 @@ int ObDbmsStats::compute_bucket_num(ObColumnStatParam &param,
                                     const MethodOptSizeConf &size_conf)
 {
   int ret = OB_SUCCESS;
-  param.need_basic_static_ = true;
+  param.set_need_basic_stat();
   if (size_conf.is_manual()) {
     param.set_size_manual();
     param.bucket_num_ = size_conf.val_;

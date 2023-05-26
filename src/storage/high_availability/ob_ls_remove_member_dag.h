@@ -77,6 +77,7 @@ public:
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
   virtual int init_by_param(const share::ObIDagInitParam *param) override;
   virtual int create_first_task() override;
+  virtual bool is_ha_dag() const override { return true; }
 protected:
   bool is_inited_;
   ObLSRemoveMemberCtx ctx_;

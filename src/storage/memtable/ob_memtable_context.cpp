@@ -61,7 +61,7 @@ ObMemtableCtx::ObMemtableCtx()
       callback_free_count_(0),
       is_read_only_(false),
       is_master_(true),
-      read_elr_data_(false),
+      has_row_updated_(false),
       lock_mem_ctx_(ctx_cb_allocator_),
       is_inited_(false)
 {
@@ -132,7 +132,7 @@ void ObMemtableCtx::reset()
     callback_free_count_ = 0;
     callback_alloc_count_ = 0;
     callback_mem_used_ = 0;
-    read_elr_data_ = false;
+    has_row_updated_ = false;
     trans_mem_total_size_ = 0;
     lock_for_read_retry_count_ = 0;
     lock_for_read_elapse_ = 0;
@@ -870,18 +870,21 @@ int ObMemtableCtx::remove_callbacks_for_fast_commit()
   return ret;
 }
 
-int ObMemtableCtx::remove_callback_for_uncommited_txn(ObMemtable *mt, const share::SCN max_applied_scn)
+int ObMemtableCtx::remove_callback_for_uncommited_txn(
+  const memtable::ObMemtableSet *memtable_set,
+  const share::SCN max_applied_scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
 
-  if (OB_ISNULL(mt)) {
+  if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "memtable is NULL", K(mt));
+    TRANS_LOG(WARN, "memtable is NULL", K(memtable_set));
   } else if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(mt, max_applied_scn))) {
-    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt));
+  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(memtable_set,
+                                                                   max_applied_scn))) {
+    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(memtable_set));
   }
 
   return ret;

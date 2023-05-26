@@ -203,7 +203,7 @@ int ObXmlTreeTextWriter::visit_xml_element(ObXmlElement* node) {
     buffer_.append("<");
     append_qname(node->get_prefix(), node->get_key());
 
-    for (int i = 0; OB_SUCC(ret) && i < node->attributes_size(); ++i) {
+    for (int i = 0; OB_SUCC(ret) && i < node->attribute_size(); ++i) {
       ObXmlAttribute* attr = NULL;
       if (OB_FAIL(node->get_attribute(attr, i))) {
         LOG_WARN("get attr failed", K(ret), K(i));

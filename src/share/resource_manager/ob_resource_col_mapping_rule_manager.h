@@ -181,6 +181,7 @@ public:
   {}
   int init(uint64_t tenant_id);
   int refresh(sql::ObPlanCache *plan_cache, const common::ObString &plan);
+  uint64_t get_tenant_id() const { return tenant_id_; }
   int get_rule_id(uint64_t tenant_id, uint64_t database_id, const common::ObString &table_name,
                        const common::ObString &column_name, common::ObNameCaseMode case_mode,
                        uint64_t &rule_id);
@@ -215,8 +216,7 @@ private:
     }
     static ObResColMapInfoNode *alloc_node(ObTenantResColMappingInfo *p)
     {
-      UNUSED(p);
-      return OB_NEW(ObResColMapInfoNode, "ResRuleInfoMap");
+      return OB_NEW(ObResColMapInfoNode, ObMemAttr(p->get_tenant_id(), "ResRuleInfoMap"));
     }
     static void free_node(ObResColMapInfoNode *node)
     {

@@ -1499,6 +1499,11 @@ int ObLSTabletService::update_tablet_restore_status(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status), KPC(tablet));
     } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
       LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_restore_status(current_status))) {
+        LOG_WARN("failed to set restore status", K(tmp_ret), K(current_status), KPC(tablet));
+        ob_abort();
+      }
     } else if (FALSE_IT(time_guard.click("WrSlog"))) {
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key,
         disk_addr, tablet_handle, tablet_handle))) {
@@ -1558,6 +1563,11 @@ int ObLSTabletService::update_tablet_ha_data_status(
       LOG_WARN("failed to set data status", K(ret), KPC(tablet), K(data_status));
     } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
       LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_data_status(current_status))) {
+        LOG_WARN("failed to set data status", K(tmp_ret), K(current_status), KPC(tablet));
+        ob_abort();
+      }
     } else if (FALSE_IT(time_guard.click("WrSlog"))) {
     } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, tablet_handle, tablet_handle))) {
       LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr), K(lbt()));
@@ -1619,6 +1629,11 @@ int ObLSTabletService::update_tablet_ha_expected_status(
         LOG_WARN("failed to set ha meta status", K(ret), KPC(tablet), K(expected_status));
       } else if (OB_FAIL(ObTabletSlogHelper::write_create_tablet_slog(tablet_handle, disk_addr))) {
         LOG_WARN("failed to write update tablet slog", K(ret), K(tablet_handle), K(disk_addr));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = tablet->tablet_meta_.ha_status_.set_expected_status(current_status))) {
+          LOG_WARN("failed to set expected status", K(tmp_ret), K(current_status), KPC(tablet));
+          ob_abort();
+        }
       } else if (FALSE_IT(time_guard.click("WrSlog"))) {
       } else if (OB_FAIL(t3m->compare_and_swap_tablet(key, disk_addr, tablet_handle, tablet_handle))) {
         LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(disk_addr), K(lbt()));
@@ -2477,8 +2492,6 @@ int ObLSTabletService::insert_rows(
     void *ptr = nullptr;
     ObStoreRow *tbl_rows = nullptr;
     int64_t row_count = 0;
-    //index of row that exists
-    int64_t row_count_first_bulk = 0;
     bool first_bulk = true;
     ObNewRow *rows = nullptr;
     ObRowsInfo rows_info;
@@ -2489,16 +2502,21 @@ int ObLSTabletService::insert_rows(
     }
 
     while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
+      ObStoreRow reserved_row;
       if (row_count <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("row_count should be greater than 0", K(ret));
+      } else if (!rows_info.is_inited()
+          && OB_FAIL(rows_info.init(data_table,
+                                    ctx,
+                                    tablet_handle.get_obj()->get_full_read_info()))) {
+        LOG_WARN("Failed to init rows info", K(ret), K(data_table));
+      } else if (1 == row_count) {
+        tbl_rows = &reserved_row;
+        tbl_rows[0].flag_.set_flag(ObDmlFlag::DF_INSERT);
       } else if (first_bulk) {
         first_bulk = false;
-        row_count_first_bulk = row_count;
-        const ObTableReadInfo &full_read_info = tablet_handle.get_obj()->get_full_read_info();
-        if (OB_FAIL(rows_info.init(data_table, ctx, full_read_info))) {
-          LOG_WARN("Failed to init rows info", K(ret), K(data_table));
-        } else if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
+        if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("fail to allocate memory", K(ret), K(row_count));
         } else {

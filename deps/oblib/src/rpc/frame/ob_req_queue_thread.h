@@ -38,6 +38,8 @@ public:
 
   virtual ~ObReqQueue();
 
+  int init(const int64_t tenant_id = OB_SERVER_TENANT_ID);
+
   void set_qhandler(ObiReqQHandler *handler);
 
   bool push(ObRequest *req, int max_queue_len, bool block = true);
@@ -72,6 +74,7 @@ protected:
 
   bool wait_finish_;
   int push_worker_count_;
+  int64_t capacity_;
   common::ObLightyQueue queue_;
   ObiReqQHandler *qhandler_;
 

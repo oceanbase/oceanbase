@@ -16,13 +16,26 @@ static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes
 
 static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   pkts_t* pkts = structof(s->fty, pkts_t, sf);
-#ifdef PERF_MODE
-  int ret = pkts->on_req(pkts, ib_ref(&s->ib), msg->payload, msg->sz, s->id);
-#else
   int ret = pkts->on_req(pkts, s->ib.b, msg->payload, msg->sz, s->id);
-#endif
   ib_consumed(&s->ib, msg->sz);
   return ret;
+}
+
+static int pkts_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
+  // delete response req that has reached expired time
+  if (PNIO_REACH_TIME_INTERVAL(10*1000)) {
+    int64_t cur_time = rk_get_us();
+    dlink_for(&wq->queue.head, p) {
+      pkts_req_t* req = structof(p, pkts_req_t, link);
+      if (req->expire_us > 0 && cur_time >= req->expire_us) {
+        if (PNIO_OK == wq_delete(wq, p)) {
+          rk_warn("rpc resp is expired, expire_us=%ld, sock_id=%ld", req->expire_us, req->sock_id);
+          pkts_flush_cb(NULL, req);
+        }
+      }
+    }
+  }
+  return wq_flush(s, wq, old_head);
 }
 
 #define tns(x) pkts ## x

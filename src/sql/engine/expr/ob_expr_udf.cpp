@@ -131,6 +131,8 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
       type.set_meta(result_type_.get_obj_meta());
       if (type.get_type() == ObRawType) {
         type.set_collation_level(CS_LEVEL_NUMERIC);
+      } else if (type.is_string_or_lob_locator_type() && udf_package_id_ == T_OBJ_XML) {
+        type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       }
       if (!type.is_ext()) {
         if (lib::is_oracle_mode()) {
@@ -368,6 +370,15 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
         } else {
           OZ (deep_copy_obj(*pkg_allocator, obj, obj));
         }
+        OZ (ObSPIService::spi_set_package_variable(
+              &exec_ctx,
+              NULL,
+              params_desc.at(i).get_package_id(),
+              params_desc.at(i).get_index(),
+              iparams.at(i)));
+        int tmp_ret = OB_SUCCESS;
+        tmp_ret = pl::ObUserDefinedType::destruct_obj(iparams.at(i), exec_ctx.get_my_session());
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }
@@ -600,6 +611,10 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                               ctx.exec_ctx_.get_allocator(), res));
       }
       OZ(expr.deep_copy_datum(ctx, res));
+
+      if (OB_SUCC(ret) && info->is_udt_cons_) {
+        OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
+      }
     }
     if (need_end_stmt) {
       session->set_end_stmt();

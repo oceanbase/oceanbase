@@ -61,7 +61,6 @@ ObVirtualSqlPlanMonitor::~ObVirtualSqlPlanMonitor()
 void ObVirtualSqlPlanMonitor::reset()
 {
   if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    SERVER_LOG(INFO, "nijia debug deconstruct", KP(this));
     if (cur_mysql_req_mgr_ != nullptr && ref_.idx_ != -1) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
@@ -841,4 +840,3 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
   }
   return ret;
 }
-

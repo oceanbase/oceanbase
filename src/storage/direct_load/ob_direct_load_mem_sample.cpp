@@ -4,16 +4,11 @@
 
 #define USING_LOG_PREFIX STORAGE
 
-#include "observer/table_load/ob_table_load_partition_location.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "storage/direct_load/ob_direct_load_mem_sample.h"
-#include "observer/table_load/ob_table_load_store_ctx.h"
-#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/ob_table_load_task.h"
-#include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "share/table/ob_table_load_handle.h"
-#include "observer/table_load/ob_table_load_mem_compactor.h"
 
 namespace oceanbase
 {

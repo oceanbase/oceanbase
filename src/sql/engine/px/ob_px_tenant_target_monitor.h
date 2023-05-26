@@ -128,7 +128,6 @@ public:
   bool is_leader();
   uint64_t get_version();
   int update_peer_target_used(const ObAddr &server, int64_t peer_used);
-  int rollback_local_report_target_used(const ObAddr &server, int64_t local_report);
   int get_global_target_usage(const hash::ObHashMap<ObAddr, ServerTargetUsage> *&global_target_usage);
   // if role is follower and find that its version is different with leader's
   // call this function to reset statistics, the param version is from the leader.

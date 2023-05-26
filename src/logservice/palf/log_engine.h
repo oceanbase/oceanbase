@@ -103,6 +103,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogPlugins *plugins,
            const int64_t palf_epoch,
            const int64_t log_storage_block_size,
            const int64_t log_meta_storage_block_size);
@@ -115,6 +116,7 @@ public:
            LogHotCache *hot_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
+           LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
            const int64_t palf_epoch,
            bool &is_integrity,
@@ -419,7 +421,8 @@ public:
   // ===================== NetService end ========================
   LogStorage *get_log_storage() { return &log_storage_; }
   LogStorage *get_log_meta_storage() { return &log_meta_storage_; }
-  int get_total_used_disk_space(int64_t &total_used_size_byte) const;
+  int get_total_used_disk_space(int64_t &total_used_size_byte,
+                                int64_t &unrecyclable_disk_space) const;
   virtual int64_t get_palf_epoch() const { return palf_epoch_; }
   TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(base_lsn_for_block_gc),
       K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), K_(last_purge_throttling_ts), KP(this));
@@ -480,6 +483,7 @@ private:
   LogNetService log_net_service_;
   common::ObILogAllocator *alloc_mgr_;
   LogIOWorker *log_io_worker_;
+  LogPlugins *plugins_;
   // Except for LogNetService, this field is just only used for debug
   int64_t palf_id_;
   // palf_epoch_ is used for identifying an uniq palf instance.

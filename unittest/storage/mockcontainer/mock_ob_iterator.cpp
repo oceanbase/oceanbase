@@ -29,7 +29,7 @@ ObMockIterator::ObMockIterator(bool reverse)
       cursor_(0),
       reverse_(reverse),
       trans_id_(888),
-      allocator_(ObModIds::OB_ST_TEMP)
+      allocator_("StTemp")
 {
 }
 
@@ -204,7 +204,7 @@ int ObMockIterator::from(const ObString &str, char escape, uint16_t *col_id_arra
 {
   int ret = OB_SUCCESS;
   ObMockIteratorBuilder builder;
-  ObArenaAllocator buffer(ObModIds::OB_ST_TEMP);
+  ObArenaAllocator buffer("StTemp");
   if (OB_SUCCESS != (ret != builder.init(&buffer, escape))) {
     STORAGE_LOG(WARN, "init builder failed");
   } else {

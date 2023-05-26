@@ -186,7 +186,7 @@ int FetchStream::handle(volatile bool &stop_flag)
     LOG_INFO("[STAT] [FETCH_STREAM] begin handle", "fetch_stream", this,
         "fetch_stream", *this, "LS_CTX", *ls_fetch_ctx_);
   } else {
-    LOG_DEBUG("[STAT] [FETCH_STREAM] begin handle", "fetch_stream", this,
+    LOG_TRACE("[STAT] [FETCH_STREAM] begin handle", "fetch_stream", this,
         "fetch_stream", *this, "LS_CTX", *ls_fetch_ctx_);
   }
   if (OB_ISNULL(ls_fetch_ctx_)) {
@@ -249,7 +249,7 @@ void FetchStream::runTimerTask()
   int64_t start_time = get_timestamp();
   int64_t end_time = 0;
 
-  LOG_DEBUG("[STAT] [WAKE_UP_STREAM_TASK]", "task", this, "task", *this);
+  LOG_TRACE("[STAT] [WAKE_UP_STREAM_TASK]", "task", this, "task", *this);
 
   if (OB_ISNULL(stream_worker_)) {
     LOG_ERROR("invalid stream worker", K(stream_worker_));
@@ -309,7 +309,7 @@ void FetchStream::do_stat()
     last_stat_info_ = cur_stat_info_;
   } else if (delta_second <= 0) {
     // Statistics are too frequent, ignore the statistics here, otherwise the following will lead to divide by zero error
-    LOG_DEBUG("fetch stream stat too frequently", K(delta_time), K(delta_second),
+    LOG_TRACE("fetch stream stat too frequently", K(delta_time), K(delta_second),
         K(last_stat_time_), K(this));
   } else {
     FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
@@ -339,7 +339,7 @@ void FetchStream::handle_when_leave_(const char *leave_reason) const
     // No data members can be accessed in when print log, only the address is printed
     LOG_INFO("[STAT] [FETCH_STREAM] leave stream", "fetch_stream", this, K(leave_reason));
   } else {
-    LOG_DEBUG("[STAT] [FETCH_STREAM] leave stream", "fetch_stream", this, K(leave_reason));
+    LOG_TRACE("[STAT] [FETCH_STREAM] leave stream", "fetch_stream", this, K(leave_reason));
   }
 }
 
@@ -485,7 +485,12 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_us)
 
     global_upper_limit = progress_controller_->get_global_upper_limit();
     if (OB_INVALID_TIMESTAMP != global_upper_limit) {
-      upper_limit_us = std::min(upper_limit_us, global_upper_limit);
+      const int64_t log_progress = ls_fetch_ctx_->get_progress();
+      if (log_progress < global_upper_limit) {
+        upper_limit_us = INT64_MAX - 1;
+      } else {
+        upper_limit_us = std::min(upper_limit_us, global_upper_limit);
+      }
     }
   }
 
@@ -615,7 +620,7 @@ void FetchStream::print_handle_info_(
         "resp", result.resp_, K(handle_rpc_time), K(read_log_time), K(decode_log_entry_time),
         K(tsi), K(min_progress), K(min_tls_id));
   } else {
-    LOG_DEBUG("handle rpc result by fetch stream",
+    LOG_TRACE("handle rpc result by fetch stream",
         "fetch_stream", this,
         "upper_limit", NTS_TO_STR(upper_limit_),
         K(need_stop_request),
@@ -880,7 +885,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
   int ret = OB_SUCCESS;
   static const int64_t UPDATE_FETCH_STATE_INTERVAL = 100;
   bool need_fetch_log = true;
-  LOG_DEBUG("handle_fetch_archive_task_ begin", K(svr_), "tls_id", ls_fetch_ctx_->get_tls_id());
+  LOG_TRACE("handle_fetch_archive_task_ begin", K(svr_), "tls_id", ls_fetch_ctx_->get_tls_id());
 
   if (OB_ISNULL(ls_fetch_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -931,6 +936,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           }
         }
         // retry on fetch remote log failure anyway
+        // for all scenario above, no need to fetch log and need to reset remote iterator.
         need_fetch_log = false;
         ls_fetch_ctx_->reset_remote_iter();
         ret = OB_SUCCESS;
@@ -943,6 +949,12 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
               K(lsn), K(kick_out_info), KPC(ls_fetch_ctx_));
         } else if (OB_NEED_RETRY == ret) {
           LOG_WARN("read_group_entry failed, retry", KR(ret), K(log_group_entry), K(lsn), K(tls_id));
+          // reset remote iter to fetch log that match the next_lsn in progress next round,
+          // otherwise incorrect log may be fetched.
+          ls_fetch_ctx_->reset_remote_iter();
+          // reset memory storage to prevent the remain logentry in mem_storage from
+          // disruppting the iteration of log group entry.
+          ls_fetch_ctx_->reset_memory_storage();
           need_fetch_log = false;
           ret = OB_SUCCESS;
         }
@@ -981,11 +993,6 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
       }
     }
 
-    // rewrite ret code when ret equals OB_NEED_RETRY.
-    if (OB_NEED_RETRY == ret) {
-      ret = OB_SUCCESS;
-    }
-
     // when exit from loop, there could still be some fetch tasks to be synchronized
     if (OB_SUCC(ret)) {
       int64_t flush_time = 0;
@@ -997,6 +1004,12 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
             read_log_time, fetch_remote_time, flush_time, tsi);
       }
     }
+
+    // rewrite ret code when ret equals OB_NEED_RETRY.
+    if (OB_NEED_RETRY == ret) {
+      ret = OB_SUCCESS;
+    }
+
     if (OB_SUCC(ret)) {
       if (kick_out_info.need_kick_out()) {
         if (OB_FAIL(kick_out_task_(kick_out_info))) {
@@ -1292,7 +1305,7 @@ int FetchStream::read_log_(
   read_log_time = 0;
   decode_log_entry_time = 0;
   // TODO for Debug remove
-  LOG_DEBUG("redo_log_debug", K(resp), "tls_id", ls_fetch_ctx_->get_tls_id());
+  LOG_TRACE("redo_log_debug", K(resp), "tls_id", ls_fetch_ctx_->get_tls_id());
 
   if (OB_ISNULL(buf)) {
     LOG_ERROR("invalid response log buf", K(buf), K(resp));
@@ -1302,7 +1315,7 @@ int FetchStream::read_log_(
     LOG_ERROR("invalid ls_fetch_ctx", KR(ret), K(ls_fetch_ctx_));
   } else if (0 == log_cnt) {
     // Ignore 0 logs
-    LOG_DEBUG("fetch 0 log", K_(svr), "fetch_status", resp.get_fetch_status());
+    LOG_TRACE("fetch 0 log", K_(svr), "fetch_status", resp.get_fetch_status());
   } else if (OB_FAIL(ls_fetch_ctx_->append_log(buf, len))) {
     LOG_ERROR("append log to LSFetchCtx failed", KR(ret), KPC(ls_fetch_ctx_), K(resp));
   } else {
@@ -1598,7 +1611,7 @@ int FetchStream::check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_in
   if (exist_(kick_out_info, task.get_tls_id())) {
     // Do not check for LS already located in kick_out_info
   } else if (task.need_switch_server(svr_)) {
-    LOG_DEBUG("exist higher priority server, need switch server", KR(ret), "key", task.get_tls_id(),
+    LOG_TRACE("exist higher priority server, need switch server", KR(ret), "key", task.get_tls_id(),
              K_(svr));
     // If need to switch the stream, add it to the kick out collection
     if (OB_FAIL(set_(kick_out_info, task.get_tls_id(), NEED_SWITCH_SERVER))) {

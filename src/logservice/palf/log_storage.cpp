@@ -36,6 +36,7 @@ LogStorage::LogStorage() :
     tail_info_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     update_manifest_cb_(),
+    plugins_(NULL),
     hot_cache_(NULL),
     is_inited_(false)
 {}
@@ -49,7 +50,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t palf_id, const int64_t logical_block_size,
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
-                     ILogBlockPool *log_block_pool,
+                     ILogBlockPool *log_block_pool, LogPlugins *plugins,
                      LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
@@ -64,6 +65,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               align_buf_size,
                               update_manifest_cb,
                               log_block_pool,
+                              plugins,
                               hot_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
@@ -76,7 +78,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
 int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_id)
 {
   int ret = OB_SUCCESS;
-  block_id_t log_tail_block_id = lsn_2_block(log_tail_, PALF_BLOCK_SIZE);
+  block_id_t log_tail_block_id = lsn_2_block(log_tail_, logical_block_size_);
   // if last block is full, last_block_id will be the next block id of 'last block'
   // NB: nowdays, there is no possible which last block is empty but the header of this block is valid.
   block_id_t last_block_id = (0 == curr_block_writable_size_ ? log_tail_block_id - 1 : log_tail_block_id);
@@ -92,7 +94,7 @@ int LogStorage::load_manifest_for_meta_storage(block_id_t &expected_next_block_i
                  read_block_header_(last_block_id, log_block_header_))) {
     PALF_LOG(WARN, "read_block_header_ failed", K(ret), KPC(this));
   } else {
-    expected_next_block_id= lsn_2_block(log_block_header_.get_min_lsn(), PALF_BLOCK_SIZE);
+    expected_next_block_id= lsn_2_block(log_block_header_.get_min_lsn(), logical_block_size_);
     PALF_LOG(INFO, "load_manifest_for_meta_storage success", K(ret), KPC(this), K(expected_next_block_id));
   }
   return ret;
@@ -390,9 +392,10 @@ int LogStorage::truncate_prefix_blocks(const LSN &lsn)
 		reset_log_tail_for_last_block_(lsn, false);
     block_mgr_.reset(lsn_2_block(lsn, logical_block_size_));
   }
-  PALF_EVENT("LogStorage truncate_prefix_blocks finihsed", palf_id_, K(ret), KPC(this),
+  PALF_EVENT("truncate_prefix_blocks success", palf_id_, K(ret), KPC(this),
              K(lsn), K(block_id), K(min_block_id), K(max_block_id),
              K(truncate_end_block_id));
+  plugins_->record_truncate_event(palf_id_, lsn, min_block_id, max_block_id, truncate_end_block_id);
   return ret;
 }
 
@@ -524,7 +527,10 @@ int LogStorage::update_manifest_used_for_meta_storage(const block_id_t expected_
   // log error in LogBlockMgr because 'log_tail_block_id' is not same as 'curr_writable_block_id'(LogBlockMgr)
   // assume 'log_tail_' is equal to PALF_PHY_BLOCK_SIZE, 'log_tail_block_id' is 1, however
   // 'curr_writable_block_id' is 0.
-  if (OB_FAIL(update_block_header_(last_block_id, LSN(expected_max_block_id*PALF_BLOCK_SIZE), SCN::min_scn()))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogMetaStorage not inited", KPC(this), K(expected_max_block_id));
+  } else if (OB_FAIL(update_block_header_(last_block_id, LSN(expected_max_block_id*logical_block_size_), SCN::min_scn()))) {
     PALF_LOG(WARN, "append_block_header_ failed", K(ret), KPC(this), K(last_block_id), K(log_tail_block_id));
   } else {
     PALF_LOG(INFO, "update_manifest_used_for_meta_storage success", K(ret), KPC(this));
@@ -593,6 +599,7 @@ int LogStorage::do_init_(const char *base_dir,
                          const int64_t align_buf_size,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
+                         LogPlugins *plugins,
                          LogHotCache *hot_cache)
 {
   int ret = OB_SUCCESS;
@@ -620,6 +627,7 @@ int LogStorage::do_init_(const char *base_dir,
     palf_id_ = palf_id;
     logical_block_size_ = logical_block_size;
     update_manifest_cb_ = update_manifest_cb;
+    plugins_ = plugins;
     hot_cache_ = hot_cache;
     is_inited_ = true;
   }
@@ -881,6 +889,18 @@ void LogStorage::reset_log_tail_for_last_block_(const LSN &lsn, bool last_block_
 int LogStorage::update_manifest_(const block_id_t expected_next_block_id, const bool in_restart)
 {
   return update_manifest_cb_(expected_next_block_id, in_restart);
+}
+
+int LogStorage::get_logical_block_size(int64_t &logical_block_size) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not init", KPC(this));
+  } else {
+    logical_block_size = logical_block_size_;
+  }
+  return ret;
 }
 } // end namespace palf
 } // end namespace oceanbase

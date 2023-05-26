@@ -9,7 +9,7 @@ int check_connect_result(int fd) {
     err = -EAGAIN;
   } else if (0 != sys_err) {
     err = -EIO;
-    rk_error("connect error: err=%d %s", sys_err, T2S(sock_fd, fd));
+    rk_warn("connect error: err=%d %s", sys_err, T2S(sock_fd, fd));
   }
   return err;
 }

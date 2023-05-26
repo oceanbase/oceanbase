@@ -245,6 +245,10 @@ public:
   void dispatch_in_idle_pool();
   void dispatch_in_fetch_stream(const common::ObAddr &svr, FetchStream &fs);
   void dispatch_in_dead_pool();
+  int64_t get_dispatched_count_from_idle_to_idle() const
+  {
+    return fetch_info_.get_dispatched_count_from_idle_to_idle();
+  }
 
   bool is_in_fetching_log() const { return FETCHING_LOG == ATOMIC_LOAD(&state_); }
   void set_not_in_fetching_log() { ATOMIC_SET(&state_, NOT_FETCHING_LOG); }
@@ -286,6 +290,8 @@ public:
 
   // Internal member functions
 private:
+  static const int64_t SERVER_LIST_UPDATE_INTERVAL_SEC = 5 * _SEC_;
+
   int init_group_iterator_(const palf::LSN &start_lsn);
 
   int init_archive_dest_(const ObBackupPathString &archve_dest_str,
@@ -391,6 +397,7 @@ public:
 
     FetchModule     out_mod_;               // module that dispatch out from
     const char      *out_reason_;           // reason for dispatch out
+    int64_t         dispatched_count_from_idle_to_idle_;
 
     FetchInfo() { reset(); }
 
@@ -405,6 +412,7 @@ public:
       return (FetchModule::ModuleName::FETCH_MODULE_IDLE_POOL == cur_mod_.module_)
         && (FetchModule::ModuleName::FETCH_MODULE_IDLE_POOL == out_mod_.module_);
     }
+    int64_t get_dispatched_count_from_idle_to_idle() const { return dispatched_count_from_idle_to_idle_; }
 
     // Get the start fetch time  of the log on the current server
     // Requires FETCH_STREAM for the fetch log module; requiring the server to match

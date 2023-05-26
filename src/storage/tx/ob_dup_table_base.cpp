@@ -405,6 +405,7 @@ int ObDupTableLogOperator::deserialize_log_entry()
 
 bool ObDupTableLogOperator::is_busy()
 {
+  SpinRLockGuard guard(log_lock_);
   return !logging_tablet_set_ids_.empty() || !logging_lease_addrs_.empty();
 }
 

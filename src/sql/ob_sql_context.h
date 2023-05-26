@@ -580,7 +580,8 @@ public:
       tz_info_(NULL),
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
-      root_stmt_(NULL)
+      root_stmt_(NULL),
+      udf_has_select_stmt_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -620,6 +621,7 @@ public:
     res_map_rule_id_ = common::OB_INVALID_ID;
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
+    udf_has_select_stmt_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -695,6 +697,7 @@ public:
   uint64_t res_map_rule_id_;
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
+  bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
 };
 } /* ns sql*/
 } /* ns oceanbase */

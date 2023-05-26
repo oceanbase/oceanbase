@@ -201,6 +201,7 @@ public:
                              const common::ObBorderFlag  &border_flag,
                              const bool for_compaction,
                              ObStoreRange &range);
+  void set_col_cnt(int64_t col_cnt) { col_cnt_ = col_cnt; }
   TO_STRING_KV(KPC(store_range_), K_(endkey_iters), KP_(last_macro_endkey), K_(total_endkey_cnt),
                K_(sample_cnt), K_(parallel_target_count), K_(is_inited));
 private:
@@ -212,6 +213,7 @@ private:
                        const bool for_compaction,
                        common::ObIAllocator &allocator,
                        common::ObStoreRowkey &new_rowkey);
+  int build_bound_rowkey(const bool is_max, common::ObIAllocator &allocator, common::ObStoreRowkey &new_rowkey);
   int check_rowkey_equal(const common::ObStoreRowkey &rowkey1, const common::ObStoreRowkey &rowkey2, bool &equal);
   int check_continuous(common::ObIArray<common::ObStoreRange> &range_array);
 private:
@@ -226,6 +228,7 @@ private:
   int64_t sample_cnt_;
   int64_t parallel_target_count_;
   bool is_micro_level_;
+  int64_t col_cnt_;
   bool is_inited_;
 };
 

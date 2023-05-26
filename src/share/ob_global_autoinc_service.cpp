@@ -116,14 +116,15 @@ int ObAutoIncCacheNode::update_sync_value(const uint64_t sync_value)
 int ObGlobalAutoIncService::init(const ObAddr &addr, ObMySQLProxy *mysql_proxy)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(MTL_ID(), ObModIds::OB_AUTOINCREMENT);
   if (OB_ISNULL(mysql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(mysql_proxy));
   } else if (OB_FAIL(inner_table_proxy_.init(mysql_proxy))) {
     LOG_WARN("init inner table proxy failed", K(ret));
   } else if (OB_FAIL(autoinc_map_.create(ObGlobalAutoIncService::INIT_HASHMAP_SIZE,
-                                         ObModIds::OB_AUTOINCREMENT,
-                                         ObModIds::OB_AUTOINCREMENT))) {
+                                         attr,
+                                         attr))) {
     LOG_WARN("init autoinc_map_ failed", K(ret));
   } else {
     for (int64_t i = 0; i < MUTEX_NUM; ++i) {

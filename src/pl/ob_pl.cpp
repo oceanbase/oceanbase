@@ -475,15 +475,16 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
 
 int ObPLContext::init(ObSQLSessionInfo &session_info,
                        ObExecContext &ctx,
-                       bool is_autonomous,
+                       ObPLFunction *routine,
                        bool is_function_or_trigger,
                        ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   int64_t pl_block_timeout = 0;
   int64_t query_start_time = session_info.get_query_start_time();
-  
-  OX (is_autonomous_ = is_autonomous);
+  CK (OB_NOT_NULL(routine));
+  OX (is_function_or_trigger |= routine->is_function());
+  OX (is_autonomous_ = routine->is_autonomous());
   OX (is_function_or_trigger_ = is_function_or_trigger);
 
   OZ (session_info.get_pl_block_timeout(pl_block_timeout));
@@ -579,7 +580,10 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     }
   }
 
-  if (is_function_or_trigger && lib::is_mysql_mode()) {
+  if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode() &&
+      routine->get_has_parallel_affect_factor()) {
+    // 并行场景下不能创建stash savepoint, 只有当udf/trigger内部有tcl语句时, stash savepoint才有意义
+    // udf内部有tcl语句时，该标记为true
     last_insert_id_ = session_info.get_local_last_insert_id();
     const ObString stash_savepoint_name("PL stash savepoint");
     OZ (ObSqlTransControl::create_stash_savepoint(ctx, stash_savepoint_name));
@@ -909,7 +913,7 @@ int ObPLContext::check_routine_legal(ObPLFunction &routine, bool in_function, bo
       ret = OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG;
       LOG_WARN("Dynamic SQL is not allowed in stored function", K(ret));
       LOG_USER_ERROR(OB_ER_STMT_NOT_ALLOWED_IN_SF_OR_TRG, "Dynamic SQL");
-    } else if (routine.get_multi_results() || in_tg) {
+    } else if (routine.get_multi_results()) {
       ret = OB_ER_SP_NO_RETSET;
       LOG_WARN("Not allowed to return a result set in pl function", K(ret));
       if (in_tg) {
@@ -1337,10 +1341,8 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
       if (NULL == buf) {
         LOG_WARN("fail to alloc buf", K(pc_ctx.raw_sql_.length()));
         ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(ObSqlParameterization::construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
+      } else if (OB_FAIL(ObSqlParameterization::construct_sql_for_pl(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
         LOG_WARN("fail to construct_sql", K(ret));
-      } else if (OB_FAIL(ObSqlParameterization::transform_neg_param(pc_ctx.fp_result_.raw_params_))) {
-        LOG_WARN("fail to transform_neg_param", K(ret));
       } else {
         if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + pos) {
           ret = OB_ERR_UNEXPECTED;
@@ -1546,7 +1548,7 @@ int ObPL::execute(ObExecContext &ctx, const ObStmtNodeTree *block)
     if (OB_SUCC(ret)) {
       SMART_VAR(ObPLContext, stack_ctx) {
         LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
-        OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine->is_autonomous(), false));
+        OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
         try {
           // execute it.
@@ -1650,7 +1652,7 @@ int ObPL::execute(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     SMART_VAR(ObPLContext, stack_ctx) {
       LinkPLStackGuard link_stack_guard(ctx, stack_ctx);
-      OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine->is_autonomous(), false));
+      OZ (stack_ctx.init(*(ctx.get_my_session()), ctx, routine, false));
 
       try {
         // execute it...
@@ -1791,9 +1793,8 @@ int ObPL::execute(ObExecContext &ctx,
     }
     // prepare it ...
     OZ (stack_ctx.init(*(ctx.get_my_session()), ctx,
-                      routine->is_autonomous(),
-                      routine->is_function()
-                      || in_function
+                      routine,
+                      in_function
                       || (package_id != OB_INVALID_ID
                           && ObTriggerInfo::is_trigger_package_id(package_id)),
                       &allocator));
@@ -2515,30 +2516,61 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
+  const ObPLDataType *real_pl_type = &pl_type;
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
-  if (pl_type.is_ref_cursor_type() || pl_type.is_sys_refcursor_type()) {
+
+  if (OB_FAIL(ret)) {
+  } else if (pl_type.is_generic_type()) {
+    ObPLComposite *composite = NULL;
+    const ObUserDefinedType* user_type = NULL;
+    if (!obj.is_pl_extend()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
+    }
+    CK (OB_NOT_NULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext())));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(session->get_pl_context())
+          && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
+      pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
+      OZ (ns->get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    } else {
+      ObPLResolveCtx ns(allocator,
+                      *session,
+                      *schema_guard,
+                      *package_guard,
+                      *sql_proxy,
+                      false);
+      OZ (ns.get_user_type(composite->get_id(), user_type));
+      CK (OB_NOT_NULL(user_type));
+    }
+    OX (real_pl_type = user_type);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
-  } else if (pl_type.is_udt_type()) {
+  } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
-  } else if (pl_type.is_package_type() || pl_type.is_rowtype_type()) {
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
+  } else if (real_pl_type->is_package_type() || real_pl_type->is_rowtype_type()) {
     ObPLResolveCtx ns(allocator,
                       *session,
                       *schema_guard,
                       *package_guard,
                       *sql_proxy,
                       false);
-    OZ (ns.init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
   } else if (OB_NOT_NULL(session->get_pl_context())
       && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
     pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, pl_type, obj, false));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
   }
-  OX (obj.set_udt_id(pl_type.get_user_type_id()));
+  OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
 }
 
@@ -2842,7 +2874,11 @@ do {                                                                  \
             ObObj tmp;
             // CHARSET_ANY代表接受任何字符集,因此不能改变入参的字符集
             if (CS_TYPE_ANY == result_type.get_collation_type()) {
-              result_type.set_collation_type(params->at(i).get_meta().get_collation_type());
+              if (params->at(i).get_meta().is_string_or_lob_locator_type()) {
+                result_type.set_collation_type(params->at(i).get_meta().get_collation_type());
+              } else {
+                result_type.set_collation_type(ctx_.exec_ctx_->get_my_session()->get_nls_collation());
+              }
             }
             if ((result_type.is_blob() || result_type.is_blob_locator()
                  || params->at(i).is_blob() || params->at(i).is_blob_locator())

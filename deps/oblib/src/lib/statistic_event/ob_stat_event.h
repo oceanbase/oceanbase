@@ -197,8 +197,8 @@ STAT_EVENT_ADD_DEF(TMP_BLOCK_CACHE_HIT, "tmp block cache hit", ObStatClassIds::C
 STAT_EVENT_ADD_DEF(TMP_BLOCK_CACHE_MISS, "tmp block cache miss", ObStatClassIds::CACHE, "tmp block cache miss", 50052, false, true)
 STAT_EVENT_ADD_DEF(SECONDARY_META_CACHE_HIT, "secondary meta cache hit", ObStatClassIds::CACHE, "secondary meta cache hit", 50053, false, true)
 STAT_EVENT_ADD_DEF(SECONDARY_META_CACHE_MISS, "secondary meta cache miss", ObStatClassIds::CACHE, "secondary meta cache miss", 50054, false, true)
-STAT_EVENT_ADD_DEF(OPT_DS_STAT_CACHE_HIT, "opt ds stat cache hit", ObStatClassIds::CACHE, "opt ds stat cache hit", 50045, false, true)
-STAT_EVENT_ADD_DEF(OPT_DS_STAT_CACHE_MISS, "opt ds stat cache miss", ObStatClassIds::CACHE, "opt ds stat cache miss", 50046, false, true)
+STAT_EVENT_ADD_DEF(OPT_DS_STAT_CACHE_HIT, "opt ds stat cache hit", ObStatClassIds::CACHE, "opt ds stat cache hit", 50055, false, true)
+STAT_EVENT_ADD_DEF(OPT_DS_STAT_CACHE_MISS, "opt ds stat cache miss", ObStatClassIds::CACHE, "opt ds stat cache miss", 50056, false, true)
 
 // STORAGE
 //STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS")

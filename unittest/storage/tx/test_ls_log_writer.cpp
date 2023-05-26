@@ -72,7 +72,7 @@ const ObLSID TEST_LS_ID(735);
 
 TEST_F(TestLSLogWriter, submit_start_working_log)
 {
-  int64_t tmp_tenant_id = 1004;
+  int64_t tmp_tenant_id = 1;
   ObLSTxCtxMgr tmp_mgr;
   common::ObConcurrentFIFOAllocator tmp_allocator;
 

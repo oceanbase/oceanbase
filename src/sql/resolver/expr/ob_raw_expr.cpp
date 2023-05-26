@@ -389,7 +389,12 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
   ObRawExprDeduceType expr_deducer(session_info);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
-    LOG_WARN("fail to deduce", K(ret));
+    if (session_info->is_ps_prepare_stage()) {
+      ret = OB_SUCCESS;
+      LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else {
+      LOG_WARN("fail to deduce", K(ret));
+    }
   }
   //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   return ret;
@@ -1373,7 +1378,8 @@ bool ObQueryRefRawExpr::inner_same_as(
       // very tricky, check the definition of ref_stmt_ and get_ref_stmt()
       bool_ret = (get_ref_id() == u_expr.get_ref_id() &&
                   ref_stmt_ == u_expr.ref_stmt_ &&
-                  is_multiset_ == is_multiset_);
+                  is_set_ == u_expr.is_set_ &&
+                  is_multiset_ == u_expr.is_multiset_);
     }
   }
   return bool_ret;
@@ -1383,7 +1389,9 @@ bool ObExprEqualCheckContext::compare_query(const ObQueryRefRawExpr &left,
                                             const ObQueryRefRawExpr &right)
 {
   return left.get_ref_id() == right.get_ref_id() &&
-      left.get_ref_stmt() == right.get_ref_stmt();
+      left.get_ref_stmt() == right.get_ref_stmt() &&
+      left.is_set() == right.is_set() &&
+      left.is_multiset() == right.is_multiset();
 }
 
 int ObQueryRefRawExpr::do_visit(ObRawExprVisitor &visitor)
@@ -2569,6 +2577,8 @@ int ObObjAccessRawExpr::assign(const ObRawExpr &other)
         LOG_WARN("append error", K(ret));
       } else if (OB_FAIL(append(var_indexs_, tmp.var_indexs_))) {
         LOG_WARN("append error", K(ret));
+      } else if (OB_FAIL(append(orig_access_indexs_, tmp.orig_access_indexs_))) {
+        LOG_WARN("append error", K(ret));
       } else {
         get_attr_func_ = tmp.get_attr_func_;
         func_name_ = tmp.func_name_;
@@ -2594,6 +2604,8 @@ int ObObjAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
     } else {
       pl::ObObjAccessIdx access;
       common::ObSEArray<pl::ObObjAccessIdx, 4> access_array;
+      pl::ObObjAccessIdx orig_access;
+      common::ObSEArray<pl::ObObjAccessIdx, 4> orig_access_array;
       for (int64_t i = 0; OB_SUCC(ret) && i < access_indexs_.count(); ++i) {
         access.reset();
         if (OB_FAIL(access.deep_copy(*inner_alloc_, copier.get_expr_factory(), access_indexs_.at(i)))) {
@@ -2604,6 +2616,17 @@ int ObObjAccessRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
       }
       if (OB_SUCC(ret) && OB_FAIL(access_indexs_.assign(access_array))) {
         LOG_WARN("assign array error", K(access_array), K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < orig_access_indexs_.count(); ++i) {
+        orig_access.reset();
+        if (OB_FAIL(orig_access.deep_copy(*inner_alloc_, copier.get_expr_factory(), orig_access_indexs_.at(i)))) {
+          LOG_WARN("failed to deep copy ObObjAccessIdx", K(i), K(orig_access_indexs_.at(i)), K(ret));
+        } else if (OB_FAIL(orig_access_array.push_back(orig_access))) {
+          LOG_WARN("push back error", K(i), K(orig_access_indexs_.at(i)), K(orig_access), K(ret));
+        } else { /*do nothing*/ }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.assign(orig_access_array))) {
+        LOG_WARN("assign array error", K(orig_access_array), K(ret));
       }
     }
   }
@@ -2622,7 +2645,8 @@ bool ObObjAccessRawExpr::inner_same_as(const ObRawExpr &expr,
         && is_array_equal(access_indexs_, obj_access_expr.access_indexs_)
         && is_array_equal(var_indexs_, obj_access_expr.var_indexs_)
         && for_write_ == obj_access_expr.for_write_
-        && property_type_ == obj_access_expr.property_type_;
+        && property_type_ == obj_access_expr.property_type_
+        && is_array_equal(orig_access_indexs_, obj_access_expr.orig_access_indexs_);
   } else { /*do nothing*/ }
   return bool_ret;
 }
@@ -2739,6 +2763,9 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
         LOG_WARN("store access index failed", K(ret));
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(orig_access_indexs_.assign(access_idxs))) {
+    LOG_WARN("failed to assign access indexs", K(ret), K(access_idxs));
   }
   return ret;
 }

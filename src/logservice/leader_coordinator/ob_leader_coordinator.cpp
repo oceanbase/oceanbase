@@ -48,6 +48,7 @@ struct AllLsElectionReferenceInfoFactory
       COORDINATOR_LOG_RET(ERROR, OB_ALLOCATE_MEMORY_FAILED, "alloc memory failed");
     } else {
       new(new_all_ls_election_reference_info) ObArray<LsElectionReferenceInfo>();
+      new_all_ls_election_reference_info->set_attr(ObMemAttr(MTL_ID(), "LsElectRefInfo"));
     }
     return new_all_ls_election_reference_info;
   }

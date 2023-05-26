@@ -87,6 +87,11 @@ int ObGVTxSchedulerStat::process_curr_tenant(common::ObNewRow *&row)
   } else if (!tx_scheduler_stat_iter_.is_ready()) {
     if (OB_FAIL(MTL(ObTransService*)->iterate_tx_scheduler_stat(tx_scheduler_stat_iter_))) {
       SERVER_LOG(WARN, "iterate transaction scheduler error", KR(ret));
+      if (OB_NOT_RUNNING == ret || OB_NOT_INIT == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(tx_scheduler_stat_iter_.set_ready())) {
       SERVER_LOG(WARN, "ObTransSchedulerIterator set ready error", KR(ret));
     }

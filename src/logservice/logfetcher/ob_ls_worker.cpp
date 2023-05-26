@@ -208,7 +208,7 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
     request_svr.reset();
     bool found_valid_svr = false;
 
-    LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] begin to dispatch",
+    LOG_TRACE("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] begin to dispatch",
         "task", &task, K(task), K(dispatch_reason));
 
     // Get the next valid server for the service log
@@ -224,7 +224,7 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
                     "svr_service_time", TVAL_TO_STR(svr_service_time),
                     "survival_time", TVAL_TO_STR(survival_time));
         } else {
-          LOG_DEBUG("not-avail server, task add into blacklist succ", KR(ret), K(task), K(request_svr),
+          LOG_TRACE("not-avail server, task add into blacklist succ", KR(ret), K(task), K(request_svr),
                     "svr_service_time", TVAL_TO_STR(svr_service_time),
                     "survival_time", TVAL_TO_STR(survival_time));
         }
@@ -242,14 +242,14 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
     if (OB_SUCCESS == ret) {
       // No server available, put it into idle pool
       if (! found_valid_svr) {
-        LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] server list is used up, "
+        LOG_TRACE("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] server list is used up, "
             "dispatch to idle pool", "task", &task, K(task));
 
         if (OB_FAIL(idle_pool_->push(&task))) {
           LOG_ERROR("push into idle pool fail", KR(ret), K(task));
         }
       } else {
-        LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] dispatch to next server",
+        LOG_TRACE("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] dispatch to next server",
             K(request_svr), "task", &task, K(task));
 
         // Assigning tasks to the server
@@ -286,7 +286,7 @@ int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
       LOG_INFO("[STAT] [STREAM_WORKER] [DISPATCH_STREAM_TASK]",
           "fetch_stream", &task, K(from_mod), K(hash_val), K(task));
     } else {
-      LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_STREAM_TASK]",
+      LOG_TRACE("[STAT] [STREAM_WORKER] [DISPATCH_STREAM_TASK]",
           "fetch_stream", &task, K(from_mod), K(hash_val), K(task));
     }
 
@@ -307,7 +307,7 @@ int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
     LOG_INFO("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK]",
         "task", &task, K(from_mod), K(task));
   } else {
-    LOG_DEBUG("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK]",
+    LOG_TRACE("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK]",
         "task", &task, K(from_mod), K(task));
   }
 
@@ -328,7 +328,7 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
   bool is_paused = ATOMIC_LOAD(&stream_paused_);
   FetchStream *task = static_cast<FetchStream *>(data);
 
-  LOG_DEBUG("[STAT] [STREAM_WORKER] [HANDLE_STREAM_TASK]", K_(stream_paused), K(thread_index),
+  LOG_TRACE("[STAT] [STREAM_WORKER] [HANDLE_STREAM_TASK]", K_(stream_paused), K(thread_index),
       K(task), KPC(task));
 
   if (OB_ISNULL(task)) {
@@ -338,13 +338,17 @@ void ObLSWorker::handle(void *data, volatile bool &stop_flag)
   // If the stream task is currently suspended, the task is put to sleep
   // DDL tasks are exempt from suspend and require always processing
   else if (OB_UNLIKELY(is_paused) && ! task->is_sys_log_stream()) {
-    LOG_DEBUG("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK_ON_PAUSE]", K(task));
+    LOG_TRACE("[STAT] [STREAM_WORKER] [HIBERNATE_STREAM_TASK_ON_PAUSE]", K(task));
 
     if (OB_FAIL(hibernate_stream_task(*task, "PausedFetcher"))) {
       LOG_ERROR("hibernate_stream_task on pause fail", KR(ret), K(task), KPC(task));
     }
   } else if (OB_FAIL(task->handle(stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr"))) {
+        LOG_ERROR_RET(tmp_ret, "hibernate_stream_task on handle task failure", K(task), KPC(task));
+      }
       LOG_ERROR("handle fetch stream task fail", KR(ret), K(task));
     }
   } else {
@@ -391,7 +395,7 @@ int ObLSWorker::dispatch_fetch_task_to_svr_(LSFetchCtx &task, const common::ObAd
   } else if (OB_FAIL(fs_container_mgr->get_fsc(tls_id, fsc))) {
     LOG_ERROR("FetchStreamContainerMgr get_fsc fail", KR(ret));
   } else {
-    LOG_DEBUG("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] dispatch to svr",
+    LOG_TRACE("[STAT] [STREAM_WORKER] [DISPATCH_FETCH_TASK] dispatch to svr",
         "task", &task, K(task), K(request_svr));
 
     if (OB_FAIL(fsc->dispatch(task, request_svr))) {

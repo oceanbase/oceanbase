@@ -22,6 +22,7 @@
 #include "log_writer_utils.h"      // LogWriteBuf
 #include "lsn.h"                   // LSN
 #include "palf_iterator.h"         // PalfIteraor
+#include "palf_callback_wrapper.h"
 
 namespace oceanbase
 {
@@ -52,6 +53,7 @@ public:
            const int64_t align_buf_size,
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
+           LogPlugins *plugins,
            LogHotCache *hot_cache);
 
   template <class EntryHeaderType>
@@ -64,6 +66,7 @@ public:
            const int64_t align_buf_size,
            const UpdateManifestCallback &update_manifest_cb,
            ILogBlockPool *log_block_pool,
+           LogPlugins *plugins,
            LogHotCache *hot_cache,
            EntryHeaderType &entry_header,
            LSN &lsn);
@@ -112,6 +115,8 @@ public:
 
   int update_manifest_used_for_meta_storage(const block_id_t expected_max_block_id);
 
+  int get_logical_block_size(int64_t &logical_block_size) const;
+
   TO_STRING_KV(K_(log_tail),
                K_(readable_log_tail),
                K_(log_block_header),
@@ -130,6 +135,7 @@ private:
                const int64_t align_buf_size,
                const UpdateManifestCallback &update_manifest_cb,
                ILogBlockPool *log_block_pool,
+               LogPlugins *plugins,
                LogHotCache *hot_cache);
   // @ret val:
   //   OB_SUCCESS
@@ -190,6 +196,7 @@ private:
   mutable ObSpinLock tail_info_lock_;
   mutable ObSpinLock delete_block_lock_;
   UpdateManifestCallback update_manifest_cb_;
+  LogPlugins *plugins_;
   char block_header_serialize_buf_[MAX_INFO_BLOCK_SIZE];
   LogHotCache *hot_cache_;
   bool is_inited_;
@@ -211,6 +218,7 @@ int LogStorage::load(const char *base_dir,
                      const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool,
+                     LogPlugins *plugins,
                      LogHotCache *hot_cache,
                      EntryHeaderType &entry_header,
                      LSN &lsn)
@@ -231,6 +239,7 @@ int LogStorage::load(const char *base_dir,
                               align_buf_size,
                               update_manifest_cb,
                               log_block_pool,
+                              plugins,
                               hot_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
     // NB: if there is no valid data on disk, no need to load last block

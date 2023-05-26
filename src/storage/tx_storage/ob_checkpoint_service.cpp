@@ -42,16 +42,16 @@ int64_t ObCheckPointService::TRAVERSAL_FLUSH_INTERVAL = 5000 * 1000L;
 
 int ObCheckPointService::mtl_init(ObCheckPointService* &m)
 {
-  return m->init();
+  return m->init(MTL_ID());
 }
 
-int ObCheckPointService::init()
+int ObCheckPointService::init(const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObCheckPointService init twice.", K(ret));
-  } else if (OB_FAIL(freeze_thread_.init(lib::TGDefIDs::LSFreeze))) {
+  } else if (OB_FAIL(freeze_thread_.init(tenant_id, lib::TGDefIDs::LSFreeze))) {
     LOG_WARN("fail to initialize freeze thread", K(ret));
   } else {
     is_inited_ = true;
@@ -66,15 +66,15 @@ int ObCheckPointService::start()
   traversal_flush_timer_.set_run_wrapper(MTL_CTX());
   check_clog_disk_usage_timer_.set_run_wrapper(MTL_CTX());
 
-  if (OB_FAIL(checkpoint_timer_.init("TxCkpt"))) {
+  if (OB_FAIL(checkpoint_timer_.init("TxCkpt", ObMemAttr(MTL_ID(), "CheckPointTimer")))) {
     STORAGE_LOG(ERROR, "fail to init checkpoint_timer", K(ret));
   } else if (OB_FAIL(checkpoint_timer_.schedule(checkpoint_task_, CHECKPOINT_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule checkpoint task", K(ret));
-  } else if (OB_FAIL(traversal_flush_timer_.init("Flush"))) {
+  } else if (OB_FAIL(traversal_flush_timer_.init("Flush", ObMemAttr(MTL_ID(), "FlushTimer")))) {
     STORAGE_LOG(ERROR, "fail to init traversal_timer", K(ret));
   } else if (OB_FAIL(traversal_flush_timer_.schedule(traversal_flush_task_, TRAVERSAL_FLUSH_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule traversal_flush task", K(ret));
-  } else if (OB_FAIL(check_clog_disk_usage_timer_.init("CKClogDisk"))) {
+  } else if (OB_FAIL(check_clog_disk_usage_timer_.init("CKClogDisk", ObMemAttr(MTL_ID(), "DiskUsageTimer")))) {
     STORAGE_LOG(ERROR, "fail to init check_clog_disk_usage_timer", K(ret));
   } else if (OB_FAIL(check_clog_disk_usage_timer_.schedule(check_clog_disk_usage_task_, CHECK_CLOG_USAGE_INTERVAL, true))) {
     STORAGE_LOG(ERROR, "fail to schedule check_clog_disk_usage task", K(ret));

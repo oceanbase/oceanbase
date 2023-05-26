@@ -47,13 +47,13 @@ public:
   int pread(ObIOInfo &info, int64_t &read_size);
 
   int pwrite(ObIOInfo &info, int64_t &write_size);
-  
+
   int detect_read(const ObIOInfo &info, ObIOHandle &handle, const uint64_t timeout_ms);
 
   // config related, thread safe
   int set_io_config(const ObIOConfig &conf);
   const ObIOConfig &get_io_config() const;
-  
+
   // device health management
   ObIOFaultDetector &get_device_health_detector();
   int get_device_health_status(ObDeviceHealthStatus &dhs, int64_t &device_abnormal_time);
@@ -120,7 +120,7 @@ public:
   int update_basic_io_config(const ObTenantIOConfig &io_config);
   int alloc_io_request(ObIAllocator &allocator,const int64_t callback_size,  ObIORequest *&req);
   int alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *&io_clock);
-  int init_group_index_map(const ObTenantIOConfig &io_config);
+  int init_group_index_map(const int64_t tenant_id, const ObTenantIOConfig &io_config);
   int get_group_index(const int64_t group_id, uint64_t &index);
   int modify_group_io_config(const uint64_t index,
                              const int64_t min_percent,

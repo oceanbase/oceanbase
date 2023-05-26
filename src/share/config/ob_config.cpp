@@ -701,6 +701,17 @@ int ObConfigStringItem::copy(char *buf, const int64_t buf_len)
   return ret;
 }
 
+int ObConfigStringItem::deep_copy_value_string(ObIAllocator &allocator, ObString &dst)
+{
+  int ret = OB_SUCCESS;
+  ObLatchRGuard rd_guard(const_cast<ObLatch&>(lock_), ObLatchIds::CONFIG_LOCK);
+  ObString src = ObString::make_string(value_str_);
+  if (OB_FAIL(ob_write_string(allocator, src, dst))) {
+    OB_LOG(WARN, "fail to deep copy", KR(ret), K(src));
+  }
+  return ret;
+}
+
 ObConfigLogArchiveOptionsItem::ObConfigLogArchiveOptionsItem(ObConfigContainer *container,
                                                              Scope::ScopeInfo scope_info,
                                                              const char *name,

@@ -140,11 +140,13 @@ int ObCompatModeGetter::init(common::ObMySQLProxy *proxy)
 {
   int ret = OB_SUCCESS;
 
+  ObMemAttr attr(OB_SERVER_TENANT_ID,
+                 ObModIds::OB_HASH_BUCKET_TENANT_COMPAT_MODE);
+  SET_USE_500(attr);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
   } else if (OB_FAIL(id_mode_map_.create(bucket_num,
-        ObModIds::OB_HASH_BUCKET_TENANT_COMPAT_MODE,
-        ObModIds::OB_HASH_NODE_TENANT_COMPAT_MODE))) {
+                                         attr))) {
     LOG_WARN("create hash table failed", K(ret));
   } else {
     sql_proxy_ = proxy;
@@ -272,5 +274,3 @@ int ObCompatModeGetter::reset_compat_getter_map()
   }
   return ret;
 }
-
-

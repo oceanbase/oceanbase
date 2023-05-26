@@ -218,6 +218,7 @@ private:
 
 class GenPreCommitSetHashMapFunctor
 {
+  using ObAddrArray = ObSEArray<ObAddr, 3>;
 public:
   GenPreCommitSetHashMapFunctor(ObAddrArray &addr_array, const int64_t gts)
     : addr_array_(addr_array), gts_(gts), err_(OB_SUCCESS) {}
@@ -318,6 +319,7 @@ private:
 
 class ObDupTablePartitionMgr
 {
+  using ObAddrArray = ObSEArray<ObAddr, 3>;
 public:
   ObDupTablePartitionMgr() : dup_table_lease_infos_(1 << 7) { reset(); }
   ~ObDupTablePartitionMgr() { destroy(); }
@@ -426,6 +428,7 @@ public:
 
 class ObPreCommitTask : public ObTransTask
 {
+  using ObAddrArray = ObSEArray<ObAddr, 3>;
 public:
   enum ObPreCommitTaskStatus {
     UNKNOWN = -1,

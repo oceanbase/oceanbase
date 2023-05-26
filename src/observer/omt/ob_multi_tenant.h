@@ -100,7 +100,7 @@ public:
 
   int get_tenant_unit(const uint64_t tenant_id, share::ObUnitInfoGetter::ObTenantConfig &unit);
   int get_unit_id(const uint64_t tenant_id, uint64_t &unit_id);
-  int get_tenant_units(share::TenantUnits &units);
+  int get_tenant_units(share::TenantUnits &units, bool include_hidden_sys);
   int get_tenant_metas(common::ObIArray<ObTenantMeta> &metas);
   int get_tenant_metas_for_ckpt(common::ObIArray<ObTenantMeta> &metas);
   int get_compat_mode(const uint64_t tenant_id, lib::Worker::CompatMode &compat_mode);

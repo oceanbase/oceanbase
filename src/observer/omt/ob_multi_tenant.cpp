@@ -306,10 +306,12 @@ static int start_mysql_queue(QueueThread *&qthread)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
-    qthread = OB_NEW(QueueThread, ObModIds::OB_RPC, "MysqlQueueTh", tenant_id);
+    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC), "MysqlQueueTh", tenant_id);
     if (OB_ISNULL(qthread)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new qthread", K(ret), K(tenant_id));
+    } else if (OB_FAIL(qthread->init())) {
+      LOG_WARN("init qthread failed", K(tenant_id), K(ret));
     } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::MysqlQueueTh,
                                         qthread->tg_id_))) {
       LOG_WARN("mysql queue init failed", K(ret), K(tenant_id),
@@ -381,7 +383,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObLogService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND2(mtl_new_default, ObLSService::mtl_init, mtl_start_default, mtl_stop_default, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObLSService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantCheckpointSlogHandler::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     // other mtl
@@ -1201,7 +1203,7 @@ int ObMultiTenant::get_unit_id(const uint64_t tenant_id, uint64_t &unit_id)
   return ret;
 }
 
-int ObMultiTenant::get_tenant_units(share::TenantUnits &units)
+int ObMultiTenant::get_tenant_units(share::TenantUnits &units, bool include_hidden_sys)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
@@ -1209,7 +1211,7 @@ int ObMultiTenant::get_tenant_units(share::TenantUnits &units)
     if (OB_ISNULL(*it)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant is nullptr", K(ret));
-    } else if (is_virtual_tenant_id((*it)->id()) || (*it)->is_hidden()) {
+    } else if (is_virtual_tenant_id((*it)->id()) || (!include_hidden_sys && (*it)->is_hidden())) {
       // skip
     } else if (OB_FAIL(units.push_back((*it)->get_unit()))) {
       LOG_WARN("fail to push back unit", K(ret));

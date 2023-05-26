@@ -198,21 +198,30 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
                 "paramlized_questionmask_count", ctx.paramlized_questionmask_count_, K(ret));
     } else if (OB_NOT_NULL(raw_params)
                && OB_NOT_NULL(select_item_param_infos)) {
-      select_item_param_infos->set_capacity(ctx.project_list_.count());
-      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
-        ParseNode *tmp_root = static_cast<ParseNode *>(ctx.project_list_.at(i));
-        if (OB_ISNULL(tmp_root)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
-        } else if (0 == tmp_root->is_val_paramed_item_idx_
-                   && OB_FAIL(get_select_item_param_info(*raw_params,
-                                                         tmp_root,
-                                                         select_item_param_infos))) {
-          SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
-        } else {
-          // do nothing
-        }
-      } // for end
+      if (sql_info.total_ != raw_params->count()) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_PC_LOG(TRACE, "const number of fast parse and normal parse is different",
+                "fast_parse_const_num", raw_params->count(),
+                "normal_parse_const_num", sql_info.total_,
+                K(session.get_current_query_string()),
+                "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+      } else {
+        select_item_param_infos->set_capacity(ctx.project_list_.count());
+        for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
+          ParseNode *tmp_root = static_cast<ParseNode *>(ctx.project_list_.at(i));
+          if (OB_ISNULL(tmp_root)) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid null child", K(ret), K(i), K(ctx.project_list_.at(i)));
+          } else if (0 == tmp_root->is_val_paramed_item_idx_
+                     && OB_FAIL(get_select_item_param_info(*raw_params,
+                                                           tmp_root,
+                                                           select_item_param_infos))) {
+            SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
+          } else {
+            // do nothing
+          }
+        } // for end
+      }
     }
     SQL_PC_LOG(DEBUG, "after transform_tree",
                "result_tree_", SJ(ObParserResultPrintWrapper(*tree)));
@@ -1225,6 +1234,104 @@ int ObSqlParameterization::transform_neg_param(ObIArray<ObPCParam *> &pc_params)
   return ret;
 }
 
+int ObSqlParameterization::construct_not_param(const ObString &no_param_sql,
+                                                ObPCParam *pc_param,
+                                                char *buf,
+                                                int32_t buf_len,
+                                                int32_t &pos,
+                                                int32_t &idx)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(pc_param));
+  if (OB_SUCC(ret)) {
+    int32_t len = (int32_t)pc_param->node_->pos_ - idx;
+    if (len > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (len > 0) {
+      //copy text
+      MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
+      idx = (int32_t)pc_param->node_->pos_ + 1;
+      pos += len;
+      //copy raw param
+      MEMCPY(buf + pos, pc_param->node_->raw_text_, pc_param->node_->text_len_);
+      pos += (int32_t)pc_param->node_->text_len_;
+    }
+  }
+  return ret;
+}
+
+int ObSqlParameterization::construct_neg_param(const ObString &no_param_sql,
+                                                ObPCParam *pc_param,
+                                                char *buf,
+                                                int32_t buf_len,
+                                                int32_t &pos,
+                                                int32_t &idx)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(pc_param));
+  if (OB_SUCC(ret)) {
+    int32_t len = (int32_t)pc_param->node_->pos_ - idx;
+    if (len > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (len > 0) {
+      MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
+      pos += len;
+    }
+    if (OB_SUCC(ret)) {
+      idx = (int32_t)pc_param->node_->pos_ + 1;
+      buf[pos++] = '?';
+    }
+  }
+  return ret;
+}
+
+int ObSqlParameterization::construct_trans_neg_param(const ObString &no_param_sql,
+                                                      ObPCParam *pc_param,
+                                                      char *buf,
+                                                      int32_t buf_len,
+                                                      int32_t &pos,
+                                                      int32_t &idx)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(pc_param));
+  if (OB_SUCC(ret)) {
+    int32_t len = (int32_t)pc_param->node_->pos_ - idx;
+    if (len > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (len > 0) {
+      MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
+      pos += len;
+    }
+    if (OB_SUCC(ret)) {
+      // for 'select * from t where a -   1 = 2', the statement is 'select * from t where a -   ? = ?'
+      // so we need fill spaces between '-' and '?', so here it is
+      buf[pos++] = '-';
+      int64_t tmp_pos = 0;
+      for (; tmp_pos < pc_param->node_->str_len_ && isspace(pc_param->node_->str_value_[tmp_pos]); tmp_pos++);
+      if (OB_UNLIKELY(tmp_pos >= pc_param->node_->str_len_)) {
+        int ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(tmp_pos), K(pc_param->node_->str_len_), K(ret));
+      } else {
+        if ('-' != pc_param->node_->str_value_[tmp_pos]) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expected neg sign here", K(tmp_pos), K(ObString(pc_param->node_->str_len_,
+                                                                    pc_param->node_->str_value_)));
+        } else {
+          tmp_pos += 1;
+          for (; tmp_pos < pc_param->node_->str_len_ && isspace(pc_param->node_->str_value_[tmp_pos]); tmp_pos++) {
+            buf[pos++] = ' ';
+          }
+        }
+        if (OB_SUCC(ret)) {
+          buf[pos++] = '?';
+          idx = pc_param->node_->pos_ + 1;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSqlParameterization::construct_sql(const ObString &no_param_sql,
                                          ObIArray<ObPCParam *> &pc_params,
                                          char *buf,
@@ -1241,64 +1348,57 @@ int ObSqlParameterization::construct_sql(const ObString &no_param_sql,
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid argument", K(ret));
     } else if (NOT_PARAM == pc_param->flag_) {
+      OZ (construct_not_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
+    } else if (NEG_PARAM == pc_param->flag_) {
+      OZ (construct_neg_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
+    } else if (TRANS_NEG_PARAM == pc_param->flag_) {
+      OZ (construct_trans_neg_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
+    } else {
+      //do nothing
+    }
+  } //for end
+
+  if (OB_SUCCESS == ret) {
+    int32_t len = no_param_sql.length() - idx;
+    if (len > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (len > 0) {
+      MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
+      idx += len;
+      pos += len;
+    }
+  }
+  return ret;
+}
+
+int ObSqlParameterization::construct_sql_for_pl(const ObString &no_param_sql,
+                                                ObIArray<ObPCParam *> &pc_params,
+                                                char *buf,
+                                                int32_t buf_len,
+                                                int32_t &pos) //已存的长度
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = 0; //原始带?sql的偏移位置
+  ObPCParam *pc_param = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pc_params.count(); i ++) {
+    pc_param = pc_params.at(i);
+    int32_t len = 0; //需要copy的text的长度
+    if (OB_ISNULL(pc_param)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument", K(ret));
+    } else if (NOT_PARAM == pc_param->flag_) {
       int32_t len = (int32_t)pc_param->node_->pos_ - idx;
-      if (len > buf_len - pos) {
-        ret = OB_BUF_NOT_ENOUGH;
-      } else if (len > 0) {
-        //copy text
-        MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
-        idx = (int32_t)pc_param->node_->pos_ + 1;
-        pos += len;
-        //copy raw param
+      if (0 == len) {
         MEMCPY(buf + pos, pc_param->node_->raw_text_, pc_param->node_->text_len_);
         pos += (int32_t)pc_param->node_->text_len_;
+        idx = (int32_t)pc_param->node_->pos_ + 1;
+      } else {
+        OZ (construct_not_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
       }
     } else if (NEG_PARAM == pc_param->flag_) {
-      len = (int32_t)pc_param->node_->pos_ - idx;
-      if (len > buf_len - pos) {
-        ret = OB_BUF_NOT_ENOUGH;
-      } else if (len > 0) {
-        MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
-        pos += len;
-      }
-      if (OB_SUCC(ret)) {
-        idx = (int32_t)pc_param->node_->pos_ + 1;
-        buf[pos++] = '?';
-      }
+      OZ (construct_neg_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
     } else if (TRANS_NEG_PARAM == pc_param->flag_) {
-      len = (int32_t)pc_param->node_->pos_ - idx;
-      if (len > buf_len - pos) {
-        ret = OB_BUF_NOT_ENOUGH;
-      } else if (len > 0) {
-        MEMCPY(buf + pos, no_param_sql.ptr() + idx, len);
-        pos += len;
-      }
-      if (OB_SUCC(ret)) {
-        // for 'select * from t where a -   1 = 2', the statement is 'select * from t where a -   ? = ?'
-        // so we need fill spaces between '-' and '?', so here it is
-        buf[pos++] = '-';
-        int64_t tmp_pos = 0;
-        for (; tmp_pos < pc_param->node_->str_len_ && isspace(pc_param->node_->str_value_[tmp_pos]); tmp_pos++);
-        if (OB_UNLIKELY(tmp_pos >= pc_param->node_->str_len_)) {
-          int ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(tmp_pos), K(pc_param->node_->str_len_), K(ret));
-        } else {
-          if ('-' != pc_param->node_->str_value_[tmp_pos]) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("expected neg sign here", K(tmp_pos), K(ObString(pc_param->node_->str_len_,
-                                                                      pc_param->node_->str_value_)));
-          } else {
-            tmp_pos += 1;
-            for (; tmp_pos < pc_param->node_->str_len_ && isspace(pc_param->node_->str_value_[tmp_pos]); tmp_pos++) {
-              buf[pos++] = ' ';
-            }
-          }
-          if (OB_SUCC(ret)) {
-            buf[pos++] = '?';
-            idx = pc_param->node_->pos_ + 1;
-          }
-        }
-      }
+      OZ (construct_trans_neg_param(no_param_sql, pc_param, buf, buf_len, pos, idx));
     } else {
       //do nothing
     }

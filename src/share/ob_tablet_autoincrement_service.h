@@ -105,6 +105,9 @@ public:
   int get_autoinc_seq(const uint64_t tenant_id, const common::ObTabletID &tablet_id, uint64_t &autoinc_seq);
   int clear_tablet_autoinc_cache(const uint64_t tenant_id, const common::ObTabletID &tablet_id);
 private:
+  int acquire_mgr(const uint64_t tenant_id, const common::ObTabletID &tablet_id, const int64_t init_cache_size, ObTabletAutoincMgr *&autoinc_mgr);
+  void release_mgr(ObTabletAutoincMgr *autoinc_mgr);
+
   ObTabletAutoincrementService();
   ~ObTabletAutoincrementService();
 

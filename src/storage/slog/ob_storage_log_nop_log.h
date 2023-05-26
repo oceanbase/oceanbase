@@ -26,7 +26,7 @@ public:
   ObStorageLogNopLog();
   virtual ~ObStorageLogNopLog();
 
-  int init(const int64_t buffer_size);
+  int init(const int64_t tenant_id, const int64_t buffer_size);
   void destroy();
 
   int set_needed_size(const int64_t size);

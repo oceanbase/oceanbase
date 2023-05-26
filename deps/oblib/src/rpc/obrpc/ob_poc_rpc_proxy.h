@@ -132,6 +132,7 @@ public:
     if (OB_LS_FETCH_LOG2 == pcode) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
+    IGNORE_RETURN new (&lib::Thread::rpc_dest_addr_) ObAddr(addr);
     if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
       RPC_LOG(WARN, "rpc encode req fail", K(ret));
     } else if(OB_FAIL(check_blacklist(addr))) {
@@ -155,6 +156,7 @@ public:
     } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
       RPC_LOG(WARN, "rpc decode response fail", KP(resp), K(resp_sz), K(ret));
     }
+    lib::Thread::rpc_dest_addr_.reset();
     if (rcode.rcode_ != OB_DESERIALIZE_ERROR) {
       int wb_ret = OB_SUCCESS;
       if (common::OB_SUCCESS != (wb_ret = log_user_error_and_warn(rcode))) {
@@ -183,11 +185,7 @@ public:
     if (get_proxy_group_id(proxy) == ObPocServerHandleContext::OBCG_ELECTION) {
       src_tenant_id = OB_SERVER_TENANT_ID;
     }
-#ifndef PERF_MODE
     const int init_alloc_sz = 0;
-#else
-    const int init_alloc_sz = 400<<10;
-#endif
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode));
     if (NULL == (pool = ObRpcMemPool::create(src_tenant_id, pcode_label, init_alloc_sz))) {

@@ -149,6 +149,7 @@ public:
   { return consumer_group_id_; }
   ObStorageHADagType get_sub_type() const { return sub_type_; }
   ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
+  virtual bool is_ha_dag() const override { return true; }
 
   INHERIT_TO_STRING_KV("ObIDag", ObIDag, KPC_(ha_dag_net_ctx), K_(sub_type), K_(result_mgr));
 protected:

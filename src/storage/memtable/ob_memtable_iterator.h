@@ -330,7 +330,7 @@ public:
       const storage::ObTableReadInfo &read_info,
       const common::ObStoreRowkey &key,
       common::ObIAllocator &allocator,
-      ObIMvccValueIterator &value_iter,
+      ObMvccValueIterator &value_iter,
       blocksstable::ObDatumRow &row,
       ObNopBitMap &bitmap,
       int64_t &row_scn);
@@ -343,7 +343,7 @@ private:
   static int iterate_row_value_(
       const storage::ObTableReadInfo &read_info,
       common::ObIAllocator &allocator,
-      ObIMvccValueIterator &value_iter,
+      ObMvccValueIterator &value_iter,
       blocksstable::ObDatumRow &row,
       ObNopBitMap &bitmap,
       int64_t &row_scn);

@@ -107,7 +107,7 @@ int ObIOMemoryPool<SIZE>::init(const int64_t block_count, ObIAllocator &allocato
 
   if (OB_FAIL(ret)) {
     // do nothing
-  } else if (OB_FAIL(pool_.init(capacity_))) {
+  } else if (OB_FAIL(pool_.init(capacity_, allocator_))) {
     LOG_WARN("fail to init memory pool", K(ret));
   } else if (OB_ISNULL(begin_ptr_ = reinterpret_cast<char *>(allocator_->alloc(capacity_ * SIZE)))){
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -992,7 +992,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
       } else {
         uint64_t index = INT_MAX64;
         const int64_t group_id = tmp_req->get_group_id();
-        if (group_id < GROUP_START_ID) { //other
+        if (group_id < RESOURCE_GROUP_START_ID) { //other
           tmp_phy_queue = &(io_group_queues->other_phy_queue_);
         } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
           // 防止删除group、新建group等情况发生时在途req无法找到对应的group
@@ -2546,10 +2546,12 @@ ObIOCallbackManager::~ObIOCallbackManager()
   destroy();
 }
 
-int ObIOCallbackManager::init(const int64_t thread_count, const int32_t queue_depth, ObIOAllocator *io_allocator)
+int ObIOCallbackManager::init(const int64_t tenant_id, const int64_t thread_count,
+                              const int32_t queue_depth, ObIOAllocator *io_allocator)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
+  runners_.set_attr(ObMemAttr(tenant_id, "IORunners"));
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), K(is_inited_));

@@ -56,9 +56,6 @@
 #include "sql/monitor/ob_security_audit_utils.h"
 #include "observer/mysql/obmp_utils.h"
 #include "lib/ash/ob_active_session_guard.h"
-#ifdef PERF_MODE
-#include "observer/layer_perf/ob_layer_perf.h"
-#endif
 #include "lib/trace/ob_trace.h"
 
 using namespace oceanbase::rpc;
@@ -90,17 +87,6 @@ ObMPQuery::~ObMPQuery()
 int ObMPQuery::process()
 {
   int ret = OB_SUCCESS;
-  #ifdef PERF_MODE
-  // use for ob layer benchmark
-  //
-  bool layer_perf_hit = false;
-  ObLayerPerf layer_perf(this);
-  ret = layer_perf.process(layer_perf_hit);
-  if (layer_perf_hit) {
-    return ret;
-  }
-  #endif
-
   int tmp_ret = OB_SUCCESS;
   ObSQLSessionInfo *sess = NULL;
   uint32_t sessid = 0;
@@ -394,8 +380,7 @@ int ObMPQuery::process()
     // THIS_WORKER.need_retry()是指是否扔回队列重试，包括大查询被扔回队列的情况。
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-    int tmp_ret = OB_SUCCESS;
-    tmp_ret = record_flt_trace(session);
+    IGNORE_RETURN record_flt_trace(session);
   }
 
   if (OB_UNLIKELY(NULL != GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {

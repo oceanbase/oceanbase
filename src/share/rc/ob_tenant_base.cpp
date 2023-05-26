@@ -26,6 +26,10 @@ int64_t mtl_id()
 {
   return MTL_CTX() != nullptr && MTL_ID() != 0 ? MTL_ID() : OB_SERVER_TENANT_ID;
 }
+bool mtl_is_mini_mode()
+{
+  return MTL_CTX() != nullptr && MTL_IS_MINI_MODE();
+}
 }
 
 namespace share
@@ -94,12 +98,13 @@ int ObTenantBase::init(ObCgroupCtrl *cgroup)
 {
   int ret = OB_SUCCESS;
 
+  ObMemAttr attr(id_, "DynamicFactor");
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice error", K(ret));
   } else if (OB_FAIL(tg_set_.create(1024))) {
     LOG_WARN("fail to create tg set", K(ret));
-  } else if (OB_FAIL(thread_dynamic_factor_map_.create(1024, "thread_factor", ObModIds::OB_HASH_NODE, id_))) {
+  } else if (OB_FAIL(thread_dynamic_factor_map_.create(1024, attr))) {
     LOG_WARN("fail to create thread dynamic_factor_map", K(ret));
   } else {
     if (cgroup == nullptr) {

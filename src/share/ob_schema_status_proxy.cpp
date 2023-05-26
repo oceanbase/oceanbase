@@ -112,7 +112,6 @@ int ObSchemaStatusProxy::get_refresh_schema_status(
     ObRefreshSchemaStatus &refresh_schema_status)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
   refresh_schema_status.reset();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", K(ret));
@@ -122,71 +121,91 @@ int ObSchemaStatusProxy::get_refresh_schema_status(
   } else if (OB_FAIL(schema_status_cache_.get_refactored(refresh_tenant_id, refresh_schema_status))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("fail to get schema_status from cache", K(ret), K(refresh_tenant_id));
-    } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID))) { //overwrite ret
-      LOG_WARN("fail to start", K(ret));
+    } else if (OB_FAIL(load_refresh_schema_status(refresh_tenant_id, refresh_schema_status))) { //overwrite ret
+      LOG_WARN("fail to load_refresh_schema_status", KR(ret), K(refresh_tenant_id));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaStatusProxy::load_refresh_schema_status(
+    const uint64_t refresh_tenant_id,
+    ObRefreshSchemaStatus &refresh_schema_status)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  refresh_schema_status.reset();
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("check inner stat failed", KR(ret));
+  } else if (OB_INVALID_TENANT_ID == refresh_tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(refresh_tenant_id));
+  } else if (OB_FAIL(trans.start(&sql_proxy_, OB_SYS_TENANT_ID))) {
+    LOG_WARN("fail to start trans", KR(ret));
+  } else {
+    ObCoreTableProxy core_table(OB_ALL_SCHEMA_STATUS_TNAME, trans, OB_SYS_TENANT_ID);
+    if (OB_FAIL(core_table.load())) {
+      LOG_WARN("fail to load core table", KR(ret));
     } else {
-      ObCoreTableProxy core_table(OB_ALL_SCHEMA_STATUS_TNAME, trans, OB_SYS_TENANT_ID);
-      if (OB_FAIL(core_table.load())) {
-        LOG_WARN("fail to load core table", K(ret));
-      } else {
-        uint64_t tenant_id = OB_INVALID_TENANT_ID;
-        int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP;
-        int64_t readable_schema_version = OB_INVALID_VERSION;
-        bool exist = false;
-        while(OB_SUCC(ret)) {
-          if (OB_FAIL(core_table.next())) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              break;
-            } else {
-              LOG_WARN("fail to next", K(ret));
-            }
-          } else if (OB_FAIL(core_table.get_uint(TENANT_ID_CNAME, tenant_id))) {
-            LOG_WARN("fail to get int", K(ret));
-          } else if (OB_FAIL(core_table.get_int(SNAPSHOT_TIMESTAMP_CNAME, snapshot_timestamp))) {
-            LOG_WARN("fail to get int", K(ret));
-          } else if (OB_FAIL(core_table.get_int(READABLE_SCHEMA_VERSION_CNAME, readable_schema_version))) {
-            LOG_WARN("fail to get int", K(ret));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (refresh_tenant_id == tenant_id) {
-            refresh_schema_status.tenant_id_ = tenant_id;
-            refresh_schema_status.snapshot_timestamp_ = snapshot_timestamp;
-            refresh_schema_status.readable_schema_version_ = readable_schema_version;
-            exist = true;
+      uint64_t tenant_id = OB_INVALID_TENANT_ID;
+      int64_t snapshot_timestamp = OB_INVALID_TIMESTAMP;
+      int64_t readable_schema_version = OB_INVALID_VERSION;
+      bool exist = false;
+      while(OB_SUCC(ret)) {
+        if (OB_FAIL(core_table.next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
             break;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (!exist) {
-            ret = OB_ENTRY_NOT_EXIST;
-            LOG_WARN("tenant refresh schema status not exist", K(ret), K(refresh_tenant_id));
           } else {
-            ObSchemaStatusUpdater updater(refresh_schema_status);
-            if (OB_FAIL(schema_status_cache_.atomic_refactored(refresh_tenant_id, updater))) {
-              if (OB_HASH_NOT_EXIST != ret) {
-                LOG_WARN("fail to update schema_status", K(ret), K(refresh_tenant_id), K(refresh_schema_status));
-              } else if (OB_FAIL(schema_status_cache_.set_refactored(refresh_tenant_id, refresh_schema_status))) {
-                if (OB_HASH_EXIST == ret) {
-                  LOG_WARN("concurrent set, just ignore", K(ret), K(refresh_tenant_id), K(refresh_schema_status));
-                  ret = OB_SUCCESS;
-                } else {
-                  LOG_WARN("fail to set schema_status", K(ret), K(refresh_tenant_id), K(refresh_schema_status));
-                }
+            LOG_WARN("fail to next", KR(ret));
+          }
+        } else if (OB_FAIL(core_table.get_uint(TENANT_ID_CNAME, tenant_id))) {
+          LOG_WARN("fail to get int", KR(ret));
+        } else if (OB_FAIL(core_table.get_int(SNAPSHOT_TIMESTAMP_CNAME, snapshot_timestamp))) {
+          LOG_WARN("fail to get int", KR(ret));
+        } else if (OB_FAIL(core_table.get_int(READABLE_SCHEMA_VERSION_CNAME, readable_schema_version))) {
+          LOG_WARN("fail to get int", KR(ret));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (refresh_tenant_id == tenant_id) {
+          refresh_schema_status.tenant_id_ = tenant_id;
+          refresh_schema_status.snapshot_timestamp_ = snapshot_timestamp;
+          refresh_schema_status.readable_schema_version_ = readable_schema_version;
+          exist = true;
+          break;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!exist) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("tenant refresh schema status not exist", KR(ret), K(refresh_tenant_id));
+        } else {
+          ObSchemaStatusUpdater updater(refresh_schema_status);
+          if (OB_FAIL(schema_status_cache_.atomic_refactored(refresh_tenant_id, updater))) {
+            if (OB_HASH_NOT_EXIST != ret) {
+              LOG_WARN("fail to update schema_status", KR(ret), K(refresh_tenant_id), K(refresh_schema_status));
+            } else if (OB_FAIL(schema_status_cache_.set_refactored(refresh_tenant_id, refresh_schema_status))) {
+              if (OB_HASH_EXIST == ret) {
+                LOG_WARN("concurrent set, just ignore", KR(ret), K(refresh_tenant_id), K(refresh_schema_status));
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fail to set schema_status", KR(ret), K(refresh_tenant_id), K(refresh_schema_status));
               }
             }
           }
         }
       }
     }
-    if (trans.is_started()) {
-      bool is_commit = (OB_SUCCESS == ret);
-      int tmp_ret = trans.end(is_commit);
-      if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("fail to commit transaction", K(tmp_ret), K(ret), K(is_commit));
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
+  }
+
+  if (trans.is_started()) {
+    bool is_commit = (OB_SUCCESS == ret);
+    int tmp_ret = trans.end(is_commit);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to commit transaction", KR(tmp_ret), KR(ret), K(is_commit));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
       }
     }
   }

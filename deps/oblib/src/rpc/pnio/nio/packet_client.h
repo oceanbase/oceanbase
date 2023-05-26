@@ -21,7 +21,7 @@ struct pktc_req_t {
   pktc_flush_cb_func_t flush_cb;
   pktc_cb_t* resp_cb;
   addr_t dest;
-  int64_t categ_id;
+  int64_t categ_id; // ATTENTION! Cannot add new structure field from categ_id!
   dlink_t link;
   str_t msg;
 };

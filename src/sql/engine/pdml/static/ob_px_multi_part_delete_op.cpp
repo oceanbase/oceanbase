@@ -65,14 +65,15 @@ int ObPxMultiPartDeleteOp::inner_open()
     LOG_WARN("failed to inner open", K(ret));
   } else if (OB_FAIL(ObDMLService::init_del_rtdef(dml_rtctx_, del_rtdef_, MY_SPEC.del_ctdef_))) {
     LOG_WARN("init delete rtdef failed", K(ret));
-  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, this, false))) {
+  } else if (OB_FAIL(data_driver_.init(get_spec(), ctx_.get_allocator(), del_rtdef_, this, this, this, false, MY_SPEC.with_barrier_))) {
     LOG_WARN("failed to init data driver", K(ret));
   } else if (MY_SPEC.with_barrier_) {
     if (OB_ISNULL(input_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the input is null", K(ret));
-    } else if (OB_FAIL(data_driver_.set_with_barrier(MY_SPEC.get_id(),
-                                static_cast<const ObPxMultiPartModifyOpInput *>(input_)))) {
+    } else if (OB_FAIL(data_driver_.set_dh_barrier_param(
+                MY_SPEC.get_id(),
+                static_cast<const ObPxMultiPartModifyOpInput *>(input_)))) {
       LOG_WARN("faile to set barrier", K(ret));
     }
   }

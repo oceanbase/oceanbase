@@ -21,7 +21,6 @@ namespace storage
 {
 using namespace common;
 using namespace blocksstable;
-using namespace observer;
 using namespace share;
 
 /**
@@ -37,6 +36,7 @@ ObDirectLoadPartitionMergeTask::ObDirectLoadPartitionMergeTask()
     is_stop_(false),
     is_inited_(false)
 {
+  allocator_.set_tenant_id(MTL_ID());
 }
 
 ObDirectLoadPartitionMergeTask::~ObDirectLoadPartitionMergeTask()
@@ -154,7 +154,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
                                                             i + extra_rowkey_cnt + 1).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i + 1);
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
           LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
@@ -167,7 +167,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const common::ObCmpFunc &cmp_func = merge_param_->datum_utils_->get_cmp_funcs().at(i).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
           LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
@@ -179,7 +179,7 @@ int ObDirectLoadPartitionMergeTask::collect_obj(const ObDatumRow &datum_row)
       const common::ObCmpFunc &cmp_func = merge_param_->datum_utils_->get_cmp_funcs().at(i + extra_rowkey_cnt).get_cmp_func();
       const ObColDesc &col_desc = merge_param_->col_descs_->at(i);
       ObOptOSGColumnStat *col_stat = column_stat_array_.at(i);
-      bool is_valid = ObColumnStatParam::is_valid_histogram_type(col_desc.col_type_.get_type());
+      bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
       if (col_stat != nullptr && is_valid) {
         if (OB_FAIL(col_stat->update_column_stat_info(&datum, col_desc.col_type_, cmp_func.cmp_func_))) {
           LOG_WARN("Failed to merge obj", K(ret), KP(col_stat));
@@ -230,9 +230,7 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
     data_fuse_param.store_column_count_ = merge_param.store_column_count_;
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
-    data_fuse_param.error_row_handler_ = merge_param.error_row_handler_;
-    data_fuse_param.dup_action_ = merge_param.error_row_handler_->get_action();
-    data_fuse_param.result_info_ = merge_param.result_info_;
+    data_fuse_param.dml_row_handler_ = merge_param.dml_row_handler_;
     if (OB_FAIL(data_fuse_.init(data_fuse_param, origin_table, sstable_array, range))) {
       LOG_WARN("fail to init data fuse", KR(ret));
     }
@@ -386,9 +384,7 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
     data_fuse_param.store_column_count_ = merge_param.store_column_count_;
     data_fuse_param.table_data_desc_ = merge_param.table_data_desc_;
     data_fuse_param.datum_utils_ = merge_param.datum_utils_;
-    data_fuse_param.error_row_handler_ = merge_param.error_row_handler_;
-    data_fuse_param.dup_action_ = merge_param.error_row_handler_->get_action();
-    data_fuse_param.result_info_ = merge_param.result_info_;
+    data_fuse_param.dml_row_handler_ = merge_param.dml_row_handler_;
     if (OB_FAIL(data_fuse_.init(data_fuse_param, origin_table, sstable_array, range))) {
       LOG_WARN("fail to init data fuse", KR(ret));
     }
@@ -516,7 +512,7 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::construct_row_iter(
 ObDirectLoadPartitionHeapTableMergeTask::RowIterator::RowIterator()
   : deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    result_info_(nullptr),
+    dml_row_handler_(nullptr),
     is_inited_(false)
 {
 }
@@ -562,7 +558,7 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::init(
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
-      result_info_ = merge_param.result_info_;
+      dml_row_handler_ = merge_param.dml_row_handler_;
       is_inited_ = true;
     }
   }
@@ -592,7 +588,11 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::get_next_row(
       // fill hide pk
       datum_row_.storage_datums_[0].set_int(pk_seq);
       result_row = &datum_row_;
-      ATOMIC_INC(&result_info_->rows_affected_);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+        LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
+      }
     }
   }
   return ret;
@@ -671,7 +671,7 @@ int ObDirectLoadPartitionHeapTableMergeTask::construct_row_iter(
 ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::RowIterator()
   : deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    result_info_(nullptr),
+    dml_row_handler_(nullptr),
     is_inited_(false)
 {
 }
@@ -715,7 +715,7 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::init(
                             ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
       deserialize_datum_cnt_ = merge_param.store_column_count_ - merge_param.rowkey_column_num_;
       pk_interval_ = pk_interval;
-      result_info_ = merge_param.result_info_;
+      dml_row_handler_ = merge_param.dml_row_handler_;
       is_inited_ = true;
     }
   }
@@ -746,7 +746,11 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::RowIterator::get_next_row(
       // fill hide pk
       datum_row_.storage_datums_[0].set_int(pk_seq);
       result_row = &datum_row_;
-      ATOMIC_INC(&result_info_->rows_affected_);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+        LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
+      }
     }
   }
   return ret;
@@ -822,14 +826,15 @@ int ObDirectLoadPartitionHeapTableMultipleMergeTask::construct_row_iter(
  */
 
 ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::RowIterator()
-  : origin_iter_(nullptr),
+  : allocator_("TLD_RowIter"),
+    origin_iter_(nullptr),
     rowkey_column_num_(0),
     store_column_count_(0),
     heap_table_array_(nullptr),
     pos_(0),
     deserialize_datums_(nullptr),
     deserialize_datum_cnt_(0),
-    result_info_(nullptr),
+    dml_row_handler_(nullptr),
     is_inited_(false)
 {
 }
@@ -859,6 +864,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
     LOG_WARN("invalid args", KR(ret), K(merge_param), K(tablet_id), KP(origin_table),
              KP(heap_table_array));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     range_.set_whole_range();
     if (OB_FAIL(origin_table->scan(range_, allocator_, origin_iter_))) {
       LOG_WARN("fail to scan origin table", KR(ret));
@@ -882,7 +888,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::init(
       table_data_desc_ = merge_param.table_data_desc_;
       heap_table_array_ = heap_table_array;
       pk_interval_ = pk_interval;
-      result_info_ = merge_param.result_info_;
+      dml_row_handler_ = merge_param.dml_row_handler_;
       is_inited_ = true;
     }
   }
@@ -899,6 +905,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::get_n
     LOG_WARN("ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator not init",
              KR(ret), KP(this));
   } else {
+    // get row from origin table
     if (pos_ == 0) {
       const ObDatumRow *datum_row = nullptr;
       if (OB_FAIL(origin_iter_->get_next_row(datum_row))) {
@@ -931,6 +938,7 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::get_n
         result_row = &datum_row_;
       }
     }
+    // get row from load data
     while (OB_SUCC(ret) && result_row == nullptr) {
       const ObDirectLoadMultipleExternalRow *external_row = nullptr;
       uint64_t pk_seq = OB_INVALID_ID;
@@ -954,7 +962,11 @@ int ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask::RowIterator::get_n
         // fill hide pk
         datum_row_.storage_datums_[0].set_int(pk_seq);
         result_row = &datum_row_;
-        ATOMIC_INC(&result_info_->rows_affected_);
+      }
+      if (OB_SUCC(ret) && nullptr != result_row) {
+        if (OB_FAIL(dml_row_handler_->handle_insert_row(*result_row))) {
+          LOG_WARN("fail to handle insert row", KR(ret), KPC(result_row));
+        }
       }
     }
   }

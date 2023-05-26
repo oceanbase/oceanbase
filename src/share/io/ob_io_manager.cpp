@@ -661,7 +661,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
      LOG_WARN("init io usage failed", K(ret), K(io_usage_));
   } else if (OB_FAIL(io_clock_->init(io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
-  } else if (OB_FAIL(init_group_index_map(io_config))) {
+  } else if (OB_FAIL(init_group_index_map(tenant_id, io_config))) {
     LOG_WARN("init group map failed", K(ret));
   } else if (OB_FAIL(io_config_.deep_copy(io_config))) {
     LOG_WARN("copy io config failed", K(ret), K(io_config_));
@@ -703,7 +703,8 @@ int ObTenantIOManager::start()
     LOG_WARN("not init", K(ret), K(is_inited_));
   } else if (is_working()) {
     // do nothing
-  } else if (OB_FAIL(callback_mgr_.init(io_config_.callback_thread_count_, DEFAULT_QUEUE_DEPTH, &io_allocator_))) {
+  } else if (OB_FAIL(callback_mgr_.init(tenant_id_, io_config_.callback_thread_count_,
+                                        DEFAULT_QUEUE_DEPTH, &io_allocator_))) {
     LOG_WARN("init callback manager failed", K(ret), K(tenant_id_), K(io_config_.callback_thread_count_));
   } else {
     is_working_ = true;
@@ -894,10 +895,12 @@ int ObTenantIOManager::alloc_io_clock(ObIAllocator &allocator, ObTenantIOClock *
   return ret;
 }
 
-int ObTenantIOManager::init_group_index_map(const ObTenantIOConfig &io_config)
+int ObTenantIOManager::init_group_index_map(const int64_t tenant_id,
+                                            const ObTenantIOConfig &io_config)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(group_id_index_map_.create(7, "GROUP_INDEX_MAP"))) {
+  ObMemAttr attr(tenant_id, "GROUP_INDEX_MAP");
+  if (OB_FAIL(group_id_index_map_.create(7, attr, attr))) {
     LOG_WARN("create group index map failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < io_config.group_num_; ++i) {
@@ -977,7 +980,7 @@ int ObTenantIOManager::modify_io_config(const uint64_t group_id,
   } else {
     uint64_t index = INT64_MAX;
     DRWLock::WRLockGuard guard(io_config_lock_);
-    if (group_id < GROUP_START_ID && group_id > 0) {
+    if (group_id < RESOURCE_GROUP_START_ID && group_id > 0) {
       ret = OB_INVALID_CONFIG;
       LOG_WARN("invalid group id", K(ret), K(tenant_id_), K(group_id));
     } else if (min_percent < 0 || min_percent > 100 ||
@@ -1043,7 +1046,7 @@ int ObTenantIOManager::add_group_io_config(const int64_t group_id,
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID || min_percent < 0 || min_percent > 100 ||
+  } else if (group_id < RESOURCE_GROUP_START_ID || min_percent < 0 || min_percent > 100 ||
             max_percent < 0 || max_percent > 100 || max_percent < min_percent ||
             weight_percent < 0 || weight_percent > 100) {
     ret = OB_INVALID_CONFIG;
@@ -1096,7 +1099,7 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot reset other group io config", K(ret), K(group_id));
   } else {
@@ -1135,7 +1138,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (group_id < GROUP_START_ID) {
+  } else if (group_id < RESOURCE_GROUP_START_ID) {
     ret = OB_INVALID_CONFIG;
     LOG_WARN("cannot delete other group io config", K(ret), K(group_id));
   } else {

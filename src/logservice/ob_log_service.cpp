@@ -706,6 +706,7 @@ int ObLogService::diagnose_apply(const share::ObLSID &id,
   return ret;
 }
 
+
 int ObLogService::get_io_start_time(int64_t &last_working_time)
 {
   int ret = OB_SUCCESS;

@@ -37,6 +37,11 @@ using namespace oceanbase::common;
 #define SO_REUSEPORT 15
 #endif
 
+extern "C" {
+extern int ob_epoll_wait(int __epfd, struct epoll_event *__events,
+	                       int __maxevents, int __timeout);
+};
+
 namespace oceanbase
 {
 namespace obmysql
@@ -331,9 +336,10 @@ private:
 class ObSqlSock: public ObLink
 {
 public:
-  ObSqlSock(ObSqlNioImpl *nio, int fd): nio_impl_(nio), fd_(fd), err_(0), read_buffer_(fd),
-            need_epoll_trigger_write_(false), may_handling_(true), handler_close_flag_(false),
-            need_shutdown_(false), last_decode_time_(0), last_write_time_(0), sql_session_info_(NULL) {
+  ObSqlSock(ObSqlNioImpl *nio, int fd): dlink_(), all_list_link_(), write_task_link_(), nio_impl_(nio),
+            fd_(fd), err_(0), read_buffer_(fd), need_epoll_trigger_write_(false), may_handling_(true),
+            handler_close_flag_(false), need_shutdown_(false), last_decode_time_(0), last_write_time_(0),
+            sql_session_info_(NULL) {
     memset(sess_, 0, sizeof(sess_));
   }
   ~ObSqlSock() {}
@@ -735,28 +741,26 @@ public:
     tcp_keepintvl_ = tcp_keepintvl;
     tcp_keepcnt_ = tcp_keepcnt;
   }
-  void close_all_fd() {
-    if (lfd_ > 0) {
-      IGNORE_RETURN epoll_ctl(epfd_, EPOLL_CTL_DEL, lfd_, NULL);
-      close(lfd_);
-      lfd_ = -1;
-    }
+  void close_all() {
     ObDLink* head = all_list_.head();
     ObLink* cur = head->next_;
     while (cur != head) {
       ObSqlSock* s = CONTAINER_OF(cur, ObSqlSock, all_list_link_);
       cur = cur->next_;
-      s->on_disconnect();
-      ObSqlSockSession *sess = (ObSqlSockSession *)s->sess_;
-      sess->destroy();
-      s->do_close();
+      if (s->set_error(EIO)) {
+        prepare_destroy(s);
+      }
+    }
+    while(head->next_ != head) {
+      handle_write_req_queue();
+      handle_pending_destroy_list();
     }
   }
 private:
   void handle_epoll_event() {
     const int maxevents = 512;
     struct epoll_event events[maxevents];
-    int cnt = epoll_wait(epfd_, events, maxevents, 1000);
+    int cnt = ob_epoll_wait(epfd_, events, maxevents, 1000);
     for(int i = 0; i < cnt; i++) {
       ObSqlSock* s = (ObSqlSock*)events[i].data.ptr;
       if (OB_UNLIKELY(NULL == s)) {
@@ -838,7 +842,7 @@ private:
       }
       if (OB_UNLIKELY(0 != err)) {
         revert_sock(s);
-        if (s->set_error(err)) {
+        if (s->set_error(EIO)) {
           prepare_destroy(s);
         }
       }
@@ -1065,7 +1069,7 @@ void ObSqlNio::run(int64_t idx)
       impl_[idx].do_work();
     }
     if (has_set_stop()) {
-      impl_[idx].close_all_fd();
+      impl_[idx].close_all();
     }
   }
 }

@@ -1583,7 +1583,8 @@ int64_t ObPartTransCtx::to_string(char* buf, const int64_t buf_len) const
   return len1 + len2;
 }
 
-int ObPartTransCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
+int ObPartTransCtx::remove_callback_for_uncommited_txn(
+  const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
@@ -1591,12 +1592,13 @@ int ObPartTransCtx::remove_callback_for_uncommited_txn(ObMemtable *mt)
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (OB_ISNULL(mt)) {
+  } else if (OB_ISNULL(memtable_set)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "memtable is NULL", K(mt));
+    TRANS_LOG(WARN, "memtable is NULL", K(memtable_set));
   } else if (OB_UNLIKELY(is_exiting_)) {
-  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(mt, exec_info_.max_applied_log_ts_))) {
-    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_), K(exec_info_.max_applied_log_ts_));
+  } else if (OB_FAIL(mt_ctx_.remove_callback_for_uncommited_txn(memtable_set, exec_info_.max_applied_log_ts_))) {
+    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(mt_ctx_),
+              K(memtable_set), K(exec_info_.max_applied_log_ts_));
   }
 
   return ret;
@@ -1806,15 +1808,20 @@ int ObPartTransCtx::tx_end_(const bool commit)
   // suicide before the tnode can be cleanout by concurrent read using state in
   // ctx_tx_data.
   } else if (!commit && FALSE_IT(mt_ctx_.set_tx_rollbacked())) {
-  // STEP4: We need set state in order to informing others of the final status
-  // of my txn. What you need pay attention to is that after this action, others
-  // can cleanout the unfinished txn state and see all your data. We currently
-  // move set_state before mt_ctx_.trans_end for the commit state in order to
-  // accelerate users to see the data state.
+  // STEP4: We need set state in order to inform others of the final status of
+  // my txn. What you need pay attention to is that only after this action,
+  // others can cleanout the unfinished txn state and see all your data. It
+  // should guarantee that all necesary information(including commit_version and
+  // end_scn) is settled. What's more, it accelerates the data visibility for
+  // the user.
   } else if (OB_FAIL(ctx_tx_data_.set_state(state))) {
     TRANS_LOG(WARN, "set tx data state failed", K(ret), KPC(this));
-  // STEP5: We need invoke mt_ctx_.trans_end before state is filled in here
-  // because we relay on the state in the ctx_tx_data_ to callback all txn ops.
+  // STEP5: We need invoke mt_ctx_.trans_end after the ctx_tx_data is decided
+  // and filled in because we obey the rule that ObMvccRowCallback::trans_commit
+  // is callbacked from front to back so that if the read or write is standing
+  // on one tx node, all previous tx node is decided or can be simply cleanout
+  // (which depends on the state in the ctx_tx_data). In conclusion, the action
+  // of callbacking is depended on all states in the ctx_tx_data.
   } else if (OB_FAIL(mt_ctx_.trans_end(commit, commit_version, end_scn))) {
     TRANS_LOG(WARN, "trans end error", KR(ret), K(commit), "context", *this);
   // STEP6: We need insert into the tx_data after all states are filled
@@ -3770,7 +3777,7 @@ int ObPartTransCtx::after_submit_log_(ObTxLogBlock &log_block,
       if (OB_FAIL(ctx_tx_data_.set_state(ObTxData::ELR_COMMIT))) {
         TRANS_LOG(WARN, "set tx data state", K(ret));
       }
-       elr_handler_.check_and_early_lock_release(this);
+      elr_handler_.check_and_early_lock_release(mt_ctx_.has_row_updated(), this);
     }
   }
   if (OB_SUCC(ret) && is_contain(cb_arg_array, ObTxLogType::TX_ABORT_LOG)) {
@@ -6640,39 +6647,56 @@ int ObPartTransCtx::sub_end_tx(const int64_t &request_id,
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (xid.empty() || xid != exec_info_.xid_) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), KPC(this));
-  } else if (!is_sub2pc() && !is_rollback) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected trans ctx", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(is_follower_())) {
-    ret = OB_NOT_MASTER;
-    TRANS_LOG(WARN, "transaction is replaying", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(is_2pc_logging_())) {
-    TRANS_LOG(WARN, "tx is 2pc logging", KPC(this));
   } else if (OB_UNLIKELY(is_exiting_)) {
     ret = OB_TRANS_IS_EXITING;
     TRANS_LOG(WARN, "transaction is exiting", K(ret), KPC(this));
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE > get_downstream_state()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "not in prepare state", K(ret), KPC(this));
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE < get_upstream_state()) {
-    // do nothing
-  } else if (!is_rollback && ObTxState::REDO_COMPLETE == get_upstream_state() && ObTxState::REDO_COMPLETE == get_downstream_state() && !all_downstream_collected_()) {
-    // do nothing
-  } else {
-    tmp_scheduler_= tmp_scheduler;
-    // (void)set_sub2pc_coord_state(Ob2PCPrepareState::VERSION_PREPARING);
-    if (OB_FAIL(continue_execution(is_rollback))) {
-      TRANS_LOG(WARN, "fail to continue execution", KR(ret), KPC(this));
-    } else if (OB_FAIL(unregister_timeout_task_())) {
-      TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
-    } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
-                                              + trans_id_.hash() % USEC_PER_SEC))) {
-      TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(is_2pc_logging_())) {
+    TRANS_LOG(WARN, "tx is in 2pc logging", KPC(this));
+  } else if (OB_UNLIKELY(is_follower_())) {
+    ret = OB_NOT_MASTER;
+    TRANS_LOG(WARN, "not handle this request for follower", KR(ret), KPC(this));
+  } else if (xid.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), K(tmp_scheduler), KPC(this));
+  } else if (ObTxState::INIT == get_upstream_state() && !is_committing_()) {
+    // not in commit phase
+    // if sub rollback, abort the trans
+    // if sub commit, return an error
+    if (is_rollback) {
+      if (OB_FAIL(abort_(OB_TRANS_ROLLBACKED))) {
+        TRANS_LOG(WARN, "abort trans failed", KR(ret), K(*this));
+      }
+      last_request_ts_ = ObClockGenerator::getClock();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected request, not in sub prepare state", K(ret), KPC(this));
     }
-    last_request_ts_ = ObClockGenerator::getClock();
+  } else {
+    // in commit phase
+    if (xid != exec_info_.xid_) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(ret), K(xid), KPC(this));
+    } else if (!is_sub2pc()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "unexpected trans ctx", KR(ret), K(is_rollback), K(xid), KPC(this));
+    } else if (ObTxState::REDO_COMPLETE == get_upstream_state() && !is_prepared_sub2pc()) {
+      // not finish in first phase
+    } else if (ObTxState::REDO_COMPLETE < get_upstream_state()
+        || ObTxState::REDO_COMPLETE < get_downstream_state()) {
+      // already in second phase
+      // in this case, drive by self
+    } else {
+      tmp_scheduler_ = tmp_scheduler;
+      if (OB_FAIL(continue_execution(is_rollback))) {
+        TRANS_LOG(WARN, "fail to continue execution", KR(ret), K(is_rollback), K(xid), KPC(this));
+      } else if (OB_FAIL(unregister_timeout_task_())) {
+        TRANS_LOG(WARN, "unregister timeout handler error", K(ret), KPC(this));
+      } else if (OB_FAIL(register_timeout_task_(ObServerConfig::get_instance().trx_2pc_retry_interval
+                                                + trans_id_.hash() % USEC_PER_SEC))) {
+        TRANS_LOG(WARN, "register timeout handler error", K(ret), KPC(this));
+      }
+      last_request_ts_ = ObClockGenerator::getClock();
+    }
   }
   TRANS_LOG(INFO, "sub end tx", K(ret), K(xid), K(is_rollback), K(tmp_scheduler), KPC(this));
   return ret;

@@ -682,7 +682,6 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObSEArray<ObDfo *, 32> active_dfos;
   bool all_dfo_terminate = false;
-  int64_t timeout_us = 0;
   int64_t nth_channel = OB_INVALID_INDEX_INT64;
   bool collect_trans_result_ok = false;
   if (OB_FAIL(coord_info_.dfo_mgr_.get_running_dfos(active_dfos))) {
@@ -734,7 +733,6 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
     int64_t start_wait_time = ObTimeUtility::current_time();
     while (OB_SUCC(ret) && wait_msg) {
       ObDtlChannelLoop &loop = msg_loop_;
-      timeout_us = phy_plan_ctx->get_timeout_timestamp() - get_timestamp();
       /**
        * 开始收下一个消息。
        */
@@ -761,7 +759,7 @@ int ObPxCoordOp::wait_all_running_dfos_exit()
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(loop.process_one_if(&control_channels, timeout_us, nth_channel))) {
+      } else if (OB_FAIL(loop.process_one_if(&control_channels, nth_channel))) {
         if (OB_EAGAIN == ret) {
           LOG_DEBUG("no msessage, waiting sqc report", K(ret));
           ret = OB_SUCCESS;

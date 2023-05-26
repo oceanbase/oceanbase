@@ -17,6 +17,7 @@ typedef int (*handle_event_t)(struct sock_t*);
   dlink_t rl_ready_link;                        \
   int fd;                                       \
   int ep_fd;                                    \
+  addr_t peer;                                  \
   uint32_t mask;                                \
   uint8_t conn_ok:1
 

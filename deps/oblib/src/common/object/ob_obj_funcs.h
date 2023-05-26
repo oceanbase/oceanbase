@@ -97,7 +97,11 @@ template <>
   UNUSED(obj);
   UNUSED(params);
   int ret = OB_SUCCESS;
-  ret = databuff_printf(buffer, length, pos, "NULL");
+  if (params.print_null_string_value_) {
+    ret = databuff_printf(buffer, length, pos, "''");
+  } else {
+    ret = databuff_printf(buffer, length, pos, "NULL");
+  }
   return ret;
 }
 template <>

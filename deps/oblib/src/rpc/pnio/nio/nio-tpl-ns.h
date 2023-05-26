@@ -18,6 +18,7 @@
 #define my_sk_flush tns(_sk_flush)
 #define my_write_queue_on_sk_destroy tns(_write_queue_on_sk_destroy)
 #define my_sk_consume tns(_sk_consume)
+#define my_wq_flush tns(_wq_flush)
 #else
 #undef __ns__
 #undef tns
@@ -38,4 +39,5 @@
 #undef my_sk_flush
 #undef my_write_queue_on_sk_destroy
 #undef my_sk_consume
+#undef my_wq_flush
 #endif

@@ -208,7 +208,7 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.online_opt_stat_gather_ = trans_ctx_->ctx_->param_.online_opt_stat_gather_;
   param.insert_table_ctx_ = trans_ctx_->ctx_->store_ctx_->insert_table_ctx_;
   param.fast_heap_table_ctx_ = trans_ctx_->ctx_->store_ctx_->fast_heap_table_ctx_;
-  param.result_info_ = &(trans_ctx_->ctx_->store_ctx_->result_info_);
+  param.dml_row_handler_ = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;
     if (param_.px_mode_) {
@@ -413,11 +413,10 @@ int ObTableLoadTransStoreWriter::cast_row(ObArenaAllocator &cast_allocator,
     }
   }
   if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
     ObTableLoadErrorRowHandler *error_row_handler =
       trans_ctx_->ctx_->store_ctx_->error_row_handler_;
-    if (OB_TMP_FAIL(error_row_handler->append_error_row(row))) {
-      LOG_WARN("failed to append error row", K(ret), K(row));
+    if (OB_FAIL(error_row_handler->handle_error_row(ret, row))) {
+      LOG_WARN("failed to handle error row", K(ret), K(row));
     } else {
       ret = OB_EAGAIN;
     }
@@ -462,36 +461,23 @@ int ObTableLoadTransStoreWriter::handle_identity_column(const ObColumnSchemaV2 *
 }
 
 int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore &table_store,
-                                                    const ObTabletID &tablet_id,
-                                                    const ObDatumRow &datum_row)
+                                                          const ObTabletID &tablet_id,
+                                                          const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(table_store.append_row(tablet_id, datum_row))) {
     LOG_WARN("fail to append row", KR(ret), K(datum_row));
   }
   if (OB_FAIL(ret)) {
-    ObTableLoadErrorRowHandler *error_row_handler = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
+    ObTableLoadErrorRowHandler *error_row_handler =
+      trans_ctx_->ctx_->store_ctx_->error_row_handler_;
     if (OB_LIKELY(OB_ERR_PRIMARY_KEY_DUPLICATE == ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (trans_ctx_->ctx_->param_.dup_action_ == ObLoadDupActionType::LOAD_REPLACE) {
-        ATOMIC_AAF(&trans_ctx_->ctx_->store_ctx_->result_info_.rows_affected_, 2);
-        ATOMIC_INC(&trans_ctx_->ctx_->store_ctx_->result_info_.deleted_);
-      } else if (trans_ctx_->ctx_->param_.dup_action_ == ObLoadDupActionType::LOAD_IGNORE) {
-        ATOMIC_INC(&trans_ctx_->ctx_->store_ctx_->result_info_.skipped_);
-      } else if (trans_ctx_->ctx_->param_.dup_action_ == ObLoadDupActionType::LOAD_STOP_ON_DUP) {
-        if (OB_TMP_FAIL(error_row_handler->append_error_row(datum_row))) {
-          LOG_WARN("failed to append repeated row", K(ret), K(tablet_id), K(datum_row));
-        }
-      }
-      if (OB_LIKELY(OB_SUCCESS == tmp_ret)) {
-        ret = OB_SUCCESS;
+      if (OB_FAIL(error_row_handler->handle_update_row(datum_row))) {
+        LOG_WARN("fail to handle update row", KR(ret), K(datum_row));
       }
     } else if (OB_LIKELY(OB_ROWKEY_ORDER_ERROR == ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(error_row_handler->append_error_row(datum_row))) {
-        LOG_WARN("failed to append error row", K(ret), K(tablet_id), K(datum_row));
-      } else {
-        ret = OB_SUCCESS;
+      if (OB_FAIL(error_row_handler->handle_error_row(ret, datum_row))) {
+        LOG_WARN("fail to handle error row", KR(ret), K(tablet_id), K(datum_row));
       }
     }
   }

@@ -42,9 +42,6 @@ namespace observer
 {
 class ObMPQuery : public ObMPBase
 {
-#ifdef PERF_MODE
-friend class ObLayerPerf;
-#endif
 public:
   static const obmysql::ObMySQLCmd COM = obmysql::COM_QUERY;
 

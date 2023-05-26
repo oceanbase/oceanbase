@@ -32,9 +32,9 @@ ObDirectLoadTableStoreParam::ObDirectLoadTableStoreParam()
     is_fast_heap_table_(false),
     insert_table_ctx_(nullptr),
     fast_heap_table_ctx_(nullptr),
+    dml_row_handler_(nullptr),
     extra_buf_(nullptr),
-    extra_buf_size_(0),
-    result_info_(nullptr)
+    extra_buf_size_(0)
 {
 }
 
@@ -48,7 +48,7 @@ bool ObDirectLoadTableStoreParam::is_valid() const
          nullptr != file_mgr_ &&
          (!is_fast_heap_table_ ||
           (nullptr != insert_table_ctx_ && nullptr != fast_heap_table_ctx_)) &&
-         nullptr != result_info_;
+         nullptr != dml_row_handler_;
 }
 
 /**
@@ -105,7 +105,7 @@ int ObDirectLoadTableStoreBucket::init(const ObDirectLoadTableStoreParam &param,
       fast_heap_table_build_param.col_descs_ = param.col_descs_;
       fast_heap_table_build_param.insert_table_ctx_ = param.insert_table_ctx_;
       fast_heap_table_build_param.fast_heap_table_ctx_ = param.fast_heap_table_ctx_;
-      fast_heap_table_build_param.result_info_ = param.result_info_;
+      fast_heap_table_build_param.dml_row_handler_ = param.dml_row_handler_;
       fast_heap_table_build_param.online_opt_stat_gather_ = param.online_opt_stat_gather_;
       ObDirectLoadFastHeapTableBuilder *fast_heap_table_builder = nullptr;
       if (OB_ISNULL(fast_heap_table_builder =

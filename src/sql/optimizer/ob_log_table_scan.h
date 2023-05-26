@@ -72,6 +72,7 @@ public:
         fq_type_(TableItem::NOT_USING),
         fq_read_tx_uncommitted_(false),
         bf_info_(),
+        part_join_filter_allocated_(false),
         group_id_expr_(nullptr),
         use_batch_(false),
         access_path_(NULL),
@@ -436,6 +437,8 @@ public:
   inline const AccessPath* get_access_path() const { return access_path_; }
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *expr) { tablet_id_expr_ = expr; }
   void set_trans_info_expr(ObOpPseudoColumnRawExpr *expr) { trans_info_expr_ = expr; }
+  void set_part_join_filter_created(bool flag) { part_join_filter_allocated_ = flag; }
+  bool is_part_join_filter_created() { return part_join_filter_allocated_; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() const { return tablet_id_expr_; }
   ObRawExpr *get_trans_info_expr() const { return trans_info_expr_; }
   void set_tablet_id_type(int64_t type) { tablet_id_type_ = type; }
@@ -574,8 +577,9 @@ protected: // memeber variables
   ObRawExpr* fq_expr_; //flashback query expr
   TableItem::FlashBackQueryType fq_type_; //flashback query type
   bool fq_read_tx_uncommitted_; // whether flashback query read uncommitted changes in transaction
-
-  ObPxBFStaticInfo bf_info_; // for join partition filter
+   // for join partition filter
+  ObPxBFStaticInfo bf_info_;
+  bool part_join_filter_allocated_;
   // end for partition join filter
   ObRawExpr *group_id_expr_;
   bool use_batch_;

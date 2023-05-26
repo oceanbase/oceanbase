@@ -718,7 +718,7 @@ void ObReferenceObjTable::ObDependencyObjItem::reset()
   max_dependency_version_ = OB_INVALID_VERSION;
   max_ref_obj_schema_version_ = OB_INVALID_VERSION;
   dep_obj_schema_version_ = OB_INVALID_VERSION;
-  ref_obj_versions_.reuse();
+  ref_obj_versions_.reset();
 }
 
 int ObReferenceObjTable::ObDependencyObjItem::add_ref_obj_version(const ObSchemaObjVersion &ref_obj)
@@ -838,6 +838,24 @@ int ObReferenceObjTable::ObGetDependencyObjOp::operator()(
     }
   }
   return ret;
+}
+
+void ObReferenceObjTable::reset()
+{
+  int ret = OB_SUCCESS;
+  auto free_func = [](common::hash::HashMapPair<ObDependencyObjKey, ObDependencyObjItem*> &entry) -> int {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(entry.second)) {
+      entry.second->~ObDependencyObjItem();
+      entry.second = nullptr;
+    }
+    return ret;
+  };
+  if (OB_FAIL(ref_obj_version_table_.foreach_refactored(free_func))) {
+    OB_LOG(WARN, "traversal ref obj version map failed", K(ret));
+  }
+  inited_ = false;
+  ref_obj_version_table_.destroy();
 }
 
 int ObReferenceObjTable::batch_fill_kv_pairs(

@@ -715,7 +715,6 @@ ERRSIM_POINT_DEF(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
 int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_time,
                                                    SCN &snapshot)
 {
-  UNUSED(max_read_stale_time);
   int ret = OB_SUCCESS;
   bool monotinic_read = true;;
     // server weak read version
@@ -727,12 +726,12 @@ int ObTransService::get_weak_read_snapshot_version(const int64_t max_read_stale_
     // wrs cluster version
   } else if (OB_FAIL(GCTX.weak_read_service_->get_cluster_version(tenant_id_, snapshot))) {
     TRANS_LOG(WARN, "get weak read snapshot fail", K(ret), KPC(this));
-  } else {
+  } else if (-1 == max_read_stale_time) {
+    // no need to check barrier version
     // do nothing
-  }
-  if (OB_SUCC(ret)) {
-    int64_t max_stale_time = ObWeakReadUtil::max_stale_time_for_weak_consistency(tenant_id_, 0);
-    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_stale_time
+  } else {
+    // check snapshot version barrier which is setted by user system variable
+    const int64_t snapshot_barrier = ObTimeUtility::current_time() - max_read_stale_time
                                       + abs(ERRSIM_WEAK_READ_SNAPSHOT_DELAY_US);
     if (snapshot.convert_to_ts() < snapshot_barrier) {
       TRANS_LOG(WARN, "weak read snapshot too stale", K(snapshot),

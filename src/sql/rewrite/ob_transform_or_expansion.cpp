@@ -1640,7 +1640,7 @@ int ObTransformOrExpansion::is_match_index(const ObDMLStmt *stmt,
           if (OB_ISNULL(temp_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("null expr", K(ret));
-          } else if (!temp_expr->is_const_or_param_expr()) {
+          } else if (!temp_expr->is_const_expr()) {
             is_const = false;
           } else { /*do nothing*/ }
         }

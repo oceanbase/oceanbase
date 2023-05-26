@@ -26,7 +26,7 @@ void ObTxELRHandler::reset()
   mt_ctx_ = NULL;
 }
 
-int ObTxELRHandler::check_and_early_lock_release(ObPartTransCtx *ctx)
+int ObTxELRHandler::check_and_early_lock_release(bool has_row_updated, ObPartTransCtx *ctx)
 {
   int ret = OB_SUCCESS;
 
@@ -34,10 +34,15 @@ int ObTxELRHandler::check_and_early_lock_release(ObPartTransCtx *ctx)
     // do nothing
   } else {
     ctx->trans_service_->get_tx_version_mgr().update_max_commit_ts(ctx->ctx_tx_data_.get_commit_version(), true);
-    if (OB_FAIL(ctx->acquire_ctx_ref())) {
-      TRANS_LOG(WARN, "get trans ctx error", K(ret), K(*this));
+    if (has_row_updated) {
+      if (OB_FAIL(ctx->acquire_ctx_ref())) {
+        TRANS_LOG(WARN, "get trans ctx error", K(ret), K(*this));
+      } else {
+        set_elr_prepared();
+      }
     } else {
-      set_elr_prepared();
+      // no need to release lock after submit log
+      mt_ctx_ = NULL;
     }
   }
   return ret;

@@ -2025,7 +2025,12 @@ int ObFastParserMysql::process_string(const char quote)
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
         } else {
-          ParseNode *node = new_node(buf, T_VARCHAR);
+          ObItemType param_type = T_VARCHAR;
+          if ('n' == raw_sql_.char_at(cur_token_begin_pos_) ||
+              'N' == raw_sql_.char_at(cur_token_begin_pos_)) {
+            param_type = T_NCHAR;
+          }
+          ParseNode *node = new_node(buf, param_type);
           if (NULL != child_node) {
             node->num_child_ = 1;
             node->children_ = child_node;
@@ -2056,6 +2061,8 @@ int ObFastParserMysql::process_identifier_begin_with_n()
       cur_token_type_ = PARAM_TOKEN;
       OZ (add_null_type_node());
     }
+  } else if ('\'' == raw_sql_.char_at(raw_sql_.cur_pos_)) {
+    OZ (process_string('\''));
   } else {
   }
   return ret;

@@ -42,18 +42,6 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
     mfield.charsetnr_ = field.charsetnr_;
     mfield.flags_ = field.flags_;
     mfield.length_ = field.length_;
-    // 对于Varchar类，检查charset：
-    mfield.flags_ &= (~BINARY_FLAG);
-    bool is_oracle_lob = false;
-    if (ObLongTextType == field.type_.get_type() && lib::is_oracle_mode()) { // was ObLobType
-      is_oracle_lob = true;
-    }
-    if (ob_is_string_type(field.type_.get_type())
-        && ObCharset::is_valid_collation(static_cast<ObCollationType>(field.charsetnr_))
-        && ObCharset::is_bin_sort(static_cast<ObCollationType>(field.charsetnr_))
-        && !is_oracle_lob) {
-      mfield.flags_ |= BINARY_FLAG;
-    }
 
     ObScale decimals = mfield.accuracy_.get_scale();
     ObPrecision pre = mfield.accuracy_.get_precision();
@@ -62,9 +50,6 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
       mfield.type_ = MYSQL_TYPE_CURSOR;
     } else {
       ret = ObSMUtils::get_mysql_type(field.type_.get_type(), mfield.type_, mfield.flags_, decimals);
-    }
-    if (OB_SUCC(ret) && is_oracle_lob) {
-      mfield.flags_ &= (~BLOB_FLAG); // was ObLobType
     }
 
     mfield.type_owner_ = field.type_owner_;
@@ -89,14 +74,6 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
       ObScale num_decimals;
       ret = ObSMUtils::get_mysql_type(
         field.default_value_.get_type(), mfield.default_value_, flags, num_decimals);
-    }
-    if (OB_SUCC(ret)
-        && EMySQLFieldType::MYSQL_TYPE_BIT == mfield.type_
-        && 1 != mfield.accuracy_.get_precision()) {
-      // bit(1) flags -> UNSIGNED
-      // bit(2) flags -> BINARY_FLAG | BLOB_FLAG | UNSIGNED
-      mfield.flags_ |= BINARY_FLAG;
-      mfield.flags_ |= BLOB_FLAG;
     }
     if (field.is_hidden_rowid_) {
       mfield.inout_mode_ |= 0x04;

@@ -25,13 +25,13 @@ using namespace obutil;
 using namespace lib;
 
 
-int ObTimer::init(const char* thread_name)
+int ObTimer::init(const char* thread_name, const ObMemAttr &attr)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
   } else {
-    tokens_ = reinterpret_cast<Token*>(ob_malloc(sizeof(Token) * max_task_num_, "timer"));
+    tokens_ = reinterpret_cast<Token*>(ob_malloc(sizeof(Token) * max_task_num_, attr));
     if (nullptr == tokens_) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       OB_LOG(ERROR, "failed to alloc memory", K(ret));

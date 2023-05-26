@@ -16,6 +16,7 @@
 #include "share/ob_errno.h"
 #include "share/config/ob_server_config.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/dtl/ob_dtl_channel_mem_manager.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::omt;
@@ -32,7 +33,7 @@ int ObDtlTenantMemManager::init()
   int ret = OB_SUCCESS;
   char *buf = nullptr;
   hash_cnt_ = next_pow2(common::ObServerConfig::get_instance()._px_chunklist_count_ratio) * HASH_CNT;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, "SqlDtlMgr");
+  ObMemAttr attr(tenant_id_, "SqlDtlMgr");
   buf = reinterpret_cast<char*>(ob_malloc(hash_cnt_ * sizeof(ObDtlChannelMemManager), attr));
   if (nullptr == buf) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -43,7 +44,7 @@ int ObDtlTenantMemManager::init()
     LOG_WARN("failed to reserver times", K(ret));
   } else {
     for (int i = 0; i < hash_cnt_ && OB_SUCC(ret); ++i) {
-      ObDtlChannelMemManager *ch_mem_mgr = new (buf + i * sizeof(ObDtlChannelMemManager)) ObDtlChannelMemManager (tenant_id_);
+      ObDtlChannelMemManager *ch_mem_mgr = new (buf + i * sizeof(ObDtlChannelMemManager)) ObDtlChannelMemManager (tenant_id_, *this);
       if (OB_FAIL(ch_mem_mgr->init())) {
         LOG_WARN("failed to init channel memory manager", K(ret));
       } else {
@@ -250,4 +251,13 @@ void ObDtlTenantMemManager::buffer_status()
       K(n_times));
     }
   }
+}
+
+int64_t ObDtlTenantMemManager::get_used_memory_size()
+{
+  int64_t used = 0;
+  for (int64_t i = 0; i < mem_mgrs_.count(); ++i) {
+    used += mem_mgrs_.at(i)->get_total_memory_size();
+  }
+  return used;
 }

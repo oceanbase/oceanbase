@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "pl/ob_pl_type.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
+#include "pl/ob_pl_user_type.h"
 
 namespace oceanbase
 {
@@ -50,7 +51,7 @@ public:
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
   static int eval_collection_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  static bool is_match_type(const ObObj &element_obj, pl::ObPLType type);
+  static int check_match(const ObObj &element_obj, pl::ObElemDesc &desc, pl::ObPLINS &ns);
 
   struct ExtraInfo : public ObIExprExtraInfo
   {

@@ -80,7 +80,7 @@ public:
 private:
   int64_t buf_mem_limit_;
   common::ObArenaAllocator allocator_;
-  common::ObVector<T *> item_list_;
+  common::ObArray<T *> item_list_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObDirectLoadMemChunk);
 };
@@ -132,6 +132,7 @@ int ObDirectLoadMemChunk<T, Compare>::init(uint64_t tenant_id, int64_t mem_limit
   } else {
     buf_mem_limit_ = mem_limit;
     allocator_.set_tenant_id(tenant_id);
+    item_list_.set_attr(ObMemAttr(tenant_id, "TLD_MemChunk"));
     is_inited_ = true;
   }
   return ret;

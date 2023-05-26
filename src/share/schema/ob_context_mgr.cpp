@@ -83,19 +83,19 @@ ObContextHashWrapper ObGetContextKey<ObContextHashWrapper,ObContextSchema *>
 
 ObContextMgr::ObContextMgr()
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      context_infos_(0, NULL, SET_USE_500("SchemaContext")),
-      context_map_(SET_USE_500("SchemaContext"))
+      context_infos_(0, NULL, SET_USE_500("SchemaContext", ObCtxIds::SCHEMA_SERVICE)),
+      context_map_(SET_USE_500("SchemaContext", ObCtxIds::SCHEMA_SERVICE))
 {
 }
 
 ObContextMgr::ObContextMgr(ObIAllocator &allocator)
     : is_inited_(false),
-      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+      local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      context_infos_(0, NULL, SET_USE_500("SchemaContext")),
-      context_map_(SET_USE_500("SchemaContext"))
+      context_infos_(0, NULL, SET_USE_500("SchemaContext", ObCtxIds::SCHEMA_SERVICE)),
+      context_map_(SET_USE_500("SchemaContext", ObCtxIds::SCHEMA_SERVICE))
 {
 }
 

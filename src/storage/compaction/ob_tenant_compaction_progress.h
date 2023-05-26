@@ -91,9 +91,9 @@ public:
 
   ObTenantCompactionProgressMgr()
    : ObInfoRingArray(allocator_),
-     allocator_("TenCompProgMgr"),
      sum_time_guard_()
   {
+    allocator_.set_attr(SET_USE_500("TenCompProgMgr"));
   }
   ~ObTenantCompactionProgressMgr() {}
   static int mtl_init(ObTenantCompactionProgressMgr* &progress_mgr);

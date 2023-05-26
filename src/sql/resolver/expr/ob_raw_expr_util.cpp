@@ -1649,8 +1649,19 @@ int ObRawExprUtils::build_seq_nextval_expr(ObRawExpr *&expr,
                                           uint64_t seq_id,
                                           ObDMLStmt *stmt)
 {
-  return build_seq_nextval_expr(expr, session_info, expr_factory, q_name.database_name_,
-                                q_name.tbl_name_, q_name.col_name_, seq_id, stmt);
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret));
+  } else {
+    const ObString &database_name = q_name.database_name_.empty() ?
+                                    session_info->get_database_name() : q_name.database_name_;
+    if (OB_FAIL(build_seq_nextval_expr(expr, session_info, expr_factory, database_name,
+                                q_name.tbl_name_, q_name.col_name_, seq_id, stmt))) {
+      LOG_WARN("build seq nextval expr failed", K(ret));
+    }
+  }
+  return ret;
 }
 
 // build oracle sequence_object.currval, sequence_object.nextval expr
@@ -1669,7 +1680,7 @@ int ObRawExprUtils::build_seq_nextval_expr(ObRawExpr *&expr,
   ObConstRawExpr *col_id_expr = NULL;
   if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is NULL", K(session_info), K(expr_factory));
+    LOG_WARN("session info is NULL", K(ret), K(session_info), K(expr_factory));
   } else if (NULL != stmt && OB_FAIL(stmt->get_sequence_expr(exists_seq_expr,
                                                    tbl_name,
                                                    col_name,
@@ -1974,6 +1985,17 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr->formalize(&session_info))) {
       LOG_WARN("formalize expr failed", K(ret), KPC(expr));
+    } else if (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+               ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status) {
+      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory.get_allocator()))) {
+        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+        } else {
+          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+        }
+      }
     }
   }
 
@@ -6382,7 +6404,8 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
         }
       }
     } else if (ObExtendType == obj_type
-               && OB_INVALID_ID != udt_id) {
+               && OB_INVALID_ID != udt_id
+               && src->get_expr_type() != T_QUESTIONMARK) {
       if (ObNullType == src->get_result_type().get_type()) {
         // do nothing
       } else if (src->get_result_type().is_user_defined_sql_type()) {
@@ -7014,8 +7037,10 @@ int ObRawExprUtils::check_need_cast_expr(const ObExprResType &src_type,
     //no need add cast, will add column_conv later
     need_cast = false;
   } else if ((ob_is_xml_sql_type(in_type, src_type.get_subschema_id()) || ob_is_xml_pl_type(in_type, src_type.get_udt_id())) &&
-              ob_is_large_text(out_type)) {
+              ob_is_blob(out_type, out_cs_type)) {
     //no need add cast, will transform in make_xmlbinary
+    // there are cases cannot skip cast expr, and xmltype cast to clob is not support and cast func will check:
+    // case: select xmlserialize(content xmltype_var as clob) || xmltype_var from t;
     need_cast = false;
   } else if (OB_FAIL(ObRawExprUtils::need_wrap_to_string(in_type, out_type,
                                                          is_same_need, need_wrap))) {

@@ -48,7 +48,7 @@ void eloop_fire(eloop_t* ep, sock_t* s) {
 static void eloop_refire(eloop_t* ep, int64_t timeout) {
   const int maxevents = 512;
   struct epoll_event events[maxevents];
-  int cnt = epoll_wait(ep->fd, events, maxevents, timeout);
+  int cnt = ob_epoll_wait(ep->fd, events, maxevents, timeout);
   for(int i = 0; i < cnt; i++) {
     sock_t* s = (sock_t*)events[i].data.ptr;
     s->mask |= events[i].events;
@@ -63,13 +63,13 @@ static void sock_destroy(sock_t* s) {
   if (s->ep_fd >= 0) {
     err = epoll_ctl(s->ep_fd, EPOLL_CTL_DEL, s->fd, NULL);
     if (0 != err) {
-      rk_error("epoll_ctl delete fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+      rk_warn("epoll_ctl delete fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
     }
   }
   if (s->fd >= 0) {
     err = ussl_close(s->fd);
     if (0 != err) {
-      rk_error("close sock fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
+      rk_warn("close sock fd faild, s=%p, s->fd=%d, errno=%d", s, s->fd, errno);
     }
   }
   if (s->fty) {
@@ -102,7 +102,8 @@ int eloop_thread_run(eloop_t** udata) {
 }
 
 int eloop_run(eloop_t* ep) {
-  while(true) {
+  pn_comm_t* pn = get_current_pnio();
+  while(!ATOMIC_LOAD(&pn->is_stop_)) {
     int64_t epoll_timeout = 1000;
     ob_update_loop_ts();
     if (ep->ready_link.next != &ep->ready_link) {
@@ -116,7 +117,6 @@ int eloop_run(eloop_t* ep) {
     }
 
     PNIO_DELAY_WARN(eloop_delay_warn(start_us, ELOOP_WARN_US));
-    pn_comm_t* pn = get_current_pnio();
     if (unlikely(NULL != pn && 0 == pn->tid && PNIO_REACH_TIME_INTERVAL(1000000))) {
       static __thread uint64_t last_rx_bytes = 0;
       static __thread uint64_t last_time = 0;

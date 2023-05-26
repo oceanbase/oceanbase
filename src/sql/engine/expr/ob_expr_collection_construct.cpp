@@ -119,16 +119,39 @@ int ObExprCollectionConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
   return ret;
 }
 
-bool ObExprCollectionConstruct::is_match_type(const ObObj &element_obj, pl::ObPLType type)
+
+int ObExprCollectionConstruct::check_match(const ObObj &element_obj, pl::ObElemDesc &desc, pl::ObPLINS &ns)
 {
-  bool is_same = true;
+  int ret = OB_SUCCESS;
+  pl::ObPLType type = desc.get_pl_type();
+  bool is_comp = false;
   if (pl::PL_NESTED_TABLE_TYPE == element_obj.get_meta().get_extend_type() ||
       pl::PL_VARRAY_TYPE == element_obj.get_meta().get_extend_type()) {
-    is_same = pl::PL_NESTED_TABLE_TYPE == type || pl::PL_VARRAY_TYPE == type;
+    is_comp = pl::PL_NESTED_TABLE_TYPE == type || pl::PL_VARRAY_TYPE == type;
   } else {
-    is_same = element_obj.get_meta().get_extend_type() == type;
+    is_comp = element_obj.get_meta().get_extend_type() == type;
   }
-  return is_same;
+
+  if (is_comp) {
+    pl::ObPLComposite *composite = reinterpret_cast<pl::ObPLComposite*>(element_obj.get_ext());
+    CK (OB_NOT_NULL(composite));
+    if (OB_FAIL(ret)) {
+    } else if (composite->get_id() != desc.get_udt_id()) {
+      if (composite->is_record()) {
+        OZ (pl::ObPLResolver::check_composite_compatible(ns, composite->get_id(),
+                                                         desc.get_udt_id(),
+                                                         is_comp));
+      } else {
+        is_comp = false;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_comp) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_WARN("invalid argument. unexpected composite value", K(ret));
+  }
+
+  return ret;
 }
 
 int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,

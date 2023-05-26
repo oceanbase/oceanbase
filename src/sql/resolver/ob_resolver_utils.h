@@ -281,6 +281,11 @@ public:
                                          ObQualifiedName &q_name,
                                          const ObSQLSessionInfo &session_info);
 
+  static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
+                               share::schema::ObSchemaGetterGuard &schema_guard,
+                               ObRawExpr &expr,
+                               bool &contain_select_stmt);
+
   static int resolve_external_symbol(common::ObIAllocator &allocator,
                                      sql::ObRawExprFactory &expr_factory,
                                      sql::ObSQLSessionInfo &session_info,
@@ -338,6 +343,12 @@ public:
                            ObExprInfo *parents_expr_info,
                            const ObSQLMode mode,
                            bool is_from_pl = false);
+
+  static int set_string_val_charset(ObObjParam &val,
+                                    ObString &charset,
+                                    ObObj &result_val,
+                                    bool is_strict_mode,
+                                    bool return_ret);
 
   static int resolve_data_type(const ParseNode &type_node,
                                const common::ObString &ident_name,

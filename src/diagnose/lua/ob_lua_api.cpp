@@ -1893,14 +1893,23 @@ int dump_thread_info(lua_State *L)
         gen.next_column(loop_ts);
         // latch_hold
         {
+          char addrs[256];
           GET_OTHER_TSI_ADDR(uint32_t**, locks_addr, &ObLatch::current_locks);
           GET_OTHER_TSI_ADDR(int8_t, slot_cnt, &ObLatch::max_lock_slot_idx)
+          const int64_t cnt = std::min(ARRAYSIZEOF(ObLatch::current_locks), (int64_t)slot_cnt);
           locks_addr = (uint32_t**)(thread_base + locks_addr_offset);
-          char addrs[256];
           addrs[0] = 0;
-          for (auto i = 0, offset1 = 0; i < slot_cnt; ++i) {
-            if (OB_NOT_NULL(locks_addr[i]) && offset1 < 256) {
-              offset1 += snprintf(addrs + offset1, 256 - offset1, "%p ", locks_addr[i]);
+          for (int64_t i = 0, j = 0; i < cnt; ++i) {
+            int64_t idx = (slot_cnt + i) % ARRAYSIZEOF(ObLatch::current_locks);
+            if (OB_NOT_NULL(locks_addr[idx]) && j < 256) {
+              bool has_segv = false;
+              uint32_t val = 0;
+              do_with_crash_restore([&] {
+                val = *locks_addr[idx];
+              }, has_segv);
+              if (!has_segv && 0 != val) {
+                j += snprintf(addrs + j, 256 - j, "%p ", locks_addr[idx]);
+              }
             }
           }
           if (0 == addrs[0]) {
@@ -1926,16 +1935,16 @@ int dump_thread_info(lua_State *L)
           gen.next_column(trace_id_buf);
         }
         // status
+        GET_OTHER_TSI_ADDR(uint8_t, is_blocking, &Thread::is_blocking_);
         {
           GET_OTHER_TSI_ADDR(pthread_t, join_addr, &Thread::thread_joined_);
           GET_OTHER_TSI_ADDR(int64_t, sleep_us, &Thread::sleep_us_);
-          GET_OTHER_TSI_ADDR(bool, is_blocking, &Thread::is_blocking_);
           const char* status_str = nullptr;
           if (0 != join_addr) {
             status_str = "Join";
           } else if (0 != sleep_us) {
             status_str = "Sleep";
-          } else if (is_blocking) {
+          } else if (0 != is_blocking) {
             status_str = "Wait";
           } else {
             status_str = "Run";
@@ -1972,6 +1981,10 @@ int dump_thread_info(lua_State *L)
             do_with_crash_restore([&] {
               IGNORE_RETURN snprintf(wait_event, BUF_LEN, "rpc to %s", rpc_dest_addr);
             }, has_segv);
+          } else if (0 != (is_blocking & Thread::WAIT_IN_TENANT_QUEUE)) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "tenant worker request");
+          } else if (0 != (is_blocking & Thread::WAIT_FOR_IO_EVENT)) {
+            IGNORE_RETURN snprintf(wait_event, BUF_LEN, "IO events");
           }
           gen.next_column(wait_event);
         }

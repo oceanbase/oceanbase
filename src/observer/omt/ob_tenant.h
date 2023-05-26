@@ -130,7 +130,7 @@ public:
   {
     int ret = common::OB_SUCCESS;
     uint64_t tenant_id = MTL_ID();
-    pools = OB_NEW(ObPxPools, common::ObModIds::OMT_TENANT);
+    pools = OB_NEW(ObPxPools, ObMemAttr(tenant_id, "PxPools"));
     if (OB_ISNULL(pools)) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
     } else if (OB_FAIL(pools->init(tenant_id))) {

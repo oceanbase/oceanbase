@@ -167,6 +167,14 @@ struct ObNullSafeDatumGeoCmp
   }
 };
 
+template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+struct ObNullSafeDatumUDTCmp
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret) {
+    return datum_cmp::ObDatumUDTCmp<HAS_LOB_HEADER>::cmp(l, r, cmp_ret);
+  }
+};
+
 template <ObScale SCALE, bool NULL_FIRST>
 struct ObNullSafeFixedDoubleCmp
 {
@@ -512,6 +520,25 @@ struct DatumGeoHashCalculator : public DefHashMethod<T>
   }
 };
 
+template <typename T, bool HAS_LOB_HEADER>
+struct DatumUDTHashCalculator : public DefHashMethod<T>
+{
+  static int calc_datum_hash(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    UNUSED(datum);
+    UNUSED(seed);
+    UNUSED(res);
+    return OB_NOT_SUPPORTED;
+  }
+
+  static int calc_datum_hash_v2(const ObDatum &datum, const uint64_t seed, uint64_t &res)
+  {
+    UNUSED(datum);
+    UNUSED(seed);
+    UNUSED(res);
+    return OB_NOT_SUPPORTED;
+  }
+};
 
 #define DEF_DATUM_TIMESTAMP_HASH_FUNCS(OBJTYPE, TYPE, DESC, VTYPE)              \
   template <typename T>                                                         \
@@ -1085,26 +1112,32 @@ template <int X>
 struct InitUDTBasicFuncArray
 {
   // only for storage use, udt types are used as null bitmap in storage
+  // storage will use murmur_hash_ and null_last_cmp_ maybe, so keep the origin basic func define and others
+  // basic func return error code wheh is called: hash func return OB_NOT_SUPPORTED and cmp func return OB_ERR_NO_ORDER_MAP_SQL
   template <typename T>
-  using Hash = DefHashFunc<DatumStrHashCalculator<CS_TYPE_BINARY, false, T, false>>;
+  using StrHash = DefHashFunc<DatumStrHashCalculator<CS_TYPE_BINARY, false, T, false>>;
+  template <typename T, bool HAS_LOB_HEADER>
+  using Hash = DefHashFunc<DatumUDTHashCalculator<T, HAS_LOB_HEADER>>;
+  template <bool NULL_FIRST, bool HAS_LOB_HEADER>
+  using TypeCmp = ObNullSafeDatumUDTCmp<NULL_FIRST, HAS_LOB_HEADER>;
   template <bool null_first>
   using StrCmp = ObNullSafeDatumStrCmp<CS_TYPE_BINARY, false, null_first>;
   using Def = datum_cmp::ObDatumStrCmp<CS_TYPE_BINARY, false>;
   static void init_array()
   {
     auto &basic_funcs = EXPR_BASIC_UDT_FUNCS;
-    basic_funcs[X].default_hash_ = NULL;
-    basic_funcs[X].default_hash_batch_= NULL;
-    basic_funcs[X].murmur_hash_ = Hash<ObMurmurHash>::hash;
-    basic_funcs[X].murmur_hash_batch_ = NULL;
-    basic_funcs[X].xx_hash_ = NULL;
-    basic_funcs[X].xx_hash_batch_ = NULL;
-    basic_funcs[X].wy_hash_ = NULL;
-    basic_funcs[X].wy_hash_batch_ = NULL;
-    basic_funcs[X].null_first_cmp_ = NULL;
+    basic_funcs[X].default_hash_ = Hash<ObDefaultHash, true>::hash;
+    basic_funcs[X].default_hash_batch_= Hash<ObDefaultHash, true>::hash_batch;
+    basic_funcs[X].murmur_hash_ = StrHash<ObMurmurHash>::hash;
+    basic_funcs[X].murmur_hash_batch_ = Hash<ObMurmurHash, true>::hash_batch;
+    basic_funcs[X].xx_hash_ = Hash<ObXxHash, true>::hash;
+    basic_funcs[X].xx_hash_batch_ = Hash<ObXxHash, true>::hash_batch;
+    basic_funcs[X].wy_hash_ = Hash<ObWyHash, true>::hash;
+    basic_funcs[X].wy_hash_batch_ = Hash<ObWyHash, true>::hash_batch;
+    basic_funcs[X].null_first_cmp_ = &TypeCmp<1, 1>::cmp;
     basic_funcs[X].null_last_cmp_ = Def::defined_ ? &StrCmp<0>::cmp : NULL;
-    basic_funcs[X].murmur_hash_v2_ = NULL;
-    basic_funcs[X].murmur_hash_v2_batch_ = NULL;
+    basic_funcs[X].murmur_hash_v2_ = Hash<ObMurmurHash, true>::hash_v2;
+    basic_funcs[X].murmur_hash_v2_batch_ = Hash<ObMurmurHash, true>::hash_v2_batch;
   }
 };
 

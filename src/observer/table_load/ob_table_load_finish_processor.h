@@ -36,7 +36,10 @@ class ObTableLoadPreMergePeerP : public obrpc::ObRpcProcessor<obrpc::ObTableRpcP
 {
   typedef obrpc::ObRpcProcessor<obrpc::ObTableRpcProxy::ObRpc<obrpc::OB_TABLE_API_LOAD_PRE_MERGE_PEER> > ParentType;
 public:
-  explicit ObTableLoadPreMergePeerP(const ObGlobalContext &gctx) : gctx_(gctx) {}
+  explicit ObTableLoadPreMergePeerP(const ObGlobalContext &gctx) : gctx_(gctx)
+  {
+    allocator_.set_tenant_id(MTL_ID());
+  }
   virtual ~ObTableLoadPreMergePeerP() = default;
 
 protected:

@@ -94,7 +94,6 @@ public:
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,
           const ObQueryFlag &query_flag,
-          const bool skip_compact,
           const ObMemtableKey *parameter_key,
           ObMemtableKey *internal_key,
           ObMvccValueIterator &value_iter);

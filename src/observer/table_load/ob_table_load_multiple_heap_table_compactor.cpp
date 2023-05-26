@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_multiple_heap_table_compactor.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
@@ -71,9 +72,11 @@ public:
       ctx_(ctx),
       mem_ctx_(mem_ctx),
       index_dir_id_(-1),
-      data_dir_id_(-1)
+      data_dir_id_(-1),
+      heap_table_allocator_("TLD_MHTCompact")
   {
     ctx_->inc_ref_count();
+    heap_table_allocator_.set_tenant_id(MTL_ID());
   }
   virtual ~CompactTaskProcessor()
   {
@@ -316,9 +319,8 @@ int ObTableLoadMultipleHeapTableCompactor::inner_init()
   mem_ctx_.need_sort_ = param_->need_sort_;
   mem_ctx_.mem_load_task_count_ = param_->session_count_;
   mem_ctx_.column_count_ = param_->column_count_;
-  mem_ctx_.error_row_handler_ = store_ctx_->error_row_handler_;
+  mem_ctx_.dml_row_handler_ = store_ctx_->error_row_handler_;
   mem_ctx_.file_mgr_ = store_ctx_->tmp_file_mgr_;
-  mem_ctx_.result_info_ = &(store_ctx_->result_info_);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mem_ctx_.init())) {

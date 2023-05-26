@@ -74,6 +74,7 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"
+#include "logservice/palf/log_define.h"
 
 namespace oceanbase
 {
@@ -718,6 +719,31 @@ int MockTenantModuleEnv::start_()
   } else if (OB_FAIL(tenant->acquire_more_worker(TENANT_WORKER_COUNT, succ_num))) {
   } else if (OB_FAIL(guard_.switch_to(tenant_id))) { // switch mtl context
     STORAGE_LOG(ERROR, "fail to switch to sys tenant", K(ret));
+  } else {
+    ObLogService *log_service = MTL(logservice::ObLogService*);
+    if (OB_ISNULL(log_service) || OB_ISNULL(log_service->palf_env_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "fail to switch to sys tenant", KP(log_service));
+    } else {
+      palf::LogIOWorkerConfig log_io_worker_config;
+      log_io_worker_config.io_worker_num_ = 1;
+      log_io_worker_config.io_queue_capcity_ = 100 * 1024;
+      log_io_worker_config.batch_width_ = 8;
+      log_io_worker_config.batch_depth_ = palf::PALF_SLIDING_WINDOW_SIZE;
+
+      palf::LogIOWorker &use_io_worker = log_service->palf_env_->palf_env_impl_.log_io_worker_wrapper_.user_log_io_worker_;
+      if (OB_FAIL(use_io_worker.init(log_io_worker_config, tenant_id,
+                                     log_service->palf_env_->palf_env_impl_.cb_thread_pool_.get_tg_id(),
+                                     log_service->palf_env_->palf_env_impl_.log_alloc_mgr_,
+                                     &log_service->palf_env_->palf_env_impl_))) {
+        STORAGE_LOG(ERROR, "fail to init user_io_worker", KP(log_service));
+      } else if (OB_FAIL(use_io_worker.start())) {
+        STORAGE_LOG(ERROR, "fail to init start", KP(log_service));
+      } else {
+        //set this to stop user_io_worker
+        log_service->palf_env_->palf_env_impl_.log_io_worker_wrapper_.is_user_tenant_ = true;
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -744,6 +770,7 @@ void MockTenantModuleEnv::destroy()
   }
   // 释放租户上下文
   guard_.release();
+
 
   multi_tenant_.stop();
   multi_tenant_.wait();

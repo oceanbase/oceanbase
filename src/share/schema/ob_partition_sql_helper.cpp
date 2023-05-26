@@ -562,7 +562,7 @@ int ObAddPartInfoHelper::add_part_dml_column(const uint64_t exec_tenant_id,
                                                    exec_tenant_id, part.get_tablespace_id())))
         || OB_FAIL(dml.add_column("partition_type", partition_type))
         || OB_FAIL(dml.add_column("tablet_id", part.get_tablet_id().id()))
-        || OB_FAIL(dml.add_column("part_name", part.get_part_name()))) {
+        || OB_FAIL(dml.add_column("part_name", ObHexEscapeSqlStr(part.get_part_name())))) {
       LOG_WARN("dml add part info failed", K(ret));
     } else if (OB_FAIL(add_part_high_bound_val_column(table, part, dml))) {
       LOG_WARN("add part high bound failed", K(ret), K(table), K(part));
@@ -608,7 +608,7 @@ int ObAddPartInfoHelper::add_subpart_dml_column(const uint64_t exec_tenant_id,
         || OB_FAIL(dml.add_column("tablespace_id", ObSchemaUtils::get_extract_schema_id(
                                                    exec_tenant_id, subpart.get_tablespace_id())))
         || OB_FAIL(dml.add_column("tablet_id", subpart.get_tablet_id().id()))
-        || OB_FAIL(dml.add_column("sub_part_name", subpart.get_part_name()))) {
+        || OB_FAIL(dml.add_column("sub_part_name", ObHexEscapeSqlStr(subpart.get_part_name())))) {
         LOG_WARN("dml add part info failed", K(ret));
     } else if (OB_FAIL(add_subpart_high_bound_val_column(table, subpart, dml))) {
       LOG_WARN("add part high bound failed", K(ret), KPC(table), K(subpart_id));
@@ -646,7 +646,7 @@ int ObAddPartInfoHelper::add_def_subpart_dml_column(const uint64_t exec_tenant_i
         || OB_FAIL(dml.add_column("sub_part_idx", def_subpart_idx))
         || OB_FAIL(dml.add_column("tablespace_id", ObSchemaUtils::get_extract_schema_id(
                                                    exec_tenant_id, subpart.get_tablespace_id())))
-        || OB_FAIL(dml.add_column("sub_part_name", subpart.get_part_name()))) {
+        || OB_FAIL(dml.add_column("sub_part_name", ObHexEscapeSqlStr(subpart.get_part_name())))) {
         LOG_WARN("dml add part info failed", K(ret));
     } else if (OB_FAIL(add_subpart_high_bound_val_column(table, subpart, dml))) {
       LOG_WARN("add part high bound failed", K(ret), KPC(table), K(def_subpart_idx));
@@ -936,7 +936,7 @@ int ObAddIncSubPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDML
       || OB_FAIL(dml.add_pk_column("part_id", part_info.part_id_))
       || OB_FAIL(dml.add_pk_column("sub_part_id", part_info.sub_part_id_))
       || OB_FAIL(dml.add_pk_column("sub_part_idx", subpart_idx))
-      || OB_FAIL(dml.add_column("sub_part_name", part_info.part_name_))
+      || OB_FAIL(dml.add_column("sub_part_name", ObHexEscapeSqlStr(part_info.part_name_)))
       || OB_FAIL(dml.add_column("schema_version", part_info.schema_version_))
       || OB_FAIL(dml.add_column("status", part_info.status_))
       || OB_FAIL(dml.add_column("spare1", 0 /*unused now*/))
@@ -1025,7 +1025,7 @@ int ObAddIncPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDMLSql
                                                exec_tenant_id, part_info.table_id_)))
       || OB_FAIL(dml.add_pk_column("part_id", part_info.part_id_))
       || OB_FAIL(dml.add_pk_column("part_idx", part_idx))
-      || OB_FAIL(dml.add_pk_column("part_name", part_info.part_name_))
+      || OB_FAIL(dml.add_pk_column("part_name", ObHexEscapeSqlStr(part_info.part_name_)))
       || OB_FAIL(dml.add_column("schema_version", part_info.schema_version_))
       || OB_FAIL(dml.add_column("sub_part_num", part_info.sub_part_num_))
       || OB_FAIL(dml.add_column("sub_part_space", 0 /*unused now*/))

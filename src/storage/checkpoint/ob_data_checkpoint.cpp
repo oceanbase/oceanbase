@@ -24,6 +24,8 @@ namespace storage
 namespace checkpoint
 {
 
+__thread bool ObDataCheckpoint::is_tenant_freeze_for_flush_ = false;
+
 // ** ObCheckpointDList **
 void ObCheckpointDList::reset()
 {
@@ -770,7 +772,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
 {
   int ret = OB_SUCCESS;
   if (get_rec_scn() <= recycle_scn) {
-    if (!is_flushing() && prepare_list_.is_empty()) {
+    if (is_tenant_freeze() || (!is_flushing() && prepare_list_.is_empty())) {
       int64_t wait_flush_num =
         new_create_list_.checkpoint_list_.get_size()
         + active_list_.checkpoint_list_.get_size();
@@ -787,10 +789,10 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
       }
 
       if (logstream_freeze) {
-        if (OB_FAIL(ls_->logstream_freeze(true/*is_sync*/))) {
+        if (OB_FAIL(ls_->logstream_freeze(false /* !is_sync */))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
-      } else if (OB_FAIL(ls_->batch_tablet_freeze(need_flush_tablets, true/*is_sync*/))) {
+      } else if (OB_FAIL(ls_->batch_tablet_freeze(need_flush_tablets, false /* !is_sync */))) {
         STORAGE_LOG(WARN, "batch tablet freeze failed",
                     K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
       }

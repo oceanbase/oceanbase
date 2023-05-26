@@ -19,7 +19,6 @@
 #include "share/scheduler/ob_worker_obj_pool.h"
 #include "lib/atomic/ob_atomic.h"
 #include "observer/omt/ob_tenant_node_balancer.h"
-#include "share/scheduler/ob_dag_type.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 5; // 500ms

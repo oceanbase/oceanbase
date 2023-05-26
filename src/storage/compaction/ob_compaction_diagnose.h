@@ -130,6 +130,9 @@ public:
       ObDiagnoseTabletCompProgress &input_progress);
   static int check_system_compaction_config(char *tmp_str, const int64_t buf_len);
 private:
+  int diagnose_ls_merge(
+      const ObMergeType merge_type,
+      const ObLSID &ls_id);
   int diagnose_tablet_mini_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_minor_merge(const ObLSID &ls_id, ObTablet &tablet);
   int diagnose_tablet_medium_merge(
@@ -209,20 +212,21 @@ private:
 
 #define DEL_SUSPECT_INFO(type, ls_id, tablet_id) \
 { \
+      int tmp_ret = OB_SUCCESS;                                                                 \
       compaction::ObMergeDagHash dag_hash;                                                      \
       dag_hash.merge_type_ = type;                                                                     \
       dag_hash.ls_id_ = ls_id;                                                                           \
       dag_hash.tablet_id_ = tablet_id;                                                                   \
       int64_t tenant_id = MTL_ID();                                                                     \
       int64_t hash_value = ObScheduleSuspectInfo::gen_hash(tenant_id, dag_hash.inner_hash());          \
-      if (OB_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(hash_value))) { \
-        if (OB_HASH_NOT_EXIST != ret) {                                                                \
-          STORAGE_LOG(WARN, "failed to add suspect info", K(ret), K(dag_hash), K(tenant_id));         \
+      if (OB_TMP_FAIL(ObScheduleSuspectInfoMgr::get_instance().del_suspect_info(hash_value))) { \
+        if (OB_HASH_NOT_EXIST != tmp_ret) {                                                                \
+          STORAGE_LOG(WARN, "failed to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));         \
         } else {                                                                                      \
-          ret = OB_SUCCESS;                                                                           \
+          tmp_ret = OB_SUCCESS;                                                                           \
         }                                                                                            \
       } else {                                                                                      \
-        STORAGE_LOG(DEBUG, "success to add suspect info", K(ret), K(dag_hash), K(tenant_id));       \
+        STORAGE_LOG(DEBUG, "success to add suspect info", K(tmp_ret), K(dag_hash), K(tenant_id));       \
       }                                                                                       \
 }
 

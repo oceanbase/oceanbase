@@ -79,6 +79,7 @@ public:
 
 private:
   static const int64_t IDLE_WAIT_TIME = 100 * 1000;
+  static const int64_t IDLE_HANDLE_COUNT = 10;
   int do_request_(const int64_t thread_index, LSFetchCtx &ls_fetch_ctx);
   int handle_task_(LSFetchCtx *task, bool &need_dispatch);
 

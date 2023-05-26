@@ -94,19 +94,19 @@ ObSimpleSysVariableSchema &ObSimpleSysVariableSchema::operator =(const ObSimpleS
 
 ObSysVariableMgr::ObSysVariableMgr() :
     is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    sys_variable_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE)),
-    sys_variable_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE))
+    sys_variable_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE, ObCtxIds::SCHEMA_SERVICE)),
+    sys_variable_map_(SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE, ObCtxIds::SCHEMA_SERVICE))
   {
   }
 
 ObSysVariableMgr::ObSysVariableMgr(common::ObIAllocator &allocator) :
     is_inited_(false),
-    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    sys_variable_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE)),
-    sys_variable_map_(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_SCHEMA_SYS_VARIABLE)))
+    sys_variable_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_SYS_VARIABLE, ObCtxIds::SCHEMA_SERVICE)),
+    sys_variable_map_(SET_USE_500(ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_SCHEMA_SYS_VARIABLE, ObCtxIds::SCHEMA_SERVICE)))
 {
 }
 

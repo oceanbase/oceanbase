@@ -28,20 +28,20 @@ using namespace common;
 using namespace common::hash;
 
 ObDbLinkMgr::ObDbLinkMgr()
-  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(local_allocator_),
-    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR")),
-    dblink_id_map_(SET_USE_500("DBLINK_MGR")),
-    dblink_name_map_(SET_USE_500("DBLINK_MGR")),
+    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
+    dblink_id_map_(SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
+    dblink_name_map_(SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
     is_inited_(false)
 {}
 
 ObDbLinkMgr::ObDbLinkMgr(ObIAllocator &allocator)
-  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+  : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
     allocator_(allocator),
-    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR")),
-    dblink_id_map_(SET_USE_500("DBLINK_MGR")),
-    dblink_name_map_(SET_USE_500("DBLINK_MGR")),
+    dblink_schemas_(0, NULL, SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
+    dblink_id_map_(SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
+    dblink_name_map_(SET_USE_500("DBLINK_MGR", ObCtxIds::SCHEMA_SERVICE)),
     is_inited_(false)
 {}
 

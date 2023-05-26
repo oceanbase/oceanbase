@@ -368,6 +368,7 @@ int ObDirectLoadSSTableRangeSplitter::init(const ObIArray<ObDirectLoadSSTable *>
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(sstable_array), KP(datum_utils));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(construct_rowkey_iters(sstable_array))) {
       LOG_WARN("fail to construct rowkey itres", KR(ret));
     } else if (OB_FAIL(
@@ -452,6 +453,7 @@ int ObDirectLoadMergeRangeSplitter::init(ObDirectLoadOriginTable *origin_table,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KPC(origin_table), K(sstable_array), KP(datum_utils));
   } else {
+    allocator_.set_tenant_id(MTL_ID());
     scan_range_.set_whole_range();
     if (OB_FAIL(construct_origin_table_rowkey_iter(origin_table))) {
       LOG_WARN("fail to construct origin sstable rowkey itre", KR(ret));
@@ -567,6 +569,7 @@ int ObDirectLoadMultipleMergeTabletRangeSplitter::init(
              K(table_data_desc), KP(datum_utils));
   } else {
     tablet_id_ = tablet_id;
+    allocator_.set_tenant_id(MTL_ID());
     scan_range_.set_whole_range();
     if (OB_FAIL(construct_origin_table_rowkey_iter(origin_table))) {
       LOG_WARN("fail to construct origin sstable rowkey itre", KR(ret));
@@ -1036,6 +1039,7 @@ int ObDirectLoadMultipleSSTableRangeSplitter::init(
     LOG_WARN("invalid args", KR(ret), K(sstable_array), K(table_data_desc), KP(datum_utils));
   } else {
     datum_utils_ = datum_utils;
+    allocator_.set_tenant_id(MTL_ID());
     if (OB_FAIL(construct_rowkey_iters(sstable_array, table_data_desc, datum_utils))) {
       LOG_WARN("fail to construct rowkey iters", KR(ret));
     } else if (OB_FAIL(compare_.init(*datum_utils))) {

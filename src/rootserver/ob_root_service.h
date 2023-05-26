@@ -41,7 +41,6 @@
 #include "rootserver/ob_root_inspection.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
 #include "rootserver/ob_rs_thread_checker.h"
-#include "rootserver/ob_inner_table_monitor.h"
 #include "rootserver/ob_snapshot_info_manager.h"
 #include "rootserver/ob_upgrade_storage_format_version_executor.h"
 #include "rootserver/ob_upgrade_executor.h"
@@ -291,6 +290,7 @@ public:
   class ObUpdateAllServerConfigTask : public common::ObAsyncTimerTask
   {
   public:
+    const static int64_t RETRY_INTERVAL = 600 * 1000L * 1000L;  // 10min
     explicit ObUpdateAllServerConfigTask(ObRootService &root_service);
     virtual ~ObUpdateAllServerConfigTask() {}
   public:
@@ -335,21 +335,6 @@ public:
     DISALLOW_COPY_AND_ASSIGN(RsListChangeCb);
   };
 
-  class ObInnerTableMonitorTask: public common::ObAsyncTimerTask
-  {
-  public:
-    const static int64_t PURGE_INTERVAL = 3600L * 1000L * 1000L;//1h
-    ObInnerTableMonitorTask(ObRootService &rs);
-    virtual ~ObInnerTableMonitorTask() {}
-
-    // interface of AsyncTask
-    virtual int process() override;
-    virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
-    virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
-  private:
-    ObRootService &rs_;
-    DISALLOW_COPY_AND_ASSIGN(ObInnerTableMonitorTask);
-  };
   class ObMinorFreezeTask : public share::ObAsyncTask
   {
   public:
@@ -754,13 +739,12 @@ public:
   int schedule_check_server_timer_task();
   // @see ObRefreshServerTask
   int schedule_refresh_server_timer_task(const int64_t delay);
-  // @see ObInnerTableMonitorTask
-  int schedule_inner_table_monitor_task();
   int schedule_primary_cluster_inspection_task();
   int schedule_recyclebin_task(int64_t delay);
   // @see ObInspector
   int schedule_inspector_task();
   int schedule_update_rs_list_task();
+  int schedule_update_all_server_config_task();
   //update statistic cache
   int update_stat_cache(const obrpc::ObUpdateStatCacheArg &arg);
 
@@ -944,9 +928,6 @@ private:
 
   common::SpinRWLock broadcast_rs_list_lock_;
 
-  // Inner table mointor
-  ObInnerTableMonitor inner_table_monitor_;
-
   // the single task queue for all async tasks and timer tasks
   common::ObWorkQueue task_queue_;
   common::ObWorkQueue inspect_task_queue_;
@@ -959,7 +940,6 @@ private:
   ObLoadDDLTask load_ddl_task_; // repeat to succeed & no retry
   ObRefreshIOCalibrationTask refresh_io_calibration_task_; // retry to succeed & no repeat
   share::ObEventTableClearTask event_table_clear_task_;  // repeat & no retry
-  ObInnerTableMonitorTask inner_table_monitor_task_;     // repeat & no retry
 
   ObInspector inspector_task_;     // repeat & no retry
   ObPurgeRecyclebinTask purge_recyclebin_task_;     // not repeat & no retry
@@ -971,6 +951,7 @@ private:
   ObSnapshotInfoManager snapshot_manager_;
   int64_t core_meta_table_version_;
   ObUpdateRsListTimerTask update_rs_list_timer_task_;
+  ObUpdateAllServerConfigTask update_all_server_config_task_;
   int64_t baseline_schema_version_;
 
   // backup

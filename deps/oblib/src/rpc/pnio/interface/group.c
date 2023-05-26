@@ -1,11 +1,7 @@
 #define MAX_PN_LISTEN 256
 #define MAX_PN_GRP (1<<17)
 #define MAX_PN_PER_GRP 64
-#ifdef PERF_MODE
-#define CHUNK_SIZE ((1<<21) - (17<<10))
-#else
 #define CHUNK_SIZE (1<<14) - 128
-#endif
 
 typedef struct pn_listen_t
 {
@@ -223,6 +219,7 @@ static pn_t* pn_create(int listen_id, int gid, int tid)
     cfifo_alloc_init(&pn->server_resp_alloc, &pn->server_resp_chunk_alloc);
     cfifo_alloc_init(&pn->client_req_alloc, &pn->client_req_chunk_alloc);
     cfifo_alloc_init(&pn->client_cb_alloc, &pn->client_cb_chunk_alloc);
+    pn->is_stop_ = false;
   }
   if (0 != err && NULL != pn) {
     pn_destroy(pn);
@@ -275,28 +272,6 @@ typedef struct pn_client_slice_t
   pn_client_req_t req_;
 } pn_client_slice_t;
 
-#ifdef PERF_MODE
-static void pn_pktc_flush_cb(pktc_req_t* r)
-{
-  pn_client_req_t* pn_req = structof(r, pn_client_req_t, req);
-  pn_client_slice_t* slice = structof(pn_req, pn_client_slice_t, req_);
-  if (0 == --slice->ref_) {
-    pn_pktc_cb_t* pn_cb = &slice->cb_;
-    PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
-    pn_cb->client_cb(pn_cb->arg, (&pn_cb->cb)->errcode, NULL, 0);
-  }
-}
-
-static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
-{
-  pn_pktc_cb_t* pn_cb = structof(cb, pn_pktc_cb_t, cb);
-  pn_client_slice_t* slice = structof(pn_cb, pn_client_slice_t, cb_);
-  if (0 == ++slice->ref_) {
-    PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
-    pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
-  }
-}
-#else
 static void pn_pktc_flush_cb(pktc_req_t* r)
 {
   pn_client_req_t* pn_req = structof(r, pn_client_req_t, req);
@@ -318,19 +293,9 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
 }
-#endif
 
 static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const char* req, int64_t req_sz, int16_t categ_id, int64_t expire_us, client_cb_t client_cb, void* arg)
 {
-#ifdef PERF_MODE
-  pn_client_slice_t* slice = ((typeof(slice))req) - 1;
-  if (unlikely(NULL == slice)) {
-    return NULL;
-  }
-  pn_client_req_t* pn_req = &slice->req_;
-  struct pn_pktc_cb_t* pn_cb = &slice->cb_;
-  slice->ref_ = 0;
-#else
   pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
   if (unlikely(NULL == pn_req)) {
     return NULL;
@@ -340,7 +305,6 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
     cfifo_free(pn_req);
     return NULL;
   }
-#endif
   pktc_cb_t* cb = &pn_cb->cb;
   pktc_req_t* r = &pn_req->req;
   pn_cb->client_cb = client_cb;
@@ -382,7 +346,7 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
   if (addr->sin_addr.s_addr == 0 || htons(addr->sin_port) == 0) {
     err = -EINVAL;
-    rk_error("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
+    rk_warn("invalid sin_addr: %x:%d", addr->sin_addr.s_addr, addr->sin_port);
   }
   pktc_req_t* r = pn_create_pktc_req(pn, gen_pkt_id(), dest, buf, sz, categ_id, expire_us, cb, arg);
   if (NULL == r) {
@@ -396,17 +360,31 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   return err;
 }
 
+PN_API void pn_stop(uint64_t gid)
+{
+  pn_grp_t *pgrp = locate_grp(gid);
+  for (int tid = 0; tid < pgrp->count; tid++) {
+    pn_t *pn = get_pn_for_send(pgrp, tid);
+    ATOMIC_STORE(&pn->is_stop_, true);
+  }
+}
+
+PN_API void pn_wait(uint64_t gid)
+{
+  pn_grp_t *pgrp = locate_grp(gid);
+  for (int tid = 0; tid < pgrp->count; tid++) {
+    pn_t *pn = get_pn_for_send(pgrp, tid);
+    pthread_join(pn->pd, NULL);
+  }
+}
+
 typedef struct pn_resp_ctx_t
 {
   pn_t* pn;
   void* req_handle;
   uint64_t sock_id;
   uint64_t pkt_id;
-#ifdef PERF_MODE
-  char reserve[1<<10];
-#else
   char reserve[sizeof(pkts_req_t)];
-#endif
 } pn_resp_ctx_t;
 
 static pn_resp_ctx_t* create_resp_ctx(pn_t* pn, void* req_handle, uint64_t sock_id, uint64_t pkt_id)
@@ -462,12 +440,9 @@ static void pn_pkts_flush_cb_error_func(pkts_req_t* req)
   fifo_free(ctx);
 }
 
-PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
+PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us)
 {
   pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
-#ifdef PERF_MODE
-  ref_free(ctx->req_handle);
-#endif
   pn_resp_t* resp = NULL;
   if (sizeof(pn_resp_t) + sz <= sizeof(ctx->reserve)) {
     resp = (typeof(resp))(ctx->reserve);
@@ -482,6 +457,7 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
     r->flush_cb = pn_pkts_flush_cb_func;
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
+    r->expire_us = resp_expired_abs_us;
     eh_copy_msg(&r->msg, ctx->pkt_id, buf, sz);
   } else {
     r = (typeof(r))(ctx->reserve);
@@ -489,6 +465,7 @@ PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz)
     r->flush_cb = pn_pkts_flush_cb_error_func;
     r->sock_id = ctx->sock_id;
     r->categ_id = 0;
+    r->expire_us = resp_expired_abs_us;
   }
   pkts_t* pkts = &ctx->pn->pkts;
   return pkts_resp(pkts, r);
@@ -503,13 +480,14 @@ PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr) {
   } else {
     pkts_t* pkts = &ctx->pn->pkts;
     pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
-    socklen_t sa_len = sizeof(struct sockaddr_storage);
     if (unlikely(NULL == sock)) {
       err = -EINVAL;
       rk_warn("idm_get sock failed, sock_id=%lx", ctx->sock_id);
-    } else if (0 != getpeername(sock->fd, (struct sockaddr*)addr, &sa_len)) {
-      err = -EIO;
-      rk_warn("getpeername failed, fd=%d, errno=%d", sock->fd, errno);
+    } else {
+      struct sockaddr_in* sin = (typeof(sin))addr;
+      sin->sin_family = AF_INET;
+      sin->sin_addr.s_addr = sock->peer.ip;
+      sin->sin_port = htons(sock->peer.port);
     }
   }
   return err;

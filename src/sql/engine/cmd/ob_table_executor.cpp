@@ -1525,6 +1525,13 @@ int ObAlterTableExecutor::calc_range_values_exprs(
                                        *sub_part,
                                        ctx));
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObPartitionExecutorUtils::check_increasing_range_value(part->get_subpart_array(),
+                                                                           part->get_subpartition_num(),
+                                                                           stmt::T_ALTER_TABLE))) {
+          LOG_WARN("check increasing range value failed", K(ret));
+        }
+      }
     }
   } else {
     const int64_t part_num = new_table_schema.get_partition_num();
@@ -1539,6 +1546,13 @@ int ObAlterTableExecutor::calc_range_values_exprs(
                                      dst_res_type,
                                      *part,
                                      ctx));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObPartitionExecutorUtils::check_increasing_range_value(part_array,
+                                                                         part_num,
+                                                                         stmt::T_ALTER_TABLE))) {
+        LOG_WARN("check increasing range value failed", K(ret));
+      }
     }
   }
   return ret;
@@ -2124,9 +2138,16 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             // wait schema_version refreshed on this server
             while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
               int64_t refreshed_schema_version = OB_INVALID_VERSION;
+              int64_t consensus_schema_version = OB_INVALID_VERSION;
               if (OB_FAIL(GCTX.schema_service_->get_tenant_refreshed_schema_version(res.tenant_id_, refreshed_schema_version))) {
-                LOG_WARN("get schema_version fail", KR(ret), K(res.tenant_id_));
-              } else if (refreshed_schema_version >= res.task_id_) {
+                LOG_WARN("get refreshed schema_version fail", KR(ret), K(res.tenant_id_));
+              } else if (OB_FAIL(GCTX.schema_service_->get_tenant_broadcast_consensus_version(res.tenant_id_, consensus_schema_version))) {
+                LOG_WARN("get consensus schema_version fail", KR(ret), K(res.tenant_id_));
+              } else if (refreshed_schema_version >= res.task_id_
+                          && consensus_schema_version >= res.task_id_) {
+                break;
+              } else if (refreshed_schema_version >= res.task_id_
+                          && ObTimeUtility::current_time() - step_time >= GCONF._wait_interval_after_truncate) {
                 break;
               } else {
                 ob_usleep(10 * 1000);
@@ -2134,7 +2155,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             }
           }
           int64_t end_time = ObTimeUtility::current_time();
-          LOG_INFO("truncate_table_v2", K(ret), "cost", end_time-start_time,
+          LOG_INFO("truncate_table_v2", KR(ret), "cost", end_time-start_time,
                                                 "trans_cost", step_time - start_time,
                                                 "wait_refresh", end_time - step_time,
                                                 "table_name", truncate_table_arg.table_name_,

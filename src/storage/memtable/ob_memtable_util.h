@@ -16,6 +16,8 @@
 #include "share/ob_define.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/thread_local/ob_tsi_factory.h"
+#include "lib/hash/ob_hashset.h"
+#include "common/rowkey/ob_store_rowkey.h"
 
 namespace oceanbase
 {
@@ -23,6 +25,8 @@ using namespace lib;
 using namespace common;
 namespace memtable
 {
+
+typedef common::hash::ObHashSet<uint64_t> ObMemtableSet;
 
 template <typename T>
 const char *strarray(const common::ObIArray<T> &array)
@@ -65,7 +69,7 @@ public:
   ObFakeStoreRowKey(const char *str, const int64_t size)
   {
     for(int64_t i = 0; i < OBJ_CNT; i++) {
-      obj_array_[i].set_char_value(str, size);
+      obj_array_[i].set_char_value(str, (ObString::obstr_size_t)size);
     }
     rowkey_.assign(obj_array_, OBJ_CNT);
   }

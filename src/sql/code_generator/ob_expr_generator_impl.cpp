@@ -1523,13 +1523,8 @@ int ObExprGeneratorImpl::visit(ObOpRawExpr &expr)
       } else if (T_OBJ_ACCESS_REF == expr.get_expr_type()) {
         ObExprObjAccess *obj_access_op = static_cast<ObExprObjAccess *>(op);
         const ObObjAccessRawExpr &obj_access_expr = static_cast<ObObjAccessRawExpr &>(expr);
-        if (OB_ISNULL(reinterpret_cast<void*>(obj_access_expr.get_get_attr_func_addr()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("func addr is NULL", K(obj_access_expr), K(obj_access_expr.get_var_indexs()), K(ret));
-        } else {
-          obj_access_op->set_real_param_num(static_cast<int32_t>(obj_access_expr.get_param_count()));
-          OZ(obj_access_op->get_info().from_raw_expr(obj_access_expr));
-        }
+        obj_access_op->set_real_param_num(static_cast<int32_t>(obj_access_expr.get_param_count()));
+        OZ(obj_access_op->get_info().from_raw_expr(obj_access_expr));
       } else if (T_OP_MULTISET == expr.get_expr_type()) {
         ObExprMultiSet *ms_op = static_cast<ObExprMultiSet *>(op);
         const ObMultiSetRawExpr &ms_expr = static_cast<ObMultiSetRawExpr &>(expr);

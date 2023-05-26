@@ -36,7 +36,7 @@ int ObMajorFreezeService::init(const uint64_t tenant_id)
   return ret;
 }
 
-ObMajorFreezeService::~ObMajorFreezeService() 
+ObMajorFreezeService::~ObMajorFreezeService()
 {
   SpinWLockGuard w_guard(rw_lock_);
   ob_delete(tenant_major_freeze_);
@@ -53,7 +53,7 @@ int ObMajorFreezeService::switch_to_leader()
     if (OB_ISNULL(tenant_major_freeze_)) {
       SpinWLockGuard w_guard(rw_lock_);
       if (OB_FAIL(alloc_tenant_major_freeze())) {
-        LOG_WARN("fail to alloc tenant_major_freeze", KR(ret), K_(tenant_id)); 
+        LOG_WARN("fail to alloc tenant_major_freeze", KR(ret), K_(tenant_id));
       }
     } else {
       SpinRLockGuard r_guard(rw_lock_);
@@ -119,7 +119,7 @@ int ObMajorFreezeService::alloc_tenant_major_freeze()
   } else if (OB_NOT_NULL(tenant_major_freeze_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_major_freeze is not null", K_(tenant_id), KR(ret), KP_(tenant_major_freeze));
-  } else if (nullptr == (buf = common::ob_malloc(len, "tenant_mf_mgr"))) {
+  } else if (nullptr == (buf = common::ob_malloc(len, ObMemAttr(tenant_id_, "tenant_mf_mgr")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", KR(ret), K_(tenant_id), K(len));
   } else if (FALSE_IT(tenant_major_freeze_ = new(buf) ObTenantMajorFreeze())) {
@@ -130,7 +130,7 @@ int ObMajorFreezeService::alloc_tenant_major_freeze()
   } else if (OB_FAIL(tenant_major_freeze_->start())) {
     LOG_WARN("fail to start tenant_major_freeze", K_(tenant_id), KR(ret), K(is_primary_service));
   }
-  
+
   if (OB_SUCC(ret)) {
     LOG_INFO("succ to alloc tenant_major_freeze", K_(tenant_id), KP_(tenant_major_freeze),
              K(is_primary_service));
@@ -195,7 +195,7 @@ int ObMajorFreezeService::launch_major_freeze()
     }
     ATOMIC_STORE(&is_launched_, false); // set is as false no matter its previous value.
   }
-  
+
   return ret;
 }
 
@@ -247,7 +247,7 @@ int ObMajorFreezeService::check_inner_stat()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } 
+  }
   return ret;
 }
 

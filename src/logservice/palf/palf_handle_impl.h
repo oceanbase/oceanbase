@@ -108,18 +108,24 @@ struct PalfDiagnoseInfo {
   common::ObRole palf_role_;
   palf::ObReplicaState palf_state_;
   int64_t palf_proposal_id_;
+  bool enable_sync_;
+  bool enable_vote_;
   void reset() {
     election_role_ = FOLLOWER;
     election_epoch_ = 0;
     palf_role_ = FOLLOWER;
     palf_state_ = ObReplicaState::INVALID_STATE;
     palf_proposal_id_ = INVALID_PROPOSAL_ID;
+    enable_sync_ = false;
+    enable_vote_ = false;
   }
   TO_STRING_KV(K(election_role_),
                K(election_epoch_),
                K(palf_role_),
                K(palf_state_),
-               K(palf_proposal_id_));
+               K(palf_proposal_id_),
+               K(enable_sync_),
+               K(enable_vote_));
 };
 
 struct FetchLogStat {
@@ -460,6 +466,7 @@ public:
   // - OB_INVALID_ARGUMENT
   // - OB_ENTRY_NOT_EXIST: there is no log in disk
   // - OB_ERR_OUT_OF_LOWER_BOUND: scn is too old, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) = 0;
 
@@ -476,6 +483,7 @@ public:
   // - OB_SUCCESS; locate_by_lsn_coarsely success
   // - OB_INVALID_ARGUMENT
   // - OB_ERR_OUT_OF_LOWER_BOUND: lsn is too small, log files may have been recycled
+  // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   virtual int locate_by_lsn_coarsely(const LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_begin_lsn(LSN &lsn) const = 0;
@@ -502,7 +510,7 @@ public:
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
-  virtual int64_t get_total_used_disk_space() const = 0;
+  virtual int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const = 0;
   virtual const LSN &get_base_lsn_used_for_block_gc() const = 0;
   // @desc: get ack_info_array and degraded_list for judging to degrade/upgrade
   // @params [in] member_ts_array: ack info array of all paxos members
@@ -850,7 +858,7 @@ public:
     return sw_.get_last_slide_scn();
   }
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const override final;
-  int64_t get_total_used_disk_space() const;
+  int get_total_used_disk_space(int64_t &total_used_disk_space, int64_t &unrecyclable_disk_space) const;
   // return the smallest recycable lsn
   const LSN &get_base_lsn_used_for_block_gc() const override final
   {
@@ -1072,6 +1080,21 @@ private:
   int get_leader_max_scn_(SCN &max_scn, LSN &end_lsn);
   void gen_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta) const;
   void get_last_rebuild_meta_info_(RebuildMetaInfo &rebuild_meta_info) const;
+  // ======================= report event begin =======================================
+  void report_set_initial_member_list_(const int64_t paxos_replica_num, const common::ObMemberList &member_list);
+  void report_set_initial_member_list_with_arb_(const int64_t paxos_replica_num, const common::ObMemberList &member_list, const common::ObMember &arb_member);
+  void report_force_set_as_single_replica_(const int64_t prev_replica_num, const int64_t curr_replica_num, const ObMember &member);
+  void report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list);
+  void report_add_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &added_member);
+  void report_remove_member_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMember &removed_member);
+  void report_replace_member_(const common::ObMember &added_member, const common::ObMember &removed_member, const common::ObMemberList &member_list);
+  void report_add_learner_(const common::ObMember &added_learner);
+  void report_remove_learner_(const common::ObMember &removed_learner);
+  void report_add_arb_member_(const common::ObMember &added_arb_member);
+  void report_remove_arb_member_(const common::ObMember &removed_arb_member);
+  void report_switch_learner_to_acceptor_(const common::ObMember &learner);
+  void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
+  // ======================= report event end =======================================
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {

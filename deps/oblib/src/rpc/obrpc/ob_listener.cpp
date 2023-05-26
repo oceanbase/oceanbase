@@ -313,7 +313,7 @@ void ObListener::do_work()
     struct epoll_event conn_ev;
 
     while(!has_set_stop()) {
-      int cnt = epoll_wait(epoll_fd, events, MAXEPOLLSIZE, 1000);
+      int cnt = ob_epoll_wait(epoll_fd, events, MAXEPOLLSIZE, 1000);
       for (int i = 0; i < cnt; i++) {
         int accept_fd = events[i].data.fd;
         uint64_t client_magic = 0;

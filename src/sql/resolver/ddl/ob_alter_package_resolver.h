@@ -56,8 +56,6 @@ private:
                       bool compile_spec,
                       bool compile_body,
                       obrpc::ObAlterPackageArg &pkg_arg);
-  int collec_error_info(const ObPackageInfo *package_info,
-                        share::schema::ObErrorInfo &error_info);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterPackageResolver);

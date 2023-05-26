@@ -12,6 +12,7 @@
 #include "share/schema/ob_ddl_trans_controller.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "rootserver/ob_root_service.h"
+#include "share/ob_srv_rpc_proxy.h"
 
 
 namespace oceanbase
@@ -83,13 +84,15 @@ void ObDDLTransController::run1()
       } else {
         // ignore ret continue
         for (int64_t i = 0; i < tenant_ids.count(); i++) {
-          int64_t start_time= ObTimeUtility::current_time();
+          int64_t start_time = ObTimeUtility::current_time();
           ObCurTraceId::init(GCONF.self_addr_);
           if (OB_FAIL(GCTX.root_service_->get_ddl_service().publish_schema(tenant_ids.at(i)))) {
             LOG_WARN("refresh_schema fail", KR(ret), K(tenant_ids.at(i)));
+          } else if (OB_FAIL(broadcast_consensus_version(tenant_ids.at(i)))) {
+            LOG_WARN("fail to broadcast consensus version", KR(ret), K(tenant_ids.at(i)));
           } else {
-            int64_t end_time= ObTimeUtility::current_time();
-            LOG_INFO("refresh_schema", K(tenant_ids.at(i)), K(end_time - start_time));
+            int64_t end_time = ObTimeUtility::current_time();
+            LOG_INFO("refresh_schema", KR(ret), K(tenant_ids.at(i)), K(end_time - start_time));
           }
          }
       }
@@ -98,6 +101,60 @@ void ObDDLTransController::run1()
       wait_cond_.timedwait(100 * 1000);
     }
   }
+}
+
+int ObDDLTransController::broadcast_consensus_version(const int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObZone zone;
+  ObTimeoutCtx ctx;
+  ObArray<ObAddr> server_list;
+  int64_t schema_version = OB_INVALID_VERSION;
+  obrpc::ObBroadcastConsensusVersionArg arg;
+  rootserver::ObBroadcstConsensusVersionProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::broadcast_consensus_version);
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLTransController", KR(ret));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObDDLTransController", KR(ret));
+  } else if (tenant_id == OB_INVALID_TENANT_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_unit_manager().get_tenant_unit_servers(tenant_id, zone, server_list))) {
+    LOG_WARN("get alive server failed", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
+                         tenant_id, schema_version))) {
+    LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("fail to set default timeout ctx", KR(ret));
+  } else {
+    arg.set_tenant_id(tenant_id);
+    arg.set_consensus_version(schema_version);
+    FOREACH_X(s, server_list, OB_SUCC(ret)) {
+      if (OB_ISNULL(s)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("s is null", KR(ret));
+      } else {
+        // overwrite ret
+        if (OB_FAIL(proxy.call(*s, ctx.get_timeout(), arg))) {
+          LOG_WARN("send broadcast consensus version rpc failed", KR(ret),
+              K(ctx.get_timeout()), K(schema_version), K(arg), "server", *s);
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int> return_code_array;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait result failed", KR(tmp_ret));
+    }
+  }
+  LOG_INFO("broadcast consensus version finished", KR(ret), K(schema_version), K(arg), K(server_list));
+  return ret;
 }
 
 int ObDDLTransController::create_task_and_assign_schema_version(const uint64_t tenant_id,

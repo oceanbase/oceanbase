@@ -76,21 +76,21 @@ int64_t ObSimplePackageSchema::get_convert_size() const
 }
 
 ObPackageMgr::ObPackageMgr()
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(local_allocator_),
-      package_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_INFO_VECTOR)),
-      package_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_ID_MAP)),
-      package_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_NAME_MAP)),
+      package_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      package_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      package_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }
 
 ObPackageMgr::ObPackageMgr(ObIAllocator &allocator)
-    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD)),
+    : local_allocator_(SET_USE_500(ObModIds::OB_SCHEMA_GETTER_GUARD, ObCtxIds::SCHEMA_SERVICE)),
       allocator_(allocator),
-      package_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_INFO_VECTOR)),
-      package_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_ID_MAP)),
-      package_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_NAME_MAP)),
+      package_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_INFO_VECTOR, ObCtxIds::SCHEMA_SERVICE)),
+      package_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      package_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_PACKAGE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       is_inited_(false)
 {
 }

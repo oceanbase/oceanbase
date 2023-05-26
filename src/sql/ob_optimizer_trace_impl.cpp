@@ -35,7 +35,7 @@ namespace sql
 LogFileAppender::LogFileAppender()
   :allocator_("LogFileAppender"),
   identifier_(""),
-  log_file_name_("")
+  log_file_name_("OPT_TRACE")
 {
 
 }

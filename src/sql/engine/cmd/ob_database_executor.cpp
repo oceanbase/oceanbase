@@ -22,7 +22,6 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "lib/worker.h"
-#include "share/ob_cluster_info_proxy.h"
 #include "rootserver/ob_root_utils.h"
 
 namespace oceanbase

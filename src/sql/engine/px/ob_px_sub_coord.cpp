@@ -413,16 +413,15 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
       for (int64_t i = 0; OB_SUCC(ret) && !find && i < sqc.get_temp_table_ctx().count(); ++i) {
         ObSqlTempTableCtx &temp_table_ctx = sqc.get_temp_table_ctx().at(i);
         if (access_op.temp_table_id_ == temp_table_ctx.temp_table_id_) {
-          if (sqc.get_sqc_id() < 0 || sqc.get_sqc_id() >= temp_table_ctx.interm_result_infos_.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("can not find temp table info in sqc meta info", K(ret));
-          } else {
-            ObTempTableResultInfo &info = temp_table_ctx.interm_result_infos_.at(sqc.get_sqc_id());
-            std::random_shuffle(info.interm_result_ids_.begin(), info.interm_result_ids_.end());
-            if (OB_FAIL(access_input->interm_result_ids_.assign(info.interm_result_ids_))) {
-              LOG_WARN("failed to assign result ids", K(ret));
-            } else {
-              find = true;
+          for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_ctx.interm_result_infos_.count(); ++j) {
+            if (sqc.get_exec_addr() == temp_table_ctx.interm_result_infos_.at(j).addr_) {
+              ObTempTableResultInfo &info = temp_table_ctx.interm_result_infos_.at(j);
+              std::random_shuffle(info.interm_result_ids_.begin(), info.interm_result_ids_.end());
+              if (OB_FAIL(access_input->interm_result_ids_.assign(info.interm_result_ids_))) {
+                LOG_WARN("failed to assign result ids", K(ret));
+              } else {
+                find = true;
+              }
             }
           }
         }
@@ -872,6 +871,7 @@ int ObPxSubCoord::end_ddl(const bool need_commit)
     }
     LOG_INFO("end ddl sstable", K(ret), K(need_commit));
   }
+  DEBUG_SYNC(END_DDL_IN_PX_SUBCOORD);
   if (OB_EAGAIN == ret) {
     ret = OB_STATE_NOT_MATCH; // avoid px hang
   }
@@ -913,7 +913,9 @@ int ObPxSubCoord::rebuild_sqc_access_table_locations()
     for (int i = 0; i < location_keys.count() && OB_SUCC(ret); ++i) {
       // dml location always at first
       if (OB_ISNULL(table_loc) && location_keys.at(i).is_loc_uncertain_) {
-        OZ(ObTableLocation::get_full_leader_table_loc(sqc_arg_.exec_ctx_->get_allocator(),
+        ObDASLocationRouter &loc_router = DAS_CTX(*sqc_arg_.exec_ctx_).get_location_router();
+        OZ(ObTableLocation::get_full_leader_table_loc(loc_router,
+           sqc_arg_.exec_ctx_->get_allocator(),
            sqc_arg_.exec_ctx_->get_my_session()->get_effective_tenant_id(),
            location_keys.at(i).table_location_key_,
            location_keys.at(i).ref_table_id_,

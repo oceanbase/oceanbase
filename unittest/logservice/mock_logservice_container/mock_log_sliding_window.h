@@ -295,6 +295,18 @@ public:
     log_proposal_id = mock_last_submit_pid_;
     return ret;
   }
+  int get_last_submit_log_info(LSN &last_submit_lsn,
+                               LSN &last_submit_end_lsn,
+                               int64_t &log_id,
+                               int64_t &log_proposal_id) const
+  {
+    int ret = OB_SUCCESS;
+    last_submit_lsn = mock_last_submit_lsn_;
+    last_submit_end_lsn = mock_last_submit_end_lsn_;
+    log_id = mock_last_submit_log_id_;
+    log_proposal_id = mock_last_submit_pid_;
+    return ret;
+  }
   int get_last_slide_end_lsn(LSN &out_end_lsn) const
   {
     int ret = OB_SUCCESS;
@@ -356,6 +368,7 @@ public:
   int64_t mock_start_id_;
   int64_t mock_last_submit_log_id_;
   LSN mock_last_submit_lsn_;
+  LSN mock_last_submit_end_lsn_;
   int64_t mock_last_submit_pid_;
   LSN mock_max_flushed_lsn_;
   LSN mock_max_flushed_end_lsn_;

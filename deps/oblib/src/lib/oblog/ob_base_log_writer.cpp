@@ -58,6 +58,7 @@ int ObBaseLogWriter::init(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr attr(tenant_id, "BaseLogWriter");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_STDERR("The ObBaseLogWriter has been inited.\n");
@@ -69,10 +70,10 @@ int ObBaseLogWriter::init(
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else if (0 != pthread_mutex_init(&thread_mutex_, NULL)) {
     ret = OB_ERR_SYS;
-  } else if (OB_ISNULL(log_write_cond_ = OB_NEW(SimpleCond, "BaseLogWriter"))) {
+  } else if (OB_ISNULL(log_write_cond_ = OB_NEW(SimpleCond, attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
-  } else if (OB_ISNULL(log_flush_cond_ = OB_NEW(SimpleCond, "BaseLogWriter"))) {
+  } else if (OB_ISNULL(log_flush_cond_ = OB_NEW(SimpleCond, attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_STDERR("Fail to allocate memory, max_buffer_item_cnt=%lu.\n", log_cfg.max_buffer_item_cnt_);
   } else {

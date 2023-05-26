@@ -831,6 +831,7 @@ public:
   const static int64_t BLOCK_SIZE = (64L << 10);
   const static int64_t MIN_BLOCK_SIZE = (4L << 10);
   static const int32_t DATUM_SIZE = sizeof(common::ObDatum);
+  static const int64_t OLD_WORK_AREA_ID = 21;
 
   explicit ObChunkDatumStore(common::ObIAllocator *alloc = NULL);
 

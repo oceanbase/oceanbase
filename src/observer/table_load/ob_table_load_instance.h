@@ -39,8 +39,7 @@ public:
     ATOMIC_AAF(&job_stat_->parsed_bytes_, parsed_bytes);
   }
 private:
-  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
-                       sql::ObSQLSessionInfo *session_info);
+  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
   int begin();
   int start_trans();
   int check_trans_committed();

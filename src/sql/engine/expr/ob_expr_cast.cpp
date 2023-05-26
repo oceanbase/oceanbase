@@ -329,9 +329,14 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
                                         dst_type.get_type(), dst_type.get_collation_type()))) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
-               "dst", ob_obj_type_str(dst_type.get_type()));
+    if (session->is_ps_prepare_stage()) {
+      type.set_null();
+      LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("transition does not support", "src", ob_obj_type_str(type1.get_type()),
+                "dst", ob_obj_type_str(dst_type.get_type()));
+    }
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
   } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
@@ -341,8 +346,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
-    ret = OB_ERR_INVALID_TYPE_FOR_OP;
-    LOG_WARN("explicit cast to lob type not allowed", K(ret), K(dst_type));
+    if (session->is_ps_prepare_stage()) {
+      type.set_null();
+      LOG_TRACE("ps prepare phase ignores type deduce error");
+    } else {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("explicit cast to lob type not allowed", K(ret), K(dst_type));
+    }
   } else {
     // always cast to user requested type
     if (is_explicit_cast && !lib::is_oracle_mode() &&
@@ -881,6 +891,8 @@ int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common
         is_valid = false;
       }
     } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
+      is_valid = false;
+    } else if (ObTimestampType == src && ObTimestampType != dst) {
       is_valid = false;
     }
   }

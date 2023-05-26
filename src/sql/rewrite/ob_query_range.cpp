@@ -2877,7 +2877,10 @@ int ObQueryRange::get_multi_in_key_part(const ObOpRawExpr *l_expr,
       LOG_WARN("failed to adjust in param values", K(ret));
     } else if (OB_FAIL(tmp_key_part->formalize_keypart(contain_row_))) {
       LOG_WARN("failed to formalize in key", K(ret));
-    } else {
+    } else if (tmp_key_part->is_always_true() || tmp_key_part->is_always_false()) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
+    if (OB_SUCC(ret)) {
       out_key_part = tmp_key_part;
     }
   }
@@ -4304,10 +4307,9 @@ int ObQueryRange::do_row_gt_and(ObKeyPart *l_gt, ObKeyPart *r_gt, ObKeyPart  *&r
           LOG_WARN("Light copy key part and items failed", K(ret));
         } else if(OB_FAIL(deep_copy_key_part_and_items(r_cur, new_r_cur))) {
           LOG_WARN("Right copy key part and items failed", K(ret));
-        } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur) ||
-                  (OB_UNLIKELY(new_l_cur->is_like_key() && new_r_cur->is_like_key()))) {
+        } else if (OB_ISNULL(new_l_cur) || OB_ISNULL(new_r_cur)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("new_l_cur and r_cur are both like key", K(ret), K(*new_l_cur), K(*new_r_cur));
+          LOG_WARN("get unexpected null", K(ret), K(new_l_cur), K(new_r_cur));
         } else if (new_l_cur->is_like_key()) {
           result = new_r_cur;
         } else if (new_r_cur->is_like_key()) {

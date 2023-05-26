@@ -2240,6 +2240,9 @@ typedef enum ObItemType
   T_ADMIN_STORAGE,// used to support oss storage for clog/sstable
   T_DYNAMIC_SAMPLING,
   T_TABLE_DYNAMIC_SAMPLING,
+  T_PARTITION_HASH_ELEMENT,
+  T_PARTITION_LIST_ELEMENT,
+  T_PARTITION_RANGE_ELEMENT,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -38,6 +38,7 @@ typedef struct pn_grp_comm_t
 } pn_grp_comm_t;
 
 #define PN_COMM                \
+  bool is_stop_;               \
   pthread_t pd;                \
   int accept_qfd;              \
   int gid;                     \
@@ -56,12 +57,14 @@ PN_API int pn_listen(int port, serve_cb_t cb);
 PN_API int pn_provision(int listen_id, int grp, int thread_count);
 // gid_tid = (gid<<8) | tid
 PN_API int pn_send(uint64_t gid_tid, struct sockaddr_in* addr, const char* buf, int64_t sz, int16_t categ_id, int64_t expire_us, client_cb_t cb, void* arg);
-PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz);
+PN_API int pn_resp(uint64_t req_id, const char* buf, int64_t sz, int64_t resp_expired_abs_us);
 PN_API int pn_get_peer(uint64_t req_id, struct sockaddr_storage* addr);
 PN_API int pn_ratelimit(int grp_id, int64_t value);
 PN_API int64_t pn_get_ratelimit(int grp_id);
 PN_API uint64_t pn_get_rxbytes(int grp_id);
 PN_API int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid);
+PN_API void pn_stop(uint64_t gid);
+PN_API void pn_wait(uint64_t gid);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
 
@@ -73,6 +76,7 @@ pn_comm_t* get_current_pnio();
 #define PNIO_DISPATCH_ERROR         (-51)
 #define PNIO_TIMEOUT_NOT_SENT_OUT       (-54)
 #define PNIO_DISCONNECT_NOT_SENT_OUT    (-55)
+#define PNIO_LISTEN_ERROR               (-56)
 
 /*
 // 启动listen线程和epool线程池, epoll线程池有10个线程

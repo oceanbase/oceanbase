@@ -441,7 +441,7 @@ int main(int argc, char **argv)
     }
   }
 
-  common::reset_mem_leak_checker_label(ObModIds::OB_COMMON_ARRAY_OB_LOG_TABLE_SCAN);
+  common::reset_mem_leak_checker_label("ComArrObLogTabS");
   ::test::init_pc();
   ::test::run_test();
   return 0;

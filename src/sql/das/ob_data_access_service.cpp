@@ -107,6 +107,7 @@ int ObDataAccessService::execute_das_task(
   } else if (OB_FAIL(execute_dist_das_task(das_ref, task_ops, async))) {
     LOG_WARN("failed to execute dist das task", K(ret));
   }
+  DAS_CTX(das_ref.get_exec_ctx()).get_location_router().save_cur_exec_status(ret);
   return ret;
 }
 
@@ -607,7 +608,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   }
   // task_resp's error code indicate the last valid op result.
   if (OB_FAIL(task_resp.get_err_code())) {
-    LOG_WARN("error occurring in remote das task", K(ret));
+    LOG_WARN("error occurring in remote das task", K(ret), K(task_resp));
     OB_ASSERT(op_results.count() <= task_ops.count());
   } else {
     // decode last op result
@@ -653,6 +654,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
       ret = COVER_SUCC(save_ret);
     }
   }
+  DAS_CTX(das_ref.get_exec_ctx()).get_location_router().save_cur_exec_status(ret);
 
   return ret;
 }

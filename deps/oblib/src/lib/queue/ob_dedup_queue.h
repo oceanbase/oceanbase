@@ -189,7 +189,9 @@ private:
                           hash::MultiWriteDefendMode,
                           hash::hash_func<const IObDedupTask *>,
                           hash::equal_to<const IObDedupTask *>,
-                          HashAllocator> TaskMap;
+                          HashAllocator,
+                          common::hash::NormalPointer,
+                          common::ObWrapperAllocator> TaskMap;
   typedef hash::HashMapTypes<const IObDedupTask *, IObDedupTask *>::pair_type TaskMapKVPair;
   static const int32_t DEFAULT_THREAD_NUM = 4;
   static const int32_t MAX_THREAD_NUM = 64;
@@ -301,6 +303,7 @@ private:
   int64_t thread_dead_threshold_;
   ObConcurrentFIFOAllocator allocator_;
   HashAllocator hash_allocator_;
+  common::ObWrapperAllocator bucket_allocator_;
   TaskMap task_map_;
   TaskQueue task_queue_;
   ObThreadCond task_queue_sync_;

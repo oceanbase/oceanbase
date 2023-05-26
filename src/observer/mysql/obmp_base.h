@@ -158,7 +158,7 @@ public:
   virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
   {
     UNUSED(attr);
-    if (OB_UNLIKELY(ObModIds::OB_SQL_DTL == attr.label_
+    if (OB_UNLIKELY(ObLabel("SqlDtlBuf") == attr.label_
                     || ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_)) {
       // do nothing
     } else {

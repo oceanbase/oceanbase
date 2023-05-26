@@ -31,7 +31,6 @@ namespace common
 
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
-static constexpr int64_t GROUP_START_ID = 10000L; // start id = 10000
 static constexpr int64_t GROUP_START_NUM = 8L;
 enum class ObIOMode : uint8_t
 {

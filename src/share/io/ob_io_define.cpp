@@ -438,7 +438,7 @@ int64_t ObIORequest::get_group_id() const
 uint64_t ObIORequest::get_io_usage_index()
 {
   uint64_t index = 0;
-  if (get_group_id() < GROUP_START_ID) {
+  if (get_group_id() < RESOURCE_GROUP_START_ID) {
     //other group , do nothing
   } else {
     index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
@@ -1173,7 +1173,7 @@ int ObTenantIOConfig::parse_group_config(const char *config_str)
 int ObTenantIOConfig::add_single_group_config(const uint64_t tenant_id, const int64_t group_id, int64_t min_percent, int64_t max_percent, int64_t weight_percent)
 {
   int ret = OB_SUCCESS;
-  if (group_id < GROUP_START_ID || !is_valid_tenant_id(tenant_id) ||
+  if (group_id < RESOURCE_GROUP_START_ID || !is_valid_tenant_id(tenant_id) ||
       min_percent < 0 || min_percent > 100 ||
       max_percent < 0 || max_percent > 100 ||
       weight_percent < 0 || weight_percent > 100 ||

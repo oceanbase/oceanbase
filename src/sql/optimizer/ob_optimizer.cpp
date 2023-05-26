@@ -660,6 +660,11 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
   const ObDelUpdStmt *del_upd_stmt = nullptr;
+  // dml + select need run das path
+  if (!stmt.get_query_ctx()->disable_udf_parallel_ && stmt.get_query_ctx()->udf_has_select_stmt_) {
+    stmt.get_query_ctx()->disable_udf_parallel_ |= ((stmt.is_select_stmt() && stmt.has_for_update())
+                                                   || (stmt.is_dml_write_stmt()));
+  }
   if (stmt.get_query_ctx()->disable_udf_parallel_) {
     ctx_.set_has_pl_udf(true);
   }

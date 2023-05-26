@@ -23,7 +23,7 @@ TG_DEF(TEST7, test7, "", TG_STATIC, QUEUE_THREAD, ThreadCountPair(10 ,10), 10)
 TG_DEF(TEST8, test8, "", TG_STATIC, REENTRANT_THREAD_POOL, ThreadCountPair(1 ,1))
 // other
 TG_DEF(MEMORY_DUMP, memDump, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))
-TG_DEF(SchemaRefTask, SchemaRefTask, "", TG_STATIC, DEDUP_QUEUE, ThreadCountPair(1, 1), 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, common::ObModIds::OB_SCHEMA_DEDUP_QUEUE)
+TG_DEF(SchemaRefTask, SchemaRefTask, "", TG_STATIC, DEDUP_QUEUE, ThreadCountPair(1, 1), 1024, 1024, 1L << 30, 512L << 20, common::OB_MALLOC_BIG_BLOCK_SIZE, "SchemaDedupQueu")
 TG_DEF(CONFIG_MGR, ConfigMgr, "", TG_STATIC, TIMER, 1024)
 TG_DEF(ReqMemEvict, ReqMemEvict, "", TG_DYNAMIC, TIMER)
 TG_DEF(IO_TUNING, IO_TUNING, "", TG_STATIC, THREAD_POOL, ThreadCountPair(1, 1))

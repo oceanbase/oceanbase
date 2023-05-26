@@ -81,9 +81,9 @@ public:
   static const int64_t SERVER_EVENT_MAX_CNT = 500;
 
   ObServerCompactionEventHistory()
-  : ObInfoRingArray(allocator_),
-    allocator_("CompEventMgr")
+  : ObInfoRingArray(allocator_)
   {
+    allocator_.set_attr(SET_USE_500("CompEventMgr"));
   }
   ~ObServerCompactionEventHistory() {}
   static int mtl_init(ObServerCompactionEventHistory* &event_history);

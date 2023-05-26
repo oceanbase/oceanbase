@@ -335,7 +335,8 @@ OB_INLINE int ObDASCtx::build_related_tablet_loc(ObDASTabletLoc &tablet_loc)
       } else if (OB_ISNULL(rv = related_tablet_map_.get_related_tablet_id(tablet_loc.tablet_id_,
                                                                           related_table_id))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get related tablet id failed", K(ret), K(tablet_loc.tablet_id_), K(related_table_id));
+        LOG_WARN("get related tablet id failed", K(ret),
+                 K(tablet_loc.tablet_id_), K(related_table_id), K(related_tablet_map_));
       }
     }
     if (OB_SUCC(ret)) {

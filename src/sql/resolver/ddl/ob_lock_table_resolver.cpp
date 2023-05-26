@@ -41,6 +41,7 @@ int ObLockTableResolver::resolve(const ParseNode &parse_tree)
 int ObLockTableResolver::resolve_mysql_mode(const ParseNode &parse_tree)
 {
   // TODO: yanyuan.cxf deal with mysql mode later.
+  // TODO: forbid dblink lock table after yanyuan.cxf deal with mysql mode.
   int ret = OB_SUCCESS;
   ObLockTableStmt *lock_stmt = NULL;
 
@@ -117,14 +118,29 @@ int ObLockTableResolver::resolve_table_list(const ParseNode &table_list)
   } else if (OB_ISNULL(lock_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lock table stmt", K(lock_stmt));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < table_list.num_child_; ++i) {
     const ParseNode *table_node = table_list.children_[i];
     const ObTableSchema *table_schema = nullptr;
+    ObString dblink_name; //no use
+    bool is_reverse_link = false; //no use
+    bool has_dblink_node = false;
     if (OB_ISNULL(table_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table node is null");
+    } else if (OB_FAIL(ObStmtResolver::resolve_dblink_name(table_node->children_[0],
+                                                           session_info_->get_effective_tenant_id(),
+                                                           dblink_name,
+                                                           is_reverse_link,
+                                                           has_dblink_node))) {
+      LOG_WARN("failed to resolve dblink", K(ret));
+    } else if (has_dblink_node) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dblink not support lock table", K(dblink_name), K(is_reverse_link), K(ret));
     } else if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
       LOG_WARN("failed to resolve table", K(ret));
     } else if (table_item->is_function_table() || table_item->is_json_table()) {//兼容oracle行为

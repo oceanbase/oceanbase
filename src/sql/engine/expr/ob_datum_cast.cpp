@@ -3324,7 +3324,12 @@ CAST_FUNC_NAME(text, raw)
       bool has_set_res = false;
       OZ(ObDatumHexUtils::hextoraw_string(expr, in_str, ctx, res_datum, has_set_res));
     } else { // blob to raw
-      res_datum.set_string(in_str.ptr(), in_str.length());
+      // empty blob treat as null in oracle
+      if (lib::is_oracle_mode() && in_str.length() == 0) {
+        res_datum.set_null();
+      } else {
+        res_datum.set_string(in_str.ptr(), in_str.length());
+      }
     }
   }
   return ret;
@@ -8557,7 +8562,7 @@ int anytype_to_varchar_char_explicit(const sql::ObExpr &expr,
         ObDatumMeta src_meta;
         if (ObDatumCast::is_implicit_cast(*expr.args_[0])) {
           const ObExpr &grand_child = *(expr.args_[0]->args_[0]);
-          if (OB_UNLIKELY(ObDatumCast::is_implicit_cast(grand_child))) {
+          if (OB_UNLIKELY(ObDatumCast::is_implicit_cast(grand_child) && !grand_child.obj_meta_.is_xml_sql_type())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("too many cast expr, max is 2", K(ret), K(expr));
           } else {

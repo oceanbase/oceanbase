@@ -75,12 +75,12 @@ namespace sql
   int ObFLTSpanMgr::mtl_init(ObFLTSpanMgr* &span_mgr)
   {
     int ret = OB_SUCCESS;
-    span_mgr = OB_NEW(ObFLTSpanMgr, "SqlFltSpanRec");
+    uint64_t tenant_id = lib::current_resource_owner_id();
+    span_mgr = OB_NEW(ObFLTSpanMgr, ObMemAttr(tenant_id, "SqlFltSpanRec"));
     if (nullptr == span_mgr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for ObMySQLRequestManager", K(ret));
     } else {
-      uint64_t tenant_id = lib::current_resource_owner_id();
       int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
       int64_t queue_size = MAX_QUEUE_SIZE;
       if (OB_FAIL(span_mgr->init(tenant_id, mem_limit, queue_size))) {

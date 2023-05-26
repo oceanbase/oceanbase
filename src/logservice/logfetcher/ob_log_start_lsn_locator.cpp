@@ -193,7 +193,7 @@ int ObLogStartLSNLocator::dispatch_worker_(StartLSNLocateReq *req)
       if (req->is_request_ended(locate_count_)) {
         // If the request ends, set to DONE
         // NOTE: After setting to DONE, no further access is possible
-        LOG_DEBUG("start lsn locate request ended", KPC(req));
+        LOG_TRACE("start lsn locate request ended", KPC(req));
         req->set_state_done();
       } else if (OB_FAIL(req->next_svr_item(item)) || OB_ISNULL(item)) {
         LOG_ERROR("get next server item fail", KR(ret), KPC(req), K(item));
@@ -209,7 +209,7 @@ int ObLogStartLSNLocator::dispatch_worker_(StartLSNLocateReq *req)
         hash_val = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_val);
         hash_val = common::murmurhash(&svr_hash, sizeof(svr_hash), hash_val);
 
-        LOG_DEBUG("dispatch start lsn locate request",
+        LOG_TRACE("dispatch start lsn locate request",
             "worker_idx", hash_val % worker_cnt_,
             K(request_svr),
             KPC(req));

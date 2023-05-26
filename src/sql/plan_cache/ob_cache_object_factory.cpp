@@ -35,12 +35,14 @@ namespace sql
 int ObCacheObjectFactory::alloc(ObCacheObjGuard& guard, ObLibCacheNameSpace ns, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObPlanCache *lib_cache = MTL(ObPlanCache*);
-  if (OB_ISNULL(lib_cache)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid null plan cache", K(ret));
-  } else if (OB_FAIL(lib_cache->alloc_cache_obj(guard, ns, tenant_id))) {
-    LOG_WARN("failed to alloc cache obj", K(ret), K(ns));
+  MTL_SWITCH(tenant_id) {
+    ObPlanCache *lib_cache = MTL(ObPlanCache*);
+    if (OB_ISNULL(lib_cache)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null plan cache", K(ret));
+    } else if (OB_FAIL(lib_cache->alloc_cache_obj(guard, ns, tenant_id))) {
+      LOG_WARN("failed to alloc cache obj", K(ret), K(ns));
+    }
   }
   return ret;
 }

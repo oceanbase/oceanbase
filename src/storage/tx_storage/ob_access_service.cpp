@@ -1017,7 +1017,12 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
   } else if (OB_ISNULL(iter)) {
     //do nothing
   } else if (iter->get_type() == ObNewRowIterator::ObTableScanIterator) {
-    sop_return(ObTableScanIterator, static_cast<ObTableScanIterator*>(iter));
+    ObTableScanIterator *table_scan_iter = nullptr;
+    table_scan_iter = static_cast<ObTableScanIterator *>(iter);
+    if (OB_FAIL(table_scan_iter->check_ls_offline_after_read())) {
+      LOG_WARN("discover ls offline after table scan", K(ret), KPC(table_scan_iter));
+    }
+    sop_return(ObTableScanIterator, table_scan_iter);
   } else {
     iter->~ObNewRowIterator();
   }

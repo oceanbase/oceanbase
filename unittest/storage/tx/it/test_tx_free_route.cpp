@@ -946,8 +946,8 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_T(txn_free_route_ctx.dynamic_changed_),
                 A_T(txn_free_route_ctx.parts_changed_),
                 A_T(txn_free_route_ctx.extra_changed_),
-                A_F(txn_free_route_ctx.flag_.is_tx_terminated_),
-                A_F(txn_free_route_ctx.flag_.is_fallback_));
+                A_F(txn_free_route_ctx.flag_.is_tx_terminated()),
+                A_F(txn_free_route_ctx.flag_.is_fallback()));
   EX_START_TX(1);
   RESET_HOOKS_2();
   EXPECT_PROXY(POST_ROUTE, A_EQ(backend->server_, &server2));
@@ -1002,7 +1002,7 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_F(txn_free_route_ctx.dynamic_changed_),
                 A_F(txn_free_route_ctx.parts_changed_),
                 A_F(txn_free_route_ctx.extra_changed_),
-                A_F(txn_free_route_ctx.flag_.is_tx_terminated_));
+                A_F(txn_free_route_ctx.flag_.is_tx_terminated()));
   EX_DUMMY_WRITE(201,100);
   // step2
   RESET_HOOKS_2();
@@ -1014,7 +1014,7 @@ TEST_F(ObTestTxFreeRoute, sample)
                 A_F(txn_free_route_ctx.dynamic_changed_),
                 A_F(txn_free_route_ctx.parts_changed_),
                 A_T(txn_free_route_ctx.extra_changed_),
-                A_F(txn_free_route_ctx.flag_.is_tx_terminated_));
+                A_F(txn_free_route_ctx.flag_.is_tx_terminated()));
   EX_SAVEPOINT(202, 102);
   // step3
   RESET_HOOKS_2();

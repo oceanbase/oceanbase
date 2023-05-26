@@ -91,26 +91,14 @@ struct ObMvccScanRange
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class ObIMvccValueIterator
-{
-public:
-  ObIMvccValueIterator() {}
-  virtual ~ObIMvccValueIterator() {}
-  virtual int get_next_node(const void *&tnode) = 0;
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class ObMvccValueIterator : public ObIMvccValueIterator
+class ObMvccValueIterator
 {
 public:
   ObMvccValueIterator()
       : is_inited_(false),
         ctx_(NULL),
         value_(NULL),
-        version_iter_(NULL),
-        last_trans_version_(share::SCN::max_scn()),
-        skip_compact_(false)
+        version_iter_(NULL)
   {
   }
   virtual ~ObMvccValueIterator() {}
@@ -118,8 +106,7 @@ public:
   int init(ObMvccAccessCtx &ctx,
            const ObMemtableKey *key,
            ObMvccRow *value,
-           const ObQueryFlag &query_flag,
-           const bool skip_compact);
+           const ObQueryFlag &query_flag);
   OB_INLINE bool is_exist()
   {
     return (NULL != version_iter_);
@@ -131,7 +118,6 @@ public:
     ctx_ = NULL;
     value_ = NULL;
     version_iter_ = NULL;
-    last_trans_version_ = share::SCN::max_scn();
   }
   int check_row_locked(storage::ObStoreRowLockState &lock_state);
   const transaction::ObTransID get_trans_id() const { return ctx_->get_tx_id(); }
@@ -141,6 +127,18 @@ public:
   const ObMvccRow *get_mvcc_row() const { return value_; }
   const ObMvccTransNode *get_trans_node() const { return version_iter_; }
   void get_trans_stat_row(concurrency_control::ObTransStatRow &row);
+
+  // The interface returns the reader's reader_tx_id and snapshot_tx_id. Both of
+  // the reader_tx_id and snapshot_tx_id is initialized after the first dml and
+  // the former one is used for read latest check and the later one is used for
+  // the read between statements(including cursor)
+  //
+  // NB: Be careful with these interface, because it is only for defensive code
+  // usage.
+  transaction::ObTransID get_reader_tx_id() const { return ctx_->tx_id_; }
+  transaction::ObTransID get_snapshot_tx_id() const { return ctx_->snapshot_.tx_id_; }
+
+  TO_STRING_KV(KPC_(value), KPC_(version_iter), KPC_(ctx));
 private:
   int lock_for_read_(const ObQueryFlag &flag);
   int lock_for_read_inner_(const ObQueryFlag &flag, ObMvccTransNode *&iter);
@@ -156,8 +154,6 @@ private:
   ObMvccAccessCtx *ctx_;
   ObMvccRow *value_;
   ObMvccTransNode *version_iter_;
-  share::SCN last_trans_version_;
-  bool skip_compact_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,8 +170,7 @@ public:
            const ObQueryFlag &query_flag);
   int get_next_row(const ObMemtableKey *&key,
                    ObMvccValueIterator *&value_iter,
-                   uint8_t& iter_flag,
-                   const bool skip_compact = false);
+                   uint8_t& iter_flag);
   void reset();
   int get_key_val(const ObMemtableKey*& key, ObMvccRow*& row);
   int try_purge(const transaction::ObTxSnapshot &snapshot_info,

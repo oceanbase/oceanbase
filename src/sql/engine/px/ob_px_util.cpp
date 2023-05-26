@@ -41,6 +41,13 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
+#define CASE_IGNORE_ERR_HELPER(ERR_CODE)                        \
+case ERR_CODE: {                                                \
+  should_ignore = true;                                         \
+  LOG_USER_WARN(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, ERR_CODE);  \
+  break;                                                        \
+}                                                               \
+
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
 
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
@@ -310,11 +317,12 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
     } else if (dml_op && dml_op->is_table_location_uncertain()) {
       // 需要获取FULL TABLE LOCATION. FIX ME YISHEN.
       CK(OB_NOT_NULL(ctx.get_my_session()));
-      OZ(ObTableLocation::get_full_leader_table_loc(ctx.get_allocator(),
-                                   ctx.get_my_session()->get_effective_tenant_id(),
-                                   table_location_key,
-                                   ref_table_id,
-                                   table_loc));
+      OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                    ctx.get_allocator(),
+                                                    ctx.get_my_session()->get_effective_tenant_id(),
+                                                    table_location_key,
+                                                    ref_table_id,
+                                                    table_loc));
     } else {
       if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
         // create new table loc for a random dfo distribution for external table
@@ -946,11 +954,12 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
     } else {
       if (dml_op->is_table_location_uncertain()) {
         CK(OB_NOT_NULL(ctx.get_my_session()));
-        OZ(ObTableLocation::get_full_leader_table_loc(ctx.get_allocator(),
-                                     ctx.get_my_session()->get_effective_tenant_id(),
-                                     table_location_key,
-                                     ref_table_id,
-                                     table_loc));
+        OZ(ObTableLocation::get_full_leader_table_loc(DAS_CTX(ctx).get_location_router(),
+                                                      ctx.get_allocator(),
+                                                      ctx.get_my_session()->get_effective_tenant_id(),
+                                                      table_location_key,
+                                                      ref_table_id,
+                                                      table_loc));
       } else {
         // 通过TSC或者DML获得当前的DFO的partition对应的location信息
         // 后续利用location信息构建对应的SQC meta
@@ -1415,15 +1424,21 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
       ObTabletIdxMap &idx_map)
 {
   int ret = OB_SUCCESS;
+  int64_t tablet_idx = 0;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
   } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "TabletOrderIdx"))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
+  } else if (is_virtual_table(table_schema->get_table_id())) {
+    for (int i = 0; OB_SUCC(ret) && i < table_schema->get_all_part_num(); ++i) {
+      if (OB_FAIL(idx_map.set_refactored(i + 1, tablet_idx++))) {
+        LOG_WARN("fail set value to hashmap", K(ret));
+      }
+    }
   } else {
     ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
     ObPartitionSchemaIter::Info info;
-    int64_t tablet_idx = 0;
     do {
       if (OB_FAIL(iter.next_partition_info(info))) {
         if (OB_ITER_END != ret) {
@@ -3763,22 +3778,10 @@ bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
 {
   bool should_ignore = false;
   switch (error_code) {
-    case OB_ALLOCATE_MEMORY_FAILED: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_CONNECT_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_RPC_SEND_ERROR: {
-      should_ignore = true;
-      break;
-    }
-    case OB_TENANT_NOT_IN_SERVER: {
-      should_ignore = true;
-      break;
-    }
+    CASE_IGNORE_ERR_HELPER(OB_ALLOCATE_MEMORY_FAILED)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_CONNECT_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_RPC_SEND_ERROR)
+    CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
     default: {
       break;
     }

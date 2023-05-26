@@ -133,12 +133,12 @@ private:
       // because the log could be archived, and the logroute service doesn't know whether
       // archive is on or log exists in archive, so the rpc would be lauched.
       // In this perspective, the log is served, because we need to lauch rpc.
-      return lsn <= end_lsn_;
+      return lsn < end_lsn_;
     }
 
     bool is_lower_bound(const palf::LSN &lsn)
     {
-      return lsn <= start_lsn_;
+      return lsn < start_lsn_;
     }
 
     int64_t to_string(char *buffer, int64_t length) const;

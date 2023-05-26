@@ -298,7 +298,10 @@ private:
                                const ObTableSchema &table);
   int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
                     const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
-  int gen_table_options_dml(const uint64_t exec_tenant_id, const ObTableSchema &table, share::ObDMLSqlSplicer &dml);
+  int gen_table_options_dml(const uint64_t exec_tenant_id,
+                            const ObTableSchema &table,
+                            const bool update_object_status_ignore_version,
+                            share::ObDMLSqlSplicer &dml);
   int gen_column_dml(const uint64_t exec_tenant_id, const ObColumnSchemaV2 &column, share::ObDMLSqlSplicer &dml);
   int gen_constraint_dml(const uint64_t exec_tenant_id, const ObConstraint &constraint, share::ObDMLSqlSplicer &dml);
   int gen_constraint_column_dml(
@@ -455,6 +458,12 @@ private:
       const bool is_history,
       ObSqlString &column_sql);
 // MockFKParentTable end
+//
+  int check_table_history_matched_(
+      ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const int64_t schema_version);
 
 public:
   void init(common::ObMySQLProxy *sql_proxy) { sql_proxy_ = sql_proxy; }

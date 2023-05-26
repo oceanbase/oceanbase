@@ -2686,7 +2686,8 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
     } else if (GEN_COLUMN_DEFINITION_NUM_CHILD == node->num_child_) {
       //处理identity column的定义
       if (OB_NOT_NULL(node->children_[4]) && node->children_[4]->type_ == T_IDENTITY_COLUMN) {
-        if (!column.get_meta_type().is_numeric_type()) {
+        if (ob_is_real_type(column.get_meta_type().get_type())
+              || !column.get_meta_type().is_numeric_type()) {
           ret = OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE;
           LOG_USER_ERROR(OB_ERR_IDENTITY_COLUMN_MUST_BE_NUMERIC_TYPE);
         } else if (OB_FAIL(resolve_identity_column_definition(column, node))) {
@@ -5359,6 +5360,9 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     } else if (column.is_xmltype() && ob_is_numeric_type(tmp_default_value.get_type())) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_WARN("incorrect cmp type with xml arguments",K(tmp_default_value.get_type()), K(ret));
+    } else if (lib::is_oracle_mode() && column.get_meta_type().is_blob() && ob_is_numeric_type(tmp_default_value.get_type())) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("inconsistent datatypes", "expected", data_type, "got", tmp_default_value.get_type(), K(ret));
     } else if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
       LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
     } else if (OB_ISNULL(tmp_res_obj)) {
@@ -5708,6 +5712,9 @@ int ObDDLResolver::resolve_range_partition_elements(ParseNode *node,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_RANGE_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid range partition define", K(element_node->type_));
       } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
                   || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
                  && !is_oracle_mode()) {
@@ -6006,6 +6013,9 @@ int ObDDLResolver::resolve_list_partition_elements(ParseNode *node,
           || OB_ISNULL(element_node->children_[PARTITION_ELEMENT_NODE])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition expr list node is null", K(ret), K(element_node));
+      } else if (element_node->type_ != T_PARTITION_LIST_ELEMENT) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("not a valid list partition define", K(element_node->type_));
       } else if ((OB_ISNULL(element_node->children_[PARTITION_NAME_NODE])
                   || OB_ISNULL(element_node->children_[PARTITION_NAME_NODE]->children_[NAMENODE]))
                  && !is_oracle_mode()) {

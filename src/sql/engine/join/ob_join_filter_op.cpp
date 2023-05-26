@@ -422,6 +422,71 @@ int ObJoinFilterOp::inner_rescan()
   return ret;
 }
 
+// see issue:
+int ObJoinFilterOp::mark_not_need_send_bf_msg()
+{
+  int ret = OB_SUCCESS;
+  ObJoinFilterOpInput *filter_input = static_cast<ObJoinFilterOpInput*>(input_);
+  ObPxSQCProxy *sqc_proxy = reinterpret_cast<ObPxSQCProxy *>(
+      filter_input->share_info_.ch_provider_ptr_);
+  if (MY_SPEC.is_shared_join_filter() && MY_SPEC.is_shuffle_) {
+    for (int i = 0; i < local_rf_msgs_.count() && OB_SUCC(ret); ++i) {
+      if (local_rf_msgs_.at(i)->get_msg_type() == ObP2PDatahubMsgBase::BLOOM_FILTER_MSG) {
+        ObRFBloomFilterMsg *shared_bf_msg = static_cast<ObRFBloomFilterMsg *>(shared_rf_msgs_.at(i));
+        bool is_local_dh = false;
+        if (OB_FAIL(sqc_proxy->check_is_local_dh(local_rf_msgs_.at(i)->get_p2p_datahub_id(),
+            is_local_dh,
+            local_rf_msgs_.at(i)->get_msg_receive_expect_cnt()))) {
+          LOG_WARN("fail to check local dh", K(ret));
+        } else if (is_local_dh) {
+        } else {
+          // only the msg is a shared and shuffled BLOOM_FILTER_MSG
+          // let other worker threads stop trying send join_filter
+          shared_bf_msg->need_send_msg_ = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// copy ObOperator::drain_exch
+// It's same as the base operator, but only need add mark_not_need_send_bf_msg for shared shuffled bloom filter
+int ObJoinFilterOp::drain_exch()
+{
+  uint64_t cpu_begin_time = rdtsc();
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  /**
+   * 1. try to open this operator
+   * 2. try to drain all children
+   */
+  if (OB_FAIL(try_open())) {
+    LOG_WARN("fail to open operator", K(ret));
+  } else if (!exch_drained_) {
+    if (MY_SPEC.is_create_mode()) {
+      tmp_ret = mark_not_need_send_bf_msg();
+    }
+    exch_drained_ = true;
+    for (int64_t i = 0; i < child_cnt_ && OB_SUCC(ret); i++) {
+      if (OB_ISNULL(children_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL child found", K(ret), K(i));
+      } else if (OB_FAIL(children_[i]->drain_exch())) {
+        LOG_WARN("drain exch failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to mark_not_need_send_bf_msg", K(ret));
+      }
+    }
+  }
+  total_time_ += (rdtsc() - cpu_begin_time);
+  return ret;
+}
+
 int ObJoinFilterOp::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
@@ -571,6 +636,13 @@ int ObJoinFilterOp::inner_close()
 int ObJoinFilterOp::try_merge_join_filter()
 {
   int ret = OB_SUCCESS;
+#ifdef ERRSIM
+  if (OB_FAIL(OB_E(EventTable::EN_PX_JOIN_FILTER_NOT_MERGE_MSG) OB_SUCCESS))  {
+    LOG_WARN("ERRSIM match, don't merge_join_filter by desigin", K(ret));
+    return OB_SUCCESS;
+  }
+#endif
+
   ObJoinFilterOpInput *filter_input = static_cast<ObJoinFilterOpInput*>(input_);
   uint64_t *count_ptr = reinterpret_cast<uint64_t *>(
       filter_input->share_info_.unfinished_count_ptr_);

@@ -1400,6 +1400,8 @@ int ObLogicalOperator::do_pre_traverse_operation(const TraverseOp &op, void *ctx
         LOG_WARN("get unexpected null", K(session), K(ret));
       } else if (is_plan_root() && OB_FAIL(adjust_plan_root_output_exprs())) {
         LOG_WARN("failed to set plan root output", K(ret));
+      } else if (is_plan_root() && OB_FAIL(collecte_inseparable_exprs(*alloc_expr_context))) {
+        LOG_WARN("failed to set plan root output", K(ret));
       } else if (OB_FAIL(allocate_expr_pre(*alloc_expr_context))) {
         LOG_WARN("failed to do allocate expr pre", K(ret));
       } else {
@@ -1686,6 +1688,22 @@ int ObLogicalOperator::mark_expr_produced(ObRawExpr *expr,
   return ret;
 }
 
+int ObLogicalOperator::collecte_inseparable_exprs(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else if (stmt->is_dblink_stmt() && stmt->is_select_stmt()) {
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (OB_FAIL(sel_stmt->get_select_exprs(ctx.inseparable_exprs_))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogicalOperator::allocate_expr_pre(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1880,8 +1898,6 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (log_op_def::LOG_LINK_SCAN == get_type()) {
-    // do not extract shared exprs for link op
   } else if (OB_FAIL(extract_shared_exprs(expr,
                                           ctx,
                                           0,
@@ -2044,11 +2060,13 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     LOG_WARN("failed to add var to array", K(ret));
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
-    ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
-                                           ctx,
-                                           ref_cnt,
-                                           shard_exprs));
+  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
+      ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
+                                            ctx,
+                                            ref_cnt,
+                                            shard_exprs));
+    }
   }
   return ret;
 }
@@ -4654,6 +4672,9 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
     } else if (log_op_def::LOG_TABLE_SCAN != node->get_type()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect operator type", K(ret));
+    } else if (FALSE_IT(scan_op = static_cast<ObLogTableScan*>(node))) {
+    } else if (scan_op->is_part_join_filter_created()) {
+      /*do nothing*/
     } else if (OB_ISNULL(filter_create = factory.allocate(*(get_plan()), LOG_JOIN_FILTER))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("failed to allocate exchange nodes", K(ret));
@@ -4662,7 +4683,6 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
       LOG_WARN("fail to add parttition join filter info", K(ret));
     } else {
       bool is_shared_hash_join = static_cast<ObLogJoin*>(this)->is_shared_hash_join();
-      scan_op = static_cast<ObLogTableScan*>(node);
       ObPxBFStaticInfo bf_info;
       join_filter_create = static_cast<ObLogJoinFilter *>(filter_create);
       join_filter_create->set_is_create_filter(true);
@@ -4687,6 +4707,7 @@ int ObLogicalOperator::allocate_partition_join_filter(const ObIArray<JoinFilterI
           join_filter_create->get_p2p_sequence_ids().at(0),
           right_has_exchange));
       scan_op->set_join_filter_info(bf_info);
+      scan_op->set_part_join_filter_created(true);
       filter_id++;
       for (int j = 0; j < info.lexprs_.count() && OB_SUCC(ret); ++j) {
         ObRawExpr *expr = info.lexprs_.at(j);

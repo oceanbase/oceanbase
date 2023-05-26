@@ -205,7 +205,7 @@ int PartProgressController::update_progress(const int64_t progress_id, const int
     Item &item = *(progress_list_ + progress_id);
     item.update(progress);
 
-    _LOG_DEBUG("[STAT] [PROGRESS_CONTROLLER] [UPDATE] progress_id=%ld progress=%ld(%s) "
+    _LOG_TRACE("[STAT] [PROGRESS_CONTROLLER] [UPDATE] progress_id=%ld progress=%ld(%s) "
         "delay=%s  progress_cnt=(total=%ld,valid=%ld,recycled=%ld,max=%ld)",
         progress_id, progress, NTS_TO_STR(progress), NTS_TO_DELAY(progress),
         progress_cnt_, valid_progress_cnt_, recycled_indices_.count(), max_progress_cnt_);
@@ -242,7 +242,7 @@ int PartProgressController::get_min_progress(int64_t &progress)
       }
     }
 
-    LOG_DEBUG("[FETCHER] [GET_MIN_PROGRESS] ", K(progress), K_(progress_cnt), K(min_progress_id));
+    LOG_TRACE("[FETCHER] [GET_MIN_PROGRESS] ", K(progress), K_(progress_cnt), K(min_progress_id));
     execution_time = get_timestamp() - execution_time ;
     // Update execution time, print execution time periodically
     update_execution_time_(execution_time);

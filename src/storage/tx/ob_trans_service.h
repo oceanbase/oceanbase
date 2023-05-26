@@ -176,7 +176,9 @@ public:
   //get the memory used condition of transaction module
   int iterate_trans_memory_stat(ObTransMemStatIterator &mem_stat_iter);
   int dump_elr_statistic();
-  int remove_callback_for_uncommited_txn(memtable::ObMemtable* mt);
+  int remove_callback_for_uncommited_txn(
+    const ObLSID ls_id,
+    const memtable::ObMemtableSet *memtable_set);
   int64_t get_tenant_id() const { return tenant_id_; }
   const common::ObAddr &get_server() { return self_; }
   ObTransTimer &get_trans_timer() { return timer_; }
@@ -234,7 +236,8 @@ public:
 private:
   static const int64_t END_STMT_MORE_TIME_US = 100 * 1000;
   // max task count in message process queue
-  static const int64_t MAX_MSG_TASK = (1 << 20); // 8M
+  static const int64_t MAX_MSG_TASK_CNT = 1000 * 1000;
+  static const int64_t MSG_TASK_CNT_PER_GB = 50 * 1000;
   static const int64_t MAX_BIG_TRANS_WORKER = 8;
   static const int64_t MAX_BIG_TRANS_TASK = 100 * 1000;
   // max time bias between any two machine

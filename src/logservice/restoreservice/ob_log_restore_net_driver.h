@@ -79,7 +79,7 @@ public:
   void clean_resource();
 
   // set the max scn can be restored
-  int set_restore_log_upper_limit_();
+  int set_restore_log_upper_limit();
 
 private:
   // TODO LogFetcher如何区分LogRestoreSource变化了, 比如从cluster 1的tenant A, 变为了cluster 2的tenant B
@@ -89,6 +89,8 @@ private:
   int refresh_fetcher_if_needed_(const share::ObRestoreSourceServiceAttr &source);
   int init_fetcher_if_needed_(const int64_t cluster_id, const uint64_t tenant_id);
   void delete_fetcher_if_needed_with_lock_();
+  void update_config_();
+  int64_t get_rpc_timeout_sec_();
   int refresh_proxy_(const share::ObRestoreSourceServiceAttr &source);
 
 

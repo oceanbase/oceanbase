@@ -450,6 +450,7 @@ constexpr int OB_ERR_ROOTSERVICE_THREAD_HUNG = -4755;
 constexpr int OB_MIGRATE_NOT_COMPATIBLE = -4756;
 constexpr int OB_CLUSTER_INFO_MAYBE_REMAINED = -4757;
 constexpr int OB_ARBITRATION_INFO_QUERY_FAILED = -4758;
+constexpr int OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE = -4759;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1392,6 +1393,8 @@ constexpr int OB_ERR_UNEXPECTED_LOCK_OWNER = -7111;
 constexpr int OB_LS_TRANSFER_SCN_TOO_SMALL = -7112;
 constexpr int OB_TABLET_TRANSFER_SEQ_NOT_MATCH = -7113;
 constexpr int OB_TRANSFER_DETECT_ACTIVE_TRANS = -7114;
+constexpr int OB_TRANSFER_SRC_LS_NOT_EXIST = -7115;
+constexpr int OB_TRANSFER_SRC_TABLET_NOT_EXIST = -7116;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -2292,6 +2295,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_MIGRATE_NOT_COMPATIBLE__USER_ERROR_MSG "Migration src and dest version is not compatible."
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__USER_ERROR_MSG "Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__USER_ERROR_MSG "the arbitration service may be unavailable, please check and retry"
+#define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__USER_ERROR_MSG "An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3360,6 +3364,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_TRANSFER_SCN_TOO_SMALL__USER_ERROR_MSG "change member list compare ls transfer scn too small"
 #define OB_TABLET_TRANSFER_SEQ_NOT_MATCH__USER_ERROR_MSG "compare tablet transfer seq not match"
 #define OB_TRANSFER_DETECT_ACTIVE_TRANS__USER_ERROR_MSG "transfer detect active trans"
+#define OB_TRANSFER_SRC_LS_NOT_EXIST__USER_ERROR_MSG "transfer src ls does not exist"
+#define OB_TRANSFER_SRC_TABLET_NOT_EXIST__USER_ERROR_MSG "transfer src tablet does not exist"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -3550,8 +3556,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__USER_ERROR_MSG "backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__USER_ERROR_MSG "backup advance checkpoint by flush timeout"
 #define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__USER_ERROR_MSG "observer clog is recycled before archive"
-#define OB_SOURCE_TENANT_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source tenant state not match when switchover to primary"
-#define OB_SOURCE_LS_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source ls state not match when switchover to primary"
+#define OB_SOURCE_TENANT_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source tenant state not match, switchover to primary not allowed"
+#define OB_SOURCE_LS_STATE_NOT_MATCH__USER_ERROR_MSG "log restore source ls state not match, switchover to primary not allowed"
 #define OB_ESI_SESSION_NOT_EXIST__USER_ERROR_MSG "obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__USER_ERROR_MSG "Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__USER_ERROR_MSG "Already in NOARCHIVELOG mode"
@@ -4369,6 +4375,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_MIGRATE_NOT_COMPATIBLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4756, Migration src and dest version is not compatible."
 #define OB_CLUSTER_INFO_MAYBE_REMAINED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4757, Cluster info may remain on arbitration server '%.*s', please make sure whether to use ob_admin to clean it."
 #define OB_ARBITRATION_INFO_QUERY_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4758, the arbitration service may be unavailable, please check and retry"
+#define OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4759, An error was ignored when accessing virtual table, actual error code: %d"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5437,6 +5444,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_TRANSFER_SCN_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7112, change member list compare ls transfer scn too small"
 #define OB_TABLET_TRANSFER_SEQ_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7113, compare tablet transfer seq not match"
 #define OB_TRANSFER_DETECT_ACTIVE_TRANS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7114, transfer detect active trans"
+#define OB_TRANSFER_SRC_LS_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7115, transfer src ls does not exist"
+#define OB_TRANSFER_SRC_TABLET_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7116, transfer src tablet does not exist"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5627,8 +5636,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_MAJOR_NOT_COVER_MINOR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9085, backup major sstable range not cover minor sstable"
 #define OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9086, backup advance checkpoint by flush timeout"
 #define OB_CLOG_RECYCLE_BEFORE_ARCHIVE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9087, observer clog is recycled before archive"
-#define OB_SOURCE_TENANT_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, log restore source tenant state not match when switchover to primary"
-#define OB_SOURCE_LS_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, log restore source ls state not match when switchover to primary"
+#define OB_SOURCE_TENANT_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9088, log restore source tenant state not match, switchover to primary not allowed"
+#define OB_SOURCE_LS_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9089, log restore source ls state not match, switchover to primary not allowed"
 #define OB_ESI_SESSION_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9090, obesi process session not exist"
 #define OB_ALREADY_IN_ARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9091, Already in ARCHIVELOG mode"
 #define OB_ALREADY_IN_NOARCHIVE_MODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9092, Already in NOARCHIVELOG mode"
@@ -5897,7 +5906,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2073];
+extern int g_all_ob_errnos[2076];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

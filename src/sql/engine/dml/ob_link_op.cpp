@@ -240,6 +240,10 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       int64_t param_idx = param_infos.at(next_param).idx_;
       const ObObjParam &param = param_store.at(param_idx);
       ObObjPrintParams obj_print_params = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
+
+      if (lib::is_oracle_mode() && ObSQLUtils::is_oracle_empty_string(param)) {
+        obj_print_params.print_null_string_value_  = true;
+      }
       if (DBLINK_DRV_OCI == link_type_) {
         // Ensure that when oceanbase connects to oracle,
         // the target character set of param is the same as that of oci connection.

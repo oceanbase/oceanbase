@@ -1004,8 +1004,14 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     }
     if (OB_SUCC(ret) && old_status != real_new_status) {
-      ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+      const char *status_str = ddl_task_status_to_str(real_new_status);
+      if (status_str) {
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
+          "new_state", status_str, K_(snapshot_version), ret_code_);
+      } else {
+        ROOTSERVICE_EVENT_ADD("ddl_scheduler", "switch_state", K_(tenant_id), K_(task_id), K_(object_id), K_(target_object_id),
           "new_state", real_new_status, K_(snapshot_version), ret_code_);
+      }
       task_status_ = real_new_status;
     }
 
@@ -3214,6 +3220,7 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
           LOG_WARN("assign sql string failed", K(ret));
         }
       }
+      LOG_INFO("kill session sql string", K(sql_string), K(task_id), K(sql_exec_addr));
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) { // default use OB_SYS_TENANT_ID
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

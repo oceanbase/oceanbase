@@ -520,7 +520,8 @@ public:
       value_(allocator),
       cursor_type_(),
       formal_params_(allocator),
-      state_(INVALID) {}
+      state_(INVALID),
+      has_dup_column_name_(false) {}
   virtual ~ObPLCursor() {}
 
   inline bool is_package_cursor() const
@@ -563,6 +564,8 @@ public:
   inline void set_state(CursorState state) { state_ = state; }
   inline uint64_t get_rowid_table_id() const { return value_.get_rowid_table_id(); }
   inline void set_rowid_table_id(uint64 table_id) { value_.set_rowid_table_id(table_id); }
+  inline void set_dup_column() { has_dup_column_name_ = true; }
+  inline bool is_dup_column() const { return has_dup_column_name_; }
 
   int set(const ObString &sql,
                  const ObIArray<int64_t> &expr_idxs,
@@ -573,11 +576,12 @@ public:
                  const ObPLDataType &cursor_type,
                  CursorState state,
                  const ObIArray<share::schema::ObSchemaObjVersion> &ref_objects,
-                 const common::ObIArray<int64_t> &params
+                 const common::ObIArray<int64_t> &params,
+                 bool has_dup_column_name
                  );
 
   TO_STRING_KV(
-    K_(pkg_id), K_(routine_id), K_(idx), K_(value), K_(cursor_type), K_(formal_params), K_(state));
+    K_(pkg_id), K_(routine_id), K_(idx), K_(value), K_(cursor_type), K_(formal_params), K_(state), K_(has_dup_column_name));
 
 protected:
   uint64_t pkg_id_;
@@ -587,6 +591,7 @@ protected:
   ObPLDataType cursor_type_;
   ObPLSEArray<int64_t> formal_params_;
   CursorState state_;
+  bool has_dup_column_name_;
 };
 
 class ObPLCursorTable
@@ -616,7 +621,8 @@ public:
                  const ObRecordType* row_desc,
                  const ObPLDataType &cursor_type,
                  const common::ObIArray<int64_t> &formal_params,
-                 ObPLCursor::CursorState state = ObPLCursor::DEFINED);
+                 ObPLCursor::CursorState state = ObPLCursor::DEFINED,
+                 bool has_dup_column_name = false);
 
   TO_STRING_KV(K_(cursors));
 
@@ -1312,6 +1318,7 @@ public:
                  const ObPLDataType& cursor_type,
                  const common::ObIArray<int64_t> &formal_params,
                  ObPLCursor::CursorState state,
+                 bool has_dup_column_name,
                  int64_t &index);
   int add_questionmark_cursor(const int64_t symbol_idx);
   inline const common::ObIArray<sql::ObRawExpr*> *get_exprs() const { return exprs_; }
@@ -1712,6 +1719,11 @@ public:
   inline int add_subprogram_path(int64_t path) { return subprogram_path_.push_back(path); }
   inline bool get_is_all_sql_stmt() const { return is_all_sql_stmt_; }
   inline void set_is_all_sql_stmt(bool is_all_sql_stmt) { is_all_sql_stmt_ = is_all_sql_stmt; }
+  inline bool has_parallel_affect_factor() const
+  {
+    return is_reads_sql_data() || is_modifies_sql_data() || is_wps() ||
+           is_rps() || is_has_sequence() || is_external_state();
+  }
   int add_argument(const common::ObString &name, const ObPLDataType &type,
                    const sql::ObRawExpr *expr = NULL,
                    const common::ObIArray<common::ObString> *type_info = NULL,
@@ -1921,13 +1933,7 @@ public:
   inline bool get_is_autonomous() const { return is_autonomous_block_; }
   inline void clear_aotonomous() { is_autonomous_block_ = false; }
   inline bool get_is_contain_goto_stmt() const { return is_contain_goto_stmt_; }
-  inline void set_is_contain_goto_stmt(bool flag)
-  {
-    if (flag && OB_NOT_NULL(parent_)) {
-      (const_cast<ObPLStmtBlock *>(parent_))->set_is_contain_goto_stmt(true);
-    }
-    is_contain_goto_stmt_ = flag;
-  }
+  inline void set_is_contain_goto_stmt(bool flag) { is_contain_goto_stmt_ = flag; }
   inline const ObPLSymbolTable *get_symbol_table() const { return ns_.get_symbol_table(); }
   inline const ObPLLabelTable *get_label_table() const { return ns_.get_label_table(); }
   inline const ObPLConditionTable *get_condition_table() const { return ns_.get_condition_table(); }

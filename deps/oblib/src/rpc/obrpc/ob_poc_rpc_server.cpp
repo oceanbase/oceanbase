@@ -46,11 +46,7 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
   int ret = OB_SUCCESS;
   ObPocServerHandleContext* ctx = NULL;
   ObRpcPacket tmp_pkt;
-#ifndef PERF_MODE
   const int64_t alloc_payload_sz = sz;
-#else
-  const int64_t alloc_payload_sz = 0;
-#endif
   if (OB_FAIL(tmp_pkt.decode(buf, sz))) {
     RPC_LOG(ERROR, "decode packet fail", K(ret));
   } else {
@@ -71,7 +67,9 @@ int ObPocServerHandleContext::create(int64_t resp_id, const char* buf, int64_t s
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       RPC_LOG(WARN, "pool allocate memory failed", K(tenant_id), K(pcode_label));
     } else {
-      ctx = new(temp)ObPocServerHandleContext(*pool, resp_id);
+      int64_t resp_expired_abs_us = ObTimeUtility::current_time() + tmp_pkt.get_timeout();
+      ctx = new(temp)ObPocServerHandleContext(*pool, resp_id, resp_expired_abs_us);
+      ctx->set_peer_unsafe();
       req = new(ctx + 1)ObRequest(ObRequest::OB_RPC, ObRequest::TRANSPORT_PROTO_POC);
       ObRpcPacket* pkt = (ObRpcPacket*)pool->alloc(sizeof(ObRpcPacket) + alloc_payload_sz);
       if (NULL == pkt) {
@@ -119,25 +117,28 @@ void ObPocServerHandleContext::resp(ObRpcPacket* pkt)
     buf = NULL;
     sz = 0;
   }
-  if ((sys_err = pn_resp(resp_id_, buf, sz)) != 0) {
+  if ((sys_err = pn_resp(resp_id_, buf, sz, resp_expired_abs_us_)) != 0) {
     RPC_LOG(WARN, "pn_resp fail", K(resp_id_), K(sys_err));
+  }
+}
+
+void ObPocServerHandleContext::set_peer_unsafe()
+{
+  struct sockaddr_storage sock_addr;
+  if (0 == pn_get_peer(resp_id_, &sock_addr)) {
+    if (AF_INET == sock_addr.ss_family) {
+      struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
+      peer_.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
+    } else if (AF_INET6 == sock_addr.ss_family) {
+      struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
+      peer_.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
+    }
   }
 }
 
 ObAddr ObPocServerHandleContext::get_peer()
 {
-  ObAddr addr;
-  struct sockaddr_storage sock_addr;
-  if (0 == pn_get_peer(resp_id_, &sock_addr)) {
-    if (AF_INET == sock_addr.ss_family) {
-      struct sockaddr_in *sin = reinterpret_cast<struct sockaddr_in *>(&sock_addr);
-      addr.set_ipv4_addr(ntohl(sin->sin_addr.s_addr), ntohs(sin->sin_port));
-    } else if (AF_INET6 == sock_addr.ss_family) {
-      struct sockaddr_in6 *sin6 = reinterpret_cast<struct sockaddr_in6 *>(&sock_addr);
-      addr.set_ipv6_addr(&sin6->sin6_addr.s6_addr, ntohs(sin6->sin6_port));
-    }
-  }
-  return addr;
+  return peer_;
 }
 
 int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
@@ -159,7 +160,7 @@ int serve_cb(int grp, const char* b, int64_t sz, uint64_t resp_id)
   }
   if (OB_SUCCESS != tmp_ret) {
     int sys_err = 0;
-    if ((sys_err = pn_resp(resp_id, NULL, 0)) != 0) {
+    if ((sys_err = pn_resp(resp_id, NULL, 0, OB_INVALID_TIMESTAMP)) != 0) {
       RPC_LOG(WARN, "pn_resp fail", K(resp_id), K(sys_err));
     }
   }
@@ -177,6 +178,9 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
     RPC_LOG(ERROR, "pn_listen failed", K(ret));
   } else {
     ATOMIC_STORE(&global_deliver, deliver);
+    if (2 == net_thread_count) {
+      net_thread_count = 1;
+    }
     int count = 0;
     if ((count = pn_provision(lfd, DEFAULT_PNIO_GROUP, net_thread_count)) != net_thread_count) {
       ret = OB_ERR_SYS;
@@ -190,6 +194,21 @@ int ObPocRpcServer::start(int port, int net_thread_count, frame::ObReqDeliver* d
   }
   return ret;
 }
+
+void ObPocRpcServer::stop()
+{
+  for (uint64_t gid = 1; gid < END_GROUP; gid++) {
+    pn_stop(gid);
+  }
+}
+
+void ObPocRpcServer::wait()
+{
+  for (uint64_t gid = 1; gid < END_GROUP; gid++) {
+    pn_wait(gid);
+  }
+}
+
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {
   int ret = OB_SUCCESS;
   if (pn_set_keepalive_timeout(user_timeout) != user_timeout) {
@@ -237,6 +256,22 @@ int dispatch_to_ob_listener(int accept_fd) {
   int ret = -1;
   if (OB_NOT_NULL(ATOMIC_LOAD(&oceanbase::obrpc::global_ob_listener))) {
     ret = oceanbase::obrpc::global_ob_listener->do_one_event(accept_fd);
+  }
+  return ret;
+}
+int tranlate_to_ob_error(int err) {
+  int ret = OB_SUCCESS;
+  if (PNIO_OK == err) {
+  } else if (PNIO_LISTEN_ERROR == err) {
+    ret = OB_SERVER_LISTEN_ERROR;
+  } else if (ENOMEM == err || -ENOMEM == err) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (EINVAL == err || -EINVAL == err) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (EIO == err || -EIO == err) {
+    ret = OB_IO_ERROR;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
   }
   return ret;
 }

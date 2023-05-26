@@ -361,20 +361,14 @@ TEST_F(TestTxCallbackList, remove_callback_by_release_memtable)
 
   EXPECT_EQ(9, callback_list_.get_length());
 
-  EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable2, scn_1/*not used*/));
-
-  EXPECT_EQ(7, callback_list_.get_length());
-  EXPECT_EQ(2, mgr_.get_callback_remove_for_remove_memtable_count());
-
-  EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable1, scn_1/*not used*/));
-
-  EXPECT_EQ(5, callback_list_.get_length());
-  EXPECT_EQ(4, mgr_.get_callback_remove_for_remove_memtable_count());
+  memtable::ObMemtableSet memtable_set;
+  EXPECT_EQ(OB_SUCCESS, memtable_set.create(24));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable2)));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable1)));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable3)));
 
   EXPECT_EQ(OB_SUCCESS,
-            callback_list_.remove_callbacks_for_remove_memtable(memtable3, scn_1/*not used*/));
+            callback_list_.remove_callbacks_for_remove_memtable(&memtable_set, scn_1/*not used*/));
 
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_remove_memtable_count());
@@ -822,16 +816,13 @@ TEST_F(TestTxCallbackList, checksum_remove_memtable_and_tx_end)
 
   EXPECT_EQ(9, callback_list_.get_length());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable2, scn_1/*not used*/));
-  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
+  memtable::ObMemtableSet memtable_set;
+  EXPECT_EQ(OB_SUCCESS, memtable_set.create(24));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable2)));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable1)));
+  EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(memtable3)));
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable3, scn_1/*not used*/));
-  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
-  EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
-
-
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(memtable1, scn_1/*not used*/));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_remove_memtable(&memtable_set, scn_1/*not used*/));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
 
@@ -1060,8 +1051,11 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
       }
 
       if (enable) {
+        memtable::ObMemtableSet memtable_set;
+        EXPECT_EQ(OB_SUCCESS, memtable_set.create(24));
+        EXPECT_EQ(OB_SUCCESS, memtable_set.set_refactored((uint64_t)(mt)));
         EXPECT_EQ(OB_SUCCESS,
-                  callback_list_.remove_callbacks_for_remove_memtable(mt, scn_1/*not used*/));
+                  callback_list_.remove_callbacks_for_remove_memtable(&memtable_set, scn_1/*not used*/));
       }
 
       return enable;
@@ -1190,20 +1184,27 @@ int ObTxCallbackList::remove_callbacks_for_fast_commit(bool &has_remove)
   return ret;
 }
 
-int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable_for_remove,
-                                                           const share::SCN)
+int ObTxCallbackList::remove_callbacks_for_remove_memtable(
+  const memtable::ObMemtableSet *memtable_set,
+  const share::SCN)
 {
   int ret = OB_SUCCESS;
   SpinLockGuard guard(latch_);
 
   ObRemoveSyncCallbacksWCondFunctor functor(
     // condition for remove
-    [memtable_for_remove](ObITransCallback *callback) -> bool {
-      if (callback->get_memtable() == memtable_for_remove) {
-        return true;
+    [memtable_set](ObITransCallback *callback) -> bool {
+      int ret = OB_SUCCESS;
+      int bool_ret = true;
+      if (OB_HASH_EXIST == (ret = memtable_set->exist_refactored((uint64_t)callback->get_memtable()))) {
+        bool_ret = true;
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        bool_ret = false;
       } else {
-        return false;
+        // We have no idea to handle the error
+        ob_abort();
       }
+      return bool_ret;
     }, // condition for stop
     [](ObITransCallback *) -> bool {
       return false;
@@ -1217,7 +1218,7 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(ObIMemtable *memtable
     callback_mgr_.add_release_memtable_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
     if (functor.get_remove_cnt() > 0) {
-      TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_for_remove),
+      TRANS_LOG(INFO, "remove callbacks for remove memtable", KP(memtable_set),
                 K(functor), K(*this));
     }
   }

@@ -387,7 +387,7 @@ int FetchLogARpc::prepare_request(const share::ObLSID &ls_id,
         "flying_rpc", flying_req_list_.count_,
         K(rpc_timeout));
   } else {
-    LOG_DEBUG("[STAT] [FETCH_LOG_ARPC] prepare rpc request", K(fetch_stream),
+    LOG_TRACE("[STAT] [FETCH_LOG_ARPC] prepare rpc request", K(fetch_stream),
         "ready_result", res_queue_.count(),
         "flying_rpc", flying_req_list_.count_,
         K(rpc_timeout));
@@ -431,7 +431,7 @@ void FetchLogARpc::discard_request(const char *discard_reason, const bool is_nor
           "ready_result", res_queue_.count(),
           "flying_rpc", flying_req_list_.count_);
     } else {
-      LOG_DEBUG("[STAT] [FETCH_LOG_ARPC] discard rpc request", K(discard_reason),
+      LOG_TRACE("[STAT] [FETCH_LOG_ARPC] discard rpc request", K(discard_reason),
           K(fetch_stream), K_(cur_req), KPC_(cur_req),
           "ready_result", res_queue_.count(),
           "flying_rpc", flying_req_list_.count_);
@@ -640,14 +640,19 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
 {
   int ret = OB_SUCCESS;
   int64_t start_proc_time = get_timestamp();
-
+  bool need_dispatch_stream_task = false;
   // Locked mutually exclusive access
   ObSpinLockGuard lock_guard(lock_);
 
   // Use the trace id associated with the request
   ObLogTraceIdGuard guard(rpc_req.get_trace_id());
 
-  if (OB_ISNULL(stream_worker_)) {
+  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
+    LOG_ERROR("invalid response packet", K(rcode), K(resp));
+    ret = OB_INVALID_ERROR;
+  }
+  // Processing RPC response results
+  else if (OB_ISNULL(stream_worker_)) {
     LOG_ERROR("invalid stream worker", K(stream_worker_));
     ret = OB_INVALID_ERROR;
   }
@@ -662,7 +667,6 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
       LOG_ERROR("destroy_flying_request_ fail", KR(ret), K(rpc_req));
     }
   } else {
-    bool need_dispatch_stream_task = false;
     bool need_stop_rpc = false;
     RpcStopReason rpc_stop_reason = INVALID_REASON;
     int64_t next_upper_limit = OB_INVALID_TIMESTAMP;
@@ -716,6 +720,18 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
       }
     }
   }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    rpc_req.mark_flying_state(false);
+    if (need_dispatch_stream_task || IDLE == state_) {
+      if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess"))) {
+        LOG_ERROR_RET(tmp_ret, "dispatch stream task fail", KR(ret));
+      }
+    }
+    LOG_ERROR("handle_rpc_response failed, need reschedule", K(need_dispatch_stream_task), K(state_));
+  }
+
 
   return ret;
 }
@@ -846,7 +862,7 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
         "delta", next_upper_limit - req_upper_limit,
         K(rpc_time), KPC(resp));
   } else {
-    LOG_DEBUG("handle rpc result by rpc callback",
+    LOG_TRACE("handle rpc result by rpc callback",
         K(fetch_stream),
         K(need_stop_rpc),
         "stop_reason", print_rpc_stop_reason(rpc_stop_reason),
@@ -881,7 +897,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     // Use the trace id of the request
     ObLogTraceIdGuard guard(rpc_req.get_trace_id());
 
-    _LOG_DEBUG("launch async fetch log rpc by %s, request=%s",
+    _LOG_TRACE("launch async fetch log rpc by %s, request=%s",
         launch_by_cb ? "callback" : "fetch stream", to_cstring(rpc_req));
 
     // The default setting is flyin before sending an asynchronous request
@@ -1158,12 +1174,7 @@ int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
   RpcRequest &rpc_req = host_;
   FetchLogARpc &rpc_host = rpc_req.host_;
 
-  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
-    LOG_ERROR("invalid response packet", K(rcode), K(resp));
-    ret = OB_INVALID_ERROR;
-  }
-  // Processing RPC response results
-  else if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
+  if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
     LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode), K(rpc_req));
   } else {
     // success

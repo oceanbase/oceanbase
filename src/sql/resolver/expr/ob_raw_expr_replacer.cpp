@@ -21,7 +21,7 @@ namespace oceanbase
 namespace sql
 {
 ObRawExprReplacer::ObRawExprReplacer()
-  : replace_happened_(false)
+  : replace_happened_(false), skip_bool_param_mysql_(false)
 {}
 
 ObRawExprReplacer::~ObRawExprReplacer()
@@ -117,6 +117,15 @@ int ObRawExprReplacer::visit(ObOpRawExpr &expr)
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_FAIL(check_need_replace(expr.get_param_expr(i), new_expr, need_replace))) {
         LOG_WARN("failed to check need replace", K(ret));
+      } else if (is_skip_bool_param_mysql()) {
+        if (T_OP_IS == expr.get_expr_type() && i == 1) {
+          //do nothing
+        } else if (T_OP_IS_NOT == expr.get_expr_type() && i == 1) {
+          //do nothing
+        } else if (need_replace) {
+          ret = expr.replace_param_expr(i, new_expr);
+          replace_happened_ = true;
+        }
       } else if (need_replace) {
         ret = expr.replace_param_expr(i, new_expr);
         replace_happened_ = true;

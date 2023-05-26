@@ -638,7 +638,7 @@ ObLinearHashMap<Key, Value, MemMgrTag>::HashMapMemMgrCore::HashMapMemMgrCore()
     //
     page_size = OB_MALLOC_BIG_BLOCK_SIZE;
   } else {
-    total_limit /= (lib::ObRunningModeConfig::MINI_MEM_UPPER / lib::ObRunningModeConfig::instance().memory_limit_);
+    total_limit *= lib::mini_mode_resource_ratio();
     page_size = OB_MALLOC_MIDDLE_BLOCK_SIZE;
   }
   // Init dir alloc.

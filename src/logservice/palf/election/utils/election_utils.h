@@ -267,6 +267,15 @@ private:
 private:
   struct PImpl
   {
+    PImpl()
+    {
+      prepare_ok_.set_attr(
+        ObMemAttr(OB_SERVER_TENANT_ID, "PrepareOk"));
+      accept_ok_promise_not_vote_before_local_ts_.set_attr(
+        ObMemAttr(OB_SERVER_TENANT_ID, "acceptOK"));
+      follower_renew_lease_success_membership_version_.set_attr(
+        ObMemAttr(OB_SERVER_TENANT_ID, "followerRenew"));
+    }
     MemberList member_list_;
     common::ObArray<bool> prepare_ok_;
     common::ObArray<int64_t> accept_ok_promise_not_vote_before_local_ts_;

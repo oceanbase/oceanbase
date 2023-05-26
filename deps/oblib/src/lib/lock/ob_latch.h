@@ -230,21 +230,19 @@ public:
   OB_INLINE static int reg_lock(uint32_t* latch_addr)
   {
     int ret = -1;
-    if (max_lock_slot_idx < sizeof(current_locks) / sizeof(uint32_t*)) {
-      ret = max_lock_slot_idx++;
-      current_locks[ret] = latch_addr;
-    }
+    ret = (max_lock_slot_idx++) % ARRAYSIZEOF(current_locks);
+    current_locks[ret] = latch_addr;
     return ret;
   }
   OB_INLINE static int unreg_lock(uint32_t* latch_addr)
   {
     int ret = -1;
-    // for (int8_t i = max_lock_slot_idx - 1; -1 == ret && i >= 0; --i) {
-    //   if (latch_addr == current_locks[i]) {
-    //     ret = i;
-    //     current_locks[i] = max_lock_slot_idx > 0 ? current_locks[--max_lock_slot_idx] : nullptr;
-    //   }
-    // }
+    UNUSED(latch_addr);
+    //if (max_lock_slot_idx > 0
+    //    && latch_addr == current_locks[(max_lock_slot_idx - 1) % ARRAYSIZEOF(current_locks)]) {
+    //    ret = (--max_lock_slot_idx % ARRAYSIZEOF(current_locks));
+    //    current_locks[ret] = nullptr;
+    //}
     return ret;
   }
   OB_INLINE static void clear_lock()

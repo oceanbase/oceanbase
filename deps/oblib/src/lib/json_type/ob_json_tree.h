@@ -80,7 +80,7 @@ public:
   virtual bool is_number() const { return false; }
   virtual uint32_t depth() const = 0;
   virtual uint64_t get_serialize_size() = 0;
-  virtual ObJsonNode *clone(ObIAllocator* allocator) const = 0;
+  virtual ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const = 0;
   OB_INLINE void set_serialize_size(uint64_t size) { serialize_size_ = size; }
   OB_INLINE void set_serialize_delta_size(int64_t size)
   {
@@ -218,7 +218,7 @@ public:
     update_serialize_size_cascade(size);
   }
   void update_serialize_size(int64_t change_size = 0);
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
   
   // Get json node by key.
   //
@@ -347,7 +347,7 @@ public:
     update_serialize_size_cascade(size);
   }
   void update_serialize_size(int64_t change_size = 0);
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 
   // Removes the array element by index.
   //
@@ -457,7 +457,7 @@ public:
     return value_.get_serialize_size() + serialization::encoded_length_i16(prec_)
     + serialization::encoded_length_i16(scale_); 
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   number::ObNumber value_;
   ObPrecision prec_;
@@ -484,7 +484,7 @@ public:
   OB_INLINE void set_value(double value) { value_ = value; }
   OB_INLINE double value() const { return value_; }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(double); }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   double value_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonDouble);
@@ -512,7 +512,7 @@ public:
   {
     return serialization::encoded_length_vi64(value_);
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   int64_t value_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonInt);
@@ -543,7 +543,7 @@ public:
   {
     return serialization::encoded_length_vi64(value_);
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   uint64_t value_;
   bool is_string_length_;
@@ -578,7 +578,7 @@ public:
   {
     return serialization::encoded_length_vi64(length()) + length();
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
   void set_ext(uint64_t type) { ext_ = type; }
   uint64_t get_ext() { return ext_; }
 private:
@@ -611,7 +611,7 @@ public:
   OB_INLINE ObJsonNodeType json_type() const override { return ObJsonNodeType::J_NULL; }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
   OB_INLINE bool is_not_null() { return is_not_null_;}
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObJsonNull);
   bool is_not_null_;
@@ -647,7 +647,7 @@ public:
     }
     return size;
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   ObTime value_;
   ObObjType field_type_;
@@ -683,7 +683,7 @@ public:
   {
     return sizeof(uint16_t) + sizeof(uint64_t) + size(); // [field_type][length][value]; 
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   ObObjType field_type_;
   common::ObString value_;
@@ -713,7 +713,7 @@ public:
     return bool_ret;
   }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(char); }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   bool value_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonBoolean);
@@ -746,7 +746,7 @@ public:
   OB_INLINE void set_value(float value) { value_ = value; }
   OB_INLINE float value() const { return value_; }
   OB_INLINE uint64_t get_serialize_size() { return sizeof(float); }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   float value_;
   DISALLOW_COPY_AND_ASSIGN(ObJsonOFloat);
@@ -810,14 +810,14 @@ public:
   {
     return field_type_ == ObIntervalYMType ? ObJsonNodeType::J_OYEARMONTH : ObJsonNodeType::J_ODAYSECOND;
   }
-
+  OB_INLINE void set_value(const char *str, uint64_t length) { str_val_.assign_ptr(str, length); }
   OB_INLINE const common::ObString &value() const { return str_val_; }
   OB_INLINE uint64_t length() const { return str_val_.length(); }
   OB_INLINE uint64_t get_serialize_size()
   {
     return serialization::encoded_length_vi64(length()) + length();
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 
 private:
   ObString str_val_;
@@ -872,7 +872,7 @@ public:
   {
     return serialization::encoded_length_vi64(length()) + length();
   }
-  ObJsonNode *clone(ObIAllocator* allocator) const;
+  ObJsonNode *clone(ObIAllocator* allocator, bool is_deep_copy = false) const;
 private:
   ObString str_val_;
   ObJsonNodeType json_type_;

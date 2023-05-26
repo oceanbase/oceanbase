@@ -97,8 +97,11 @@ struct DiagnoseInfo
   DiagnoseInfo() { reset(); }
   ~DiagnoseInfo() { reset(); }
   bool is_role_sync() {
-    return ((palf_diagnose_info_.election_role_ == palf_diagnose_info_.palf_role_)
-           && (palf_diagnose_info_.palf_role_ == log_handler_diagnose_info_.log_handler_role_));
+    return ((palf_diagnose_info_.election_role_ == palf_diagnose_info_.palf_role_) &&
+            ((palf_diagnose_info_.palf_role_ == log_handler_diagnose_info_.log_handler_role_ &&
+              palf_diagnose_info_.palf_proposal_id_ == log_handler_diagnose_info_.log_handler_proposal_id_) ||
+             (palf_diagnose_info_.palf_role_ == restore_diagnose_info_.restore_role_ &&
+              palf_diagnose_info_.palf_proposal_id_ == restore_diagnose_info_.restore_proposal_id_)));
   }
   int64_t ls_id_;
   logservice::LogHandlerDiagnoseInfo log_handler_diagnose_info_;
@@ -117,7 +120,8 @@ struct DiagnoseInfo
                K(replay_diagnose_info_),
                K(gc_diagnose_info_),
                K(checkpoint_diagnose_info_),
-               K(restore_diagnose_info_));
+               K(restore_diagnose_info_)
+               );
   void reset() {
     ls_id_ = -1;
     log_handler_diagnose_info_.reset();
@@ -690,7 +694,8 @@ public:
   // advance the checkpoint of this ls
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
   int advance_checkpoint_by_flush(share::SCN recycle_scn,
-                                  const int64_t abs_timeout_ts = INT64_MAX);
+                                  const int64_t abs_timeout_ts = INT64_MAX,
+                                  const bool is_tenant_freeze = false);
 
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);

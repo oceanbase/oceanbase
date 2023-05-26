@@ -218,7 +218,7 @@ public:
   // dot notation
   int pre_process_dot_notation(ParseNode &node);
   int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
-  int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str);
+  int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check = true);  // obj_check : whether need check dot notaion
   int check_first_node_name(const ObString &node_name, bool &check_res);
   int transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str);
   int transform_dot_notation2_json_value(ParseNode &node, const ObString &sql_str);
@@ -885,6 +885,9 @@ private:
   int implict_cast_sql_udt_to_pl_udt(ObRawExpr* &real_ref_expr);
   int check_column_udt_type(ParseNode *root_node);
   int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+
+  int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
+  bool check_expr_has_colref(ObRawExpr *expr);
 
   //////////end of functions for sql hint/////////////
 protected:

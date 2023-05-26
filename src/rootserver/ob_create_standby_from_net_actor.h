@@ -35,7 +35,7 @@ class ObCreateStandbyFromNetActor : public ObTenantThreadHelper
 {
 public:
   ObCreateStandbyFromNetActor() : is_inited_(false),
-    tenant_id_(OB_INVALID_TENANT_ID), sql_proxy_(NULL), idle_time_(DEFAULT_IDLE_TIME) {}
+    tenant_id_(OB_INVALID_TENANT_ID), sql_proxy_(NULL), schema_broadcasted_(false), idle_time_(DEFAULT_IDLE_TIME) {}
   virtual ~ObCreateStandbyFromNetActor() {}
   int init();
   void destroy();
@@ -50,17 +50,19 @@ private:
   int finish_restore_if_possible_();
   int64_t get_idle_interval_us_() { return ATOMIC_LOAD(&idle_time_); }
   int set_idle_interval_us_(const int64_t idle_time);
+  int refresh_schema_();
 
   const static int64_t DEFAULT_IDLE_TIME = 1000 * 1000;  // 1s
   const static int64_t MAX_IDLE_TIME = 3600L * 1000 * 1000;  // 3600s
 
 public:
- TO_STRING_KV(K_(is_inited), K_(tenant_id), KP_(sql_proxy), K_(idle_time));
+ TO_STRING_KV(K_(is_inited), K_(tenant_id), KP_(sql_proxy), K_(schema_broadcasted), K_(idle_time));
 
 private:
   bool is_inited_;
   uint64_t tenant_id_;
   common::ObMySQLProxy *sql_proxy_;
+  bool schema_broadcasted_;
   int64_t idle_time_;
 };
 

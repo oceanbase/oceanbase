@@ -36,7 +36,12 @@ bool ObDirectLoadSSTableCompactParam::is_valid() const
  */
 
 ObDirectLoadSSTableCompactor::ObDirectLoadSSTableCompactor()
-  : index_item_count_(0), index_block_count_(0), row_count_(0), is_inited_(false)
+  : index_item_count_(0),
+    index_block_count_(0),
+    row_count_(0),
+    start_key_allocator_("TLD_SRowkey"),
+    end_key_allocator_("TLD_ERowkey"),
+    is_inited_(false)
 {
 }
 
@@ -55,6 +60,8 @@ int ObDirectLoadSSTableCompactor::init(const ObDirectLoadSSTableCompactParam &pa
     LOG_WARN("invalid args", KR(ret), K(param));
   } else {
     param_ = param;
+    start_key_allocator_.set_tenant_id(MTL_ID());
+    end_key_allocator_.set_tenant_id(MTL_ID());
     start_key_.set_min_rowkey();
     end_key_.set_min_rowkey();
     is_inited_ = true;

@@ -66,6 +66,8 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
   } else if (OB_FAIL(init_tx_data_read_schema_())) {
     STORAGE_LOG(WARN, "init tx data read ctx failed.", KR(ret), K(tablet_id_));
   } else {
+    calc_upper_trans_version_cache_.commit_versions_.array_.set_attr(
+      ObMemAttr(ls->get_tenant_id(), "CommitVersions"));
     slice_allocator_.set_nway(ObTxDataTable::TX_DATA_MAX_CONCURRENCY);
     TX_DATA_MEM_LEAK_DEBUG_CODE
 

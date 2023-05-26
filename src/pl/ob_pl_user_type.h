@@ -17,6 +17,7 @@
 #include "lib/hash/ob_array_index_hash_set.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/json_type/ob_json_tree.h"
+#include "share/rc/ob_tenant_base.h"
 
 namespace oceanbase
 {

@@ -82,7 +82,7 @@ ObLogCommitter::ObLogCommitter() :
     checkpoint_queue_(),
     checkpoint_queue_cond_(),
     checkpoint_queue_allocator_(),
-    last_output_checkpoint_(0),
+    last_output_checkpoint_(OB_INVALID_VERSION),
     global_heartbeat_seq_(0),
     global_heartbeat_info_queue_(),
     dml_part_trans_task_count_(0),
@@ -131,7 +131,7 @@ int ObLogCommitter::init(const int64_t start_seq,
     LOG_ERROR("init checkpoint_queue_allocator_ fail", KR(ret));
   } else {
     checkpoint_queue_allocator_.set_label(ObModIds::OB_LOG_COMMITTER_CHECKPOINT_QUEUE);
-    last_output_checkpoint_ = 0;
+    last_output_checkpoint_ = OB_INVALID_VERSION;
     global_heartbeat_seq_ = start_seq;
     commit_pid_ = 0;
     heartbeat_pid_ = 0;
@@ -167,7 +167,7 @@ void ObLogCommitter::destroy()
   (void)checkpoint_queue_.destroy();
   checkpoint_queue_allocator_.destroy();
 
-  last_output_checkpoint_ = 0;
+  last_output_checkpoint_ = OB_INVALID_VERSION;
   global_heartbeat_seq_ = 0;
   (void)global_heartbeat_info_queue_.destroy();
 
@@ -1414,6 +1414,9 @@ int ObLogCommitter::calculate_output_checkpoint_(int64_t &output_checkpoint)
     LOG_ERROR("tenant_mgr is NULL", KR(ret));
   } else if (OB_FAIL(tenant_mgr->get_min_output_checkpoint_for_all_tenant(output_checkpoint))) {
     LOG_ERROR("get_min_output_checkpoint_for_all_tenant failed", KR(ret), K(output_checkpoint));
+  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP >= output_checkpoint)) {
+    LOG_INFO("IGNORE INVALID CHECKPOINT", K(output_checkpoint));
+    output_checkpoint = OB_INVALID_TIMESTAMP;
   } else if (OB_UNLIKELY(output_checkpoint < last_output_checkpoint_)) {
     // TODO: need handle new_tenant by create or restore.
     ret = OB_ERR_UNEXPECTED;

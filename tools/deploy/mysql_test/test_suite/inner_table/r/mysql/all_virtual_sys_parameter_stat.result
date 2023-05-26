@@ -56,6 +56,7 @@ data_dir
 data_disk_usage_limit_percentage
 data_storage_error_tolerance_time
 data_storage_warning_tolerance_time
+ddl_thread_score
 dead_socket_detection_timeout
 debug_sync_timeout
 default_auto_increment_mode
@@ -201,6 +202,7 @@ sql_work_area
 ssl_client_authentication
 ssl_external_kms_info
 stack_size
+standby_db_fetch_log_rpc_timeout
 standby_fetch_log_bandwidth_limit
 syslog_io_bandwidth_limit
 syslog_level
@@ -350,6 +352,7 @@ _temporary_file_io_area_size
 _trace_control_info
 _tx_result_retention
 _upgrade_stage
+_wait_interval_after_truncate
 _with_subquery
 _xa_gc_interval
 _xa_gc_timeout

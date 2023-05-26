@@ -31,7 +31,7 @@ public:
   static const int64_t DEFAULT_REPLICA_KEEPALIVE_INTERVAL = 3000 * 1000L;
   static const int64_t IGNORE_TENANT_EXIST_WARN = 1;
   static int64_t replica_keepalive_interval();
-  static share::SCN generate_min_weak_read_version(const uint64_t tenant_id);
+  static int generate_min_weak_read_version(const uint64_t tenant_id, share::SCN &scn);
   static bool enable_monotonic_weak_read(const uint64_t tenant_id);
   static int64_t max_stale_time_for_weak_consistency(const uint64_t tenant_id, int64_t ignore_warn = 0);
   static bool check_weak_read_service_available();

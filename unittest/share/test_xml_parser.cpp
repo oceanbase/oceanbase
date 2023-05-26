@@ -2161,7 +2161,7 @@ TEST_F(TestXmlParser, test_ns_attr_simple)
   ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, root_node->type());
   ObXmlElement* root = dynamic_cast<ObXmlElement*>(root_node);
   ASSERT_EQ(1, root->size());
-  ASSERT_EQ(2, root->attributes_size());
+  ASSERT_EQ(2, root->attribute_size());
 
   // check root attrs
   ObXmlAttribute* attr1 = NULL;
@@ -2213,7 +2213,7 @@ TEST_F(TestXmlParser, test_ns_attr_before_simple)
   ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, root_node->type());
   ObXmlElement* root = dynamic_cast<ObXmlElement*>(root_node);
   ASSERT_EQ(1, root->size());
-  ASSERT_EQ(2, root->attributes_size());
+  ASSERT_EQ(2, root->attribute_size());
 
   // check root attrs
   ObXmlAttribute* attr1 = NULL;
@@ -2263,7 +2263,7 @@ TEST_F(TestXmlParser, test_ns_default_elem)
   ObXmlNode* root_node = doc->at(0);
   ASSERT_EQ(ObMulModeNodeType::M_ELEMENT, root_node->type());
   ObXmlElement* root = dynamic_cast<ObXmlElement*>(root_node);
-  ASSERT_EQ(2, root->attributes_size());
+  ASSERT_EQ(2, root->attribute_size());
   ASSERT_EQ(1, root->size());
 
   // check root attrs

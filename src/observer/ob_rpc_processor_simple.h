@@ -222,6 +222,7 @@ OB_DEFINE_PROCESSOR_SM(Srv, OB_SESS_INFO_VERIFICATION, ObSessInfoVerificationP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_SEND_HEARTBEAT, ObRpcSendHeartbeatP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_SERVER_RESOURCE_INFO, ObRpcGetServerResourceInfoP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_UPDATE_TENANT_INFO_CACHE, ObUpdateTenantInfoCacheP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_BROADCAST_CONSENSUS_VERSION, ObBroadcastConsensusVersionP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

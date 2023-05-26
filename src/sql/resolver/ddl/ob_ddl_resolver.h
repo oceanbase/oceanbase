@@ -1042,8 +1042,11 @@ int ObDDLResolver::resolve_split_into_partition(STMT *stmt, const ParseNode *nod
       check_part_name = false;
       part_node = node->children_[i];
       share::schema::ObPartition part;
-      if (OB_ISNULL(part_node)
-          || T_PARTITION_ELEMENT != part_node->type_) {
+      if (OB_ISNULL(part_node) ||
+          (T_PARTITION_ELEMENT != part_node->type_ &&
+           T_PARTITION_HASH_ELEMENT != part_node->type_ &&
+           T_PARTITION_LIST_ELEMENT != part_node->type_ &&
+           T_PARTITION_RANGE_ELEMENT != part_node->type_)) {
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(WARN,"invalid argument", K(ret), K(part_node), "node type", part_node->type_);
       } else if (OB_NOT_NULL(part_node->children_[ObDDLResolver::PART_ID_NODE])) {

@@ -26,6 +26,7 @@
 #include "logservice/ob_log_service.h"      // ObLogService
 #include "share/restore/ob_log_restore_source.h"   // ObLogRestoreSourceType
 #include "logservice/logfetcher/ob_log_fetcher.h"  // ObLogFetcher
+#include "observer/omt/ob_tenant_config_mgr.h"  // tenant_config
 
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/string/ob_sql_string.h"    // ObSqlString
@@ -216,7 +217,7 @@ int ObLogRestoreNetDriver::scan_ls(const share::ObLogRestoreSourceType &type)
     }
   }
   delete_fetcher_if_needed_with_lock_();
-  set_restore_log_upper_limit_();
+  update_config_();
   return ret;
 }
 
@@ -394,6 +395,7 @@ int ObLogRestoreNetDriver::init_fetcher_if_needed_(const int64_t cluster_id, con
     const logfetcher::ClientFetchingMode fetching_mode = logfetcher::ClientFetchingMode::FETCHING_MODE_INTEGRATED;
     share::ObBackupPathString archive_dest;
     common::ObMySQLProxy *proxy = NULL;
+    cfg_.fetch_log_rpc_timeout_sec = get_rpc_timeout_sec_();
 
     if (OB_FAIL(proxy_.get_sql_proxy(proxy))) {
       LOG_WARN("get sql proxy failed");
@@ -431,6 +433,30 @@ void ObLogRestoreNetDriver::delete_fetcher_if_needed_with_lock_()
     stop_fetcher_safely_();
     destroy_fetcher_();
   }
+}
+
+void ObLogRestoreNetDriver::update_config_()
+{
+  if (NULL != fetcher_) {
+    const int64_t fetch_log_rpc_timeout_sec = get_rpc_timeout_sec_();
+    if (fetch_log_rpc_timeout_sec != cfg_.fetch_log_rpc_timeout_sec) {
+      cfg_.fetch_log_rpc_timeout_sec = fetch_log_rpc_timeout_sec;
+      fetcher_->configure(cfg_);
+    }
+  }
+}
+
+int64_t ObLogRestoreNetDriver::get_rpc_timeout_sec_()
+{
+  int64_t rpc_timeout = 0;
+  const int64_t DEFAULT_FETECH_LOG_RPC_TIMEOUT = 15;   // 15s
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    rpc_timeout = DEFAULT_FETECH_LOG_RPC_TIMEOUT;
+  } else {
+    rpc_timeout = tenant_config->standby_db_fetch_log_rpc_timeout / 1000 / 1000L;
+  }
+  return rpc_timeout;
 }
 
 bool ObLogRestoreNetDriver::is_fetcher_stale_(const int64_t cluster_id, const uint64_t tenant_id)
@@ -531,7 +557,7 @@ int ObLogRestoreNetDriver::get_ls_count_in_fetcher_(int64_t &count)
   return ret;
 }
 
-int ObLogRestoreNetDriver::set_restore_log_upper_limit_()
+int ObLogRestoreNetDriver::set_restore_log_upper_limit()
 {
   int ret = OB_SUCCESS;
   share::SCN upper_limit_scn;

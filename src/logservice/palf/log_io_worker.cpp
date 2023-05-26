@@ -164,7 +164,8 @@ int LogWritingThrottle::update_throtting_options_(IPalfEnvImpl *palf_env_impl, b
                      THROTTLING_DURATION_US / (1000 * 1000), K(THROTTLING_CHUNK_SIZE));
           } else {
             PALF_LOG(INFO, "[LOG DISK THROTTLING] success to calc_decay_factor", K(decay_factor_), K(throttling_options_),
-                     K(new_throttling_options), "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
+                     K(new_throttling_options), "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE),
+                     KPC(this));
           }
         }
 
@@ -178,8 +179,9 @@ int LogWritingThrottle::update_throtting_options_(IPalfEnvImpl *palf_env_impl, b
           }
           throttling_options_ = new_throttling_options;
           if (need_start_throttling) {
+            const LogThrottlingStat old_stat = stat_;
             stat_.start_throttling();
-            PALF_LOG(INFO, "[LOG DISK THROTTLING] [START]", KPC(this),
+            PALF_LOG(INFO, "[LOG DISK THROTTLING] [START]", K(old_stat), KPC(this),
             "duration(s)", THROTTLING_DURATION_US / (1000 * 1000L), K(THROTTLING_CHUNK_SIZE));
           }
         }
@@ -311,6 +313,7 @@ int LogIOWorker::submit_io_task(LogIOTask *io_task)
   }
   return ret;
 }
+
 int LogIOWorker::notify_need_writing_throttling(const bool &need_throttling)
 {
   int ret = OB_SUCCESS;

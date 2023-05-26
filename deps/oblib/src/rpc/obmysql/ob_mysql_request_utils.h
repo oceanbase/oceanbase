@@ -53,7 +53,7 @@ public:
     READ_BODY,
     READ_COMPLETE
   };
-   ObMysqlPktContext() : arena_(common::ObModIds::LIB_MULTI_PACKETS) { reset(); }
+   ObMysqlPktContext() : arena_("LibMultiPackets") { reset(); }
    ~ObMysqlPktContext() {}
   void reset()
   {
@@ -137,7 +137,7 @@ private:
 class ObProto20PktContext
 {
 public:
-  ObProto20PktContext() : arena_(common::ObModIds::LIB_MULTI_PACKETS){ reset(); }
+  ObProto20PktContext() : arena_("LibMultiPackets"){ reset(); }
   ~ObProto20PktContext() { }
   void reset()
   {

@@ -42,6 +42,7 @@ public:
         server_idx_(-1),
         rebuild_palf_id_(-1),
         rebuild_lsn_(),
+        allow_rebuild_(false),
         is_inited_(false) {}
     virtual ~TestRebuildCbImpl() { destroy(); }
   public:
@@ -80,6 +81,7 @@ public:
       server_idx_ = -1;
       rebuild_palf_id_ = -1;
       rebuild_lsn_.reset();
+      allow_rebuild_ = false;
       test_base_ = NULL;
     }
 
@@ -106,7 +108,7 @@ public:
       ObTenantEnv::set_tenant(&tenant_base);
       lib::set_thread_name("RebuildCB");
       while (!has_set_stop()) {
-        if (rebuild_palf_id_ != -1 && rebuild_lsn_.is_valid()) {
+        if (true == allow_rebuild_ && rebuild_palf_id_ != -1 && rebuild_lsn_.is_valid()) {
           PalfHandleImplGuard leader;
           PalfHandleImplGuard *rebuild_palf;
           int64_t leader_idx;
@@ -133,6 +135,7 @@ public:
     int64_t server_idx_;
     int64_t rebuild_palf_id_;
     LSN rebuild_lsn_;
+    bool allow_rebuild_;
     bool is_inited_;
   };
 };
@@ -170,10 +173,9 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   PALF_LOG(INFO, "begin block net", K(id), K(leader_idx), K(follower_idx1), K(follower_idx2));
   block_net(leader_idx, follower_idx1);
   block_net(leader_idx, follower_idx2);
+  submit_log(leader, 100, id, 6 * KB);
   PALF_LOG(INFO, "begin submit logs", K(id), K(leader_idx), K(follower_idx1), K(follower_idx2));
   (void) submit_log(leader, 1000, leader_idx, MB);
-  // sleep to wait leader switching
-  sleep(16);
   PALF_LOG(INFO, "after sleep 16s, begin get_leader", K(id), K(leader_idx), K(follower_idx1), K(follower_idx2));
   int64_t new_leader_idx = 0;
   unittest::PalfHandleImplGuard new_leader;
@@ -206,10 +208,26 @@ TEST_F(TestObSimpleLogClusterRebuild, test_old_leader_rebuild)
   EXPECT_EQ(OB_SUCCESS, rebuild_server->palf_handle_impl_->log_engine_.get_block_id_range(min_block_id, max_block_id));
   PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "runlin trace get_block_id_range", K(min_block_id), K(max_block_id));
 
+  // submit a cond task before unblocking net to stop truncating task
+  IOTaskCond cond(id, rebuild_server->palf_env_impl_->last_palf_epoch_);
+  LogIOWorker *io_worker = &rebuild_server->palf_env_impl_->log_io_worker_wrapper_.user_log_io_worker_;
+  io_worker->submit_io_task(&cond);
+
   // after unblocking net, old leader will do rebuild
   unblock_net(leader_idx, follower_idx1);
   unblock_net(leader_idx, follower_idx2);
-  sleep(10);
+  sleep(5);
+
+  // is truncating, can not rebuild
+  if (rebuild_server->palf_handle_impl_->sw_.is_truncating_) {
+    PalfBaseInfo rebuild_base_info;
+    EXPECT_EQ(OB_SUCCESS, new_leader.palf_handle_impl_->get_base_info(rebuild_cb.rebuild_lsn_, rebuild_base_info));
+    EXPECT_EQ(OB_SUCCESS, rebuild_server->palf_handle_impl_->disable_sync());
+    EXPECT_EQ(OB_EAGAIN, rebuild_server->palf_handle_impl_->advance_base_info(rebuild_base_info, true));
+  }
+  cond.cond_.signal();
+  sleep(5);
+  rebuild_cb.allow_rebuild_ = true;
 
   PalfBaseInfo base_info_in_leader;
   PalfBaseInfo base_info_after_rebuild;
@@ -255,6 +273,7 @@ TEST_F(TestObSimpleLogClusterRebuild, test_follower_rebuild)
   EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
   follower_idx = (leader_idx + 1) % 3;
   TestRebuildCbImpl rebuild_cb;
+  rebuild_cb.allow_rebuild_ = true;
   PalfRebuildCbNode rebuild_node(&rebuild_cb);
   EXPECT_EQ(OB_SUCCESS, rebuild_cb.init(this, follower_idx));
   EXPECT_EQ(OB_SUCCESS, rebuild_cb.start());

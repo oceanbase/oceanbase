@@ -452,6 +452,8 @@ int ObLogRestoreProxyUtil::check_begin_lsn(const uint64_t tenant_id)
         LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
       } else if (OB_FAIL(sql_proxy_.read(result, sql.ptr()))) {
         LOG_WARN("check_begin_lsn failed", KR(ret), K(tenant_id), K(sql));
+        RESTORE_PROXY_USER_ERROR("tenant ls begin_lsn failed");
+        ret = OB_INVALID_ARGUMENT;
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("config result is null", KR(ret), K(tenant_id), K(sql));

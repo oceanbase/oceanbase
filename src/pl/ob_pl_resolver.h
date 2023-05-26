@@ -948,22 +948,14 @@ private:
                            ObIArray<ObObjAccessIdx> &access_idxs,
                            bool &is_routine);
   static int get_number_literal_value(ObRawExpr *expr, int64_t &result);
+  int get_const_number_variable_literal_value(ObRawExpr *expr, int64_t &result);
   int check_assign_type(const ObPLDataType &dest_data_type, const ObRawExpr *right_expr);
   int is_return_ref_cursor_type(const ObRawExpr *expr, bool &is_ref_cursor_type);
-  int make_udt_udf_self_expr(const ObIArray<ObString> &access_name,
-                             ObPLCompileUnitAST &func,
-                             ObRawExpr *&expr,
-                             bool need_add = true);
-  int resolve_mocked_map_order_udf(const uint64_t udt_id,
-                                   const ObString &self_name,
-                                   const ObString &other_name,
-                                   ObPLCompileUnitAST &unit_ast,
-                                   ObIArray<ObRawExpr *> &expr,
-                                   ObRawExpr *org_expr,
-                                   bool &is_order);
+  int replace_map_or_order_expr(uint64_t udt_id,
+                                ObRawExpr *&expr,
+                                ObPLCompileUnitAST &unit_ast);
   int replace_object_compare_expr(ObRawExpr *&relation_expr,
-                                  ObPLCompileUnitAST &unit_ast,
-                                  bool &is_order);
+                                  ObPLCompileUnitAST &unit_ast);
 
   static const ObRawExpr *skip_implict_cast(const ObRawExpr *e);
 
@@ -1072,6 +1064,7 @@ private:
                                const ObPLBlockNS &ns,
                                ObPLCompileUnitAST &func);
 
+  int init_udf_info_of_accessident(ObObjAccessIdent &access_ident);
   int init_udf_info_of_accessidents(ObIArray<ObObjAccessIdent> &access_ident);
 
   int resolve_sys_func_access(ObObjAccessIdent &access_ident,

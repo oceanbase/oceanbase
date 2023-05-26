@@ -451,6 +451,7 @@ void ObDupTableLSHandler::reset()
     ob_free(tablets_mgr_ptr_);
   }
   if (OB_NOT_NULL(log_operator_)) {
+    log_operator_->reset();
     share::mtl_free(log_operator_);
   }
 
@@ -982,7 +983,7 @@ int ObDupTableLSHandler::replay(const void *buffer,
       DUP_TABLE_LOG(WARN, "merge replay buf failed", K(ret));
     }
   } else if (OB_FAIL(log_operator_->deserialize_log_entry())) {
-    DUP_TABLE_LOG(WARN, "deserialize log block failed", K(ret));
+    DUP_TABLE_LOG(WARN, "deserialize log block failed", K(ret), K(ts_ns));
   } else if (OB_FAIL(lease_mgr_ptr_->follower_try_acquire_lease(ts_ns))) {
     DUP_TABLE_LOG(WARN, "acquire lease from lease log error", K(ret), K(ts_ns));
   } else {
@@ -995,7 +996,9 @@ int ObDupTableLSHandler::replay(const void *buffer,
 
   // start require lease instantly
   if (OB_FAIL(ret)) {
-    // do nothing
+    if (OB_NOT_NULL(log_operator_)) {
+      log_operator_->reuse();
+    }
   } else if (no_dup_tablet_before_replay && has_dup_tablet()
              && OB_TMP_FAIL(
                  MTL(ObTransService *)->get_dup_table_loop_worker().append_dup_table_ls(ls_id_))) {
@@ -1010,7 +1013,7 @@ void ObDupTableLSHandler::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), K(ls_id),
+    DUP_TABLE_LOG(ERROR, "switch to follower forcedly failed for dup table", K(ret), K(ls_id_),
                   K(is_master()));
   }
   ATOMIC_STORE(&is_master_, false);
@@ -1022,7 +1025,7 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   int tmp_ret = OB_SUCCESS;
 
   if (OB_FAIL(leader_revoke_())) {
-    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), K(ls_id),
+    DUP_TABLE_LOG(WARN, "switch to follower gracefully failed for dup table", K(ret), K(ls_id_),
                   K(is_master()));
   }
 
@@ -1031,10 +1034,10 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
   if (OB_FAIL(ret)) {
     if (OB_TMP_FAIL(resume_leader())) {
       ret = OB_LS_NEED_REVOKE;
-      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), K(ls_id));
+      DUP_TABLE_LOG(WARN, "resume leader failed, need revoke", K(ret), K(tmp_ret), K(ls_id_));
     } else {
       DUP_TABLE_LOG(WARN, "resume leader successfully, return error code", K(ret), K(tmp_ret),
-                    K(ls_id));
+                    K(ls_id_));
     }
   }
 
@@ -1048,7 +1051,7 @@ int ObDupTableLSHandler::resume_leader()
   const bool is_resume = true;
 
   if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), K(ls_id), K(is_master()));
+    DUP_TABLE_LOG(WARN, "resume leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
   }
 
   ATOMIC_STORE(&is_master_, true);
@@ -1061,7 +1064,7 @@ int ObDupTableLSHandler::switch_to_leader()
 
   const bool is_resume = false;
   if (OB_FAIL(leader_takeover_(is_resume))) {
-    DUP_TABLE_LOG(WARN, "switch to leader failed for dup table", K(ret), K(ls_id), K(is_master()));
+    DUP_TABLE_LOG(WARN, "switch to leader failed for dup table", K(ret), K(ls_id_), K(is_master()));
   }
   ATOMIC_STORE(&is_master_, true);
   return ret;
@@ -1072,8 +1075,9 @@ int ObDupTableLSHandler::leader_revoke_()
   int ret = OB_SUCCESS;
 
   if (!is_master()) {
-    ret = OB_STATE_NOT_MATCH;
-    DUP_TABLE_LOG(ERROR, "unexpected ObDupTableLSHandler role", K(ret), K(ls_id_), K(is_master()));
+    // ret = OB_STATE_NOT_MATCH;
+    DUP_TABLE_LOG(WARN, "ObDupTableLSHandler has already been follower",
+                  K(ret), K(ls_id_), K(is_master()));
   } else {
     // clean new/old tablet set
     if (OB_NOT_NULL(log_operator_)) {
@@ -1098,7 +1102,7 @@ int ObDupTableLSHandler::leader_revoke_()
   }
 
   interface_stat_.reset();
-  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(ls_id_));
+  DUP_TABLE_LOG(INFO, "Leader Revoke", K(ret), K(ls_id_), KPC(log_operator_));
   return ret;
 }
 

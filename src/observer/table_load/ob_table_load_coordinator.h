@@ -14,6 +14,7 @@ namespace oceanbase
 {
 namespace observer
 {
+class ObTableLoadExecCtx;
 class ObTableLoadTableCtx;
 class ObTableLoadCoordinatorCtx;
 class ObTableLoadCoordinatorTrans;
@@ -26,7 +27,7 @@ public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
   static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
-                      uint64_t user_id);
+                      uint64_t user_id, ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
   bool is_valid() const { return is_inited_; }
@@ -39,8 +40,8 @@ private:
 public:
   int begin();
   int finish();
-  int commit(sql::ObExecContext *exec_ctx, table::ObTableLoadResultInfo &result_info);
-  int px_commit_data(sql::ObExecContext *exec_ctx);
+  int commit(table::ObTableLoadResultInfo &result_info);
+  int px_commit_data();
   int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
 private:
@@ -50,7 +51,7 @@ private:
   int start_merge_peers();
   int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
   int commit_redef_table();
-  int drive_sql_stat(sql::ObExecContext &ctx, table::ObTableLoadSqlStatistics &sql_statistics);
+  int drive_sql_stat(sql::ObExecContext *ctx, table::ObTableLoadSqlStatistics &sql_statistics);
 private:
   int add_check_merge_result_task();
   int check_peers_merge_result(bool &is_finish);

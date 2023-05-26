@@ -104,6 +104,7 @@ private:
       ObLobDataOutRowCtxList &lob_data_out_row_ctx_list,
       volatile bool &stop_flag);
 
+  bool is_in_stop_status(volatile bool stop_flag) const { return stop_flag || LobDataMergerThread::is_stoped(); }
   // TODO
   void print_task_count_();
 

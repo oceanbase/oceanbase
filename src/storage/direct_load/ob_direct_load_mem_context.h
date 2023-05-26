@@ -5,12 +5,12 @@
 #ifndef OB_DIRECT_LOAD_MEM_CONTEXT_H_
 #define OB_DIRECT_LOAD_MEM_CONTEXT_H_
 
-#include "storage/direct_load/ob_direct_load_easy_queue.h"
-#include "storage/direct_load/ob_direct_load_mem_define.h"
-#include "storage/direct_load/ob_direct_load_i_table.h"
-#include "storage/direct_load/ob_direct_load_table_data_desc.h"
-#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "share/table/ob_table_load_define.h"
+#include "storage/direct_load/ob_direct_load_easy_queue.h"
+#include "storage/direct_load/ob_direct_load_dml_row_handler.h"
+#include "storage/direct_load/ob_direct_load_i_table.h"
+#include "storage/direct_load/ob_direct_load_mem_define.h"
+#include "storage/direct_load/ob_direct_load_table_data_desc.h"
 
 namespace oceanbase
 {
@@ -49,8 +49,8 @@ public:
                              need_sort_(false),
                              mem_load_task_count_(0),
                              column_count_(0),
+                             dml_row_handler_(nullptr),
                              file_mgr_(nullptr),
-                             result_info_(nullptr),
                              fly_mem_chunk_count_(0),
                              finish_compact_count_(0),
                              mem_dump_task_count_(0),
@@ -76,9 +76,8 @@ public:
   bool need_sort_; // false: sstable, true: external_table
   int32_t mem_load_task_count_;
   int32_t column_count_;
-  observer::ObTableLoadErrorRowHandler *error_row_handler_;
+  ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadTmpFileManager *file_mgr_;
-  table::ObTableLoadResultInfo *result_info_;
   ObDirectLoadEasyQueue<storage::ObDirectLoadExternalMultiPartitionRowChunk *> mem_chunk_queue_;
   int64_t fly_mem_chunk_count_;
 

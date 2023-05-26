@@ -105,7 +105,7 @@ inline int64_t get_monotonic_ts()
 extern int64_t INIT_TS;
 extern ObOccamTimer GLOBAL_REPORT_TIMER;// used to report election event to inner table
 
-inline int GLOBAL_INIT_ELECTION_MODULE(const int64_t queue_size_square_of_2 = 14)
+inline int GLOBAL_INIT_ELECTION_MODULE(const int64_t queue_size_square_of_2 = 10)
 {
   int ret = common::OB_SUCCESS;
   static int64_t call_times = 0;

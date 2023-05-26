@@ -300,6 +300,7 @@ class ObTxExecResult
   friend class ObTransService;
   friend class ObTxDesc;
   OB_UNIS_VERSION(1);
+  TransModulePageAllocator allocator_;
   bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
@@ -313,8 +314,8 @@ public:
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
     incomplete_ = true;
   }
-  void merge_cflict_txs(const common::ObIArray<ObTransIDAndAddr> &txs);
-  inline bool is_incomplete() const { return incomplete_; }
+  int merge_cflict_txs(const common::ObIArray<ObTransIDAndAddr> &txs);
+  bool is_incomplete() const { return incomplete_; }
   int add_touched_ls(const share::ObLSID ls);
   int add_touched_ls(const ObIArray<share::ObLSID> &ls_list);
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }

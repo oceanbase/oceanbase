@@ -723,6 +723,7 @@ int PalfEnvImpl::try_recycle_blocks()
           "warn_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_threshold_,
           "limit_size(MB)", (total_size_to_recycle_blocks*disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_)/100/MB,
           "limit_percent(%)", disk_opts_for_recycling_blocks.log_disk_utilization_limit_threshold_,
+          "total_unrecyclable_size_byte(MB)", total_unrecyclable_size_byte/MB,
           "maximum_used_size(MB)", maximum_used_size/MB,
           "maximum_log_stream", palf_id,
           "oldest_log_stream", oldest_palf_id,
@@ -755,26 +756,24 @@ bool PalfEnvImpl::GetTotalUsedDiskSpace::operator() (const LSKey &ls_key, IPalfH
     bool_ret = false;
   } else {
     constexpr int64_t MB = 1024 * 1024;
-    const int64_t used_size = palf_handle_impl->get_total_used_disk_space();
-    if (used_size >= maximum_used_size_) {
-      maximum_used_size_ = used_size;
-      palf_id_ = ls_key.id_;
-    }
-    total_used_disk_space_ += palf_handle_impl->get_total_used_disk_space();
-    LSN base_lsn;
     int ret = OB_SUCCESS;
-    if (OB_FAIL(palf_handle_impl->get_base_lsn(base_lsn))) {
-      PALF_LOG(WARN, "failed to get_base_lsn", K(ls_key));
+    int64_t used_size = 0;
+    int64_t unrecyclable_size = 0;
+    if (OB_FAIL(palf_handle_impl->get_total_used_disk_space(used_size, unrecyclable_size))) {
+      PALF_LOG(WARN, "failed to get_total_used_disk_space", K(ls_key));
       ret_code_ = ret;
       bool_ret = false;
     } else {
-      const int64_t unrecyclable_meta_size = (PALF_META_BLOCK_SIZE + MAX_INFO_BLOCK_SIZE);
-      total_unrecyclable_disk_space_ += (palf_handle_impl->get_end_lsn() - base_lsn + unrecyclable_meta_size);
+      if (used_size >= maximum_used_size_) {
+        maximum_used_size_ = used_size;
+        palf_id_ = ls_key.id_;
+      }
+      total_used_disk_space_ += used_size;
+      total_unrecyclable_disk_space_ += unrecyclable_size;
       PALF_LOG(TRACE, "get_total_used_disk_space success", K(ls_key),
              "total_used_disk_space(MB):", total_used_disk_space_/MB,
              "total_unrecyclable_disk_space(MB):", total_unrecyclable_disk_space_/MB,
-             "end_lsn", palf_handle_impl->get_end_lsn(),
-             "base_lsn", base_lsn);
+             "end_lsn", palf_handle_impl->get_end_lsn());
     }
   }
   return bool_ret;

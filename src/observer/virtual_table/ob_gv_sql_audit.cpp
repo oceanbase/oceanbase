@@ -56,7 +56,6 @@ ObGvSqlAudit::~ObGvSqlAudit() {
 void ObGvSqlAudit::reset()
 {
   if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    SERVER_LOG(INFO, "nijia debug deconstruct", KP(this));
     if (cur_mysql_req_mgr_ != nullptr && ref_.idx_ != -1) {
       cur_mysql_req_mgr_->revert(&ref_);
     }

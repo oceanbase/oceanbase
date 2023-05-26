@@ -26,6 +26,7 @@
 #include "share/ob_share_util.h"//ObShareUtil
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_tenant_recovery_reportor.h"//update_ls_recovery
+#include "rootserver/ob_tenant_info_loader.h"
 #include "rootserver/ob_tenant_role_transition_service.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
@@ -2131,8 +2132,9 @@ void ObPrimaryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    int64_t idle_time_us = 100 * 1000L;
+    int64_t idle_time_us = 1000 * 1000L;
     int tmp_ret = OB_SUCCESS;
+    ObAllTenantInfo tenant_info;
     while (!has_set_stop()) {
       idle_time_us = 1000 * 1000L;
       {
@@ -2161,6 +2163,18 @@ void ObPrimaryLSService::do_work()
             if (OB_SUCCESS != (tmp_ret = try_force_drop_tenant_(user_tenant_id))) {
               ret = OB_SUCC(ret) ? tmp_ret : ret;
               LOG_WARN("failed to drop tenant", KR(ret), KR(tmp_ret), K(user_tenant_id));
+            }
+            MTL_SWITCH(user_tenant_id) {
+              ObTenantInfoLoader *tenant_info_loader = MTL(ObTenantInfoLoader*);
+              if (OB_ISNULL(tenant_info_loader)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("tenant report is null", KR(ret), K(tenant_id_));
+              } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
+                LOG_WARN("failed to get tenant info", KR(ret));
+              } else if (!tenant_info.is_primary()) {
+                //standby and restore
+                idle_time_us = 100 * 1000L;
+              }
             }
           }
         } else {

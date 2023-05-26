@@ -15,7 +15,6 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_ts_worker.h"
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
-#include "storage/tx_storage/ob_ls_cb_queue_thread.h"
 #include "rootserver/ob_index_builder.h"
 #include "observer/ob_srv_deliver.h"
 #include "logservice/palf/log_io_task_cb_thread_pool.h"

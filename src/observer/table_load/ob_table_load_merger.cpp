@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/table_load/ob_table_load_merger.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
@@ -103,7 +104,6 @@ private:
 ObTableLoadMerger::ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx)
   : store_ctx_(store_ctx),
     param_(store_ctx->ctx_->param_),
-    allocator_("TLD_TLdMerge"),
     running_thread_count_(0),
     has_error_(false),
     is_stop_(false),
@@ -198,8 +198,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
   merge_param.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
-  merge_param.error_row_handler_ = store_ctx_->error_row_handler_;
-  merge_param.result_info_ = &(store_ctx_->result_info_);
+  merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
   if (OB_FAIL(merge_ctx_.init(merge_param, store_ctx_->ls_partition_ids_,
                               store_ctx_->target_ls_partition_ids_))) {
     LOG_WARN("fail to init merge ctx", KR(ret));

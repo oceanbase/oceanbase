@@ -129,6 +129,8 @@ class ITG
 public:
   ITG() : tg_helper_(nullptr), tg_cgroup_(lib::ThreadCGroup::INVALID_CGROUP) {}
   virtual ~ITG() {}
+  int64_t get_tenant_id() const
+  { return NULL == tg_helper_ ? common::OB_SERVER_TENANT_ID : tg_helper_->id(); }
   virtual int thread_cnt() = 0;
   virtual int set_thread_cnt(int64_t) = 0;
   virtual int start() = 0;
@@ -455,7 +457,7 @@ public:
   int set_handler(TGTaskHandler &handler)
   {
     int ret = common::OB_SUCCESS;
-    uint64_t tenant_id = NULL == tg_helper_ ? common::OB_SERVER_TENANT_ID : tg_helper_->id();
+    uint64_t tenant_id = get_tenant_id();
     if (qth_ != nullptr) {
       ret = common::OB_ERR_UNEXPECTED;
     } else {
@@ -756,7 +758,8 @@ public:
     } else {
       timer_ = new (buf_) common::ObTimer(max_task_num_);
       timer_->set_run_wrapper(tg_helper_, tg_cgroup_);
-      if (OB_FAIL(timer_->init(attr_.name_))) {
+      if (OB_FAIL(timer_->init(attr_.name_,
+                               ObMemAttr(get_tenant_id(), "TGTimer")))) {
         OB_LOG(WARN, "init failed", K(ret));
       }
     }

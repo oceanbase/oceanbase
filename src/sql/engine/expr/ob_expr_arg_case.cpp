@@ -131,10 +131,7 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
     int64_t val_type_count = param_num / 2;
     ObExprResType tmp_res_type;
     const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
-    if (lib::is_oracle_mode() && types_stack[0].is_xml_sql_type()) {
-      ret = OB_ERR_NO_ORDER_MAP_SQL;
-      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
-    } else if (OB_FAIL(aggregate_result_type_for_case(
+    if (OB_FAIL(aggregate_result_type_for_case(
                   tmp_res_type,
                   types_stack,
                   cond_type_count,
@@ -171,6 +168,9 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
           } else {
             types_stack[i].set_calc_type(calc_type);
           }
+        } else if (lib::is_oracle_mode() && types_stack[0].is_xml_sql_type() && types_stack[i].is_xml_sql_type()) {
+          ret = OB_ERR_NO_ORDER_MAP_SQL;
+          LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
         }
       }
     }

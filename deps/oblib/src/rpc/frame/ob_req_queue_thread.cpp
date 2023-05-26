@@ -31,20 +31,25 @@ using namespace oceanbase::rpc::frame;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
-ObReqQueue::ObReqQueue(int queue_capacity)
+ObReqQueue::ObReqQueue(int capacity)
     : wait_finish_(true),
       push_worker_count_(0),
+      capacity_(capacity),
       queue_(),
       qhandler_(NULL),
       host_()
 {
-  queue_.init(queue_capacity);
 }
 
 ObReqQueue::~ObReqQueue()
 {
   LOG_INFO("begin to destroy queue", K(queue_.size()));
   queue_.destroy();
+}
+
+int ObReqQueue::init(const int64_t tenant_id)
+{
+  return queue_.init(capacity_, "ReqQueue", tenant_id);
 }
 
 void ObReqQueue::set_qhandler(ObiReqQHandler *qhandler)

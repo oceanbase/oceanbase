@@ -38,6 +38,7 @@ public:
   void destroy();
   int do_schedule(const share::ObLogRestoreSourceItem &source);
   void clean_resource();
+  void update_restore_upper_limit();
 
 private:
   bool inited_;

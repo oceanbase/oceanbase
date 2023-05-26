@@ -28,6 +28,7 @@
 #include "lib/utility/ob_fast_convert.h"
 #include "lib/utility/ob_rate_limiter.h"
 #include "lib/container/ob_vector.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "common/ob_smart_var.h"

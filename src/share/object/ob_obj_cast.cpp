@@ -80,7 +80,7 @@ static int cast_not_expected(const ObObjType expect_type,
   UNUSED(params);
   LOG_WARN_RET(OB_ERR_UNEXPECTED, "not expected obj type convert",
             K(expect_type), K(in), K(out), K(cast_mode));
-  return OB_ERR_UNEXPECTED;
+  return lib::is_oracle_mode() ? OB_ERR_INVALID_DATATYPE : OB_ERR_UNEXPECTED;
 }
 
 static int cast_inconsistent_types(const ObObjType expect_type,
