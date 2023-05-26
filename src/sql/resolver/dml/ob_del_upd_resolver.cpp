@@ -849,7 +849,17 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
         } else {
           table_item.view_base_item_ = new_table_item;
           if (new_table_item->is_basic_table()) {
-            // find base table, do nothing
+            const ObTableSchema *base_table_schema = NULL;
+            if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                        new_table_item->ref_id_, base_table_schema))) {
+              LOG_WARN("get table schema failed", K(ret));
+            } else if (OB_ISNULL(base_table_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("NULL table schema", K(ret));
+            } else if (OB_UNLIKELY(base_table_schema->is_vir_table())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on Virtual Table/Temporary Table");
+            }
           } else if (new_table_item->is_generated_table() || new_table_item->is_temp_table()) {
             const bool inner_log_error = false;
             if (new_table_item->is_view_table_ && is_oracle_mode()
@@ -942,8 +952,21 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
       if (NULL == base) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table item is null", K(ret));
-      } else if (base->is_basic_table() || base->is_link_table()) {
+      } else if (base->is_link_table()) {
         table_item.view_base_item_ = base;
+      } else if (base->is_basic_table()) {
+        table_item.view_base_item_ = base;
+        const ObTableSchema *base_table_schema = NULL;
+        if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                    base->ref_id_, base_table_schema))) {
+          LOG_WARN("get table schema failed", K(ret));
+        } else if (OB_ISNULL(base_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL table schema", K(ret));
+        } else if (OB_UNLIKELY(base_table_schema->is_vir_table())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "DML operation on Virtual Table/Temporary Table");
+        }
       } else if (base->is_generated_table()) {
         table_item.view_base_item_ = base;
         const bool inner_log_error = false;
