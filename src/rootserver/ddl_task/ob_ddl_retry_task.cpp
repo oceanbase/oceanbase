@@ -242,8 +242,7 @@ int ObDDLRetryTask::prepare(const ObDDLTaskStatus next_task_status)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  }
-  if (OB_FAIL(switch_status(next_task_status, true, ret))) {
+  } else if (OB_FAIL(switch_status(next_task_status, true, ret))) {
     LOG_WARN("fail to switch status", K(ret));
   }
   return ret;
