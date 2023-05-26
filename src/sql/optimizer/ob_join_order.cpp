@@ -3822,7 +3822,8 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
   if (OB_ISNULL(input_sharding) || OB_ISNULL(plan.get_stmt()) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(input_sharding), K(ret));
-  } else if (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning()) {
+  } else if (!input_sharding->get_can_reselect_replica() &&
+             (input_sharding->is_single() || input_sharding->is_distributed_without_partitioning())) {
     output_sharding = input_sharding;
   } else if (OB_FAIL(ObOptimizerUtil::convert_subplan_scan_expr(expr_factory,
                                                                 subplan_root.get_output_equal_sets(),
@@ -3878,6 +3879,7 @@ int ObJoinOrder::convert_subplan_scan_sharding_info(ObLogPlan &plan,
         } else if (OB_FAIL(temp_sharding->get_partition_func().assign(part_func))) {
           LOG_WARN("failed to assign part funcs", K(ret));
         } else {
+          temp_sharding->set_can_reselect_replica(false);
           output_sharding = temp_sharding;
           LOG_TRACE("succeed to convert subplan scan sharding", K(*output_sharding));
         }
