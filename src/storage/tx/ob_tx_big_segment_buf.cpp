@@ -171,7 +171,7 @@ int ObTxBigSegmentBuf::split_one_part(char *part_buf,
     if (segment_pos_ == 0) {
       if (prev_part_id_ != INVALID_SEGMENT_PART_ID) {
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "init first_part_id_ twice", K(ret), KPC(this));
+        TRANS_LOG(WARN, "init prev_part_id_ twice", K(ret), KPC(this));
       } else if (segment_data_len_ <= part_header.part_length_) {
         // only one part
         need_fill_id_into_next_part = false;
@@ -183,7 +183,7 @@ int ObTxBigSegmentBuf::split_one_part(char *part_buf,
     } else {
       if (prev_part_id_ == INVALID_SEGMENT_PART_ID) {
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "invalid first_part_id_", K(ret), KPC(this));
+        TRANS_LOG(WARN, "invalid prev_part_id_", K(ret), KPC(this));
       // } else if (OB_FALSE_IT(need_set_prev_id = false)) {
       } else if (part_header.remain_length_ <= part_header.part_length_) {
         // the last part

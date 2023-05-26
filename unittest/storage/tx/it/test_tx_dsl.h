@@ -25,6 +25,15 @@
     ASSERT_EQ(OB_SUCCESS, n2->start());                                 \
     LOG_INFO("##START_TWO_TX_NODE##", K(n1->addr_), K(n2->addr_));
 
+#define START_TWO_TX_NODE_WITH_LSID(n1, n2, ls_id)                                       \
+  auto n1 = new ObTxNode(ls_id, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);     \
+  auto n2 = new ObTxNode(ls_id + 1, ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 8888), bus_); \
+  NAMED_DEFER(defer_n1, delete (n1));                                                    \
+  NAMED_DEFER(defer_n2, delete (n2));                                                    \
+  ASSERT_EQ(OB_SUCCESS, n1->start());                                                    \
+  ASSERT_EQ(OB_SUCCESS, n2->start());                                                    \
+  LOG_INFO("##START_TWO_TX_NODE##", K(n1->addr_), K(n2->addr_));
+
 #define PREPARE_TX(n1, tx)                                              \
     ObTxDescGuard guard = n1->get_tx_guard();                           \
     ObTxDesc &tx = guard.get_tx_desc();                                 \

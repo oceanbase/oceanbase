@@ -752,14 +752,18 @@ void ObTxMultiDataSourceLog::reset()
 int ObTxMultiDataSourceLog::fill_MDS_data(const ObTxBufferNode &node)
 {
   int ret = OB_SUCCESS;
-
+#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
   if (node.get_serialize_size() + data_.get_serialize_size() >= MAX_MDS_LOG_SIZE) {
     ret = OB_SIZE_OVERFLOW;
     TRANS_LOG(WARN, "MDS log is overflow", K(*this), K(node));
   } else {
-    data_.push_back(node);
-  }
+#endif
 
+    data_.push_back(node);
+
+#ifndef OB_TX_MDS_LOG_USE_BIT_SEGMENT_BUF
+  }
+#endif
   return ret;
 }
 
@@ -1007,6 +1011,8 @@ const logservice::ObLogBaseType ObTxLogBlock::DEFAULT_LOG_BLOCK_TYPE =
 const int32_t ObTxLogBlock::DEFAULT_BIG_ROW_BLOCK_SIZE =
     62 * 1024 * 1024; // 62M redo log buf for big row
 
+const int64_t ObTxLogBlock::BIG_SEGMENT_SPILT_SIZE = common::OB_MAX_LOG_ALLOWED_SIZE; //256 * 1024
+
 void ObTxLogBlock::reset()
 {
   fill_buf_.reset();
@@ -1155,7 +1161,7 @@ int ObTxLogBlock::acquire_segment_log_buf(const char *&submit_buf,
 
   if (OB_ISNULL(big_segment_buf_) || OB_ISNULL(fill_buf_.get_buf())) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(this));
+    TRANS_LOG(WARN, "invalid argument", K(ret), KPC(big_segment_buf), KPC(this));
   } else if (OB_ISNULL(big_segment_buf_) || fill_buf_.is_use_local_buf()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, " big segment_buf", K(ret), KPC(this));
@@ -1168,7 +1174,7 @@ int ObTxLogBlock::acquire_segment_log_buf(const char *&submit_buf,
     TRANS_LOG(WARN, "push the first log type arg failed", K(ret), K(*this));
   } else if (OB_FAIL(cb_arg_array_.push_back(ObTxCbArg(big_segment_log_type, NULL)))) {
     TRANS_LOG(WARN, "push the second log type arg failed", K(ret), K(*this));
-  } else if (OB_FAIL(tmp_segment_buf->split_one_part(fill_buf_.get_buf(), len_, pos_,
+  } else if (OB_FAIL(tmp_segment_buf->split_one_part(fill_buf_.get_buf(), BIG_SEGMENT_SPILT_SIZE, pos_,
                                                      need_fill_part_scn))) {
     TRANS_LOG(WARN, "acquire a part of big segment failed", K(ret), K(block_header), KPC(this));
   } else if (OB_FALSE_IT(submit_buf = fill_buf_.get_buf())) {
@@ -1230,10 +1236,16 @@ int ObTxLogBlock::deserialize_log_block_header_(int64_t &replay_hint, ObTxLogBlo
   return ret;
 }
 
-int ObTxLogBlock::get_next_log(ObTxLogHeader &header, ObTxBigSegmentBuf *big_segment_buf)
+int ObTxLogBlock::get_next_log(ObTxLogHeader &header,
+                               ObTxBigSegmentBuf *big_segment_buf,
+                               bool *contain_big_segment)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_pos = pos_;
+  if (OB_NOT_NULL(contain_big_segment)) {
+    *contain_big_segment = false;
+  }
+
   if (OB_ISNULL(replay_buf_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(ERROR, "invalid argument", K(*this));
@@ -1244,9 +1256,14 @@ int ObTxLogBlock::get_next_log(ObTxLogHeader &header, ObTxBigSegmentBuf *big_seg
       cur_log_type_ = header.get_tx_log_type();
 
       if (ObTxLogType::TX_BIG_SEGMENT_LOG == cur_log_type_) {
+        if (OB_NOT_NULL(contain_big_segment)) {
+          *contain_big_segment = true;
+        }
+
         if (OB_ISNULL(big_segment_buf)) {
-          ret = OB_INVALID_ARGUMENT;
-          TRANS_LOG(WARN, "invalid big_segment_buf", KPC(big_segment_buf));
+          ret = OB_LOG_ALREADY_SPLIT;
+          TRANS_LOG(WARN, "the tx log entry has been split, need big_segment_buf", K(ret),
+                    KPC(big_segment_buf), KPC(this));
         } else if (OB_NOT_NULL(big_segment_buf_)) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "A completed big segment need be serialized", K(ret), KPC(this),
@@ -1273,6 +1290,13 @@ int ObTxLogBlock::get_next_log(ObTxLogHeader &header, ObTxBigSegmentBuf *big_seg
                       KPC(big_segment_buf), KPC(this));
             ret = OB_LOG_TOO_LARGE;
           }
+        }
+
+        if (OB_FAIL(ret)) {
+          if (OB_LOG_TOO_LARGE != ret) {
+            pos_ = tmp_pos;
+          }
+          cur_log_type_ = ObTxLogType::UNKNOWN;
         }
       }
     }

@@ -172,6 +172,7 @@ int ObTxNode::start() {
     ls_tx_data_table_ptr = &fake_tx_table_.tx_data_table_;
     mock_ls_.tx_table_.is_inited_ = true;
     mock_ls_.tx_table_.online();
+    mock_ls_.ls_meta_.clog_checkpoint_scn_ = share::SCN::max_scn();
   } else {
     abort();
   }

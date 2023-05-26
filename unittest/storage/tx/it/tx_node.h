@@ -222,11 +222,11 @@ private:
       usleep(500);
     }
     if (2000 == i) {
-      LOG_INFO("print all tx begin");
+      ret = OB_ERR_UNEXPECTED;
+      LOG_INFO("print all tx begin", K(ret));
       const bool verbose = true;
       ls_tx_ctx_mgr->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
-      LOG_INFO("print all tx end");
-      ret = OB_ERR_UNEXPECTED;
+      LOG_INFO("print all tx end", K(ret));
     }
     OZ(txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
     return ret;
