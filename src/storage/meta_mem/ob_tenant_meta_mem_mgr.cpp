@@ -426,7 +426,11 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
         && 0 != memtable_set->size()) {
       if (OB_TMP_FAIL(ObMemtable::batch_remove_unused_callback_for_uncommited_txn(ls_id,
                                                                                   memtable_set))) {
-        LOG_ERROR("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+        if (OB_NOT_RUNNING != tmp_ret) {
+          LOG_ERROR("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+        } else {
+          LOG_WARN("batch remove memtable set failed", K(tmp_ret), KPC(memtable_set));
+        }
         for (auto set_iter = memtable_set->begin(); set_iter != memtable_set->end(); ++set_iter) {
           if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
                                                    ObITable::TableType::DATA_MEMTABLE))) {
