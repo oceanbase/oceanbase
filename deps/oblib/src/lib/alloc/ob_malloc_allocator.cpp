@@ -763,7 +763,7 @@ void ObMallocAllocator::modify_tenant_memory_access_permission(ObTenantCtxAlloca
 {
   AChunk *chunks[1024] = {nullptr};
   int chunk_cnt = 0;
-  abort_unless(OB_SUCCESS == get_chunks(ta, chunks, sizeof(chunks)/sizeof(chunks[0]), chunk_cnt));
+  get_chunks(ta, chunks, sizeof(chunks)/sizeof(chunks[0]), chunk_cnt);
   for (int i = 0; i < chunk_cnt; i++) {
     AChunk *chunk = chunks[i];
     if (chunk != nullptr) {
