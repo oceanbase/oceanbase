@@ -12,6 +12,7 @@ connection conn_admin;
 alter system flush plan cache global;
 
 connection default;
+set ob_enable_plan_cache = false;
 
 --enable_metadata
 --disable_abort_on_error
