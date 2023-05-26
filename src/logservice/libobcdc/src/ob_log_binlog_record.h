@@ -32,8 +32,6 @@ namespace libobcdc
 class ObLogBR : public ObLogResourceRecycleTask, public common::ObLink
 {
 public:
-  static const char *COLUMN_CHANGED_LABEL_PTR;
-  static const char *COLUMN_UNCHANGED_LABEL_PTR;
   static const uint64_t MIN_DRC_CLUSTER_ID = 4294901760; // 0xffff0000
   static const uint64_t MAX_DRC_CLUSTER_ID = 4294967295; // 0xffffffff
 

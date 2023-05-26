@@ -129,6 +129,7 @@ int ObCDCLobDataMerger::push(
 int ObCDCLobDataMerger::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  set_cdc_thread_name("LobDtMerger", thread_index);
   LobColumnFragmentCtx *task = static_cast<LobColumnFragmentCtx *>(data);
 
   if (IS_NOT_INIT) {
@@ -227,35 +228,29 @@ int ObCDCLobDataMerger::push_lob_column_(
       }
     } else if (lob_data_get_ctx.is_update()) {
       const int64_t insert_seq_no_cnt = seq_no_cnt - del_seq_no_cnt;
+      // NOTICE:
+      // 1. Update LOB column data from in_row to out_row, the del_seq_no_cnt is 0
+      // 2. Update LOB column data from out_row to empty string, the insert_seq_no_cnt is 0
+      //
+      // 3. Currently, LOB column data is stored in out_row in these cases:
+      // 3.1  Length of column data is larger than 4K
+      // 3.2. Length of column data is less than 4K(even if column data is empty string),
+      //      but was larger than 4K(stored out_row) and not update to NULL until this trans.
 
-      if (OB_UNLIKELY(insert_seq_no_cnt <= 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("insert_seq_no_cnt or del_seq_no_cnt is not right",
-            K(insert_seq_no_cnt), K(del_seq_no_cnt), K(lob_data_out_row_ctx_list), K(lob_data_get_ctx));
-      } else {
-        if (0 == del_seq_no_cnt) {
-          // Update LOB column data(in row) to out-of-row storage, the del_seq_no_cnt is 0
-        } else {
-          if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
-            LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(del_seq_no_cnt),
-                K(lob_data_get_ctx));
-          } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt,
-                  allocator, lob_data_get_ctx, old_lob_col_fra_ctx_list))) {
-            LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
-                K(old_lob_col_fra_ctx_list));
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
-            LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt), K(del_seq_no_cnt),
-                K(lob_data_get_ctx));
-          } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
-                  allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
-            LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
-                K(new_lob_col_fra_ctx_list));
-          } else {}
-        }
+      if (OB_FAIL(lob_data_get_ctx.old_lob_col_ctx_.init(del_seq_no_cnt, allocator))) {
+        LOG_ERROR("lob_data_get_ctx old_lob_col_ctx_ init failed", KR(ret), K(del_seq_no_cnt),
+            K(lob_data_get_ctx));
+      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(false/*is_new_col*/, seq_no_st, del_seq_no_cnt,
+              allocator, lob_data_get_ctx, old_lob_col_fra_ctx_list))) {
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
+            K(old_lob_col_fra_ctx_list));
+      } else if (OB_FAIL(lob_data_get_ctx.new_lob_col_ctx_.init(insert_seq_no_cnt, allocator))) {
+        LOG_ERROR("lob_data_get_ctx new_lob_col_ctx_ init failed", KR(ret), K(seq_no_cnt), K(del_seq_no_cnt),
+            K(lob_data_get_ctx));
+      } else if (OB_FAIL(get_lob_col_fra_ctx_list_(true/*is_new_col*/, seq_no_st + del_seq_no_cnt, insert_seq_no_cnt,
+              allocator, lob_data_get_ctx, new_lob_col_fra_ctx_list))) {
+        LOG_ERROR("get_lob_col_fra_ctx_list_ failed", KR(ret), K(seq_no_st), K(del_seq_no_cnt),
+            K(new_lob_col_fra_ctx_list));
       }
     } else if (lob_data_get_ctx.is_delete()) {
       ret = OB_ERR_UNEXPECTED;
@@ -286,7 +281,7 @@ int ObCDCLobDataMerger::push_lob_column_(
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_lob_col_fra_ctx_list_ failed", KR(ret));
           }
-        } else {}
+        }
       }
     }
   }
@@ -445,11 +440,14 @@ int ObCDCLobDataMerger::handle_when_all_lob_col_fragment_progress_done_(
     const bool is_new_col = task.is_new_col_;
     const uint32_t seq_no_cnt = task.ref_cnt_;
     const uint64_t lob_total_len = lob_data->byte_size_;
-    char *buf = static_cast<char *>(lob_data_out_row_ctx_list.get_allocator().alloc(sizeof(char) * (lob_total_len + 1)));
+    char *buf = nullptr;
 
-    if (OB_ISNULL(buf)) {
+    if (OB_UNLIKELY(0 >= lob_total_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("lob_data_len is 0, there should be no outrow lob_col_value", K(task), K(lob_data));
+    } else if (OB_ISNULL(buf = static_cast<char *>(lob_data_out_row_ctx_list.get_allocator().alloc(sizeof(char) * (lob_total_len + 1))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("buf is nullptr", KR(ret));
+      LOG_ERROR("buf is nullptr", KR(ret), K(is_new_col), K(task), K(lob_data));
     } else {
       uint64_t pos = 0;
       bool is_lob_col_value_handle_done = false;
@@ -501,7 +499,7 @@ int ObCDCLobDataMerger::handle_when_all_lob_col_fragment_progress_done_(
         }
       }
 
-      LOG_DEBUG("handle_when_all_lob_col_fragment_progress_done_", K(is_all_lob_col_handle_done), K(seq_no_cnt), K(pos));
+      LOG_DEBUG("handle_when_all_lob_col_fragment_progress_done_", K(is_lob_col_value_handle_done), K(is_all_lob_col_handle_done), K(seq_no_cnt), K(pos));
     }
   }
 
