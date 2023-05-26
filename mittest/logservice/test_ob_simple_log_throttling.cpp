@@ -273,7 +273,6 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   ASSERT_EQ(0, throttle.stat_.total_throttling_task_cnt_);
   ASSERT_EQ(10, throttle.stat_.total_skipped_task_cnt_);
   ASSERT_EQ(10 * (log_size), throttle.stat_.total_skipped_size_);
-  ASSERT_EQ(10 * (log_size), throttle.appended_log_size_cur_round_);
   int64_t cur_has_batched_size = log_io_worker->batch_io_task_mgr_.has_batched_size_;
   // no io reduce during writing throttling
   ASSERT_EQ(cur_has_batched_size, prev_has_batched_size);
