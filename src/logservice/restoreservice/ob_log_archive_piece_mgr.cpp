@@ -842,7 +842,13 @@ void ObLogArchivePieceContext::check_if_switch_piece_(const int64_t file_id,
     if (inner_piece_context_.min_lsn_in_piece_ > lsn) {
       op = PieceOp::BACKWARD;
     } else if (inner_piece_context_.max_file_id_ <= file_id) {
-      op = PieceOp::ADVANCE;
+      // if piece context is stale, load piece meta fully
+      // else just advance piece simply
+      if (inner_piece_context_.max_file_id_ + 1 < file_id) {
+        op = PieceOp::LOAD;
+      } else {
+        op = PieceOp::ADVANCE;
+      }
     } else {
       op = PieceOp::NONE;
     }
