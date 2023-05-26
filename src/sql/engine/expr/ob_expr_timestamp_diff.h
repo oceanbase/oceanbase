@@ -52,8 +52,8 @@ inline int ObExprTimeStampDiff::calc_result_type3(ObExprResType& type, ObExprRes
   type.set_scale(common::DEFAULT_SCALE_FOR_INTEGER);
   type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   // set calc type
-  left.set_calc_type(common::ObTimestampType);
-  right.set_calc_type(common::ObTimestampType);
+  left.set_calc_type(common::ObDateTimeType);
+  right.set_calc_type(common::ObDateTimeType);
   return common::OB_SUCCESS;
 }
 }  // namespace sql

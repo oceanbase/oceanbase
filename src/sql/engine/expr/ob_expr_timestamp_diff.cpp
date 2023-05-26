@@ -42,16 +42,16 @@ int ObExprTimeStampDiff::calc_result3(
     result.set_null();
   } else {
     TYPE_CHECK(unit, ObIntType);
-    TYPE_CHECK(left, ObTimestampType);
-    TYPE_CHECK(right, ObTimestampType);
+    TYPE_CHECK(left, ObDateTimeType);
+    TYPE_CHECK(right, ObDateTimeType);
     int64_t res = 0;
     bool is_null = false;
     ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params((expr_ctx).my_session_);
     if (OB_FAIL(calc(res,
             is_null,
             unit.get_int(),
-            left.get_timestamp(),
-            right.get_timestamp(),
+            left.get_datetime(),
+            right.get_datetime(),
             expr_ctx.my_session_->get_timezone_info()))) {
       LOG_WARN("calc failed", K(ret), K(left), K(right), K(unit));
     } else if (is_null) {
@@ -223,8 +223,8 @@ int ObExprTimeStampDiff::eval_timestamp_diff(const ObExpr& expr, ObEvalCtx& ctx,
   } else {
     int64_t res_int = 0;
     bool is_null = false;
-    if (OB_FAIL(calc(
-            res_int, is_null, u->get_int(), l->get_timestamp(), r->get_timestamp(), session->get_timezone_info()))) {
+    if (OB_FAIL(
+            calc(res_int, is_null, u->get_int(), l->get_datetime(), r->get_datetime(), session->get_timezone_info()))) {
       LOG_WARN("calc failed", K(ret));
     } else if (is_null) {
       res.set_null();
@@ -241,8 +241,8 @@ int ObExprTimeStampDiff::cg_expr(ObExprCGCtx& ctx, const ObRawExpr& raw_expr, Ob
   UNUSED(ctx);
   UNUSED(raw_expr);
   CK(3 == rt_expr.arg_cnt_);
-  CK(ObIntType == rt_expr.args_[0]->datum_meta_.type_ && ObTimestampType == rt_expr.args_[1]->datum_meta_.type_ &&
-      ObTimestampType == rt_expr.args_[2]->datum_meta_.type_);
+  CK(ObIntType == rt_expr.args_[0]->datum_meta_.type_ && ObDateTimeType == rt_expr.args_[1]->datum_meta_.type_ &&
+      ObDateTimeType == rt_expr.args_[2]->datum_meta_.type_);
   OX(rt_expr.eval_func_ = eval_timestamp_diff);
   return ret;
 }

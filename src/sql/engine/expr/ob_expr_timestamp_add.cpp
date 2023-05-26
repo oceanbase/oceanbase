@@ -47,8 +47,9 @@ inline int ObExprTimeStampAdd::calc_result_type3(ObExprResType& type, ObExprResT
   ObCompatibilityMode compat_mode = get_compatibility_mode();
   // not timestamp. compatible with mysql.
   type.set_varchar();
-  type.set_length(common::ObAccuracy::MAX_ACCURACY2[compat_mode][common::ObTimestampType].precision_ +
-                  common::ObAccuracy::MAX_ACCURACY2[compat_mode][common::ObTimestampType].scale_ + 1);
+  // timestamp.set_calc_type(common::ObDateTimeType);
+  type.set_length(common::ObAccuracy::MAX_ACCURACY2[compat_mode][common::ObDateTimeType].precision_ +
+                  common::ObAccuracy::MAX_ACCURACY2[compat_mode][common::ObDateTimeType].scale_ + 1);
   type.set_collation_level(common::CS_LEVEL_IMPLICIT);
   // not connection collation. compatible with mysql.
   type.set_collation_type(common::ObCharset::get_default_collation(common::ObCharset::get_default_charset()));
@@ -84,7 +85,7 @@ int ObExprTimeStampAdd::calc_result3(
     expr_ctx.cast_mode_ &= ~(CM_WARN_ON_FAIL);
     EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
     EXPR_GET_INT64_V2(interval, interval_int);
-    ObTimeConvertCtx cvrt_ctx(get_timezone_info(expr_ctx.my_session_), true);
+    ObTimeConvertCtx cvrt_ctx(get_timezone_info(expr_ctx.my_session_), false);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ob_obj_to_ob_time_with_date(
               timestamp, cvrt_ctx.tz_info_, ot, get_cur_time(expr_ctx.exec_ctx_->get_physical_plan_ctx())))) {
@@ -95,7 +96,7 @@ int ObExprTimeStampAdd::calc_result3(
         LOG_WARN("calc failed", K(ret), K(unit), K(ts), K(interval_int));
       } else {
         ObObj tmp;
-        tmp.set_timestamp(res);
+        tmp.set_datetime(res);
         ObString result_string;
         EXPR_GET_VARCHAR_V2(tmp, result_string);
         if (OB_SUCC(ret)) {
@@ -248,8 +249,8 @@ int calc_timestampadd_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datu
     int64_t interval_int = interval_datum->get_int();
     int64_t res = 0;
     ObTime ot;
-    ObTimeConvertCtx cvrt_ctx(get_timezone_info(ctx.exec_ctx_.get_my_session()), true);
-    char* buf = NULL;
+    ObTimeConvertCtx cvrt_ctx(get_timezone_info(ctx.exec_ctx_.get_my_session()), false);
+    char *buf = NULL;
     int64_t buf_len = OB_CAST_TO_VARCHAR_MAX_LENGTH;
     int64_t out_len = 0;
     if (OB_FAIL(ob_datum_to_ob_time_with_date(*timestamp_datum,
@@ -265,7 +266,7 @@ int calc_timestampadd_expr(const ObExpr& expr, ObEvalCtx& ctx, ObDatum& res_datu
     } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(buf_len));
-    } else if (OB_FAIL(common_datetime_string(ObTimestampType,
+    } else if (OB_FAIL(common_datetime_string(ObDateTimeType,
                    ObVarcharType,
                    expr.args_[2]->datum_meta_.scale_,
                    false,
