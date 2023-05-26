@@ -403,6 +403,7 @@ END_P SET_VAR DELIMITER
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
 %type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
+%type <node> add_key_or_index_opt add_key_or_index add_unique_key_opt add_unique_key add_constraint_uniq_key_opt add_constraint_uniq_key add_constraint_pri_key_opt add_constraint_pri_key add_primary_key_opt add_primary_key add_spatial_index_opt add_spatial_index
 %type <node> index_hint_definition index_hint_list
 %type <node> intnum_list
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
@@ -14158,68 +14159,34 @@ tg_hash_partition_option
 
 
 alter_index_option:
-ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+ADD add_key_or_index_opt
 {
-  (void)($2);
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $6);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $3, col_list, index_option, $4, $9);
-  $$->value_ = 0;
+  $$ = $2;
 }
-| ADD UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+| ADD add_unique_key_opt
 {
-  (void)($3);
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $7);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $4, col_list, index_option, $5, $10);
-  $$->value_ = 1;
+  $$ = $2;
 }
-| ADD CONSTRAINT opt_constraint_name UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+| ADD add_constraint_uniq_key_opt
 {
-  (void)($5);
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $9);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $11);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $6 ? $6 : $3, col_list, index_option, $7, $12);
-  $$->value_ = 1;
+  $$ = $2;
+}
+| ADD add_spatial_index_opt
+{
+  $$ = $2;
+}
+| ADD add_constraint_pri_key_opt
+{
+  $$ = $2;
+}
+| ADD add_primary_key_opt
+{
+  $$ = $2;
 }
 | DROP key_or_index index_name
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_DROP, 1, $3);
-}
-| ADD SPATIAL opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
-{
-  (void)($3);
-  (void)($10);
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $7);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $4, col_list, index_option, $5, NULL);
-  $$->value_ = 2;
-}
-| ADD CONSTRAINT opt_constraint_name PRIMARY KEY '(' column_name_list ')' opt_index_option_list
-{
-  (void)($3);
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_COLUMN_LIST, $7);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 2, col_list, index_option);
-}
-| ADD PRIMARY KEY '(' column_name_list ')' opt_index_option_list
-{
-  ParseNode *col_list = NULL;
-  ParseNode *index_option = NULL;
-  merge_nodes(col_list, result, T_COLUMN_LIST, $5);
-  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $7);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 2, col_list, index_option);
 }
 | DROP PRIMARY KEY
 {
@@ -14247,6 +14214,148 @@ ADD key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list '
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_CONSTRAINT_OPTION, 2, $3, $4);
   $$->value_ = 1; // alter state of a check constraint
+}
+;
+
+add_key_or_index_opt:
+add_key_or_index
+{
+  $$ = $1;
+}
+| '(' add_key_or_index ')'
+{
+  $$ = $2;
+}
+;
+
+add_key_or_index:
+key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+{
+  (void)($1);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $5);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $2, col_list, index_option, $3, $8);
+  $$->value_ = 0;
+}
+;
+
+add_unique_key_opt:
+add_unique_key
+{
+  $$ = $1;
+}
+| '(' add_unique_key ')'
+{
+  $$ = $2;
+}
+;
+
+add_unique_key:
+UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+{
+  (void)($2);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $6);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $3, col_list, index_option, $4, $9);
+  $$->value_ = 1;
+}
+;
+
+add_constraint_uniq_key_opt:
+add_constraint_uniq_key
+{
+  $$ = $1;
+}
+| '(' add_constraint_uniq_key ')'
+{
+  $$ = $2;
+}
+;
+
+add_constraint_uniq_key:
+CONSTRAINT opt_constraint_name UNIQUE opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+{
+  (void)($4);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $8);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $5 ? $5 : $2, col_list, index_option, $6, $11);
+  $$->value_ = 1;
+}
+;
+
+add_constraint_pri_key_opt:
+add_constraint_pri_key
+{
+  $$ = $1;
+}
+| '(' add_constraint_pri_key ')'
+{
+  $$ = $2;
+}
+;
+
+add_constraint_pri_key:
+CONSTRAINT opt_constraint_name PRIMARY KEY '(' column_name_list ')' opt_index_option_list
+{
+  (void)($2);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $6);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 2, col_list, index_option);
+}
+;
+
+add_spatial_index_opt:
+add_spatial_index
+{
+  $$ = $1;
+}
+| '(' add_spatial_index ')'
+{
+  $$ = $2;
+}
+;
+
+add_spatial_index:
+SPATIAL opt_key_or_index opt_index_name opt_index_using_algorithm '(' sort_column_list ')' opt_index_option_list opt_partition_option
+{
+  (void)($2);
+  (void)($9);
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_INDEX_COLUMN_LIST, $6);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_ADD, 5, $3, col_list, index_option, $4, NULL);
+  $$->value_ = 2;
+}
+;
+
+add_primary_key_opt:
+add_primary_key
+{
+  $$ = $1;
+}
+| '(' add_primary_key ')'
+{
+  $$ = $2;
+}
+;
+
+add_primary_key:
+PRIMARY KEY '(' column_name_list ')' opt_index_option_list
+{
+  ParseNode *col_list = NULL;
+  ParseNode *index_option = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $4);
+  merge_nodes(index_option, result, T_TABLE_OPTION_LIST, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 2, col_list, index_option);
 }
 ;
 
