@@ -374,7 +374,7 @@ int LsElectionReferenceInfoRow::convert_table_info_to_user_info_()
         COORDINATOR_LOG_(WARN, "get ObAddr from ObString failed");
       } else {
         ObArray<ObStringHolder> split_by_comma;
-        if (!row_for_table_.element<4>().empty() && CLICK_FAIL(ObTableAccessHelper::split_string_by_char(row_for_table_.element<4>(), ',', split_by_comma))) {
+        if (!row_for_table_.element<4>().empty() && CLICK_FAIL(ObTableAccessHelper::split_string_by_char(row_for_table_.element<4>(), ';', split_by_comma))) {
           COORDINATOR_LOG_(WARN, "split blacklist by ',' failed");
         } else {
           for (int64_t idx = 0; idx < split_by_comma.count() && OB_SUCC(ret); ++idx) {
